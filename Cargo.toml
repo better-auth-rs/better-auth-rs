@@ -1,75 +1,87 @@
 [package]
 name = "better-auth"
-version = "0.0.1-alpha.2"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = { workspace = true }
+repository = { workspace = true }
+
+[workspace]
+members = [
+    ".",
+    "crates/better-auth-api",
+    "crates/better-auth-core",
+    "crates/better-auth-entity",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
 edition = "2024"
 license = "MIT"
 description = "The most comprehensive authentication framework for Rust"
 repository = "https://github.com/better-auth-rs/better-auth-rs"
 
-[lib]
-name = "better_auth"
-path = "src/lib.rs"
-
-[dependencies]
-# Async runtime
+[workspace.dependencies]
+# Asynchronous runtime
 tokio = { version = "1.0", features = ["full"] }
+tokio-util = "0.7"
 async-trait = "0.1"
-
+futures = "0.3"
+# OpenAPI
+utoipa = { version = "5", features = [
+    "axum_extras",
+    "uuid",
+    "chrono",
+    "time",
+    "url",
+    "preserve_path_order",
+] }
+# Database
+sea-orm = { version = "1.1.16", features = [
+    "runtime-tokio-rustls",
+    "macros",
+    "with-uuid",
+    "with-chrono",
+    "with-json",
+    "with-ipnetwork", 
+] }
+# Crypto provider
+rustls = { version = "0.23", default-features = false, features = [
+    "aws-lc-rs",
+] }
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-
+# Configuration management
+config = "0.15"
+clap = { version = "4.5", features = ["derive", "env"] }
+lazy_static = "1.4"
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+backoff = "0.4"
 # Time handling
 chrono = { version = "0.4", features = ["serde"] }
+# Data structures
+uuid = { version = "1.18", features = ["v4", "v7", "serde"] }
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
 
-# Error handling
-thiserror = "1.0"
-anyhow = "1.0"
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+incremental = false
+debug = false
 
-# Cryptography
-sha2 = "0.10"
-rand = "0.8"
-jsonwebtoken = "9.0"
-argon2 = "0.5"
-base64 = "0.22"
-
-# UUID and URL encoding
-uuid = { version = "1.0", features = ["v4", "serde"] }
-urlencoding = "2.1"
-
-# HTTP related (optional features)
-axum = { version = "0.7", optional = true, features = ["tokio"] }
-tower = { version = "0.4", features = ["util"], optional = true }
-tower-http = { version = "0.5", features = ["cors", "fs"], optional = true }
-url = "2.4"
-
-# Database adapters (optional features)
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono"], optional = true }
-
-# Cache adapters (optional features)
-redis = { version = "0.24", optional = true }
-
-[features]
-default = []
-axum = ["dep:axum", "dep:tower", "dep:tower-http"]
-sqlx-postgres = ["dep:sqlx"]
-redis-cache = ["dep:redis"]
-
-[dev-dependencies]
-tokio-test = "0.4"
-tracing-subscriber = "0.3"
-tower-test = "0.4"
-
-[[example]]
-name = "basic_usage"
-path = "examples/basic_usage.rs"
-
-[[example]]
-name = "postgres_usage"
-path = "examples/postgres_usage.rs"
-required-features = ["sqlx-postgres"]
-
-[[example]]
-name = "axum_server"
-path = "examples/axum_server.rs"
-required-features = ["axum"]
+[profile.ci]
+inherits = "release"
+opt-level = 2
+lto = "thin"
+codegen-units = 16
