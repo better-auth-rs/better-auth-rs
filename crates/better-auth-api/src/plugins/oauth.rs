@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::collections::HashMap as StdHashMap;
 
 use crate::core::{AuthPlugin, AuthRoute, AuthContext, PluginCapabilities};
 use crate::types::{AuthRequest, AuthResponse, HttpMethod, User, CreateUser, CreateAccount};
@@ -127,6 +128,7 @@ impl AuthPlugin for OAuthPlugin {
         vec![
             AuthRoute::post("/sign-in/social", "social_sign_in"),
             AuthRoute::post("/link-social", "link_social"),
+            AuthRoute::get("/oauth/callback", "oauth_callback"),
         ]
     }
 
@@ -144,6 +146,9 @@ impl AuthPlugin for OAuthPlugin {
             },
             (HttpMethod::Post, "/link-social") => {
                 Ok(Some(self.handle_link_social(req, ctx).await?))
+            },
+            (HttpMethod::Get, "/oauth/callback") => {
+                Ok(Some(self.handle_oauth_callback(req, ctx).await?))
             },
             _ => Ok(None),
         }
@@ -361,6 +366,185 @@ impl OAuthPlugin {
         }))?)
     }
 
+    async fn handle_oauth_callback(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
+        let provider_name = match req.query.get("provider") {
+            Some(provider) => provider,
+            None => {
+                return Ok(AuthResponse::json(400, &serde_json::json!({
+                    "error": "Invalid request",
+                    "message": "Missing provider"
+                }))?);
+            }
+        };
+
+        let code = match req.query.get("code") {
+            Some(code) => code,
+            None => {
+                return Ok(AuthResponse::json(400, &serde_json::json!({
+                    "error": "Invalid request",
+                    "message": "Missing authorization code"
+                }))?);
+            }
+        };
+
+        let provider = match self.config.providers.get(provider_name) {
+            Some(provider) => provider,
+            None => {
+                return Ok(AuthResponse::json(400, &serde_json::json!({
+                    "error": "Invalid provider",
+                    "message": "Provider is not configured"
+                }))?);
+            }
+        };
+
+        let redirect_uri = req.query.get("redirect_uri")
+            .cloned()
+            .unwrap_or_else(|| format!("{}/oauth/callback?provider={}", ctx.config.base_url, provider_name));
+
+        let token_response = self.exchange_code_for_token(provider, code, &redirect_uri).await?;
+
+        let mut claims = None;
+        if let Some(id_token) = token_response.id_token.as_deref() {
+            if let Some(jwt_config) = self.config.jwt.get(provider_name) {
+                if let Ok(parsed) = self.verify_id_token(id_token, jwt_config) {
+                    claims = Some(parsed);
+                }
+            }
+        }
+
+        let user_info = self.fetch_user_info(provider, token_response.access_token.as_str()).await?;
+
+        let email = claims
+            .as_ref()
+            .and_then(|c| c.email.clone())
+            .or_else(|| user_info.email.clone())
+            .ok_or_else(|| AuthError::InvalidRequest("User info missing email".to_string()))?;
+
+        let name = claims
+            .as_ref()
+            .and_then(|c| c.name.clone())
+            .or_else(|| user_info.name.clone())
+            .unwrap_or_else(|| format!("User from {}", provider_name));
+
+        let email_verified = claims
+            .as_ref()
+            .and_then(|c| c.email_verified)
+            .or(user_info.email_verified)
+            .unwrap_or(false);
+
+        let existing_user = ctx.database.get_user_by_email(&email).await?;
+        let user = if let Some(user) = existing_user {
+            user
+        } else {
+            let create_user = CreateUser::new()
+                .with_email(&email)
+                .with_name(&name)
+                .with_email_verified(email_verified);
+
+            let user = ctx.database.create_user(create_user).await?;
+            let _ = ctx.emit_user_created(&user).await;
+            user
+        };
+
+        let account_id = claims
+            .as_ref()
+            .map(|c| c.sub.clone())
+            .or_else(|| user_info.sub.clone())
+            .unwrap_or_else(|| format!("{}_{}", provider_name, uuid::Uuid::new_v4()));
+
+        let create_account = CreateAccount {
+            account_id,
+            provider_id: provider_name.to_string(),
+            user_id: user.id.clone(),
+            access_token: Some(token_response.access_token.clone()),
+            refresh_token: token_response.refresh_token.clone(),
+            id_token: token_response.id_token.clone(),
+            access_token_expires_at: token_response.expires_at(),
+            refresh_token_expires_at: None,
+            scope: token_response.scope.clone(),
+            password: None,
+        };
+
+        if ctx.database.get_account(provider_name, &create_account.account_id).await?.is_none() {
+            ctx.database.create_account(create_account).await?;
+        }
+
+        let session_manager = crate::core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+        let session = session_manager.create_session(&user, None, None).await?;
+        let _ = ctx.emit_session_created(&session).await;
+
+        let response = SocialSignInResponse {
+            redirect: false,
+            token: session.token,
+            url: None,
+            user,
+        };
+
+        Ok(AuthResponse::json(200, &response)?)
+    }
+
+    async fn exchange_code_for_token(
+        &self,
+        provider: &OAuthProviderConfig,
+        code: &str,
+        redirect_uri: &str,
+    ) -> AuthResult<OAuthTokenResponse> {
+        let client = reqwest::Client::new();
+        let mut params = StdHashMap::new();
+        params.insert("grant_type", "authorization_code");
+        params.insert("code", code);
+        params.insert("client_id", provider.client_id.as_str());
+        params.insert("client_secret", provider.client_secret.as_str());
+        params.insert("redirect_uri", redirect_uri);
+
+        let response = client
+            .post(&provider.token_url)
+            .form(&params)
+            .send()
+            .await
+            .map_err(|e| AuthError::Internal(format!("Token exchange failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(AuthError::Internal("Token exchange failed".to_string()));
+        }
+
+        let token = response
+            .json::<OAuthTokenResponse>()
+            .await
+            .map_err(|e| AuthError::Internal(format!("Invalid token response: {}", e)))?;
+
+        Ok(token)
+    }
+
+    async fn fetch_user_info(
+        &self,
+        provider: &OAuthProviderConfig,
+        access_token: &str,
+    ) -> AuthResult<OAuthUserInfo> {
+        let client = reqwest::Client::new();
+        let response = client
+            .get(&provider.user_info_url)
+            .bearer_auth(access_token)
+            .send()
+            .await
+            .map_err(|e| AuthError::Internal(format!("User info request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(AuthError::Internal("User info request failed".to_string()));
+        }
+
+        let info = response
+            .json::<OAuthUserInfo>()
+            .await
+            .map_err(|e| AuthError::Internal(format!("Invalid user info response: {}", e)))?;
+
+        Ok(info)
+    }
+
     fn verify_id_token(&self, id_token: &str, config: &OAuthJwtConfig) -> AuthResult<IdTokenClaims> {
         use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 
@@ -412,6 +596,33 @@ impl OAuthPlugin {
 #[derive(Debug, Deserialize, Serialize)]
 struct IdTokenClaims {
     sub: String,
+    email: Option<String>,
+    #[serde(rename = "email_verified")]
+    email_verified: Option<bool>,
+    name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct OAuthTokenResponse {
+    access_token: String,
+    token_type: Option<String>,
+    expires_in: Option<i64>,
+    refresh_token: Option<String>,
+    scope: Option<String>,
+    id_token: Option<String>,
+}
+
+impl OAuthTokenResponse {
+    fn expires_at(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.expires_in
+            .map(|seconds| chrono::Utc::now() + chrono::Duration::seconds(seconds))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct OAuthUserInfo {
+    sub: Option<String>,
     email: Option<String>,
     #[serde(rename = "email_verified")]
     email_verified: Option<bool>,

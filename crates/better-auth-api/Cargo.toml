@@ -32,6 +32,8 @@ anyhow = { workspace = true }
 uuid = { workspace = true }
 url = "2.4"
 urlencoding = "2.1"
+# HTTP client
+reqwest = { workspace = true, features = ["json"] }
 # Crypto and tokens
 argon2 = "0.5"
 base64 = "0.22"
