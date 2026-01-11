@@ -13,22 +13,27 @@ pub struct OAuthPlugin {
 
 #[derive(Debug, Clone)]
 pub struct OAuthConfig {
-    pub providers: HashMap<String, OAuthProvider>,
+    pub providers: HashMap<String, OAuthProviderConfig>,
+    pub jwt: HashMap<String, OAuthJwtConfig>,
 }
 
 #[derive(Debug, Clone)]
-pub struct OAuthProvider {
+pub struct OAuthProviderConfig {
     pub client_id: String,
     pub client_secret: String,
     pub auth_url: String,
     pub token_url: String,
     pub user_info_url: String,
     pub scopes: Vec<String>,
-    pub jwt_issuer: Option<String>,
-    pub jwt_audience: Option<String>,
-    pub jwt_algorithm: Option<String>,
-    pub jwt_public_keys: Option<Vec<String>>,
-    pub jwt_shared_secret: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OAuthJwtConfig {
+    pub issuer: Option<String>,
+    pub audience: Option<String>,
+    pub algorithm: Option<String>,
+    pub public_keys: Option<Vec<String>>,
+    pub shared_secret: Option<String>,
 }
 
 impl OAuthPlugin {
@@ -42,8 +47,13 @@ impl OAuthPlugin {
         Self { config }
     }
     
-    pub fn add_provider(mut self, name: &str, provider: OAuthProvider) -> Self {
+    pub fn add_provider(mut self, name: &str, provider: OAuthProviderConfig) -> Self {
         self.config.providers.insert(name.to_string(), provider);
+        self
+    }
+
+    pub fn add_jwt_config(mut self, name: &str, config: OAuthJwtConfig) -> Self {
+        self.config.jwt.insert(name.to_string(), config);
         self
     }
 }
@@ -58,6 +68,7 @@ impl Default for OAuthConfig {
     fn default() -> Self {
         Self {
             providers: HashMap::new(),
+            jwt: HashMap::new(),
         }
     }
 }
@@ -223,7 +234,7 @@ impl OAuthPlugin {
         signin_req: &SocialSignInRequest,
         ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
-        let provider = match self.config.providers.get(&signin_req.provider) {
+        let _provider = match self.config.providers.get(&signin_req.provider) {
             Some(provider) => provider,
             None => {
                 return Ok(AuthResponse::json(400, &serde_json::json!({
@@ -233,7 +244,17 @@ impl OAuthPlugin {
             }
         };
 
-        let claims = match self.verify_id_token(id_token, provider) {
+        let jwt_config = match self.config.jwt.get(&signin_req.provider) {
+            Some(config) => config,
+            None => {
+                return Ok(AuthResponse::json(400, &serde_json::json!({
+                    "error": "Invalid provider",
+                    "message": "JWT configuration is not configured"
+                }))?);
+            }
+        };
+
+        let claims = match self.verify_id_token(id_token, jwt_config) {
             Ok(claims) => claims,
             Err(err) => {
                 return Ok(AuthResponse::json(400, &serde_json::json!({
@@ -340,10 +361,10 @@ impl OAuthPlugin {
         }))?)
     }
 
-    fn verify_id_token(&self, id_token: &str, provider: &OAuthProvider) -> AuthResult<IdTokenClaims> {
+    fn verify_id_token(&self, id_token: &str, config: &OAuthJwtConfig) -> AuthResult<IdTokenClaims> {
         use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 
-        let alg = provider.jwt_algorithm.as_deref().unwrap_or("RS256");
+        let alg = config.algorithm.as_deref().unwrap_or("RS256");
         let algorithm = match alg {
             "HS256" => Algorithm::HS256,
             "HS384" => Algorithm::HS384,
@@ -357,15 +378,15 @@ impl OAuthPlugin {
         };
 
         let mut validation = Validation::new(algorithm);
-        if let Some(issuer) = provider.jwt_issuer.as_deref() {
+        if let Some(issuer) = config.issuer.as_deref() {
             validation.set_issuer(&[issuer]);
         }
-        if let Some(audience) = provider.jwt_audience.as_deref() {
+        if let Some(audience) = config.audience.as_deref() {
             validation.set_audience(&[audience]);
         }
 
         if matches!(algorithm, Algorithm::HS256 | Algorithm::HS384 | Algorithm::HS512) {
-            let secret = provider.jwt_shared_secret.as_deref()
+            let secret = config.shared_secret.as_deref()
                 .ok_or_else(|| AuthError::InvalidRequest("Missing JWT shared secret".to_string()))?;
             let key = DecodingKey::from_secret(secret.as_bytes());
             let token = decode::<IdTokenClaims>(id_token, &key, &validation)
@@ -373,7 +394,7 @@ impl OAuthPlugin {
             return Ok(token.claims);
         }
 
-        let keys = provider.jwt_public_keys.as_ref()
+        let keys = config.public_keys.as_ref()
             .ok_or_else(|| AuthError::InvalidRequest("Missing JWT public keys".to_string()))?;
 
         for key_pem in keys {

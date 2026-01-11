@@ -31,15 +31,10 @@ struct SendVerificationEmailRequest {
 
 // Response structures
 #[derive(Debug, Serialize)]
-struct StatusResponse {
-    status: bool,
-    description: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct VerifyEmailResponse {
-    user: User,
-    status: bool,
+struct EmailVerificationResponse {
+    success: bool,
+    message: String,
+    user: Option<User>,
 }
 
 impl EmailVerificationPlugin {
@@ -177,37 +172,41 @@ impl EmailVerificationPlugin {
         let user = match ctx.database.get_user_by_email(&send_req.email).await? {
             Some(user) => user,
             None => {
-                return Ok(AuthResponse::json(400, &serde_json::json!({
-                    "error": "User not found",
-                    "message": "No user found with this email address"
-                }))?);
+                return Ok(AuthResponse::json(400, &EmailVerificationResponse {
+                    success: false,
+                    message: "No user found with this email address".to_string(),
+                    user: None,
+                })?);
             }
         };
         
         // Check if user is already verified
         if user.email_verified {
-            return Ok(AuthResponse::json(400, &serde_json::json!({
-                "error": "Already verified",
-                "message": "Email is already verified"
-            }))?);
+            return Ok(AuthResponse::json(400, &EmailVerificationResponse {
+                success: false,
+                message: "Email is already verified".to_string(),
+                user: None,
+            })?);
         }
         
         // Send verification email
         if let Err(err) = self.send_verification_email_internal(&send_req.email, send_req.callback_url.as_deref(), ctx).await {
             if let AuthError::InvalidRequest(ref message) = err {
                 if message == "Verification email recently sent" {
-                    return Ok(AuthResponse::json(429, &serde_json::json!({
-                        "error": "Too many requests",
-                        "message": message
-                    }))?);
+                    return Ok(AuthResponse::json(429, &EmailVerificationResponse {
+                        success: false,
+                        message: message.to_string(),
+                        user: None,
+                    })?);
                 }
             }
             return Err(err);
         }
         
-        let response = StatusResponse {
-            status: true,
-            description: Some("Verification email sent successfully".to_string()),
+        let response = EmailVerificationResponse {
+            success: true,
+            message: "Verification email sent successfully".to_string(),
+            user: None,
         };
         Ok(AuthResponse::json(200, &response)?)
     }
@@ -217,10 +216,11 @@ impl EmailVerificationPlugin {
         let token = match req.query.get("token") {
             Some(token) => token,
             None => {
-                return Ok(AuthResponse::json(400, &serde_json::json!({
-                    "error": "Missing token",
-                    "message": "Verification token is required"
-                }))?);
+                return Ok(AuthResponse::json(400, &EmailVerificationResponse {
+                    success: false,
+                    message: "Verification token is required".to_string(),
+                    user: None,
+                })?);
             }
         };
         
@@ -230,37 +230,41 @@ impl EmailVerificationPlugin {
         let verification = match ctx.database.get_verification_by_value(token).await? {
             Some(verification) => verification,
             None => {
-                return Ok(AuthResponse::json(400, &serde_json::json!({
-                    "error": "Invalid token",
-                    "message": "Invalid or expired verification token"
-                }))?);
+                return Ok(AuthResponse::json(400, &EmailVerificationResponse {
+                    success: false,
+                    message: "Invalid or expired verification token".to_string(),
+                    user: None,
+                })?);
             }
         };
 
         if verification.expires_at < Utc::now() {
             let _ = ctx.database.delete_verification(&verification.id).await;
-            return Ok(AuthResponse::json(400, &serde_json::json!({
-                "error": "Invalid token",
-                "message": "Invalid or expired verification token"
-            }))?);
+            return Ok(AuthResponse::json(400, &EmailVerificationResponse {
+                success: false,
+                message: "Invalid or expired verification token".to_string(),
+                user: None,
+            })?);
         }
         
         // Get user by email (stored in identifier field)
         let user = match ctx.database.get_user_by_email(&verification.identifier).await? {
             Some(user) => user,
             None => {
-                return Ok(AuthResponse::json(400, &serde_json::json!({
-                    "error": "User not found",
-                    "message": "User associated with this token not found"
-                }))?);
+                return Ok(AuthResponse::json(400, &EmailVerificationResponse {
+                    success: false,
+                    message: "User associated with this token not found".to_string(),
+                    user: None,
+                })?);
             }
         };
         
         // Check if already verified
         if user.email_verified {
-            let response = VerifyEmailResponse {
-                user,
-                status: true,
+            let response = EmailVerificationResponse {
+                success: true,
+                message: "Email already verified".to_string(),
+                user: Some(user),
             };
             return Ok(AuthResponse::json(200, &response)?);
         }
@@ -291,9 +295,10 @@ impl EmailVerificationPlugin {
             println!("Would redirect to: {}?verified=true", callback_url);
         }
         
-        let response = VerifyEmailResponse {
-            user: updated_user,
-            status: true,
+        let response = EmailVerificationResponse {
+            success: true,
+            message: "Email verified successfully".to_string(),
+            user: Some(updated_user),
         };
         Ok(AuthResponse::json(200, &response)?)
     }

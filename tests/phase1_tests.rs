@@ -27,21 +27,26 @@ struct TestClaims {
 
 #[tokio::test]
 async fn test_oauth_id_token_validation_hs256() {
-    let provider = better_auth::plugins::oauth::OAuthProvider {
+    let provider = better_auth::plugins::oauth::OAuthProviderConfig {
         client_id: "client".to_string(),
         client_secret: "secret".to_string(),
         auth_url: "https://example.com/auth".to_string(),
         token_url: "https://example.com/token".to_string(),
         user_info_url: "https://example.com/userinfo".to_string(),
         scopes: vec!["email".to_string()],
-        jwt_issuer: Some("https://issuer.example".to_string()),
-        jwt_audience: Some("client".to_string()),
-        jwt_algorithm: Some("HS256".to_string()),
-        jwt_public_keys: None,
-        jwt_shared_secret: Some("jwt-secret".to_string()),
     };
 
-    let oauth = OAuthPlugin::new().add_provider("test", provider);
+    let jwt_config = better_auth::plugins::oauth::OAuthJwtConfig {
+        issuer: Some("https://issuer.example".to_string()),
+        audience: Some("client".to_string()),
+        algorithm: Some("HS256".to_string()),
+        public_keys: None,
+        shared_secret: Some("jwt-secret".to_string()),
+    };
+
+    let oauth = OAuthPlugin::new()
+        .add_provider("test", provider)
+        .add_jwt_config("test", jwt_config);
 
     let auth = BetterAuth::new(test_config())
         .database(MemoryDatabaseAdapter::new())
@@ -86,21 +91,26 @@ async fn test_oauth_id_token_validation_hs256() {
 
 #[tokio::test]
 async fn test_oauth_id_token_invalid_signature() {
-    let provider = better_auth::plugins::oauth::OAuthProvider {
+    let provider = better_auth::plugins::oauth::OAuthProviderConfig {
         client_id: "client".to_string(),
         client_secret: "secret".to_string(),
         auth_url: "https://example.com/auth".to_string(),
         token_url: "https://example.com/token".to_string(),
         user_info_url: "https://example.com/userinfo".to_string(),
         scopes: vec!["email".to_string()],
-        jwt_issuer: Some("https://issuer.example".to_string()),
-        jwt_audience: Some("client".to_string()),
-        jwt_algorithm: Some("HS256".to_string()),
-        jwt_public_keys: None,
-        jwt_shared_secret: Some("jwt-secret".to_string()),
     };
 
-    let oauth = OAuthPlugin::new().add_provider("test", provider);
+    let jwt_config = better_auth::plugins::oauth::OAuthJwtConfig {
+        issuer: Some("https://issuer.example".to_string()),
+        audience: Some("client".to_string()),
+        algorithm: Some("HS256".to_string()),
+        public_keys: None,
+        shared_secret: Some("jwt-secret".to_string()),
+    };
+
+    let oauth = OAuthPlugin::new()
+        .add_provider("test", provider)
+        .add_jwt_config("test", jwt_config);
 
     let auth = BetterAuth::new(test_config())
         .database(MemoryDatabaseAdapter::new())
