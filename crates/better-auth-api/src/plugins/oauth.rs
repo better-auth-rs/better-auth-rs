@@ -16,6 +16,7 @@ pub struct OAuthPlugin {
 pub struct OAuthConfig {
     pub providers: HashMap<String, OAuthProviderConfig>,
     pub jwt: HashMap<String, OAuthJwtConfig>,
+    pub userinfo: HashMap<String, OAuthUserInfoConfig>,
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +27,9 @@ pub struct OAuthProviderConfig {
     pub token_url: String,
     pub user_info_url: String,
     pub scopes: Vec<String>,
+    pub authorize_params: HashMap<String, String>,
+    pub token_params: HashMap<String, String>,
+    pub userinfo_params: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -35,6 +39,14 @@ pub struct OAuthJwtConfig {
     pub algorithm: Option<String>,
     pub public_keys: Option<Vec<String>>,
     pub shared_secret: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OAuthUserInfoConfig {
+    pub sub_field: String,
+    pub email_field: String,
+    pub name_field: String,
+    pub email_verified_field: String,
 }
 
 impl OAuthPlugin {
@@ -57,6 +69,11 @@ impl OAuthPlugin {
         self.config.jwt.insert(name.to_string(), config);
         self
     }
+
+    pub fn add_userinfo_config(mut self, name: &str, config: OAuthUserInfoConfig) -> Self {
+        self.config.userinfo.insert(name.to_string(), config);
+        self
+    }
 }
 
 impl Default for OAuthPlugin {
@@ -70,6 +87,7 @@ impl Default for OAuthConfig {
         Self {
             providers: HashMap::new(),
             jwt: HashMap::new(),
+            userinfo: HashMap::new(),
         }
     }
 }
@@ -94,6 +112,7 @@ struct SocialSignInRequest {
     request_sign_up: Option<String>,
     #[serde(rename = "loginHint")]
     login_hint: Option<String>,
+    state: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -345,18 +364,23 @@ impl OAuthPlugin {
         } else {
             provider.scopes.clone()
         };
-        
+        let state = signin_req.state.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
         let mut auth_url = format!(
             "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&state={}",
             provider.auth_url,
             provider.client_id,
             urlencoding::encode(&callback_url),
             urlencoding::encode(&scopes.join(" ")),
-            uuid::Uuid::new_v4()
+            state
         );
         
         if let Some(login_hint) = &signin_req.login_hint {
             auth_url.push_str(&format!("&login_hint={}", urlencoding::encode(login_hint)));
+        }
+
+        for (key, value) in &provider.authorize_params {
+            auth_url.push_str(&format!("&{}={}", urlencoding::encode(key), urlencoding::encode(value)));
         }
         
         // Return redirect response
@@ -405,7 +429,10 @@ impl OAuthPlugin {
             .cloned()
             .unwrap_or_else(|| format!("{}/oauth/callback?provider={}", ctx.config.base_url, provider_name));
 
-        let token_response = self.exchange_code_for_token(provider, code, &redirect_uri).await?;
+        let scope = req.query.get("scope").cloned();
+        let state = req.query.get("state").cloned();
+
+        let token_response = self.exchange_code_for_token(provider, code, &redirect_uri, scope.as_deref(), state.as_deref()).await?;
 
         let mut claims = None;
         if let Some(id_token) = token_response.id_token.as_deref() {
@@ -416,7 +443,10 @@ impl OAuthPlugin {
             }
         }
 
-        let user_info = self.fetch_user_info(provider, token_response.access_token.as_str()).await?;
+        let userinfo_config = self.config.userinfo.get(provider_name)
+            .cloned()
+            .unwrap_or_else(OAuthUserInfoConfig::default);
+        let user_info = self.fetch_user_info(provider, &userinfo_config, token_response.access_token.as_str()).await?;
 
         let email = claims
             .as_ref()
@@ -477,6 +507,17 @@ impl OAuthPlugin {
         let session = session_manager.create_session(&user, None, None).await?;
         let _ = ctx.emit_session_created(&session).await;
 
+        if let Some(callback_url) = req.query.get("callbackURL") {
+            let redirect_url = format!(
+                "{}?token={}&provider={}",
+                callback_url,
+                urlencoding::encode(&session.token),
+                urlencoding::encode(provider_name),
+            );
+            return Ok(AuthResponse::text(302, "Redirect")
+                .with_header("Location", redirect_url));
+        }
+
         let response = SocialSignInResponse {
             redirect: false,
             token: session.token,
@@ -492,6 +533,8 @@ impl OAuthPlugin {
         provider: &OAuthProviderConfig,
         code: &str,
         redirect_uri: &str,
+        scope: Option<&str>,
+        state: Option<&str>,
     ) -> AuthResult<OAuthTokenResponse> {
         let client = reqwest::Client::new();
         let mut params = StdHashMap::new();
@@ -500,6 +543,15 @@ impl OAuthPlugin {
         params.insert("client_id", provider.client_id.as_str());
         params.insert("client_secret", provider.client_secret.as_str());
         params.insert("redirect_uri", redirect_uri);
+        if let Some(scope) = scope {
+            params.insert("scope", scope);
+        }
+        if let Some(state) = state {
+            params.insert("state", state);
+        }
+        for (key, value) in &provider.token_params {
+            params.insert(key.as_str(), value.as_str());
+        }
 
         let response = client
             .post(&provider.token_url)
@@ -523,11 +575,13 @@ impl OAuthPlugin {
     async fn fetch_user_info(
         &self,
         provider: &OAuthProviderConfig,
+        config: &OAuthUserInfoConfig,
         access_token: &str,
     ) -> AuthResult<OAuthUserInfo> {
         let client = reqwest::Client::new();
         let response = client
             .get(&provider.user_info_url)
+            .query(&provider.userinfo_params)
             .bearer_auth(access_token)
             .send()
             .await
@@ -537,12 +591,17 @@ impl OAuthPlugin {
             return Err(AuthError::Internal("User info request failed".to_string()));
         }
 
-        let info = response
-            .json::<OAuthUserInfo>()
+        let value = response
+            .json::<serde_json::Value>()
             .await
             .map_err(|e| AuthError::Internal(format!("Invalid user info response: {}", e)))?;
 
-        Ok(info)
+        Ok(OAuthUserInfo {
+            sub: extract_string(&value, &config.sub_field),
+            email: extract_string(&value, &config.email_field),
+            name: extract_string(&value, &config.name_field),
+            email_verified: extract_bool(&value, &config.email_verified_field),
+        })
     }
 
     fn verify_id_token(&self, id_token: &str, config: &OAuthJwtConfig) -> AuthResult<IdTokenClaims> {
@@ -627,4 +686,23 @@ struct OAuthUserInfo {
     #[serde(rename = "email_verified")]
     email_verified: Option<bool>,
     name: Option<String>,
+}
+
+impl Default for OAuthUserInfoConfig {
+    fn default() -> Self {
+        Self {
+            sub_field: "sub".to_string(),
+            email_field: "email".to_string(),
+            name_field: "name".to_string(),
+            email_verified_field: "email_verified".to_string(),
+        }
+    }
+}
+
+fn extract_string(value: &serde_json::Value, key: &str) -> Option<String> {
+    value.get(key).and_then(|v| v.as_str()).map(|s| s.to_string())
+}
+
+fn extract_bool(value: &serde_json::Value, key: &str) -> Option<bool> {
+    value.get(key).and_then(|v| v.as_bool())
 }

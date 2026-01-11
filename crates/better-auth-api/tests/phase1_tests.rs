@@ -35,6 +35,9 @@ async fn test_oauth_id_token_validation_hs256() {
         token_url: "https://example.com/token".to_string(),
         user_info_url: "https://example.com/userinfo".to_string(),
         scopes: vec!["email".to_string()],
+        authorize_params: std::collections::HashMap::new(),
+        token_params: std::collections::HashMap::new(),
+        userinfo_params: std::collections::HashMap::new(),
     };
 
     let jwt_config = better_auth::plugins::oauth::OAuthJwtConfig {
@@ -99,6 +102,9 @@ async fn test_oauth_id_token_invalid_signature() {
         token_url: "https://example.com/token".to_string(),
         user_info_url: "https://example.com/userinfo".to_string(),
         scopes: vec!["email".to_string()],
+        authorize_params: std::collections::HashMap::new(),
+        token_params: std::collections::HashMap::new(),
+        userinfo_params: std::collections::HashMap::new(),
     };
 
     let jwt_config = better_auth::plugins::oauth::OAuthJwtConfig {
