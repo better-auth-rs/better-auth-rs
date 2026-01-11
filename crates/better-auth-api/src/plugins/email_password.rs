@@ -180,6 +180,13 @@ impl EmailPasswordPlugin {
                 }))?);
             }
         };
+
+        if self.config.require_email_verification && !user.email_verified {
+            return Ok(AuthResponse::json(403, &serde_json::json!({
+                "error": "Email not verified",
+                "message": "Please verify your email before signing in"
+            }))?);
+        }
             
         if let Err(_) = self.verify_password(&signin_req.password, stored_hash) {
             return Ok(AuthResponse::json(401, &serde_json::json!({

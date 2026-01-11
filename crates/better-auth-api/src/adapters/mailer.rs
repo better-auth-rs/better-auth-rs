@@ -17,6 +17,7 @@ pub trait MailerAdapter: Send + Sync {
 }
 
 /// In-memory mailer for testing and development.
+#[derive(Clone)]
 pub struct MemoryMailerAdapter {
     sent: Arc<Mutex<Vec<EmailMessage>>>,
 }

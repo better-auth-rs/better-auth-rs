@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::core::{AuthPlugin, AuthRoute, AuthContext, PluginCapabilities};
 use crate::types::{AuthRequest, AuthResponse, HttpMethod, User, CreateUser, CreateAccount};
-use crate::error::AuthResult;
+use crate::error::{AuthError, AuthResult};
 
 /// OAuth authentication plugin for social sign-in
 pub struct OAuthPlugin {
@@ -24,6 +24,11 @@ pub struct OAuthProvider {
     pub token_url: String,
     pub user_info_url: String,
     pub scopes: Vec<String>,
+    pub jwt_issuer: Option<String>,
+    pub jwt_audience: Option<String>,
+    pub jwt_algorithm: Option<String>,
+    pub jwt_public_keys: Option<Vec<String>>,
+    pub jwt_shared_secret: Option<String>,
 }
 
 impl OAuthPlugin {
@@ -218,12 +223,36 @@ impl OAuthPlugin {
         signin_req: &SocialSignInRequest,
         ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
-        // TODO: Implement proper JWT verification
-        // For now, return a mock implementation that creates a user
-        
-        // Mock user creation from ID token
-        let email = format!("user+{}@{}.com", uuid::Uuid::new_v4(), signin_req.provider);
-        let name = format!("User from {}", signin_req.provider);
+        let provider = match self.config.providers.get(&signin_req.provider) {
+            Some(provider) => provider,
+            None => {
+                return Ok(AuthResponse::json(400, &serde_json::json!({
+                    "error": "Invalid provider",
+                    "message": "Provider is not configured"
+                }))?);
+            }
+        };
+
+        let claims = match self.verify_id_token(id_token, provider) {
+            Ok(claims) => claims,
+            Err(err) => {
+                return Ok(AuthResponse::json(400, &serde_json::json!({
+                    "error": "Invalid token",
+                    "message": err.to_string()
+                }))?);
+            }
+        };
+
+        let email = match claims.email.clone() {
+            Some(email) => email,
+            None => {
+                return Ok(AuthResponse::json(400, &serde_json::json!({
+                    "error": "Invalid token",
+                    "message": "ID token is missing email claim"
+                }))?);
+            }
+        };
+        let name = claims.name.clone().unwrap_or_else(|| format!("User from {}", signin_req.provider));
         
         // Check if user already exists
         let existing_user = ctx.database.get_user_by_email(&email).await?;
@@ -234,14 +263,16 @@ impl OAuthPlugin {
             let create_user = CreateUser::new()
                 .with_email(&email)
                 .with_name(&name)
-                .with_email_verified(true); // Social providers typically verify email
-            
-            ctx.database.create_user(create_user).await?
+                .with_email_verified(claims.email_verified.unwrap_or(false));
+
+            let user = ctx.database.create_user(create_user).await?;
+            let _ = ctx.emit_user_created(&user).await;
+            user
         };
         
         // Create account record for this social provider
         let create_account = CreateAccount {
-            account_id: format!("{}_{}", signin_req.provider, uuid::Uuid::new_v4()),
+            account_id: claims.sub.clone(),
             provider_id: signin_req.provider.clone(),
             user_id: user.id.clone(),
             access_token: Some("mock_access_token".to_string()),
@@ -261,6 +292,7 @@ impl OAuthPlugin {
         // Create session
         let session_manager = crate::core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
         let session = session_manager.create_session(&user, None, None).await?;
+        let _ = ctx.emit_session_created(&session).await;
         
         let response = SocialSignInResponse {
             redirect: false,
@@ -307,4 +339,60 @@ impl OAuthPlugin {
             "redirect": true
         }))?)
     }
-} 
+
+    fn verify_id_token(&self, id_token: &str, provider: &OAuthProvider) -> AuthResult<IdTokenClaims> {
+        use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
+
+        let alg = provider.jwt_algorithm.as_deref().unwrap_or("RS256");
+        let algorithm = match alg {
+            "HS256" => Algorithm::HS256,
+            "HS384" => Algorithm::HS384,
+            "HS512" => Algorithm::HS512,
+            "RS256" => Algorithm::RS256,
+            "RS384" => Algorithm::RS384,
+            "RS512" => Algorithm::RS512,
+            _ => {
+                return Err(AuthError::InvalidRequest("Unsupported JWT algorithm".to_string()));
+            }
+        };
+
+        let mut validation = Validation::new(algorithm);
+        if let Some(issuer) = provider.jwt_issuer.as_deref() {
+            validation.set_issuer(&[issuer]);
+        }
+        if let Some(audience) = provider.jwt_audience.as_deref() {
+            validation.set_audience(&[audience]);
+        }
+
+        if matches!(algorithm, Algorithm::HS256 | Algorithm::HS384 | Algorithm::HS512) {
+            let secret = provider.jwt_shared_secret.as_deref()
+                .ok_or_else(|| AuthError::InvalidRequest("Missing JWT shared secret".to_string()))?;
+            let key = DecodingKey::from_secret(secret.as_bytes());
+            let token = decode::<IdTokenClaims>(id_token, &key, &validation)
+                .map_err(|_| AuthError::InvalidRequest("Invalid ID token".to_string()))?;
+            return Ok(token.claims);
+        }
+
+        let keys = provider.jwt_public_keys.as_ref()
+            .ok_or_else(|| AuthError::InvalidRequest("Missing JWT public keys".to_string()))?;
+
+        for key_pem in keys {
+            if let Ok(key) = DecodingKey::from_rsa_pem(key_pem.as_bytes()) {
+                if let Ok(token) = decode::<IdTokenClaims>(id_token, &key, &validation) {
+                    return Ok(token.claims);
+                }
+            }
+        }
+
+        Err(AuthError::InvalidRequest("Invalid ID token".to_string()))
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct IdTokenClaims {
+    sub: String,
+    email: Option<String>,
+    #[serde(rename = "email_verified")]
+    email_verified: Option<bool>,
+    name: Option<String>,
+}

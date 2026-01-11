@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::core::{AuthPlugin, AuthRoute, AuthContext, PluginCapabilities};
 use crate::types::{AuthRequest, AuthResponse, HttpMethod, User, UpdateUser, CreateVerification};
-use crate::error::AuthResult;
+use crate::error::{AuthError, AuthResult};
 
 /// Email verification plugin for handling email verification flows
 pub struct EmailVerificationPlugin {
@@ -18,6 +18,7 @@ pub struct EmailVerificationConfig {
     pub send_email_notifications: bool,
     pub require_verification_for_signin: bool,
     pub auto_verify_new_users: bool,
+    pub resend_cooldown_seconds: i64,
 }
 
 // Request structures for email verification endpoints
@@ -71,6 +72,11 @@ impl EmailVerificationPlugin {
         self.config.auto_verify_new_users = auto_verify;
         self
     }
+
+    pub fn resend_cooldown_seconds(mut self, seconds: i64) -> Self {
+        self.config.resend_cooldown_seconds = seconds;
+        self
+    }
 }
 
 impl Default for EmailVerificationPlugin {
@@ -86,6 +92,7 @@ impl Default for EmailVerificationConfig {
             send_email_notifications: true,
             require_verification_for_signin: false,
             auto_verify_new_users: false,
+            resend_cooldown_seconds: 60,
         }
     }
 }
@@ -123,6 +130,26 @@ impl AuthPlugin for EmailVerificationPlugin {
     }
     
     async fn on_user_created(&self, user: &User, ctx: &AuthContext) -> AuthResult<()> {
+        if self.config.auto_verify_new_users && !user.email_verified {
+            let update_user = UpdateUser {
+                email: None,
+                name: None,
+                image: None,
+                email_verified: Some(true),
+                username: None,
+                display_username: None,
+                role: None,
+                banned: None,
+                ban_reason: None,
+                ban_expires: None,
+                two_factor_enabled: None,
+                metadata: None,
+            };
+
+            let _ = ctx.database.update_user(&user.id, update_user).await?;
+            return Ok(());
+        }
+
         // Send verification email for new users if configured
         if self.config.send_email_notifications && !user.email_verified {
             if let Some(email) = &user.email {
@@ -166,7 +193,17 @@ impl EmailVerificationPlugin {
         }
         
         // Send verification email
-        self.send_verification_email_internal(&send_req.email, send_req.callback_url.as_deref(), ctx).await?;
+        if let Err(err) = self.send_verification_email_internal(&send_req.email, send_req.callback_url.as_deref(), ctx).await {
+            if let AuthError::InvalidRequest(ref message) = err {
+                if message == "Verification email recently sent" {
+                    return Ok(AuthResponse::json(429, &serde_json::json!({
+                        "error": "Too many requests",
+                        "message": message
+                    }))?);
+                }
+            }
+            return Err(err);
+        }
         
         let response = StatusResponse {
             status: true,
@@ -199,6 +236,14 @@ impl EmailVerificationPlugin {
                 }))?);
             }
         };
+
+        if verification.expires_at < Utc::now() {
+            let _ = ctx.database.delete_verification(&verification.id).await;
+            return Ok(AuthResponse::json(400, &serde_json::json!({
+                "error": "Invalid token",
+                "message": "Invalid or expired verification token"
+            }))?);
+        }
         
         // Get user by email (stored in identifier field)
         let user = match ctx.database.get_user_by_email(&verification.identifier).await? {
@@ -259,6 +304,14 @@ impl EmailVerificationPlugin {
         callback_url: Option<&str>,
         ctx: &AuthContext,
     ) -> AuthResult<()> {
+        if let Some(cache) = ctx.cache.as_ref() {
+            let key = format!("email_verification:resend:{}", email);
+            if cache.exists(&key).await? {
+                return Err(AuthError::InvalidRequest("Verification email recently sent".to_string()));
+            }
+            cache.set(&key, "1", Duration::seconds(self.config.resend_cooldown_seconds)).await?;
+        }
+
         // Generate verification token
         let verification_token = format!("verify_{}", Uuid::new_v4());
         let expires_at = Utc::now() + Duration::hours(self.config.verification_token_expiry_hours);
@@ -279,8 +332,14 @@ impl EmailVerificationPlugin {
             } else {
                 format!("{}/verify-email?token={}", ctx.config.base_url, verification_token)
             };
-            
-            println!("📧 Verification email would be sent to {} with URL: {}", email, verification_url);
+
+            if let Some(mailer) = ctx.mailer.as_ref() {
+                let subject = "Verify your email";
+                let body = format!("Click the link to verify your email: {}", verification_url);
+                mailer.send(email, subject, &body).await?;
+            } else {
+                println!("📧 Verification email would be sent to {} with URL: {}", email, verification_url);
+            }
         }
         
         Ok(())
