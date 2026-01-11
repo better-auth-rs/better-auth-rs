@@ -1,0 +1,66 @@
+[package]
+name = "better-auth-api"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = { workspace = true }
+repository = { workspace = true }
+
+[lib]
+name = "better_auth"
+path = "src/lib.rs"
+
+[features]
+default = []
+axum = ["dep:axum", "dep:tower", "dep:tower-http"]
+redis-cache = ["dep:redis"]
+sqlx-postgres = ["dep:sqlx"]
+
+[dependencies]
+# Asynchronous runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Time handling
+chrono = { workspace = true }
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+# UUID and URL encoding
+uuid = { workspace = true }
+url = "2.4"
+urlencoding = "2.1"
+# Crypto and tokens
+argon2 = "0.5"
+base64 = "0.22"
+jsonwebtoken = "9"
+rand = "0.8"
+# HTTP related (optional features)
+axum = { version = "0.8", optional = true, features = ["tokio"] }
+tower = { version = "0.5", optional = true, features = ["util"] }
+tower-http = { version = "0.6", optional = true, features = ["cors", "fs"] }
+# Database adapters
+sea-orm = { workspace = true }
+redis = { version = "0.24", optional = true }
+sqlx = { version = "0.8", optional = true, features = ["runtime-tokio-rustls", "postgres", "macros", "uuid", "chrono", "json"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+tracing-subscriber = "0.3"
+tower-test = "0.4"
+
+[[example]]
+name = "basic_usage"
+path = "../../examples/basic_usage.rs"
+
+[[example]]
+name = "postgres_usage"
+path = "../../examples/postgres_usage.rs"
+required-features = ["sqlx-postgres"]
+
+[[example]]
+name = "axum_server"
+path = "../../examples/axum_server.rs"
+required-features = ["axum"]
