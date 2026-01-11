@@ -1,6 +1,7 @@
 use better_auth::{AuthConfig, BetterAuth};
 use better_auth::adapters::{MemoryDatabaseAdapter, MemoryCacheAdapter, MemoryMailerAdapter};
-use better_auth::plugins::{OAuthPlugin, EmailVerificationPlugin};
+use better_auth::plugins::{EmailVerificationPlugin};
+use better_auth::plugins::oauth::OAuthPlugin;
 use better_auth::types::{AuthRequest, HttpMethod, CreateUser, CreateVerification};
 use chrono::{Duration, Utc};
 use serde::{Serialize, Deserialize};
