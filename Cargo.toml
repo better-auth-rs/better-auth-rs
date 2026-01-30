@@ -18,7 +18,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 description = "The most comprehensive authentication framework for Rust"
 repository = "https://github.com/better-auth-rs/better-auth-rs"
 
@@ -44,7 +44,7 @@ sea-orm = { version = "1.1.16", features = [
     "with-uuid",
     "with-chrono",
     "with-json",
-    "with-ipnetwork", 
+    "with-ipnetwork",
 ] }
 # Crypto provider
 rustls = { version = "0.23", default-features = false, features = [
