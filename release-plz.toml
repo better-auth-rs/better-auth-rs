@@ -1,15 +1,96 @@
 [workspace]
-changelog_config = "cliff.toml"
-git_release_enable = true
+release_always = false
+changelog_update = false
+git_release_enable = false
+git_tag_enable = false
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+"""
+body = """
+{% if version %}## [{{ version }}]{% if release_link %}({{ release_link }}){% endif %} - {{ timestamp | date(format="%Y-%m-%d") }}{% else %}## [Unreleased]{% endif %}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group }}
+{% for commit in commits %}
+- {{ commit.message | trim }}
+{% endfor %}
+{% endfor %}
+"""
+trim = true
+tag_pattern = "v[0-9].*"
+sort_commits = "oldest"
+
+[[changelog.commit_parsers]]
+message = "^feat"
+group = "Features"
+
+[[changelog.commit_parsers]]
+message = "^fix"
+group = "Bug Fixes"
+
+[[changelog.commit_parsers]]
+message = "^perf"
+group = "Performance"
+
+[[changelog.commit_parsers]]
+message = "^refactor"
+group = "Refactoring"
+
+[[changelog.commit_parsers]]
+message = "^docs"
+group = "Documentation"
+
+[[changelog.commit_parsers]]
+message = "^test"
+group = "Tests"
+
+[[changelog.commit_parsers]]
+message = "^build"
+group = "Build"
+
+[[changelog.commit_parsers]]
+message = "^ci"
+group = "CI"
+
+[[changelog.commit_parsers]]
+message = "^chore"
+group = "Chores"
+
+[[changelog.commit_parsers]]
+message = "^style"
+group = "Style"
+
+[[changelog.commit_parsers]]
+message = "^revert"
+group = "Reverts"
 
 [[package]]
 name = "better-auth"
+version_group = "workspace"
+changelog_update = true
+changelog_path = "./CHANGELOG.md"
+changelog_include = [
+  "better-auth-core",
+  "better-auth-api",
+  "better-auth-entity",
+]
+git_tag_name = "v{{ version }}"
+git_tag_enable = true
+git_release_enable = true
 
 [[package]]
 name = "better-auth-core"
+version_group = "workspace"
 
 [[package]]
 name = "better-auth-api"
+version_group = "workspace"
 
 [[package]]
 name = "better-auth-entity"
+version_group = "workspace"

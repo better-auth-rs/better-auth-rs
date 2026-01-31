@@ -1,11 +1,11 @@
 [workspace]
+resolver = "2"
 members = [
     ".",
     "crates/better-auth-core",
     "crates/better-auth-api",
     "crates/better-auth-entity",
 ]
-resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
