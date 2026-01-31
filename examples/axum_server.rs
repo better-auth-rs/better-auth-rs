@@ -1,5 +1,5 @@
 use better_auth::{BetterAuth, AuthConfig};
-use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin, PasswordManagementPlugin};
+use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin, PasswordManagementPlugin, AccountManagementPlugin};
 use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::handlers::AxumIntegration;
 use axum::{
@@ -74,6 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new())
+            .plugin(AccountManagementPlugin::new())
             .build()
             .await?
     );
@@ -87,26 +88,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🌐 Starting server on http://localhost:8080");
     println!("📖 Available endpoints:");
     println!("   Authentication:");
-    println!("     • POST /auth/sign-up/email - Sign up with email/password");
-    println!("     • POST /auth/sign-in/email - Sign in with email/password");
+    println!("     POST /auth/sign-up/email       - Sign up with email/password");
+    println!("     POST /auth/sign-in/email       - Sign in with email/password");
+    println!("     POST /auth/sign-in/username     - Sign in with username/password");
     println!("   Session Management:");
-    println!("     • GET  /auth/get-session - Get current session info");
-    println!("     • POST /auth/sign-out - Sign out current session");
-    println!("     • GET  /auth/list-sessions - List all user sessions");
-    println!("     • POST /auth/revoke-session - Revoke specific session");
-    println!("     • POST /auth/revoke-sessions - Revoke all user sessions");
+    println!("     GET  /auth/get-session          - Get current session info");
+    println!("     POST /auth/sign-out             - Sign out current session");
+    println!("     GET  /auth/list-sessions        - List all user sessions");
+    println!("     POST /auth/revoke-session       - Revoke specific session");
+    println!("     POST /auth/revoke-sessions      - Revoke all user sessions");
+    println!("     POST /auth/revoke-other-sessions - Revoke all except current");
     println!("   Password Management:");
-    println!("     • POST /auth/forget-password - Request password reset");
-    println!("     • POST /auth/reset-password - Reset password with token");
-    println!("     • GET  /auth/reset-password/{{token}} - Validate reset token");
-    println!("     • POST /auth/change-password - Change password (authenticated)");
-    println!("   User Profile Management:");
-    println!("     • POST /auth/update-user - Update user profile (authenticated)");
-    println!("     • DELETE /auth/delete-user - Delete user account (authenticated)");
+    println!("     POST /auth/forget-password      - Request password reset");
+    println!("     POST /auth/reset-password       - Reset password with token");
+    println!("     GET  /auth/reset-password/{{token}} - Validate reset token");
+    println!("     POST /auth/change-password      - Change password (auth)");
+    println!("     POST /auth/set-password         - Set password for OAuth users (auth)");
+    println!("   Email Verification:");
+    println!("     POST /auth/send-verification-email - Send verification email (auth)");
+    println!("     GET  /auth/verify-email         - Verify email with token");
+    println!("   User Management:");
+    println!("     POST /auth/update-user          - Update user profile (auth)");
+    println!("     POST /auth/delete-user          - Delete user account (auth)");
+    println!("     POST /auth/change-email         - Change email address (auth)");
+    println!("     GET  /auth/delete-user/callback - Confirm deletion via token");
+    println!("   Account Management:");
+    println!("     GET  /auth/list-accounts        - List linked accounts (auth)");
+    println!("     POST /auth/unlink-account       - Unlink an account (auth)");
     println!("   Other:");
-    println!("     • GET  /auth/health - Health check");
-    println!("     • GET  /api/profile - Protected API route");
-    println!("     • GET  /api/public - Public API route");
+    println!("     GET  /auth/ok                   - Health check");
+    println!("     GET  /api/profile               - Protected API route");
+    println!("     GET  /api/public                - Public API route");
     
     // Start the server
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
@@ -227,22 +239,31 @@ async fn public_route() -> Json<ApiResponse<serde_json::Value>> {
         "server": "Better Auth Axum Server",
         "endpoints": [
             "POST /auth/sign-up/email",
-            "POST /auth/sign-in/email", 
-            "GET /auth/health",
-            "GET /auth/get-session (protected)",
+            "POST /auth/sign-in/email",
+            "POST /auth/sign-in/username",
+            "GET  /auth/get-session (protected)",
             "POST /auth/sign-out (protected)",
-            "GET /auth/list-sessions (protected)",
+            "GET  /auth/list-sessions (protected)",
             "POST /auth/revoke-session (protected)",
             "POST /auth/revoke-sessions (protected)",
+            "POST /auth/revoke-other-sessions (protected)",
             "POST /auth/forget-password",
             "POST /auth/reset-password",
-            "GET /auth/reset-password/{token}",
+            "GET  /auth/reset-password/{token}",
             "POST /auth/change-password (protected)",
+            "POST /auth/set-password (protected)",
+            "POST /auth/send-verification-email (protected)",
+            "GET  /auth/verify-email",
             "POST /auth/update-user (protected)",
-            "DELETE /auth/delete-user (protected)",
-            "GET /api/profile (protected)",
-            "GET /api/protected (protected)",
-            "GET /api/public"
+            "POST /auth/delete-user (protected)",
+            "POST /auth/change-email (protected)",
+            "GET  /auth/delete-user/callback",
+            "GET  /auth/list-accounts (protected)",
+            "POST /auth/unlink-account (protected)",
+            "GET  /auth/ok",
+            "GET  /api/profile (protected)",
+            "GET  /api/protected (protected)",
+            "GET  /api/public"
         ]
     });
     

@@ -1,157 +1,148 @@
 use better_auth::{BetterAuth, AuthConfig};
-use better_auth::plugins::EmailPasswordPlugin;
+use better_auth::plugins::{
+    EmailPasswordPlugin, PasswordManagementPlugin,
+    SessionManagementPlugin, AccountManagementPlugin,
+};
 use better_auth::adapters::SqlxAdapter;
 use better_auth::types::{AuthRequest, HttpMethod};
 use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🐘 Better Auth PostgreSQL Example");
-    
+    println!("Better Auth PostgreSQL Example\n");
+
     // Get database URL from environment variable
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgresql://better_auth:password@localhost:5432/better_auth".to_string());
-    
-    println!("📋 Connecting to database: {}", hide_password(&database_url));
-    
+
+    println!("Connecting to database: {}", hide_password(&database_url));
+
     // Create PostgreSQL adapter
     let database = SqlxAdapter::new(&database_url).await?;
-    
-    println!("✅ Database connection established");
-    
+    println!("Database connection established\n");
+
     // Create configuration
     let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
         .base_url("http://localhost:3000")
         .password_min_length(8);
-    
-    // Build authentication system
+
+    // Build authentication system with all Phase 1 plugins
     let auth = BetterAuth::new(config)
         .database(database)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
+        .plugin(PasswordManagementPlugin::new())
+        .plugin(SessionManagementPlugin::new())
+        .plugin(AccountManagementPlugin::new())
         .build()
         .await?;
-    
-    println!("🔐 BetterAuth instance created successfully!");
-    println!("📝 Registered plugins: {:?}", auth.plugin_names());
-    
-    // Test user registration
-    println!("\n🧪 Testing user registration...");
+
+    println!("BetterAuth instance created");
+    println!("Registered plugins: {:?}\n", auth.plugin_names());
+
+    // --- Sign up with username ---
+    println!("=== Sign up ===");
     let signup_body = serde_json::json!({
         "email": "postgres_user@example.com",
         "password": "secure_password_123",
-        "name": "PostgreSQL Test User"
+        "name": "PostgreSQL Test User",
+        "username": "pg_user"
     });
-    
-    let mut signup_req = AuthRequest::new(HttpMethod::Post, "/sign-up");
-    signup_req.body = Some(signup_body.to_string().into_bytes());
-    signup_req.headers.insert("content-type".to_string(), "application/json".to_string());
-    
-    match auth.handle_request(signup_req).await {
-        Ok(response) => {
-            println!("✅ Registration successful: Status {}", response.status);
-            if let Ok(body_str) = String::from_utf8(response.body.clone()) {
-                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&body_str) {
-                    if let Some(user) = parsed.get("user") {
-                        println!("👤 Created user: {}", user.get("email").unwrap_or(&serde_json::Value::Null));
-                        println!("🆔 User ID: {}", user.get("id").unwrap_or(&serde_json::Value::Null));
-                    }
-                    if let Some(token) = parsed.get("session_token") {
-                        println!("🎫 Session token: {}...", token.as_str().unwrap_or("").chars().take(20).collect::<String>());
-                    }
-                }
-            }
-        }
-        Err(e) => println!("❌ Registration failed: {}", e),
+
+    let response = send(&auth, HttpMethod::Post, "/sign-up/email", Some(&signup_body), None).await;
+    println!("Status: {}", response.status);
+    let data = parse_body(&response.body);
+    let token = data["token"].as_str().unwrap_or_default().to_string();
+    if let Some(user) = data.get("user") {
+        println!("User: {}", user["email"]);
+        println!("Username: {}", user["username"]);
+        println!("ID: {}", user["id"]);
     }
-    
-    // Test user login
-    println!("\n🧪 Testing user login...");
+    println!();
+
+    // --- Sign in by email ---
+    println!("=== Sign in by email ===");
     let signin_body = serde_json::json!({
         "email": "postgres_user@example.com",
         "password": "secure_password_123"
     });
-    
-    let mut signin_req = AuthRequest::new(HttpMethod::Post, "/sign-in");
-    signin_req.body = Some(signin_body.to_string().into_bytes());
-    signin_req.headers.insert("content-type".to_string(), "application/json".to_string());
-    
-    match auth.handle_request(signin_req).await {
-        Ok(response) => {
-            println!("✅ Login successful: Status {}", response.status);
-            if let Ok(body_str) = String::from_utf8(response.body.clone()) {
-                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&body_str) {
-                    if let Some(user) = parsed.get("user") {
-                        println!("👤 Logged in user: {}", user.get("email").unwrap_or(&serde_json::Value::Null));
-                        println!("📅 Account created: {}", user.get("created_at").unwrap_or(&serde_json::Value::Null));
-                    }
-                    if let Some(token) = parsed.get("session_token") {
-                        println!("🎫 New session token: {}...", token.as_str().unwrap_or("").chars().take(20).collect::<String>());
-                    }
-                }
-            }
-        }
-        Err(e) => println!("❌ Login failed: {}", e),
-    }
-    
-    // Test duplicate registration (should fail)
-    println!("\n🧪 Testing duplicate registration (should fail)...");
-    let duplicate_signup_body = serde_json::json!({
-        "email": "postgres_user@example.com",
-        "password": "another_password",
-        "name": "Duplicate User"
+    let response = send(&auth, HttpMethod::Post, "/sign-in/email", Some(&signin_body), None).await;
+    println!("Status: {}\n", response.status);
+
+    // --- Sign in by username ---
+    println!("=== Sign in by username ===");
+    let signin_body = serde_json::json!({
+        "username": "pg_user",
+        "password": "secure_password_123"
     });
-    
-    let mut duplicate_req = AuthRequest::new(HttpMethod::Post, "/sign-up");
-    duplicate_req.body = Some(duplicate_signup_body.to_string().into_bytes());
-    duplicate_req.headers.insert("content-type".to_string(), "application/json".to_string());
-    
-    match auth.handle_request(duplicate_req).await {
-        Ok(response) => {
-            println!("📊 Response status: {}", response.status);
-            if let Ok(body_str) = String::from_utf8(response.body) {
-                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&body_str) {
-                    if let Some(error) = parsed.get("error") {
-                        println!("⚠️  Expected error: {}", error);
-                    }
-                }
-            }
-        }
-        Err(e) => println!("✅ Correctly rejected duplicate: {}", e),
-    }
-    
-    // Test wrong password login (should fail)
-    println!("\n🧪 Testing wrong password login (should fail)...");
-    let wrong_password_body = serde_json::json!({
+    let response = send(&auth, HttpMethod::Post, "/sign-in/username", Some(&signin_body), None).await;
+    println!("Status: {}\n", response.status);
+
+    // --- Get session ---
+    println!("=== Get session ===");
+    let response = send(&auth, HttpMethod::Get, "/get-session", None, Some(&token)).await;
+    println!("Status: {}", response.status);
+    let data = parse_body(&response.body);
+    println!("Session user: {}\n", data["user"]["email"]);
+
+    // --- List sessions ---
+    println!("=== List sessions ===");
+    let response = send(&auth, HttpMethod::Get, "/list-sessions", None, Some(&token)).await;
+    println!("Status: {}\n", response.status);
+
+    // --- List accounts ---
+    println!("=== List accounts ===");
+    let response = send(&auth, HttpMethod::Get, "/list-accounts", None, Some(&token)).await;
+    println!("Status: {}\n", response.status);
+
+    // --- Duplicate registration (should fail) ---
+    println!("=== Duplicate registration (should fail) ===");
+    let response = send(&auth, HttpMethod::Post, "/sign-up/email", Some(&signup_body), None).await;
+    println!("Status: {} (expected error)\n", response.status);
+
+    // --- Wrong password (should fail) ---
+    println!("=== Wrong password (should fail) ===");
+    let wrong_body = serde_json::json!({
         "email": "postgres_user@example.com",
         "password": "wrong_password"
     });
-    
-    let mut wrong_password_req = AuthRequest::new(HttpMethod::Post, "/sign-in");
-    wrong_password_req.body = Some(wrong_password_body.to_string().into_bytes());
-    wrong_password_req.headers.insert("content-type".to_string(), "application/json".to_string());
-    
-    match auth.handle_request(wrong_password_req).await {
-        Ok(response) => {
-            println!("📊 Response status: {}", response.status);
-            if response.status != 200 {
-                println!("✅ Correctly rejected wrong password");
-            }
-        }
-        Err(e) => println!("✅ Correctly rejected wrong password: {}", e),
-    }
-    
-    // Display database statistics
-    println!("\n📊 Database Operations Summary:");
-    println!("  - Successfully connected to PostgreSQL");
-    println!("  - Created user with encrypted password");
-    println!("  - Generated secure session tokens");
-    println!("  - Handled duplicate email validation");
-    println!("  - Verified password authentication");
-    
-    println!("\n🎉 PostgreSQL example completed successfully!");
-    println!("💡 Tip: Check your database to see the created user and session records");
-    
+    let response = send(&auth, HttpMethod::Post, "/sign-in/email", Some(&wrong_body), None).await;
+    println!("Status: {} (expected 401)\n", response.status);
+
+    println!("PostgreSQL example completed successfully!");
+
     Ok(())
+}
+
+/// Helper: send a request through the auth handler
+async fn send(
+    auth: &BetterAuth,
+    method: HttpMethod,
+    path: &str,
+    body: Option<&serde_json::Value>,
+    bearer_token: Option<&str>,
+) -> better_auth::types::AuthResponse {
+    let mut headers = HashMap::new();
+    if body.is_some() {
+        headers.insert("content-type".to_string(), "application/json".to_string());
+    }
+    if let Some(token) = bearer_token {
+        headers.insert("authorization".to_string(), format!("Bearer {}", token));
+    }
+
+    let request = AuthRequest {
+        method,
+        path: path.to_string(),
+        headers,
+        body: body.map(|b| b.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    auth.handle_request(request).await.unwrap()
+}
+
+/// Helper: parse JSON body
+fn parse_body(body: &[u8]) -> serde_json::Value {
+    serde_json::from_slice(body).unwrap_or(serde_json::Value::Null)
 }
 
 /// Hide password in database URL for logging output
@@ -166,4 +157,4 @@ fn hide_password(url: &str) -> String {
         }
     }
     url.to_string()
-} 
+}
