@@ -28,6 +28,9 @@ struct SignUpRequest {
     email: String,
     #[validate(length(min = 1, message = "Password is required"))]
     password: String,
+    username: Option<String>,
+    #[serde(rename = "displayUsername")]
+    display_username: Option<String>,
     #[serde(rename = "callbackURL")]
     callback_url: Option<String>,
 }
@@ -40,6 +43,16 @@ struct SignInRequest {
     password: String,
     #[serde(rename = "callbackURL")]
     callback_url: Option<String>,
+    #[serde(rename = "rememberMe")]
+    remember_me: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+struct SignInUsernameRequest {
+    #[validate(length(min = 1, message = "Username is required"))]
+    username: String,
+    #[validate(length(min = 1, message = "Password is required"))]
+    password: String,
     #[serde(rename = "rememberMe")]
     remember_me: Option<bool>,
 }
@@ -112,6 +125,12 @@ impl EmailPasswordPlugin {
         let mut create_user = CreateUser::new()
             .with_email(&signup_req.email)
             .with_name(&signup_req.name);
+        if let Some(username) = signup_req.username {
+            create_user = create_user.with_username(username);
+        }
+        if let Some(display_username) = signup_req.display_username {
+            create_user.display_username = Some(display_username);
+        }
         create_user.metadata = Some(metadata);
 
         let user = ctx.database.create_user(create_user).await?;
@@ -140,6 +159,41 @@ impl EmailPasswordPlugin {
 
         // Get user by email
         let user = ctx.database.get_user_by_email(&signin_req.email).await?
+            .ok_or(AuthError::InvalidCredentials)?;
+
+        // Verify password
+        let stored_hash = user.metadata.get("password_hash")
+            .and_then(|v| v.as_str())
+            .ok_or(AuthError::InvalidCredentials)?;
+
+        self.verify_password(&signin_req.password, stored_hash)?;
+
+        // Create session
+        let session_manager = better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+        let session = session_manager.create_session(&user, None, None).await?;
+
+        let response = SignInResponse {
+            redirect: false,
+            token: session.token.clone(),
+            url: None,
+            user,
+        };
+
+        // Create session cookie
+        let cookie_header = self.create_session_cookie(&session.token, ctx);
+
+        Ok(AuthResponse::json(200, &response)?
+            .with_header("Set-Cookie", cookie_header))
+    }
+
+    async fn handle_sign_in_username(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+        let signin_req: SignInUsernameRequest = match better_auth_core::validate_request_body(req) {
+            Ok(v) => v,
+            Err(resp) => return Ok(resp),
+        };
+
+        // Get user by username
+        let user = ctx.database.get_user_by_username(&signin_req.username).await?
             .ok_or(AuthError::InvalidCredentials)?;
 
         // Verify password
@@ -240,6 +294,7 @@ impl AuthPlugin for EmailPasswordPlugin {
     fn routes(&self) -> Vec<AuthRoute> {
         let mut routes = vec![
             AuthRoute::post("/sign-in/email", "sign_in_email"),
+            AuthRoute::post("/sign-in/username", "sign_in_username"),
         ];
 
         if self.config.enable_signup {
@@ -256,6 +311,9 @@ impl AuthPlugin for EmailPasswordPlugin {
             },
             (HttpMethod::Post, "/sign-in/email") => {
                 Ok(Some(self.handle_sign_in(req, ctx).await?))
+            },
+            (HttpMethod::Post, "/sign-in/username") => {
+                Ok(Some(self.handle_sign_in_username(req, ctx).await?))
             },
             _ => Ok(None),
         }

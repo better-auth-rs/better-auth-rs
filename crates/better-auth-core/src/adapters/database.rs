@@ -14,6 +14,7 @@ pub trait DatabaseAdapter: Send + Sync {
     async fn create_user(&self, user: CreateUser) -> AuthResult<User>;
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<User>>;
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<User>>;
+    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<User>>;
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<User>;
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
     
@@ -47,6 +48,7 @@ pub struct MemoryDatabaseAdapter {
     accounts: Arc<Mutex<HashMap<String, Account>>>,
     verifications: Arc<Mutex<HashMap<String, Verification>>>,
     email_index: Arc<Mutex<HashMap<String, String>>>, // email -> user_id
+    username_index: Arc<Mutex<HashMap<String, String>>>, // username -> user_id
 }
 
 impl MemoryDatabaseAdapter {
@@ -57,6 +59,7 @@ impl MemoryDatabaseAdapter {
             accounts: Arc::new(Mutex::new(HashMap::new())),
             verifications: Arc::new(Mutex::new(HashMap::new())),
             email_index: Arc::new(Mutex::new(HashMap::new())),
+            username_index: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -72,16 +75,24 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<User> {
         let mut users = self.users.lock().unwrap();
         let mut email_index = self.email_index.lock().unwrap();
-        
+        let mut username_index = self.username_index.lock().unwrap();
+
         let id = create_user.id.unwrap_or_else(|| Uuid::new_v4().to_string());
-        
+
         // Check if email already exists
         if let Some(email) = &create_user.email {
             if email_index.contains_key(email) {
                 return Err(AuthError::config("Email already exists"));
             }
         }
-        
+
+        // Check if username already exists
+        if let Some(username) = &create_user.username {
+            if username_index.contains_key(username) {
+                return Err(AuthError::conflict("A user with this username already exists"));
+            }
+        }
+
         let now = Utc::now();
         let user = User {
             id: id.clone(),
@@ -91,7 +102,7 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
             image: create_user.image,
             created_at: now,
             updated_at: now,
-            username: create_user.username,
+            username: create_user.username.clone(),
             display_username: create_user.display_username,
             two_factor_enabled: false,
             role: create_user.role,
@@ -100,13 +111,17 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
             ban_expires: None,
             metadata: create_user.metadata.unwrap_or_default(),
         };
-        
+
         users.insert(id.clone(), user.clone());
-        
+
         if let Some(email) = &create_user.email {
-            email_index.insert(email.clone(), id);
+            email_index.insert(email.clone(), id.clone());
         }
-        
+
+        if let Some(username) = &create_user.username {
+            username_index.insert(username.clone(), id);
+        }
+
         Ok(user)
     }
     
@@ -118,20 +133,32 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<User>> {
         let email_index = self.email_index.lock().unwrap();
         let users = self.users.lock().unwrap();
-        
+
         if let Some(user_id) = email_index.get(email) {
             Ok(users.get(user_id).cloned())
         } else {
             Ok(None)
         }
     }
-    
+
+    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<User>> {
+        let username_index = self.username_index.lock().unwrap();
+        let users = self.users.lock().unwrap();
+
+        if let Some(user_id) = username_index.get(username) {
+            Ok(users.get(user_id).cloned())
+        } else {
+            Ok(None)
+        }
+    }
+
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<User> {
         let mut users = self.users.lock().unwrap();
         let mut email_index = self.email_index.lock().unwrap();
-        
+        let mut username_index = self.username_index.lock().unwrap();
+
         let user = users.get_mut(id).ok_or(AuthError::UserNotFound)?;
-        
+
         // Update email index if email changed
         if let Some(new_email) = &update.email {
             if let Some(old_email) = &user.email {
@@ -140,23 +167,28 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
             email_index.insert(new_email.clone(), id.to_string());
             user.email = Some(new_email.clone());
         }
-        
+
         if let Some(name) = update.name {
             user.name = Some(name);
         }
-        
+
         if let Some(image) = update.image {
             user.image = Some(image);
         }
-        
+
         if let Some(email_verified) = update.email_verified {
             user.email_verified = email_verified;
         }
-        
-        if let Some(username) = update.username {
-            user.username = Some(username);
+
+        if let Some(ref username) = update.username {
+            // Update username index
+            if let Some(old_username) = &user.username {
+                username_index.remove(old_username);
+            }
+            username_index.insert(username.clone(), id.to_string());
+            user.username = Some(username.clone());
         }
-        
+
         if let Some(display_username) = update.display_username {
             user.display_username = Some(display_username);
         }
@@ -193,13 +225,17 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
         let mut users = self.users.lock().unwrap();
         let mut email_index = self.email_index.lock().unwrap();
-        
+        let mut username_index = self.username_index.lock().unwrap();
+
         if let Some(user) = users.remove(id) {
             if let Some(email) = &user.email {
                 email_index.remove(email);
             }
+            if let Some(username) = &user.username {
+                username_index.remove(username);
+            }
         }
-        
+
         Ok(())
     }
     
@@ -501,10 +537,24 @@ pub mod sqlx_adapter {
             .bind(email)
             .fetch_optional(&self.pool)
             .await?;
-            
+
             Ok(user)
         }
-        
+
+        async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<User>> {
+            let user = sqlx::query_as::<_, User>(
+                r#"
+                SELECT id, email, name, image, email_verified, created_at, updated_at, metadata
+                FROM users WHERE username = $1
+                "#
+            )
+            .bind(username)
+            .fetch_optional(&self.pool)
+            .await?;
+
+            Ok(user)
+        }
+
         async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<User> {
             let mut query = sqlx::QueryBuilder::new("UPDATE users SET updated_at = NOW()");
             let mut has_updates = false;

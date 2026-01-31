@@ -124,6 +124,10 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         self.inner.get_user_by_email(email).await
     }
 
+    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<User>> {
+        self.inner.get_user_by_username(username).await
+    }
+
     async fn update_user(&self, id: &str, mut update: UpdateUser) -> AuthResult<User> {
         for hook in &self.hooks {
             hook.before_update_user(id, &mut update).await?;

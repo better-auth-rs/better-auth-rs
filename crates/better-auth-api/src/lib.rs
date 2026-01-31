@@ -4,6 +4,7 @@
 
 pub mod plugins;
 
+pub use plugins::account_management::AccountManagementPlugin;
 pub use plugins::email_password::EmailPasswordPlugin;
 pub use plugins::email_verification::EmailVerificationPlugin;
 pub use plugins::password_management::PasswordManagementPlugin;
