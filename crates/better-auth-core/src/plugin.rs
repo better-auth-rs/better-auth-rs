@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::types::{AuthRequest, AuthResponse, User, Session, HttpMethod};
 use crate::error::{AuthError, AuthResult};
 use crate::adapters::DatabaseAdapter;
-use crate::core::config::AuthConfig;
+use crate::config::AuthConfig;
 
 /// Plugin trait that all authentication plugins must implement
 #[async_trait]

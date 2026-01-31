@@ -170,7 +170,7 @@ async fn test_revoke_session_integration() {
     let (user_id, session_token1) = create_test_user_and_session(auth.clone()).await;
     
     // Create a second session for the same user
-    use better_auth::core::SessionManager;
+    use better_auth::SessionManager;
     use better_auth::types::CreateSession;
     use chrono::{Utc, Duration};
     
@@ -463,6 +463,113 @@ async fn test_reset_password_token_integration() {
     let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     
     assert_eq!(response_data["token"], reset_token);
+}
+
+/// Integration test for /ok endpoint
+#[tokio::test]
+async fn test_ok_endpoint() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/ok".to_string(),
+        headers: HashMap::new(),
+        body: None,
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    assert_eq!(response_data["status"], true);
+}
+
+/// Integration test for /error endpoint
+#[tokio::test]
+async fn test_error_endpoint() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/error".to_string(),
+        headers: HashMap::new(),
+        body: None,
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    assert_eq!(response_data["status"], false);
+}
+
+/// Integration test for POST /get-session (in addition to GET)
+#[tokio::test]
+async fn test_get_session_post_integration() {
+    let auth = create_test_auth_memory().await;
+    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("authorization".to_string(), format!("Bearer {}", session_token));
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/get-session".to_string(),
+        headers,
+        body: Some(b"{}".to_vec()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+
+    assert!(response_data["session"]["token"].is_string());
+    assert!(response_data["user"]["id"].is_string());
+    assert_eq!(response_data["user"]["email"], "integration@test.com");
+}
+
+/// Integration test for POST /delete-user (changed from DELETE)
+#[tokio::test]
+async fn test_delete_user_post_method() {
+    let auth = create_test_auth_memory().await;
+    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("authorization".to_string(), format!("Bearer {}", session_token));
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/delete-user".to_string(),
+        headers,
+        body: Some(b"{}".to_vec()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    assert_eq!(response_data["success"], true);
 }
 
 /// Integration test for unauthorized password operations

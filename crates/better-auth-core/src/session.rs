@@ -6,7 +6,7 @@ use rand::Rng;
 use crate::types::{Session, CreateSession, User};
 use crate::error::{AuthError, AuthResult};
 use crate::adapters::DatabaseAdapter;
-use crate::core::config::AuthConfig;
+use crate::config::AuthConfig;
 
 /// Session manager handles session creation, validation, and cleanup
 pub struct SessionManager {

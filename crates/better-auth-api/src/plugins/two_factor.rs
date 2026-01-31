@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 
-use crate::core::{AuthPlugin, AuthRoute, AuthContext};
-use crate::types::{AuthRequest, AuthResponse, HttpMethod};
-use crate::error::{AuthError, AuthResult};
+use better_auth_core::{AuthPlugin, AuthRoute, AuthContext};
+use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
+use better_auth_core::{AuthError, AuthResult};
 
 /// Two-factor authentication plugin
 pub struct TwoFactorPlugin {
@@ -26,7 +26,7 @@ impl AuthPlugin for TwoFactorPlugin {
     fn name(&self) -> &'static str {
         "two-factor"
     }
-    
+
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
             AuthRoute::post("/2fa/setup", "setup_2fa"),
@@ -34,17 +34,15 @@ impl AuthPlugin for TwoFactorPlugin {
             AuthRoute::post("/2fa/disable", "disable_2fa"),
         ]
     }
-    
-    async fn on_request(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<Option<AuthResponse>> {
+
+    async fn on_request(&self, req: &AuthRequest, _ctx: &AuthContext) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, path) if path.starts_with("/2fa/") => {
-                // TODO: Implement 2FA flows
-                Ok(Some(AuthResponse::json(501, &serde_json::json!({
-                    "error": "Not implemented", 
-                    "message": "Two-factor authentication plugin not yet implemented"
-                }))?))
+                Err(AuthError::not_implemented(
+                    "Two-factor authentication plugin not yet implemented"
+                ))
             },
             _ => Ok(None),
         }
     }
-} 
+}

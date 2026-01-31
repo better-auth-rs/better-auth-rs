@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 use std::collections::HashMap;
@@ -357,9 +358,10 @@ impl AuthResponse {
 }
 
 // User profile management request/response structures
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct UpdateUserRequest {
     pub name: Option<String>,
+    #[validate(email(message = "Invalid email address"))]
     pub email: Option<String>,
     pub image: Option<String>,
     pub username: Option<String>,

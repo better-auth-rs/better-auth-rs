@@ -3,19 +3,15 @@ use axum::{
     Router,
     extract::{Request, State},
     response::{Response, IntoResponse},
-    http::{StatusCode, HeaderMap},
+    http::StatusCode,
     routing::{get, post},
 };
-#[cfg(feature = "axum")]
-use tower::ServiceBuilder;
 #[cfg(feature = "axum")]
 use std::sync::Arc;
 
 #[cfg(feature = "axum")]
-use crate::{BetterAuth, AuthRequest, AuthResponse};
-use crate::types::HttpMethod;
-#[cfg(feature = "axum")]
-use crate::error::AuthError;
+use crate::BetterAuth;
+use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, AuthError};
 
 /// Integration trait for Axum web framework
 #[cfg(feature = "axum")]
@@ -28,41 +24,58 @@ pub trait AxumIntegration {
 impl AxumIntegration for Arc<BetterAuth> {
     fn axum_router(self) -> Router<Arc<BetterAuth>> {
         let mut router = Router::new();
-        
+
+        // Add status endpoints
+        router = router.route("/ok", get(ok_check));
+        router = router.route("/error", get(error_check));
+
         // Add default health check route
         router = router.route("/health", get(health_check));
-        
+
+        // Add OpenAPI spec endpoint
+        router = router.route("/reference/openapi.json", get(create_plugin_handler()));
+
         // Add core user management routes
         router = router.route("/update-user", post(create_plugin_handler()));
-        router = router.route("/delete-user", axum::routing::delete(create_plugin_handler()));
-        
+        router = router.route("/delete-user", post(create_plugin_handler()));
+
         // Register plugin routes
         for plugin in self.plugins() {
             for route in plugin.routes() {
                 let handler_fn = create_plugin_handler();
                 match route.method {
-                    crate::types::HttpMethod::Get => {
+                    HttpMethod::Get => {
                         router = router.route(&route.path, get(handler_fn.clone()));
                     },
-                    crate::types::HttpMethod::Post => {
+                    HttpMethod::Post => {
                         router = router.route(&route.path, post(handler_fn.clone()));
                     },
-                    crate::types::HttpMethod::Put => {
+                    HttpMethod::Put => {
                         router = router.route(&route.path, axum::routing::put(handler_fn.clone()));
                     },
-                    crate::types::HttpMethod::Delete => {
+                    HttpMethod::Delete => {
                         router = router.route(&route.path, axum::routing::delete(handler_fn.clone()));
                     },
-                    crate::types::HttpMethod::Patch => {
+                    HttpMethod::Patch => {
                         router = router.route(&route.path, axum::routing::patch(handler_fn.clone()));
                     },
                     _ => {} // Skip unsupported methods
                 }
             }
         }
-        
+
         router.with_state(self)
     }
+}
+
+#[cfg(feature = "axum")]
+async fn ok_check() -> impl IntoResponse {
+    axum::Json(serde_json::json!({ "status": true }))
+}
+
+#[cfg(feature = "axum")]
+async fn error_check() -> impl IntoResponse {
+    axum::Json(serde_json::json!({ "status": false }))
 }
 
 #[cfg(feature = "axum")]
@@ -92,12 +105,10 @@ fn create_plugin_handler() -> impl Fn(State<Arc<BetterAuth>>, Request) -> std::p
 
 #[cfg(feature = "axum")]
 async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
-    use axum::body::Body;
-    use axum::extract::Request as AxumRequest;
     use std::collections::HashMap;
-    
+
     let (parts, body) = req.into_parts();
-    
+
     // Convert method
     let method = match parts.method {
         axum::http::Method::GET => HttpMethod::Get,
@@ -109,7 +120,7 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
         axum::http::Method::HEAD => HttpMethod::Head,
         _ => return Err(AuthError::InvalidRequest("Unsupported HTTP method".to_string())),
     };
-    
+
     // Convert headers
     let mut headers = HashMap::new();
     for (name, value) in parts.headers.iter() {
@@ -117,10 +128,10 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
             headers.insert(name.to_string(), value_str.to_string());
         }
     }
-    
+
     // Get path
     let path = parts.uri.path().to_string();
-    
+
     // Convert query parameters
     let mut query = HashMap::new();
     if let Some(query_str) = parts.uri.query() {
@@ -128,13 +139,13 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
             query.insert(key.to_string(), value.to_string());
         }
     }
-    
+
     // Convert body
     let body_bytes = match axum::body::to_bytes(body, usize::MAX).await {
         Ok(bytes) => if bytes.is_empty() { None } else { Some(bytes.to_vec()) },
         Err(_) => None,
     };
-    
+
     Ok(AuthRequest {
         method,
         path,
@@ -148,7 +159,7 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
 fn convert_auth_response(auth_response: AuthResponse) -> Response {
     let mut response = Response::builder()
         .status(StatusCode::from_u16(auth_response.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR));
-    
+
     // Add headers
     for (name, value) in auth_response.headers {
         if let (Ok(header_name), Ok(header_value)) = (
@@ -158,7 +169,7 @@ fn convert_auth_response(auth_response: AuthResponse) -> Response {
             response = response.header(header_name, header_value);
         }
     }
-    
+
     response.body(axum::body::Body::from(auth_response.body))
         .unwrap_or_else(|_| {
             Response::builder()
@@ -171,21 +182,18 @@ fn convert_auth_response(auth_response: AuthResponse) -> Response {
 #[cfg(feature = "axum")]
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
-        let (status, message) = match self {
-            AuthError::InvalidCredentials => (StatusCode::UNAUTHORIZED, "Invalid credentials"),
-            AuthError::UserNotFound => (StatusCode::NOT_FOUND, "User not found"),
-            AuthError::SessionNotFound => (StatusCode::UNAUTHORIZED, "Session not found or expired"),
-            AuthError::Unauthenticated => (StatusCode::UNAUTHORIZED, "Authentication required"),
-            AuthError::Unauthorized => (StatusCode::FORBIDDEN, "Insufficient permissions"),
-            AuthError::InvalidRequest(_) => (StatusCode::BAD_REQUEST, "Invalid request"),
-            _ => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error"),
+        let status_code = StatusCode::from_u16(self.status_code())
+            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
+        let message = match self.status_code() {
+            500 => "Internal server error".to_string(),
+            _ => self.to_string(),
         };
-        
+
         let body = serde_json::json!({
-            "error": message,
-            "details": self.to_string()
+            "message": message
         });
-        
-        (status, axum::Json(body)).into_response()
+
+        (status_code, axum::Json(body)).into_response()
     }
-} 
+}
