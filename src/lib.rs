@@ -29,59 +29,92 @@ pub mod handlers;
 // Re-export core abstractions
 pub use better_auth_core as types_mod;
 pub use better_auth_core::{
+    Account,
+    Argon2Config,
     // Config
-    AuthConfig, SessionConfig, JwtConfig, PasswordConfig, Argon2Config, SameSite,
+    AuthConfig,
+    AuthContext,
+    // Error
+    AuthError,
     // Plugin system
-    AuthPlugin, AuthRoute, AuthContext,
+    AuthPlugin,
+    AuthRequest,
+    AuthResponse,
+    AuthResult,
+    AuthRoute,
+    BodyLimitConfig,
+    BodyLimitMiddleware,
+    CacheAdapter,
+    ConsoleEmailProvider,
+    CorsConfig,
+    CorsMiddleware,
+    CreateAccount,
+    CreateSession,
+    CreateUser,
+    CreateVerification,
+    CsrfConfig,
+    CsrfMiddleware,
+    // Adapters
+    DatabaseAdapter,
+    DatabaseError,
+    // Hooks
+    DatabaseHooks,
+    DeleteUserResponse,
+    // Email
+    EmailProvider,
+    EndpointRateLimit,
+    HookedDatabaseAdapter,
+    HttpMethod,
+    JwtConfig,
+    MemoryCacheAdapter,
+    MemoryDatabaseAdapter,
+    // Middleware
+    Middleware,
+    OpenApiBuilder,
+    // OpenAPI
+    OpenApiSpec,
+    Passkey,
+    PasswordConfig,
+    RateLimitConfig,
+    RateLimitMiddleware,
+    SameSite,
+    Session,
+    SessionConfig,
     // Session
     SessionManager,
-    // Error
-    AuthError, AuthResult, DatabaseError,
+    TwoFactor,
+    UpdateUser,
+    UpdateUserRequest,
+    UpdateUserResponse,
     // Types
-    User, Session, Account, Verification, TwoFactor, Passkey,
-    HttpMethod, AuthRequest, AuthResponse,
-    CreateUser, UpdateUser, CreateSession, CreateAccount, CreateVerification,
-    UpdateUserRequest, UpdateUserResponse, DeleteUserResponse,
-    // Adapters
-    DatabaseAdapter, MemoryDatabaseAdapter, CacheAdapter, MemoryCacheAdapter,
-    // Email
-    EmailProvider, ConsoleEmailProvider,
-    // Hooks
-    DatabaseHooks, HookedDatabaseAdapter,
-    // OpenAPI
-    OpenApiSpec, OpenApiBuilder,
-    // Middleware
-    Middleware, CsrfMiddleware, CsrfConfig,
-    RateLimitMiddleware, RateLimitConfig, EndpointRateLimit,
-    CorsMiddleware, CorsConfig,
-    BodyLimitMiddleware, BodyLimitConfig,
+    User,
+    Verification,
 };
 
 // Re-export types under `types` module for backwards compatibility
 pub mod types {
     pub use better_auth_core::{
-        User, Session, Account, Verification, TwoFactor, Passkey,
-        HttpMethod, AuthRequest, AuthResponse,
-        CreateUser, UpdateUser, CreateSession, CreateAccount, CreateVerification,
-        UpdateUserRequest, UpdateUserResponse, DeleteUserResponse,
+        Account, AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser,
+        CreateVerification, DeleteUserResponse, HttpMethod, Passkey, Session, TwoFactor,
+        UpdateUser, UpdateUserRequest, UpdateUserResponse, User, Verification,
     };
 }
 
 // Re-export adapters
 pub mod adapters {
     pub use better_auth_core::{
-        DatabaseAdapter, MemoryDatabaseAdapter, CacheAdapter, MemoryCacheAdapter,
+        CacheAdapter, DatabaseAdapter, MemoryCacheAdapter, MemoryDatabaseAdapter,
     };
 }
 
 // Re-export plugins
 pub mod plugins {
-    pub use better_auth_api::*;
     pub use better_auth_api::plugins::*;
+    pub use better_auth_api::*;
 }
 
 // Re-export the main BetterAuth struct
-pub use core::{BetterAuth, AuthBuilder};
+pub use core::{AuthBuilder, BetterAuth};
 
 #[cfg(feature = "axum")]
 pub use handlers::axum::AxumIntegration;
@@ -111,7 +144,10 @@ mod tests {
     async fn test_auth_builder() {
         let auth = create_test_auth().await;
         assert_eq!(auth.plugin_names(), vec!["email-password"]);
-        assert_eq!(auth.config().secret, "test-secret-key-that-is-at-least-32-characters-long");
+        assert_eq!(
+            auth.config().secret,
+            "test-secret-key-that-is-at-least-32-characters-long"
+        );
     }
 
     #[tokio::test]
@@ -126,14 +162,19 @@ mod tests {
 
         let mut request = AuthRequest::new(HttpMethod::Post, "/sign-up/email");
         request.body = Some(signup_data.to_string().into_bytes());
-        request.headers.insert("content-type".to_string(), "application/json".to_string());
+        request
+            .headers
+            .insert("content-type".to_string(), "application/json".to_string());
 
-        let response = auth.handle_request(request).await.expect("Signup request failed");
+        let response = auth
+            .handle_request(request)
+            .await
+            .expect("Signup request failed");
 
         assert_eq!(response.status, 200);
 
-        let response_json: serde_json::Value = serde_json::from_slice(&response.body)
-            .expect("Failed to parse response JSON");
+        let response_json: serde_json::Value =
+            serde_json::from_slice(&response.body).expect("Failed to parse response JSON");
 
         assert!(response_json["user"]["id"].is_string());
         assert_eq!(response_json["user"]["email"], "test@example.com");
@@ -154,9 +195,14 @@ mod tests {
 
         let mut signup_request = AuthRequest::new(HttpMethod::Post, "/sign-up/email");
         signup_request.body = Some(signup_data.to_string().into_bytes());
-        signup_request.headers.insert("content-type".to_string(), "application/json".to_string());
+        signup_request
+            .headers
+            .insert("content-type".to_string(), "application/json".to_string());
 
-        let signup_response = auth.handle_request(signup_request).await.expect("Signup failed");
+        let signup_response = auth
+            .handle_request(signup_request)
+            .await
+            .expect("Signup failed");
         assert_eq!(signup_response.status, 200);
 
         // Now test signin
@@ -167,13 +213,18 @@ mod tests {
 
         let mut signin_request = AuthRequest::new(HttpMethod::Post, "/sign-in/email");
         signin_request.body = Some(signin_data.to_string().into_bytes());
-        signin_request.headers.insert("content-type".to_string(), "application/json".to_string());
+        signin_request
+            .headers
+            .insert("content-type".to_string(), "application/json".to_string());
 
-        let signin_response = auth.handle_request(signin_request).await.expect("Signin failed");
+        let signin_response = auth
+            .handle_request(signin_request)
+            .await
+            .expect("Signin failed");
         assert_eq!(signin_response.status, 200);
 
-        let response_json: serde_json::Value = serde_json::from_slice(&signin_response.body)
-            .expect("Failed to parse signin response");
+        let response_json: serde_json::Value =
+            serde_json::from_slice(&signin_response.body).expect("Failed to parse signin response");
 
         assert_eq!(response_json["user"]["email"], "signin@example.com");
         assert!(response_json["token"].is_string());
@@ -191,14 +242,22 @@ mod tests {
 
         let mut request = AuthRequest::new(HttpMethod::Post, "/sign-up/email");
         request.body = Some(signup_data.to_string().into_bytes());
-        request.headers.insert("content-type".to_string(), "application/json".to_string());
+        request
+            .headers
+            .insert("content-type".to_string(), "application/json".to_string());
 
         // First signup should succeed
-        let response1 = auth.handle_request(request.clone()).await.expect("First signup failed");
+        let response1 = auth
+            .handle_request(request.clone())
+            .await
+            .expect("First signup failed");
         assert_eq!(response1.status, 200);
 
         // Second signup with same email should fail
-        let response2 = auth.handle_request(request).await.expect("Second signup request failed");
+        let response2 = auth
+            .handle_request(request)
+            .await
+            .expect("Second signup request failed");
         assert_eq!(response2.status, 409);
     }
 
@@ -214,9 +273,14 @@ mod tests {
 
         let mut request = AuthRequest::new(HttpMethod::Post, "/sign-in/email");
         request.body = Some(signin_data.to_string().into_bytes());
-        request.headers.insert("content-type".to_string(), "application/json".to_string());
+        request
+            .headers
+            .insert("content-type".to_string(), "application/json".to_string());
 
-        let response = auth.handle_request(request).await.expect("Request should not panic");
+        let response = auth
+            .handle_request(request)
+            .await
+            .expect("Request should not panic");
         assert_eq!(response.status, 401);
     }
 
@@ -232,14 +296,24 @@ mod tests {
 
         let mut request = AuthRequest::new(HttpMethod::Post, "/sign-up/email");
         request.body = Some(signup_data.to_string().into_bytes());
-        request.headers.insert("content-type".to_string(), "application/json".to_string());
+        request
+            .headers
+            .insert("content-type".to_string(), "application/json".to_string());
 
-        let response = auth.handle_request(request).await.expect("Request should not panic");
+        let response = auth
+            .handle_request(request)
+            .await
+            .expect("Request should not panic");
         assert_eq!(response.status, 400);
 
-        let response_json: serde_json::Value = serde_json::from_slice(&response.body)
-            .expect("Failed to parse response");
-        assert!(response_json["message"].as_str().unwrap_or("").contains("Password must be at least"));
+        let response_json: serde_json::Value =
+            serde_json::from_slice(&response.body).expect("Failed to parse response");
+        assert!(
+            response_json["message"]
+                .as_str()
+                .unwrap_or("")
+                .contains("Password must be at least")
+        );
     }
 
     #[tokio::test]
@@ -253,10 +327,15 @@ mod tests {
             .with_email("session@example.com")
             .with_name("Session User");
 
-        let user = database.create_user(create_user).await.expect("Failed to create user");
+        let user = database
+            .create_user(create_user)
+            .await
+            .expect("Failed to create user");
 
         // Create a session
-        let session = session_manager.create_session(&user, None, None).await
+        let session = session_manager
+            .create_session(&user, None, None)
+            .await
             .expect("Failed to create session");
 
         assert!(session.token.starts_with("session_"));
@@ -264,7 +343,9 @@ mod tests {
         assert!(session.active);
 
         // Retrieve the session
-        let retrieved_session = session_manager.get_session(&session.token).await
+        let retrieved_session = session_manager
+            .get_session(&session.token)
+            .await
             .expect("Failed to get session")
             .expect("Session not found");
 
@@ -272,11 +353,15 @@ mod tests {
         assert_eq!(retrieved_session.user_id, user.id);
 
         // Delete the session
-        session_manager.delete_session(&session.token).await
+        session_manager
+            .delete_session(&session.token)
+            .await
             .expect("Failed to delete session");
 
         // Verify session is deleted
-        let deleted_session = session_manager.get_session(&session.token).await
+        let deleted_session = session_manager
+            .get_session(&session.token)
+            .await
             .expect("Failed to check deleted session");
         assert!(deleted_session.is_none());
     }
@@ -287,7 +372,10 @@ mod tests {
         let session_manager = auth.session_manager();
 
         // Valid token format: "session_" + base64 encoded 32 bytes = "session_" + 43 chars
-        assert!(session_manager.validate_token_format("session_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN"));
+        assert!(
+            session_manager
+                .validate_token_format("session_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN")
+        );
         assert!(!session_manager.validate_token_format("invalid_token"));
         assert!(!session_manager.validate_token_format("session_short"));
         assert!(!session_manager.validate_token_format(""));
@@ -298,7 +386,10 @@ mod tests {
         let auth = create_test_auth().await;
 
         let request = AuthRequest::new(HttpMethod::Get, "/health");
-        let response = auth.handle_request(request).await.expect("Health check failed");
+        let response = auth
+            .handle_request(request)
+            .await
+            .expect("Health check failed");
 
         // Health check should return 404 since no plugin handles it
         // In a real Axum integration, this would be handled by the router

@@ -95,8 +95,12 @@ impl AuthError {
             // 501
             Self::NotImplemented(_) => 501,
             // 500
-            Self::Config(_) | Self::Database(_) | Self::Serialization(_)
-            | Self::Plugin { .. } | Self::Internal(_) | Self::PasswordHash(_)
+            Self::Config(_)
+            | Self::Database(_)
+            | Self::Serialization(_)
+            | Self::Plugin { .. }
+            | Self::Internal(_)
+            | Self::PasswordHash(_)
             | Self::Jwt(_) => 500,
         }
     }
@@ -112,9 +116,12 @@ impl AuthError {
             _ => self.to_string(),
         };
 
-        crate::types::AuthResponse::json(status, &serde_json::json!({
-            "message": message
-        }))
+        crate::types::AuthResponse::json(
+            status,
+            &serde_json::json!({
+                "message": message
+            }),
+        )
         .unwrap_or_else(|_| crate::types::AuthResponse::text(status, &message))
     }
 
@@ -208,16 +215,22 @@ pub type AuthResult<T> = Result<T, AuthError>;
 /// Convert `validator::ValidationErrors` into a standardized error response body.
 ///
 /// Returns a 422 response with `{ "code": "VALIDATION_ERROR", "message": "...", "errors": {...} }`.
-pub fn validation_error_response(errors: &validator::ValidationErrors) -> crate::types::AuthResponse {
+pub fn validation_error_response(
+    errors: &validator::ValidationErrors,
+) -> crate::types::AuthResponse {
     let field_errors: std::collections::HashMap<&str, Vec<String>> = errors
         .field_errors()
         .into_iter()
         .map(|(field, errs)| {
-            let messages: Vec<String> = errs.iter().map(|e| {
-                e.message.as_ref()
-                    .map(|m| m.to_string())
-                    .unwrap_or_else(|| format!("Invalid value for {}", field))
-            }).collect();
+            let messages: Vec<String> = errs
+                .iter()
+                .map(|e| {
+                    e.message
+                        .as_ref()
+                        .map(|m| m.to_string())
+                        .unwrap_or_else(|| format!("Invalid value for {}", field))
+                })
+                .collect();
             (field, messages)
         })
         .collect();
@@ -233,17 +246,25 @@ pub fn validation_error_response(errors: &validator::ValidationErrors) -> crate:
 }
 
 /// Validate a request body, returning a parsed + validated value or an error response.
-pub fn validate_request_body<T>(req: &crate::types::AuthRequest) -> Result<T, crate::types::AuthResponse>
+pub fn validate_request_body<T>(
+    req: &crate::types::AuthRequest,
+) -> Result<T, crate::types::AuthResponse>
 where
     T: serde::de::DeserializeOwned + validator::Validate,
 {
     let value: T = req.body_as_json().map_err(|e| {
-        crate::types::AuthResponse::json(400, &serde_json::json!({
-            "message": format!("Invalid JSON: {}", e),
-        })).unwrap_or_else(|_| crate::types::AuthResponse::text(400, "Invalid JSON"))
+        crate::types::AuthResponse::json(
+            400,
+            &serde_json::json!({
+                "message": format!("Invalid JSON: {}", e),
+            }),
+        )
+        .unwrap_or_else(|_| crate::types::AuthResponse::text(400, "Invalid JSON"))
     })?;
 
-    value.validate().map_err(|e| validation_error_response(&e))?;
+    value
+        .validate()
+        .map_err(|e| validation_error_response(&e))?;
 
     Ok(value)
 }

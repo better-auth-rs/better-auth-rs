@@ -1,60 +1,3 @@
-[package]
-name = "better-auth"
-version = { workspace = true }
-edition = { workspace = true }
-license = { workspace = true }
-description = { workspace = true }
-repository = { workspace = true }
-
-[dependencies]
-# Core crates
-better-auth-core = { path = "crates/better-auth-core" }
-better-auth-api = { path = "crates/better-auth-api" }
-
-# Asynchronous runtime
-tokio = { workspace = true }
-async-trait = { workspace = true }
-
-# Serialization
-serde = { workspace = true }
-serde_json = { workspace = true }
-
-# Error handling
-thiserror = { workspace = true }
-
-# Time handling
-chrono = { workspace = true }
-
-# Data structures
-uuid = { workspace = true }
-
-# Crypto
-argon2 = { workspace = true }
-rand = { workspace = true }
-base64 = { workspace = true }
-jsonwebtoken = { workspace = true }
-
-# Web framework (optional)
-axum = { workspace = true, optional = true }
-tower = { workspace = true, optional = true }
-url = { workspace = true, optional = true }
-
-# Database (optional)
-sqlx = { workspace = true, optional = true }
-
-# Cache (optional)
-redis = { workspace = true, optional = true }
-
-[dev-dependencies]
-tokio = { workspace = true, features = ["full", "test-util"] }
-serde_yaml = "0.9"
-
-[features]
-default = []
-axum = ["dep:axum", "dep:tower", "dep:url"]
-sqlx-postgres = ["dep:sqlx"]
-redis-cache = ["dep:redis"]
-
 [workspace]
 members = [
     ".",
@@ -73,9 +16,9 @@ repository = "https://github.com/better-auth-rs/better-auth-rs"
 
 [workspace.dependencies]
 # Sub-crates
-better-auth-core = { path = "crates/better-auth-core" }
-better-auth-api = { path = "crates/better-auth-api" }
-better-auth-entity = { path = "crates/better-auth-entity" }
+better-auth-core = { version = "0.1.0", path = "crates/better-auth-core" }
+better-auth-api = { version = "0.1.0", path = "crates/better-auth-api" }
+better-auth-entity = { version = "0.1.0", path = "crates/better-auth-entity" }
 
 # Asynchronous runtime
 tokio = { version = "1.0", features = ["full"] }
@@ -104,7 +47,13 @@ sea-orm = { version = "1.1.16", features = [
 ] }
 
 # SQL
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid", "json"] }
+sqlx = { version = "0.8", features = [
+    "runtime-tokio-rustls",
+    "postgres",
+    "chrono",
+    "uuid",
+    "json",
+] }
 
 # Crypto provider
 rustls = { version = "0.23", default-features = false, features = [
@@ -154,6 +103,71 @@ url = "2"
 
 # Cache
 redis = "0.27"
+
+[package]
+name = "better-auth"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = { workspace = true }
+repository = { workspace = true }
+
+[features]
+default = []
+axum = ["dep:axum", "dep:tower", "dep:url"]
+sqlx-postgres = ["dep:sqlx"]
+redis-cache = ["dep:redis"]
+
+[dependencies]
+# Core crates
+better-auth-core = { path = "crates/better-auth-core" }
+better-auth-api = { path = "crates/better-auth-api" }
+
+# Asynchronous runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Time handling
+chrono = { workspace = true }
+
+# Data structures
+uuid = { workspace = true }
+
+# Crypto
+argon2 = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
+jsonwebtoken = { workspace = true }
+
+# Web framework (optional)
+axum = { workspace = true, optional = true }
+tower = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
+
+# Database (optional)
+sqlx = { workspace = true, optional = true }
+
+# Cache (optional)
+redis = { workspace = true, optional = true }
+
+[[example]]
+name = "axum_server"
+required-features = ["axum"]
+
+[[example]]
+name = "postgres_usage"
+required-features = ["sqlx-postgres"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+serde_yaml = "0.9"
 
 [profile.release]
 opt-level = 3

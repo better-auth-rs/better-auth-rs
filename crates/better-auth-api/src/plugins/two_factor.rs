@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 
-use better_auth_core::{AuthPlugin, AuthRoute, AuthContext};
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
+use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
 /// Two-factor authentication plugin
 pub struct TwoFactorPlugin {
@@ -35,13 +35,15 @@ impl AuthPlugin for TwoFactorPlugin {
         ]
     }
 
-    async fn on_request(&self, req: &AuthRequest, _ctx: &AuthContext) -> AuthResult<Option<AuthResponse>> {
+    async fn on_request(
+        &self,
+        req: &AuthRequest,
+        _ctx: &AuthContext,
+    ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
-            (HttpMethod::Post, path) if path.starts_with("/2fa/") => {
-                Err(AuthError::not_implemented(
-                    "Two-factor authentication plugin not yet implemented"
-                ))
-            },
+            (HttpMethod::Post, path) if path.starts_with("/2fa/") => Err(
+                AuthError::not_implemented("Two-factor authentication plugin not yet implemented"),
+            ),
             _ => Ok(None),
         }
     }

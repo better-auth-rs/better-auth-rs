@@ -1,9 +1,9 @@
+use ipnetwork::IpNetwork;
+use sea_orm::ActiveValue::Set;
 use sea_orm::entity::prelude::*;
 use sea_orm::prelude::async_trait::async_trait;
-use sea_orm::ActiveValue::Set;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use ipnetwork::IpNetwork;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize, ToSchema)]
 #[sea_orm(table_name = "session")]
@@ -26,7 +26,6 @@ pub struct Model {
     pub user_agent: Option<String>,
     pub user_id: String,
 }
-
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {

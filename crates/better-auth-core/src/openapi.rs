@@ -79,9 +79,12 @@ impl OpenApiBuilder {
             tags: vec![tag.to_string()],
             responses: {
                 let mut r = BTreeMap::new();
-                r.insert("200".to_string(), OpenApiResponse {
-                    description: "Successful response".to_string(),
-                });
+                r.insert(
+                    "200".to_string(),
+                    OpenApiResponse {
+                        description: "Successful response".to_string(),
+                    },
+                );
                 r
             },
         };
@@ -109,7 +112,12 @@ impl OpenApiBuilder {
             .route(&HttpMethod::Post, "/update-user", "update_user", "core")
             .route(&HttpMethod::Post, "/delete-user", "delete_user", "core")
             .route(&HttpMethod::Post, "/change-email", "change_email", "core")
-            .route(&HttpMethod::Get, "/delete-user/callback", "delete_user_callback", "core")
+            .route(
+                &HttpMethod::Get,
+                "/delete-user/callback",
+                "delete_user_callback",
+                "core",
+            )
     }
 
     /// Build the final OpenAPI spec.
@@ -165,7 +173,12 @@ mod tests {
     #[test]
     fn test_builder_custom_route() {
         let spec = OpenApiBuilder::new("Test", "1.0.0")
-            .route(&HttpMethod::Post, "/sign-in/email", "sign_in_email", "email-password")
+            .route(
+                &HttpMethod::Post,
+                "/sign-in/email",
+                "sign_in_email",
+                "email-password",
+            )
             .build();
 
         let path = &spec.paths["/sign-in/email"];
@@ -175,9 +188,7 @@ mod tests {
 
     #[test]
     fn test_spec_to_json() {
-        let spec = OpenApiBuilder::new("Test", "1.0.0")
-            .core_routes()
-            .build();
+        let spec = OpenApiBuilder::new("Test", "1.0.0").core_routes().build();
 
         let json = spec.to_json().unwrap();
         assert!(json.contains("\"openapi\": \"3.1.0\""));
@@ -186,9 +197,7 @@ mod tests {
 
     #[test]
     fn test_spec_to_value() {
-        let spec = OpenApiBuilder::new("Test", "1.0.0")
-            .core_routes()
-            .build();
+        let spec = OpenApiBuilder::new("Test", "1.0.0").core_routes().build();
 
         let value = spec.to_value().unwrap();
         assert_eq!(value["openapi"], "3.1.0");

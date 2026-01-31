@@ -10,4 +10,4 @@ pub use account_management::AccountManagementPlugin;
 pub use email_password::EmailPasswordPlugin;
 pub use email_verification::EmailVerificationPlugin;
 pub use password_management::PasswordManagementPlugin;
-pub use session_management::SessionManagementPlugin; 
+pub use session_management::SessionManagementPlugin;

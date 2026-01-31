@@ -1,11 +1,10 @@
-use better_auth::{BetterAuth, AuthConfig};
-use better_auth::plugins::{
-    EmailPasswordPlugin, PasswordManagementPlugin,
-    EmailVerificationPlugin, SessionManagementPlugin,
-    AccountManagementPlugin,
-};
 use better_auth::adapters::MemoryDatabaseAdapter;
+use better_auth::plugins::{
+    AccountManagementPlugin, EmailPasswordPlugin, EmailVerificationPlugin,
+    PasswordManagementPlugin, SessionManagementPlugin,
+};
 use better_auth::types::{AuthRequest, HttpMethod};
+use better_auth::{AuthConfig, BetterAuth};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -41,7 +40,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "displayUsername": "Test User"
     });
 
-    let response = send(&auth, HttpMethod::Post, "/sign-up/email", Some(&signup_body), None).await;
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/sign-up/email",
+        Some(&signup_body),
+        None,
+    )
+    .await;
     println!("Status: {}", response.status);
     let data = parse_body(&response.body);
     let token = data["token"].as_str().unwrap_or_default().to_string();
@@ -55,7 +61,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "email": "test@example.com",
         "password": "password123"
     });
-    let response = send(&auth, HttpMethod::Post, "/sign-in/email", Some(&signin_body), None).await;
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/sign-in/email",
+        Some(&signin_body),
+        None,
+    )
+    .await;
     println!("Status: {}\n", response.status);
 
     // --- Sign in by username ---
@@ -64,7 +77,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "username": "testuser",
         "password": "password123"
     });
-    let response = send(&auth, HttpMethod::Post, "/sign-in/username", Some(&signin_body), None).await;
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/sign-in/username",
+        Some(&signin_body),
+        None,
+    )
+    .await;
     println!("Status: {}", response.status);
     let data = parse_body(&response.body);
     println!("Logged in as: {}\n", data["user"]["email"]);
@@ -81,7 +101,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let response = send(&auth, HttpMethod::Get, "/list-sessions", None, Some(&token)).await;
     println!("Status: {}", response.status);
     let data = parse_body(&response.body);
-    println!("Active sessions: {}\n", data["sessions"].as_array().map(|a| a.len()).unwrap_or(0));
+    println!(
+        "Active sessions: {}\n",
+        data["sessions"].as_array().map(|a| a.len()).unwrap_or(0)
+    );
 
     // --- Change password ---
     println!("=== Change password ===");
@@ -89,13 +112,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "currentPassword": "password123",
         "newPassword": "newpassword456"
     });
-    let response = send(&auth, HttpMethod::Post, "/change-password", Some(&body), Some(&token)).await;
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/change-password",
+        Some(&body),
+        Some(&token),
+    )
+    .await;
     println!("Status: {}\n", response.status);
 
     // --- Change email ---
     println!("=== Change email ===");
     let body = serde_json::json!({ "newEmail": "newemail@example.com" });
-    let response = send(&auth, HttpMethod::Post, "/change-email", Some(&body), Some(&token)).await;
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/change-email",
+        Some(&body),
+        Some(&token),
+    )
+    .await;
     println!("Status: {}", response.status);
     let data = parse_body(&response.body);
     println!("New email: {}\n", data["user"]["email"]);

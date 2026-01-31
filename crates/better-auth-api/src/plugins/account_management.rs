@@ -2,9 +2,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use better_auth_core::{AuthPlugin, AuthRoute, AuthContext, SessionManager};
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, User, Session, Account};
+use better_auth_core::{AuthContext, AuthPlugin, AuthRoute, SessionManager};
 use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, Session, User};
 
 /// Account management plugin for listing and unlinking user accounts.
 pub struct AccountManagementPlugin {
@@ -88,54 +88,72 @@ impl AuthPlugin for AccountManagementPlugin {
         ]
     }
 
-    async fn on_request(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<Option<AuthResponse>> {
+    async fn on_request(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Get, "/list-accounts") => {
                 Ok(Some(self.handle_list_accounts(req, ctx).await?))
-            },
+            }
             (HttpMethod::Post, "/unlink-account") => {
                 Ok(Some(self.handle_unlink_account(req, ctx).await?))
-            },
+            }
             _ => Ok(None),
         }
     }
 }
 
 impl AccountManagementPlugin {
-    async fn require_session(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<(User, Session)> {
+    async fn require_session(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<(User, Session)> {
         let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
 
-        if let Some(token) = session_manager.extract_session_token(req) {
-            if let Some(session) = session_manager.get_session(&token).await? {
-                if let Some(user) = ctx.database.get_user_by_id(&session.user_id).await? {
-                    return Ok((user, session));
-                }
-            }
+        if let Some(token) = session_manager.extract_session_token(req)
+            && let Some(session) = session_manager.get_session(&token).await?
+            && let Some(user) = ctx.database.get_user_by_id(&session.user_id).await?
+        {
+            return Ok((user, session));
         }
 
         Err(AuthError::Unauthenticated)
     }
 
-    async fn handle_list_accounts(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_list_accounts(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let (user, _session) = self.require_session(req, ctx).await?;
 
         let accounts = ctx.database.get_user_accounts(&user.id).await?;
 
         // Filter sensitive fields (password, tokens)
-        let filtered: Vec<AccountResponse> = accounts.iter().map(|acc| AccountResponse {
-            id: acc.id.clone(),
-            account_id: acc.account_id.clone(),
-            provider_id: acc.provider_id.clone(),
-            user_id: acc.user_id.clone(),
-            created_at: acc.created_at.to_rfc3339(),
-            updated_at: acc.updated_at.to_rfc3339(),
-            scope: acc.scope.clone(),
-        }).collect();
+        let filtered: Vec<AccountResponse> = accounts
+            .iter()
+            .map(|acc| AccountResponse {
+                id: acc.id.clone(),
+                account_id: acc.account_id.clone(),
+                provider_id: acc.provider_id.clone(),
+                user_id: acc.user_id.clone(),
+                created_at: acc.created_at.to_rfc3339(),
+                updated_at: acc.updated_at.to_rfc3339(),
+                scope: acc.scope.clone(),
+            })
+            .collect();
 
         Ok(AuthResponse::json(200, &filtered)?)
     }
 
-    async fn handle_unlink_account(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_unlink_account(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let (user, _session) = self.require_session(req, ctx).await?;
 
         let unlink_req: UnlinkAccountRequest = match better_auth_core::validate_request_body(req) {
@@ -146,24 +164,28 @@ impl AccountManagementPlugin {
         let accounts = ctx.database.get_user_accounts(&user.id).await?;
 
         // Check if user has a password (credential provider)
-        let has_password = user.metadata.get("password_hash")
+        let has_password = user
+            .metadata
+            .get("password_hash")
             .and_then(|v| v.as_str())
             .is_some();
 
         // Count remaining credentials after unlinking
-        let remaining_accounts = accounts.iter()
+        let remaining_accounts = accounts
+            .iter()
             .filter(|acc| acc.provider_id != unlink_req.provider_id)
             .count();
 
         // Prevent unlinking the last credential
         if !has_password && remaining_accounts == 0 {
             return Err(AuthError::bad_request(
-                "Cannot unlink the last account. You must have at least one authentication method."
+                "Cannot unlink the last account. You must have at least one authentication method.",
             ));
         }
 
         // Find and delete the account
-        let account_to_remove = accounts.iter()
+        let account_to_remove = accounts
+            .iter()
             .find(|acc| acc.provider_id == unlink_req.provider_id)
             .ok_or_else(|| AuthError::not_found("No account found with this provider"))?;
 

@@ -3,18 +3,14 @@ use std::sync::Arc;
 use serde::Deserialize;
 
 use better_auth_core::{
-    AuthRequest, AuthResponse, UpdateUserRequest, UpdateUserResponse,
-    DeleteUserResponse, UpdateUser, HttpMethod, User,
-    AuthError, AuthResult,
-    DatabaseAdapter,
-    AuthConfig, AuthPlugin, AuthContext, SessionManager,
-    DatabaseHooks, HookedDatabaseAdapter,
-    OpenApiBuilder, OpenApiSpec,
-    EmailProvider,
-    middleware::{self, Middleware, CsrfMiddleware, CsrfConfig,
-        RateLimitMiddleware, RateLimitConfig,
-        CorsMiddleware, CorsConfig,
-        BodyLimitMiddleware, BodyLimitConfig},
+    AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
+    DatabaseAdapter, DatabaseHooks, DeleteUserResponse, EmailProvider, HookedDatabaseAdapter,
+    HttpMethod, OpenApiBuilder, OpenApiSpec, SessionManager, UpdateUser, UpdateUserRequest,
+    UpdateUserResponse, User,
+    middleware::{
+        self, BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig,
+        CsrfMiddleware, Middleware, RateLimitConfig, RateLimitMiddleware,
+    },
 };
 
 #[derive(Debug, Deserialize)]
@@ -144,24 +140,19 @@ impl AuthBuilder {
         }
 
         // Build middleware chain (order matters: body limit → rate limit → CSRF → CORS → custom)
-        let mut middlewares: Vec<Box<dyn Middleware>> = Vec::new();
-
-        middlewares.push(Box::new(BodyLimitMiddleware::new(
-            self.body_limit_config.unwrap_or_default(),
-        )));
-
-        middlewares.push(Box::new(RateLimitMiddleware::new(
-            self.rate_limit_config.unwrap_or_default(),
-        )));
-
-        middlewares.push(Box::new(CsrfMiddleware::new(
-            self.csrf_config.unwrap_or_default(),
-            &config.base_url,
-        )));
-
-        middlewares.push(Box::new(CorsMiddleware::new(
-            self.cors_config.unwrap_or_default(),
-        )));
+        let mut middlewares: Vec<Box<dyn Middleware>> = vec![
+            Box::new(BodyLimitMiddleware::new(
+                self.body_limit_config.unwrap_or_default(),
+            )),
+            Box::new(RateLimitMiddleware::new(
+                self.rate_limit_config.unwrap_or_default(),
+            )),
+            Box::new(CsrfMiddleware::new(
+                self.csrf_config.unwrap_or_default(),
+                &config.base_url,
+            )),
+            Box::new(CorsMiddleware::new(self.cors_config.unwrap_or_default())),
+        ];
 
         middlewares.extend(self.custom_middlewares);
 
@@ -178,6 +169,7 @@ impl AuthBuilder {
 
 impl BetterAuth {
     /// Create a new BetterAuth builder
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(config: AuthConfig) -> AuthBuilder {
         AuthBuilder::new(config)
     }
@@ -258,7 +250,8 @@ impl BetterAuth {
 
     /// Get plugin by name
     pub fn get_plugin(&self, name: &str) -> Option<&dyn AuthPlugin> {
-        self.plugins.iter()
+        self.plugins
+            .iter()
             .find(|p| p.name() == name)
             .map(|p| p.as_ref())
     }
@@ -284,28 +277,24 @@ impl BetterAuth {
     /// Handle core authentication requests (user profile management + status endpoints)
     async fn handle_core_request(&self, req: &AuthRequest) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
-            (HttpMethod::Get, "/ok") => {
-                Ok(Some(AuthResponse::json(200, &serde_json::json!({ "status": true }))?))
-            },
-            (HttpMethod::Get, "/error") => {
-                Ok(Some(AuthResponse::json(200, &serde_json::json!({ "status": false }))?))
-            },
+            (HttpMethod::Get, "/ok") => Ok(Some(AuthResponse::json(
+                200,
+                &serde_json::json!({ "status": true }),
+            )?)),
+            (HttpMethod::Get, "/error") => Ok(Some(AuthResponse::json(
+                200,
+                &serde_json::json!({ "status": false }),
+            )?)),
             (HttpMethod::Get, "/reference/openapi.json") => {
                 let spec = self.openapi_spec();
                 Ok(Some(AuthResponse::json(200, &spec)?))
-            },
-            (HttpMethod::Post, "/update-user") => {
-                Ok(Some(self.handle_update_user(req).await?))
-            },
-            (HttpMethod::Post, "/delete-user") => {
-                Ok(Some(self.handle_delete_user(req).await?))
-            },
-            (HttpMethod::Post, "/change-email") => {
-                Ok(Some(self.handle_change_email(req).await?))
-            },
+            }
+            (HttpMethod::Post, "/update-user") => Ok(Some(self.handle_update_user(req).await?)),
+            (HttpMethod::Post, "/delete-user") => Ok(Some(self.handle_delete_user(req).await?)),
+            (HttpMethod::Post, "/change-email") => Ok(Some(self.handle_change_email(req).await?)),
             (HttpMethod::Get, "/delete-user/callback") => {
                 Ok(Some(self.handle_delete_user_callback(req).await?))
-            },
+            }
             _ => Ok(None), // Not a core endpoint
         }
     }
@@ -316,7 +305,8 @@ impl BetterAuth {
         let current_user = self.extract_current_user(req).await?;
 
         // Parse request body
-        let update_req: UpdateUserRequest = req.body_as_json()
+        let update_req: UpdateUserRequest = req
+            .body_as_json()
             .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
 
         // Convert to UpdateUser
@@ -336,11 +326,12 @@ impl BetterAuth {
         };
 
         // Update user in database
-        let updated_user = self.database.update_user(&current_user.id, update_user).await?;
+        let updated_user = self
+            .database
+            .update_user(&current_user.id, update_user)
+            .await?;
 
-        let response = UpdateUserResponse {
-            user: updated_user,
-        };
+        let response = UpdateUserResponse { user: updated_user };
 
         Ok(AuthResponse::json(200, &response)?)
     }
@@ -368,7 +359,8 @@ impl BetterAuth {
     async fn handle_change_email(&self, req: &AuthRequest) -> AuthResult<AuthResponse> {
         let current_user = self.extract_current_user(req).await?;
 
-        let change_req: ChangeEmailRequest = req.body_as_json()
+        let change_req: ChangeEmailRequest = req
+            .body_as_json()
             .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
 
         // Basic email validation
@@ -377,7 +369,12 @@ impl BetterAuth {
         }
 
         // Check if the new email is already in use
-        if self.database.get_user_by_email(&change_req.new_email).await?.is_some() {
+        if self
+            .database
+            .get_user_by_email(&change_req.new_email)
+            .await?
+            .is_some()
+        {
             return Err(AuthError::conflict("A user with this email already exists"));
         }
 
@@ -397,22 +394,28 @@ impl BetterAuth {
             metadata: None,
         };
 
-        let updated_user = self.database.update_user(&current_user.id, update_user).await?;
+        let updated_user = self
+            .database
+            .update_user(&current_user.id, update_user)
+            .await?;
 
-        let response = UpdateUserResponse {
-            user: updated_user,
-        };
+        let response = UpdateUserResponse { user: updated_user };
 
         Ok(AuthResponse::json(200, &response)?)
     }
 
     /// Handle delete-user callback (token-based deletion confirmation)
     async fn handle_delete_user_callback(&self, req: &AuthRequest) -> AuthResult<AuthResponse> {
-        let token = req.query.get("token")
+        let token = req
+            .query
+            .get("token")
             .ok_or_else(|| AuthError::bad_request("Deletion token is required"))?;
 
         // Validate the token
-        let verification = self.database.get_verification_by_value(token).await?
+        let verification = self
+            .database
+            .get_verification_by_value(token)
+            .await?
             .ok_or_else(|| AuthError::bad_request("Invalid or expired deletion token"))?;
 
         // The identifier stores the user_id for deletion tokens
@@ -444,15 +447,23 @@ impl BetterAuth {
     /// Extract current user from request (validates session)
     async fn extract_current_user(&self, req: &AuthRequest) -> AuthResult<User> {
         // Extract token from Authorization header or cookie
-        let token = self.session_manager.extract_session_token(req)
+        let token = self
+            .session_manager
+            .extract_session_token(req)
             .ok_or(AuthError::Unauthenticated)?;
 
         // Get session from database
-        let session = self.session_manager.get_session(&token).await?
+        let session = self
+            .session_manager
+            .get_session(&token)
+            .await?
             .ok_or(AuthError::SessionNotFound)?;
 
         // Get user from database
-        let user = self.database.get_user_by_id(&session.user_id).await?
+        let user = self
+            .database
+            .get_user_by_id(&session.user_id)
+            .await?
             .ok_or(AuthError::UserNotFound)?;
 
         Ok(user)

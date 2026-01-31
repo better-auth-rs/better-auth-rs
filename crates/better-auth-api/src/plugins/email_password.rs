@@ -1,12 +1,12 @@
+use argon2::password_hash::{SaltString, rand_core::OsRng};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use argon2::password_hash::{SaltString, rand_core::OsRng};
 
-use better_auth_core::{AuthPlugin, AuthRoute, AuthContext};
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, CreateUser, User};
+use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::{AuthRequest, AuthResponse, CreateUser, HttpMethod, User};
 
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
@@ -21,6 +21,7 @@ pub struct EmailPasswordConfig {
 }
 
 #[derive(Debug, Deserialize, Validate)]
+#[allow(dead_code)]
 struct SignUpRequest {
     #[validate(length(min = 1, message = "Name is required"))]
     name: String,
@@ -36,6 +37,7 @@ struct SignUpRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
+#[allow(dead_code)]
 struct SignInRequest {
     #[validate(email(message = "Invalid email address"))]
     email: String,
@@ -48,6 +50,7 @@ struct SignInRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
+#[allow(dead_code)]
 struct SignInUsernameRequest {
     #[validate(length(min = 1, message = "Username is required"))]
     username: String,
@@ -72,6 +75,7 @@ struct SignInResponse {
 }
 
 impl EmailPasswordPlugin {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             config: EmailPasswordConfig::default(),
@@ -97,7 +101,11 @@ impl EmailPasswordPlugin {
         self
     }
 
-    async fn handle_sign_up(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_sign_up(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         if !self.config.enable_signup {
             return Err(AuthError::forbidden("User registration is not enabled"));
         }
@@ -111,7 +119,12 @@ impl EmailPasswordPlugin {
         self.validate_password(&signup_req.password, ctx)?;
 
         // Check if user already exists
-        if ctx.database.get_user_by_email(&signup_req.email).await?.is_some() {
+        if ctx
+            .database
+            .get_user_by_email(&signup_req.email)
+            .await?
+            .is_some()
+        {
             return Err(AuthError::conflict("A user with this email already exists"));
         }
 
@@ -120,7 +133,10 @@ impl EmailPasswordPlugin {
 
         // Create user with password hash in metadata
         let mut metadata = std::collections::HashMap::new();
-        metadata.insert("password_hash".to_string(), serde_json::Value::String(password_hash));
+        metadata.insert(
+            "password_hash".to_string(),
+            serde_json::Value::String(password_hash),
+        );
 
         let mut create_user = CreateUser::new()
             .with_email(&signup_req.email)
@@ -136,7 +152,8 @@ impl EmailPasswordPlugin {
         let user = ctx.database.create_user(create_user).await?;
 
         // Create session
-        let session_manager = better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+        let session_manager =
+            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
         let session = session_manager.create_session(&user, None, None).await?;
 
         let response = SignUpResponse {
@@ -147,29 +164,38 @@ impl EmailPasswordPlugin {
         // Create session cookie
         let cookie_header = self.create_session_cookie(&session.token, ctx);
 
-        Ok(AuthResponse::json(200, &response)?
-            .with_header("Set-Cookie", cookie_header))
+        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
-    async fn handle_sign_in(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_sign_in(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let signin_req: SignInRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
         // Get user by email
-        let user = ctx.database.get_user_by_email(&signin_req.email).await?
+        let user = ctx
+            .database
+            .get_user_by_email(&signin_req.email)
+            .await?
             .ok_or(AuthError::InvalidCredentials)?;
 
         // Verify password
-        let stored_hash = user.metadata.get("password_hash")
+        let stored_hash = user
+            .metadata
+            .get("password_hash")
             .and_then(|v| v.as_str())
             .ok_or(AuthError::InvalidCredentials)?;
 
         self.verify_password(&signin_req.password, stored_hash)?;
 
         // Create session
-        let session_manager = better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+        let session_manager =
+            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
         let session = session_manager.create_session(&user, None, None).await?;
 
         let response = SignInResponse {
@@ -182,29 +208,38 @@ impl EmailPasswordPlugin {
         // Create session cookie
         let cookie_header = self.create_session_cookie(&session.token, ctx);
 
-        Ok(AuthResponse::json(200, &response)?
-            .with_header("Set-Cookie", cookie_header))
+        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
-    async fn handle_sign_in_username(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_sign_in_username(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let signin_req: SignInUsernameRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
         // Get user by username
-        let user = ctx.database.get_user_by_username(&signin_req.username).await?
+        let user = ctx
+            .database
+            .get_user_by_username(&signin_req.username)
+            .await?
             .ok_or(AuthError::InvalidCredentials)?;
 
         // Verify password
-        let stored_hash = user.metadata.get("password_hash")
+        let stored_hash = user
+            .metadata
+            .get("password_hash")
             .and_then(|v| v.as_str())
             .ok_or(AuthError::InvalidCredentials)?;
 
         self.verify_password(&signin_req.password, stored_hash)?;
 
         // Create session
-        let session_manager = better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+        let session_manager =
+            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
         let session = session_manager.create_session(&user, None, None).await?;
 
         let response = SignInResponse {
@@ -217,8 +252,7 @@ impl EmailPasswordPlugin {
         // Create session cookie
         let cookie_header = self.create_session_cookie(&session.token, ctx);
 
-        Ok(AuthResponse::json(200, &response)?
-            .with_header("Set-Cookie", cookie_header))
+        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
     fn validate_password(&self, password: &str, ctx: &AuthContext) -> AuthResult<()> {
@@ -235,7 +269,8 @@ impl EmailPasswordPlugin {
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
 
-        let password_hash = argon2.hash_password(password.as_bytes(), &salt)
+        let password_hash = argon2
+            .hash_password(password.as_bytes(), &salt)
             .map_err(|e| AuthError::PasswordHash(format!("Failed to hash password: {}", e)))?;
 
         Ok(password_hash.to_string())
@@ -243,8 +278,16 @@ impl EmailPasswordPlugin {
 
     fn create_session_cookie(&self, token: &str, ctx: &AuthContext) -> String {
         let session_config = &ctx.config.session;
-        let secure = if session_config.cookie_secure { "; Secure" } else { "" };
-        let http_only = if session_config.cookie_http_only { "; HttpOnly" } else { "" };
+        let secure = if session_config.cookie_secure {
+            "; Secure"
+        } else {
+            ""
+        };
+        let http_only = if session_config.cookie_http_only {
+            "; HttpOnly"
+        } else {
+            ""
+        };
         let same_site = match session_config.cookie_same_site {
             better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
             better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
@@ -254,13 +297,10 @@ impl EmailPasswordPlugin {
         let expires = chrono::Utc::now() + session_config.expires_in;
         let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
 
-        format!("{}={}; Path=/; Expires={}{}{}{}",
-                session_config.cookie_name,
-                token,
-                expires_str,
-                secure,
-                http_only,
-                same_site)
+        format!(
+            "{}={}; Path=/; Expires={}{}{}{}",
+            session_config.cookie_name, token, expires_str, secure, http_only, same_site
+        )
     }
 
     fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
@@ -268,7 +308,8 @@ impl EmailPasswordPlugin {
             .map_err(|e| AuthError::PasswordHash(format!("Invalid password hash: {}", e)))?;
 
         let argon2 = Argon2::default();
-        argon2.verify_password(password.as_bytes(), &parsed_hash)
+        argon2
+            .verify_password(password.as_bytes(), &parsed_hash)
             .map_err(|_| AuthError::InvalidCredentials)?;
 
         Ok(())
@@ -304,26 +345,29 @@ impl AuthPlugin for EmailPasswordPlugin {
         routes
     }
 
-    async fn on_request(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<Option<AuthResponse>> {
+    async fn on_request(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/sign-up/email") if self.config.enable_signup => {
                 Ok(Some(self.handle_sign_up(req, ctx).await?))
-            },
-            (HttpMethod::Post, "/sign-in/email") => {
-                Ok(Some(self.handle_sign_in(req, ctx).await?))
-            },
+            }
+            (HttpMethod::Post, "/sign-in/email") => Ok(Some(self.handle_sign_in(req, ctx).await?)),
             (HttpMethod::Post, "/sign-in/username") => {
                 Ok(Some(self.handle_sign_in_username(req, ctx).await?))
-            },
+            }
             _ => Ok(None),
         }
     }
 
     async fn on_user_created(&self, user: &User, _ctx: &AuthContext) -> AuthResult<()> {
-        if self.config.require_email_verification && !user.email_verified {
-            if let Some(email) = &user.email {
-                println!("Email verification required for user: {}", email);
-            }
+        if self.config.require_email_verification
+            && !user.email_verified
+            && let Some(email) = &user.email
+        {
+            println!("Email verification required for user: {}", email);
         }
         Ok(())
     }

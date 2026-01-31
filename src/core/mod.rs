@@ -1,3 +1,3 @@
 pub mod auth;
 
-pub use auth::{BetterAuth, AuthBuilder};
+pub use auth::{AuthBuilder, BetterAuth};

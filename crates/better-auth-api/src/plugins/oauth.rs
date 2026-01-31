@@ -1,18 +1,18 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use validator::Validate;
 use std::collections::HashMap;
+use validator::Validate;
 
-use better_auth_core::{AuthPlugin, AuthRoute, AuthContext};
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, User, CreateUser, CreateAccount};
+use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::{AuthRequest, AuthResponse, CreateAccount, CreateUser, HttpMethod, User};
 
 /// OAuth authentication plugin for social sign-in
 pub struct OAuthPlugin {
     config: OAuthConfig,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct OAuthConfig {
     pub providers: HashMap<String, OAuthProvider>,
 }
@@ -50,16 +50,9 @@ impl Default for OAuthPlugin {
     }
 }
 
-impl Default for OAuthConfig {
-    fn default() -> Self {
-        Self {
-            providers: HashMap::new(),
-        }
-    }
-}
-
 // Request/Response structures for social authentication
 #[derive(Debug, Deserialize, Validate)]
+#[allow(dead_code)]
 struct SocialSignInRequest {
     #[serde(rename = "callbackURL")]
     callback_url: Option<String>,
@@ -116,14 +109,18 @@ impl AuthPlugin for OAuthPlugin {
         ]
     }
 
-    async fn on_request(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<Option<AuthResponse>> {
+    async fn on_request(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/sign-in/social") => {
                 Ok(Some(self.handle_social_sign_in(req, ctx).await?))
-            },
+            }
             (HttpMethod::Post, "/link-social") => {
                 Ok(Some(self.handle_link_social(req, ctx).await?))
-            },
+            }
             _ => Ok(None),
         }
     }
@@ -131,7 +128,11 @@ impl AuthPlugin for OAuthPlugin {
 
 // Implementation methods outside the trait
 impl OAuthPlugin {
-    async fn handle_social_sign_in(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_social_sign_in(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let signin_req: SocialSignInRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -140,20 +141,27 @@ impl OAuthPlugin {
         // Validate provider
         if !self.config.providers.contains_key(&signin_req.provider) {
             return Err(AuthError::bad_request(format!(
-                "Provider '{}' is not configured", signin_req.provider
+                "Provider '{}' is not configured",
+                signin_req.provider
             )));
         }
 
         // If id_token is provided, verify and create session directly
         if let Some(id_token) = &signin_req.id_token {
-            return self.handle_id_token_sign_in(id_token, &signin_req, ctx).await;
+            return self
+                .handle_id_token_sign_in(id_token, &signin_req, ctx)
+                .await;
         }
 
         // Otherwise, generate authorization URL for OAuth flow
         self.generate_auth_url(&signin_req, ctx).await
     }
 
-    async fn handle_link_social(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_link_social(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let link_req: LinkSocialRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -162,14 +170,18 @@ impl OAuthPlugin {
         // Validate provider
         if !self.config.providers.contains_key(&link_req.provider) {
             return Err(AuthError::bad_request(format!(
-                "Provider '{}' is not configured", link_req.provider
+                "Provider '{}' is not configured",
+                link_req.provider
             )));
         }
 
         // Generate authorization URL for linking
         let provider = &self.config.providers[&link_req.provider];
         let callback_url = link_req.callback_url.unwrap_or_else(|| {
-            format!("{}/oauth/{}/callback", ctx.config.base_url, link_req.provider)
+            format!(
+                "{}/oauth/{}/callback",
+                ctx.config.base_url, link_req.provider
+            )
         });
 
         let scopes = if let Some(scopes) = &link_req.scopes {
@@ -237,12 +249,18 @@ impl OAuthPlugin {
         };
 
         // Check if account already exists
-        if ctx.database.get_account(&signin_req.provider, &create_account.account_id).await?.is_none() {
+        if ctx
+            .database
+            .get_account(&signin_req.provider, &create_account.account_id)
+            .await?
+            .is_none()
+        {
             ctx.database.create_account(create_account).await?;
         }
 
         // Create session
-        let session_manager = better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+        let session_manager =
+            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
         let session = session_manager.create_session(&user, None, None).await?;
 
         let response = SocialSignInResponse {
@@ -262,7 +280,10 @@ impl OAuthPlugin {
     ) -> AuthResult<AuthResponse> {
         let provider = &self.config.providers[&signin_req.provider];
         let callback_url = signin_req.callback_url.clone().unwrap_or_else(|| {
-            format!("{}/oauth/{}/callback", ctx.config.base_url, signin_req.provider)
+            format!(
+                "{}/oauth/{}/callback",
+                ctx.config.base_url, signin_req.provider
+            )
         });
 
         let scopes = if let Some(scopes) = &signin_req.scopes {
@@ -285,9 +306,12 @@ impl OAuthPlugin {
         }
 
         // Return redirect response
-        Ok(AuthResponse::json(200, &serde_json::json!({
-            "url": auth_url,
-            "redirect": true
-        }))?)
+        Ok(AuthResponse::json(
+            200,
+            &serde_json::json!({
+                "url": auth_url,
+                "redirect": true
+            }),
+        )?)
     }
 }

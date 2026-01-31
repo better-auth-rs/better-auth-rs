@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use crate::types::{AuthRequest, AuthResponse};
-use crate::error::AuthResult;
 use super::Middleware;
+use crate::error::AuthResult;
+use crate::types::{AuthRequest, AuthResponse};
 
 /// Configuration for the rate limiting middleware.
 #[derive(Debug, Clone)]
@@ -49,12 +49,26 @@ impl RateLimitConfig {
     }
 
     pub fn default_limit(mut self, window: Duration, max_requests: u32) -> Self {
-        self.default = EndpointRateLimit { window, max_requests };
+        self.default = EndpointRateLimit {
+            window,
+            max_requests,
+        };
         self
     }
 
-    pub fn endpoint(mut self, path: impl Into<String>, window: Duration, max_requests: u32) -> Self {
-        self.per_endpoint.insert(path.into(), EndpointRateLimit { window, max_requests });
+    pub fn endpoint(
+        mut self,
+        path: impl Into<String>,
+        window: Duration,
+        max_requests: u32,
+    ) -> Self {
+        self.per_endpoint.insert(
+            path.into(),
+            EndpointRateLimit {
+                window,
+                max_requests,
+            },
+        );
         self
     }
 
@@ -86,14 +100,18 @@ impl RateLimitMiddleware {
     /// Derive a client key from the request. Uses X-Forwarded-For, then
     /// falls back to a fixed key (single-bucket) when no IP is available.
     fn client_key(req: &AuthRequest) -> String {
-        req.headers.get("x-forwarded-for")
+        req.headers
+            .get("x-forwarded-for")
             .or_else(|| req.headers.get("x-real-ip"))
             .cloned()
             .unwrap_or_else(|| "unknown".to_string())
     }
 
     fn limit_for_path(&self, path: &str) -> &EndpointRateLimit {
-        self.config.per_endpoint.get(path).unwrap_or(&self.config.default)
+        self.config
+            .per_endpoint
+            .get(path)
+            .unwrap_or(&self.config.default)
     }
 }
 
@@ -114,22 +132,30 @@ impl Middleware for RateLimitMiddleware {
         let window = limit.window;
 
         let mut buckets = self.buckets.lock().unwrap();
-        let timestamps = buckets.entry(key).or_insert_with(Vec::new);
+        let timestamps = buckets.entry(key).or_default();
 
         // Remove timestamps outside the window
         timestamps.retain(|&t| now.duration_since(t) < window);
 
         if timestamps.len() as u32 >= limit.max_requests {
-            let retry_after = timestamps.first()
-                .map(|&t| window.as_secs().saturating_sub(now.duration_since(t).as_secs()))
+            let retry_after = timestamps
+                .first()
+                .map(|&t| {
+                    window
+                        .as_secs()
+                        .saturating_sub(now.duration_since(t).as_secs())
+                })
                 .unwrap_or(window.as_secs());
 
             return Ok(Some(
-                AuthResponse::json(429, &serde_json::json!({
-                    "code": "RATE_LIMIT_EXCEEDED",
-                    "message": "Too many requests",
-                    "retryAfter": retry_after,
-                }))?
+                AuthResponse::json(
+                    429,
+                    &serde_json::json!({
+                        "code": "RATE_LIMIT_EXCEEDED",
+                        "message": "Too many requests",
+                        "retryAfter": retry_after,
+                    }),
+                )?
                 .with_header("Retry-After", retry_after.to_string()),
             ));
         }
@@ -159,8 +185,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limit_allows_within_limit() {
-        let config = RateLimitConfig::new()
-            .default_limit(Duration::from_secs(60), 5);
+        let config = RateLimitConfig::new().default_limit(Duration::from_secs(60), 5);
         let mw = RateLimitMiddleware::new(config);
         let req = make_request("/sign-in/email", "1.2.3.4");
 
@@ -171,8 +196,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limit_blocks_over_limit() {
-        let config = RateLimitConfig::new()
-            .default_limit(Duration::from_secs(60), 3);
+        let config = RateLimitConfig::new().default_limit(Duration::from_secs(60), 3);
         let mw = RateLimitMiddleware::new(config);
         let req = make_request("/sign-in/email", "1.2.3.4");
 
@@ -187,8 +211,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limit_per_client() {
-        let config = RateLimitConfig::new()
-            .default_limit(Duration::from_secs(60), 2);
+        let config = RateLimitConfig::new().default_limit(Duration::from_secs(60), 2);
         let mw = RateLimitMiddleware::new(config);
 
         let req_a = make_request("/sign-in/email", "1.1.1.1");

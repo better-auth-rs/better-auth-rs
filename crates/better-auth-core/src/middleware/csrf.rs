@@ -1,7 +1,7 @@
-use async_trait::async_trait;
-use crate::types::{AuthRequest, AuthResponse, HttpMethod};
-use crate::error::AuthResult;
 use super::Middleware;
+use crate::error::AuthResult;
+use crate::types::{AuthRequest, AuthResponse, HttpMethod};
+use async_trait::async_trait;
 
 /// Configuration for CSRF protection middleware.
 #[derive(Debug, Clone)]
@@ -52,11 +52,17 @@ pub struct CsrfMiddleware {
 impl CsrfMiddleware {
     pub fn new(config: CsrfConfig, base_url: &str) -> Self {
         let base_origin = extract_origin(base_url).unwrap_or_default();
-        Self { config, base_origin }
+        Self {
+            config,
+            base_origin,
+        }
     }
 
     fn is_state_changing(method: &HttpMethod) -> bool {
-        matches!(method, HttpMethod::Post | HttpMethod::Put | HttpMethod::Delete | HttpMethod::Patch)
+        matches!(
+            method,
+            HttpMethod::Post | HttpMethod::Put | HttpMethod::Delete | HttpMethod::Patch
+        )
     }
 
     fn is_origin_trusted(&self, origin: &str) -> bool {
@@ -87,21 +93,21 @@ impl Middleware for CsrfMiddleware {
         }
 
         // Check Origin header first, then Referer
-        let request_origin = req.headers.get("origin")
+        let request_origin = req
+            .headers
+            .get("origin")
             .cloned()
-            .or_else(|| {
-                req.headers.get("referer")
-                    .and_then(|r| extract_origin(r))
-            });
+            .or_else(|| req.headers.get("referer").and_then(|r| extract_origin(r)));
 
         match request_origin {
             Some(origin) if self.is_origin_trusted(&origin) => Ok(None),
-            Some(_origin) => {
-                Ok(Some(AuthResponse::json(403, &serde_json::json!({
+            Some(_origin) => Ok(Some(AuthResponse::json(
+                403,
+                &serde_json::json!({
                     "code": "CSRF_ERROR",
                     "message": "Cross-site request blocked"
-                }))?))
-            }
+                }),
+            )?)),
             // If no Origin/Referer header is present, allow the request.
             // This handles same-origin requests from older browsers and
             // non-browser clients (curl, SDKs, etc.).
@@ -142,20 +148,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_csrf_allows_same_origin() {
-        let mw = CsrfMiddleware::new(
-            CsrfConfig::new(),
-            "http://localhost:3000",
-        );
+        let mw = CsrfMiddleware::new(CsrfConfig::new(), "http://localhost:3000");
         let req = make_post(Some("http://localhost:3000"));
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
     #[tokio::test]
     async fn test_csrf_blocks_cross_origin() {
-        let mw = CsrfMiddleware::new(
-            CsrfConfig::new(),
-            "http://localhost:3000",
-        );
+        let mw = CsrfMiddleware::new(CsrfConfig::new(), "http://localhost:3000");
         let req = make_post(Some("http://evil.com"));
         let resp = mw.before_request(&req).await.unwrap();
         assert!(resp.is_some());
@@ -164,8 +164,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_csrf_allows_trusted_origin() {
-        let config = CsrfConfig::new()
-            .trusted_origin("https://myapp.com");
+        let config = CsrfConfig::new().trusted_origin("https://myapp.com");
         let mw = CsrfMiddleware::new(config, "http://localhost:3000");
         let req = make_post(Some("https://myapp.com"));
         assert!(mw.before_request(&req).await.unwrap().is_none());
@@ -173,10 +172,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_csrf_skips_get_requests() {
-        let mw = CsrfMiddleware::new(
-            CsrfConfig::new(),
-            "http://localhost:3000",
-        );
+        let mw = CsrfMiddleware::new(CsrfConfig::new(), "http://localhost:3000");
         let req = AuthRequest {
             method: HttpMethod::Get,
             path: "/get-session".to_string(),
@@ -193,10 +189,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_csrf_allows_no_origin_header() {
-        let mw = CsrfMiddleware::new(
-            CsrfConfig::new(),
-            "http://localhost:3000",
-        );
+        let mw = CsrfMiddleware::new(CsrfConfig::new(), "http://localhost:3000");
         let req = make_post(None);
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }

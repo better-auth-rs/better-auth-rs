@@ -1,11 +1,11 @@
+pub mod body_limit;
+pub mod cors;
 pub mod csrf;
 pub mod rate_limit;
-pub mod cors;
-pub mod body_limit;
 
-use async_trait::async_trait;
-use crate::types::{AuthRequest, AuthResponse};
 use crate::error::AuthResult;
+use crate::types::{AuthRequest, AuthResponse};
+use async_trait::async_trait;
 
 /// Middleware trait for request/response processing.
 ///
@@ -26,7 +26,11 @@ pub trait Middleware: Send + Sync {
     ///
     /// Allows the middleware to mutate the response (e.g. add CORS headers).
     /// The default implementation is a no-op pass-through.
-    async fn after_request(&self, _req: &AuthRequest, response: AuthResponse) -> AuthResult<AuthResponse> {
+    async fn after_request(
+        &self,
+        _req: &AuthRequest,
+        response: AuthResponse,
+    ) -> AuthResult<AuthResponse> {
         Ok(response)
     }
 }
@@ -58,7 +62,7 @@ pub async fn run_after(
     Ok(response)
 }
 
-pub use csrf::{CsrfMiddleware, CsrfConfig};
-pub use rate_limit::{RateLimitMiddleware, RateLimitConfig, EndpointRateLimit};
-pub use cors::{CorsMiddleware, CorsConfig};
-pub use body_limit::{BodyLimitMiddleware, BodyLimitConfig};
+pub use body_limit::{BodyLimitConfig, BodyLimitMiddleware};
+pub use cors::{CorsConfig, CorsMiddleware};
+pub use csrf::{CsrfConfig, CsrfMiddleware};
+pub use rate_limit::{EndpointRateLimit, RateLimitConfig, RateLimitMiddleware};

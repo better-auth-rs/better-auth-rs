@@ -2,8 +2,8 @@
 use axum::{
     Router,
     extract::{Request, State},
-    response::{Response, IntoResponse},
     http::StatusCode,
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
 #[cfg(feature = "axum")]
@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 #[cfg(feature = "axum")]
 use crate::BetterAuth;
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, AuthError};
+use better_auth_core::{AuthError, AuthRequest, AuthResponse, HttpMethod};
 
 /// Integration trait for Axum web framework
 #[cfg(feature = "axum")]
@@ -46,19 +46,21 @@ impl AxumIntegration for Arc<BetterAuth> {
                 match route.method {
                     HttpMethod::Get => {
                         router = router.route(&route.path, get(handler_fn.clone()));
-                    },
+                    }
                     HttpMethod::Post => {
                         router = router.route(&route.path, post(handler_fn.clone()));
-                    },
+                    }
                     HttpMethod::Put => {
                         router = router.route(&route.path, axum::routing::put(handler_fn.clone()));
-                    },
+                    }
                     HttpMethod::Delete => {
-                        router = router.route(&route.path, axum::routing::delete(handler_fn.clone()));
-                    },
+                        router =
+                            router.route(&route.path, axum::routing::delete(handler_fn.clone()));
+                    }
                     HttpMethod::Patch => {
-                        router = router.route(&route.path, axum::routing::patch(handler_fn.clone()));
-                    },
+                        router =
+                            router.route(&route.path, axum::routing::patch(handler_fn.clone()));
+                    }
                     _ => {} // Skip unsupported methods
                 }
             }
@@ -87,15 +89,18 @@ async fn health_check() -> impl IntoResponse {
 }
 
 #[cfg(feature = "axum")]
-fn create_plugin_handler() -> impl Fn(State<Arc<BetterAuth>>, Request) -> std::pin::Pin<Box<dyn std::future::Future<Output = Response> + Send>> + Clone {
+fn create_plugin_handler() -> impl Fn(
+    State<Arc<BetterAuth>>,
+    Request,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Response> + Send>,
+> + Clone {
     |State(auth): State<Arc<BetterAuth>>, req: Request| {
         Box::pin(async move {
             match convert_axum_request(req).await {
-                Ok(auth_req) => {
-                    match auth.handle_request(auth_req).await {
-                        Ok(auth_response) => convert_auth_response(auth_response),
-                        Err(err) => err.into_response(),
-                    }
+                Ok(auth_req) => match auth.handle_request(auth_req).await {
+                    Ok(auth_response) => convert_auth_response(auth_response),
+                    Err(err) => err.into_response(),
                 },
                 Err(err) => err.into_response(),
             }
@@ -118,7 +123,11 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
         axum::http::Method::PATCH => HttpMethod::Patch,
         axum::http::Method::OPTIONS => HttpMethod::Options,
         axum::http::Method::HEAD => HttpMethod::Head,
-        _ => return Err(AuthError::InvalidRequest("Unsupported HTTP method".to_string())),
+        _ => {
+            return Err(AuthError::InvalidRequest(
+                "Unsupported HTTP method".to_string(),
+            ));
+        }
     };
 
     // Convert headers
@@ -142,7 +151,13 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
 
     // Convert body
     let body_bytes = match axum::body::to_bytes(body, usize::MAX).await {
-        Ok(bytes) => if bytes.is_empty() { None } else { Some(bytes.to_vec()) },
+        Ok(bytes) => {
+            if bytes.is_empty() {
+                None
+            } else {
+                Some(bytes.to_vec())
+            }
+        }
         Err(_) => None,
     };
 
@@ -157,20 +172,22 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
 
 #[cfg(feature = "axum")]
 fn convert_auth_response(auth_response: AuthResponse) -> Response {
-    let mut response = Response::builder()
-        .status(StatusCode::from_u16(auth_response.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR));
+    let mut response = Response::builder().status(
+        StatusCode::from_u16(auth_response.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+    );
 
     // Add headers
     for (name, value) in auth_response.headers {
         if let (Ok(header_name), Ok(header_value)) = (
             axum::http::HeaderName::from_bytes(name.as_bytes()),
-            axum::http::HeaderValue::from_str(&value)
+            axum::http::HeaderValue::from_str(&value),
         ) {
             response = response.header(header_name, header_value);
         }
     }
 
-    response.body(axum::body::Body::from(auth_response.body))
+    response
+        .body(axum::body::Body::from(auth_response.body))
         .unwrap_or_else(|_| {
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -182,8 +199,8 @@ fn convert_auth_response(auth_response: AuthResponse) -> Response {
 #[cfg(feature = "axum")]
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
-        let status_code = StatusCode::from_u16(self.status_code())
-            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status_code =
+            StatusCode::from_u16(self.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
         let message = match self.status_code() {
             500 => "Internal server error".to_string(),

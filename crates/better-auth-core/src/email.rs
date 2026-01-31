@@ -29,6 +29,7 @@ impl EmailProvider for ConsoleEmailProvider {
 }
 
 #[cfg(test)]
+#[allow(clippy::type_complexity)]
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
@@ -61,14 +62,19 @@ mod tests {
     #[tokio::test]
     async fn test_console_email_provider_send() {
         let provider = ConsoleEmailProvider;
-        let result = provider.send("user@example.com", "Test Subject", "<h1>Hi</h1>", "Hi").await;
+        let result = provider
+            .send("user@example.com", "Test Subject", "<h1>Hi</h1>", "Hi")
+            .await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_mock_email_provider_records_sends() {
         let (provider, sent) = MockEmailProvider::new();
-        provider.send("a@b.com", "Sub", "<p>html</p>", "text").await.unwrap();
+        provider
+            .send("a@b.com", "Sub", "<p>html</p>", "text")
+            .await
+            .unwrap();
         provider.send("c@d.com", "Sub2", "", "text2").await.unwrap();
 
         let messages = sent.lock().unwrap();
@@ -86,8 +92,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_missing_provider_returns_error() {
-        use crate::config::AuthConfig;
         use crate::adapters::MemoryDatabaseAdapter;
+        use crate::config::AuthConfig;
         use crate::plugin::AuthContext;
 
         let config = Arc::new(AuthConfig::new("test-secret-key-at-least-32-chars-long"));

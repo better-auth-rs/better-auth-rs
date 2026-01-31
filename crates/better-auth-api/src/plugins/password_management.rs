@@ -1,12 +1,14 @@
 use async_trait::async_trait;
+use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
-use validator::Validate;
-use chrono::{Utc, Duration};
 use uuid::Uuid;
+use validator::Validate;
 
-use better_auth_core::{AuthPlugin, AuthRoute, AuthContext};
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, User, UpdateUser, CreateVerification};
+use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::{
+    AuthRequest, AuthResponse, CreateVerification, HttpMethod, UpdateUser, User,
+};
 
 /// Password management plugin for password reset and change functionality
 pub struct PasswordManagementPlugin {
@@ -132,24 +134,30 @@ impl AuthPlugin for PasswordManagementPlugin {
         ]
     }
 
-    async fn on_request(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<Option<AuthResponse>> {
+    async fn on_request(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/forget-password") => {
                 Ok(Some(self.handle_forget_password(req, ctx).await?))
-            },
+            }
             (HttpMethod::Post, "/reset-password") => {
                 Ok(Some(self.handle_reset_password(req, ctx).await?))
-            },
+            }
             (HttpMethod::Post, "/change-password") => {
                 Ok(Some(self.handle_change_password(req, ctx).await?))
-            },
+            }
             (HttpMethod::Post, "/set-password") => {
                 Ok(Some(self.handle_set_password(req, ctx).await?))
-            },
+            }
             (HttpMethod::Get, path) if path.starts_with("/reset-password/") => {
                 let token = &path[16..]; // Remove "/reset-password/" prefix
-                Ok(Some(self.handle_reset_password_token(token, req, ctx).await?))
-            },
+                Ok(Some(
+                    self.handle_reset_password_token(token, req, ctx).await?,
+                ))
+            }
             _ => Ok(None),
         }
     }
@@ -157,7 +165,11 @@ impl AuthPlugin for PasswordManagementPlugin {
 
 // Implementation methods outside the trait
 impl PasswordManagementPlugin {
-    async fn handle_forget_password(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_forget_password(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let forget_req: ForgetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -184,14 +196,19 @@ impl PasswordManagementPlugin {
             expires_at,
         };
 
-        ctx.database.create_verification(create_verification).await?;
+        ctx.database
+            .create_verification(create_verification)
+            .await?;
 
         // Send email with reset link
         if self.config.send_email_notifications {
             let reset_url = if let Some(redirect_to) = &forget_req.redirect_to {
                 format!("{}?token={}", redirect_to, reset_token)
             } else {
-                format!("{}/reset-password?token={}", ctx.config.base_url, reset_token)
+                format!(
+                    "{}/reset-password?token={}",
+                    ctx.config.base_url, reset_token
+                )
             };
 
             if let Ok(provider) = ctx.email_provider() {
@@ -203,11 +220,20 @@ impl PasswordManagementPlugin {
                 );
                 let text = format!("Reset your password: {}", reset_url);
 
-                if let Err(e) = provider.send(&forget_req.email, subject, &html, &text).await {
-                    eprintln!("[password-management] Failed to send reset email to {}: {}", forget_req.email, e);
+                if let Err(e) = provider
+                    .send(&forget_req.email, subject, &html, &text)
+                    .await
+                {
+                    eprintln!(
+                        "[password-management] Failed to send reset email to {}: {}",
+                        forget_req.email, e
+                    );
                 }
             } else {
-                eprintln!("[password-management] No email provider configured, skipping password reset email for {}", forget_req.email);
+                eprintln!(
+                    "[password-management] No email provider configured, skipping password reset email for {}",
+                    forget_req.email
+                );
             }
         }
 
@@ -215,7 +241,11 @@ impl PasswordManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_reset_password(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_reset_password(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let reset_req: ResetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -230,7 +260,9 @@ impl PasswordManagementPlugin {
             return Err(AuthError::bad_request("Reset token is required"));
         }
 
-        let (user, verification) = self.find_user_by_reset_token(token, ctx).await?
+        let (user, verification) = self
+            .find_user_by_reset_token(token, ctx)
+            .await?
             .ok_or_else(|| AuthError::bad_request("Invalid or expired reset token"))?;
 
         // Hash new password
@@ -238,7 +270,10 @@ impl PasswordManagementPlugin {
 
         // Update user password
         let mut metadata = user.metadata.clone();
-        metadata.insert("password_hash".to_string(), serde_json::Value::String(password_hash));
+        metadata.insert(
+            "password_hash".to_string(),
+            serde_json::Value::String(password_hash),
+        );
 
         let update_user = UpdateUser {
             email: None,
@@ -267,19 +302,27 @@ impl PasswordManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_change_password(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_change_password(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let change_req: ChangePasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
         // Get current user from session
-        let user = self.get_current_user(req, ctx).await?
+        let user = self
+            .get_current_user(req, ctx)
+            .await?
             .ok_or(AuthError::Unauthenticated)?;
 
         // Verify current password
         if self.config.require_current_password {
-            let stored_hash = user.metadata.get("password_hash")
+            let stored_hash = user
+                .metadata
+                .get("password_hash")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| AuthError::bad_request("No password set for this user"))?;
 
@@ -295,7 +338,10 @@ impl PasswordManagementPlugin {
 
         // Update user password
         let mut metadata = user.metadata.clone();
-        metadata.insert("password_hash".to_string(), serde_json::Value::String(password_hash));
+        metadata.insert(
+            "password_hash".to_string(),
+            serde_json::Value::String(password_hash),
+        );
 
         let update_user = UpdateUser {
             email: None,
@@ -320,8 +366,11 @@ impl PasswordManagementPlugin {
             ctx.database.delete_user_sessions(&user.id).await?;
 
             // Create new session
-            let session_manager = better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-            let session = session_manager.create_session(&updated_user, None, None).await?;
+            let session_manager =
+                better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+            let session = session_manager
+                .create_session(&updated_user, None, None)
+                .await?;
             Some(session.token)
         } else {
             None
@@ -335,20 +384,31 @@ impl PasswordManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_set_password(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_set_password(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let set_req: SetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
         // Authenticate user
-        let user = self.get_current_user(req, ctx).await?
+        let user = self
+            .get_current_user(req, ctx)
+            .await?
             .ok_or(AuthError::Unauthenticated)?;
 
         // Verify the user does NOT already have a password
-        if user.metadata.get("password_hash").and_then(|v| v.as_str()).is_some() {
+        if user
+            .metadata
+            .get("password_hash")
+            .and_then(|v| v.as_str())
+            .is_some()
+        {
             return Err(AuthError::bad_request(
-                "User already has a password. Use /change-password instead."
+                "User already has a password. Use /change-password instead.",
             ));
         }
 
@@ -359,7 +419,10 @@ impl PasswordManagementPlugin {
         let password_hash = self.hash_password(&set_req.new_password)?;
 
         let mut metadata = user.metadata.clone();
-        metadata.insert("password_hash".to_string(), serde_json::Value::String(password_hash));
+        metadata.insert(
+            "password_hash".to_string(),
+            serde_json::Value::String(password_hash),
+        );
 
         let update_user = UpdateUser {
             email: None,
@@ -382,7 +445,12 @@ impl PasswordManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_reset_password_token(&self, token: &str, _req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_reset_password_token(
+        &self,
+        token: &str,
+        _req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         // Check if token is valid and get callback URL from query parameters
         let callback_url = _req.query.get("callbackURL").cloned();
 
@@ -425,7 +493,11 @@ impl PasswordManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn find_user_by_reset_token(&self, token: &str, ctx: &AuthContext) -> AuthResult<Option<(User, better_auth_core::Verification)>> {
+    async fn find_user_by_reset_token(
+        &self,
+        token: &str,
+        ctx: &AuthContext,
+    ) -> AuthResult<Option<(User, better_auth_core::Verification)>> {
         // Find verification token by value
         let verification = match ctx.database.get_verification_by_value(token).await? {
             Some(verification) => verification,
@@ -433,7 +505,11 @@ impl PasswordManagementPlugin {
         };
 
         // Get user by email (stored in identifier field)
-        let user = match ctx.database.get_user_by_email(&verification.identifier).await? {
+        let user = match ctx
+            .database
+            .get_user_by_email(&verification.identifier)
+            .await?
+        {
             Some(user) => user,
             None => return Ok(None),
         };
@@ -441,13 +517,18 @@ impl PasswordManagementPlugin {
         Ok(Some((user, verification)))
     }
 
-    async fn get_current_user(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<Option<User>> {
-        let session_manager = better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    async fn get_current_user(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<Option<User>> {
+        let session_manager =
+            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
 
-        if let Some(token) = session_manager.extract_session_token(req) {
-            if let Some(session) = session_manager.get_session(&token).await? {
-                return ctx.database.get_user_by_id(&session.user_id).await;
-            }
+        if let Some(token) = session_manager.extract_session_token(req)
+            && let Some(session) = session_manager.get_session(&token).await?
+        {
+            return ctx.database.get_user_by_id(&session.user_id).await;
         }
 
         Ok(None)
@@ -465,25 +546,29 @@ impl PasswordManagementPlugin {
 
         if config.require_uppercase && !password.chars().any(|c| c.is_uppercase()) {
             return Err(AuthError::bad_request(
-                "Password must contain at least one uppercase letter"
+                "Password must contain at least one uppercase letter",
             ));
         }
 
         if config.require_lowercase && !password.chars().any(|c| c.is_lowercase()) {
             return Err(AuthError::bad_request(
-                "Password must contain at least one lowercase letter"
+                "Password must contain at least one lowercase letter",
             ));
         }
 
         if config.require_numbers && !password.chars().any(|c| c.is_ascii_digit()) {
             return Err(AuthError::bad_request(
-                "Password must contain at least one number"
+                "Password must contain at least one number",
             ));
         }
 
-        if config.require_special && !password.chars().any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c)) {
+        if config.require_special
+            && !password
+                .chars()
+                .any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c))
+        {
             return Err(AuthError::bad_request(
-                "Password must contain at least one special character"
+                "Password must contain at least one special character",
             ));
         }
 
@@ -491,27 +576,29 @@ impl PasswordManagementPlugin {
     }
 
     fn hash_password(&self, password: &str) -> AuthResult<String> {
-        use argon2::{Argon2, PasswordHasher};
         use argon2::password_hash::{SaltString, rand_core::OsRng};
+        use argon2::{Argon2, PasswordHasher};
 
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
 
-        let password_hash = argon2.hash_password(password.as_bytes(), &salt)
+        let password_hash = argon2
+            .hash_password(password.as_bytes(), &salt)
             .map_err(|e| AuthError::PasswordHash(format!("Failed to hash password: {}", e)))?;
 
         Ok(password_hash.to_string())
     }
 
     fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
-        use argon2::{Argon2, PasswordVerifier};
         use argon2::password_hash::PasswordHash;
+        use argon2::{Argon2, PasswordVerifier};
 
         let parsed_hash = PasswordHash::new(hash)
             .map_err(|e| AuthError::PasswordHash(format!("Invalid password hash: {}", e)))?;
 
         let argon2 = Argon2::default();
-        argon2.verify_password(password.as_bytes(), &parsed_hash)
+        argon2
+            .verify_password(password.as_bytes(), &parsed_hash)
             .map_err(|_| AuthError::InvalidCredentials)?;
 
         Ok(())
@@ -521,10 +608,10 @@ impl PasswordManagementPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use better_auth_core::config::{AuthConfig, PasswordConfig, Argon2Config};
-    use crate::adapters::{MemoryDatabaseAdapter, DatabaseAdapter};
-    use better_auth_core::{CreateUser, CreateSession, CreateVerification, Session, User};
-    use chrono::{Utc, Duration};
+    use better_auth_core::adapters::{DatabaseAdapter, MemoryDatabaseAdapter};
+    use better_auth_core::config::{Argon2Config, AuthConfig, PasswordConfig};
+    use better_auth_core::{CreateSession, CreateUser, CreateVerification, Session, User};
+    use chrono::{Duration, Utc};
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -548,7 +635,10 @@ mod tests {
         let password_hash = plugin.hash_password("Password123!").unwrap();
 
         let mut metadata = HashMap::new();
-        metadata.insert("password_hash".to_string(), serde_json::Value::String(password_hash));
+        metadata.insert(
+            "password_hash".to_string(),
+            serde_json::Value::String(password_hash),
+        );
 
         let create_user = CreateUser::new()
             .with_email("test@example.com")
@@ -570,7 +660,12 @@ mod tests {
         (ctx, user, session)
     }
 
-    fn create_auth_request(method: HttpMethod, path: &str, token: Option<&str>, body: Option<Vec<u8>>) -> AuthRequest {
+    fn create_auth_request(
+        method: HttpMethod,
+        path: &str,
+        token: Option<&str>,
+        body: Option<Vec<u8>>,
+    ) -> AuthRequest {
         let mut headers = HashMap::new();
         if let Some(token) = token {
             headers.insert("authorization".to_string(), format!("Bearer {}", token));
@@ -599,7 +694,7 @@ mod tests {
             HttpMethod::Post,
             "/forget-password",
             None,
-            Some(body.to_string().into_bytes())
+            Some(body.to_string().into_bytes()),
         );
 
         let response = plugin.handle_forget_password(&req, &ctx).await.unwrap();
@@ -623,7 +718,7 @@ mod tests {
             HttpMethod::Post,
             "/forget-password",
             None,
-            Some(body.to_string().into_bytes())
+            Some(body.to_string().into_bytes()),
         );
 
         let response = plugin.handle_forget_password(&req, &ctx).await.unwrap();
@@ -647,7 +742,10 @@ mod tests {
             value: reset_token.clone(),
             expires_at: Utc::now() + Duration::hours(24),
         };
-        ctx.database.create_verification(create_verification).await.unwrap();
+        ctx.database
+            .create_verification(create_verification)
+            .await
+            .unwrap();
 
         let body = serde_json::json!({
             "newPassword": "NewPassword123!",
@@ -658,7 +756,7 @@ mod tests {
             HttpMethod::Post,
             "/reset-password",
             None,
-            Some(body.to_string().into_bytes())
+            Some(body.to_string().into_bytes()),
         );
 
         let response = plugin.handle_reset_password(&req, &ctx).await.unwrap();
@@ -669,12 +767,30 @@ mod tests {
         assert!(response_data.status);
 
         // Verify password was updated
-        let updated_user = ctx.database.get_user_by_id(&user.id).await.unwrap().unwrap();
-        let stored_hash = updated_user.metadata.get("password_hash").unwrap().as_str().unwrap();
-        assert!(plugin.verify_password("NewPassword123!", stored_hash).is_ok());
+        let updated_user = ctx
+            .database
+            .get_user_by_id(&user.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let stored_hash = updated_user
+            .metadata
+            .get("password_hash")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert!(
+            plugin
+                .verify_password("NewPassword123!", stored_hash)
+                .is_ok()
+        );
 
         // Verify token was deleted
-        let verification_check = ctx.database.get_verification_by_value(&reset_token).await.unwrap();
+        let verification_check = ctx
+            .database
+            .get_verification_by_value(&reset_token)
+            .await
+            .unwrap();
         assert!(verification_check.is_none());
     }
 
@@ -692,7 +808,7 @@ mod tests {
             HttpMethod::Post,
             "/reset-password",
             None,
-            Some(body.to_string().into_bytes())
+            Some(body.to_string().into_bytes()),
         );
 
         let err = plugin.handle_reset_password(&req, &ctx).await.unwrap_err();
@@ -711,7 +827,10 @@ mod tests {
             value: reset_token.clone(),
             expires_at: Utc::now() + Duration::hours(24),
         };
-        ctx.database.create_verification(create_verification).await.unwrap();
+        ctx.database
+            .create_verification(create_verification)
+            .await
+            .unwrap();
 
         let body = serde_json::json!({
             "newPassword": "weak",
@@ -722,7 +841,7 @@ mod tests {
             HttpMethod::Post,
             "/reset-password",
             None,
-            Some(body.to_string().into_bytes())
+            Some(body.to_string().into_bytes()),
         );
 
         let err = plugin.handle_reset_password(&req, &ctx).await.unwrap_err();
@@ -744,7 +863,7 @@ mod tests {
             HttpMethod::Post,
             "/change-password",
             Some(&session.token),
-            Some(body.to_string().into_bytes())
+            Some(body.to_string().into_bytes()),
         );
 
         let response = plugin.handle_change_password(&req, &ctx).await.unwrap();
@@ -755,9 +874,23 @@ mod tests {
         assert!(response_data.token.is_none()); // No new token when not revoking sessions
 
         // Verify password was updated by checking the database directly
-        let updated_user = ctx.database.get_user_by_id(&response_data.user.id).await.unwrap().unwrap();
-        let stored_hash = updated_user.metadata.get("password_hash").unwrap().as_str().unwrap();
-        assert!(plugin.verify_password("NewPassword123!", stored_hash).is_ok());
+        let updated_user = ctx
+            .database
+            .get_user_by_id(&response_data.user.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let stored_hash = updated_user
+            .metadata
+            .get("password_hash")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert!(
+            plugin
+                .verify_password("NewPassword123!", stored_hash)
+                .is_ok()
+        );
     }
 
     #[tokio::test]
@@ -775,7 +908,7 @@ mod tests {
             HttpMethod::Post,
             "/change-password",
             Some(&session.token),
-            Some(body.to_string().into_bytes())
+            Some(body.to_string().into_bytes()),
         );
 
         let response = plugin.handle_change_password(&req, &ctx).await.unwrap();
@@ -800,7 +933,7 @@ mod tests {
             HttpMethod::Post,
             "/change-password",
             Some(&session.token),
-            Some(body.to_string().into_bytes())
+            Some(body.to_string().into_bytes()),
         );
 
         let err = plugin.handle_change_password(&req, &ctx).await.unwrap_err();
@@ -821,7 +954,7 @@ mod tests {
             HttpMethod::Post,
             "/change-password",
             None,
-            Some(body.to_string().into_bytes())
+            Some(body.to_string().into_bytes()),
         );
 
         let err = plugin.handle_change_password(&req, &ctx).await.unwrap_err();
@@ -840,11 +973,17 @@ mod tests {
             value: reset_token.clone(),
             expires_at: Utc::now() + Duration::hours(24),
         };
-        ctx.database.create_verification(create_verification).await.unwrap();
+        ctx.database
+            .create_verification(create_verification)
+            .await
+            .unwrap();
 
         let req = create_auth_request(HttpMethod::Get, "/reset-password/token", None, None);
 
-        let response = plugin.handle_reset_password_token(&reset_token, &req, &ctx).await.unwrap();
+        let response = plugin
+            .handle_reset_password_token(&reset_token, &req, &ctx)
+            .await
+            .unwrap();
         assert_eq!(response.status, 200);
 
         let body_str = String::from_utf8(response.body).unwrap();
@@ -864,10 +1003,16 @@ mod tests {
             value: reset_token.clone(),
             expires_at: Utc::now() + Duration::hours(24),
         };
-        ctx.database.create_verification(create_verification).await.unwrap();
+        ctx.database
+            .create_verification(create_verification)
+            .await
+            .unwrap();
 
         let mut query = HashMap::new();
-        query.insert("callbackURL".to_string(), "http://localhost:3000/reset".to_string());
+        query.insert(
+            "callbackURL".to_string(),
+            "http://localhost:3000/reset".to_string(),
+        );
 
         let req = AuthRequest {
             method: HttpMethod::Get,
@@ -877,15 +1022,24 @@ mod tests {
             query,
         };
 
-        let response = plugin.handle_reset_password_token(&reset_token, &req, &ctx).await.unwrap();
+        let response = plugin
+            .handle_reset_password_token(&reset_token, &req, &ctx)
+            .await
+            .unwrap();
         assert_eq!(response.status, 302);
 
         // Check redirect URL
-        let location_header = response.headers.iter()
+        let location_header = response
+            .headers
+            .iter()
             .find(|(key, _)| *key == "Location")
             .map(|(_, value)| value);
         assert!(location_header.is_some());
-        assert!(location_header.unwrap().contains("http://localhost:3000/reset"));
+        assert!(
+            location_header
+                .unwrap()
+                .contains("http://localhost:3000/reset")
+        );
         assert!(location_header.unwrap().contains(&reset_token));
     }
 
@@ -896,7 +1050,10 @@ mod tests {
 
         let req = create_auth_request(HttpMethod::Get, "/reset-password/token", None, None);
 
-        let err = plugin.handle_reset_password_token("invalid_token", &req, &ctx).await.unwrap_err();
+        let err = plugin
+            .handle_reset_password_token("invalid_token", &req, &ctx)
+            .await
+            .unwrap_err();
         assert_eq!(err.status_code(), 400);
     }
 
@@ -952,11 +1109,27 @@ mod tests {
         let plugin = PasswordManagementPlugin::new();
         let routes = plugin.routes();
 
-        assert_eq!(routes.len(), 4);
-        assert!(routes.iter().any(|r| r.path == "/forget-password" && r.method == HttpMethod::Post));
-        assert!(routes.iter().any(|r| r.path == "/reset-password" && r.method == HttpMethod::Post));
-        assert!(routes.iter().any(|r| r.path == "/reset-password/{token}" && r.method == HttpMethod::Get));
-        assert!(routes.iter().any(|r| r.path == "/change-password" && r.method == HttpMethod::Post));
+        assert_eq!(routes.len(), 5);
+        assert!(
+            routes
+                .iter()
+                .any(|r| r.path == "/forget-password" && r.method == HttpMethod::Post)
+        );
+        assert!(
+            routes
+                .iter()
+                .any(|r| r.path == "/reset-password" && r.method == HttpMethod::Post)
+        );
+        assert!(
+            routes
+                .iter()
+                .any(|r| r.path == "/reset-password/{token}" && r.method == HttpMethod::Get)
+        );
+        assert!(
+            routes
+                .iter()
+                .any(|r| r.path == "/change-password" && r.method == HttpMethod::Post)
+        );
     }
 
     #[tokio::test]
@@ -970,7 +1143,7 @@ mod tests {
             HttpMethod::Post,
             "/forget-password",
             None,
-            Some(body.to_string().into_bytes())
+            Some(body.to_string().into_bytes()),
         );
         let response = plugin.on_request(&req, &ctx).await.unwrap();
         assert!(response.is_some());
@@ -985,7 +1158,7 @@ mod tests {
             HttpMethod::Post,
             "/change-password",
             Some(&session.token),
-            Some(body.to_string().into_bytes())
+            Some(body.to_string().into_bytes()),
         );
         let response = plugin.on_request(&req, &ctx).await.unwrap();
         assert!(response.is_some());

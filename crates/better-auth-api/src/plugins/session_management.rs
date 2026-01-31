@@ -2,9 +2,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use better_auth_core::{AuthPlugin, AuthRoute, AuthContext, SessionManager};
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, User, Session};
+use better_auth_core::{AuthContext, AuthPlugin, AuthRoute, SessionManager};
 use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, Session, User};
 
 /// Session management plugin for handling session operations
 pub struct SessionManagementPlugin {
@@ -103,26 +103,30 @@ impl AuthPlugin for SessionManagementPlugin {
         ]
     }
 
-    async fn on_request(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<Option<AuthResponse>> {
+    async fn on_request(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Get | HttpMethod::Post, "/get-session") => {
                 Ok(Some(self.handle_get_session(req, ctx).await?))
-            },
-            (HttpMethod::Post, "/sign-out") => {
-                Ok(Some(self.handle_sign_out(req, ctx).await?))
-            },
+            }
+            (HttpMethod::Post, "/sign-out") => Ok(Some(self.handle_sign_out(req, ctx).await?)),
             (HttpMethod::Get, "/list-sessions") if self.config.enable_session_listing => {
                 Ok(Some(self.handle_list_sessions(req, ctx).await?))
-            },
+            }
             (HttpMethod::Post, "/revoke-session") if self.config.enable_session_revocation => {
                 Ok(Some(self.handle_revoke_session(req, ctx).await?))
-            },
+            }
             (HttpMethod::Post, "/revoke-sessions") if self.config.enable_session_revocation => {
                 Ok(Some(self.handle_revoke_sessions(req, ctx).await?))
-            },
-            (HttpMethod::Post, "/revoke-other-sessions") if self.config.enable_session_revocation => {
+            }
+            (HttpMethod::Post, "/revoke-other-sessions")
+                if self.config.enable_session_revocation =>
+            {
                 Ok(Some(self.handle_revoke_other_sessions(req, ctx).await?))
-            },
+            }
             _ => Ok(None),
         }
     }
@@ -130,13 +134,21 @@ impl AuthPlugin for SessionManagementPlugin {
 
 // Implementation methods outside the trait
 impl SessionManagementPlugin {
-    async fn handle_get_session(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_get_session(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let (user, session) = self.require_session(req, ctx).await?;
         let response = GetSessionResponse { session, user };
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_sign_out(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_sign_out(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let (_user, current_session) = self.require_session(req, ctx).await?;
 
         ctx.database.delete_session(&current_session.token).await?;
@@ -144,45 +156,62 @@ impl SessionManagementPlugin {
         let response = SignOutResponse { success: true };
         let clear_cookie_header = self.create_clear_session_cookie(ctx);
 
-        Ok(AuthResponse::json(200, &response)?
-            .with_header("Set-Cookie", clear_cookie_header))
+        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", clear_cookie_header))
     }
 
     fn create_clear_session_cookie(&self, ctx: &AuthContext) -> String {
         let session_config = &ctx.config.session;
-        let secure = if session_config.cookie_secure { "; Secure" } else { "" };
-        let http_only = if session_config.cookie_http_only { "; HttpOnly" } else { "" };
+        let secure = if session_config.cookie_secure {
+            "; Secure"
+        } else {
+            ""
+        };
+        let http_only = if session_config.cookie_http_only {
+            "; HttpOnly"
+        } else {
+            ""
+        };
         let same_site = match session_config.cookie_same_site {
             better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
             better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
             better_auth_core::config::SameSite::None => "; SameSite=None",
         };
 
-        format!("{}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT{}{}{}",
-                session_config.cookie_name,
-                secure,
-                http_only,
-                same_site)
+        format!(
+            "{}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT{}{}{}",
+            session_config.cookie_name, secure, http_only, same_site
+        )
     }
 
-    async fn handle_list_sessions(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_list_sessions(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let (user, _) = self.require_session(req, ctx).await?;
         let sessions = self.get_user_sessions(&user.id, ctx).await?;
         Ok(AuthResponse::json(200, &sessions)?)
     }
 
-    async fn handle_revoke_session(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_revoke_session(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let (user, _) = self.require_session(req, ctx).await?;
 
-        let revoke_req: RevokeSessionRequest = req.body_as_json()
+        let revoke_req: RevokeSessionRequest = req
+            .body_as_json()
             .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
 
         // Verify the session belongs to the current user before revoking
         let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        if let Some(session_to_revoke) = session_manager.get_session(&revoke_req.token).await? {
-            if session_to_revoke.user_id != user.id {
-                return Err(AuthError::forbidden("Cannot revoke session that belongs to another user"));
-            }
+        if let Some(session_to_revoke) = session_manager.get_session(&revoke_req.token).await?
+            && session_to_revoke.user_id != user.id
+        {
+            return Err(AuthError::forbidden(
+                "Cannot revoke session that belongs to another user",
+            ));
         }
 
         ctx.database.delete_session(&revoke_req.token).await?;
@@ -191,7 +220,11 @@ impl SessionManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_revoke_sessions(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_revoke_sessions(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let (user, _) = self.require_session(req, ctx).await?;
         ctx.database.delete_user_sessions(&user.id).await?;
 
@@ -199,7 +232,11 @@ impl SessionManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_revoke_other_sessions(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_revoke_other_sessions(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         let (user, current_session) = self.require_session(req, ctx).await?;
 
         let all_sessions = self.get_user_sessions(&user.id, ctx).await?;
@@ -215,26 +252,38 @@ impl SessionManagementPlugin {
 
     /// Extract and validate the current user + session from the request.
     /// Returns `Err(AuthError::Unauthenticated)` if no valid session.
-    async fn require_session(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<(User, Session)> {
-        self.get_current_user_and_session(req, ctx).await?
+    async fn require_session(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<(User, Session)> {
+        self.get_current_user_and_session(req, ctx)
+            .await?
             .ok_or(AuthError::Unauthenticated)
     }
 
-    async fn get_current_user_and_session(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<Option<(User, Session)>> {
+    async fn get_current_user_and_session(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<Option<(User, Session)>> {
         let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
 
-        if let Some(token) = session_manager.extract_session_token(req) {
-            if let Some(session) = session_manager.get_session(&token).await? {
-                if let Some(user) = ctx.database.get_user_by_id(&session.user_id).await? {
-                    return Ok(Some((user, session)));
-                }
-            }
+        if let Some(token) = session_manager.extract_session_token(req)
+            && let Some(session) = session_manager.get_session(&token).await?
+            && let Some(user) = ctx.database.get_user_by_id(&session.user_id).await?
+        {
+            return Ok(Some((user, session)));
         }
 
         Ok(None)
     }
 
-    async fn get_user_sessions(&self, user_id: &str, ctx: &AuthContext) -> AuthResult<Vec<Session>> {
+    async fn get_user_sessions(
+        &self,
+        user_id: &str,
+        ctx: &AuthContext,
+    ) -> AuthResult<Vec<Session>> {
         ctx.database.get_user_sessions(user_id).await
     }
 }
@@ -242,10 +291,10 @@ impl SessionManagementPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use better_auth_core::adapters::{DatabaseAdapter, MemoryDatabaseAdapter};
     use better_auth_core::config::AuthConfig;
-    use crate::adapters::{MemoryDatabaseAdapter, DatabaseAdapter};
-    use better_auth_core::{CreateUser, CreateSession};
-    use chrono::{Utc, Duration};
+    use better_auth_core::{CreateSession, CreateUser};
+    use chrono::{Duration, Utc};
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -272,7 +321,12 @@ mod tests {
         (ctx, user, session)
     }
 
-    fn create_auth_request(method: HttpMethod, path: &str, token: Option<&str>, body: Option<Vec<u8>>) -> AuthRequest {
+    fn create_auth_request(
+        method: HttpMethod,
+        path: &str,
+        token: Option<&str>,
+        body: Option<Vec<u8>>,
+    ) -> AuthRequest {
         let mut headers = HashMap::new();
         if let Some(token) = token {
             headers.insert("authorization".to_string(), format!("Bearer {}", token));
@@ -300,7 +354,10 @@ mod tests {
         let body_str = String::from_utf8(response.body).unwrap();
         let response_data: GetSessionResponse = serde_json::from_str(&body_str).unwrap();
         assert_eq!(response_data.session.token, session.token);
-        assert_eq!(response_data.user.email, Some("test@example.com".to_string()));
+        assert_eq!(
+            response_data.user.email,
+            Some("test@example.com".to_string())
+        );
     }
 
     #[tokio::test]
@@ -318,7 +375,12 @@ mod tests {
         let plugin = SessionManagementPlugin::new();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
-        let req = create_auth_request(HttpMethod::Post, "/sign-out", Some(&session.token), Some(b"{}".to_vec()));
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/sign-out",
+            Some(&session.token),
+            Some(b"{}".to_vec()),
+        );
         let response = plugin.handle_sign_out(&req, &ctx).await.unwrap();
 
         assert_eq!(response.status, 200);
@@ -346,7 +408,12 @@ mod tests {
         };
         ctx.database.create_session(create_session2).await.unwrap();
 
-        let req = create_auth_request(HttpMethod::Get, "/list-sessions", Some(&session.token), None);
+        let req = create_auth_request(
+            HttpMethod::Get,
+            "/list-sessions",
+            Some(&session.token),
+            None,
+        );
         let response = plugin.handle_list_sessions(&req, &ctx).await.unwrap();
 
         assert_eq!(response.status, 200);
@@ -376,7 +443,7 @@ mod tests {
             HttpMethod::Post,
             "/revoke-session",
             Some(&session.token),
-            Some(body.to_string().into_bytes())
+            Some(body.to_string().into_bytes()),
         );
 
         let response = plugin.handle_revoke_session(&req, &ctx).await.unwrap();
@@ -414,7 +481,7 @@ mod tests {
             HttpMethod::Post,
             "/revoke-session",
             Some(&session1.token),
-            Some(body.to_string().into_bytes())
+            Some(body.to_string().into_bytes()),
         );
 
         let err = plugin.handle_revoke_session(&req, &ctx).await.unwrap_err();
@@ -436,7 +503,12 @@ mod tests {
         };
         ctx.database.create_session(create_session2).await.unwrap();
 
-        let req = create_auth_request(HttpMethod::Post, "/revoke-sessions", Some(&session1.token), Some(b"{}".to_vec()));
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/revoke-sessions",
+            Some(&session1.token),
+            Some(b"{}".to_vec()),
+        );
         let response = plugin.handle_revoke_sessions(&req, &ctx).await.unwrap();
 
         assert_eq!(response.status, 200);
@@ -450,12 +522,32 @@ mod tests {
         let plugin = SessionManagementPlugin::new();
         let routes = plugin.routes();
 
-        assert_eq!(routes.len(), 5);
-        assert!(routes.iter().any(|r| r.path == "/get-session" && r.method == HttpMethod::Get));
-        assert!(routes.iter().any(|r| r.path == "/sign-out" && r.method == HttpMethod::Post));
-        assert!(routes.iter().any(|r| r.path == "/list-sessions" && r.method == HttpMethod::Get));
-        assert!(routes.iter().any(|r| r.path == "/revoke-session" && r.method == HttpMethod::Post));
-        assert!(routes.iter().any(|r| r.path == "/revoke-sessions" && r.method == HttpMethod::Post));
+        assert_eq!(routes.len(), 7);
+        assert!(
+            routes
+                .iter()
+                .any(|r| r.path == "/get-session" && r.method == HttpMethod::Get)
+        );
+        assert!(
+            routes
+                .iter()
+                .any(|r| r.path == "/sign-out" && r.method == HttpMethod::Post)
+        );
+        assert!(
+            routes
+                .iter()
+                .any(|r| r.path == "/list-sessions" && r.method == HttpMethod::Get)
+        );
+        assert!(
+            routes
+                .iter()
+                .any(|r| r.path == "/revoke-session" && r.method == HttpMethod::Post)
+        );
+        assert!(
+            routes
+                .iter()
+                .any(|r| r.path == "/revoke-sessions" && r.method == HttpMethod::Post)
+        );
     }
 
     #[tokio::test]
@@ -470,7 +562,12 @@ mod tests {
         assert_eq!(response.unwrap().status, 200);
 
         // Test invalid route
-        let req = create_auth_request(HttpMethod::Get, "/invalid-route", Some(&session.token), None);
+        let req = create_auth_request(
+            HttpMethod::Get,
+            "/invalid-route",
+            Some(&session.token),
+            None,
+        );
         let response = plugin.on_request(&req, &ctx).await.unwrap();
         assert!(response.is_none());
     }
@@ -488,11 +585,21 @@ mod tests {
 
         let (ctx, _user, session) = create_test_context_with_user().await;
 
-        let req = create_auth_request(HttpMethod::Get, "/list-sessions", Some(&session.token), None);
+        let req = create_auth_request(
+            HttpMethod::Get,
+            "/list-sessions",
+            Some(&session.token),
+            None,
+        );
         let response = plugin.on_request(&req, &ctx).await.unwrap();
         assert!(response.is_none());
 
-        let req = create_auth_request(HttpMethod::Post, "/revoke-session", Some(&session.token), Some(b"{}".to_vec()));
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/revoke-session",
+            Some(&session.token),
+            Some(b"{}".to_vec()),
+        );
         let response = plugin.on_request(&req, &ctx).await.unwrap();
         assert!(response.is_none());
     }

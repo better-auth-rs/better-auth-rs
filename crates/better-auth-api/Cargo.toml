@@ -29,3 +29,6 @@ argon2 = { workspace = true }
 
 # URL encoding
 urlencoding = "2"
+
+[dev-dependencies]
+tokio = { workspace = true }

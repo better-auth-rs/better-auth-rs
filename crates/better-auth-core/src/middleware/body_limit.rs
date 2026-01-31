@@ -1,7 +1,7 @@
-use async_trait::async_trait;
-use crate::types::{AuthRequest, AuthResponse};
-use crate::error::AuthResult;
 use super::Middleware;
+use crate::error::AuthResult;
+use crate::types::{AuthRequest, AuthResponse};
+use async_trait::async_trait;
 
 /// Configuration for body size limit middleware.
 #[derive(Debug, Clone)]
@@ -62,16 +62,19 @@ impl Middleware for BodyLimitMiddleware {
             return Ok(None);
         }
 
-        if let Some(body) = &req.body {
-            if body.len() > self.config.max_bytes {
-                return Ok(Some(AuthResponse::json(413, &serde_json::json!({
+        if let Some(body) = &req.body
+            && body.len() > self.config.max_bytes
+        {
+            return Ok(Some(AuthResponse::json(
+                413,
+                &serde_json::json!({
                     "code": "BODY_TOO_LARGE",
                     "message": format!(
                         "Request body exceeds maximum size of {} bytes",
                         self.config.max_bytes
                     ),
-                }))?));
-            }
+                }),
+            )?));
         }
 
         Ok(None)

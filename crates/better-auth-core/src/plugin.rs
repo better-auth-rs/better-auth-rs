@@ -1,49 +1,53 @@
 use async_trait::async_trait;
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use crate::types::{AuthRequest, AuthResponse, User, Session, HttpMethod};
-use crate::error::{AuthError, AuthResult};
 use crate::adapters::DatabaseAdapter;
 use crate::config::AuthConfig;
 use crate::email::EmailProvider;
+use crate::error::{AuthError, AuthResult};
+use crate::types::{AuthRequest, AuthResponse, HttpMethod, Session, User};
 
 /// Plugin trait that all authentication plugins must implement
 #[async_trait]
 pub trait AuthPlugin: Send + Sync {
     /// Plugin name - should be unique
     fn name(&self) -> &'static str;
-    
+
     /// Routes that this plugin handles
     fn routes(&self) -> Vec<AuthRoute>;
-    
+
     /// Called when the plugin is initialized
     async fn on_init(&self, ctx: &mut AuthContext) -> AuthResult<()> {
         let _ = ctx;
         Ok(())
     }
-    
+
     /// Called for each request - return Some(response) to handle, None to pass through
-    async fn on_request(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<Option<AuthResponse>>;
-    
+    async fn on_request(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<Option<AuthResponse>>;
+
     /// Called after a user is created
     async fn on_user_created(&self, user: &User, ctx: &AuthContext) -> AuthResult<()> {
         let _ = (user, ctx);
         Ok(())
     }
-    
+
     /// Called after a session is created
     async fn on_session_created(&self, session: &Session, ctx: &AuthContext) -> AuthResult<()> {
         let _ = (session, ctx);
         Ok(())
     }
-    
+
     /// Called before a user is deleted
     async fn on_user_deleted(&self, user_id: &str, ctx: &AuthContext) -> AuthResult<()> {
         let _ = (user_id, ctx);
         Ok(())
     }
-    
+
     /// Called before a session is deleted
     async fn on_session_deleted(&self, session_token: &str, ctx: &AuthContext) -> AuthResult<()> {
         let _ = (session_token, ctx);
@@ -75,19 +79,19 @@ impl AuthRoute {
             handler: handler.into(),
         }
     }
-    
+
     pub fn get(path: impl Into<String>, handler: impl Into<String>) -> Self {
         Self::new(HttpMethod::Get, path, handler)
     }
-    
+
     pub fn post(path: impl Into<String>, handler: impl Into<String>) -> Self {
         Self::new(HttpMethod::Post, path, handler)
     }
-    
+
     pub fn put(path: impl Into<String>, handler: impl Into<String>) -> Self {
         Self::new(HttpMethod::Put, path, handler)
     }
-    
+
     pub fn delete(path: impl Into<String>, handler: impl Into<String>) -> Self {
         Self::new(HttpMethod::Delete, path, handler)
     }
@@ -118,4 +122,4 @@ impl AuthContext {
             .as_deref()
             .ok_or_else(|| AuthError::config("No email provider configured"))
     }
-} 
+}

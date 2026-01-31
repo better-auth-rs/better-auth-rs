@@ -1,9 +1,12 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::error::AuthResult;
-use crate::types::{User, Session, Account, Verification, CreateUser, UpdateUser, CreateSession, CreateAccount, CreateVerification};
 use crate::adapters::DatabaseAdapter;
+use crate::error::AuthResult;
+use crate::types::{
+    Account, CreateAccount, CreateSession, CreateUser, CreateVerification, Session, UpdateUser,
+    User, Verification,
+};
 use chrono::{DateTime, Utc};
 
 /// Database lifecycle hooks for intercepting operations.
@@ -171,7 +174,11 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         self.inner.get_user_sessions(user_id).await
     }
 
-    async fn update_session_expiry(&self, token: &str, expires_at: DateTime<Utc>) -> AuthResult<()> {
+    async fn update_session_expiry(
+        &self,
+        token: &str,
+        expires_at: DateTime<Utc>,
+    ) -> AuthResult<()> {
         self.inner.update_session_expiry(token, expires_at).await
     }
 
@@ -200,7 +207,11 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         self.inner.create_account(account).await
     }
 
-    async fn get_account(&self, provider: &str, provider_account_id: &str) -> AuthResult<Option<Account>> {
+    async fn get_account(
+        &self,
+        provider: &str,
+        provider_account_id: &str,
+    ) -> AuthResult<Option<Account>> {
         self.inner.get_account(provider, provider_account_id).await
     }
 
@@ -214,11 +225,18 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
 
     // --- Verification operations (pass-through, no hooks) ---
 
-    async fn create_verification(&self, verification: CreateVerification) -> AuthResult<Verification> {
+    async fn create_verification(
+        &self,
+        verification: CreateVerification,
+    ) -> AuthResult<Verification> {
         self.inner.create_verification(verification).await
     }
 
-    async fn get_verification(&self, identifier: &str, value: &str) -> AuthResult<Option<Verification>> {
+    async fn get_verification(
+        &self,
+        identifier: &str,
+        value: &str,
+    ) -> AuthResult<Option<Verification>> {
         self.inner.get_verification(identifier, value).await
     }
 
@@ -297,7 +315,9 @@ mod tests {
         let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
             .with_hook(hook.clone());
 
-        let create = CreateUser::new().with_email("test@example.com").with_name("Test");
+        let create = CreateUser::new()
+            .with_email("test@example.com")
+            .with_name("Test");
         db.create_user(create).await.unwrap();
 
         assert_eq!(hook.before_create_count.load(Ordering::SeqCst), 1);
@@ -310,15 +330,24 @@ mod tests {
         let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
             .with_hook(hook.clone());
 
-        let create = CreateUser::new().with_email("test@example.com").with_name("Test");
+        let create = CreateUser::new()
+            .with_email("test@example.com")
+            .with_name("Test");
         let user = db.create_user(create).await.unwrap();
 
         let update = UpdateUser {
             name: Some("Updated".to_string()),
-            email: None, image: None, email_verified: None,
-            username: None, display_username: None, role: None,
-            banned: None, ban_reason: None, ban_expires: None,
-            two_factor_enabled: None, metadata: None,
+            email: None,
+            image: None,
+            email_verified: None,
+            username: None,
+            display_username: None,
+            role: None,
+            banned: None,
+            ban_reason: None,
+            ban_expires: None,
+            two_factor_enabled: None,
+            metadata: None,
         };
         db.update_user(&user.id, update).await.unwrap();
 
@@ -332,7 +361,9 @@ mod tests {
         let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
             .with_hook(hook.clone());
 
-        let create = CreateUser::new().with_email("test@example.com").with_name("Test");
+        let create = CreateUser::new()
+            .with_email("test@example.com")
+            .with_name("Test");
         let user = db.create_user(create).await.unwrap();
 
         db.delete_user(&user.id).await.unwrap();
@@ -355,7 +386,9 @@ mod tests {
         let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
             .with_hook(Arc::new(RejectHook));
 
-        let create = CreateUser::new().with_email("test@example.com").with_name("Test");
+        let create = CreateUser::new()
+            .with_email("test@example.com")
+            .with_name("Test");
         let result = db.create_user(create).await;
 
         assert!(result.is_err());
@@ -370,7 +403,9 @@ mod tests {
             .with_hook(hook1.clone())
             .with_hook(hook2.clone());
 
-        let create = CreateUser::new().with_email("test@example.com").with_name("Test");
+        let create = CreateUser::new()
+            .with_email("test@example.com")
+            .with_name("Test");
         db.create_user(create).await.unwrap();
 
         assert_eq!(hook1.before_create_count.load(Ordering::SeqCst), 1);

@@ -1,21 +1,22 @@
-use better_auth::{BetterAuth, AuthConfig};
-use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin, PasswordManagementPlugin, AccountManagementPlugin};
+use axum::{
+    Json, Router,
+    extract::{Request, State},
+    http::StatusCode,
+    middleware::{self, Next},
+    response::Response,
+    routing::get,
+};
 use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::handlers::AxumIntegration;
-use axum::{
-    Router,
-    extract::{Request, State},
-    response::Response,
-    http::StatusCode,
-    routing::get,
-    middleware::{self, Next},
-    Json,
+use better_auth::plugins::{
+    AccountManagementPlugin, EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
 };
+use better_auth::{AuthConfig, BetterAuth};
+use chrono;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
-use chrono;
 
 #[derive(Serialize, Deserialize)]
 struct UserProfile {
@@ -40,7 +41,7 @@ impl<T> ApiResponse<T> {
             message: message.to_string(),
         }
     }
-    
+
     fn error(message: &str) -> ApiResponse<()> {
         ApiResponse {
             success: false,
@@ -54,19 +55,19 @@ impl<T> ApiResponse<T> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing for better logging
     tracing_subscriber::fmt::init();
-    
+
     println!("🚀 Starting Better Auth Axum Server");
-    
+
     // Create configuration
     let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
         .base_url("http://localhost:8080")
         .password_min_length(6);
-    
+
     println!("📋 Configuration created");
-    
+
     // Create database adapter (use in-memory for this example)
     let database = MemoryDatabaseAdapter::new();
-    
+
     // Build the authentication system
     let auth = Arc::new(
         BetterAuth::new(config)
@@ -76,15 +77,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .plugin(PasswordManagementPlugin::new())
             .plugin(AccountManagementPlugin::new())
             .build()
-            .await?
+            .await?,
     );
-    
+
     println!("🔐 BetterAuth instance created");
     println!("📝 Registered plugins: {:?}", auth.plugin_names());
-    
+
     // Create the main application router
     let app = create_app_router(auth).await;
-    
+
     println!("🌐 Starting server on http://localhost:8080");
     println!("📖 Available endpoints:");
     println!("   Authentication:");
@@ -119,11 +120,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("     GET  /auth/ok                   - Health check");
     println!("     GET  /api/profile               - Protected API route");
     println!("     GET  /api/public                - Public API route");
-    
+
     // Start the server
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
     axum::serve(listener, app).await?;
-    
+
     Ok(())
 }
 
@@ -131,21 +132,21 @@ async fn create_app_router(auth: Arc<BetterAuth>) -> Router {
     // Create auth router using the BetterAuth AxumIntegration
     // This automatically registers all plugin routes
     let auth_router = auth.clone().axum_router();
-    
+
     // Create main application router
     Router::new()
         // API routes
         .route("/api/profile", get(get_user_profile))
         .route("/api/protected", get(protected_route))
         .route("/api/public", get(public_route))
-        
         // Mount auth routes under /auth prefix
         .nest("/auth", auth_router)
-        
         // Add middleware
         .layer(CorsLayer::permissive())
-        .layer(middleware::from_fn_with_state(auth.clone(), auth_middleware))
-        
+        .layer(middleware::from_fn_with_state(
+            auth.clone(),
+            auth_middleware,
+        ))
         // Add the auth state
         .with_state(auth)
 }
@@ -158,13 +159,13 @@ async fn auth_middleware(
 ) -> Response {
     // Extract session token from Authorization header or cookie
     let token = extract_session_token(&req);
-    
+
     if let Some(token) = token {
         // Validate session (this would be implemented in your auth system)
         // For now, just pass the token along in extensions
         req.extensions_mut().insert(token);
     }
-    
+
     next.run(req).await
 }
 
@@ -177,7 +178,7 @@ fn extract_session_token(req: &Request) -> Option<String> {
             }
         }
     }
-    
+
     // Try session cookie
     if let Some(cookie_header) = req.headers().get("cookie") {
         if let Ok(cookie_str) = cookie_header.to_str() {
@@ -189,11 +190,9 @@ fn extract_session_token(req: &Request) -> Option<String> {
             }
         }
     }
-    
+
     None
 }
-
-
 
 // API route handlers
 async fn get_user_profile(
@@ -209,24 +208,28 @@ async fn get_user_profile(
             name: Some("Test User".to_string()),
             created_at: "2024-01-01T00:00:00Z".to_string(),
         };
-        
-        Ok(Json(ApiResponse::success(profile, "Profile retrieved successfully")))
+
+        Ok(Json(ApiResponse::success(
+            profile,
+            "Profile retrieved successfully",
+        )))
     } else {
         Err(StatusCode::UNAUTHORIZED)
     }
 }
 
-async fn protected_route(
-    req: Request,
-) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
+async fn protected_route(req: Request) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
     if req.extensions().get::<String>().is_some() {
         let data = serde_json::json!({
             "message": "This is a protected route",
             "timestamp": chrono::Utc::now().to_rfc3339(),
             "server": "Better Auth Axum Server"
         });
-        
-        Ok(Json(ApiResponse::success(data, "Access granted to protected route")))
+
+        Ok(Json(ApiResponse::success(
+            data,
+            "Access granted to protected route",
+        )))
     } else {
         Err(StatusCode::UNAUTHORIZED)
     }
@@ -266,6 +269,9 @@ async fn public_route() -> Json<ApiResponse<serde_json::Value>> {
             "GET  /api/public"
         ]
     });
-    
-    Json(ApiResponse::success(data, "Public route accessed successfully"))
-} 
+
+    Json(ApiResponse::success(
+        data,
+        "Public route accessed successfully",
+    ))
+}

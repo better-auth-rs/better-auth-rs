@@ -1,10 +1,8 @@
-use serde::{Deserialize, Serialize};
-use validator::Validate;
 use chrono::{DateTime, Utc};
-use uuid::Uuid;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-
+use uuid::Uuid;
+use validator::Validate;
 
 /// Core user type - matches OpenAPI schema
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -48,7 +46,7 @@ pub struct Session {
     pub updated_at: DateTime<Utc>,
     #[serde(rename = "ipAddress")]
     pub ip_address: Option<String>,
-    #[serde(rename = "userAgent")]  
+    #[serde(rename = "userAgent")]
     pub user_agent: Option<String>,
     #[serde(rename = "userId")]
     pub user_id: String,
@@ -79,7 +77,7 @@ pub struct Account {
     pub id_token: Option<String>,
     #[serde(rename = "accessTokenExpiresAt")]
     pub access_token_expires_at: Option<DateTime<Utc>>,
-    #[serde(rename = "refreshTokenExpiresAt")] 
+    #[serde(rename = "refreshTokenExpiresAt")]
     pub refresh_token_expires_at: Option<DateTime<Utc>>,
     pub scope: Option<String>,
     pub password: Option<String>,
@@ -243,37 +241,37 @@ impl CreateUser {
             metadata: None,
         }
     }
-    
+
     pub fn with_email(mut self, email: impl Into<String>) -> Self {
         self.email = Some(email.into());
         self
     }
-    
+
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
         self
     }
-    
+
     pub fn with_email_verified(mut self, verified: bool) -> Self {
         self.email_verified = Some(verified);
         self
     }
-    
+
     pub fn with_password(mut self, password: impl Into<String>) -> Self {
         self.password = Some(password.into());
         self
     }
-    
+
     pub fn with_username(mut self, username: impl Into<String>) -> Self {
         self.username = Some(username.into());
         self
     }
-    
+
     pub fn with_role(mut self, role: impl Into<String>) -> Self {
         self.role = Some(role.into());
         self
     }
-    
+
     pub fn with_metadata(mut self, metadata: HashMap<String, serde_json::Value>) -> Self {
         self.metadata = Some(metadata);
         self
@@ -296,19 +294,19 @@ impl AuthRequest {
             query: HashMap::new(),
         }
     }
-    
+
     pub fn method(&self) -> &HttpMethod {
         &self.method
     }
-    
+
     pub fn path(&self) -> &str {
         &self.path
     }
-    
+
     pub fn header(&self, name: &str) -> Option<&String> {
         self.headers.get(name)
     }
-    
+
     pub fn body_as_json<T: for<'de> Deserialize<'de>>(&self) -> Result<T, serde_json::Error> {
         if let Some(body) = &self.body {
             serde_json::from_slice(body)
@@ -326,31 +324,31 @@ impl AuthResponse {
             body: Vec::new(),
         }
     }
-    
+
     pub fn json<T: Serialize>(status: u16, data: &T) -> Result<Self, serde_json::Error> {
         let body = serde_json::to_vec(data)?;
         let mut headers = HashMap::new();
         headers.insert("content-type".to_string(), "application/json".to_string());
-        
+
         Ok(Self {
             status,
             headers,
             body,
         })
     }
-    
+
     pub fn text(status: u16, text: impl Into<String>) -> Self {
         let body = text.into().into_bytes();
         let mut headers = HashMap::new();
         headers.insert("content-type".to_string(), "text/plain".to_string());
-        
+
         Self {
             status,
             headers,
             body,
         }
     }
-    
+
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.insert(name.into(), value.into());
         self
@@ -386,9 +384,9 @@ pub struct DeleteUserResponse {
 #[cfg(feature = "sqlx-postgres")]
 mod postgres_impls {
     use super::*;
-    use sqlx::{FromRow, Row};
     use sqlx::postgres::PgRow;
-    
+    use sqlx::{FromRow, Row};
+
     impl FromRow<'_, PgRow> for User {
         fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
             Ok(Self {
@@ -407,14 +405,14 @@ mod postgres_impls {
                 ban_reason: row.try_get("ban_reason")?,
                 ban_expires: row.try_get("ban_expires")?,
                 metadata: {
-                    let json_value: sqlx::types::Json<HashMap<String, serde_json::Value>> = 
+                    let json_value: sqlx::types::Json<HashMap<String, serde_json::Value>> =
                         row.try_get("metadata")?;
                     json_value.0
                 },
             })
         }
     }
-    
+
     impl FromRow<'_, PgRow> for Session {
         fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
             Ok(Self {
@@ -432,7 +430,7 @@ mod postgres_impls {
             })
         }
     }
-    
+
     impl FromRow<'_, PgRow> for Account {
         fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
             Ok(Self {
@@ -452,4 +450,4 @@ mod postgres_impls {
             })
         }
     }
-} 
+}

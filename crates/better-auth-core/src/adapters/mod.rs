@@ -1,11 +1,11 @@
-pub mod database;
 pub mod cache;
+pub mod database;
 
-pub use database::{DatabaseAdapter, MemoryDatabaseAdapter};
 pub use cache::{CacheAdapter, MemoryCacheAdapter};
+pub use database::{DatabaseAdapter, MemoryDatabaseAdapter};
 
 #[cfg(feature = "sqlx-postgres")]
-pub use database::sqlx_adapter::{SqlxAdapter, PoolConfig, PoolStats};
+pub use database::sqlx_adapter::{PoolConfig, PoolStats, SqlxAdapter};
 
 #[cfg(feature = "redis-cache")]
 pub use cache::RedisAdapter;

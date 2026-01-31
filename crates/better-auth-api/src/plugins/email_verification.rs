@@ -1,12 +1,14 @@
 use async_trait::async_trait;
+use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
-use validator::Validate;
-use chrono::{Utc, Duration};
 use uuid::Uuid;
+use validator::Validate;
 
-use better_auth_core::{AuthPlugin, AuthRoute, AuthContext};
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, User, UpdateUser, CreateVerification};
+use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::{
+    AuthRequest, AuthResponse, CreateVerification, HttpMethod, UpdateUser, User,
+};
 
 /// Email verification plugin for handling email verification flows
 pub struct EmailVerificationPlugin {
@@ -105,30 +107,44 @@ impl AuthPlugin for EmailVerificationPlugin {
         ]
     }
 
-    async fn on_request(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<Option<AuthResponse>> {
+    async fn on_request(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/send-verification-email") => {
                 Ok(Some(self.handle_send_verification_email(req, ctx).await?))
-            },
+            }
             (HttpMethod::Get, "/verify-email") => {
                 Ok(Some(self.handle_verify_email(req, ctx).await?))
-            },
+            }
             _ => Ok(None),
         }
     }
 
     async fn on_user_created(&self, user: &User, ctx: &AuthContext) -> AuthResult<()> {
         // Send verification email for new users if configured
-        if self.config.send_email_notifications && !user.email_verified {
-            if let Some(email) = &user.email {
-                // Gracefully skip if no email provider is configured
-                if ctx.email_provider.is_some() {
-                    if let Err(e) = self.send_verification_email_internal(email, None, ctx).await {
-                        eprintln!("[email-verification] Failed to send verification email to {}: {}", email, e);
-                    }
-                } else {
-                    eprintln!("[email-verification] No email provider configured, skipping verification email for {}", email);
+        if self.config.send_email_notifications
+            && !user.email_verified
+            && let Some(email) = &user.email
+        {
+            // Gracefully skip if no email provider is configured
+            if ctx.email_provider.is_some() {
+                if let Err(e) = self
+                    .send_verification_email_internal(email, None, ctx)
+                    .await
+                {
+                    eprintln!(
+                        "[email-verification] Failed to send verification email to {}: {}",
+                        email, e
+                    );
                 }
+            } else {
+                eprintln!(
+                    "[email-verification] No email provider configured, skipping verification email for {}",
+                    email
+                );
             }
         }
         Ok(())
@@ -137,14 +153,22 @@ impl AuthPlugin for EmailVerificationPlugin {
 
 // Implementation methods outside the trait
 impl EmailVerificationPlugin {
-    async fn handle_send_verification_email(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
-        let send_req: SendVerificationEmailRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+    async fn handle_send_verification_email(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
+        let send_req: SendVerificationEmailRequest =
+            match better_auth_core::validate_request_body(req) {
+                Ok(v) => v,
+                Err(resp) => return Ok(resp),
+            };
 
         // Check if user exists
-        let user = ctx.database.get_user_by_email(&send_req.email).await?
+        let user = ctx
+            .database
+            .get_user_by_email(&send_req.email)
+            .await?
             .ok_or_else(|| AuthError::not_found("No user found with this email address"))?;
 
         // Check if user is already verified
@@ -153,7 +177,12 @@ impl EmailVerificationPlugin {
         }
 
         // Send verification email
-        self.send_verification_email_internal(&send_req.email, send_req.callback_url.as_deref(), ctx).await?;
+        self.send_verification_email_internal(
+            &send_req.email,
+            send_req.callback_url.as_deref(),
+            ctx,
+        )
+        .await?;
 
         let response = StatusResponse {
             status: true,
@@ -162,27 +191,36 @@ impl EmailVerificationPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_verify_email(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+    async fn handle_verify_email(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext,
+    ) -> AuthResult<AuthResponse> {
         // Extract token from query parameters
-        let token = req.query.get("token")
+        let token = req
+            .query
+            .get("token")
             .ok_or_else(|| AuthError::bad_request("Verification token is required"))?;
 
         let callback_url = req.query.get("callbackURL");
 
         // Find verification token
-        let verification = ctx.database.get_verification_by_value(token).await?
+        let verification = ctx
+            .database
+            .get_verification_by_value(token)
+            .await?
             .ok_or_else(|| AuthError::bad_request("Invalid or expired verification token"))?;
 
         // Get user by email (stored in identifier field)
-        let user = ctx.database.get_user_by_email(&verification.identifier).await?
+        let user = ctx
+            .database
+            .get_user_by_email(&verification.identifier)
+            .await?
             .ok_or_else(|| AuthError::not_found("User associated with this token not found"))?;
 
         // Check if already verified
         if user.email_verified {
-            let response = VerifyEmailResponse {
-                user,
-                status: true,
-            };
+            let response = VerifyEmailResponse { user, status: true };
             return Ok(AuthResponse::json(200, &response)?);
         }
 
@@ -243,14 +281,19 @@ impl EmailVerificationPlugin {
             expires_at,
         };
 
-        ctx.database.create_verification(create_verification).await?;
+        ctx.database
+            .create_verification(create_verification)
+            .await?;
 
         // Send email via the configured provider
         if self.config.send_email_notifications {
             let verification_url = if let Some(callback_url) = callback_url {
                 format!("{}?token={}", callback_url, verification_token)
             } else {
-                format!("{}/verify-email?token={}", ctx.config.base_url, verification_token)
+                format!(
+                    "{}/verify-email?token={}",
+                    ctx.config.base_url, verification_token
+                )
             };
 
             let subject = "Verify your email address";
@@ -261,7 +304,9 @@ impl EmailVerificationPlugin {
             );
             let text = format!("Verify your email address: {}", verification_url);
 
-            ctx.email_provider()?.send(email, subject, &html, &text).await?;
+            ctx.email_provider()?
+                .send(email, subject, &html, &text)
+                .await?;
         }
 
         Ok(())

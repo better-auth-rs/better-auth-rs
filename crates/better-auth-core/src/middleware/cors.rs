@@ -1,7 +1,7 @@
-use async_trait::async_trait;
-use crate::types::{AuthRequest, AuthResponse, HttpMethod};
-use crate::error::AuthResult;
 use super::Middleware;
+use crate::error::AuthResult;
+use crate::types::{AuthRequest, AuthResponse, HttpMethod};
+use async_trait::async_trait;
 
 /// Configuration for CORS middleware.
 #[derive(Debug, Clone)]
@@ -34,11 +34,16 @@ impl Default for CorsConfig {
         Self {
             allowed_origins: Vec::new(),
             allowed_methods: vec![
-                "GET".into(), "POST".into(), "PUT".into(),
-                "DELETE".into(), "PATCH".into(), "OPTIONS".into(),
+                "GET".into(),
+                "POST".into(),
+                "PUT".into(),
+                "DELETE".into(),
+                "PATCH".into(),
+                "OPTIONS".into(),
             ],
             allowed_headers: vec![
-                "Content-Type".into(), "Authorization".into(),
+                "Content-Type".into(),
+                "Authorization".into(),
                 "X-Requested-With".into(),
             ],
             exposed_headers: Vec::new(),
@@ -91,7 +96,10 @@ impl CorsMiddleware {
         if self.config.allowed_origins.is_empty() {
             return false;
         }
-        self.config.allowed_origins.iter().any(|o| o == "*" || o == origin)
+        self.config
+            .allowed_origins
+            .iter()
+            .any(|o| o == "*" || o == origin)
     }
 
     fn cors_headers(&self, origin: &str) -> Vec<(String, String)> {
@@ -174,7 +182,11 @@ impl Middleware for CorsMiddleware {
         Ok(None)
     }
 
-    async fn after_request(&self, req: &AuthRequest, mut response: AuthResponse) -> AuthResult<AuthResponse> {
+    async fn after_request(
+        &self,
+        req: &AuthRequest,
+        mut response: AuthResponse,
+    ) -> AuthResult<AuthResponse> {
         if !self.config.enabled {
             return Ok(response);
         }
@@ -265,7 +277,10 @@ mod tests {
             "http://localhost:5173"
         );
         assert_eq!(
-            response.headers.get("Access-Control-Allow-Credentials").unwrap(),
+            response
+                .headers
+                .get("Access-Control-Allow-Credentials")
+                .unwrap(),
             "true"
         );
     }
@@ -286,7 +301,7 @@ mod tests {
 
         let response = AuthResponse::new(200);
         let response = mw.after_request(&req, response).await.unwrap();
-        assert!(response.headers.get("Access-Control-Allow-Origin").is_none());
+        assert!(!response.headers.contains_key("Access-Control-Allow-Origin"));
     }
 
     #[tokio::test]

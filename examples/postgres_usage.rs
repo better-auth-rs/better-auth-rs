@@ -1,10 +1,9 @@
-use better_auth::{BetterAuth, AuthConfig};
-use better_auth::plugins::{
-    EmailPasswordPlugin, PasswordManagementPlugin,
-    SessionManagementPlugin, AccountManagementPlugin,
-};
 use better_auth::adapters::SqlxAdapter;
+use better_auth::plugins::{
+    AccountManagementPlugin, EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
+};
 use better_auth::types::{AuthRequest, HttpMethod};
+use better_auth::{AuthConfig, BetterAuth};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -12,8 +11,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Better Auth PostgreSQL Example\n");
 
     // Get database URL from environment variable
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://better_auth:password@localhost:5432/better_auth".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://better_auth:password@localhost:5432/better_auth".to_string()
+    });
 
     println!("Connecting to database: {}", hide_password(&database_url));
 
@@ -48,7 +48,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "username": "pg_user"
     });
 
-    let response = send(&auth, HttpMethod::Post, "/sign-up/email", Some(&signup_body), None).await;
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/sign-up/email",
+        Some(&signup_body),
+        None,
+    )
+    .await;
     println!("Status: {}", response.status);
     let data = parse_body(&response.body);
     let token = data["token"].as_str().unwrap_or_default().to_string();
@@ -65,7 +72,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "email": "postgres_user@example.com",
         "password": "secure_password_123"
     });
-    let response = send(&auth, HttpMethod::Post, "/sign-in/email", Some(&signin_body), None).await;
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/sign-in/email",
+        Some(&signin_body),
+        None,
+    )
+    .await;
     println!("Status: {}\n", response.status);
 
     // --- Sign in by username ---
@@ -74,7 +88,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "username": "pg_user",
         "password": "secure_password_123"
     });
-    let response = send(&auth, HttpMethod::Post, "/sign-in/username", Some(&signin_body), None).await;
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/sign-in/username",
+        Some(&signin_body),
+        None,
+    )
+    .await;
     println!("Status: {}\n", response.status);
 
     // --- Get session ---
@@ -96,7 +117,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- Duplicate registration (should fail) ---
     println!("=== Duplicate registration (should fail) ===");
-    let response = send(&auth, HttpMethod::Post, "/sign-up/email", Some(&signup_body), None).await;
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/sign-up/email",
+        Some(&signup_body),
+        None,
+    )
+    .await;
     println!("Status: {} (expected error)\n", response.status);
 
     // --- Wrong password (should fail) ---
@@ -105,7 +133,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "email": "postgres_user@example.com",
         "password": "wrong_password"
     });
-    let response = send(&auth, HttpMethod::Post, "/sign-in/email", Some(&wrong_body), None).await;
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/sign-in/email",
+        Some(&wrong_body),
+        None,
+    )
+    .await;
     println!("Status: {} (expected 401)\n", response.status);
 
     println!("PostgreSQL example completed successfully!");

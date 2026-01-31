@@ -1,27 +1,27 @@
-use std::sync::Arc;
-use chrono::Duration;
 use crate::adapters::DatabaseAdapter;
 use crate::email::EmailProvider;
 use crate::error::AuthError;
+use chrono::Duration;
+use std::sync::Arc;
 
 /// Main configuration for BetterAuth
 #[derive(Clone)]
 pub struct AuthConfig {
     /// Secret key for signing tokens and sessions
     pub secret: String,
-    
+
     /// Base URL for the authentication service
     pub base_url: String,
-    
+
     /// Database adapter for persistence
     pub database: Option<Arc<dyn DatabaseAdapter>>,
-    
+
     /// Session configuration
     pub session: SessionConfig,
-    
+
     /// JWT configuration
     pub jwt: JwtConfig,
-    
+
     /// Password configuration
     pub password: PasswordConfig,
 
@@ -34,13 +34,13 @@ pub struct AuthConfig {
 pub struct SessionConfig {
     /// Session expiration duration
     pub expires_in: Duration,
-    
+
     /// Update session on activity
     pub update_age: bool,
-    
+
     /// Cookie name for session token
     pub cookie_name: String,
-    
+
     /// Cookie settings
     pub cookie_secure: bool,
     pub cookie_http_only: bool,
@@ -52,13 +52,13 @@ pub struct SessionConfig {
 pub struct JwtConfig {
     /// JWT expiration duration
     pub expires_in: Duration,
-    
+
     /// JWT algorithm
     pub algorithm: String,
-    
+
     /// Issuer claim
     pub issuer: Option<String>,
-    
+
     /// Audience claim
     pub audience: Option<String>,
 }
@@ -68,19 +68,19 @@ pub struct JwtConfig {
 pub struct PasswordConfig {
     /// Minimum password length
     pub min_length: usize,
-    
+
     /// Require uppercase letters
     pub require_uppercase: bool,
-    
+
     /// Require lowercase letters
     pub require_lowercase: bool,
-    
+
     /// Require numbers
     pub require_numbers: bool,
-    
+
     /// Require special characters
     pub require_special: bool,
-    
+
     /// Argon2 configuration
     pub argon2_config: Argon2Config,
 }
@@ -154,9 +154,9 @@ impl Default for PasswordConfig {
 impl Default for Argon2Config {
     fn default() -> Self {
         Self {
-            memory_cost: 4096,  // 4MB
-            time_cost: 3,       // 3 iterations
-            parallelism: 1,     // 1 thread
+            memory_cost: 4096, // 4MB
+            time_cost: 3,      // 3 iterations
+            parallelism: 1,    // 1 thread
         }
     }
 }
@@ -168,40 +168,42 @@ impl AuthConfig {
             ..Default::default()
         }
     }
-    
+
     pub fn base_url(mut self, url: impl Into<String>) -> Self {
         self.base_url = url.into();
         self
     }
-    
+
     pub fn session_expires_in(mut self, duration: Duration) -> Self {
         self.session.expires_in = duration;
         self
     }
-    
+
     pub fn jwt_expires_in(mut self, duration: Duration) -> Self {
         self.jwt.expires_in = duration;
         self
     }
-    
+
     pub fn password_min_length(mut self, length: usize) -> Self {
         self.password.min_length = length;
         self
     }
-    
+
     pub fn validate(&self) -> Result<(), AuthError> {
         if self.secret.is_empty() {
             return Err(AuthError::config("Secret key cannot be empty"));
         }
-        
+
         if self.secret.len() < 32 {
-            return Err(AuthError::config("Secret key must be at least 32 characters"));
+            return Err(AuthError::config(
+                "Secret key must be at least 32 characters",
+            ));
         }
-        
+
         if self.database.is_none() {
             return Err(AuthError::config("Database adapter is required"));
         }
-        
+
         Ok(())
     }
-} 
+}
