@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use chrono::Duration;
 use crate::adapters::DatabaseAdapter;
+use crate::email::EmailProvider;
 use crate::error::AuthError;
 
 /// Main configuration for BetterAuth
@@ -23,6 +24,9 @@ pub struct AuthConfig {
     
     /// Password configuration
     pub password: PasswordConfig,
+
+    /// Email provider for sending emails (verification, password reset, etc.)
+    pub email_provider: Option<Arc<dyn EmailProvider>>,
 }
 
 /// Session-specific configuration
@@ -105,6 +109,7 @@ impl Default for AuthConfig {
             session: SessionConfig::default(),
             jwt: JwtConfig::default(),
             password: PasswordConfig::default(),
+            email_provider: None,
         }
     }
 }

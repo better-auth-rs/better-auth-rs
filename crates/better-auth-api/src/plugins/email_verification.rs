@@ -121,7 +121,14 @@ impl AuthPlugin for EmailVerificationPlugin {
         // Send verification email for new users if configured
         if self.config.send_email_notifications && !user.email_verified {
             if let Some(email) = &user.email {
-                let _ = self.send_verification_email_internal(email, None, ctx).await;
+                // Gracefully skip if no email provider is configured
+                if ctx.email_provider.is_some() {
+                    if let Err(e) = self.send_verification_email_internal(email, None, ctx).await {
+                        eprintln!("[email-verification] Failed to send verification email to {}: {}", email, e);
+                    }
+                } else {
+                    eprintln!("[email-verification] No email provider configured, skipping verification email for {}", email);
+                }
             }
         }
         Ok(())
@@ -200,9 +207,16 @@ impl EmailVerificationPlugin {
         // Delete the used verification token
         ctx.database.delete_verification(&verification.id).await?;
 
-        // If callback URL is provided, handle redirect (in a real implementation)
+        // If callback URL is provided, redirect
         if let Some(callback_url) = callback_url {
-            println!("Would redirect to: {}?verified=true", callback_url);
+            let redirect_url = format!("{}?verified=true", callback_url);
+            let mut headers = std::collections::HashMap::new();
+            headers.insert("Location".to_string(), redirect_url);
+            return Ok(AuthResponse {
+                status: 302,
+                headers,
+                body: Vec::new(),
+            });
         }
 
         let response = VerifyEmailResponse {
@@ -231,7 +245,7 @@ impl EmailVerificationPlugin {
 
         ctx.database.create_verification(create_verification).await?;
 
-        // Send email (in a real implementation, this would use an email service)
+        // Send email via the configured provider
         if self.config.send_email_notifications {
             let verification_url = if let Some(callback_url) = callback_url {
                 format!("{}?token={}", callback_url, verification_token)
@@ -239,7 +253,15 @@ impl EmailVerificationPlugin {
                 format!("{}/verify-email?token={}", ctx.config.base_url, verification_token)
             };
 
-            println!("Verification email would be sent to {} with URL: {}", email, verification_url);
+            let subject = "Verify your email address";
+            let html = format!(
+                "<p>Click the link below to verify your email address:</p>\
+                 <p><a href=\"{url}\">Verify Email</a></p>",
+                url = verification_url
+            );
+            let text = format!("Verify your email address: {}", verification_url);
+
+            ctx.email_provider()?.send(email, subject, &html, &text).await?;
         }
 
         Ok(())

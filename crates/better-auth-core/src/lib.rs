@@ -6,6 +6,7 @@
 pub mod types;
 pub mod error;
 pub mod config;
+pub mod email;
 pub mod plugin;
 pub mod session;
 pub mod adapters;
@@ -15,6 +16,7 @@ pub mod openapi;
 
 // Re-export commonly used items
 pub use config::{AuthConfig, SessionConfig, JwtConfig, PasswordConfig, Argon2Config, SameSite};
+pub use email::{EmailProvider, ConsoleEmailProvider};
 pub use plugin::{AuthPlugin, AuthRoute, AuthContext};
 pub use session::SessionManager;
 pub use error::{AuthError, AuthResult, DatabaseError, validation_error_response, validate_request_body};

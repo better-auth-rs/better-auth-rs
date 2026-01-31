@@ -6,6 +6,7 @@ use crate::types::{AuthRequest, AuthResponse, User, Session, HttpMethod};
 use crate::error::{AuthError, AuthResult};
 use crate::adapters::DatabaseAdapter;
 use crate::config::AuthConfig;
+use crate::email::EmailProvider;
 
 /// Plugin trait that all authentication plugins must implement
 #[async_trait]
@@ -62,6 +63,7 @@ pub struct AuthRoute {
 pub struct AuthContext {
     pub config: Arc<AuthConfig>,
     pub database: Arc<dyn DatabaseAdapter>,
+    pub email_provider: Option<Arc<dyn EmailProvider>>,
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
@@ -93,18 +95,27 @@ impl AuthRoute {
 
 impl AuthContext {
     pub fn new(config: Arc<AuthConfig>, database: Arc<dyn DatabaseAdapter>) -> Self {
+        let email_provider = config.email_provider.clone();
         Self {
             config,
             database,
+            email_provider,
             metadata: HashMap::new(),
         }
     }
-    
+
     pub fn set_metadata(&mut self, key: impl Into<String>, value: serde_json::Value) {
         self.metadata.insert(key.into(), value);
     }
-    
+
     pub fn get_metadata(&self, key: &str) -> Option<&serde_json::Value> {
         self.metadata.get(key)
+    }
+
+    /// Get the email provider, returning an error if none is configured.
+    pub fn email_provider(&self) -> AuthResult<&dyn EmailProvider> {
+        self.email_provider
+            .as_deref()
+            .ok_or_else(|| AuthError::config("No email provider configured"))
     }
 } 

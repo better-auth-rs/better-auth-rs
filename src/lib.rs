@@ -44,6 +44,8 @@ pub use better_auth_core::{
     UpdateUserRequest, UpdateUserResponse, DeleteUserResponse,
     // Adapters
     DatabaseAdapter, MemoryDatabaseAdapter, CacheAdapter, MemoryCacheAdapter,
+    // Email
+    EmailProvider, ConsoleEmailProvider,
     // Hooks
     DatabaseHooks, HookedDatabaseAdapter,
     // OpenAPI
