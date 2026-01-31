@@ -1,0 +1,81 @@
+---
+title: Errors
+description: Error types, HTTP status codes, and error response format.
+---
+
+## Error Response Format
+
+All errors return JSON:
+
+```json
+{
+  "message": "Description of the error"
+}
+```
+
+For 5xx errors, the actual error details are hidden and a generic message is returned to avoid leaking internal information.
+
+## AuthError Variants
+
+| Variant | HTTP Status | Description |
+|---------|-------------|-------------|
+| `BadRequest` | 400 | Malformed request |
+| `InvalidRequest` | 400 | Invalid request parameters |
+| `Validation` | 400 | Input validation failed |
+| `InvalidCredentials` | 401 | Wrong email/password |
+| `Unauthenticated` | 401 | No valid session token |
+| `SessionNotFound` | 401 | Session token not found or expired |
+| `Forbidden` | 403 | Action not allowed |
+| `Unauthorized` | 403 | Insufficient permissions |
+| `UserNotFound` | 404 | User does not exist |
+| `NotFound` | 404 | Resource not found |
+| `Conflict` | 409 | Duplicate resource (email, username) |
+| `RateLimited` | 429 | Too many requests |
+| `NotImplemented` | 501 | Feature not implemented |
+| `Config` | 500 | Configuration error |
+| `Database` | 500 | Database operation failed |
+| `Serialization` | 500 | JSON serialization error |
+| `Plugin` | 500 | Plugin-specific error |
+| `Internal` | 500 | Unexpected internal error |
+| `PasswordHash` | 500 | Password hashing failure |
+| `Jwt` | 500 | JWT encoding/decoding error |
+
+## DatabaseError Variants
+
+Database errors are wrapped in `AuthError::Database`:
+
+| Variant | Description |
+|---------|-------------|
+| `Connection` | Failed to connect to database |
+| `Query` | Query execution failed |
+| `Migration` | Migration failed |
+| `Constraint` | Unique constraint violation |
+| `Transaction` | Transaction failed |
+
+## Programmatic Error Handling
+
+```rust
+use better_auth::error::{AuthError, AuthResult};
+
+fn handle_result(result: AuthResult<()>) {
+    match result {
+        Ok(()) => println!("Success"),
+        Err(e) => {
+            println!("Status: {}", e.status_code());
+            println!("Message: {}", e.message());
+        }
+    }
+}
+```
+
+Constructors for common errors:
+
+```rust
+AuthError::bad_request("Invalid input");
+AuthError::forbidden("Not allowed");
+AuthError::not_found("User not found");
+AuthError::conflict("Email already exists");
+AuthError::internal("Unexpected error");
+AuthError::validation("Password too short");
+AuthError::plugin("my-plugin", "Something went wrong");
+```

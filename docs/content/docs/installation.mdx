@@ -1,0 +1,32 @@
+---
+title: Installation
+description: Add Better Auth RS to your Rust project.
+---
+
+## Add the Dependency
+
+```toml title="Cargo.toml"
+[dependencies]
+better-auth = "0.1"
+tokio = { version = "1", features = ["full"] }
+```
+
+## Feature Flags
+
+Enable additional functionality with feature flags:
+
+```toml title="Cargo.toml"
+[dependencies]
+better-auth = { version = "0.1", features = ["axum", "sqlx-postgres"] }
+```
+
+| Feature | Description |
+|---------|-------------|
+| `axum` | Axum web framework integration with automatic route mounting |
+| `sqlx-postgres` | PostgreSQL database support via SQLx with connection pooling |
+
+No features are enabled by default. The core library works with the in-memory database adapter and the framework-agnostic request/response types.
+
+## Minimum Supported Rust Version
+
+Better Auth RS requires Rust 1.75 or later (for `async fn` in traits).

@@ -1,0 +1,115 @@
+---
+title: Email Verification
+description: Send and verify email addresses.
+---
+
+The `EmailVerificationPlugin` handles sending verification emails and validating tokens.
+
+## Setup
+
+```rust
+use better_auth::plugins::EmailVerificationPlugin;
+use better_auth::email::ConsoleEmailProvider;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .email_provider(ConsoleEmailProvider) // Required for sending emails
+    .plugin(
+        EmailVerificationPlugin::new()
+            .verification_token_expiry_hours(24)
+            .auto_verify_new_users(false)
+    )
+    .build()
+    .await?;
+```
+
+An [email provider](/docs/concepts/configuration) must be configured for this plugin to send emails. Without one, calling `send-verification-email` will return an error.
+
+### Plugin Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `verification_token_expiry_hours` | `i64` | `24` | Hours before token expires |
+| `send_email_notifications` | `bool` | `true` | Actually send the email |
+| `require_verification_for_signin` | `bool` | `false` | Block sign-in for unverified emails |
+| `auto_verify_new_users` | `bool` | `false` | Auto-verify on sign-up |
+
+## Send Verification Email
+
+```http
+POST /send-verification-email
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "alice@example.com",
+  "callbackURL": "https://example.com/verify"
+}
+```
+
+### Response
+
+```json
+{
+  "status": true,
+  "description": "Verification email sent"
+}
+```
+
+## Verify Email
+
+Called when the user clicks the link in the verification email.
+
+```http
+GET /verify-email?token=<verification_token>
+```
+
+### Response
+
+```json
+{
+  "user": {
+    "id": "uuid",
+    "email": "alice@example.com",
+    "emailVerified": true,
+    ...
+  },
+  "status": true
+}
+```
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Token missing, expired, or invalid |
+
+## Automatic Verification on Sign-Up
+
+When `auto_verify_new_users` is enabled, the plugin listens to the `on_user_created` lifecycle event and automatically sends a verification email to newly registered users.
+
+## Email Provider
+
+The `ConsoleEmailProvider` logs emails to stderr and is useful for development:
+
+```
+[EMAIL] To: alice@example.com | Subject: Verify your email | Body: ...
+```
+
+For production, implement the `EmailProvider` trait:
+
+```rust
+use better_auth::email::EmailProvider;
+
+struct SmtpProvider { /* ... */ }
+
+#[async_trait::async_trait]
+impl EmailProvider for SmtpProvider {
+    async fn send(
+        &self, to: &str, subject: &str, html: &str, text: &str
+    ) -> better_auth::error::AuthResult<()> {
+        // Send via SMTP, SendGrid, etc.
+        Ok(())
+    }
+}
+```

@@ -1,0 +1,121 @@
+---
+title: Axum
+description: Integrate Better Auth RS with the Axum web framework.
+---
+
+Better Auth RS provides first-class integration with [Axum](https://github.com/tokio-rs/axum) via the `axum` feature flag.
+
+## Setup
+
+```toml title="Cargo.toml"
+[dependencies]
+better-auth = { version = "0.1", features = ["axum"] }
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors"] }
+```
+
+## Creating a Router
+
+Use `.axum_router()` to convert the auth instance into an Axum `Router`:
+
+```rust
+use better_auth::{BetterAuth, AuthConfig};
+use better_auth::plugins::{
+    EmailPasswordPlugin, SessionManagementPlugin,
+    PasswordManagementPlugin, AccountManagementPlugin,
+};
+use better_auth::adapters::MemoryDatabaseAdapter;
+use better_auth::handlers::AxumIntegration;
+use axum::Router;
+use std::sync::Arc;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
+        .base_url("http://localhost:8080");
+
+    let auth = Arc::new(
+        BetterAuth::new(config)
+            .database(MemoryDatabaseAdapter::new())
+            .plugin(EmailPasswordPlugin::new().enable_signup(true))
+            .plugin(SessionManagementPlugin::new())
+            .plugin(PasswordManagementPlugin::new())
+            .plugin(AccountManagementPlugin::new())
+            .build()
+            .await?
+    );
+
+    // Generate an Axum router from the auth instance
+    let auth_router = auth.clone().axum_router();
+
+    // Mount under /auth prefix alongside your app routes
+    let app = Router::new()
+        .nest("/auth", auth_router)
+        .with_state(auth);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}
+```
+
+## What Gets Mounted
+
+`.axum_router()` automatically registers:
+
+- All plugin routes (sign-up, sign-in, sessions, etc.)
+- `GET /ok` — health check
+- `GET /reference/openapi.json` — OpenAPI specification
+- `POST /update-user` — user profile updates
+- `POST /delete-user` — account deletion
+- `POST /change-email` — email changes
+
+With the router nested under `/auth`, endpoints become `/auth/sign-up/email`, `/auth/get-session`, etc.
+
+## Request/Response Conversion
+
+The integration automatically converts between Axum and Better Auth types:
+
+- **Headers**: All request headers are forwarded
+- **Body**: Request body is read as bytes and passed through
+- **Query**: Query parameters are parsed from the URL
+- **Status codes**: Mapped directly to HTTP status codes
+- **Response headers**: Set-Cookie and other headers are forwarded
+
+## Adding Application Routes
+
+Combine auth routes with your application routes:
+
+```rust
+use axum::{routing::get, extract::State, http::StatusCode, Json};
+
+async fn protected_route(
+    State(auth): State<Arc<BetterAuth>>,
+    req: axum::extract::Request,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // Extract session token from the request
+    let token = req.headers()
+        .get("authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    // Validate the session
+    let session = auth.session_manager()
+        .get_session(token).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    Ok(Json(serde_json::json!({
+        "message": "Authenticated",
+        "userId": session.user_id
+    })))
+}
+
+let app = Router::new()
+    .route("/api/protected", get(protected_route))
+    .nest("/auth", auth_router)
+    .with_state(auth);
+```

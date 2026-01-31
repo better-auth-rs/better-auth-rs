@@ -1,0 +1,17 @@
+{
+  "title": "Documentation",
+  "root": true,
+  "pages": [
+    "index",
+    "installation",
+    "quick-start",
+    "---Authentication---",
+    "...authentication",
+    "---Concepts---",
+    "...concepts",
+    "---Integrations---",
+    "...integrations",
+    "---Reference---",
+    "...reference"
+  ]
+}

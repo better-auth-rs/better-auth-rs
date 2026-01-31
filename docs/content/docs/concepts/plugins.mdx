@@ -1,0 +1,108 @@
+---
+title: Plugins
+description: The AuthPlugin trait and plugin architecture.
+---
+
+Better Auth RS uses a plugin system to compose authentication features. Each plugin registers routes and can hook into lifecycle events.
+
+## Built-in Plugins
+
+| Plugin | Description |
+|--------|-------------|
+| `EmailPasswordPlugin` | Email/password and username sign-up/sign-in |
+| `SessionManagementPlugin` | Session querying, listing, and revocation |
+| `PasswordManagementPlugin` | Password reset and change flows |
+| `EmailVerificationPlugin` | Email verification via tokens |
+| `AccountManagementPlugin` | List and unlink linked accounts |
+
+## Registering Plugins
+
+Plugins are added via the builder:
+
+```rust
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(EmailPasswordPlugin::new().enable_signup(true))
+    .plugin(SessionManagementPlugin::new())
+    .plugin(PasswordManagementPlugin::new())
+    .build()
+    .await?;
+```
+
+## The AuthPlugin Trait
+
+```rust
+#[async_trait]
+pub trait AuthPlugin: Send + Sync {
+    /// Unique plugin name.
+    fn name(&self) -> &'static str;
+
+    /// Routes this plugin provides.
+    fn routes(&self) -> Vec<AuthRoute>;
+
+    /// Called during build to initialize plugin state.
+    async fn on_init(&self, ctx: &mut AuthContext) -> AuthResult<()>;
+
+    /// Called on every request. Return Some(response) to short-circuit.
+    async fn on_request(
+        &self, req: &AuthRequest, ctx: &AuthContext
+    ) -> AuthResult<Option<AuthResponse>>;
+
+    /// Called after a user is created.
+    async fn on_user_created(
+        &self, user: &User, ctx: &AuthContext
+    ) -> AuthResult<()>;
+
+    /// Called after a session is created.
+    async fn on_session_created(
+        &self, session: &Session, ctx: &AuthContext
+    ) -> AuthResult<()>;
+
+    /// Called after a user is deleted.
+    async fn on_user_deleted(
+        &self, user_id: &str, ctx: &AuthContext
+    ) -> AuthResult<()>;
+
+    /// Called after a session is deleted.
+    async fn on_session_deleted(
+        &self, session_token: &str, ctx: &AuthContext
+    ) -> AuthResult<()>;
+}
+```
+
+All lifecycle methods have default no-op implementations. Override only what you need.
+
+## AuthRoute
+
+Routes are defined with a method, path, and handler name:
+
+```rust
+use better_auth::plugin::AuthRoute;
+use better_auth::types::HttpMethod;
+
+let routes = vec![
+    AuthRoute::post("/my-endpoint", "handle_my_endpoint"),
+    AuthRoute::get("/my-query", "handle_my_query"),
+];
+```
+
+Paths are relative to the auth mount point (e.g., `/auth`).
+
+## AuthContext
+
+Plugins receive an `AuthContext` providing access to shared state:
+
+```rust
+pub struct AuthContext {
+    pub config: Arc<AuthConfig>,
+    pub database: Arc<dyn DatabaseAdapter>,
+    pub email_provider: Option<Arc<dyn EmailProvider>>,
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+```
+
+| Method | Description |
+|--------|-------------|
+| `email_provider()` | Returns the email provider or an error if none configured |
+| `set_metadata(key, value)` | Store plugin-specific metadata |
+| `get_metadata(key)` | Retrieve plugin-specific metadata |

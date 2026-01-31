@@ -1,0 +1,8 @@
+{
+  "pages": [
+    "email-password",
+    "sessions",
+    "password-management",
+    "email-verification"
+  ]
+}

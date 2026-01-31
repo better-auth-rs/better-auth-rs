@@ -1,0 +1,78 @@
+---
+title: Quick Start
+description: Get up and running with Better Auth RS in minutes.
+---
+
+This guide walks through a minimal working example: configure auth, sign up a user, sign in, and use a session token.
+
+## Setup
+
+```rust
+use better_auth::{BetterAuth, AuthConfig};
+use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
+use better_auth::adapters::MemoryDatabaseAdapter;
+use better_auth::types::{AuthRequest, HttpMethod};
+use std::collections::HashMap;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Configure
+    let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
+        .base_url("http://localhost:3000")
+        .password_min_length(8);
+
+    // 2. Build
+    let auth = BetterAuth::new(config)
+        .database(MemoryDatabaseAdapter::new())
+        .plugin(EmailPasswordPlugin::new().enable_signup(true))
+        .plugin(SessionManagementPlugin::new())
+        .build()
+        .await?;
+
+    println!("Plugins: {:?}", auth.plugin_names());
+
+    // 3. Sign up
+    let body = serde_json::json!({
+        "email": "user@example.com",
+        "password": "password123",
+        "name": "Test User"
+    });
+
+    let response = auth.handle_request(AuthRequest {
+        method: HttpMethod::Post,
+        path: "/sign-up/email".to_string(),
+        headers: HashMap::from([
+            ("content-type".to_string(), "application/json".to_string()),
+        ]),
+        body: Some(serde_json::to_vec(&body)?),
+        query: HashMap::new(),
+    }).await?;
+
+    let data: serde_json::Value = serde_json::from_slice(&response.body)?;
+    let token = data["token"].as_str().unwrap();
+    println!("Signed up: {}", data["user"]["email"]);
+
+    // 4. Use the session token
+    let response = auth.handle_request(AuthRequest {
+        method: HttpMethod::Get,
+        path: "/get-session".to_string(),
+        headers: HashMap::from([
+            ("authorization".to_string(), format!("Bearer {}", token)),
+        ]),
+        body: None,
+        query: HashMap::new(),
+    }).await?;
+
+    let session: serde_json::Value = serde_json::from_slice(&response.body)?;
+    println!("Session user: {}", session["user"]["email"]);
+
+    Ok(())
+}
+```
+
+## What's Next
+
+- [Email & Password Authentication](/docs/authentication/email-password) — sign-up and sign-in options
+- [Session Management](/docs/authentication/sessions) — token handling, listing, and revocation
+- [Axum Integration](/docs/integrations/axum) — mount auth routes in an Axum server
+- [Configuration](/docs/concepts/configuration) — all config options and defaults

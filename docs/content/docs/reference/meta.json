@@ -1,0 +1,8 @@
+{
+  "pages": [
+    "api-routes",
+    "openapi",
+    "configuration-options",
+    "errors"
+  ]
+}

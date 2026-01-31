@@ -1,0 +1,94 @@
+---
+title: Configuration
+description: AuthConfig and related configuration structs.
+---
+
+All configuration is done through `AuthConfig`, which uses a builder pattern.
+
+## AuthConfig
+
+```rust
+use better_auth::AuthConfig;
+use std::time::Duration;
+
+let config = AuthConfig::new("your-secret-key-at-least-32-characters-long")
+    .base_url("http://localhost:3000")
+    .session_expires_in(Duration::from_secs(7 * 24 * 3600))
+    .jwt_expires_in(Duration::from_secs(24 * 3600))
+    .password_min_length(8);
+```
+
+| Method | Description |
+|--------|-------------|
+| `new(secret)` | Create config with signing secret (min 32 chars) |
+| `base_url(url)` | Set the application base URL |
+| `session_expires_in(duration)` | Session token lifetime |
+| `jwt_expires_in(duration)` | JWT token lifetime |
+| `password_min_length(length)` | Minimum password length |
+
+## SessionConfig
+
+Controls session token behavior and cookie settings.
+
+| Field | Type | Default |
+|-------|------|---------|
+| `expires_in` | `Duration` | 7 days |
+| `update_age` | `bool` | `true` |
+| `cookie_name` | `String` | `"better-auth.session-token"` |
+| `cookie_secure` | `bool` | `true` |
+| `cookie_http_only` | `bool` | `true` |
+| `cookie_same_site` | `SameSite` | `Lax` |
+
+`SameSite` variants: `Strict`, `Lax`, `None`.
+
+## JwtConfig
+
+Controls JWT token generation.
+
+| Field | Type | Default |
+|-------|------|---------|
+| `expires_in` | `Duration` | 1 day |
+| `algorithm` | `String` | `"HS256"` |
+| `issuer` | `Option<String>` | `None` |
+| `audience` | `Option<String>` | `None` |
+
+## PasswordConfig
+
+Controls password validation and hashing.
+
+| Field | Type | Default |
+|-------|------|---------|
+| `min_length` | `usize` | `8` |
+| `require_uppercase` | `bool` | `false` |
+| `require_lowercase` | `bool` | `false` |
+| `require_numbers` | `bool` | `false` |
+| `require_special` | `bool` | `false` |
+
+## Argon2Config
+
+Controls the Argon2 password hashing parameters.
+
+| Field | Type | Default |
+|-------|------|---------|
+| `memory_cost` | `u32` | `4096` |
+| `time_cost` | `u32` | `3` |
+| `parallelism` | `u32` | `1` |
+
+## Email Provider
+
+An email provider is required for password reset and email verification flows. Configure it on the builder:
+
+```rust
+use better_auth::email::ConsoleEmailProvider;
+
+let auth = BetterAuth::new(config)
+    .email_provider(ConsoleEmailProvider)
+    .build()
+    .await?;
+```
+
+See [Email Verification](/docs/authentication/email-verification) for implementing a custom provider.
+
+## Validation
+
+`AuthConfig::validate()` checks that the secret is at least 32 characters. This is called automatically during `build()`.

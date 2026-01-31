@@ -1,0 +1,152 @@
+---
+title: Middleware
+description: Built-in middleware for CSRF, CORS, rate limiting, and body limits.
+---
+
+Better Auth RS includes middleware that runs before and after every request. Enable them on the builder.
+
+## CSRF Protection
+
+Validates the `Origin` or `Referer` header against the configured base URL on mutating requests (POST, PUT, DELETE, PATCH).
+
+```rust
+use better_auth::middleware::CsrfConfig;
+
+let auth = BetterAuth::new(config)
+    .csrf(
+        CsrfConfig::new()
+            .trusted_origin("https://myapp.com")
+            .enabled(true)
+    )
+    .build()
+    .await?;
+```
+
+| Option | Type | Default |
+|--------|------|---------|
+| `trusted_origins` | `Vec<String>` | `[]` |
+| `enabled` | `bool` | `true` |
+
+Returns `403 Forbidden` when the origin is not trusted.
+
+## Rate Limiting
+
+Limits requests per client per time window.
+
+```rust
+use better_auth::middleware::RateLimitConfig;
+use std::time::Duration;
+
+let auth = BetterAuth::new(config)
+    .rate_limit(
+        RateLimitConfig::new()
+            .default_limit(Duration::from_secs(60), 100)
+            .endpoint("/sign-in/email", Duration::from_secs(60), 10)
+    )
+    .build()
+    .await?;
+```
+
+| Option | Type | Default |
+|--------|------|---------|
+| `window` | `Duration` | `60s` |
+| `max_requests` | `u32` | `100` |
+| `per_endpoint` | `HashMap` | `{}` |
+| `enabled` | `bool` | `true` |
+
+Client identification uses `X-Forwarded-For`, then `X-Real-IP`, then a default bucket.
+
+When rate limited, returns `429`:
+
+```json
+{
+  "code": "RATE_LIMIT_EXCEEDED",
+  "message": "Too many requests",
+  "retryAfter": 45
+}
+```
+
+## CORS
+
+Adds Cross-Origin Resource Sharing headers and handles preflight `OPTIONS` requests.
+
+```rust
+use better_auth::middleware::CorsConfig;
+
+let auth = BetterAuth::new(config)
+    .cors(
+        CorsConfig::new()
+            .allowed_origin("https://myapp.com")
+            .allow_credentials(true)
+            .max_age(86400)
+    )
+    .build()
+    .await?;
+```
+
+| Option | Type | Default |
+|--------|------|---------|
+| `allowed_origins` | `Vec<String>` | `[]` |
+| `allowed_methods` | `Vec<String>` | `GET, POST, PUT, DELETE, PATCH, OPTIONS` |
+| `allowed_headers` | `Vec<String>` | `Content-Type, Authorization, X-Requested-With` |
+| `exposed_headers` | `Vec<String>` | `[]` |
+| `allow_credentials` | `bool` | `true` |
+| `max_age` | `u64` | `86400` |
+| `enabled` | `bool` | `true` |
+
+## Body Limit
+
+Rejects requests with bodies exceeding a size limit.
+
+```rust
+use better_auth::middleware::BodyLimitConfig;
+
+let auth = BetterAuth::new(config)
+    .body_limit(BodyLimitConfig::new().max_bytes(512 * 1024))
+    .build()
+    .await?;
+```
+
+| Option | Type | Default |
+|--------|------|---------|
+| `max_bytes` | `usize` | `1,048,576` (1 MB) |
+| `enabled` | `bool` | `true` |
+
+Returns `413`:
+
+```json
+{
+  "code": "BODY_TOO_LARGE",
+  "message": "Request body exceeds maximum size of 524288 bytes"
+}
+```
+
+## Custom Middleware
+
+Implement the `Middleware` trait:
+
+```rust
+use better_auth::middleware::Middleware;
+
+struct LoggingMiddleware;
+
+#[async_trait::async_trait]
+impl Middleware for LoggingMiddleware {
+    fn name(&self) -> &'static str { "logging" }
+
+    async fn before_request(
+        &self, req: &AuthRequest
+    ) -> AuthResult<Option<AuthResponse>> {
+        println!("{} {}", req.method, req.path);
+        Ok(None) // Continue processing
+    }
+
+    async fn after_request(
+        &self, _req: &AuthRequest, response: AuthResponse
+    ) -> AuthResult<AuthResponse> {
+        Ok(response) // Pass through
+    }
+}
+```
+
+Register with `.middleware(LoggingMiddleware)` on the builder.

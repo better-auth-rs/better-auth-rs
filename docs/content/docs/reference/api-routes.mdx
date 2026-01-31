@@ -1,0 +1,68 @@
+---
+title: API Routes
+description: Complete list of all authentication endpoints.
+---
+
+All routes are relative to the auth mount point (e.g., `/auth` when using `nest("/auth", ...)`).
+
+## Core Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/ok` | No | Health check (`{ "status": true }`) |
+| GET | `/reference/openapi.json` | No | OpenAPI specification |
+| POST | `/update-user` | Yes | Update user profile |
+| POST | `/delete-user` | Yes | Delete user account |
+| POST | `/change-email` | Yes | Change email address |
+| GET | `/delete-user/callback` | No | Confirm deletion via email token |
+
+## Email & Password (EmailPasswordPlugin)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/sign-up/email` | No | Register with email and password |
+| POST | `/sign-in/email` | No | Sign in with email and password |
+| POST | `/sign-in/username` | No | Sign in with username and password |
+
+## Session Management (SessionManagementPlugin)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/get-session` | Yes | Get current session and user |
+| POST | `/get-session` | Yes | Get current session (alt method) |
+| POST | `/sign-out` | Yes | Revoke current session |
+| GET | `/list-sessions` | Yes | List all user sessions |
+| POST | `/revoke-session` | Yes | Revoke a specific session by token |
+| POST | `/revoke-sessions` | Yes | Revoke all user sessions |
+| POST | `/revoke-other-sessions` | Yes | Revoke all sessions except current |
+
+## Password Management (PasswordManagementPlugin)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/forget-password` | No | Request password reset email |
+| POST | `/reset-password` | No | Reset password with token |
+| GET | `/reset-password/{token}` | No | Validate a reset token |
+| POST | `/change-password` | Yes | Change password (requires current) |
+| POST | `/set-password` | Yes | Set password for OAuth-only users |
+
+## Email Verification (EmailVerificationPlugin)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/send-verification-email` | Yes | Send verification email |
+| GET | `/verify-email` | No | Verify email with token (query param) |
+
+## Account Management (AccountManagementPlugin)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/list-accounts` | Yes | List linked accounts |
+| POST | `/unlink-account` | Yes | Unlink an account provider |
+
+## Authentication
+
+Authenticated endpoints require a session token sent as:
+
+- **Bearer token**: `Authorization: Bearer session_abc123...`
+- **Cookie**: `Cookie: better-auth.session-token=session_abc123...`

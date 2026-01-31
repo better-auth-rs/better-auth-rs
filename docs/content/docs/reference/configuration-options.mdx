@@ -1,0 +1,132 @@
+---
+title: Configuration Options
+description: Complete reference for all configuration fields and defaults.
+---
+
+## AuthConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `secret` | `String` | (required) | Signing secret, minimum 32 characters |
+| `base_url` | `String` | `"http://localhost:3000"` | Application base URL |
+| `session` | `SessionConfig` | See below | Session settings |
+| `jwt` | `JwtConfig` | See below | JWT settings |
+| `password` | `PasswordConfig` | See below | Password policy |
+
+## SessionConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `expires_in` | `Duration` | 7 days | Session token lifetime |
+| `update_age` | `bool` | `true` | Update session expiry on access |
+| `cookie_name` | `String` | `"better-auth.session-token"` | Session cookie name |
+| `cookie_secure` | `bool` | `true` | Secure cookie flag |
+| `cookie_http_only` | `bool` | `true` | HttpOnly cookie flag |
+| `cookie_same_site` | `SameSite` | `Lax` | SameSite cookie policy |
+
+## JwtConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `expires_in` | `Duration` | 1 day | JWT token lifetime |
+| `algorithm` | `String` | `"HS256"` | Signing algorithm |
+| `issuer` | `Option<String>` | `None` | JWT `iss` claim |
+| `audience` | `Option<String>` | `None` | JWT `aud` claim |
+
+## PasswordConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `min_length` | `usize` | `8` | Minimum password length |
+| `require_uppercase` | `bool` | `false` | Require uppercase letter |
+| `require_lowercase` | `bool` | `false` | Require lowercase letter |
+| `require_numbers` | `bool` | `false` | Require digit |
+| `require_special` | `bool` | `false` | Require special character |
+
+## Argon2Config
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `memory_cost` | `u32` | `4096` | Memory usage in KiB |
+| `time_cost` | `u32` | `3` | Number of iterations |
+| `parallelism` | `u32` | `1` | Degree of parallelism |
+
+## CsrfConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `trusted_origins` | `Vec<String>` | `[]` | Additional trusted origins |
+| `enabled` | `bool` | `true` | Enable CSRF checks |
+
+## RateLimitConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `window` | `Duration` | `60s` | Default time window |
+| `max_requests` | `u32` | `100` | Default max requests per window |
+| `per_endpoint` | `HashMap` | `{}` | Per-endpoint overrides |
+| `enabled` | `bool` | `true` | Enable rate limiting |
+
+## CorsConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `allowed_origins` | `Vec<String>` | `[]` | Allowed origins |
+| `allowed_methods` | `Vec<String>` | `GET, POST, PUT, DELETE, PATCH, OPTIONS` | Allowed HTTP methods |
+| `allowed_headers` | `Vec<String>` | `Content-Type, Authorization, X-Requested-With` | Allowed headers |
+| `exposed_headers` | `Vec<String>` | `[]` | Headers exposed to clients |
+| `allow_credentials` | `bool` | `true` | Allow credentials |
+| `max_age` | `u64` | `86400` | Preflight cache duration (seconds) |
+| `enabled` | `bool` | `true` | Enable CORS |
+
+## BodyLimitConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_bytes` | `usize` | `1,048,576` | Maximum body size in bytes (1 MB) |
+| `enabled` | `bool` | `true` | Enable body limit |
+
+## PoolConfig (PostgreSQL)
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_connections` | `u32` | `10` | Maximum pool size |
+| `min_connections` | `u32` | `0` | Minimum idle connections |
+| `acquire_timeout` | `Duration` | `30s` | Connection acquire timeout |
+| `idle_timeout` | `Option<Duration>` | `600s` | Idle connection timeout |
+| `max_lifetime` | `Option<Duration>` | `1800s` | Maximum connection lifetime |
+
+## Plugin Configs
+
+### EmailPasswordConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enable_signup` | `bool` | `true` | Allow new registrations |
+| `require_email_verification` | `bool` | `false` | Require verified email for sign-in |
+| `password_min_length` | `usize` | `8` | Minimum password length |
+
+### SessionManagementConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enable_session_listing` | `bool` | `true` | Allow listing sessions |
+| `enable_session_revocation` | `bool` | `true` | Allow revoking sessions |
+| `require_authentication` | `bool` | `true` | Require auth for endpoints |
+
+### PasswordManagementConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `reset_token_expiry_hours` | `i64` | `24` | Reset token validity |
+| `require_current_password` | `bool` | `true` | Require current password for changes |
+| `send_email_notifications` | `bool` | `true` | Notify on password changes |
+
+### EmailVerificationConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `verification_token_expiry_hours` | `i64` | `24` | Token validity |
+| `send_email_notifications` | `bool` | `true` | Send verification emails |
+| `require_verification_for_signin` | `bool` | `false` | Block unverified sign-in |
+| `auto_verify_new_users` | `bool` | `false` | Auto-send on sign-up |

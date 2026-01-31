@@ -1,0 +1,50 @@
+---
+title: OpenAPI
+description: Auto-generated OpenAPI specification.
+---
+
+Better Auth RS generates an OpenAPI 3.0 specification from its registered plugins and routes.
+
+## Accessing the Spec
+
+When using the Axum integration, the spec is available at:
+
+```
+GET /auth/reference/openapi.json
+```
+
+## Programmatic Access
+
+Generate the spec without a web server:
+
+```rust
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(EmailPasswordPlugin::new())
+    .build()
+    .await?;
+
+let spec = auth.openapi_spec();
+let json = serde_json::to_string_pretty(&spec)?;
+println!("{}", json);
+```
+
+## Spec Contents
+
+The generated specification includes:
+
+- **Info**: Title, version, and description
+- **Paths**: All registered routes with HTTP methods
+- **Components**: Request/response schemas
+- **Tags**: Grouped by plugin name
+
+Each route entry includes the path, method, summary, and which plugin provides it.
+
+## Using with API Tools
+
+The OpenAPI spec can be imported into tools like:
+
+- Swagger UI
+- Postman
+- Insomnia
+- Any OpenAPI 3.0 compatible client generator

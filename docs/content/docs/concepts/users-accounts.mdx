@@ -1,0 +1,137 @@
+---
+title: Users & Accounts
+description: User entities, account linking, and management endpoints.
+---
+
+## User Entity
+
+The `User` struct represents a registered user:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` | UUID primary key |
+| `name` | `Option<String>` | Display name |
+| `email` | `Option<String>` | Email address (unique) |
+| `emailVerified` | `bool` | Whether email is verified |
+| `image` | `Option<String>` | Profile image URL |
+| `username` | `Option<String>` | Unique username |
+| `displayUsername` | `Option<String>` | Case-preserved display name |
+| `role` | `Option<String>` | User role |
+| `banned` | `bool` | Whether user is banned |
+| `banReason` | `Option<String>` | Ban reason |
+| `banExpires` | `Option<DateTime>` | Ban expiration |
+| `twoFactorEnabled` | `bool` | 2FA status |
+| `metadata` | `HashMap` | Arbitrary key-value data |
+| `createdAt` | `DateTime` | Creation timestamp |
+| `updatedAt` | `DateTime` | Last update timestamp |
+
+## Account Entity
+
+Accounts represent authentication methods linked to a user (email/password, OAuth providers, etc.):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` | UUID primary key |
+| `accountId` | `String` | Provider-specific account ID |
+| `providerId` | `String` | Provider name (e.g., `"credential"`, `"google"`) |
+| `userId` | `String` | Owning user ID |
+| `password` | `Option<String>` | Hashed password (for credential accounts) |
+| `accessToken` | `Option<String>` | OAuth access token |
+| `refreshToken` | `Option<String>` | OAuth refresh token |
+
+## User Management Endpoints
+
+These endpoints are built into the core and don't require a plugin.
+
+### Update User
+
+```http
+POST /update-user
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "name": "New Name",
+  "image": "https://example.com/photo.jpg",
+  "username": "newusername",
+  "displayUsername": "NewUsername"
+}
+```
+
+All fields are optional. Only provided fields are updated.
+
+### Delete User
+
+```http
+POST /delete-user
+Authorization: Bearer <token>
+```
+
+Deletes the authenticated user and all associated sessions and accounts.
+
+### Change Email
+
+```http
+POST /change-email
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "newEmail": "new@example.com"
+}
+```
+
+## AccountManagementPlugin
+
+Provides endpoints for listing and unlinking accounts.
+
+```rust
+use better_auth::plugins::AccountManagementPlugin;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(AccountManagementPlugin::new())
+    .build()
+    .await?;
+```
+
+### List Accounts
+
+```http
+GET /list-accounts
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "accounts": [
+    {
+      "id": "uuid",
+      "accountId": "user@example.com",
+      "providerId": "credential",
+      "userId": "uuid",
+      ...
+    }
+  ]
+}
+```
+
+### Unlink Account
+
+```http
+POST /unlink-account
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "providerId": "google"
+}
+```
+
+Removes the specified provider link. Fails if it's the user's only authentication method.

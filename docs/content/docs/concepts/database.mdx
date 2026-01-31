@@ -1,0 +1,171 @@
+---
+title: Database
+description: Database adapters for storing users, sessions, and accounts.
+---
+
+Better Auth RS uses the `DatabaseAdapter` trait to abstract storage. Two adapters are provided: in-memory and PostgreSQL.
+
+## MemoryDatabaseAdapter
+
+An in-memory adapter for development and testing. Data is lost when the process exits.
+
+```rust
+use better_auth::adapters::MemoryDatabaseAdapter;
+
+let database = MemoryDatabaseAdapter::new();
+```
+
+No configuration needed. Thread-safe via `Arc<Mutex<...>>`.
+
+## PostgreSQL (SqlxAdapter)
+
+Requires the `sqlx-postgres` feature flag:
+
+```toml title="Cargo.toml"
+[dependencies]
+better-auth = { version = "0.1", features = ["sqlx-postgres"] }
+```
+
+```rust
+use better_auth::adapters::SqlxAdapter;
+
+let database = SqlxAdapter::new("postgresql://user:pass@localhost:5432/mydb").await?;
+```
+
+### Connection Pool Options
+
+```rust
+use better_auth::adapters::{SqlxAdapter, PoolConfig};
+
+let config = PoolConfig {
+    max_connections: 10,
+    min_connections: 0,
+    acquire_timeout: std::time::Duration::from_secs(30),
+    idle_timeout: Some(std::time::Duration::from_secs(600)),
+    max_lifetime: Some(std::time::Duration::from_secs(1800)),
+};
+
+let database = SqlxAdapter::with_config("postgresql://...", config).await?;
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `max_connections` | `10` | Maximum pool size |
+| `min_connections` | `0` | Minimum idle connections |
+| `acquire_timeout` | `30s` | Timeout for acquiring a connection |
+| `idle_timeout` | `600s` | Close idle connections after this duration |
+| `max_lifetime` | `1800s` | Maximum connection lifetime |
+
+### Schema
+
+Run the initial migration to create the required tables:
+
+```sql title="migrations/001_initial.sql"
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    email TEXT UNIQUE,
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    image TEXT,
+    username TEXT UNIQUE,
+    display_username TEXT,
+    two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    role TEXT,
+    banned BOOLEAN NOT NULL DEFAULT FALSE,
+    ban_reason TEXT,
+    ban_expires TIMESTAMPTZ,
+    metadata JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    expires_at TIMESTAMPTZ NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    ip_address TEXT,
+    user_agent TEXT,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    impersonated_by TEXT,
+    active_organization_id TEXT,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS accounts (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    provider_id TEXT NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    access_token TEXT,
+    refresh_token TEXT,
+    id_token TEXT,
+    access_token_expires_at TIMESTAMPTZ,
+    refresh_token_expires_at TIMESTAMPTZ,
+    scope TEXT,
+    password TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(provider_id, account_id)
+);
+
+CREATE TABLE IF NOT EXISTS verifications (
+    id TEXT PRIMARY KEY,
+    identifier TEXT NOT NULL,
+    value TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+### Docker Quick Start
+
+```bash
+docker run --name better-auth-postgres \
+  -e POSTGRES_DB=better_auth \
+  -e POSTGRES_USER=better_auth \
+  -e POSTGRES_PASSWORD=password \
+  -p 5432:5432 \
+  -d postgres:15
+```
+
+## The DatabaseAdapter Trait
+
+Implement this trait to use a custom storage backend:
+
+```rust
+#[async_trait]
+pub trait DatabaseAdapter: Send + Sync {
+    // User operations
+    async fn create_user(&self, user: CreateUser) -> AuthResult<User>;
+    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<User>>;
+    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<User>>;
+    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<User>>;
+    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<User>;
+    async fn delete_user(&self, id: &str) -> AuthResult<()>;
+
+    // Session operations
+    async fn create_session(&self, session: CreateSession) -> AuthResult<Session>;
+    async fn get_session(&self, token: &str) -> AuthResult<Option<Session>>;
+    async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<Session>>;
+    async fn update_session_expiry(&self, token: &str, expires_at: DateTime<Utc>) -> AuthResult<()>;
+    async fn delete_session(&self, token: &str) -> AuthResult<()>;
+    async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()>;
+    async fn delete_expired_sessions(&self) -> AuthResult<usize>;
+
+    // Account operations
+    async fn create_account(&self, account: CreateAccount) -> AuthResult<Account>;
+    async fn get_account(&self, provider: &str, id: &str) -> AuthResult<Option<Account>>;
+    async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<Account>>;
+    async fn delete_account(&self, id: &str) -> AuthResult<()>;
+
+    // Verification operations
+    async fn create_verification(&self, v: CreateVerification) -> AuthResult<Verification>;
+    async fn get_verification(&self, identifier: &str, value: &str) -> AuthResult<Option<Verification>>;
+    async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<Verification>>;
+    async fn delete_verification(&self, id: &str) -> AuthResult<()>;
+    async fn delete_expired_verifications(&self) -> AuthResult<usize>;
+}
+```

@@ -1,0 +1,10 @@
+{
+  "pages": [
+    "configuration",
+    "plugins",
+    "database",
+    "middleware",
+    "hooks",
+    "users-accounts"
+  ]
+}

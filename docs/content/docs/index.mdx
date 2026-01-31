@@ -1,0 +1,26 @@
+---
+title: Better Auth RS
+description: A comprehensive, plugin-based authentication framework for Rust.
+---
+
+Better Auth RS is a type-safe, async-first authentication framework for Rust inspired by [Better Auth](https://www.better-auth.com/). It provides a composable plugin system for email/password auth, sessions, password management, email verification, and more.
+
+## Features
+
+- **Plugin architecture** — compose only the auth features you need
+- **Database adapters** — in-memory for development, PostgreSQL for production
+- **Session management** — JWT tokens with cookie and Bearer header support
+- **Password security** — Argon2 hashing with configurable policies
+- **Middleware stack** — CSRF protection, CORS, rate limiting, body limits
+- **Database hooks** — intercept create/update/delete operations
+- **OpenAPI generation** — auto-generated API specification
+- **Framework integration** — first-class Axum support
+
+## Quick Links
+
+<Cards>
+  <Card title="Installation" href="/docs/installation" />
+  <Card title="Quick Start" href="/docs/quick-start" />
+  <Card title="API Routes" href="/docs/reference/api-routes" />
+  <Card title="Configuration" href="/docs/concepts/configuration" />
+</Cards>

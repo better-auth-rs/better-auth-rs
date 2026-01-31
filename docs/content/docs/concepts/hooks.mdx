@@ -1,0 +1,108 @@
+---
+title: Database Hooks
+description: Intercept database operations with lifecycle hooks.
+---
+
+Database hooks let you run custom logic before and after user and session operations. Use them for logging, validation, side effects, or rejecting operations.
+
+## Setup
+
+```rust
+use better_auth::hooks::DatabaseHooks;
+use async_trait::async_trait;
+
+struct AuditHook;
+
+#[async_trait]
+impl DatabaseHooks for AuditHook {
+    async fn after_create_user(
+        &self, user: &better_auth::types::User
+    ) -> better_auth::error::AuthResult<()> {
+        println!("User created: {}", user.email.as_deref().unwrap_or(""));
+        Ok(())
+    }
+}
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .hook(AuditHook)
+    .build()
+    .await?;
+```
+
+## The DatabaseHooks Trait
+
+All methods have default no-op implementations. Override only what you need.
+
+```rust
+#[async_trait]
+pub trait DatabaseHooks: Send + Sync {
+    // User hooks
+    async fn before_create_user(&self, user: &mut CreateUser) -> AuthResult<()>;
+    async fn after_create_user(&self, user: &User) -> AuthResult<()>;
+    async fn before_update_user(&self, id: &str, update: &mut UpdateUser) -> AuthResult<()>;
+    async fn after_update_user(&self, user: &User) -> AuthResult<()>;
+    async fn before_delete_user(&self, id: &str) -> AuthResult<()>;
+    async fn after_delete_user(&self, id: &str) -> AuthResult<()>;
+
+    // Session hooks
+    async fn before_create_session(&self, session: &mut CreateSession) -> AuthResult<()>;
+    async fn after_create_session(&self, session: &Session) -> AuthResult<()>;
+    async fn before_delete_session(&self, token: &str) -> AuthResult<()>;
+    async fn after_delete_session(&self, token: &str) -> AuthResult<()>;
+}
+```
+
+## Rejecting Operations
+
+Return `Err` from a `before_*` hook to abort the operation:
+
+```rust
+#[async_trait]
+impl DatabaseHooks for BlockDisposableEmails {
+    async fn before_create_user(
+        &self, user: &mut CreateUser
+    ) -> AuthResult<()> {
+        if let Some(email) = &user.email {
+            if email.ends_with("@disposable.com") {
+                return Err(AuthError::forbidden("Disposable emails not allowed"));
+            }
+        }
+        Ok(())
+    }
+}
+```
+
+## Modifying Data
+
+`before_*` hooks receive mutable references, so you can modify the data before it's persisted:
+
+```rust
+#[async_trait]
+impl DatabaseHooks for NormalizeEmail {
+    async fn before_create_user(
+        &self, user: &mut CreateUser
+    ) -> AuthResult<()> {
+        if let Some(email) = &mut user.email {
+            *email = email.to_lowercase();
+        }
+        Ok(())
+    }
+}
+```
+
+## Multiple Hooks
+
+Multiple hooks can be registered. They execute in registration order:
+
+```rust
+let auth = BetterAuth::new(config)
+    .database(database)
+    .hook(AuditHook)
+    .hook(NormalizeEmail)
+    .hook(BlockDisposableEmails)
+    .build()
+    .await?;
+```
+
+If any `before_*` hook returns an error, subsequent hooks and the operation itself are skipped.
