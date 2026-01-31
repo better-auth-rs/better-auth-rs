@@ -99,6 +99,7 @@ impl AuthPlugin for SessionManagementPlugin {
             AuthRoute::get("/list-sessions", "list_sessions"),
             AuthRoute::post("/revoke-session", "revoke_session"),
             AuthRoute::post("/revoke-sessions", "revoke_sessions"),
+            AuthRoute::post("/revoke-other-sessions", "revoke_other_sessions"),
         ]
     }
 
@@ -118,6 +119,9 @@ impl AuthPlugin for SessionManagementPlugin {
             },
             (HttpMethod::Post, "/revoke-sessions") if self.config.enable_session_revocation => {
                 Ok(Some(self.handle_revoke_sessions(req, ctx).await?))
+            },
+            (HttpMethod::Post, "/revoke-other-sessions") if self.config.enable_session_revocation => {
+                Ok(Some(self.handle_revoke_other_sessions(req, ctx).await?))
             },
             _ => Ok(None),
         }
@@ -217,12 +221,10 @@ impl SessionManagementPlugin {
     }
 
     async fn get_current_user_and_session(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<Option<(User, Session)>> {
-        let token = req.headers.get("authorization")
-            .and_then(|h| h.strip_prefix("Bearer "));
+        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
 
-        if let Some(token) = token {
-            let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-            if let Some(session) = session_manager.get_session(token).await? {
+        if let Some(token) = session_manager.extract_session_token(req) {
+            if let Some(session) = session_manager.get_session(&token).await? {
                 if let Some(user) = ctx.database.get_user_by_id(&session.user_id).await? {
                     return Ok(Some((user, session)));
                 }

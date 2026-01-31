@@ -1,6 +1,9 @@
 use better_auth::{BetterAuth, AuthConfig};
 use better_auth::adapters::MemoryDatabaseAdapter;
-use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin, PasswordManagementPlugin};
+use better_auth::plugins::{
+    EmailPasswordPlugin, SessionManagementPlugin, PasswordManagementPlugin,
+    AccountManagementPlugin,
+};
 use std::sync::Arc;
 
 #[cfg(feature = "sqlx-postgres")]
@@ -18,6 +21,7 @@ async fn create_test_auth_memory() -> Arc<BetterAuth> {
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new())
+            .plugin(AccountManagementPlugin::new())
             .build()
             .await
             .expect("Failed to create test auth instance")
@@ -572,6 +576,216 @@ async fn test_delete_user_post_method() {
     assert_eq!(response_data["success"], true);
 }
 
+/// Integration test for set-password success (social-only user, no password)
+#[tokio::test]
+async fn test_set_password_success() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::{AuthRequest, CreateUser, CreateSession};
+    use better_auth::adapters::DatabaseAdapter;
+    use chrono::{Utc, Duration};
+    use std::collections::HashMap;
+
+    // Create a user WITHOUT a password (social-only account)
+    let create_user = CreateUser::new()
+        .with_email("social@test.com")
+        .with_name("Social User");
+    let user = auth.database().create_user(create_user).await.unwrap();
+
+    let create_session = CreateSession {
+        user_id: user.id.clone(),
+        expires_at: Utc::now() + Duration::hours(24),
+        ip_address: None,
+        user_agent: None,
+        impersonated_by: None,
+        active_organization_id: None,
+    };
+    let session = auth.database().create_session(create_session).await.unwrap();
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    headers.insert("authorization".to_string(), format!("Bearer {}", session.token));
+
+    let set_data = serde_json::json!({
+        "newPassword": "MyNewPassword123"
+    });
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/set-password".to_string(),
+        headers,
+        body: Some(set_data.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    assert_eq!(response_data["status"], true);
+}
+
+/// Integration test for set-password when user already has a password → 400
+#[tokio::test]
+async fn test_set_password_already_has_password() {
+    let auth = create_test_auth_memory().await;
+    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    headers.insert("authorization".to_string(), format!("Bearer {}", session_token));
+
+    let set_data = serde_json::json!({
+        "newPassword": "AnotherPassword123"
+    });
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/set-password".to_string(),
+        headers,
+        body: Some(set_data.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 400);
+}
+
+/// Integration test for set-password unauthenticated → 401
+#[tokio::test]
+async fn test_set_password_unauthenticated() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+
+    let set_data = serde_json::json!({
+        "newPassword": "SomePassword123"
+    });
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/set-password".to_string(),
+        headers,
+        body: Some(set_data.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 401);
+}
+
+/// Integration test for revoke-other-sessions endpoint
+#[tokio::test]
+async fn test_revoke_other_sessions_integration() {
+    let auth = create_test_auth_memory().await;
+    let (user_id, session_token1) = create_test_user_and_session(auth.clone()).await;
+
+    // Create a second session for the same user
+    use better_auth::types::{AuthRequest, CreateSession};
+    use better_auth::adapters::DatabaseAdapter;
+    use chrono::{Utc, Duration};
+    use std::collections::HashMap;
+
+    let create_session = CreateSession {
+        user_id: user_id.clone(),
+        expires_at: Utc::now() + Duration::hours(24),
+        ip_address: Some("192.168.1.1".to_string()),
+        user_agent: Some("other-agent".to_string()),
+        impersonated_by: None,
+        active_organization_id: None,
+    };
+    let session2 = auth.database().create_session(create_session).await.unwrap();
+
+    let mut headers = HashMap::new();
+    headers.insert("authorization".to_string(), format!("Bearer {}", session_token1));
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/revoke-other-sessions".to_string(),
+        headers,
+        body: Some(b"{}".to_vec()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    // The current session should still be valid
+    let s1 = auth.database().get_session(&session_token1).await.unwrap();
+    assert!(s1.is_some());
+
+    // The other session should be revoked
+    let s2 = auth.database().get_session(&session2.token).await.unwrap();
+    assert!(s2.is_none());
+}
+
+/// Integration test for cookie-based authentication
+#[tokio::test]
+async fn test_cookie_based_auth() {
+    let auth = create_test_auth_memory().await;
+    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    // Use cookie header instead of Bearer token
+    let mut headers = HashMap::new();
+    headers.insert(
+        "cookie".to_string(),
+        format!("better-auth.session-token={}; other=value", session_token),
+    );
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/get-session".to_string(),
+        headers,
+        body: None,
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    assert_eq!(response_data["user"]["email"], "integration@test.com");
+}
+
+/// Integration test: Bearer token takes precedence over cookie
+#[tokio::test]
+async fn test_bearer_takes_precedence_over_cookie() {
+    let auth = create_test_auth_memory().await;
+    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    // Provide both Bearer and cookie, but cookie has invalid token
+    let mut headers = HashMap::new();
+    headers.insert("authorization".to_string(), format!("Bearer {}", session_token));
+    headers.insert("cookie".to_string(), "better-auth.session-token=invalid_token".to_string());
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/get-session".to_string(),
+        headers,
+        body: None,
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    // Should succeed because Bearer token takes precedence
+    assert_eq!(response.status, 200);
+}
+
 /// Integration test for unauthorized password operations
 #[tokio::test]
 async fn test_unauthorized_password_operations() {
@@ -599,6 +813,375 @@ async fn test_unauthorized_password_operations() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 401);
 }
+/// Integration test for change-email success
+#[tokio::test]
+async fn test_change_email_success() {
+    let auth = create_test_auth_memory().await;
+    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    headers.insert("authorization".to_string(), format!("Bearer {}", session_token));
+
+    let body = serde_json::json!({ "newEmail": "newemail@test.com" });
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/change-email".to_string(),
+        headers,
+        body: Some(body.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    assert_eq!(data["user"]["email"], "newemail@test.com");
+    assert_eq!(data["user"]["emailVerified"], false);
+}
+
+/// Integration test for change-email duplicate → 409
+#[tokio::test]
+async fn test_change_email_duplicate() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::{AuthRequest, CreateUser, CreateSession};
+    use better_auth::adapters::DatabaseAdapter;
+    use chrono::{Utc, Duration};
+    use std::collections::HashMap;
+
+    // Create first user
+    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+
+    // Create second user with a different email
+    let create_user = CreateUser::new()
+        .with_email("existing@test.com")
+        .with_name("Existing User");
+    auth.database().create_user(create_user).await.unwrap();
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    headers.insert("authorization".to_string(), format!("Bearer {}", session_token));
+
+    let body = serde_json::json!({ "newEmail": "existing@test.com" });
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/change-email".to_string(),
+        headers,
+        body: Some(body.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 409);
+}
+
+/// Integration test for change-email unauthenticated → 401
+#[tokio::test]
+async fn test_change_email_unauthenticated() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+
+    let body = serde_json::json!({ "newEmail": "x@y.com" });
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/change-email".to_string(),
+        headers,
+        body: Some(body.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 401);
+}
+
+/// Integration test for delete-user/callback success
+#[tokio::test]
+async fn test_delete_user_callback_success() {
+    let auth = create_test_auth_memory().await;
+    let (user_id, _session_token) = create_test_user_and_session(auth.clone()).await;
+
+    use better_auth::types::{AuthRequest, CreateVerification};
+    use better_auth::adapters::DatabaseAdapter;
+    use chrono::{Utc, Duration};
+    use std::collections::HashMap;
+
+    // Create a deletion verification token
+    let token = format!("delete_{}", uuid::Uuid::new_v4());
+    let create_verification = CreateVerification {
+        identifier: user_id.clone(),
+        value: token.clone(),
+        expires_at: Utc::now() + Duration::hours(24),
+    };
+    auth.database().create_verification(create_verification).await.unwrap();
+
+    let mut query = HashMap::new();
+    query.insert("token".to_string(), token);
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/delete-user/callback".to_string(),
+        headers: HashMap::new(),
+        body: None,
+        query,
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    assert_eq!(data["success"], true);
+
+    // Verify user is deleted
+    let user = auth.database().get_user_by_id(&user_id).await.unwrap();
+    assert!(user.is_none());
+}
+
+/// Integration test for delete-user/callback invalid token → 400
+#[tokio::test]
+async fn test_delete_user_callback_invalid_token() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut query = HashMap::new();
+    query.insert("token".to_string(), "invalid_token".to_string());
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/delete-user/callback".to_string(),
+        headers: HashMap::new(),
+        body: None,
+        query,
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 400);
+}
+
+/// Integration test for list-accounts (empty)
+#[tokio::test]
+async fn test_list_accounts_empty() {
+    let auth = create_test_auth_memory().await;
+    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("authorization".to_string(), format!("Bearer {}", session_token));
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/list-accounts".to_string(),
+        headers,
+        body: None,
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let accounts: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
+    assert_eq!(accounts.len(), 0); // No linked accounts yet
+}
+
+/// Integration test for list-accounts with an account
+#[tokio::test]
+async fn test_list_accounts_with_account() {
+    let auth = create_test_auth_memory().await;
+    let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+
+    use better_auth::types::{AuthRequest, CreateAccount};
+    use better_auth::adapters::DatabaseAdapter;
+    use std::collections::HashMap;
+
+    // Create an account for the user
+    let create_account = CreateAccount {
+        account_id: "12345".to_string(),
+        provider_id: "google".to_string(),
+        user_id: user_id.clone(),
+        access_token: Some("access_token".to_string()),
+        refresh_token: None,
+        id_token: None,
+        access_token_expires_at: None,
+        refresh_token_expires_at: None,
+        scope: Some("email profile".to_string()),
+        password: None,
+    };
+    auth.database().create_account(create_account).await.unwrap();
+
+    let mut headers = HashMap::new();
+    headers.insert("authorization".to_string(), format!("Bearer {}", session_token));
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/list-accounts".to_string(),
+        headers,
+        body: None,
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let accounts: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert_eq!(accounts[0]["providerId"], "google");
+    // Sensitive fields should NOT be present
+    assert!(accounts[0].get("access_token").is_none());
+    assert!(accounts[0].get("password").is_none());
+}
+
+/// Integration test for unlink-account success
+#[tokio::test]
+async fn test_unlink_account_success() {
+    let auth = create_test_auth_memory().await;
+    let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+
+    use better_auth::types::{AuthRequest, CreateAccount};
+    use better_auth::adapters::DatabaseAdapter;
+    use std::collections::HashMap;
+
+    // Create two accounts
+    for provider in &["google", "github"] {
+        let create_account = CreateAccount {
+            account_id: format!("id_{}", provider),
+            provider_id: provider.to_string(),
+            user_id: user_id.clone(),
+            access_token: None,
+            refresh_token: None,
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: None,
+            password: None,
+        };
+        auth.database().create_account(create_account).await.unwrap();
+    }
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    headers.insert("authorization".to_string(), format!("Bearer {}", session_token));
+
+    let unlink_data = serde_json::json!({
+        "providerId": "google"
+    });
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/unlink-account".to_string(),
+        headers,
+        body: Some(unlink_data.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    // Verify only one account remains
+    let accounts = auth.database().get_user_accounts(&user_id).await.unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert_eq!(accounts[0].provider_id, "github");
+}
+
+/// Integration test for unlink-account last credential → 400
+#[tokio::test]
+async fn test_unlink_last_account_fails() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::{AuthRequest, CreateUser, CreateSession, CreateAccount};
+    use better_auth::adapters::DatabaseAdapter;
+    use chrono::{Utc, Duration};
+    use std::collections::HashMap;
+
+    // Create a social-only user (NO password)
+    let create_user = CreateUser::new()
+        .with_email("social-only@test.com")
+        .with_name("Social Only");
+    let user = auth.database().create_user(create_user).await.unwrap();
+
+    let create_session = CreateSession {
+        user_id: user.id.clone(),
+        expires_at: Utc::now() + Duration::hours(24),
+        ip_address: None,
+        user_agent: None,
+        impersonated_by: None,
+        active_organization_id: None,
+    };
+    let session = auth.database().create_session(create_session).await.unwrap();
+
+    // Add one account
+    let create_account = CreateAccount {
+        account_id: "id_google".to_string(),
+        provider_id: "google".to_string(),
+        user_id: user.id.clone(),
+        access_token: None,
+        refresh_token: None,
+        id_token: None,
+        access_token_expires_at: None,
+        refresh_token_expires_at: None,
+        scope: None,
+        password: None,
+    };
+    auth.database().create_account(create_account).await.unwrap();
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    headers.insert("authorization".to_string(), format!("Bearer {}", session.token));
+
+    let unlink_data = serde_json::json!({
+        "providerId": "google"
+    });
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/unlink-account".to_string(),
+        headers,
+        body: Some(unlink_data.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 400); // Cannot unlink last credential
+}
+
+/// Integration test for list-accounts unauthenticated → 401
+#[tokio::test]
+async fn test_list_accounts_unauthenticated() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/list-accounts".to_string(),
+        headers: HashMap::new(),
+        body: None,
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 401);
+}
+
 /*
 /// Test basic Axum integration with memory database
 #[tokio::test]
@@ -1056,3 +1639,168 @@ async fn test_concurrent_requests() {
     }
 }
 */
+
+// ---------------------------------------------------------------------------
+// Username Support Tests (Stage 1.7)
+// ---------------------------------------------------------------------------
+
+/// Sign up with username, then sign in by username
+#[tokio::test]
+async fn test_sign_up_with_username_and_sign_in() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    // Sign up with username
+    let signup_data = serde_json::json!({
+        "email": "usernameguy@test.com",
+        "password": "password123",
+        "name": "Username Guy",
+        "username": "cool_user",
+        "displayUsername": "Cool User"
+    });
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/sign-up/email".to_string(),
+        headers: headers.clone(),
+        body: Some(signup_data.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    assert_eq!(data["user"]["username"], "cool_user");
+    assert_eq!(data["user"]["displayUsername"], "Cool User");
+
+    // Now sign in by username
+    let signin_data = serde_json::json!({
+        "username": "cool_user",
+        "password": "password123"
+    });
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/sign-in/username".to_string(),
+        headers,
+        body: Some(signin_data.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    assert!(data["token"].is_string());
+    assert_eq!(data["user"]["username"], "cool_user");
+    assert_eq!(data["user"]["email"], "usernameguy@test.com");
+}
+
+/// Sign in by username with wrong password → 401
+#[tokio::test]
+async fn test_sign_in_username_wrong_password() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    // Sign up with username
+    let signup_data = serde_json::json!({
+        "email": "wrongpw@test.com",
+        "password": "password123",
+        "name": "Wrong PW",
+        "username": "wrongpw_user"
+    });
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/sign-up/email".to_string(),
+        headers: headers.clone(),
+        body: Some(signup_data.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    auth.handle_request(request).await.unwrap();
+
+    // Sign in with wrong password
+    let signin_data = serde_json::json!({
+        "username": "wrongpw_user",
+        "password": "wrong_password"
+    });
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/sign-in/username".to_string(),
+        headers,
+        body: Some(signin_data.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 401);
+}
+
+/// Sign in by nonexistent username → 401
+#[tokio::test]
+async fn test_sign_in_username_nonexistent() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let signin_data = serde_json::json!({
+        "username": "no_such_user",
+        "password": "password123"
+    });
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/sign-in/username".to_string(),
+        headers,
+        body: Some(signin_data.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 401);
+}
+
+/// get_user_by_username works via database adapter
+#[tokio::test]
+async fn test_get_user_by_username_adapter() {
+    use better_auth::adapters::{MemoryDatabaseAdapter, DatabaseAdapter};
+    use better_auth::types::CreateUser;
+
+    let db = MemoryDatabaseAdapter::new();
+
+    // Create user with username
+    let create = CreateUser::new()
+        .with_email("dbtest@test.com")
+        .with_name("DB Test")
+        .with_username("db_user");
+
+    let user = db.create_user(create).await.unwrap();
+
+    // Lookup by username
+    let found = db.get_user_by_username("db_user").await.unwrap();
+    assert!(found.is_some());
+    assert_eq!(found.unwrap().id, user.id);
+
+    // Lookup nonexistent
+    let not_found = db.get_user_by_username("no_user").await.unwrap();
+    assert!(not_found.is_none());
+}

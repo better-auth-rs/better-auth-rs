@@ -38,6 +38,13 @@ struct ResetPasswordRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
+struct SetPasswordRequest {
+    #[serde(rename = "newPassword")]
+    #[validate(length(min = 1, message = "New password is required"))]
+    new_password: String,
+}
+
+#[derive(Debug, Deserialize, Validate)]
 struct ChangePasswordRequest {
     #[serde(rename = "newPassword")]
     #[validate(length(min = 1, message = "New password is required"))]
@@ -121,6 +128,7 @@ impl AuthPlugin for PasswordManagementPlugin {
             AuthRoute::post("/reset-password", "reset_password"),
             AuthRoute::get("/reset-password/{token}", "reset_password_token"),
             AuthRoute::post("/change-password", "change_password"),
+            AuthRoute::post("/set-password", "set_password"),
         ]
     }
 
@@ -134,6 +142,9 @@ impl AuthPlugin for PasswordManagementPlugin {
             },
             (HttpMethod::Post, "/change-password") => {
                 Ok(Some(self.handle_change_password(req, ctx).await?))
+            },
+            (HttpMethod::Post, "/set-password") => {
+                Ok(Some(self.handle_set_password(req, ctx).await?))
             },
             (HttpMethod::Get, path) if path.starts_with("/reset-password/") => {
                 let token = &path[16..]; // Remove "/reset-password/" prefix
@@ -175,8 +186,7 @@ impl PasswordManagementPlugin {
 
         ctx.database.create_verification(create_verification).await?;
 
-        // TODO: Send email with reset link
-        // In a real implementation, you would send an email here
+        // Send email with reset link
         if self.config.send_email_notifications {
             let reset_url = if let Some(redirect_to) = &forget_req.redirect_to {
                 format!("{}?token={}", redirect_to, reset_token)
@@ -184,7 +194,21 @@ impl PasswordManagementPlugin {
                 format!("{}/reset-password?token={}", ctx.config.base_url, reset_token)
             };
 
-            println!("Password reset email would be sent to {} with URL: {}", forget_req.email, reset_url);
+            if let Ok(provider) = ctx.email_provider() {
+                let subject = "Reset your password";
+                let html = format!(
+                    "<p>Click the link below to reset your password:</p>\
+                     <p><a href=\"{url}\">Reset Password</a></p>",
+                    url = reset_url
+                );
+                let text = format!("Reset your password: {}", reset_url);
+
+                if let Err(e) = provider.send(&forget_req.email, subject, &html, &text).await {
+                    eprintln!("[password-management] Failed to send reset email to {}: {}", forget_req.email, e);
+                }
+            } else {
+                eprintln!("[password-management] No email provider configured, skipping password reset email for {}", forget_req.email);
+            }
         }
 
         let response = StatusResponse { status: true };
@@ -311,6 +335,53 @@ impl PasswordManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
+    async fn handle_set_password(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+        let set_req: SetPasswordRequest = match better_auth_core::validate_request_body(req) {
+            Ok(v) => v,
+            Err(resp) => return Ok(resp),
+        };
+
+        // Authenticate user
+        let user = self.get_current_user(req, ctx).await?
+            .ok_or(AuthError::Unauthenticated)?;
+
+        // Verify the user does NOT already have a password
+        if user.metadata.get("password_hash").and_then(|v| v.as_str()).is_some() {
+            return Err(AuthError::bad_request(
+                "User already has a password. Use /change-password instead."
+            ));
+        }
+
+        // Validate new password
+        self.validate_password(&set_req.new_password, ctx)?;
+
+        // Hash and store the new password
+        let password_hash = self.hash_password(&set_req.new_password)?;
+
+        let mut metadata = user.metadata.clone();
+        metadata.insert("password_hash".to_string(), serde_json::Value::String(password_hash));
+
+        let update_user = UpdateUser {
+            email: None,
+            name: None,
+            image: None,
+            email_verified: None,
+            username: None,
+            display_username: None,
+            role: None,
+            banned: None,
+            ban_reason: None,
+            ban_expires: None,
+            two_factor_enabled: None,
+            metadata: Some(metadata),
+        };
+
+        ctx.database.update_user(&user.id, update_user).await?;
+
+        let response = StatusResponse { status: true };
+        Ok(AuthResponse::json(200, &response)?)
+    }
+
     async fn handle_reset_password_token(&self, token: &str, _req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
         // Check if token is valid and get callback URL from query parameters
         let callback_url = _req.query.get("callbackURL").cloned();
@@ -371,20 +442,10 @@ impl PasswordManagementPlugin {
     }
 
     async fn get_current_user(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<Option<User>> {
-        // Extract session token from Authorization header or cookies
-        let token = if let Some(auth_header) = req.headers.get("authorization") {
-            if auth_header.starts_with("Bearer ") {
-                Some(&auth_header[7..])
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let session_manager = better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
 
-        if let Some(token) = token {
-            let session_manager = better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-            if let Some(session) = session_manager.get_session(token).await? {
+        if let Some(token) = session_manager.extract_session_token(req) {
+            if let Some(session) = session_manager.get_session(&token).await? {
                 return ctx.database.get_user_by_id(&session.user_id).await;
             }
         }

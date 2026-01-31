@@ -59,6 +59,7 @@ async fn create_full_auth() -> BetterAuth {
         .plugin(better_auth::plugins::SessionManagementPlugin::new())
         .plugin(better_auth::plugins::PasswordManagementPlugin::new())
         .plugin(better_auth::plugins::EmailVerificationPlugin::new())
+        .plugin(better_auth::plugins::AccountManagementPlugin::new())
         .plugin(better_auth::plugins::OAuthPlugin::new())
         .plugin(better_auth::plugins::TwoFactorPlugin::new())
         .build()
@@ -77,6 +78,8 @@ fn collect_implemented_routes(auth: &BetterAuth) -> BTreeMap<String, HashSet<Str
         ("/reference/openapi.json", "get"),
         ("/update-user", "post"),
         ("/delete-user", "post"),
+        ("/change-email", "post"),
+        ("/delete-user/callback", "get"),
     ];
     for (path, method) in core {
         routes.entry(path.to_string())
@@ -209,11 +212,18 @@ async fn test_core_endpoints_present() {
         ("post", "/forget-password"),
         ("post", "/reset-password"),
         ("post", "/change-password"),
+        ("post", "/set-password"),
         ("post", "/send-verification-email"),
         ("get", "/verify-email"),
         ("get", "/list-sessions"),
         ("post", "/revoke-session"),
         ("post", "/revoke-sessions"),
+        ("post", "/revoke-other-sessions"),
+        ("get", "/list-accounts"),
+        ("post", "/unlink-account"),
+        ("post", "/change-email"),
+        ("get", "/delete-user/callback"),
+        ("post", "/sign-in/username"),
     ];
 
     let mut missing = Vec::new();

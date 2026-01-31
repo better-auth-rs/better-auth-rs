@@ -1,5 +1,6 @@
 use std::sync::Arc;
-use chrono;
+
+use serde::Deserialize;
 
 use better_auth_core::{
     AuthRequest, AuthResponse, UpdateUserRequest, UpdateUserResponse,
@@ -9,11 +10,18 @@ use better_auth_core::{
     AuthConfig, AuthPlugin, AuthContext, SessionManager,
     DatabaseHooks, HookedDatabaseAdapter,
     OpenApiBuilder, OpenApiSpec,
+    EmailProvider,
     middleware::{self, Middleware, CsrfMiddleware, CsrfConfig,
         RateLimitMiddleware, RateLimitConfig,
         CorsMiddleware, CorsConfig,
         BodyLimitMiddleware, BodyLimitConfig},
 };
+
+#[derive(Debug, Deserialize)]
+struct ChangeEmailRequest {
+    #[serde(rename = "newEmail")]
+    new_email: String,
+}
 
 /// The main BetterAuth instance
 pub struct BetterAuth {
@@ -84,6 +92,12 @@ impl AuthBuilder {
     /// Configure body size limit
     pub fn body_limit(mut self, config: BodyLimitConfig) -> Self {
         self.body_limit_config = Some(config);
+        self
+    }
+
+    /// Set the email provider for sending emails
+    pub fn email_provider<E: EmailProvider + 'static>(mut self, provider: E) -> Self {
+        self.config.email_provider = Some(Arc::new(provider));
         self
     }
 
@@ -286,6 +300,12 @@ impl BetterAuth {
             (HttpMethod::Post, "/delete-user") => {
                 Ok(Some(self.handle_delete_user(req).await?))
             },
+            (HttpMethod::Post, "/change-email") => {
+                Ok(Some(self.handle_change_email(req).await?))
+            },
+            (HttpMethod::Get, "/delete-user/callback") => {
+                Ok(Some(self.handle_delete_user_callback(req).await?))
+            },
             _ => Ok(None), // Not a core endpoint
         }
     }
@@ -344,37 +364,97 @@ impl BetterAuth {
         Ok(AuthResponse::json(200, &response)?)
     }
 
+    /// Handle email change
+    async fn handle_change_email(&self, req: &AuthRequest) -> AuthResult<AuthResponse> {
+        let current_user = self.extract_current_user(req).await?;
+
+        let change_req: ChangeEmailRequest = req.body_as_json()
+            .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
+
+        // Basic email validation
+        if !change_req.new_email.contains('@') || change_req.new_email.is_empty() {
+            return Err(AuthError::bad_request("Invalid email address"));
+        }
+
+        // Check if the new email is already in use
+        if self.database.get_user_by_email(&change_req.new_email).await?.is_some() {
+            return Err(AuthError::conflict("A user with this email already exists"));
+        }
+
+        // Update email and set emailVerified to false
+        let update_user = UpdateUser {
+            email: Some(change_req.new_email),
+            name: None,
+            image: None,
+            email_verified: Some(false),
+            username: None,
+            display_username: None,
+            role: None,
+            banned: None,
+            ban_reason: None,
+            ban_expires: None,
+            two_factor_enabled: None,
+            metadata: None,
+        };
+
+        let updated_user = self.database.update_user(&current_user.id, update_user).await?;
+
+        let response = UpdateUserResponse {
+            user: updated_user,
+        };
+
+        Ok(AuthResponse::json(200, &response)?)
+    }
+
+    /// Handle delete-user callback (token-based deletion confirmation)
+    async fn handle_delete_user_callback(&self, req: &AuthRequest) -> AuthResult<AuthResponse> {
+        let token = req.query.get("token")
+            .ok_or_else(|| AuthError::bad_request("Deletion token is required"))?;
+
+        // Validate the token
+        let verification = self.database.get_verification_by_value(token).await?
+            .ok_or_else(|| AuthError::bad_request("Invalid or expired deletion token"))?;
+
+        // The identifier stores the user_id for deletion tokens
+        let user_id = &verification.identifier;
+
+        // Delete all user sessions
+        self.database.delete_user_sessions(user_id).await?;
+
+        // Delete all user accounts
+        let accounts = self.database.get_user_accounts(user_id).await?;
+        for account in accounts {
+            self.database.delete_account(&account.id).await?;
+        }
+
+        // Delete the user
+        self.database.delete_user(user_id).await?;
+
+        // Clean up the verification token
+        self.database.delete_verification(&verification.id).await?;
+
+        let response = DeleteUserResponse {
+            success: true,
+            message: "User account successfully deleted".to_string(),
+        };
+
+        Ok(AuthResponse::json(200, &response)?)
+    }
+
     /// Extract current user from request (validates session)
     async fn extract_current_user(&self, req: &AuthRequest) -> AuthResult<User> {
-        // Extract token from Authorization header
-        let token = self.extract_bearer_token(req)
-            .ok_or_else(|| AuthError::Unauthenticated)?;
+        // Extract token from Authorization header or cookie
+        let token = self.session_manager.extract_session_token(req)
+            .ok_or(AuthError::Unauthenticated)?;
 
         // Get session from database
-        let session = self.database.get_session(&token).await?
-            .ok_or_else(|| AuthError::SessionNotFound)?;
-
-        // Check if session is expired
-        if session.expires_at < chrono::Utc::now() {
-            return Err(AuthError::SessionNotFound);
-        }
+        let session = self.session_manager.get_session(&token).await?
+            .ok_or(AuthError::SessionNotFound)?;
 
         // Get user from database
         let user = self.database.get_user_by_id(&session.user_id).await?
-            .ok_or_else(|| AuthError::UserNotFound)?;
+            .ok_or(AuthError::UserNotFound)?;
 
         Ok(user)
-    }
-
-    /// Extract Bearer token from Authorization header
-    fn extract_bearer_token(&self, req: &AuthRequest) -> Option<String> {
-        req.headers.get("authorization")
-            .and_then(|auth| {
-                if auth.starts_with("Bearer ") {
-                    Some(auth[7..].to_string())
-                } else {
-                    None
-                }
-            })
     }
 }

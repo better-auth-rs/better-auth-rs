@@ -143,4 +143,32 @@ impl SessionManager {
     pub fn validate_token_format(&self, token: &str) -> bool {
         token.starts_with("session_") && token.len() > 40
     }
+
+    /// Extract session token from a request.
+    ///
+    /// Tries Bearer token from Authorization header first, then falls back
+    /// to parsing the configured cookie from the Cookie header.
+    pub fn extract_session_token(&self, req: &crate::types::AuthRequest) -> Option<String> {
+        // Try Bearer token first
+        if let Some(auth_header) = req.headers.get("authorization") {
+            if let Some(token) = auth_header.strip_prefix("Bearer ") {
+                return Some(token.to_string());
+            }
+        }
+
+        // Fall back to cookie
+        if let Some(cookie_header) = req.headers.get("cookie") {
+            let cookie_name = &self.config.session.cookie_name;
+            for part in cookie_header.split(';') {
+                let part = part.trim();
+                if let Some(value) = part.strip_prefix(&format!("{}=", cookie_name)) {
+                    if !value.is_empty() {
+                        return Some(value.to_string());
+                    }
+                }
+            }
+        }
+
+        None
+    }
 } 

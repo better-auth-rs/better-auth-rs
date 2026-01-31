@@ -108,6 +108,8 @@ impl OpenApiBuilder {
             .route(&HttpMethod::Get, "/error", "error", "core")
             .route(&HttpMethod::Post, "/update-user", "update_user", "core")
             .route(&HttpMethod::Post, "/delete-user", "delete_user", "core")
+            .route(&HttpMethod::Post, "/change-email", "change_email", "core")
+            .route(&HttpMethod::Get, "/delete-user/callback", "delete_user_callback", "core")
     }
 
     /// Build the final OpenAPI spec.
