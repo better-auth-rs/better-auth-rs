@@ -2,6 +2,9 @@
 name = "better-auth-entity"
 version = { workspace = true }
 edition = { workspace = true }
+license = { workspace = true }
+description = "Entity definitions for better-auth"
+repository = { workspace = true }
 
 [features]
 username = []

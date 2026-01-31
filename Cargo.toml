@@ -1,7 +1,14 @@
+[package]
+name = "better-auth"
+description = "The most comprehensive authentication framework for Rust"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
 [workspace]
 resolver = "2"
 members = [
-    ".",
     "crates/better-auth-core",
     "crates/better-auth-api",
     "crates/better-auth-entity",
@@ -11,7 +18,6 @@ members = [
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-description = "The most comprehensive authentication framework for Rust"
 repository = "https://github.com/better-auth-rs/better-auth-rs"
 
 [workspace.dependencies]
@@ -104,14 +110,6 @@ url = "2"
 # Cache
 redis = "0.27"
 
-[package]
-name = "better-auth"
-version = { workspace = true }
-edition = { workspace = true }
-license = { workspace = true }
-description = { workspace = true }
-repository = { workspace = true }
-
 [features]
 default = []
 axum = ["dep:axum", "dep:tower", "dep:url"]
@@ -120,8 +118,8 @@ redis-cache = ["dep:redis"]
 
 [dependencies]
 # Core crates
-better-auth-core = { path = "crates/better-auth-core" }
-better-auth-api = { path = "crates/better-auth-api" }
+better-auth-core = { workspace = true }
+better-auth-api = { workspace = true }
 
 # Asynchronous runtime
 tokio = { workspace = true }
@@ -157,6 +155,10 @@ sqlx = { workspace = true, optional = true }
 # Cache (optional)
 redis = { workspace = true, optional = true }
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+serde_yaml = "0.9"
+
 [[example]]
 name = "axum_server"
 required-features = ["axum"]
@@ -164,10 +166,6 @@ required-features = ["axum"]
 [[example]]
 name = "postgres_usage"
 required-features = ["sqlx-postgres"]
-
-[dev-dependencies]
-tokio = { workspace = true, features = ["full", "test-util"] }
-serde_yaml = "0.9"
 
 [profile.release]
 opt-level = 3

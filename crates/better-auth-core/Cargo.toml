@@ -4,6 +4,7 @@ version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 description = "Core abstractions for better-auth: traits, types, config, error handling"
+repository = { workspace = true }
 
 [dependencies]
 # Asynchronous runtime
