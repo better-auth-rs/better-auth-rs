@@ -1,0 +1,15 @@
+[workspace]
+changelog_config = "cliff.toml"
+git_release_enable = true
+
+[[package]]
+name = "better-auth"
+
+[[package]]
+name = "better-auth-core"
+
+[[package]]
+name = "better-auth-api"
+
+[[package]]
+name = "better-auth-entity"
