@@ -6,26 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- *(entity)* Add user/entity/session
 - Restructure into workspace with middleware, validation, hooks, and OpenAPI
 - Add email provider abstraction and wire into verification plugin
 - Add cookie auth, set-password, change-email, and user management endpoints
-
-### Documentation
-
-- Update examples with new auth features and endpoints
-- Add Fumadocs documentation site with 18 pages
+- Add account management plugin and username sign-in support
 
 ### Miscellaneous
 
-- Cleanup directory
 - Add GitHub Actions workflow and fix all clippy/fmt warnings
-- Add release-plz workflow and changelog config
 
-### License
-
-- Switch to MIT+Apache dual license
-
-# Changelog
-
-All notable changes to this project will be documented in this file.
