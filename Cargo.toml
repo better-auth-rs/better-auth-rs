@@ -12,6 +12,7 @@ members = [
     "crates/better-auth-core",
     "crates/better-auth-api",
     "crates/better-auth-entity",
+    "crates/better-auth-migration",
 ]
 
 [workspace.package]
@@ -25,6 +26,13 @@ repository = "https://github.com/better-auth-rs/better-auth-rs"
 better-auth-core = { version = "0.1.0", path = "crates/better-auth-core" }
 better-auth-api = { version = "0.1.0", path = "crates/better-auth-api" }
 better-auth-entity = { version = "0.1.0", path = "crates/better-auth-entity" }
+better-auth-migration = { version = "0.1.0", path = "crates/better-auth-migration" }
+
+# Database migrations
+sea-orm-migration = { version = "1.1", features = [
+    "runtime-tokio-rustls",
+    "sqlx-postgres",
+] }
 
 # Asynchronous runtime
 tokio = { version = "1.0", features = ["full"] }

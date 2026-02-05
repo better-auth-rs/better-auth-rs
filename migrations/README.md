@@ -70,6 +70,56 @@ psql $DATABASE_URL -f migrations/001_initial.sql
 - `scope` - Authorization scope
 - `created_at` - Creation time
 
+### Organization Table (Multi-tenant)
+- `id` - Organization unique identifier
+- `name` - Organization display name
+- `slug` - URL-friendly unique identifier
+- `logo` - Organization logo URL
+- `metadata` - Extended data in JSON format
+- `created_at` - Creation time
+- `updated_at` - Update time
+
+### Member Table (Organization membership)
+- `id` - Member unique identifier
+- `organization_id` - Associated organization ID
+- `user_id` - Associated user ID
+- `role` - Member role (owner, admin, member, or custom)
+- `created_at` - Creation time
+
+### Invitation Table (Organization invitations)
+- `id` - Invitation unique identifier
+- `organization_id` - Associated organization ID
+- `email` - Invitee email address
+- `role` - Role to assign upon acceptance
+- `status` - Invitation status (pending, accepted, rejected, canceled)
+- `inviter_id` - User ID who sent the invitation
+- `expires_at` - Invitation expiration time
+- `created_at` - Creation time
+
+## Sea-ORM Migrations
+
+For programmatic migration management, use the `better-auth-migration` crate:
+
+```rust
+use better_auth_migration::{Migrator, MigratorTrait};
+use sea_orm::Database;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let db = Database::connect("postgresql://user:pass@localhost/better_auth").await?;
+    Migrator::up(&db, None).await?;
+    Ok(())
+}
+```
+
+Or use `sea-orm-cli`:
+
+```bash
+cargo install sea-orm-cli
+DATABASE_URL="postgresql://user:pass@localhost/better_auth" \
+  sea-orm-cli migrate up -d crates/better-auth-migration
+```
+
 ## Index Optimization
 
 The script includes indexes for common queries:
@@ -77,6 +127,11 @@ The script includes indexes for common queries:
 - Session token queries
 - User session queries
 - OAuth account queries
+- Organization slug queries
+- Member by organization queries
+- Member by user queries
+- Invitation by organization queries
+- Invitation by email queries
 
 ## Maintenance Functions
 

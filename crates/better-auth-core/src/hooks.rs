@@ -251,6 +251,155 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
         self.inner.delete_expired_verifications().await
     }
+
+    // --- Organization operations (pass-through, no hooks yet) ---
+
+    async fn create_organization(
+        &self,
+        org: crate::types::CreateOrganization,
+    ) -> AuthResult<crate::types::Organization> {
+        self.inner.create_organization(org).await
+    }
+
+    async fn get_organization_by_id(
+        &self,
+        id: &str,
+    ) -> AuthResult<Option<crate::types::Organization>> {
+        self.inner.get_organization_by_id(id).await
+    }
+
+    async fn get_organization_by_slug(
+        &self,
+        slug: &str,
+    ) -> AuthResult<Option<crate::types::Organization>> {
+        self.inner.get_organization_by_slug(slug).await
+    }
+
+    async fn update_organization(
+        &self,
+        id: &str,
+        update: crate::types::UpdateOrganization,
+    ) -> AuthResult<crate::types::Organization> {
+        self.inner.update_organization(id, update).await
+    }
+
+    async fn delete_organization(&self, id: &str) -> AuthResult<()> {
+        self.inner.delete_organization(id).await
+    }
+
+    async fn list_user_organizations(
+        &self,
+        user_id: &str,
+    ) -> AuthResult<Vec<crate::types::Organization>> {
+        self.inner.list_user_organizations(user_id).await
+    }
+
+    // --- Member operations (pass-through, no hooks yet) ---
+
+    async fn create_member(
+        &self,
+        member: crate::types::CreateMember,
+    ) -> AuthResult<crate::types::Member> {
+        self.inner.create_member(member).await
+    }
+
+    async fn get_member(
+        &self,
+        organization_id: &str,
+        user_id: &str,
+    ) -> AuthResult<Option<crate::types::Member>> {
+        self.inner.get_member(organization_id, user_id).await
+    }
+
+    async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<crate::types::MemberWithUser>> {
+        self.inner.get_member_by_id(id).await
+    }
+
+    async fn update_member_role(
+        &self,
+        member_id: &str,
+        role: &str,
+    ) -> AuthResult<crate::types::Member> {
+        self.inner.update_member_role(member_id, role).await
+    }
+
+    async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
+        self.inner.delete_member(member_id).await
+    }
+
+    async fn list_organization_members(
+        &self,
+        organization_id: &str,
+    ) -> AuthResult<Vec<crate::types::MemberWithUser>> {
+        self.inner.list_organization_members(organization_id).await
+    }
+
+    async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize> {
+        self.inner.count_organization_members(organization_id).await
+    }
+
+    async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<usize> {
+        self.inner.count_organization_owners(organization_id).await
+    }
+
+    // --- Invitation operations (pass-through, no hooks yet) ---
+
+    async fn create_invitation(
+        &self,
+        invitation: crate::types::CreateInvitation,
+    ) -> AuthResult<crate::types::Invitation> {
+        self.inner.create_invitation(invitation).await
+    }
+
+    async fn get_invitation_by_id(
+        &self,
+        id: &str,
+    ) -> AuthResult<Option<crate::types::Invitation>> {
+        self.inner.get_invitation_by_id(id).await
+    }
+
+    async fn get_pending_invitation(
+        &self,
+        organization_id: &str,
+        email: &str,
+    ) -> AuthResult<Option<crate::types::Invitation>> {
+        self.inner
+            .get_pending_invitation(organization_id, email)
+            .await
+    }
+
+    async fn update_invitation_status(
+        &self,
+        id: &str,
+        status: crate::types::InvitationStatus,
+    ) -> AuthResult<crate::types::Invitation> {
+        self.inner.update_invitation_status(id, status).await
+    }
+
+    async fn list_organization_invitations(
+        &self,
+        organization_id: &str,
+    ) -> AuthResult<Vec<crate::types::Invitation>> {
+        self.inner
+            .list_organization_invitations(organization_id)
+            .await
+    }
+
+    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<crate::types::Invitation>> {
+        self.inner.list_user_invitations(email).await
+    }
+
+    // --- Session organization support ---
+
+    async fn update_session_active_organization(
+        &self,
+        token: &str,
+        organization_id: Option<&str>,
+    ) -> AuthResult<Session> {
+        self.inner
+            .update_session_active_organization(token, organization_id)
+            .await
+    }
 }
 
 #[cfg(test)]

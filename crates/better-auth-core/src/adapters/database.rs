@@ -6,8 +6,9 @@ use uuid::Uuid;
 
 use crate::error::{AuthError, AuthResult};
 use crate::types::{
-    Account, CreateAccount, CreateSession, CreateUser, CreateVerification, Session, UpdateUser,
-    User, Verification,
+    Account, CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
+    CreateUser, CreateVerification, Invitation, InvitationStatus, Member, MemberUser,
+    MemberWithUser, Organization, Session, UpdateOrganization, UpdateUser, User, Verification,
 };
 
 /// Database adapter trait for persistence
@@ -54,6 +55,57 @@ pub trait DatabaseAdapter: Send + Sync {
     async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<Verification>>;
     async fn delete_verification(&self, id: &str) -> AuthResult<()>;
     async fn delete_expired_verifications(&self) -> AuthResult<usize>;
+
+    // Organization operations
+    async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Organization>;
+    async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>>;
+    async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>>;
+    async fn update_organization(
+        &self,
+        id: &str,
+        update: UpdateOrganization,
+    ) -> AuthResult<Organization>;
+    async fn delete_organization(&self, id: &str) -> AuthResult<()>;
+    async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>>;
+
+    // Member operations
+    async fn create_member(&self, member: CreateMember) -> AuthResult<Member>;
+    async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>>;
+    async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<MemberWithUser>>;
+    async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member>;
+    async fn delete_member(&self, member_id: &str) -> AuthResult<()>;
+    async fn list_organization_members(
+        &self,
+        organization_id: &str,
+    ) -> AuthResult<Vec<MemberWithUser>>;
+    async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize>;
+    async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<usize>;
+
+    // Invitation operations
+    async fn create_invitation(&self, invitation: CreateInvitation) -> AuthResult<Invitation>;
+    async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>>;
+    async fn get_pending_invitation(
+        &self,
+        organization_id: &str,
+        email: &str,
+    ) -> AuthResult<Option<Invitation>>;
+    async fn update_invitation_status(
+        &self,
+        id: &str,
+        status: InvitationStatus,
+    ) -> AuthResult<Invitation>;
+    async fn list_organization_invitations(
+        &self,
+        organization_id: &str,
+    ) -> AuthResult<Vec<Invitation>>;
+    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>>;
+
+    // Session organization support
+    async fn update_session_active_organization(
+        &self,
+        token: &str,
+        organization_id: Option<&str>,
+    ) -> AuthResult<Session>;
 }
 
 /// In-memory database adapter for testing and development
@@ -62,8 +114,13 @@ pub struct MemoryDatabaseAdapter {
     sessions: Arc<Mutex<HashMap<String, Session>>>,
     accounts: Arc<Mutex<HashMap<String, Account>>>,
     verifications: Arc<Mutex<HashMap<String, Verification>>>,
-    email_index: Arc<Mutex<HashMap<String, String>>>, // email -> user_id
+    email_index: Arc<Mutex<HashMap<String, String>>>,    // email -> user_id
     username_index: Arc<Mutex<HashMap<String, String>>>, // username -> user_id
+    // Organization data
+    organizations: Arc<Mutex<HashMap<String, Organization>>>,
+    members: Arc<Mutex<HashMap<String, Member>>>,
+    invitations: Arc<Mutex<HashMap<String, Invitation>>>,
+    slug_index: Arc<Mutex<HashMap<String, String>>>, // slug -> organization_id
 }
 
 impl MemoryDatabaseAdapter {
@@ -75,6 +132,10 @@ impl MemoryDatabaseAdapter {
             verifications: Arc::new(Mutex::new(HashMap::new())),
             email_index: Arc::new(Mutex::new(HashMap::new())),
             username_index: Arc::new(Mutex::new(HashMap::new())),
+            organizations: Arc::new(Mutex::new(HashMap::new())),
+            members: Arc::new(Mutex::new(HashMap::new())),
+            invitations: Arc::new(Mutex::new(HashMap::new())),
+            slug_index: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -436,6 +497,370 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
         verifications.retain(|_, verification| verification.expires_at > now);
 
         Ok(initial_count - verifications.len())
+    }
+
+    // Organization operations
+    async fn create_organization(&self, create_org: CreateOrganization) -> AuthResult<Organization> {
+        let mut organizations = self.organizations.lock().unwrap();
+        let mut slug_index = self.slug_index.lock().unwrap();
+
+        // Check if slug already exists
+        if slug_index.contains_key(&create_org.slug) {
+            return Err(AuthError::conflict("Organization slug already exists"));
+        }
+
+        let id = create_org.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        let now = Utc::now();
+
+        let organization = Organization {
+            id: id.clone(),
+            name: create_org.name,
+            slug: create_org.slug.clone(),
+            logo: create_org.logo,
+            metadata: create_org.metadata,
+            created_at: now,
+            updated_at: now,
+        };
+
+        organizations.insert(id.clone(), organization.clone());
+        slug_index.insert(create_org.slug, id);
+
+        Ok(organization)
+    }
+
+    async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>> {
+        let organizations = self.organizations.lock().unwrap();
+        Ok(organizations.get(id).cloned())
+    }
+
+    async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>> {
+        let slug_index = self.slug_index.lock().unwrap();
+        let organizations = self.organizations.lock().unwrap();
+
+        if let Some(org_id) = slug_index.get(slug) {
+            Ok(organizations.get(org_id).cloned())
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn update_organization(
+        &self,
+        id: &str,
+        update: UpdateOrganization,
+    ) -> AuthResult<Organization> {
+        let mut organizations = self.organizations.lock().unwrap();
+        let mut slug_index = self.slug_index.lock().unwrap();
+
+        let org = organizations
+            .get_mut(id)
+            .ok_or_else(|| AuthError::not_found("Organization not found"))?;
+
+        // Update slug index if slug changed
+        if let Some(new_slug) = &update.slug {
+            if new_slug != &org.slug {
+                // Check if new slug already exists
+                if slug_index.contains_key(new_slug) {
+                    return Err(AuthError::conflict("Organization slug already exists"));
+                }
+                slug_index.remove(&org.slug);
+                slug_index.insert(new_slug.clone(), id.to_string());
+                org.slug = new_slug.clone();
+            }
+        }
+
+        if let Some(name) = update.name {
+            org.name = name;
+        }
+        if let Some(logo) = update.logo {
+            org.logo = Some(logo);
+        }
+        if let Some(metadata) = update.metadata {
+            org.metadata = Some(metadata);
+        }
+
+        org.updated_at = Utc::now();
+
+        Ok(org.clone())
+    }
+
+    async fn delete_organization(&self, id: &str) -> AuthResult<()> {
+        let mut organizations = self.organizations.lock().unwrap();
+        let mut slug_index = self.slug_index.lock().unwrap();
+        let mut members = self.members.lock().unwrap();
+        let mut invitations = self.invitations.lock().unwrap();
+
+        if let Some(org) = organizations.remove(id) {
+            slug_index.remove(&org.slug);
+        }
+
+        // Delete all related members and invitations
+        members.retain(|_, m| m.organization_id != id);
+        invitations.retain(|_, i| i.organization_id != id);
+
+        Ok(())
+    }
+
+    async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
+        let members = self.members.lock().unwrap();
+        let organizations = self.organizations.lock().unwrap();
+
+        let org_ids: Vec<String> = members
+            .values()
+            .filter(|m| m.user_id == user_id)
+            .map(|m| m.organization_id.clone())
+            .collect();
+
+        let orgs = org_ids
+            .iter()
+            .filter_map(|id| organizations.get(id).cloned())
+            .collect();
+
+        Ok(orgs)
+    }
+
+    // Member operations
+    async fn create_member(&self, create_member: CreateMember) -> AuthResult<Member> {
+        let mut members = self.members.lock().unwrap();
+
+        // Check if member already exists
+        let exists = members
+            .values()
+            .any(|m| m.organization_id == create_member.organization_id && m.user_id == create_member.user_id);
+
+        if exists {
+            return Err(AuthError::conflict("User is already a member of this organization"));
+        }
+
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now();
+
+        let member = Member {
+            id: id.clone(),
+            organization_id: create_member.organization_id,
+            user_id: create_member.user_id,
+            role: create_member.role,
+            created_at: now,
+        };
+
+        members.insert(id, member.clone());
+
+        Ok(member)
+    }
+
+    async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>> {
+        let members = self.members.lock().unwrap();
+
+        let member = members
+            .values()
+            .find(|m| m.organization_id == organization_id && m.user_id == user_id)
+            .cloned();
+
+        Ok(member)
+    }
+
+    async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<MemberWithUser>> {
+        let members = self.members.lock().unwrap();
+        let users = self.users.lock().unwrap();
+
+        if let Some(member) = members.get(id) {
+            if let Some(user) = users.get(&member.user_id) {
+                return Ok(Some(MemberWithUser {
+                    id: member.id.clone(),
+                    organization_id: member.organization_id.clone(),
+                    user_id: member.user_id.clone(),
+                    role: member.role.clone(),
+                    created_at: member.created_at,
+                    user: MemberUser {
+                        id: user.id.clone(),
+                        email: user.email.clone(),
+                        name: user.name.clone(),
+                        image: user.image.clone(),
+                    },
+                }));
+            }
+        }
+
+        Ok(None)
+    }
+
+    async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member> {
+        let mut members = self.members.lock().unwrap();
+
+        let member = members
+            .get_mut(member_id)
+            .ok_or_else(|| AuthError::not_found("Member not found"))?;
+
+        member.role = role.to_string();
+
+        Ok(member.clone())
+    }
+
+    async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
+        let mut members = self.members.lock().unwrap();
+        members.remove(member_id);
+        Ok(())
+    }
+
+    async fn list_organization_members(
+        &self,
+        organization_id: &str,
+    ) -> AuthResult<Vec<MemberWithUser>> {
+        let members = self.members.lock().unwrap();
+        let users = self.users.lock().unwrap();
+
+        let members_with_users = members
+            .values()
+            .filter(|m| m.organization_id == organization_id)
+            .filter_map(|member| {
+                users.get(&member.user_id).map(|user| MemberWithUser {
+                    id: member.id.clone(),
+                    organization_id: member.organization_id.clone(),
+                    user_id: member.user_id.clone(),
+                    role: member.role.clone(),
+                    created_at: member.created_at,
+                    user: MemberUser {
+                        id: user.id.clone(),
+                        email: user.email.clone(),
+                        name: user.name.clone(),
+                        image: user.image.clone(),
+                    },
+                })
+            })
+            .collect();
+
+        Ok(members_with_users)
+    }
+
+    async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize> {
+        let members = self.members.lock().unwrap();
+        let count = members
+            .values()
+            .filter(|m| m.organization_id == organization_id)
+            .count();
+        Ok(count)
+    }
+
+    async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<usize> {
+        let members = self.members.lock().unwrap();
+        let count = members
+            .values()
+            .filter(|m| m.organization_id == organization_id && m.role == "owner")
+            .count();
+        Ok(count)
+    }
+
+    // Invitation operations
+    async fn create_invitation(&self, create_inv: CreateInvitation) -> AuthResult<Invitation> {
+        let mut invitations = self.invitations.lock().unwrap();
+
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now();
+
+        let invitation = Invitation {
+            id: id.clone(),
+            organization_id: create_inv.organization_id,
+            email: create_inv.email,
+            role: create_inv.role,
+            status: InvitationStatus::Pending,
+            inviter_id: create_inv.inviter_id,
+            expires_at: create_inv.expires_at,
+            created_at: now,
+        };
+
+        invitations.insert(id, invitation.clone());
+
+        Ok(invitation)
+    }
+
+    async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
+        let invitations = self.invitations.lock().unwrap();
+        Ok(invitations.get(id).cloned())
+    }
+
+    async fn get_pending_invitation(
+        &self,
+        organization_id: &str,
+        email: &str,
+    ) -> AuthResult<Option<Invitation>> {
+        let invitations = self.invitations.lock().unwrap();
+
+        let invitation = invitations
+            .values()
+            .find(|i| {
+                i.organization_id == organization_id
+                    && i.email.to_lowercase() == email.to_lowercase()
+                    && i.status == InvitationStatus::Pending
+            })
+            .cloned();
+
+        Ok(invitation)
+    }
+
+    async fn update_invitation_status(
+        &self,
+        id: &str,
+        status: InvitationStatus,
+    ) -> AuthResult<Invitation> {
+        let mut invitations = self.invitations.lock().unwrap();
+
+        let invitation = invitations
+            .get_mut(id)
+            .ok_or_else(|| AuthError::not_found("Invitation not found"))?;
+
+        invitation.status = status;
+
+        Ok(invitation.clone())
+    }
+
+    async fn list_organization_invitations(
+        &self,
+        organization_id: &str,
+    ) -> AuthResult<Vec<Invitation>> {
+        let invitations = self.invitations.lock().unwrap();
+
+        let org_invitations = invitations
+            .values()
+            .filter(|i| i.organization_id == organization_id)
+            .cloned()
+            .collect();
+
+        Ok(org_invitations)
+    }
+
+    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>> {
+        let invitations = self.invitations.lock().unwrap();
+        let now = Utc::now();
+
+        let user_invitations = invitations
+            .values()
+            .filter(|i| {
+                i.email.to_lowercase() == email.to_lowercase()
+                    && i.status == InvitationStatus::Pending
+                    && i.expires_at > now
+            })
+            .cloned()
+            .collect();
+
+        Ok(user_invitations)
+    }
+
+    // Session organization support
+    async fn update_session_active_organization(
+        &self,
+        token: &str,
+        organization_id: Option<&str>,
+    ) -> AuthResult<Session> {
+        let mut sessions = self.sessions.lock().unwrap();
+
+        let session = sessions
+            .get_mut(token)
+            .ok_or(AuthError::SessionNotFound)?;
+
+        session.active_organization_id = organization_id.map(|s| s.to_string());
+        session.updated_at = Utc::now();
+
+        Ok(session.clone())
     }
 }
 
@@ -907,6 +1332,415 @@ pub mod sqlx_adapter {
                 .await?;
 
             Ok(result.rows_affected() as usize)
+        }
+
+        // Organization operations
+        async fn create_organization(&self, create_org: CreateOrganization) -> AuthResult<Organization> {
+            let id = create_org.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+            let now = Utc::now();
+
+            let organization = sqlx::query_as::<_, Organization>(
+                r#"
+                INSERT INTO organization (id, name, slug, logo, metadata, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING id, name, slug, logo, metadata, created_at, updated_at
+                "#,
+            )
+            .bind(&id)
+            .bind(&create_org.name)
+            .bind(&create_org.slug)
+            .bind(&create_org.logo)
+            .bind(sqlx::types::Json(create_org.metadata.unwrap_or(serde_json::json!({}))))
+            .bind(&now)
+            .bind(&now)
+            .fetch_one(&self.pool)
+            .await?;
+
+            Ok(organization)
+        }
+
+        async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>> {
+            let organization = sqlx::query_as::<_, Organization>(
+                r#"
+                SELECT id, name, slug, logo, metadata, created_at, updated_at
+                FROM organization WHERE id = $1
+                "#,
+            )
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+            Ok(organization)
+        }
+
+        async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>> {
+            let organization = sqlx::query_as::<_, Organization>(
+                r#"
+                SELECT id, name, slug, logo, metadata, created_at, updated_at
+                FROM organization WHERE slug = $1
+                "#,
+            )
+            .bind(slug)
+            .fetch_optional(&self.pool)
+            .await?;
+
+            Ok(organization)
+        }
+
+        async fn update_organization(
+            &self,
+            id: &str,
+            update: UpdateOrganization,
+        ) -> AuthResult<Organization> {
+            let mut query = sqlx::QueryBuilder::new("UPDATE organization SET updated_at = NOW()");
+
+            if let Some(name) = &update.name {
+                query.push(", name = ");
+                query.push_bind(name);
+            }
+            if let Some(slug) = &update.slug {
+                query.push(", slug = ");
+                query.push_bind(slug);
+            }
+            if let Some(logo) = &update.logo {
+                query.push(", logo = ");
+                query.push_bind(logo);
+            }
+            if let Some(metadata) = &update.metadata {
+                query.push(", metadata = ");
+                query.push_bind(sqlx::types::Json(metadata.clone()));
+            }
+
+            query.push(" WHERE id = ");
+            query.push_bind(id);
+            query.push(" RETURNING id, name, slug, logo, metadata, created_at, updated_at");
+
+            let organization = query.build_query_as::<Organization>().fetch_one(&self.pool).await?;
+
+            Ok(organization)
+        }
+
+        async fn delete_organization(&self, id: &str) -> AuthResult<()> {
+            sqlx::query("DELETE FROM organization WHERE id = $1")
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+
+            Ok(())
+        }
+
+        async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
+            let organizations = sqlx::query_as::<_, Organization>(
+                r#"
+                SELECT o.id, o.name, o.slug, o.logo, o.metadata, o.created_at, o.updated_at
+                FROM organization o
+                INNER JOIN member m ON o.id = m.organization_id
+                WHERE m.user_id = $1
+                ORDER BY o.created_at DESC
+                "#,
+            )
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+            Ok(organizations)
+        }
+
+        // Member operations
+        async fn create_member(&self, create_member: CreateMember) -> AuthResult<Member> {
+            let id = Uuid::new_v4().to_string();
+            let now = Utc::now();
+
+            let member = sqlx::query_as::<_, Member>(
+                r#"
+                INSERT INTO member (id, organization_id, user_id, role, created_at)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id, organization_id, user_id, role, created_at
+                "#,
+            )
+            .bind(&id)
+            .bind(&create_member.organization_id)
+            .bind(&create_member.user_id)
+            .bind(&create_member.role)
+            .bind(&now)
+            .fetch_one(&self.pool)
+            .await?;
+
+            Ok(member)
+        }
+
+        async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>> {
+            let member = sqlx::query_as::<_, Member>(
+                r#"
+                SELECT id, organization_id, user_id, role, created_at
+                FROM member
+                WHERE organization_id = $1 AND user_id = $2
+                "#,
+            )
+            .bind(organization_id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+            Ok(member)
+        }
+
+        async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<MemberWithUser>> {
+            let row = sqlx::query(
+                r#"
+                SELECT m.id, m.organization_id, m.user_id, m.role, m.created_at,
+                       u.id as uid, u.email, u.name, u.image
+                FROM member m
+                INNER JOIN users u ON m.user_id = u.id
+                WHERE m.id = $1
+                "#,
+            )
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+            if let Some(row) = row {
+                use sqlx::Row;
+                Ok(Some(MemberWithUser {
+                    id: row.try_get("id")?,
+                    organization_id: row.try_get("organization_id")?,
+                    user_id: row.try_get("user_id")?,
+                    role: row.try_get("role")?,
+                    created_at: row.try_get("created_at")?,
+                    user: MemberUser {
+                        id: row.try_get("uid")?,
+                        email: row.try_get("email")?,
+                        name: row.try_get("name")?,
+                        image: row.try_get("image")?,
+                    },
+                }))
+            } else {
+                Ok(None)
+            }
+        }
+
+        async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member> {
+            let member = sqlx::query_as::<_, Member>(
+                r#"
+                UPDATE member SET role = $1
+                WHERE id = $2
+                RETURNING id, organization_id, user_id, role, created_at
+                "#,
+            )
+            .bind(role)
+            .bind(member_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+            Ok(member)
+        }
+
+        async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
+            sqlx::query("DELETE FROM member WHERE id = $1")
+                .bind(member_id)
+                .execute(&self.pool)
+                .await?;
+
+            Ok(())
+        }
+
+        async fn list_organization_members(
+            &self,
+            organization_id: &str,
+        ) -> AuthResult<Vec<MemberWithUser>> {
+            let rows = sqlx::query(
+                r#"
+                SELECT m.id, m.organization_id, m.user_id, m.role, m.created_at,
+                       u.id as uid, u.email, u.name, u.image
+                FROM member m
+                INNER JOIN users u ON m.user_id = u.id
+                WHERE m.organization_id = $1
+                ORDER BY m.created_at ASC
+                "#,
+            )
+            .bind(organization_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+            use sqlx::Row;
+            let members = rows
+                .iter()
+                .map(|row| {
+                    Ok(MemberWithUser {
+                        id: row.try_get("id")?,
+                        organization_id: row.try_get("organization_id")?,
+                        user_id: row.try_get("user_id")?,
+                        role: row.try_get("role")?,
+                        created_at: row.try_get("created_at")?,
+                        user: MemberUser {
+                            id: row.try_get("uid")?,
+                            email: row.try_get("email")?,
+                            name: row.try_get("name")?,
+                            image: row.try_get("image")?,
+                        },
+                    })
+                })
+                .collect::<Result<Vec<_>, sqlx::Error>>()?;
+
+            Ok(members)
+        }
+
+        async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize> {
+            let count: (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM member WHERE organization_id = $1",
+            )
+            .bind(organization_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+            Ok(count.0 as usize)
+        }
+
+        async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<usize> {
+            let count: (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM member WHERE organization_id = $1 AND role = 'owner'",
+            )
+            .bind(organization_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+            Ok(count.0 as usize)
+        }
+
+        // Invitation operations
+        async fn create_invitation(&self, create_inv: CreateInvitation) -> AuthResult<Invitation> {
+            let id = Uuid::new_v4().to_string();
+            let now = Utc::now();
+
+            let invitation = sqlx::query_as::<_, Invitation>(
+                r#"
+                INSERT INTO invitation (id, organization_id, email, role, status, inviter_id, expires_at, created_at)
+                VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)
+                RETURNING id, organization_id, email, role, status, inviter_id, expires_at, created_at
+                "#,
+            )
+            .bind(&id)
+            .bind(&create_inv.organization_id)
+            .bind(&create_inv.email)
+            .bind(&create_inv.role)
+            .bind(&create_inv.inviter_id)
+            .bind(&create_inv.expires_at)
+            .bind(&now)
+            .fetch_one(&self.pool)
+            .await?;
+
+            Ok(invitation)
+        }
+
+        async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
+            let invitation = sqlx::query_as::<_, Invitation>(
+                r#"
+                SELECT id, organization_id, email, role, status, inviter_id, expires_at, created_at
+                FROM invitation
+                WHERE id = $1
+                "#,
+            )
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+            Ok(invitation)
+        }
+
+        async fn get_pending_invitation(
+            &self,
+            organization_id: &str,
+            email: &str,
+        ) -> AuthResult<Option<Invitation>> {
+            let invitation = sqlx::query_as::<_, Invitation>(
+                r#"
+                SELECT id, organization_id, email, role, status, inviter_id, expires_at, created_at
+                FROM invitation
+                WHERE organization_id = $1 AND LOWER(email) = LOWER($2) AND status = 'pending'
+                "#,
+            )
+            .bind(organization_id)
+            .bind(email)
+            .fetch_optional(&self.pool)
+            .await?;
+
+            Ok(invitation)
+        }
+
+        async fn update_invitation_status(
+            &self,
+            id: &str,
+            status: InvitationStatus,
+        ) -> AuthResult<Invitation> {
+            let invitation = sqlx::query_as::<_, Invitation>(
+                r#"
+                UPDATE invitation SET status = $1
+                WHERE id = $2
+                RETURNING id, organization_id, email, role, status, inviter_id, expires_at, created_at
+                "#,
+            )
+            .bind(status.to_string())
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await?;
+
+            Ok(invitation)
+        }
+
+        async fn list_organization_invitations(
+            &self,
+            organization_id: &str,
+        ) -> AuthResult<Vec<Invitation>> {
+            let invitations = sqlx::query_as::<_, Invitation>(
+                r#"
+                SELECT id, organization_id, email, role, status, inviter_id, expires_at, created_at
+                FROM invitation
+                WHERE organization_id = $1
+                ORDER BY created_at DESC
+                "#,
+            )
+            .bind(organization_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+            Ok(invitations)
+        }
+
+        async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>> {
+            let invitations = sqlx::query_as::<_, Invitation>(
+                r#"
+                SELECT id, organization_id, email, role, status, inviter_id, expires_at, created_at
+                FROM invitation
+                WHERE LOWER(email) = LOWER($1) AND status = 'pending' AND expires_at > NOW()
+                ORDER BY created_at DESC
+                "#,
+            )
+            .bind(email)
+            .fetch_all(&self.pool)
+            .await?;
+
+            Ok(invitations)
+        }
+
+        // Session organization support
+        async fn update_session_active_organization(
+            &self,
+            token: &str,
+            organization_id: Option<&str>,
+        ) -> AuthResult<Session> {
+            let session = sqlx::query_as::<_, Session>(
+                r#"
+                UPDATE sessions SET active_organization_id = $1, updated_at = NOW()
+                WHERE token = $2 AND active = true
+                RETURNING id, user_id, token, expires_at, created_at, updated_at, ip_address, user_agent, active, impersonated_by, active_organization_id
+                "#,
+            )
+            .bind(organization_id)
+            .bind(token)
+            .fetch_one(&self.pool)
+            .await?;
+
+            Ok(session)
         }
     }
 }

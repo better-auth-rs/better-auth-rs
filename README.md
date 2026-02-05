@@ -93,8 +93,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 |-------|-------------|
 | [`better-auth`](https://crates.io/crates/better-auth) | Main crate, re-exports and Axum integration |
 | [`better-auth-core`](https://crates.io/crates/better-auth-core) | Core abstractions: traits, config, middleware, error handling |
-| [`better-auth-api`](https://crates.io/crates/better-auth-api) | Plugin implementations (email/password, session management, etc.) |
-| [`better-auth-entity`](https://crates.io/crates/better-auth-entity) | Entity definitions (User, Session, Account) |
+| [`better-auth-api`](https://crates.io/crates/better-auth-api) | Plugin implementations (email/password, session management, organization, etc.) |
+| [`better-auth-entity`](https://crates.io/crates/better-auth-entity) | Entity definitions (User, Session, Account, Organization, Member, Invitation) |
+| [`better-auth-migration`](https://crates.io/crates/better-auth-migration) | Database migrations using sea-orm-migration |
 
 ## Plugins
 
@@ -105,6 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | Email Verification | Done | Email verification workflows |
 | Session Management | Done | Session listing and revocation |
 | Account Management | Done | Account linking and unlinking |
+| Organization | Done | Multi-tenant organizations with RBAC |
 | OAuth | Planned | Social sign-in (OAuth 2.0) |
 | Two-Factor Auth | Planned | TOTP, backup codes |
 
@@ -113,19 +115,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 Endpoints are registered by plugins:
 
 ```
+# Authentication
 POST /sign-up/email          # User registration
 POST /sign-in/email          # Email-based login
 POST /sign-in/username       # Username-based login
+
+# Password Management
 POST /forget-password        # Password reset request
 POST /reset-password         # Password reset confirmation
 POST /change-password        # Change password (authenticated)
 POST /set-password           # Set password (authenticated)
+
+# Email Verification
 POST /send-verification-email
 POST /verify-email
+
+# Session Management
 GET  /sessions               # List active sessions
 POST /revoke-session         # Revoke a session
+
+# Account Management
 GET  /accounts               # List linked accounts
 POST /unlink-account         # Unlink an account
+
+# Organization (multi-tenant)
+POST /organization/create           # Create organization
+POST /organization/update           # Update organization
+POST /organization/delete           # Delete organization
+GET  /organization/list             # List user's organizations
+GET  /organization/get-full-organization
+POST /organization/set-active       # Set active organization
+POST /organization/leave            # Leave organization
+POST /organization/check-slug       # Check slug availability
+
+# Organization Members
+GET  /organization/get-active-member
+GET  /organization/list-members
+POST /organization/remove-member
+POST /organization/update-member-role
+
+# Organization Invitations
+POST /organization/invite-member
+GET  /organization/get-invitation
+GET  /organization/list-invitations
+POST /organization/accept-invitation
+POST /organization/reject-invitation
+POST /organization/cancel-invitation
+
+# RBAC
+POST /organization/has-permission   # Check permissions
 ```
 
 ## Database Adapters

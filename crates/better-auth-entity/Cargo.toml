@@ -17,5 +17,7 @@ serde_json = { workspace = true }
 # Data structures
 uuid = { workspace = true }
 ipnetwork = { version = "0.20", features = ["serde"] } # Version 0.21 is not compatible with sea-orm 1.1.16
+# Time handling
+chrono = { workspace = true }
 # OpenAPI
 utoipa = { workspace = true }
