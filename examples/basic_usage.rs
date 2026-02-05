@@ -1,7 +1,7 @@
 use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, EmailVerificationPlugin,
-    PasswordManagementPlugin, SessionManagementPlugin,
+    OrganizationPlugin, PasswordManagementPlugin, SessionManagementPlugin,
 };
 use better_auth::types::{AuthRequest, HttpMethod};
 use better_auth::{AuthConfig, BetterAuth};
@@ -16,7 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .base_url("http://localhost:3000")
         .password_min_length(8);
 
-    // Build the authentication system with all Phase 1 plugins
+    // Build the authentication system with all plugins
     let auth = BetterAuth::new(config)
         .database(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
@@ -24,6 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .plugin(EmailVerificationPlugin::new())
         .plugin(SessionManagementPlugin::new())
         .plugin(AccountManagementPlugin::new())
+        .plugin(OrganizationPlugin::new())
         .build()
         .await?;
 
@@ -143,6 +144,108 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Status: {}", response.status);
     let data = parse_body(&response.body);
     println!("Accounts: {}\n", data["accounts"]);
+
+    // --- Create organization ---
+    println!("=== Create organization ===");
+    let body = serde_json::json!({
+        "name": "Acme Corp",
+        "slug": "acme-corp"
+    });
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/organization/create",
+        Some(&body),
+        Some(&token),
+    )
+    .await;
+    println!("Status: {}", response.status);
+    let data = parse_body(&response.body);
+    let org_id = data["id"].as_str().unwrap_or_default().to_string();
+    println!("Organization: {} ({})", data["name"], data["slug"]);
+    println!("Org ID: {}\n", org_id);
+
+    // --- List organizations ---
+    println!("=== List organizations ===");
+    let response = send(
+        &auth,
+        HttpMethod::Get,
+        "/organization/list",
+        None,
+        Some(&token),
+    )
+    .await;
+    println!("Status: {}", response.status);
+    let data = parse_body(&response.body);
+    println!(
+        "Organizations: {}\n",
+        data.as_array().map(|a| a.len()).unwrap_or(0)
+    );
+
+    // --- Check slug availability ---
+    println!("=== Check slug availability ===");
+    let body = serde_json::json!({ "slug": "acme-corp" });
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/organization/check-slug",
+        Some(&body),
+        Some(&token),
+    )
+    .await;
+    println!("Status: {}", response.status);
+    let data = parse_body(&response.body);
+    println!("Slug 'acme-corp' available: {}\n", data["status"]);
+
+    // --- Set active organization ---
+    println!("=== Set active organization ===");
+    let body = serde_json::json!({ "organizationId": org_id });
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/organization/set-active",
+        Some(&body),
+        Some(&token),
+    )
+    .await;
+    println!("Status: {}\n", response.status);
+
+    // --- Invite member ---
+    println!("=== Invite member ===");
+    let body = serde_json::json!({
+        "organizationId": org_id,
+        "email": "colleague@example.com",
+        "role": "member"
+    });
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/organization/invite-member",
+        Some(&body),
+        Some(&token),
+    )
+    .await;
+    println!("Status: {}", response.status);
+    let data = parse_body(&response.body);
+    println!("Invitation ID: {}\n", data["id"]);
+
+    // --- Update organization ---
+    println!("=== Update organization ===");
+    let body = serde_json::json!({
+        "organizationId": org_id,
+        "name": "Acme Corporation"
+    });
+    let response = send(
+        &auth,
+        HttpMethod::Post,
+        "/organization/update",
+        Some(&body),
+        Some(&token),
+    )
+    .await;
+    println!("Status: {}", response.status);
+    let data = parse_body(&response.body);
+    println!("Updated name: {}\n", data["name"]);
 
     // --- Sign out ---
     println!("=== Sign out ===");

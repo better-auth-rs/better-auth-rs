@@ -9,7 +9,8 @@ use axum::{
 use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::handlers::AxumIntegration;
 use better_auth::plugins::{
-    AccountManagementPlugin, EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
+    AccountManagementPlugin, EmailPasswordPlugin, OrganizationPlugin,
+    PasswordManagementPlugin, SessionManagementPlugin,
 };
 use better_auth::{AuthConfig, BetterAuth};
 use chrono;
@@ -76,6 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new())
             .plugin(AccountManagementPlugin::new())
+            .plugin(OrganizationPlugin::new())
             .build()
             .await?,
     );
@@ -116,6 +118,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Account Management:");
     println!("     GET  /auth/list-accounts        - List linked accounts (auth)");
     println!("     POST /auth/unlink-account       - Unlink an account (auth)");
+    println!("   Organization:");
+    println!("     POST /auth/organization/create           - Create organization (auth)");
+    println!("     POST /auth/organization/update           - Update organization (auth)");
+    println!("     POST /auth/organization/delete           - Delete organization (auth)");
+    println!("     GET  /auth/organization/list             - List organizations (auth)");
+    println!("     GET  /auth/organization/get-full-organization - Get full org (auth)");
+    println!("     POST /auth/organization/set-active       - Set active org (auth)");
+    println!("     POST /auth/organization/leave            - Leave organization (auth)");
+    println!("     POST /auth/organization/check-slug       - Check slug availability (auth)");
+    println!("   Organization Members:");
+    println!("     GET  /auth/organization/get-active-member  - Get active member (auth)");
+    println!("     GET  /auth/organization/list-members       - List members (auth)");
+    println!("     POST /auth/organization/remove-member      - Remove member (auth)");
+    println!("     POST /auth/organization/update-member-role - Update role (auth)");
+    println!("   Organization Invitations:");
+    println!("     POST /auth/organization/invite-member      - Invite member (auth)");
+    println!("     GET  /auth/organization/get-invitation     - Get invitation (auth)");
+    println!("     GET  /auth/organization/list-invitations   - List invitations (auth)");
+    println!("     POST /auth/organization/accept-invitation  - Accept invitation (auth)");
+    println!("     POST /auth/organization/reject-invitation  - Reject invitation (auth)");
+    println!("     POST /auth/organization/cancel-invitation  - Cancel invitation (auth)");
+    println!("     POST /auth/organization/has-permission     - Check permission (auth)");
     println!("   Other:");
     println!("     GET  /auth/ok                   - Health check");
     println!("     GET  /api/profile               - Protected API route");
@@ -263,6 +287,23 @@ async fn public_route() -> Json<ApiResponse<serde_json::Value>> {
             "GET  /auth/delete-user/callback",
             "GET  /auth/list-accounts (protected)",
             "POST /auth/unlink-account (protected)",
+            "POST /auth/organization/create (protected)",
+            "POST /auth/organization/update (protected)",
+            "POST /auth/organization/delete (protected)",
+            "GET  /auth/organization/list (protected)",
+            "GET  /auth/organization/get-full-organization (protected)",
+            "POST /auth/organization/set-active (protected)",
+            "POST /auth/organization/leave (protected)",
+            "POST /auth/organization/check-slug (protected)",
+            "GET  /auth/organization/get-active-member (protected)",
+            "GET  /auth/organization/list-members (protected)",
+            "POST /auth/organization/remove-member (protected)",
+            "POST /auth/organization/update-member-role (protected)",
+            "POST /auth/organization/invite-member (protected)",
+            "POST /auth/organization/accept-invitation (protected)",
+            "POST /auth/organization/reject-invitation (protected)",
+            "POST /auth/organization/cancel-invitation (protected)",
+            "POST /auth/organization/has-permission (protected)",
             "GET  /auth/ok",
             "GET  /api/profile (protected)",
             "GET  /api/protected (protected)",

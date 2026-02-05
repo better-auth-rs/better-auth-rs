@@ -169,7 +169,17 @@ POST /organization/has-permission   # Check permissions
 ## Database Adapters
 
 - **MemoryDatabaseAdapter** - In-memory storage for development and testing
-- **SqlxAdapter** - PostgreSQL with connection pooling and migrations (`sqlx-postgres` feature)
+- **SqlxAdapter** - PostgreSQL with connection pooling (`sqlx-postgres` feature)
+
+### Migrations
+
+Database migrations are managed via `better-auth-migration` (sea-orm-migration):
+
+```bash
+cargo install sea-orm-cli
+export DATABASE_URL="postgresql://user:pass@localhost:5432/better_auth"
+sea-orm-cli migrate up -d crates/better-auth-migration
+```
 
 ## Feature Flags
 
