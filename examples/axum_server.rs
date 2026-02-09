@@ -9,8 +9,8 @@ use axum::{
 use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::handlers::AxumIntegration;
 use better_auth::plugins::{
-    AccountManagementPlugin, EmailPasswordPlugin, OrganizationPlugin,
-    PasswordManagementPlugin, SessionManagementPlugin,
+    AccountManagementPlugin, EmailPasswordPlugin, OrganizationPlugin, PasswordManagementPlugin,
+    SessionManagementPlugin,
 };
 use better_auth::{AuthConfig, BetterAuth};
 use chrono;

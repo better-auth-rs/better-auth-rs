@@ -109,11 +109,7 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
-                    .col(
-                        ColumnDef::new(Sessions::UserId)
-                            .string_len(255)
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Sessions::UserId).string_len(255).not_null())
                     .col(
                         ColumnDef::new(Sessions::Token)
                             .string_len(255)
@@ -221,22 +217,12 @@ impl MigrationTrait for Migration {
                             .string_len(255)
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(Accounts::UserId)
-                            .string_len(255)
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Accounts::UserId).string_len(255).not_null())
                     .col(ColumnDef::new(Accounts::AccessToken).text())
                     .col(ColumnDef::new(Accounts::RefreshToken).text())
                     .col(ColumnDef::new(Accounts::IdToken).text())
-                    .col(
-                        ColumnDef::new(Accounts::AccessTokenExpiresAt)
-                            .timestamp_with_time_zone(),
-                    )
-                    .col(
-                        ColumnDef::new(Accounts::RefreshTokenExpiresAt)
-                            .timestamp_with_time_zone(),
-                    )
+                    .col(ColumnDef::new(Accounts::AccessTokenExpiresAt).timestamp_with_time_zone())
+                    .col(ColumnDef::new(Accounts::RefreshTokenExpiresAt).timestamp_with_time_zone())
                     .col(ColumnDef::new(Accounts::Scope).text())
                     .col(ColumnDef::new(Accounts::Password).text())
                     .col(

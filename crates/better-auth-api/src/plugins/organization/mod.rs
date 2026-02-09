@@ -116,69 +116,69 @@ impl AuthPlugin for OrganizationPlugin {
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             // Organization CRUD
-            (HttpMethod::Post, "/organization/create") => {
-                Ok(Some(handlers::org::handle_create_organization(req, ctx, &self.config).await?))
-            }
-            (HttpMethod::Post, "/organization/update") => {
-                Ok(Some(handlers::org::handle_update_organization(req, ctx, &self.config).await?))
-            }
-            (HttpMethod::Post, "/organization/delete") => {
-                Ok(Some(handlers::org::handle_delete_organization(req, ctx, &self.config).await?))
-            }
-            (HttpMethod::Get, "/organization/list") => {
-                Ok(Some(handlers::org::handle_list_organizations(req, ctx).await?))
-            }
-            (HttpMethod::Get, "/organization/get-full-organization") => {
-                Ok(Some(handlers::org::handle_get_full_organization(req, ctx).await?))
-            }
+            (HttpMethod::Post, "/organization/create") => Ok(Some(
+                handlers::org::handle_create_organization(req, ctx, &self.config).await?,
+            )),
+            (HttpMethod::Post, "/organization/update") => Ok(Some(
+                handlers::org::handle_update_organization(req, ctx, &self.config).await?,
+            )),
+            (HttpMethod::Post, "/organization/delete") => Ok(Some(
+                handlers::org::handle_delete_organization(req, ctx, &self.config).await?,
+            )),
+            (HttpMethod::Get, "/organization/list") => Ok(Some(
+                handlers::org::handle_list_organizations(req, ctx).await?,
+            )),
+            (HttpMethod::Get, "/organization/get-full-organization") => Ok(Some(
+                handlers::org::handle_get_full_organization(req, ctx).await?,
+            )),
             (HttpMethod::Post, "/organization/check-slug") => {
                 Ok(Some(handlers::org::handle_check_slug(req, ctx).await?))
             }
-            (HttpMethod::Post, "/organization/set-active") => {
-                Ok(Some(handlers::org::handle_set_active_organization(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/organization/leave") => {
-                Ok(Some(handlers::org::handle_leave_organization(req, ctx).await?))
-            }
+            (HttpMethod::Post, "/organization/set-active") => Ok(Some(
+                handlers::org::handle_set_active_organization(req, ctx).await?,
+            )),
+            (HttpMethod::Post, "/organization/leave") => Ok(Some(
+                handlers::org::handle_leave_organization(req, ctx).await?,
+            )),
             // Member management
-            (HttpMethod::Get, "/organization/get-active-member") => {
-                Ok(Some(handlers::member::handle_get_active_member(req, ctx).await?))
-            }
+            (HttpMethod::Get, "/organization/get-active-member") => Ok(Some(
+                handlers::member::handle_get_active_member(req, ctx).await?,
+            )),
             (HttpMethod::Get, "/organization/list-members") => {
                 Ok(Some(handlers::member::handle_list_members(req, ctx).await?))
             }
-            (HttpMethod::Post, "/organization/remove-member") => {
-                Ok(Some(handlers::member::handle_remove_member(req, ctx, &self.config).await?))
-            }
-            (HttpMethod::Post, "/organization/update-member-role") => {
-                Ok(Some(handlers::member::handle_update_member_role(req, ctx, &self.config).await?))
-            }
+            (HttpMethod::Post, "/organization/remove-member") => Ok(Some(
+                handlers::member::handle_remove_member(req, ctx, &self.config).await?,
+            )),
+            (HttpMethod::Post, "/organization/update-member-role") => Ok(Some(
+                handlers::member::handle_update_member_role(req, ctx, &self.config).await?,
+            )),
             // Invitations
-            (HttpMethod::Post, "/organization/invite-member") => {
-                Ok(Some(handlers::invitation::handle_invite_member(req, ctx, &self.config).await?))
-            }
-            (HttpMethod::Get, "/organization/get-invitation") => {
-                Ok(Some(handlers::invitation::handle_get_invitation(req, ctx).await?))
-            }
-            (HttpMethod::Get, "/organization/list-invitations") => {
-                Ok(Some(handlers::invitation::handle_list_invitations(req, ctx).await?))
-            }
-            (HttpMethod::Get, "/organization/list-user-invitations") => {
-                Ok(Some(handlers::invitation::handle_list_user_invitations(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/organization/accept-invitation") => {
-                Ok(Some(handlers::invitation::handle_accept_invitation(req, ctx, &self.config).await?))
-            }
-            (HttpMethod::Post, "/organization/reject-invitation") => {
-                Ok(Some(handlers::invitation::handle_reject_invitation(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/organization/cancel-invitation") => {
-                Ok(Some(handlers::invitation::handle_cancel_invitation(req, ctx, &self.config).await?))
-            }
+            (HttpMethod::Post, "/organization/invite-member") => Ok(Some(
+                handlers::invitation::handle_invite_member(req, ctx, &self.config).await?,
+            )),
+            (HttpMethod::Get, "/organization/get-invitation") => Ok(Some(
+                handlers::invitation::handle_get_invitation(req, ctx).await?,
+            )),
+            (HttpMethod::Get, "/organization/list-invitations") => Ok(Some(
+                handlers::invitation::handle_list_invitations(req, ctx).await?,
+            )),
+            (HttpMethod::Get, "/organization/list-user-invitations") => Ok(Some(
+                handlers::invitation::handle_list_user_invitations(req, ctx).await?,
+            )),
+            (HttpMethod::Post, "/organization/accept-invitation") => Ok(Some(
+                handlers::invitation::handle_accept_invitation(req, ctx, &self.config).await?,
+            )),
+            (HttpMethod::Post, "/organization/reject-invitation") => Ok(Some(
+                handlers::invitation::handle_reject_invitation(req, ctx).await?,
+            )),
+            (HttpMethod::Post, "/organization/cancel-invitation") => Ok(Some(
+                handlers::invitation::handle_cancel_invitation(req, ctx, &self.config).await?,
+            )),
             // Permission check
-            (HttpMethod::Post, "/organization/has-permission") => {
-                Ok(Some(handlers::handle_has_permission(req, ctx, &self.config).await?))
-            }
+            (HttpMethod::Post, "/organization/has-permission") => Ok(Some(
+                handlers::handle_has_permission(req, ctx, &self.config).await?,
+            )),
             _ => Ok(None),
         }
     }

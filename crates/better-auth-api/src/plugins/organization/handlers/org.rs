@@ -1,13 +1,13 @@
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
 use better_auth_core::types::{
-    AuthRequest, AuthResponse, CreateMember, CreateOrganization, FullOrganization,
-    MemberWithUser, UpdateOrganization,
+    AuthRequest, AuthResponse, CreateMember, CreateOrganization, FullOrganization, MemberWithUser,
+    UpdateOrganization,
 };
 
 use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::config::OrganizationConfig;
-use crate::plugins::organization::rbac::{has_permission_any, Action, Resource};
+use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
 use crate::plugins::organization::types::{
     CheckSlugRequest, CheckSlugResponse, CreateOrganizationRequest, CreateOrganizationResponse,
     DeleteOrganizationRequest, GetFullOrganizationQuery, LeaveOrganizationRequest,
@@ -28,16 +28,14 @@ pub async fn handle_create_organization(
 
     // Check if user can create organizations
     if !config.allow_user_to_create_organization {
-        return Err(AuthError::forbidden(
-            "Organization creation is not allowed",
-        ));
+        return Err(AuthError::forbidden("Organization creation is not allowed"));
     }
 
     // Check organization limit
     if let Some(limit) = config.organization_limit {
         let user_orgs = ctx.database.list_user_organizations(&user.id).await?;
         if user_orgs.len() >= limit {
-            return Err(AuthError::bad_request(&format!(
+            return Err(AuthError::bad_request(format!(
                 "Organization limit of {} reached",
                 limit
             )));
@@ -104,17 +102,12 @@ pub async fn handle_update_organization(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: UpdateOrganizationRequest = req.body_as_json().map_err(|e| {
-        AuthError::bad_request(&format!("Invalid request body: {}", e))
-    })?;
+    let body: UpdateOrganizationRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
 
-    let org_id = resolve_organization_id(
-        body.organization_id.as_deref(),
-        None,
-        &session,
-        ctx,
-    )
-    .await?;
+    let org_id =
+        resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx).await?;
 
     // Check permission
     let member = ctx
@@ -135,12 +128,11 @@ pub async fn handle_update_organization(
     }
 
     // Check if new slug is available (if changing)
-    if let Some(ref new_slug) = body.slug {
-        if let Some(existing) = ctx.database.get_organization_by_slug(new_slug).await? {
-            if existing.id != org_id {
-                return Err(AuthError::bad_request("Slug is already taken"));
-            }
-        }
+    if let Some(ref new_slug) = body.slug
+        && let Some(existing) = ctx.database.get_organization_by_slug(new_slug).await?
+        && existing.id != org_id
+    {
+        return Err(AuthError::bad_request("Slug is already taken"));
     }
 
     // Update organization
@@ -166,9 +158,9 @@ pub async fn handle_delete_organization(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
-    let body: DeleteOrganizationRequest = req.body_as_json().map_err(|e| {
-        AuthError::bad_request(&format!("Invalid request body: {}", e))
-    })?;
+    let body: DeleteOrganizationRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
 
     // Check if deletion is allowed
     if config.disable_organization_deletion {
@@ -281,9 +273,9 @@ pub async fn handle_get_full_organization(
 /// Handle check slug request
 pub async fn handle_check_slug(req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
     let _session = require_session(req, ctx).await?;
-    let body: CheckSlugRequest = req.body_as_json().map_err(|e| {
-        AuthError::bad_request(&format!("Invalid request body: {}", e))
-    })?;
+    let body: CheckSlugRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
 
     let exists = ctx
         .database
@@ -302,9 +294,9 @@ pub async fn handle_set_active_organization(
     ctx: &AuthContext,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: SetActiveOrganizationRequest = req.body_as_json().map_err(|e| {
-        AuthError::bad_request(&format!("Invalid request body: {}", e))
-    })?;
+    let body: SetActiveOrganizationRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
 
     // Resolve organization
     let org_id = if body.organization_id.is_some() || body.organization_slug.is_some() {
@@ -344,9 +336,9 @@ pub async fn handle_leave_organization(
     ctx: &AuthContext,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: LeaveOrganizationRequest = req.body_as_json().map_err(|e| {
-        AuthError::bad_request(&format!("Invalid request body: {}", e))
-    })?;
+    let body: LeaveOrganizationRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
 
     // Check membership
     let member = ctx
@@ -391,15 +383,7 @@ fn parse_query<T: Default + serde::de::DeserializeOwned>(
     query: &std::collections::HashMap<String, String>,
 ) -> T {
     // Convert HashMap<String, String> to serde_json::Value for deserialization
-    let json_value = serde_json::to_value(query).unwrap_or(serde_json::Value::Object(Default::default()));
+    let json_value =
+        serde_json::to_value(query).unwrap_or(serde_json::Value::Object(Default::default()));
     serde_json::from_value(json_value).unwrap_or_default()
-}
-
-impl Default for GetFullOrganizationQuery {
-    fn default() -> Self {
-        Self {
-            organization_id: None,
-            organization_slug: None,
-        }
-    }
 }

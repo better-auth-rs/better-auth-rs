@@ -9,7 +9,7 @@ pub enum Resource {
 }
 
 impl Resource {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "organization" => Some(Self::Organization),
             "member" => Some(Self::Member),
@@ -30,7 +30,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "create" => Some(Self::Create),
             "read" => Some(Self::Read),
@@ -63,10 +63,7 @@ pub fn default_roles() -> HashMap<String, Role> {
             name: "owner".to_string(),
             permissions: {
                 let mut p = HashMap::new();
-                p.insert(
-                    Resource::Organization,
-                    vec![Action::Update, Action::Delete],
-                );
+                p.insert(Resource::Organization, vec![Action::Update, Action::Delete]);
                 p.insert(
                     Resource::Member,
                     vec![Action::Create, Action::Update, Action::Delete],
@@ -136,10 +133,10 @@ pub fn has_permission(
     }
 
     // Fall back to default roles
-    if let Some(role_def) = default.get(role) {
-        if let Some(actions) = role_def.permissions.get(resource) {
-            return actions.contains(action);
-        }
+    if let Some(role_def) = default.get(role)
+        && let Some(actions) = role_def.permissions.get(resource)
+    {
+        return actions.contains(action);
     }
 
     false

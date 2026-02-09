@@ -674,7 +674,8 @@ mod postgres_impls {
                 name: row.try_get("name")?,
                 slug: row.try_get("slug")?,
                 logo: row.try_get("logo")?,
-                metadata: row.try_get::<Option<sqlx::types::Json<serde_json::Value>>, _>("metadata")?
+                metadata: row
+                    .try_get::<Option<sqlx::types::Json<serde_json::Value>>, _>("metadata")?
                     .map(|j| j.0),
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,

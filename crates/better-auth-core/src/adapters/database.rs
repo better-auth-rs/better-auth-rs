@@ -114,7 +114,7 @@ pub struct MemoryDatabaseAdapter {
     sessions: Arc<Mutex<HashMap<String, Session>>>,
     accounts: Arc<Mutex<HashMap<String, Account>>>,
     verifications: Arc<Mutex<HashMap<String, Verification>>>,
-    email_index: Arc<Mutex<HashMap<String, String>>>,    // email -> user_id
+    email_index: Arc<Mutex<HashMap<String, String>>>, // email -> user_id
     username_index: Arc<Mutex<HashMap<String, String>>>, // username -> user_id
     // Organization data
     organizations: Arc<Mutex<HashMap<String, Organization>>>,
@@ -500,7 +500,10 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
     }
 
     // Organization operations
-    async fn create_organization(&self, create_org: CreateOrganization) -> AuthResult<Organization> {
+    async fn create_organization(
+        &self,
+        create_org: CreateOrganization,
+    ) -> AuthResult<Organization> {
         let mut organizations = self.organizations.lock().unwrap();
         let mut slug_index = self.slug_index.lock().unwrap();
 
@@ -557,16 +560,16 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
             .ok_or_else(|| AuthError::not_found("Organization not found"))?;
 
         // Update slug index if slug changed
-        if let Some(new_slug) = &update.slug {
-            if new_slug != &org.slug {
-                // Check if new slug already exists
-                if slug_index.contains_key(new_slug) {
-                    return Err(AuthError::conflict("Organization slug already exists"));
-                }
-                slug_index.remove(&org.slug);
-                slug_index.insert(new_slug.clone(), id.to_string());
-                org.slug = new_slug.clone();
+        if let Some(new_slug) = &update.slug
+            && new_slug != &org.slug
+        {
+            // Check if new slug already exists
+            if slug_index.contains_key(new_slug) {
+                return Err(AuthError::conflict("Organization slug already exists"));
             }
+            slug_index.remove(&org.slug);
+            slug_index.insert(new_slug.clone(), id.to_string());
+            org.slug = new_slug.clone();
         }
 
         if let Some(name) = update.name {
@@ -624,12 +627,14 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
         let mut members = self.members.lock().unwrap();
 
         // Check if member already exists
-        let exists = members
-            .values()
-            .any(|m| m.organization_id == create_member.organization_id && m.user_id == create_member.user_id);
+        let exists = members.values().any(|m| {
+            m.organization_id == create_member.organization_id && m.user_id == create_member.user_id
+        });
 
         if exists {
-            return Err(AuthError::conflict("User is already a member of this organization"));
+            return Err(AuthError::conflict(
+                "User is already a member of this organization",
+            ));
         }
 
         let id = Uuid::new_v4().to_string();
@@ -663,22 +668,22 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
         let members = self.members.lock().unwrap();
         let users = self.users.lock().unwrap();
 
-        if let Some(member) = members.get(id) {
-            if let Some(user) = users.get(&member.user_id) {
-                return Ok(Some(MemberWithUser {
-                    id: member.id.clone(),
-                    organization_id: member.organization_id.clone(),
-                    user_id: member.user_id.clone(),
-                    role: member.role.clone(),
-                    created_at: member.created_at,
-                    user: MemberUser {
-                        id: user.id.clone(),
-                        email: user.email.clone(),
-                        name: user.name.clone(),
-                        image: user.image.clone(),
-                    },
-                }));
-            }
+        if let Some(member) = members.get(id)
+            && let Some(user) = users.get(&member.user_id)
+        {
+            return Ok(Some(MemberWithUser {
+                id: member.id.clone(),
+                organization_id: member.organization_id.clone(),
+                user_id: member.user_id.clone(),
+                role: member.role.clone(),
+                created_at: member.created_at,
+                user: MemberUser {
+                    id: user.id.clone(),
+                    email: user.email.clone(),
+                    name: user.name.clone(),
+                    image: user.image.clone(),
+                },
+            }));
         }
 
         Ok(None)
@@ -853,9 +858,7 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
     ) -> AuthResult<Session> {
         let mut sessions = self.sessions.lock().unwrap();
 
-        let session = sessions
-            .get_mut(token)
-            .ok_or(AuthError::SessionNotFound)?;
+        let session = sessions.get_mut(token).ok_or(AuthError::SessionNotFound)?;
 
         session.active_organization_id = organization_id.map(|s| s.to_string());
         session.updated_at = Utc::now();
@@ -1335,7 +1338,10 @@ pub mod sqlx_adapter {
         }
 
         // Organization operations
-        async fn create_organization(&self, create_org: CreateOrganization) -> AuthResult<Organization> {
+        async fn create_organization(
+            &self,
+            create_org: CreateOrganization,
+        ) -> AuthResult<Organization> {
             let id = create_org.id.unwrap_or_else(|| Uuid::new_v4().to_string());
             let now = Utc::now();
 
@@ -1350,7 +1356,9 @@ pub mod sqlx_adapter {
             .bind(&create_org.name)
             .bind(&create_org.slug)
             .bind(&create_org.logo)
-            .bind(sqlx::types::Json(create_org.metadata.unwrap_or(serde_json::json!({}))))
+            .bind(sqlx::types::Json(
+                create_org.metadata.unwrap_or(serde_json::json!({})),
+            ))
             .bind(&now)
             .bind(&now)
             .fetch_one(&self.pool)
@@ -1415,7 +1423,10 @@ pub mod sqlx_adapter {
             query.push_bind(id);
             query.push(" RETURNING id, name, slug, logo, metadata, created_at, updated_at");
 
-            let organization = query.build_query_as::<Organization>().fetch_one(&self.pool).await?;
+            let organization = query
+                .build_query_as::<Organization>()
+                .fetch_one(&self.pool)
+                .await?;
 
             Ok(organization)
         }
@@ -1469,7 +1480,11 @@ pub mod sqlx_adapter {
             Ok(member)
         }
 
-        async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>> {
+        async fn get_member(
+            &self,
+            organization_id: &str,
+            user_id: &str,
+        ) -> AuthResult<Option<Member>> {
             let member = sqlx::query_as::<_, Member>(
                 r#"
                 SELECT id, organization_id, user_id, role, created_at
@@ -1586,12 +1601,11 @@ pub mod sqlx_adapter {
         }
 
         async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize> {
-            let count: (i64,) = sqlx::query_as(
-                "SELECT COUNT(*) FROM member WHERE organization_id = $1",
-            )
-            .bind(organization_id)
-            .fetch_one(&self.pool)
-            .await?;
+            let count: (i64,) =
+                sqlx::query_as("SELECT COUNT(*) FROM member WHERE organization_id = $1")
+                    .bind(organization_id)
+                    .fetch_one(&self.pool)
+                    .await?;
 
             Ok(count.0 as usize)
         }

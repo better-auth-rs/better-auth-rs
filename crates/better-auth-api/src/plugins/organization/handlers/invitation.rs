@@ -6,11 +6,11 @@ use better_auth_core::types::{
 
 use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::config::OrganizationConfig;
-use crate::plugins::organization::rbac::{has_permission_any, Action, Resource};
+use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
 use crate::plugins::organization::types::{
-    AcceptInvitationRequest, AcceptInvitationResponse, CancelInvitationRequest,
-    GetInvitationQuery, GetInvitationResponse, InviteMemberRequest, InvitationResponse,
-    ListInvitationsQuery, RejectInvitationRequest, SuccessResponse,
+    AcceptInvitationRequest, AcceptInvitationResponse, CancelInvitationRequest, GetInvitationQuery,
+    GetInvitationResponse, InvitationResponse, InviteMemberRequest, ListInvitationsQuery,
+    RejectInvitationRequest, SuccessResponse,
 };
 
 /// Handle invite member request
@@ -25,7 +25,8 @@ pub async fn handle_invite_member(
         Err(resp) => return Ok(resp),
     };
 
-    let org_id = resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx).await?;
+    let org_id =
+        resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx).await?;
 
     // Check permission
     let member = ctx
@@ -49,7 +50,7 @@ pub async fn handle_invite_member(
     if let Some(limit) = config.membership_limit {
         let members = ctx.database.list_organization_members(&org_id).await?;
         if members.len() >= limit {
-            return Err(AuthError::bad_request(&format!(
+            return Err(AuthError::bad_request(format!(
                 "Membership limit of {} reached",
                 limit
             )));
@@ -64,7 +65,7 @@ pub async fn handle_invite_member(
             .filter(|i| i.status == InvitationStatus::Pending)
             .count();
         if pending_count >= limit {
-            return Err(AuthError::bad_request(&format!(
+            return Err(AuthError::bad_request(format!(
                 "Pending invitation limit of {} reached",
                 limit
             )));
@@ -72,15 +73,14 @@ pub async fn handle_invite_member(
     }
 
     // Check if user is already a member
-    if let Some(existing_user) = ctx.database.get_user_by_email(&body.email).await? {
-        if ctx
+    if let Some(existing_user) = ctx.database.get_user_by_email(&body.email).await?
+        && ctx
             .database
             .get_member(&org_id, &existing_user.id)
             .await?
             .is_some()
-        {
-            return Err(AuthError::bad_request("User is already a member"));
-        }
+    {
+        return Err(AuthError::bad_request("User is already a member"));
     }
 
     // Check for existing pending invitation
@@ -97,7 +97,8 @@ pub async fn handle_invite_member(
     }
 
     // Calculate expiration
-    let expires_at = chrono::Utc::now() + chrono::Duration::seconds(config.invitation_expires_in as i64);
+    let expires_at =
+        chrono::Utc::now() + chrono::Duration::seconds(config.invitation_expires_in as i64);
 
     // Create invitation
     let invitation_data = CreateInvitation {
@@ -193,10 +194,7 @@ pub async fn handle_list_user_invitations(
         .ok_or_else(|| AuthError::bad_request("User has no email"))?;
 
     // Get all pending invitations for user's email
-    let all_invitations = ctx
-        .database
-        .list_user_invitations(user_email)
-        .await?;
+    let all_invitations = ctx.database.list_user_invitations(user_email).await?;
 
     // Filter only pending and non-expired
     let now = chrono::Utc::now();
@@ -215,9 +213,9 @@ pub async fn handle_accept_invitation(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: AcceptInvitationRequest = req.body_as_json().map_err(|e| {
-        AuthError::bad_request(&format!("Invalid request body: {}", e))
-    })?;
+    let body: AcceptInvitationRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
 
     let invitation = ctx
         .database
@@ -237,7 +235,7 @@ pub async fn handle_accept_invitation(
 
     // Check if invitation is still pending
     if invitation.status != InvitationStatus::Pending {
-        return Err(AuthError::bad_request(&format!(
+        return Err(AuthError::bad_request(format!(
             "Invitation is {:?}",
             invitation.status
         )));
@@ -255,7 +253,9 @@ pub async fn handle_accept_invitation(
             .list_organization_members(&invitation.organization_id)
             .await?;
         if members.len() >= limit {
-            return Err(AuthError::bad_request("Organization membership limit reached"));
+            return Err(AuthError::bad_request(
+                "Organization membership limit reached",
+            ));
         }
     }
 
@@ -270,7 +270,9 @@ pub async fn handle_accept_invitation(
         ctx.database
             .update_invitation_status(&invitation.id, InvitationStatus::Accepted)
             .await?;
-        return Err(AuthError::bad_request("Already a member of this organization"));
+        return Err(AuthError::bad_request(
+            "Already a member of this organization",
+        ));
     }
 
     // Create member
@@ -321,9 +323,9 @@ pub async fn handle_reject_invitation(
     ctx: &AuthContext,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
-    let body: RejectInvitationRequest = req.body_as_json().map_err(|e| {
-        AuthError::bad_request(&format!("Invalid request body: {}", e))
-    })?;
+    let body: RejectInvitationRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
 
     let invitation = ctx
         .database
@@ -343,7 +345,7 @@ pub async fn handle_reject_invitation(
 
     // Check if invitation is still pending
     if invitation.status != InvitationStatus::Pending {
-        return Err(AuthError::bad_request(&format!(
+        return Err(AuthError::bad_request(format!(
             "Invitation is already {:?}",
             invitation.status
         )));
@@ -364,9 +366,9 @@ pub async fn handle_cancel_invitation(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
-    let body: CancelInvitationRequest = req.body_as_json().map_err(|e| {
-        AuthError::bad_request(&format!("Invalid request body: {}", e))
-    })?;
+    let body: CancelInvitationRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
 
     let invitation = ctx
         .database
@@ -394,7 +396,7 @@ pub async fn handle_cancel_invitation(
 
     // Check if invitation is still pending
     if invitation.status != InvitationStatus::Pending {
-        return Err(AuthError::bad_request(&format!(
+        return Err(AuthError::bad_request(format!(
             "Invitation is already {:?}",
             invitation.status
         )));
@@ -412,22 +414,7 @@ pub async fn handle_cancel_invitation(
 fn parse_query<T: Default + serde::de::DeserializeOwned>(
     query: &std::collections::HashMap<String, String>,
 ) -> T {
-    let json_value = serde_json::to_value(query).unwrap_or(serde_json::Value::Object(Default::default()));
+    let json_value =
+        serde_json::to_value(query).unwrap_or(serde_json::Value::Object(Default::default()));
     serde_json::from_value(json_value).unwrap_or_default()
-}
-
-impl Default for ListInvitationsQuery {
-    fn default() -> Self {
-        Self {
-            organization_id: None,
-        }
-    }
-}
-
-impl Default for GetInvitationQuery {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-        }
-    }
 }

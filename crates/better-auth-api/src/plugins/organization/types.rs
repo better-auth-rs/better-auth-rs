@@ -52,7 +52,7 @@ pub struct LeaveOrganizationRequest {
     pub organization_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct GetFullOrganizationQuery {
     #[serde(rename = "organizationId")]
     pub organization_id: Option<String>,
@@ -92,7 +92,7 @@ pub struct UpdateMemberRoleRequest {
     pub organization_id: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct ListMembersQuery {
     #[serde(rename = "organizationId")]
     pub organization_id: Option<String>,
@@ -124,12 +124,12 @@ pub struct CancelInvitationRequest {
     pub invitation_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct GetInvitationQuery {
     pub id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct ListInvitationsQuery {
     #[serde(rename = "organizationId")]
     pub organization_id: Option<String>,

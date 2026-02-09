@@ -1,7 +1,7 @@
 use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::plugins::{
-    AccountManagementPlugin, EmailPasswordPlugin, EmailVerificationPlugin,
-    OrganizationPlugin, PasswordManagementPlugin, SessionManagementPlugin,
+    AccountManagementPlugin, EmailPasswordPlugin, EmailVerificationPlugin, OrganizationPlugin,
+    PasswordManagementPlugin, SessionManagementPlugin,
 };
 use better_auth::types::{AuthRequest, HttpMethod};
 use better_auth::{AuthConfig, BetterAuth};

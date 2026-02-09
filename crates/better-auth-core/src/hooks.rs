@@ -351,10 +351,7 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         self.inner.create_invitation(invitation).await
     }
 
-    async fn get_invitation_by_id(
-        &self,
-        id: &str,
-    ) -> AuthResult<Option<crate::types::Invitation>> {
+    async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<crate::types::Invitation>> {
         self.inner.get_invitation_by_id(id).await
     }
 
@@ -385,7 +382,10 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
             .await
     }
 
-    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<crate::types::Invitation>> {
+    async fn list_user_invitations(
+        &self,
+        email: &str,
+    ) -> AuthResult<Vec<crate::types::Invitation>> {
         self.inner.list_user_invitations(email).await
     }
 

@@ -4,7 +4,7 @@ use better_auth_core::types::{AuthRequest, AuthResponse, MemberWithUser};
 
 use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::config::OrganizationConfig;
-use crate::plugins::organization::rbac::{has_permission_any, Action, Resource};
+use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
 use crate::plugins::organization::types::{
     ListMembersQuery, ListMembersResponse, RemoveMemberRequest, SuccessResponse,
     UpdateMemberRoleRequest,
@@ -46,10 +46,7 @@ pub async fn handle_get_active_member(
 }
 
 /// Handle list members request
-pub async fn handle_list_members(
-    req: &AuthRequest,
-    ctx: &AuthContext,
-) -> AuthResult<AuthResponse> {
+pub async fn handle_list_members(req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
 
     // Parse query parameters
@@ -111,17 +108,12 @@ pub async fn handle_remove_member(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: RemoveMemberRequest = req.body_as_json().map_err(|e| {
-        AuthError::bad_request(&format!("Invalid request body: {}", e))
-    })?;
+    let body: RemoveMemberRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
 
-    let org_id = resolve_organization_id(
-        body.organization_id.as_deref(),
-        None,
-        &session,
-        ctx,
-    )
-    .await?;
+    let org_id =
+        resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx).await?;
 
     // Get the requester's membership
     let requester_member = ctx
@@ -219,17 +211,12 @@ pub async fn handle_update_member_role(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: UpdateMemberRoleRequest = req.body_as_json().map_err(|e| {
-        AuthError::bad_request(&format!("Invalid request body: {}", e))
-    })?;
+    let body: UpdateMemberRoleRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
 
-    let org_id = resolve_organization_id(
-        body.organization_id.as_deref(),
-        None,
-        &session,
-        ctx,
-    )
-    .await?;
+    let org_id =
+        resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx).await?;
 
     // Get requester's membership
     let requester_member = ctx
@@ -309,17 +296,7 @@ pub async fn handle_update_member_role(
 fn parse_query<T: Default + serde::de::DeserializeOwned>(
     query: &std::collections::HashMap<String, String>,
 ) -> T {
-    let json_value = serde_json::to_value(query).unwrap_or(serde_json::Value::Object(Default::default()));
+    let json_value =
+        serde_json::to_value(query).unwrap_or(serde_json::Value::Object(Default::default()));
     serde_json::from_value(json_value).unwrap_or_default()
-}
-
-impl Default for ListMembersQuery {
-    fn default() -> Self {
-        Self {
-            organization_id: None,
-            organization_slug: None,
-            limit: None,
-            offset: None,
-        }
-    }
 }

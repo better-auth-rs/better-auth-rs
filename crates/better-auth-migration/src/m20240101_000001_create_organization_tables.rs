@@ -239,21 +239,13 @@ impl MigrationTrait for Migration {
             .drop_index(Index::drop().name("idx_member_user_id").to_owned())
             .await?;
         manager
-            .drop_index(
-                Index::drop()
-                    .name("idx_member_organization_id")
-                    .to_owned(),
-            )
+            .drop_index(Index::drop().name("idx_member_organization_id").to_owned())
             .await?;
         manager
             .drop_index(Index::drop().name("idx_organization_slug").to_owned())
             .await?;
         manager
-            .drop_index(
-                Index::drop()
-                    .name("idx_member_org_user_unique")
-                    .to_owned(),
-            )
+            .drop_index(Index::drop().name("idx_member_org_user_unique").to_owned())
             .await?;
 
         // Drop tables in reverse order (due to foreign key constraints)

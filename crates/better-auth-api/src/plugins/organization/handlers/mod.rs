@@ -12,7 +12,7 @@ use better_auth_core::session::SessionManager;
 use better_auth_core::types::{AuthRequest, AuthResponse, Session, User};
 
 use super::config::OrganizationConfig;
-use super::rbac::{has_permission_any, Action, Resource};
+use super::rbac::{Action, Resource, has_permission_any};
 use super::types::{HasPermissionRequest, HasPermissionResponse};
 
 /// Helper function to require authenticated session
@@ -68,17 +68,12 @@ pub async fn handle_has_permission(
     let (user, session) = require_session(req, ctx).await?;
 
     // Manually deserialize since HasPermissionRequest doesn't need validation
-    let body: HasPermissionRequest = req.body_as_json().map_err(|e| {
-        AuthError::bad_request(&format!("Invalid request body: {}", e))
-    })?;
+    let body: HasPermissionRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
 
-    let org_id = resolve_organization_id(
-        body.organization_id.as_deref(),
-        None,
-        &session,
-        ctx,
-    )
-    .await?;
+    let org_id =
+        resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx).await?;
 
     // Get member to check their role
     let member = ctx
@@ -91,7 +86,7 @@ pub async fn handle_has_permission(
     let mut has_all_permissions = true;
 
     for (resource_str, actions) in &body.permissions {
-        let resource = match Resource::from_str(resource_str) {
+        let resource = match Resource::parse(resource_str) {
             Some(r) => r,
             None => {
                 has_all_permissions = false;
@@ -100,7 +95,7 @@ pub async fn handle_has_permission(
         };
 
         for action_str in actions {
-            let action = match Action::from_str(action_str) {
+            let action = match Action::parse(action_str) {
                 Some(a) => a,
                 None => {
                     has_all_permissions = false;
