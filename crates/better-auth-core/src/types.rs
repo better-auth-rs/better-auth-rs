@@ -977,4 +977,17 @@ mod postgres_impls {
             })
         }
     }
+
+    impl FromRow<'_, PgRow> for Verification {
+        fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
+            Ok(Self {
+                id: row.try_get("id")?,
+                identifier: row.try_get("identifier")?,
+                value: row.try_get("value")?,
+                expires_at: row.try_get("expires_at")?,
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            })
+        }
+    }
 }

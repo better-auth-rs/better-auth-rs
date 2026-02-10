@@ -131,16 +131,65 @@ pub trait DatabaseAdapter: Send + Sync + 'static {
 #[cfg(feature = "sqlx-postgres")]
 pub mod sqlx_adapter {
     use super::*;
+    use crate::error::AuthError;
+    use crate::types::{Account, Invitation, Member, Organization, Session, User, Verification};
     use sqlx::PgPool;
+    use sqlx::postgres::PgRow;
+    use std::marker::PhantomData;
+    use uuid::Uuid;
 
-    pub struct SqlxAdapter {
-        pool: PgPool,
+    /// Blanket trait combining all bounds needed for SQLx-based entity types.
+    ///
+    /// Any type that implements `sqlx::FromRow` plus the standard marker traits
+    /// automatically satisfies this bound. Custom entity types just need
+    /// `#[derive(sqlx::FromRow)]` (or a manual `FromRow` impl) alongside
+    /// their `Auth*` derive.
+    pub trait SqlxEntity:
+        for<'r> sqlx::FromRow<'r, PgRow> + Send + Sync + Unpin + Clone + 'static
+    {
     }
 
+    impl<T> SqlxEntity for T where
+        T: for<'r> sqlx::FromRow<'r, PgRow> + Send + Sync + Unpin + Clone + 'static
+    {
+    }
+
+    /// PostgreSQL database adapter via SQLx.
+    ///
+    /// Generic over entity types — use default type parameters for the built-in
+    /// types, or supply your own custom structs that implement `Auth*` + `sqlx::FromRow`.
+    ///
+    /// ```rust,ignore
+    /// // Using built-in types (no turbofish needed):
+    /// let adapter = SqlxAdapter::new("postgresql://...").await?;
+    ///
+    /// // Using custom types via type alias:
+    /// type AppDb = SqlxAdapter<AppUser, AppSession, AppAccount,
+    ///     AppOrg, AppMember, AppInvitation, AppVerification>;
+    /// let adapter = AppDb::from_pool(pool);
+    /// ```
+    pub struct SqlxAdapter<
+        U = User,
+        S = Session,
+        A = Account,
+        O = Organization,
+        M = Member,
+        I = Invitation,
+        V = Verification,
+    > {
+        pool: PgPool,
+        _phantom: PhantomData<(U, S, A, O, M, I, V)>,
+    }
+
+    /// Constructors for the default (built-in) entity types.
+    /// Use `from_pool()` with a type alias for custom type parameterizations.
     impl SqlxAdapter {
         pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
             let pool = PgPool::connect(database_url).await?;
-            Ok(Self { pool })
+            Ok(Self {
+                pool,
+                _phantom: PhantomData,
+            })
         }
 
         /// Create adapter with custom pool configuration
@@ -156,11 +205,20 @@ pub mod sqlx_adapter {
                 .max_lifetime(config.max_lifetime)
                 .connect(database_url)
                 .await?;
-            Ok(Self { pool })
+            Ok(Self {
+                pool,
+                _phantom: PhantomData,
+            })
         }
+    }
 
+    /// Methods available for all type parameterizations (including custom types).
+    impl<U, S, A, O, M, I, V> SqlxAdapter<U, S, A, O, M, I, V> {
         pub fn from_pool(pool: PgPool) -> Self {
-            Self { pool }
+            Self {
+                pool,
+                _phantom: PhantomData,
+            }
         }
 
         /// Test database connection
@@ -212,30 +270,35 @@ pub mod sqlx_adapter {
         pub idle: usize,
     }
 
-    use crate::error::AuthError;
-    use crate::types::{Account, Invitation, Member, Organization, Session, User, Verification};
-    use uuid::Uuid;
-
     #[async_trait]
-    impl DatabaseAdapter for SqlxAdapter {
-        type User = User;
-        type Session = Session;
-        type Account = Account;
-        type Organization = Organization;
-        type Member = Member;
-        type Invitation = Invitation;
-        type Verification = Verification;
+    impl<U, S, A, O, M, I, V> DatabaseAdapter for SqlxAdapter<U, S, A, O, M, I, V>
+    where
+        U: AuthUser + SqlxEntity,
+        S: AuthSession + SqlxEntity,
+        A: AuthAccount + SqlxEntity,
+        O: AuthOrganization + SqlxEntity,
+        M: AuthMember + SqlxEntity,
+        I: AuthInvitation + SqlxEntity,
+        V: AuthVerification + SqlxEntity,
+    {
+        type User = U;
+        type Session = S;
+        type Account = A;
+        type Organization = O;
+        type Member = M;
+        type Invitation = I;
+        type Verification = V;
 
-        async fn create_user(&self, create_user: CreateUser) -> AuthResult<User> {
+        async fn create_user(&self, create_user: CreateUser) -> AuthResult<U> {
             let id = create_user.id.unwrap_or_else(|| Uuid::new_v4().to_string());
             let now = Utc::now();
 
-            let user = sqlx::query_as::<_, User>(
+            let user = sqlx::query_as::<_, U>(
                 r#"
                 INSERT INTO users (id, email, name, image, email_verified, created_at, updated_at, metadata)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING id, email, name, image, email_verified, created_at, updated_at, metadata
-                "#
+                RETURNING *
+                "#,
             )
             .bind(&id)
             .bind(&create_user.email)
@@ -251,49 +314,34 @@ pub mod sqlx_adapter {
             Ok(user)
         }
 
-        async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<User>> {
-            let user = sqlx::query_as::<_, User>(
-                r#"
-                SELECT id, email, name, image, email_verified, created_at, updated_at, metadata
-                FROM users WHERE id = $1
-                "#,
-            )
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<U>> {
+            let user = sqlx::query_as::<_, U>("SELECT * FROM users WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
 
             Ok(user)
         }
 
-        async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<User>> {
-            let user = sqlx::query_as::<_, User>(
-                r#"
-                SELECT id, email, name, image, email_verified, created_at, updated_at, metadata
-                FROM users WHERE email = $1
-                "#,
-            )
-            .bind(email)
-            .fetch_optional(&self.pool)
-            .await?;
+        async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<U>> {
+            let user = sqlx::query_as::<_, U>("SELECT * FROM users WHERE email = $1")
+                .bind(email)
+                .fetch_optional(&self.pool)
+                .await?;
 
             Ok(user)
         }
 
-        async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<User>> {
-            let user = sqlx::query_as::<_, User>(
-                r#"
-                SELECT id, email, name, image, email_verified, created_at, updated_at, metadata
-                FROM users WHERE username = $1
-                "#,
-            )
-            .bind(username)
-            .fetch_optional(&self.pool)
-            .await?;
+        async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<U>> {
+            let user = sqlx::query_as::<_, U>("SELECT * FROM users WHERE username = $1")
+                .bind(username)
+                .fetch_optional(&self.pool)
+                .await?;
 
             Ok(user)
         }
 
-        async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<User> {
+        async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<U> {
             let mut query = sqlx::QueryBuilder::new("UPDATE users SET updated_at = NOW()");
             let mut has_updates = false;
 
@@ -328,7 +376,6 @@ pub mod sqlx_adapter {
             }
 
             if !has_updates {
-                // If no updates, just return the current user
                 return self
                     .get_user_by_id(id)
                     .await?
@@ -337,9 +384,9 @@ pub mod sqlx_adapter {
 
             query.push(" WHERE id = ");
             query.push_bind(id);
-            query.push(" RETURNING id, email, name, image, email_verified, created_at, updated_at, metadata");
+            query.push(" RETURNING *");
 
-            let user = query.build_query_as::<User>().fetch_one(&self.pool).await?;
+            let user = query.build_query_as::<U>().fetch_one(&self.pool).await?;
 
             Ok(user)
         }
@@ -353,17 +400,17 @@ pub mod sqlx_adapter {
             Ok(())
         }
 
-        async fn create_session(&self, create_session: CreateSession) -> AuthResult<Session> {
+        async fn create_session(&self, create_session: CreateSession) -> AuthResult<S> {
             let id = Uuid::new_v4().to_string();
             let token = format!("session_{}", Uuid::new_v4());
             let now = Utc::now();
 
-            let session = sqlx::query_as::<_, Session>(
+            let session = sqlx::query_as::<_, S>(
                 r#"
                 INSERT INTO sessions (id, user_id, token, expires_at, created_at, ip_address, user_agent, active)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING id, user_id, token, expires_at, created_at, ip_address, user_agent, active
-                "#
+                RETURNING *
+                "#,
             )
             .bind(&id)
             .bind(&create_session.user_id)
@@ -379,29 +426,23 @@ pub mod sqlx_adapter {
             Ok(session)
         }
 
-        async fn get_session(&self, token: &str) -> AuthResult<Option<Session>> {
-            let session = sqlx::query_as::<_, Session>(
-                r#"
-                SELECT id, user_id, token, expires_at, created_at, updated_at, ip_address, user_agent, active, impersonated_by, active_organization_id
-                FROM sessions
-                WHERE token = $1 AND active = true
-                "#
-            )
-            .bind(token)
-            .fetch_optional(&self.pool)
-            .await?;
+        async fn get_session(&self, token: &str) -> AuthResult<Option<S>> {
+            let session =
+                sqlx::query_as::<_, S>("SELECT * FROM sessions WHERE token = $1 AND active = true")
+                    .bind(token)
+                    .fetch_optional(&self.pool)
+                    .await?;
 
             Ok(session)
         }
 
-        async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<Session>> {
-            let sessions = sqlx::query_as::<_, Session>(
+        async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<S>> {
+            let sessions = sqlx::query_as::<_, S>(
                 r#"
-                SELECT id, user_id, token, expires_at, created_at, updated_at, ip_address, user_agent, active, impersonated_by, active_organization_id
-                FROM sessions
+                SELECT * FROM sessions
                 WHERE user_id = $1 AND active = true
                 ORDER BY created_at DESC
-                "#
+                "#,
             )
             .bind(user_id)
             .fetch_all(&self.pool)
@@ -415,17 +456,11 @@ pub mod sqlx_adapter {
             token: &str,
             expires_at: DateTime<Utc>,
         ) -> AuthResult<()> {
-            sqlx::query(
-                r#"
-                UPDATE sessions
-                SET expires_at = $1
-                WHERE token = $2 AND active = true
-                "#,
-            )
-            .bind(&expires_at)
-            .bind(token)
-            .execute(&self.pool)
-            .await?;
+            sqlx::query("UPDATE sessions SET expires_at = $1 WHERE token = $2 AND active = true")
+                .bind(&expires_at)
+                .bind(token)
+                .execute(&self.pool)
+                .await?;
 
             Ok(())
         }
@@ -457,16 +492,16 @@ pub mod sqlx_adapter {
             Ok(result.rows_affected() as usize)
         }
 
-        async fn create_account(&self, create_account: CreateAccount) -> AuthResult<Account> {
+        async fn create_account(&self, create_account: CreateAccount) -> AuthResult<A> {
             let id = Uuid::new_v4().to_string();
             let now = Utc::now();
 
-            let account = sqlx::query_as::<_, Account>(
+            let account = sqlx::query_as::<_, A>(
                 r#"
                 INSERT INTO accounts (id, account_id, provider_id, user_id, access_token, refresh_token, id_token, access_token_expires_at, refresh_token_expires_at, scope, password, created_at, updated_at)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 RETURNING *
-                "#
+                "#,
             )
             .bind(&id)
             .bind(&create_account.account_id)
@@ -491,13 +526,9 @@ pub mod sqlx_adapter {
             &self,
             provider: &str,
             provider_account_id: &str,
-        ) -> AuthResult<Option<Account>> {
-            let account = sqlx::query_as::<_, Account>(
-                r#"
-                SELECT *
-                FROM accounts
-                WHERE provider_id = $1 AND account_id = $2
-                "#,
+        ) -> AuthResult<Option<A>> {
+            let account = sqlx::query_as::<_, A>(
+                "SELECT * FROM accounts WHERE provider_id = $1 AND account_id = $2",
             )
             .bind(provider)
             .bind(provider_account_id)
@@ -507,14 +538,9 @@ pub mod sqlx_adapter {
             Ok(account)
         }
 
-        async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<Account>> {
-            let accounts = sqlx::query_as::<_, Account>(
-                r#"
-                SELECT id, user_id, provider, provider_account_id, access_token, refresh_token, expires_at, token_type, scope, created_at
-                FROM accounts
-                WHERE user_id = $1
-                ORDER BY created_at DESC
-                "#
+        async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<A>> {
+            let accounts = sqlx::query_as::<_, A>(
+                "SELECT * FROM accounts WHERE user_id = $1 ORDER BY created_at DESC",
             )
             .bind(user_id)
             .fetch_all(&self.pool)
@@ -535,16 +561,16 @@ pub mod sqlx_adapter {
         async fn create_verification(
             &self,
             create_verification: CreateVerification,
-        ) -> AuthResult<Verification> {
+        ) -> AuthResult<V> {
             let id = Uuid::new_v4().to_string();
             let now = Utc::now();
 
-            let verification = sqlx::query_as::<_, Verification>(
+            let verification = sqlx::query_as::<_, V>(
                 r#"
                 INSERT INTO verifications (id, identifier, value, expires_at, created_at, updated_at)
                 VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING *
-                "#
+                "#,
             )
             .bind(&id)
             .bind(&create_verification.identifier)
@@ -558,17 +584,9 @@ pub mod sqlx_adapter {
             Ok(verification)
         }
 
-        async fn get_verification(
-            &self,
-            identifier: &str,
-            value: &str,
-        ) -> AuthResult<Option<Verification>> {
-            let verification = sqlx::query_as::<_, Verification>(
-                r#"
-                SELECT *
-                FROM verifications
-                WHERE identifier = $1 AND value = $2 AND expires_at > NOW()
-                "#,
+        async fn get_verification(&self, identifier: &str, value: &str) -> AuthResult<Option<V>> {
+            let verification = sqlx::query_as::<_, V>(
+                "SELECT * FROM verifications WHERE identifier = $1 AND value = $2 AND expires_at > NOW()",
             )
             .bind(identifier)
             .bind(value)
@@ -578,13 +596,9 @@ pub mod sqlx_adapter {
             Ok(verification)
         }
 
-        async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<Verification>> {
-            let verification = sqlx::query_as::<_, Verification>(
-                r#"
-                SELECT *
-                FROM verifications
-                WHERE value = $1 AND expires_at > NOW()
-                "#,
+        async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<V>> {
+            let verification = sqlx::query_as::<_, V>(
+                "SELECT * FROM verifications WHERE value = $1 AND expires_at > NOW()",
             )
             .bind(value)
             .fetch_optional(&self.pool)
@@ -611,18 +625,15 @@ pub mod sqlx_adapter {
         }
 
         // Organization operations
-        async fn create_organization(
-            &self,
-            create_org: CreateOrganization,
-        ) -> AuthResult<Organization> {
+        async fn create_organization(&self, create_org: CreateOrganization) -> AuthResult<O> {
             let id = create_org.id.unwrap_or_else(|| Uuid::new_v4().to_string());
             let now = Utc::now();
 
-            let organization = sqlx::query_as::<_, Organization>(
+            let organization = sqlx::query_as::<_, O>(
                 r#"
                 INSERT INTO organization (id, name, slug, logo, metadata, created_at, updated_at)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING id, name, slug, logo, metadata, created_at, updated_at
+                RETURNING *
                 "#,
             )
             .bind(&id)
@@ -640,39 +651,25 @@ pub mod sqlx_adapter {
             Ok(organization)
         }
 
-        async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>> {
-            let organization = sqlx::query_as::<_, Organization>(
-                r#"
-                SELECT id, name, slug, logo, metadata, created_at, updated_at
-                FROM organization WHERE id = $1
-                "#,
-            )
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<O>> {
+            let organization = sqlx::query_as::<_, O>("SELECT * FROM organization WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
 
             Ok(organization)
         }
 
-        async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>> {
-            let organization = sqlx::query_as::<_, Organization>(
-                r#"
-                SELECT id, name, slug, logo, metadata, created_at, updated_at
-                FROM organization WHERE slug = $1
-                "#,
-            )
-            .bind(slug)
-            .fetch_optional(&self.pool)
-            .await?;
+        async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<O>> {
+            let organization = sqlx::query_as::<_, O>("SELECT * FROM organization WHERE slug = $1")
+                .bind(slug)
+                .fetch_optional(&self.pool)
+                .await?;
 
             Ok(organization)
         }
 
-        async fn update_organization(
-            &self,
-            id: &str,
-            update: UpdateOrganization,
-        ) -> AuthResult<Organization> {
+        async fn update_organization(&self, id: &str, update: UpdateOrganization) -> AuthResult<O> {
             let mut query = sqlx::QueryBuilder::new("UPDATE organization SET updated_at = NOW()");
 
             if let Some(name) = &update.name {
@@ -694,12 +691,9 @@ pub mod sqlx_adapter {
 
             query.push(" WHERE id = ");
             query.push_bind(id);
-            query.push(" RETURNING id, name, slug, logo, metadata, created_at, updated_at");
+            query.push(" RETURNING *");
 
-            let organization = query
-                .build_query_as::<Organization>()
-                .fetch_one(&self.pool)
-                .await?;
+            let organization = query.build_query_as::<O>().fetch_one(&self.pool).await?;
 
             Ok(organization)
         }
@@ -713,10 +707,10 @@ pub mod sqlx_adapter {
             Ok(())
         }
 
-        async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
-            let organizations = sqlx::query_as::<_, Organization>(
+        async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<O>> {
+            let organizations = sqlx::query_as::<_, O>(
                 r#"
-                SELECT o.id, o.name, o.slug, o.logo, o.metadata, o.created_at, o.updated_at
+                SELECT o.*
                 FROM organization o
                 INNER JOIN member m ON o.id = m.organization_id
                 WHERE m.user_id = $1
@@ -731,15 +725,15 @@ pub mod sqlx_adapter {
         }
 
         // Member operations
-        async fn create_member(&self, create_member: CreateMember) -> AuthResult<Member> {
+        async fn create_member(&self, create_member: CreateMember) -> AuthResult<M> {
             let id = Uuid::new_v4().to_string();
             let now = Utc::now();
 
-            let member = sqlx::query_as::<_, Member>(
+            let member = sqlx::query_as::<_, M>(
                 r#"
                 INSERT INTO member (id, organization_id, user_id, role, created_at)
                 VALUES ($1, $2, $3, $4, $5)
-                RETURNING id, organization_id, user_id, role, created_at
+                RETURNING *
                 "#,
             )
             .bind(&id)
@@ -753,17 +747,9 @@ pub mod sqlx_adapter {
             Ok(member)
         }
 
-        async fn get_member(
-            &self,
-            organization_id: &str,
-            user_id: &str,
-        ) -> AuthResult<Option<Member>> {
-            let member = sqlx::query_as::<_, Member>(
-                r#"
-                SELECT id, organization_id, user_id, role, created_at
-                FROM member
-                WHERE organization_id = $1 AND user_id = $2
-                "#,
+        async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<M>> {
+            let member = sqlx::query_as::<_, M>(
+                "SELECT * FROM member WHERE organization_id = $1 AND user_id = $2",
             )
             .bind(organization_id)
             .bind(user_id)
@@ -773,33 +759,22 @@ pub mod sqlx_adapter {
             Ok(member)
         }
 
-        async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
-            let member = sqlx::query_as::<_, Member>(
-                r#"
-                SELECT id, organization_id, user_id, role, created_at
-                FROM member
-                WHERE id = $1
-                "#,
-            )
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<M>> {
+            let member = sqlx::query_as::<_, M>("SELECT * FROM member WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
 
             Ok(member)
         }
 
-        async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member> {
-            let member = sqlx::query_as::<_, Member>(
-                r#"
-                UPDATE member SET role = $1
-                WHERE id = $2
-                RETURNING id, organization_id, user_id, role, created_at
-                "#,
-            )
-            .bind(role)
-            .bind(member_id)
-            .fetch_one(&self.pool)
-            .await?;
+        async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<M> {
+            let member =
+                sqlx::query_as::<_, M>("UPDATE member SET role = $1 WHERE id = $2 RETURNING *")
+                    .bind(role)
+                    .bind(member_id)
+                    .fetch_one(&self.pool)
+                    .await?;
 
             Ok(member)
         }
@@ -813,17 +788,9 @@ pub mod sqlx_adapter {
             Ok(())
         }
 
-        async fn list_organization_members(
-            &self,
-            organization_id: &str,
-        ) -> AuthResult<Vec<Member>> {
-            let members = sqlx::query_as::<_, Member>(
-                r#"
-                SELECT id, organization_id, user_id, role, created_at
-                FROM member
-                WHERE organization_id = $1
-                ORDER BY created_at ASC
-                "#,
+        async fn list_organization_members(&self, organization_id: &str) -> AuthResult<Vec<M>> {
+            let members = sqlx::query_as::<_, M>(
+                "SELECT * FROM member WHERE organization_id = $1 ORDER BY created_at ASC",
             )
             .bind(organization_id)
             .fetch_all(&self.pool)
@@ -854,15 +821,15 @@ pub mod sqlx_adapter {
         }
 
         // Invitation operations
-        async fn create_invitation(&self, create_inv: CreateInvitation) -> AuthResult<Invitation> {
+        async fn create_invitation(&self, create_inv: CreateInvitation) -> AuthResult<I> {
             let id = Uuid::new_v4().to_string();
             let now = Utc::now();
 
-            let invitation = sqlx::query_as::<_, Invitation>(
+            let invitation = sqlx::query_as::<_, I>(
                 r#"
                 INSERT INTO invitation (id, organization_id, email, role, status, inviter_id, expires_at, created_at)
                 VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)
-                RETURNING id, organization_id, email, role, status, inviter_id, expires_at, created_at
+                RETURNING *
                 "#,
             )
             .bind(&id)
@@ -878,17 +845,11 @@ pub mod sqlx_adapter {
             Ok(invitation)
         }
 
-        async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
-            let invitation = sqlx::query_as::<_, Invitation>(
-                r#"
-                SELECT id, organization_id, email, role, status, inviter_id, expires_at, created_at
-                FROM invitation
-                WHERE id = $1
-                "#,
-            )
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<I>> {
+            let invitation = sqlx::query_as::<_, I>("SELECT * FROM invitation WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
 
             Ok(invitation)
         }
@@ -897,13 +858,9 @@ pub mod sqlx_adapter {
             &self,
             organization_id: &str,
             email: &str,
-        ) -> AuthResult<Option<Invitation>> {
-            let invitation = sqlx::query_as::<_, Invitation>(
-                r#"
-                SELECT id, organization_id, email, role, status, inviter_id, expires_at, created_at
-                FROM invitation
-                WHERE organization_id = $1 AND LOWER(email) = LOWER($2) AND status = 'pending'
-                "#,
+        ) -> AuthResult<Option<I>> {
+            let invitation = sqlx::query_as::<_, I>(
+                "SELECT * FROM invitation WHERE organization_id = $1 AND LOWER(email) = LOWER($2) AND status = 'pending'",
             )
             .bind(organization_id)
             .bind(email)
@@ -917,13 +874,9 @@ pub mod sqlx_adapter {
             &self,
             id: &str,
             status: InvitationStatus,
-        ) -> AuthResult<Invitation> {
-            let invitation = sqlx::query_as::<_, Invitation>(
-                r#"
-                UPDATE invitation SET status = $1
-                WHERE id = $2
-                RETURNING id, organization_id, email, role, status, inviter_id, expires_at, created_at
-                "#,
+        ) -> AuthResult<I> {
+            let invitation = sqlx::query_as::<_, I>(
+                "UPDATE invitation SET status = $1 WHERE id = $2 RETURNING *",
             )
             .bind(status.to_string())
             .bind(id)
@@ -933,17 +886,9 @@ pub mod sqlx_adapter {
             Ok(invitation)
         }
 
-        async fn list_organization_invitations(
-            &self,
-            organization_id: &str,
-        ) -> AuthResult<Vec<Invitation>> {
-            let invitations = sqlx::query_as::<_, Invitation>(
-                r#"
-                SELECT id, organization_id, email, role, status, inviter_id, expires_at, created_at
-                FROM invitation
-                WHERE organization_id = $1
-                ORDER BY created_at DESC
-                "#,
+        async fn list_organization_invitations(&self, organization_id: &str) -> AuthResult<Vec<I>> {
+            let invitations = sqlx::query_as::<_, I>(
+                "SELECT * FROM invitation WHERE organization_id = $1 ORDER BY created_at DESC",
             )
             .bind(organization_id)
             .fetch_all(&self.pool)
@@ -952,14 +897,9 @@ pub mod sqlx_adapter {
             Ok(invitations)
         }
 
-        async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>> {
-            let invitations = sqlx::query_as::<_, Invitation>(
-                r#"
-                SELECT id, organization_id, email, role, status, inviter_id, expires_at, created_at
-                FROM invitation
-                WHERE LOWER(email) = LOWER($1) AND status = 'pending' AND expires_at > NOW()
-                ORDER BY created_at DESC
-                "#,
+        async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<I>> {
+            let invitations = sqlx::query_as::<_, I>(
+                "SELECT * FROM invitation WHERE LOWER(email) = LOWER($1) AND status = 'pending' AND expires_at > NOW() ORDER BY created_at DESC",
             )
             .bind(email)
             .fetch_all(&self.pool)
@@ -973,13 +913,9 @@ pub mod sqlx_adapter {
             &self,
             token: &str,
             organization_id: Option<&str>,
-        ) -> AuthResult<Session> {
-            let session = sqlx::query_as::<_, Session>(
-                r#"
-                UPDATE sessions SET active_organization_id = $1, updated_at = NOW()
-                WHERE token = $2 AND active = true
-                RETURNING id, user_id, token, expires_at, created_at, updated_at, ip_address, user_agent, active, impersonated_by, active_organization_id
-                "#,
+        ) -> AuthResult<S> {
+            let session = sqlx::query_as::<_, S>(
+                "UPDATE sessions SET active_organization_id = $1, updated_at = NOW() WHERE token = $2 AND active = true RETURNING *",
             )
             .bind(organization_id)
             .bind(token)
@@ -992,4 +928,4 @@ pub mod sqlx_adapter {
 }
 
 #[cfg(feature = "sqlx-postgres")]
-pub use sqlx_adapter::SqlxAdapter;
+pub use sqlx_adapter::{SqlxAdapter, SqlxEntity};

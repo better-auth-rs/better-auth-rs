@@ -20,13 +20,13 @@ pub mod types;
 pub use better_auth_derive::*;
 
 // Re-export commonly used items
-#[cfg(feature = "sqlx-postgres")]
-pub use adapters::SqlxAdapter;
 pub use adapters::{
     CacheAdapter, DatabaseAdapter, MemoryAccount, MemoryCacheAdapter, MemoryDatabaseAdapter,
     MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession, MemoryUser,
     MemoryVerification,
 };
+#[cfg(feature = "sqlx-postgres")]
+pub use adapters::{SqlxAdapter, SqlxEntity};
 pub use config::{Argon2Config, AuthConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig};
 pub use email::{ConsoleEmailProvider, EmailProvider};
 pub use entity::{

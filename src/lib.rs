@@ -70,7 +70,9 @@ pub mod adapters {
     };
 
     #[cfg(feature = "sqlx-postgres")]
-    pub use better_auth_core::SqlxAdapter;
+    pub use better_auth_core::adapters::database::sqlx_adapter::{
+        PoolConfig, PoolStats, SqlxAdapter, SqlxEntity,
+    };
 }
 
 // Re-export plugins

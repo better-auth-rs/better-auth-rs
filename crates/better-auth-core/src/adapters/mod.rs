@@ -10,7 +10,7 @@ pub use memory::{
 };
 
 #[cfg(feature = "sqlx-postgres")]
-pub use database::sqlx_adapter::{PoolConfig, PoolStats, SqlxAdapter};
+pub use database::sqlx_adapter::{PoolConfig, PoolStats, SqlxAdapter, SqlxEntity};
 
 #[cfg(feature = "redis-cache")]
 pub use cache::RedisAdapter;
