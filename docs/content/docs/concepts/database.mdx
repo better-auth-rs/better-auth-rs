@@ -3,7 +3,7 @@ title: Database
 description: Database adapters for storing users, sessions, and accounts.
 ---
 
-Better Auth RS uses the `DatabaseAdapter` trait to abstract storage. Two adapters are provided: in-memory and PostgreSQL.
+Better Auth RS uses the `DatabaseAdapter` trait to abstract storage. Two adapters are provided: in-memory and PostgreSQL. Both support **custom entity types** via generic type parameters.
 
 ## MemoryDatabaseAdapter
 
@@ -12,10 +12,28 @@ An in-memory adapter for development and testing. Data is lost when the process 
 ```rust
 use better_auth::adapters::MemoryDatabaseAdapter;
 
+// Using built-in types:
 let database = MemoryDatabaseAdapter::new();
 ```
 
 No configuration needed. Thread-safe via `Arc<Mutex<...>>`.
+
+### Custom Entity Types (Memory)
+
+Use a type alias with your custom structs:
+
+```rust
+use better_auth::adapters::MemoryDatabaseAdapter;
+
+type AppDb = MemoryDatabaseAdapter<
+    AppUser, AppSession, AppAccount,
+    AppOrg, AppMember, AppInvitation, AppVerification,
+>;
+
+let database = AppDb::default();
+```
+
+Custom structs need `Auth*` and `Memory*` derive macros. See [Custom Entity Types](#custom-entity-types) below.
 
 ## PostgreSQL (SqlxAdapter)
 
@@ -55,6 +73,39 @@ let database = SqlxAdapter::with_config("postgresql://...", config).await?;
 | `acquire_timeout` | `30s` | Timeout for acquiring a connection |
 | `idle_timeout` | `600s` | Close idle connections after this duration |
 | `max_lifetime` | `1800s` | Maximum connection lifetime |
+
+### Custom Entity Types (PostgreSQL)
+
+Use a type alias with your custom structs:
+
+```rust
+use better_auth::adapters::{SqlxAdapter, PoolConfig};
+
+type AppDb = SqlxAdapter<
+    AppUser, AppSession, AppAccount,
+    AppOrg, AppMember, AppInvitation, AppVerification,
+>;
+
+let pool = sqlx::PgPool::connect("postgresql://...").await?;
+let database = AppDb::from_pool(pool);
+```
+
+Custom structs need `Auth*` derives plus `sqlx::FromRow`:
+
+```rust
+#[derive(Clone, Debug, Serialize, sqlx::FromRow, AuthUser)]
+struct AppUser {
+    id: String,
+    email: Option<String>,
+    name: Option<String>,
+    // ... standard fields ...
+    // Custom fields (must have DB column defaults):
+    plan: String,
+    stripe_customer_id: Option<String>,
+}
+```
+
+The adapter uses `SELECT *` and `RETURNING *`, so custom columns in your database are automatically populated via `FromRow`. Custom columns not in the INSERT get their database-level defaults.
 
 ### Schema
 
@@ -120,6 +171,40 @@ CREATE TABLE IF NOT EXISTS verifications (
 );
 ```
 
+Organization tables (created by the organization migration):
+
+```sql title="migrations/002_organization.sql"
+CREATE TABLE IF NOT EXISTS organization (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    logo TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS member (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'member',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(organization_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS invitation (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'member',
+    status TEXT NOT NULL DEFAULT 'pending',
+    inviter_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
 ### Docker Quick Start
 
 ```bash
@@ -131,41 +216,108 @@ docker run --name better-auth-postgres \
   -d postgres:15
 ```
 
+## Custom Entity Types
+
+Both adapters support custom entity types via generic type parameters. This lets you add business-specific fields (like `plan`, `stripe_customer_id`, etc.) while reusing the framework's adapter logic.
+
+### Derive Macros
+
+Enable the `derive` feature:
+
+```toml title="Cargo.toml"
+[dependencies]
+better-auth = { version = "0.1", features = ["derive"] }
+```
+
+Each entity needs two derive macros:
+
+| Entity | Read-only trait (getters) | Memory adapter | PostgreSQL |
+|--------|--------------------------|----------------|------------|
+| User | `AuthUser` | `MemoryUser` | `sqlx::FromRow` |
+| Session | `AuthSession` | `MemorySession` | `sqlx::FromRow` |
+| Account | `AuthAccount` | `MemoryAccount` | `sqlx::FromRow` |
+| Organization | `AuthOrganization` | `MemoryOrganization` | `sqlx::FromRow` |
+| Member | `AuthMember` | `MemoryMember` | `sqlx::FromRow` |
+| Invitation | `AuthInvitation` | `MemoryInvitation` | `sqlx::FromRow` |
+| Verification | `AuthVerification` | `MemoryVerification` | `sqlx::FromRow` |
+
+### Example
+
+```rust
+use better_auth_core::{AuthUser, MemoryUser};
+
+#[derive(Clone, Debug, Serialize, AuthUser, MemoryUser)]
+struct AppUser {
+    // --- Required fields (same as built-in User) ---
+    id: String,
+    email: Option<String>,
+    #[auth(field = "name")]        // remap: getter is .name(), field is display_name
+    display_name: Option<String>,
+    email_verified: bool,
+    image: Option<String>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    username: Option<String>,
+    display_username: Option<String>,
+    two_factor_enabled: bool,
+    role: Option<String>,
+    banned: bool,
+    ban_reason: Option<String>,
+    ban_expires: Option<DateTime<Utc>>,
+    metadata: HashMap<String, serde_json::Value>,
+    // --- Custom fields ---
+    #[auth(default = r#""free".to_string()"#)]  // default for Memory adapter
+    plan: String,
+    stripe_customer_id: Option<String>,          // defaults to None
+}
+```
+
+### Attributes
+
+- **`#[auth(field = "name")]`** — Remap a struct field to a different getter name. The derive generates `.name()` instead of `.display_name()`.
+- **`#[auth(default = "expr")]`** — Default value expression for the Memory adapter's `from_create()`. Custom fields without this attribute use `Default::default()`.
+
+### Full Example
+
+See `examples/custom_entities.rs` for a complete working example with all 7 entity types, both `Auth*` and `Memory*` derives, and a full auth flow.
+
+```bash
+cargo run --example custom_entities --features derive
+```
+
 ## The DatabaseAdapter Trait
 
-Implement this trait to use a custom storage backend:
+The trait uses associated types so adapters can return custom entity structs:
 
 ```rust
 #[async_trait]
-pub trait DatabaseAdapter: Send + Sync {
+pub trait DatabaseAdapter: Send + Sync + 'static {
+    type User: AuthUser;
+    type Session: AuthSession;
+    type Account: AuthAccount;
+    type Organization: AuthOrganization;
+    type Member: AuthMember;
+    type Invitation: AuthInvitation;
+    type Verification: AuthVerification;
+
     // User operations
-    async fn create_user(&self, user: CreateUser) -> AuthResult<User>;
-    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<User>>;
-    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<User>>;
-    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<User>>;
-    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<User>;
+    async fn create_user(&self, user: CreateUser) -> AuthResult<Self::User>;
+    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<Self::User>>;
+    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<Self::User>>;
+    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<Self::User>;
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
 
     // Session operations
-    async fn create_session(&self, session: CreateSession) -> AuthResult<Session>;
-    async fn get_session(&self, token: &str) -> AuthResult<Option<Session>>;
-    async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<Session>>;
-    async fn update_session_expiry(&self, token: &str, expires_at: DateTime<Utc>) -> AuthResult<()>;
-    async fn delete_session(&self, token: &str) -> AuthResult<()>;
-    async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()>;
-    async fn delete_expired_sessions(&self) -> AuthResult<usize>;
+    async fn create_session(&self, session: CreateSession) -> AuthResult<Self::Session>;
+    async fn get_session(&self, token: &str) -> AuthResult<Option<Self::Session>>;
+    // ... and more
 
-    // Account operations
-    async fn create_account(&self, account: CreateAccount) -> AuthResult<Account>;
-    async fn get_account(&self, provider: &str, id: &str) -> AuthResult<Option<Account>>;
-    async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<Account>>;
-    async fn delete_account(&self, id: &str) -> AuthResult<()>;
-
-    // Verification operations
-    async fn create_verification(&self, v: CreateVerification) -> AuthResult<Verification>;
-    async fn get_verification(&self, identifier: &str, value: &str) -> AuthResult<Option<Verification>>;
-    async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<Verification>>;
-    async fn delete_verification(&self, id: &str) -> AuthResult<()>;
-    async fn delete_expired_verifications(&self) -> AuthResult<usize>;
+    // Organization, Member, Invitation operations
+    async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Self::Organization>;
+    async fn create_member(&self, member: CreateMember) -> AuthResult<Self::Member>;
+    async fn create_invitation(&self, inv: CreateInvitation) -> AuthResult<Self::Invitation>;
+    // ... and more
 }
 ```
+
+Implement this trait to use a custom storage backend. See the built-in `MemoryDatabaseAdapter` and `SqlxAdapter` implementations for reference.
