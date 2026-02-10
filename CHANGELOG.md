@@ -3,6 +3,62 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [0.2.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.0.1-alpha.2...v0.2.0) - 2026-02-10
+
+### Bug Fixes
+
+- use workspace dependencies for publishing and add missing metadata
+
+- resolve CI failures from formatting and clippy warnings
+
+
+### CI
+
+- add GitHub Actions workflow and fix all clippy/fmt warnings
+
+- add release-plz workflow and changelog config
+
+- use GitHub App token and unified versioning for release-plz
+
+
+### Chores
+
+- cleanup directory
+
+
+### Documentation
+
+- update examples with new auth features and endpoints
+
+- add Fumadocs documentation site with 18 pages
+
+- update README and configure release-plz git identity
+
+
+### Features
+
+- add user/entity/session
+
+- restructure into workspace with middleware, validation, hooks, and OpenAPI
+
+- add email provider abstraction and wire into verification plugin
+
+- add cookie auth, set-password, change-email, and user management endpoints
+
+- add Organization plugin with RBAC, member management, and invitations
+
+- generify entity types with associated types and derive macros
+
+
+### Refactoring
+
+- unify database migrations to sea-orm-migration and update examples
+
+
+### license
+
+- switch to MIT+Apache dual license
+
 
 ### Added
 
