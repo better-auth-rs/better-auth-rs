@@ -15,7 +15,6 @@ use better_auth_core::{
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use std::collections::HashMap;
 
 // --- Custom User ---
 
@@ -36,7 +35,7 @@ struct MyUser {
     banned: bool,
     ban_reason: Option<String>,
     ban_expires: Option<DateTime<Utc>>,
-    metadata: HashMap<String, serde_json::Value>,
+    metadata: serde_json::Value,
     // Extra field — should be ignored by the derive macro
     extra_field: String,
 }
@@ -142,7 +141,7 @@ fn test_derive_auth_user() {
         banned: false,
         ban_reason: None,
         ban_expires: None,
-        metadata: HashMap::new(),
+        metadata: serde_json::json!({}),
         extra_field: "ignored".into(),
     };
 
@@ -154,7 +153,7 @@ fn test_derive_auth_user() {
     assert_eq!(user.username(), Some("testuser"));
     assert_eq!(user.role(), Some("admin"));
     assert!(!user.banned());
-    assert!(user.metadata().is_empty());
+    assert_eq!(user.metadata(), &serde_json::json!({}));
 }
 
 #[test]

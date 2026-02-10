@@ -87,7 +87,7 @@ impl MemoryUser for User {
             banned: false,
             ban_reason: None,
             ban_expires: None,
-            metadata: create.metadata.clone().unwrap_or_default(),
+            metadata: create.metadata.clone().unwrap_or(serde_json::json!({})),
         }
     }
 

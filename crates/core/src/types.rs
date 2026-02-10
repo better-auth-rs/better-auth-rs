@@ -35,7 +35,7 @@ pub struct User {
     pub ban_expires: Option<DateTime<Utc>>,
     // Keep metadata for internal use but don't serialize
     #[serde(skip)]
-    pub metadata: HashMap<String, serde_json::Value>,
+    pub metadata: serde_json::Value,
 }
 
 /// Session information - matches OpenAPI schema
@@ -177,7 +177,7 @@ pub struct CreateUser {
     pub username: Option<String>,
     pub display_username: Option<String>,
     pub role: Option<String>,
-    pub metadata: Option<HashMap<String, serde_json::Value>>,
+    pub metadata: Option<serde_json::Value>,
 }
 
 /// User update data
@@ -194,7 +194,7 @@ pub struct UpdateUser {
     pub ban_reason: Option<String>,
     pub ban_expires: Option<DateTime<Utc>>,
     pub two_factor_enabled: Option<bool>,
-    pub metadata: Option<HashMap<String, serde_json::Value>>,
+    pub metadata: Option<serde_json::Value>,
 }
 
 /// Session creation data
@@ -277,7 +277,7 @@ impl CreateUser {
         self
     }
 
-    pub fn with_metadata(mut self, metadata: HashMap<String, serde_json::Value>) -> Self {
+    pub fn with_metadata(mut self, metadata: serde_json::Value) -> Self {
         self.metadata = Some(metadata);
         self
     }
@@ -371,7 +371,7 @@ pub struct UpdateUserRequest {
     #[serde(rename = "displayUsername")]
     pub display_username: Option<String>,
     pub role: Option<String>,
-    pub metadata: Option<HashMap<String, serde_json::Value>>,
+    pub metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -441,9 +441,10 @@ pub struct MemberUser {
 }
 
 /// Invitation status
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum InvitationStatus {
+    #[default]
     Pending,
     Accepted,
     Rejected,
@@ -648,7 +649,7 @@ impl AuthUser for User {
     fn ban_expires(&self) -> Option<DateTime<Utc>> {
         self.ban_expires
     }
-    fn metadata(&self) -> &HashMap<String, serde_json::Value> {
+    fn metadata(&self) -> &serde_json::Value {
         &self.metadata
     }
 }
@@ -887,11 +888,9 @@ mod postgres_impls {
                 banned: row.try_get("banned").unwrap_or(false),
                 ban_reason: row.try_get("ban_reason")?,
                 ban_expires: row.try_get("ban_expires")?,
-                metadata: {
-                    let json_value: sqlx::types::Json<HashMap<String, serde_json::Value>> =
-                        row.try_get("metadata")?;
-                    json_value.0
-                },
+                metadata: row
+                    .try_get::<sqlx::types::Json<serde_json::Value>, _>("metadata")?
+                    .0,
             })
         }
     }

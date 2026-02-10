@@ -307,7 +307,7 @@ pub mod sqlx_adapter {
             .bind(false)
             .bind(&now)
             .bind(&now)
-            .bind(sqlx::types::Json(create_user.metadata.unwrap_or_default()))
+            .bind(sqlx::types::Json(create_user.metadata.unwrap_or(serde_json::json!({}))))
             .fetch_one(&self.pool)
             .await?;
 

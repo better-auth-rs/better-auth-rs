@@ -269,10 +269,7 @@ impl PasswordManagementPlugin {
 
         // Update user password
         let mut metadata = user.metadata().clone();
-        metadata.insert(
-            "password_hash".to_string(),
-            serde_json::Value::String(password_hash),
-        );
+        metadata["password_hash"] = serde_json::Value::String(password_hash);
 
         let update_user = UpdateUser {
             email: None,
@@ -337,10 +334,7 @@ impl PasswordManagementPlugin {
 
         // Update user password
         let mut metadata = user.metadata().clone();
-        metadata.insert(
-            "password_hash".to_string(),
-            serde_json::Value::String(password_hash),
-        );
+        metadata["password_hash"] = serde_json::Value::String(password_hash);
 
         let update_user = UpdateUser {
             email: None,
@@ -418,10 +412,7 @@ impl PasswordManagementPlugin {
         let password_hash = self.hash_password(&set_req.new_password)?;
 
         let mut metadata = user.metadata().clone();
-        metadata.insert(
-            "password_hash".to_string(),
-            serde_json::Value::String(password_hash),
-        );
+        metadata["password_hash"] = serde_json::Value::String(password_hash);
 
         let update_user = UpdateUser {
             email: None,
@@ -638,11 +629,9 @@ mod tests {
         let plugin = PasswordManagementPlugin::new();
         let password_hash = plugin.hash_password("Password123!").unwrap();
 
-        let mut metadata = HashMap::new();
-        metadata.insert(
-            "password_hash".to_string(),
-            serde_json::Value::String(password_hash),
-        );
+        let metadata = serde_json::json!({
+            "password_hash": password_hash,
+        });
 
         let create_user = CreateUser::new()
             .with_email("test@example.com")

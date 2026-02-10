@@ -10,7 +10,6 @@
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use std::collections::HashMap;
 
 use crate::types::InvitationStatus;
 
@@ -33,7 +32,7 @@ pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static 
     fn banned(&self) -> bool;
     fn ban_reason(&self) -> Option<&str>;
     fn ban_expires(&self) -> Option<DateTime<Utc>>;
-    fn metadata(&self) -> &HashMap<String, serde_json::Value>;
+    fn metadata(&self) -> &serde_json::Value;
 }
 
 /// Trait representing a session entity.

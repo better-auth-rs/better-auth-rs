@@ -134,11 +134,9 @@ impl EmailPasswordPlugin {
         let password_hash = self.hash_password(&signup_req.password)?;
 
         // Create user with password hash in metadata
-        let mut metadata = std::collections::HashMap::new();
-        metadata.insert(
-            "password_hash".to_string(),
-            serde_json::Value::String(password_hash),
-        );
+        let metadata = serde_json::json!({
+            "password_hash": password_hash,
+        });
 
         let mut create_user = CreateUser::new()
             .with_email(&signup_req.email)
