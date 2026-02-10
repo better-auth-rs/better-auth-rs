@@ -6,9 +6,8 @@ use validator::Validate;
 
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{
-    AuthRequest, AuthResponse, CreateVerification, HttpMethod, UpdateUser, User,
-};
+use better_auth_core::{AuthRequest, AuthResponse, CreateVerification, HttpMethod, UpdateUser};
+use better_auth_core::{AuthUser, AuthVerification, DatabaseAdapter};
 
 /// Email verification plugin for handling email verification flows
 pub struct EmailVerificationPlugin {
@@ -40,8 +39,8 @@ struct StatusResponse {
 }
 
 #[derive(Debug, Serialize)]
-struct VerifyEmailResponse {
-    user: User,
+struct VerifyEmailResponse<U: Serialize> {
+    user: U,
     status: bool,
 }
 
@@ -95,7 +94,7 @@ impl Default for EmailVerificationConfig {
 }
 
 #[async_trait]
-impl AuthPlugin for EmailVerificationPlugin {
+impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailVerificationPlugin {
     fn name(&self) -> &'static str {
         "email-verification"
     }
@@ -110,7 +109,7 @@ impl AuthPlugin for EmailVerificationPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/send-verification-email") => {
@@ -123,11 +122,11 @@ impl AuthPlugin for EmailVerificationPlugin {
         }
     }
 
-    async fn on_user_created(&self, user: &User, ctx: &AuthContext) -> AuthResult<()> {
+    async fn on_user_created(&self, user: &DB::User, ctx: &AuthContext<DB>) -> AuthResult<()> {
         // Send verification email for new users if configured
         if self.config.send_email_notifications
-            && !user.email_verified
-            && let Some(email) = &user.email
+            && !user.email_verified()
+            && let Some(email) = user.email()
         {
             // Gracefully skip if no email provider is configured
             if ctx.email_provider.is_some() {
@@ -153,10 +152,10 @@ impl AuthPlugin for EmailVerificationPlugin {
 
 // Implementation methods outside the trait
 impl EmailVerificationPlugin {
-    async fn handle_send_verification_email(
+    async fn handle_send_verification_email<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let send_req: SendVerificationEmailRequest =
             match better_auth_core::validate_request_body(req) {
@@ -172,7 +171,7 @@ impl EmailVerificationPlugin {
             .ok_or_else(|| AuthError::not_found("No user found with this email address"))?;
 
         // Check if user is already verified
-        if user.email_verified {
+        if user.email_verified() {
             return Err(AuthError::bad_request("Email is already verified"));
         }
 
@@ -191,10 +190,10 @@ impl EmailVerificationPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_verify_email(
+    async fn handle_verify_email<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         // Extract token from query parameters
         let token = req
@@ -214,12 +213,12 @@ impl EmailVerificationPlugin {
         // Get user by email (stored in identifier field)
         let user = ctx
             .database
-            .get_user_by_email(&verification.identifier)
+            .get_user_by_email(verification.identifier())
             .await?
             .ok_or_else(|| AuthError::not_found("User associated with this token not found"))?;
 
         // Check if already verified
-        if user.email_verified {
+        if user.email_verified() {
             let response = VerifyEmailResponse { user, status: true };
             return Ok(AuthResponse::json(200, &response)?);
         }
@@ -240,10 +239,10 @@ impl EmailVerificationPlugin {
             metadata: None,
         };
 
-        let updated_user = ctx.database.update_user(&user.id, update_user).await?;
+        let updated_user = ctx.database.update_user(user.id(), update_user).await?;
 
         // Delete the used verification token
-        ctx.database.delete_verification(&verification.id).await?;
+        ctx.database.delete_verification(verification.id()).await?;
 
         // If callback URL is provided, redirect
         if let Some(callback_url) = callback_url {
@@ -264,11 +263,11 @@ impl EmailVerificationPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn send_verification_email_internal(
+    async fn send_verification_email_internal<DB: DatabaseAdapter>(
         &self,
         email: &str,
         callback_url: Option<&str>,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<()> {
         // Generate verification token
         let verification_token = format!("verify_{}", Uuid::new_v4());
@@ -318,7 +317,7 @@ impl EmailVerificationPlugin {
     }
 
     /// Check if user is verified or verification is not required
-    pub async fn is_user_verified_or_not_required(&self, user: &User) -> bool {
-        user.email_verified || !self.config.require_verification_for_signin
+    pub async fn is_user_verified_or_not_required(&self, user: &impl AuthUser) -> bool {
+        user.email_verified() || !self.config.require_verification_for_signin
     }
 }

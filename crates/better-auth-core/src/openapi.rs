@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::collections::BTreeMap;
 
+use crate::adapters::DatabaseAdapter;
 use crate::plugin::AuthPlugin;
 use crate::types::HttpMethod;
 
@@ -97,7 +98,7 @@ impl OpenApiBuilder {
     }
 
     /// Register all routes from a plugin.
-    pub fn plugin(mut self, plugin: &dyn AuthPlugin) -> Self {
+    pub fn plugin<DB: DatabaseAdapter>(mut self, plugin: &dyn AuthPlugin<DB>) -> Self {
         let tag = plugin.name();
         for route in plugin.routes() {
             self = self.route(&route.method, &route.path, &route.handler, tag);

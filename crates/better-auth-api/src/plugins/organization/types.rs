@@ -1,4 +1,4 @@
-use better_auth_core::types::{Invitation, MemberWithUser, Organization};
+use better_auth_core::entity::MemberUserView;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use validator::Validate;
@@ -151,13 +151,6 @@ pub struct HasPermissionRequest {
 // ============================================================================
 
 #[derive(Debug, Serialize)]
-pub struct CreateOrganizationResponse {
-    #[serde(flatten)]
-    pub organization: Organization,
-    pub members: Vec<MemberWithUser>,
-}
-
-#[derive(Debug, Serialize)]
 pub struct CheckSlugResponse {
     pub status: bool,
 }
@@ -168,17 +161,6 @@ pub struct SuccessResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct InvitationResponse {
-    pub invitation: Invitation,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AcceptInvitationResponse {
-    pub invitation: Invitation,
-    pub member: MemberWithUser,
-}
-
-#[derive(Debug, Serialize)]
 pub struct HasPermissionResponse {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -186,19 +168,79 @@ pub struct HasPermissionResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct CreateOrganizationResponse<O: Serialize, M: Serialize> {
+    #[serde(flatten)]
+    pub organization: O,
+    pub members: Vec<M>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FullOrganizationResponse<O: Serialize, I: Serialize> {
+    #[serde(flatten)]
+    pub organization: O,
+    pub members: Vec<MemberResponse>,
+    pub invitations: Vec<I>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct InvitationResponse<I: Serialize> {
+    pub invitation: I,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AcceptInvitationResponse<I: Serialize> {
+    pub invitation: I,
+    pub member: MemberResponse,
+}
+
+#[derive(Debug, Serialize)]
 pub struct ListMembersResponse {
-    pub members: Vec<MemberWithUser>,
+    pub members: Vec<MemberResponse>,
     pub total: usize,
 }
 
 #[derive(Debug, Serialize)]
-pub struct GetInvitationResponse {
+pub struct GetInvitationResponse<I: Serialize> {
     #[serde(flatten)]
-    pub invitation: Invitation,
+    pub invitation: I,
     #[serde(rename = "organizationName")]
     pub organization_name: String,
     #[serde(rename = "organizationSlug")]
     pub organization_slug: String,
     #[serde(rename = "inviterEmail")]
     pub inviter_email: Option<String>,
+}
+
+/// Member with user details (for API responses).
+///
+/// Uses [`MemberUserView`] from `better_auth_core::entity` for user info,
+/// making it work with any `DatabaseAdapter` implementation.
+#[derive(Debug, Clone, Serialize)]
+pub struct MemberResponse {
+    pub id: String,
+    #[serde(rename = "organizationId")]
+    pub organization_id: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
+    pub role: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub user: MemberUserView,
+}
+
+impl MemberResponse {
+    /// Construct from any type implementing [`AuthMember`] and [`AuthUser`].
+    pub fn from_member_and_user(
+        member: &impl better_auth_core::entity::AuthMember,
+        user: &impl better_auth_core::entity::AuthUser,
+    ) -> Self {
+        Self {
+            id: member.id().to_string(),
+            organization_id: member.organization_id().to_string(),
+            user_id: member.user_id().to_string(),
+            role: member.role().to_string(),
+            created_at: member.created_at(),
+            user: MemberUserView::from_user(user),
+        }
+    }
 }

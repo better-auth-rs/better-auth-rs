@@ -6,9 +6,8 @@ use validator::Validate;
 
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{
-    AuthRequest, AuthResponse, CreateVerification, HttpMethod, UpdateUser, User,
-};
+use better_auth_core::{AuthRequest, AuthResponse, CreateVerification, HttpMethod, UpdateUser};
+use better_auth_core::{AuthSession, AuthUser, AuthVerification, DatabaseAdapter};
 
 /// Password management plugin for password reset and change functionality
 pub struct PasswordManagementPlugin {
@@ -64,10 +63,10 @@ struct StatusResponse {
     status: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct ChangePasswordResponse {
+#[derive(Debug, Serialize)]
+struct ChangePasswordResponse<U: Serialize> {
     token: Option<String>,
-    user: User,
+    user: U,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -119,7 +118,7 @@ impl Default for PasswordManagementConfig {
 }
 
 #[async_trait]
-impl AuthPlugin for PasswordManagementPlugin {
+impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
     fn name(&self) -> &'static str {
         "password-management"
     }
@@ -137,7 +136,7 @@ impl AuthPlugin for PasswordManagementPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/forget-password") => {
@@ -165,10 +164,10 @@ impl AuthPlugin for PasswordManagementPlugin {
 
 // Implementation methods outside the trait
 impl PasswordManagementPlugin {
-    async fn handle_forget_password(
+    async fn handle_forget_password<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let forget_req: ForgetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -191,7 +190,7 @@ impl PasswordManagementPlugin {
 
         // Create verification token
         let create_verification = CreateVerification {
-            identifier: user.email.clone().unwrap_or_default(),
+            identifier: user.email().unwrap_or_default().to_string(),
             value: reset_token.clone(),
             expires_at,
         };
@@ -241,10 +240,10 @@ impl PasswordManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_reset_password(
+    async fn handle_reset_password<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let reset_req: ResetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -269,7 +268,7 @@ impl PasswordManagementPlugin {
         let password_hash = self.hash_password(&reset_req.new_password)?;
 
         // Update user password
-        let mut metadata = user.metadata.clone();
+        let mut metadata = user.metadata().clone();
         metadata.insert(
             "password_hash".to_string(),
             serde_json::Value::String(password_hash),
@@ -290,22 +289,22 @@ impl PasswordManagementPlugin {
             metadata: Some(metadata),
         };
 
-        ctx.database.update_user(&user.id, update_user).await?;
+        ctx.database.update_user(user.id(), update_user).await?;
 
         // Delete the used verification token
-        ctx.database.delete_verification(&verification.id).await?;
+        ctx.database.delete_verification(verification.id()).await?;
 
         // Revoke all existing sessions for security
-        ctx.database.delete_user_sessions(&user.id).await?;
+        ctx.database.delete_user_sessions(user.id()).await?;
 
         let response = StatusResponse { status: true };
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_change_password(
+    async fn handle_change_password<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let change_req: ChangePasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -321,7 +320,7 @@ impl PasswordManagementPlugin {
         // Verify current password
         if self.config.require_current_password {
             let stored_hash = user
-                .metadata
+                .metadata()
                 .get("password_hash")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| AuthError::bad_request("No password set for this user"))?;
@@ -337,7 +336,7 @@ impl PasswordManagementPlugin {
         let password_hash = self.hash_password(&change_req.new_password)?;
 
         // Update user password
-        let mut metadata = user.metadata.clone();
+        let mut metadata = user.metadata().clone();
         metadata.insert(
             "password_hash".to_string(),
             serde_json::Value::String(password_hash),
@@ -358,12 +357,12 @@ impl PasswordManagementPlugin {
             metadata: Some(metadata),
         };
 
-        let updated_user = ctx.database.update_user(&user.id, update_user).await?;
+        let updated_user = ctx.database.update_user(user.id(), update_user).await?;
 
         // Handle session revocation
         let new_token = if change_req.revoke_other_sessions.as_deref() == Some("true") {
             // Revoke all sessions except current one
-            ctx.database.delete_user_sessions(&user.id).await?;
+            ctx.database.delete_user_sessions(user.id()).await?;
 
             // Create new session
             let session_manager =
@@ -371,7 +370,7 @@ impl PasswordManagementPlugin {
             let session = session_manager
                 .create_session(&updated_user, None, None)
                 .await?;
-            Some(session.token)
+            Some(session.token().to_string())
         } else {
             None
         };
@@ -384,10 +383,10 @@ impl PasswordManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_set_password(
+    async fn handle_set_password<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let set_req: SetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -402,7 +401,7 @@ impl PasswordManagementPlugin {
 
         // Verify the user does NOT already have a password
         if user
-            .metadata
+            .metadata()
             .get("password_hash")
             .and_then(|v| v.as_str())
             .is_some()
@@ -418,7 +417,7 @@ impl PasswordManagementPlugin {
         // Hash and store the new password
         let password_hash = self.hash_password(&set_req.new_password)?;
 
-        let mut metadata = user.metadata.clone();
+        let mut metadata = user.metadata().clone();
         metadata.insert(
             "password_hash".to_string(),
             serde_json::Value::String(password_hash),
@@ -439,17 +438,17 @@ impl PasswordManagementPlugin {
             metadata: Some(metadata),
         };
 
-        ctx.database.update_user(&user.id, update_user).await?;
+        ctx.database.update_user(user.id(), update_user).await?;
 
         let response = StatusResponse { status: true };
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_reset_password_token(
+    async fn handle_reset_password_token<DB: DatabaseAdapter>(
         &self,
         token: &str,
         _req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         // Check if token is valid and get callback URL from query parameters
         let callback_url = _req.query.get("callbackURL").cloned();
@@ -493,11 +492,11 @@ impl PasswordManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn find_user_by_reset_token(
+    async fn find_user_by_reset_token<DB: DatabaseAdapter>(
         &self,
         token: &str,
-        ctx: &AuthContext,
-    ) -> AuthResult<Option<(User, better_auth_core::Verification)>> {
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<Option<(DB::User, DB::Verification)>> {
         // Find verification token by value
         let verification = match ctx.database.get_verification_by_value(token).await? {
             Some(verification) => verification,
@@ -507,7 +506,7 @@ impl PasswordManagementPlugin {
         // Get user by email (stored in identifier field)
         let user = match ctx
             .database
-            .get_user_by_email(&verification.identifier)
+            .get_user_by_email(verification.identifier())
             .await?
         {
             Some(user) => user,
@@ -517,24 +516,28 @@ impl PasswordManagementPlugin {
         Ok(Some((user, verification)))
     }
 
-    async fn get_current_user(
+    async fn get_current_user<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
-    ) -> AuthResult<Option<User>> {
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<Option<DB::User>> {
         let session_manager =
             better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
 
         if let Some(token) = session_manager.extract_session_token(req)
             && let Some(session) = session_manager.get_session(&token).await?
         {
-            return ctx.database.get_user_by_id(&session.user_id).await;
+            return ctx.database.get_user_by_id(session.user_id()).await;
         }
 
         Ok(None)
     }
 
-    fn validate_password(&self, password: &str, ctx: &AuthContext) -> AuthResult<()> {
+    fn validate_password<DB: DatabaseAdapter>(
+        &self,
+        password: &str,
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<()> {
         let config = &ctx.config.password;
 
         if password.len() < config.min_length {
@@ -615,7 +618,8 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    async fn create_test_context_with_user() -> (AuthContext, User, Session) {
+    async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>, User, Session)
+    {
         let mut config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
         config.password = PasswordConfig {
             min_length: 8,
@@ -870,16 +874,12 @@ mod tests {
         assert_eq!(response.status, 200);
 
         let body_str = String::from_utf8(response.body).unwrap();
-        let response_data: ChangePasswordResponse = serde_json::from_str(&body_str).unwrap();
-        assert!(response_data.token.is_none()); // No new token when not revoking sessions
+        let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+        assert!(response_data["token"].is_null()); // No new token when not revoking sessions
 
         // Verify password was updated by checking the database directly
-        let updated_user = ctx
-            .database
-            .get_user_by_id(&response_data.user.id)
-            .await
-            .unwrap()
-            .unwrap();
+        let user_id = response_data["user"]["id"].as_str().unwrap();
+        let updated_user = ctx.database.get_user_by_id(user_id).await.unwrap().unwrap();
         let stored_hash = updated_user
             .metadata
             .get("password_hash")
@@ -915,8 +915,8 @@ mod tests {
         assert_eq!(response.status, 200);
 
         let body_str = String::from_utf8(response.body).unwrap();
-        let response_data: ChangePasswordResponse = serde_json::from_str(&body_str).unwrap();
-        assert!(response_data.token.is_some()); // New token when revoking sessions
+        let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+        assert!(response_data["token"].is_string()); // New token when revoking sessions
     }
 
     #[tokio::test]
@@ -1107,7 +1107,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_routes() {
         let plugin = PasswordManagementPlugin::new();
-        let routes = plugin.routes();
+        let routes = AuthPlugin::<MemoryDatabaseAdapter>::routes(&plugin);
 
         assert_eq!(routes.len(), 5);
         assert!(

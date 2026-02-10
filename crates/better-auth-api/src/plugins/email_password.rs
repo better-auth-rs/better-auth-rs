@@ -4,9 +4,11 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
+use better_auth_core::adapters::DatabaseAdapter;
+use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, CreateUser, HttpMethod, User};
+use better_auth_core::{AuthRequest, AuthResponse, CreateUser, HttpMethod};
 
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
@@ -61,17 +63,17 @@ struct SignInUsernameRequest {
 }
 
 #[derive(Debug, Serialize)]
-struct SignUpResponse {
+struct SignUpResponse<U: Serialize> {
     token: Option<String>,
-    user: User,
+    user: U,
 }
 
 #[derive(Debug, Serialize)]
-struct SignInResponse {
+struct SignInResponse<U: Serialize> {
     redirect: bool,
     token: String,
     url: Option<String>,
-    user: User,
+    user: U,
 }
 
 impl EmailPasswordPlugin {
@@ -101,10 +103,10 @@ impl EmailPasswordPlugin {
         self
     }
 
-    async fn handle_sign_up(
+    async fn handle_sign_up<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         if !self.config.enable_signup {
             return Err(AuthError::forbidden("User registration is not enabled"));
@@ -157,20 +159,20 @@ impl EmailPasswordPlugin {
         let session = session_manager.create_session(&user, None, None).await?;
 
         let response = SignUpResponse {
-            token: Some(session.token.clone()),
+            token: Some(session.token().to_string()),
             user,
         };
 
         // Create session cookie
-        let cookie_header = self.create_session_cookie(&session.token, ctx);
+        let cookie_header = self.create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
-    async fn handle_sign_in(
+    async fn handle_sign_in<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let signin_req: SignInRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -186,7 +188,7 @@ impl EmailPasswordPlugin {
 
         // Verify password
         let stored_hash = user
-            .metadata
+            .metadata()
             .get("password_hash")
             .and_then(|v| v.as_str())
             .ok_or(AuthError::InvalidCredentials)?;
@@ -200,21 +202,21 @@ impl EmailPasswordPlugin {
 
         let response = SignInResponse {
             redirect: false,
-            token: session.token.clone(),
+            token: session.token().to_string(),
             url: None,
             user,
         };
 
         // Create session cookie
-        let cookie_header = self.create_session_cookie(&session.token, ctx);
+        let cookie_header = self.create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
-    async fn handle_sign_in_username(
+    async fn handle_sign_in_username<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let signin_req: SignInUsernameRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -230,7 +232,7 @@ impl EmailPasswordPlugin {
 
         // Verify password
         let stored_hash = user
-            .metadata
+            .metadata()
             .get("password_hash")
             .and_then(|v| v.as_str())
             .ok_or(AuthError::InvalidCredentials)?;
@@ -244,18 +246,22 @@ impl EmailPasswordPlugin {
 
         let response = SignInResponse {
             redirect: false,
-            token: session.token.clone(),
+            token: session.token().to_string(),
             url: None,
             user,
         };
 
         // Create session cookie
-        let cookie_header = self.create_session_cookie(&session.token, ctx);
+        let cookie_header = self.create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
-    fn validate_password(&self, password: &str, ctx: &AuthContext) -> AuthResult<()> {
+    fn validate_password<DB: DatabaseAdapter>(
+        &self,
+        password: &str,
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<()> {
         if password.len() < ctx.config.password.min_length {
             return Err(AuthError::bad_request(format!(
                 "Password must be at least {} characters long",
@@ -276,7 +282,11 @@ impl EmailPasswordPlugin {
         Ok(password_hash.to_string())
     }
 
-    fn create_session_cookie(&self, token: &str, ctx: &AuthContext) -> String {
+    fn create_session_cookie<DB: DatabaseAdapter>(
+        &self,
+        token: &str,
+        ctx: &AuthContext<DB>,
+    ) -> String {
         let session_config = &ctx.config.session;
         let secure = if session_config.cookie_secure {
             "; Secure"
@@ -327,7 +337,7 @@ impl Default for EmailPasswordConfig {
 }
 
 #[async_trait]
-impl AuthPlugin for EmailPasswordPlugin {
+impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailPasswordPlugin {
     fn name(&self) -> &'static str {
         "email-password"
     }
@@ -348,7 +358,7 @@ impl AuthPlugin for EmailPasswordPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/sign-up/email") if self.config.enable_signup => {
@@ -362,10 +372,10 @@ impl AuthPlugin for EmailPasswordPlugin {
         }
     }
 
-    async fn on_user_created(&self, user: &User, _ctx: &AuthContext) -> AuthResult<()> {
+    async fn on_user_created(&self, user: &DB::User, _ctx: &AuthContext<DB>) -> AuthResult<()> {
         if self.config.require_email_verification
-            && !user.email_verified
-            && let Some(email) = &user.email
+            && !user.email_verified()
+            && let Some(email) = user.email()
         {
             println!("Email verification required for user: {}", email);
         }

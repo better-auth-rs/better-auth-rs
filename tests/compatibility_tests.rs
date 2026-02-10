@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use better_auth::{
-    AuthConfig, BetterAuth, MemoryDatabaseAdapter,
+    AuthBuilder, AuthConfig, BetterAuth, MemoryDatabaseAdapter,
     plugins::EmailPasswordPlugin,
     types::{AuthRequest, HttpMethod},
 };
@@ -48,12 +48,12 @@ fn load_reference_spec() -> BTreeMap<String, HashSet<String>> {
 }
 
 /// Create a test auth instance with all currently implemented plugins.
-async fn create_full_auth() -> BetterAuth {
+async fn create_full_auth() -> BetterAuth<MemoryDatabaseAdapter> {
     let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
         .base_url("http://localhost:3000")
         .password_min_length(8);
 
-    BetterAuth::new(config)
+    AuthBuilder::new(config)
         .database(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(better_auth::plugins::SessionManagementPlugin::new())
@@ -68,7 +68,9 @@ async fn create_full_auth() -> BetterAuth {
 }
 
 /// Collect all routes our implementation exposes (core + plugin).
-fn collect_implemented_routes(auth: &BetterAuth) -> BTreeMap<String, HashSet<String>> {
+fn collect_implemented_routes(
+    auth: &BetterAuth<MemoryDatabaseAdapter>,
+) -> BTreeMap<String, HashSet<String>> {
     let mut routes: BTreeMap<String, HashSet<String>> = BTreeMap::new();
 
     // Core routes (from handle_core_request)
@@ -296,7 +298,7 @@ async fn test_generated_openapi_metadata() {
 
 /// Helper to send a request and parse the JSON response body.
 async fn send_json_request(
-    auth: &BetterAuth,
+    auth: &BetterAuth<MemoryDatabaseAdapter>,
     method: HttpMethod,
     path: &str,
     body: Option<Value>,

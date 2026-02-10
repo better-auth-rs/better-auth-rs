@@ -9,13 +9,13 @@ use std::sync::Arc;
 use better_auth::adapters::{PoolConfig, SqlxAdapter};
 
 /// Helper to create test BetterAuth instance with memory database
-async fn create_test_auth_memory() -> Arc<BetterAuth> {
+async fn create_test_auth_memory() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
     let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
         .base_url("http://localhost:3000")
         .password_min_length(6);
 
     Arc::new(
-        BetterAuth::new(config)
+        BetterAuth::<MemoryDatabaseAdapter>::new(config)
             .database(MemoryDatabaseAdapter::new())
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
@@ -28,7 +28,9 @@ async fn create_test_auth_memory() -> Arc<BetterAuth> {
 }
 
 /// Helper to create user and get session token
-async fn create_test_user_and_session(auth: Arc<BetterAuth>) -> (String, String) {
+async fn create_test_user_and_session(
+    auth: Arc<BetterAuth<MemoryDatabaseAdapter>>,
+) -> (String, String) {
     use better_auth::types::AuthRequest;
     use std::collections::HashMap;
 
@@ -1456,7 +1458,7 @@ mod postgres_tests {
     use std::env;
 
     /// Helper to create test BetterAuth instance with PostgreSQL
-    async fn create_test_auth_postgres() -> Option<Arc<BetterAuth>> {
+    async fn create_test_auth_postgres() -> Option<Arc<BetterAuth<SqlxAdapter>>> {
         let database_url = env::var("TEST_DATABASE_URL").ok()?;
 
         let pool_config = PoolConfig {
@@ -1476,7 +1478,7 @@ mod postgres_tests {
             .base_url("http://localhost:3000")
             .password_min_length(6);
 
-        let auth = BetterAuth::new(config)
+        let auth = BetterAuth::<SqlxAdapter>::new(config)
             .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .build()

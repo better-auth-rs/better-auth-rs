@@ -4,6 +4,7 @@ pub mod rbac;
 pub mod types;
 
 use async_trait::async_trait;
+use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::error::AuthResult;
 use better_auth_core::plugin::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::types::{AuthRequest, AuthResponse, HttpMethod};
@@ -69,7 +70,7 @@ impl Default for OrganizationPlugin {
 }
 
 #[async_trait]
-impl AuthPlugin for OrganizationPlugin {
+impl<DB: DatabaseAdapter> AuthPlugin<DB> for OrganizationPlugin {
     fn name(&self) -> &'static str {
         "organization"
     }
@@ -112,7 +113,7 @@ impl AuthPlugin for OrganizationPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             // Organization CRUD

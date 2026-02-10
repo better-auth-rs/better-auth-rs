@@ -5,14 +5,16 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use better_auth::{BetterAuth, AuthConfig};
+//! use better_auth::{AuthBuilder, AuthConfig};
+//! use better_auth::adapters::MemoryDatabaseAdapter;
 //! use better_auth::plugins::EmailPasswordPlugin;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let config = AuthConfig::new("your-secret-key-that-is-at-least-32-chars");
 //!
-//!     let auth = BetterAuth::new(config)
+//!     let auth = AuthBuilder::new(config)
+//!         .database(MemoryDatabaseAdapter::new())
 //!         .plugin(EmailPasswordPlugin::new())
 //!         .build()
 //!         .await?;
@@ -29,66 +31,21 @@ pub mod handlers;
 // Re-export core abstractions
 pub use better_auth_core as types_mod;
 pub use better_auth_core::{
-    Account,
-    Argon2Config,
-    // Config
-    AuthConfig,
-    AuthContext,
-    // Error
-    AuthError,
-    // Plugin system
-    AuthPlugin,
-    AuthRequest,
-    AuthResponse,
-    AuthResult,
-    AuthRoute,
-    BodyLimitConfig,
-    BodyLimitMiddleware,
-    CacheAdapter,
-    ConsoleEmailProvider,
-    CorsConfig,
-    CorsMiddleware,
-    CreateAccount,
-    CreateSession,
-    CreateUser,
-    CreateVerification,
-    CsrfConfig,
-    CsrfMiddleware,
-    // Adapters
-    DatabaseAdapter,
-    DatabaseError,
-    // Hooks
-    DatabaseHooks,
-    DeleteUserResponse,
-    // Email
-    EmailProvider,
-    EndpointRateLimit,
-    HookedDatabaseAdapter,
-    HttpMethod,
-    JwtConfig,
-    MemoryCacheAdapter,
-    MemoryDatabaseAdapter,
-    // Middleware
-    Middleware,
-    OpenApiBuilder,
-    // OpenAPI
-    OpenApiSpec,
-    Passkey,
-    PasswordConfig,
-    RateLimitConfig,
-    RateLimitMiddleware,
-    SameSite,
-    Session,
-    SessionConfig,
-    // Session
-    SessionManager,
-    TwoFactor,
-    UpdateUser,
-    UpdateUserRequest,
-    UpdateUserResponse,
-    // Types
-    User,
-    Verification,
+    Account, Argon2Config, AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest,
+    AuthResponse, AuthResult, AuthRoute, BodyLimitConfig, BodyLimitMiddleware, CacheAdapter,
+    ConsoleEmailProvider, CorsConfig, CorsMiddleware, CreateAccount, CreateSession, CreateUser,
+    CreateVerification, CsrfConfig, CsrfMiddleware, DatabaseAdapter, DatabaseError, DatabaseHooks,
+    DeleteUserResponse, EmailProvider, EndpointRateLimit, HookedDatabaseAdapter, HttpMethod,
+    JwtConfig, MemoryCacheAdapter, MemoryDatabaseAdapter, Middleware, OpenApiBuilder, OpenApiSpec,
+    Passkey, PasswordConfig, RateLimitConfig, RateLimitMiddleware, SameSite, Session,
+    SessionConfig, SessionManager, TwoFactor, UpdateUser, UpdateUserRequest, UpdateUserResponse,
+    User, Verification,
+};
+
+// Re-export entity traits
+pub use better_auth_core::entity::{
+    AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey, AuthSession,
+    AuthTwoFactor, AuthUser, AuthVerification, MemberUserView,
 };
 
 // Re-export types under `types` module for backwards compatibility
@@ -105,6 +62,9 @@ pub mod adapters {
     pub use better_auth_core::{
         CacheAdapter, DatabaseAdapter, MemoryCacheAdapter, MemoryDatabaseAdapter,
     };
+
+    #[cfg(feature = "sqlx-postgres")]
+    pub use better_auth_core::SqlxAdapter;
 }
 
 // Re-export plugins
@@ -114,7 +74,7 @@ pub mod plugins {
 }
 
 // Re-export the main BetterAuth struct
-pub use core::{AuthBuilder, BetterAuth};
+pub use core::{AuthBuilder, BetterAuth, TypedAuthBuilder};
 
 #[cfg(feature = "axum")]
 pub use handlers::axum::AxumIntegration;
@@ -123,7 +83,6 @@ pub use handlers::axum::AxumIntegration;
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::sync::Arc;
 
     fn test_config() -> AuthConfig {
         AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
@@ -131,8 +90,8 @@ mod tests {
             .password_min_length(8)
     }
 
-    async fn create_test_auth() -> BetterAuth {
-        BetterAuth::new(test_config())
+    async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
+        AuthBuilder::new(test_config())
             .database(MemoryDatabaseAdapter::new())
             .plugin(plugins::EmailPasswordPlugin::new().enable_signup(true))
             .build()
@@ -186,7 +145,6 @@ mod tests {
     async fn test_signin_flow() {
         let auth = create_test_auth().await;
 
-        // First, create a user
         let signup_data = json!({
             "email": "signin@example.com",
             "password": "password123",
@@ -205,7 +163,6 @@ mod tests {
             .expect("Signup failed");
         assert_eq!(signup_response.status, 200);
 
-        // Now test signin
         let signin_data = json!({
             "email": "signin@example.com",
             "password": "password123"
@@ -246,14 +203,12 @@ mod tests {
             .headers
             .insert("content-type".to_string(), "application/json".to_string());
 
-        // First signup should succeed
         let response1 = auth
             .handle_request(request.clone())
             .await
             .expect("First signup failed");
         assert_eq!(response1.status, 200);
 
-        // Second signup with same email should fail
         let response2 = auth
             .handle_request(request)
             .await
@@ -265,7 +220,6 @@ mod tests {
     async fn test_invalid_credentials_signin() {
         let auth = create_test_auth().await;
 
-        // Try to signin with non-existent user
         let signin_data = json!({
             "email": "nonexistent@example.com",
             "password": "password123"
@@ -290,7 +244,7 @@ mod tests {
 
         let signup_data = json!({
             "email": "weak@example.com",
-            "password": "123", // Too short
+            "password": "123",
             "name": "Weak Password User"
         });
 
@@ -321,7 +275,6 @@ mod tests {
         let auth = create_test_auth().await;
         let session_manager = auth.session_manager();
 
-        // Create a test user first
         let database = auth.database();
         let create_user = CreateUser::new()
             .with_email("session@example.com")
@@ -332,7 +285,6 @@ mod tests {
             .await
             .expect("Failed to create user");
 
-        // Create a session
         let session = session_manager
             .create_session(&user, None, None)
             .await
@@ -342,7 +294,6 @@ mod tests {
         assert_eq!(session.user_id, user.id);
         assert!(session.active);
 
-        // Retrieve the session
         let retrieved_session = session_manager
             .get_session(&session.token)
             .await
@@ -352,13 +303,11 @@ mod tests {
         assert_eq!(retrieved_session.id, session.id);
         assert_eq!(retrieved_session.user_id, user.id);
 
-        // Delete the session
         session_manager
             .delete_session(&session.token)
             .await
             .expect("Failed to delete session");
 
-        // Verify session is deleted
         let deleted_session = session_manager
             .get_session(&session.token)
             .await
@@ -371,7 +320,6 @@ mod tests {
         let auth = create_test_auth().await;
         let session_manager = auth.session_manager();
 
-        // Valid token format: "session_" + base64 encoded 32 bytes = "session_" + 43 chars
         assert!(
             session_manager
                 .validate_token_format("session_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN")
@@ -391,28 +339,18 @@ mod tests {
             .await
             .expect("Health check failed");
 
-        // Health check should return 404 since no plugin handles it
-        // In a real Axum integration, this would be handled by the router
         assert_eq!(response.status, 404);
     }
 
     #[tokio::test]
     async fn test_config_validation() {
-        // Test empty secret
         let config = AuthConfig::new("");
         assert!(config.validate().is_err());
 
-        // Test short secret
         let config = AuthConfig::new("short");
         assert!(config.validate().is_err());
 
-        // Test valid secret but no database
         let config = AuthConfig::new("this-is-a-valid-32-character-secret-key");
-        assert!(config.validate().is_err());
-
-        // Test valid config
-        let mut config = AuthConfig::new("this-is-a-valid-32-character-secret-key");
-        config.database = Some(Arc::new(MemoryDatabaseAdapter::new()));
         assert!(config.validate().is_ok());
     }
 }

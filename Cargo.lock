@@ -318,6 +318,7 @@ dependencies = [
  "argon2",
  "async-trait",
  "base64",
+ "better-auth-derive",
  "chrono",
  "jsonwebtoken",
  "rand",
@@ -329,6 +330,15 @@ dependencies = [
  "tokio",
  "uuid",
  "validator",
+]
+
+[[package]]
+name = "better-auth-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
 ]
 
 [[package]]

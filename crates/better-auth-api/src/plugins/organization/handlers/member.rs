@@ -1,52 +1,44 @@
+use better_auth_core::adapters::DatabaseAdapter;
+use better_auth_core::entity::{AuthMember, AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
-use better_auth_core::types::{AuthRequest, AuthResponse, MemberWithUser};
+use better_auth_core::types::{AuthRequest, AuthResponse};
 
 use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::config::OrganizationConfig;
 use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
 use crate::plugins::organization::types::{
-    ListMembersQuery, ListMembersResponse, RemoveMemberRequest, SuccessResponse,
+    ListMembersQuery, ListMembersResponse, MemberResponse, RemoveMemberRequest, SuccessResponse,
     UpdateMemberRoleRequest,
 };
 
 /// Handle get active member request
-pub async fn handle_get_active_member(
+pub async fn handle_get_active_member<DB: DatabaseAdapter>(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<DB>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
 
     let org_id = session
-        .active_organization_id
-        .as_ref()
+        .active_organization_id()
         .ok_or_else(|| AuthError::bad_request("No active organization"))?;
 
     let member = ctx
         .database
-        .get_member(org_id, &user.id)
+        .get_member(org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
-    let member_with_user = MemberWithUser {
-        id: member.id,
-        organization_id: member.organization_id,
-        user_id: member.user_id,
-        role: member.role,
-        created_at: member.created_at,
-        user: better_auth_core::types::MemberUser {
-            id: user.id.clone(),
-            name: user.name.clone(),
-            email: user.email.clone(),
-            image: user.image.clone(),
-        },
-    };
+    let member_response = MemberResponse::from_member_and_user(&member, &user);
 
-    Ok(AuthResponse::json(200, &member_with_user)?)
+    Ok(AuthResponse::json(200, &member_response)?)
 }
 
 /// Handle list members request
-pub async fn handle_list_members(req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
+pub async fn handle_list_members<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
 
     // Parse query parameters
@@ -62,7 +54,7 @@ pub async fn handle_list_members(req: &AuthRequest, ctx: &AuthContext) -> AuthRe
 
     // Check membership
     ctx.database
-        .get_member(&org_id, &user.id)
+        .get_member(&org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -78,21 +70,9 @@ pub async fn handle_list_members(req: &AuthRequest, ctx: &AuthContext) -> AuthRe
 
     // Enrich with user info
     let mut members = Vec::with_capacity(members_page.len());
-    for member in members_page {
-        if let Some(user_info) = ctx.database.get_user_by_id(&member.user_id).await? {
-            members.push(MemberWithUser {
-                id: member.id,
-                organization_id: member.organization_id,
-                user_id: member.user_id,
-                role: member.role,
-                created_at: member.created_at,
-                user: better_auth_core::types::MemberUser {
-                    id: user_info.id,
-                    name: user_info.name,
-                    email: user_info.email,
-                    image: user_info.image,
-                },
-            });
+    for member in &members_page {
+        if let Some(user_info) = ctx.database.get_user_by_id(member.user_id()).await? {
+            members.push(MemberResponse::from_member_and_user(member, &user_info));
         }
     }
 
@@ -102,9 +82,9 @@ pub async fn handle_list_members(req: &AuthRequest, ctx: &AuthContext) -> AuthRe
 }
 
 /// Handle remove member request
-pub async fn handle_remove_member(
+pub async fn handle_remove_member<DB: DatabaseAdapter>(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<DB>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
@@ -118,16 +98,26 @@ pub async fn handle_remove_member(
     // Get the requester's membership
     let requester_member = ctx
         .database
-        .get_member(&org_id, &user.id)
+        .get_member(&org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
     // Determine target member
-    let target_member = if let Some(member_id) = &body.member_id {
-        ctx.database
+    let target_member_id: String;
+    let target_member_org_id: String;
+    let target_member_user_id: String;
+    let target_member_role: String;
+
+    if let Some(member_id) = &body.member_id {
+        let target = ctx
+            .database
             .get_member_by_id(member_id)
             .await?
-            .ok_or_else(|| AuthError::not_found("Member not found"))?
+            .ok_or_else(|| AuthError::not_found("Member not found"))?;
+        target_member_id = target.id().to_string();
+        target_member_org_id = target.organization_id().to_string();
+        target_member_user_id = target.user_id().to_string();
+        target_member_role = target.role().to_string();
     } else if let Some(email) = &body.email {
         // Find user by email first
         let target_user = ctx
@@ -136,25 +126,15 @@ pub async fn handle_remove_member(
             .await?
             .ok_or_else(|| AuthError::not_found("User not found"))?;
         // Get member
-        let member = ctx
+        let target = ctx
             .database
-            .get_member(&org_id, &target_user.id)
+            .get_member(&org_id, target_user.id())
             .await?
             .ok_or_else(|| AuthError::not_found("Member not found"))?;
-        // Convert to MemberWithUser
-        MemberWithUser {
-            id: member.id,
-            organization_id: member.organization_id,
-            user_id: member.user_id.clone(),
-            role: member.role,
-            created_at: member.created_at,
-            user: better_auth_core::types::MemberUser {
-                id: target_user.id,
-                name: target_user.name,
-                email: target_user.email,
-                image: target_user.image,
-            },
-        }
+        target_member_id = target.id().to_string();
+        target_member_org_id = target.organization_id().to_string();
+        target_member_user_id = target.user_id().to_string();
+        target_member_role = target.role().to_string();
     } else {
         return Err(AuthError::bad_request(
             "Either memberId or email must be provided",
@@ -162,17 +142,17 @@ pub async fn handle_remove_member(
     };
 
     // Verify target is in same organization
-    if target_member.organization_id != org_id {
+    if target_member_org_id != org_id {
         return Err(AuthError::bad_request("Member not in this organization"));
     }
 
     // Check if user is trying to remove themselves (allowed without permission)
-    let is_self_removal = target_member.user_id == user.id;
+    let is_self_removal = target_member_user_id == user.id();
 
     if !is_self_removal {
         // Check permission for removing others
         if !has_permission_any(
-            &requester_member.role,
+            requester_member.role(),
             &Resource::Member,
             &Action::Delete,
             &config.roles,
@@ -184,11 +164,11 @@ pub async fn handle_remove_member(
     }
 
     // Check if removing the last owner
-    if target_member.role.contains("owner") {
+    if target_member_role.contains("owner") {
         let all_members = ctx.database.list_organization_members(&org_id).await?;
         let owner_count = all_members
             .iter()
-            .filter(|m| m.role.contains("owner"))
+            .filter(|m| m.role().contains("owner"))
             .count();
 
         if owner_count <= 1 {
@@ -199,15 +179,15 @@ pub async fn handle_remove_member(
     }
 
     // Delete member by member_id
-    ctx.database.delete_member(&target_member.id).await?;
+    ctx.database.delete_member(&target_member_id).await?;
 
     Ok(AuthResponse::json(200, &SuccessResponse { success: true })?)
 }
 
 /// Handle update member role request
-pub async fn handle_update_member_role(
+pub async fn handle_update_member_role<DB: DatabaseAdapter>(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<DB>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
@@ -221,13 +201,13 @@ pub async fn handle_update_member_role(
     // Get requester's membership
     let requester_member = ctx
         .database
-        .get_member(&org_id, &user.id)
+        .get_member(&org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
     // Check permission
     if !has_permission_any(
-        &requester_member.role,
+        requester_member.role(),
         &Resource::Member,
         &Action::Update,
         &config.roles,
@@ -245,16 +225,16 @@ pub async fn handle_update_member_role(
         .ok_or_else(|| AuthError::not_found("Member not found"))?;
 
     // Verify target is in same organization
-    if target_member.organization_id != org_id {
+    if target_member.organization_id() != org_id {
         return Err(AuthError::bad_request("Member not in this organization"));
     }
 
     // Prevent demoting the last owner
-    if target_member.role.contains("owner") && !body.role.contains("owner") {
+    if target_member.role().contains("owner") && !body.role.contains("owner") {
         let all_members = ctx.database.list_organization_members(&org_id).await?;
         let owner_count = all_members
             .iter()
-            .filter(|m| m.role.contains("owner"))
+            .filter(|m| m.role().contains("owner"))
             .count();
 
         if owner_count <= 1 {
@@ -271,22 +251,9 @@ pub async fn handle_update_member_role(
         .await?;
 
     // Return updated member with user info
-    if let Some(user_info) = ctx.database.get_user_by_id(&updated.user_id).await? {
-        let member_with_user = MemberWithUser {
-            id: updated.id,
-            organization_id: updated.organization_id,
-            user_id: updated.user_id,
-            role: updated.role,
-            created_at: updated.created_at,
-            user: better_auth_core::types::MemberUser {
-                id: user_info.id,
-                name: user_info.name,
-                email: user_info.email,
-                image: user_info.image,
-            },
-        };
-
-        return Ok(AuthResponse::json(200, &member_with_user)?);
+    if let Some(user_info) = ctx.database.get_user_by_id(updated.user_id()).await? {
+        let member_response = MemberResponse::from_member_and_user(&updated, &user_info);
+        return Ok(AuthResponse::json(200, &member_response)?);
     }
 
     Ok(AuthResponse::json(200, &updated)?)

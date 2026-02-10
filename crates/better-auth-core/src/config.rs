@@ -1,4 +1,3 @@
-use crate::adapters::DatabaseAdapter;
 use crate::email::EmailProvider;
 use crate::error::AuthError;
 use chrono::Duration;
@@ -12,9 +11,6 @@ pub struct AuthConfig {
 
     /// Base URL for the authentication service
     pub base_url: String,
-
-    /// Database adapter for persistence
-    pub database: Option<Arc<dyn DatabaseAdapter>>,
 
     /// Session configuration
     pub session: SessionConfig,
@@ -105,7 +101,6 @@ impl Default for AuthConfig {
         Self {
             secret: String::new(),
             base_url: "http://localhost:3000".to_string(),
-            database: None,
             session: SessionConfig::default(),
             jwt: JwtConfig::default(),
             password: PasswordConfig::default(),
@@ -198,10 +193,6 @@ impl AuthConfig {
             return Err(AuthError::config(
                 "Secret key must be at least 32 characters",
             ));
-        }
-
-        if self.database.is_none() {
-            return Err(AuthError::config("Database adapter is required"));
         }
 
         Ok(())

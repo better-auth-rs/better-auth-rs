@@ -4,28 +4,44 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
+use crate::entity::{
+    AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthSession, AuthUser,
+    AuthVerification,
+};
 use crate::error::{AuthError, AuthResult};
 use crate::types::{
     Account, CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
-    CreateUser, CreateVerification, Invitation, InvitationStatus, Member, MemberUser,
-    MemberWithUser, Organization, Session, UpdateOrganization, UpdateUser, User, Verification,
+    CreateUser, CreateVerification, Invitation, InvitationStatus, Member, Organization, Session,
+    UpdateOrganization, UpdateUser, User, Verification,
 };
 
-/// Database adapter trait for persistence
+/// Database adapter trait for persistence.
+///
+/// Associated types allow users to define their own entity structs.
+/// Use the default types (`User`, `Session`, etc.) or implement entity traits
+/// on custom structs via `#[derive(AuthUser)]` etc.
 #[async_trait]
-pub trait DatabaseAdapter: Send + Sync {
+pub trait DatabaseAdapter: Send + Sync + 'static {
+    type User: AuthUser;
+    type Session: AuthSession;
+    type Account: AuthAccount;
+    type Organization: AuthOrganization;
+    type Member: AuthMember;
+    type Invitation: AuthInvitation;
+    type Verification: AuthVerification;
+
     // User operations
-    async fn create_user(&self, user: CreateUser) -> AuthResult<User>;
-    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<User>>;
-    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<User>>;
-    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<User>>;
-    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<User>;
+    async fn create_user(&self, user: CreateUser) -> AuthResult<Self::User>;
+    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<Self::User>>;
+    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<Self::User>>;
+    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<Self::User>>;
+    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<Self::User>;
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
 
     // Session operations
-    async fn create_session(&self, session: CreateSession) -> AuthResult<Session>;
-    async fn get_session(&self, token: &str) -> AuthResult<Option<Session>>;
-    async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<Session>>;
+    async fn create_session(&self, session: CreateSession) -> AuthResult<Self::Session>;
+    async fn get_session(&self, token: &str) -> AuthResult<Option<Self::Session>>;
+    async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<Self::Session>>;
     async fn update_session_expiry(&self, token: &str, expires_at: DateTime<Utc>)
     -> AuthResult<()>;
     async fn delete_session(&self, token: &str) -> AuthResult<()>;
@@ -33,79 +49,87 @@ pub trait DatabaseAdapter: Send + Sync {
     async fn delete_expired_sessions(&self) -> AuthResult<usize>;
 
     // Account operations (for OAuth)
-    async fn create_account(&self, account: CreateAccount) -> AuthResult<Account>;
+    async fn create_account(&self, account: CreateAccount) -> AuthResult<Self::Account>;
     async fn get_account(
         &self,
         provider: &str,
         provider_account_id: &str,
-    ) -> AuthResult<Option<Account>>;
-    async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<Account>>;
+    ) -> AuthResult<Option<Self::Account>>;
+    async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<Self::Account>>;
     async fn delete_account(&self, id: &str) -> AuthResult<()>;
 
     // Verification token operations
     async fn create_verification(
         &self,
         verification: CreateVerification,
-    ) -> AuthResult<Verification>;
+    ) -> AuthResult<Self::Verification>;
     async fn get_verification(
         &self,
         identifier: &str,
         value: &str,
-    ) -> AuthResult<Option<Verification>>;
-    async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<Verification>>;
+    ) -> AuthResult<Option<Self::Verification>>;
+    async fn get_verification_by_value(
+        &self,
+        value: &str,
+    ) -> AuthResult<Option<Self::Verification>>;
     async fn delete_verification(&self, id: &str) -> AuthResult<()>;
     async fn delete_expired_verifications(&self) -> AuthResult<usize>;
 
     // Organization operations
-    async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Organization>;
-    async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>>;
-    async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>>;
+    async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Self::Organization>;
+    async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Self::Organization>>;
+    async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Self::Organization>>;
     async fn update_organization(
         &self,
         id: &str,
         update: UpdateOrganization,
-    ) -> AuthResult<Organization>;
+    ) -> AuthResult<Self::Organization>;
     async fn delete_organization(&self, id: &str) -> AuthResult<()>;
-    async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>>;
+    async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Self::Organization>>;
 
     // Member operations
-    async fn create_member(&self, member: CreateMember) -> AuthResult<Member>;
-    async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>>;
-    async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<MemberWithUser>>;
-    async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member>;
+    async fn create_member(&self, member: CreateMember) -> AuthResult<Self::Member>;
+    async fn get_member(
+        &self,
+        organization_id: &str,
+        user_id: &str,
+    ) -> AuthResult<Option<Self::Member>>;
+    async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Self::Member>>;
+    async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Self::Member>;
     async fn delete_member(&self, member_id: &str) -> AuthResult<()>;
     async fn list_organization_members(
         &self,
         organization_id: &str,
-    ) -> AuthResult<Vec<MemberWithUser>>;
+    ) -> AuthResult<Vec<Self::Member>>;
     async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize>;
     async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<usize>;
 
     // Invitation operations
-    async fn create_invitation(&self, invitation: CreateInvitation) -> AuthResult<Invitation>;
-    async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>>;
+    async fn create_invitation(&self, invitation: CreateInvitation)
+    -> AuthResult<Self::Invitation>;
+    async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Self::Invitation>>;
     async fn get_pending_invitation(
         &self,
         organization_id: &str,
         email: &str,
-    ) -> AuthResult<Option<Invitation>>;
+    ) -> AuthResult<Option<Self::Invitation>>;
     async fn update_invitation_status(
         &self,
         id: &str,
         status: InvitationStatus,
-    ) -> AuthResult<Invitation>;
+    ) -> AuthResult<Self::Invitation>;
     async fn list_organization_invitations(
         &self,
         organization_id: &str,
-    ) -> AuthResult<Vec<Invitation>>;
-    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>>;
+    ) -> AuthResult<Vec<Self::Invitation>>;
+    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Self::Invitation>>;
 
     // Session organization support
     async fn update_session_active_organization(
         &self,
         token: &str,
         organization_id: Option<&str>,
-    ) -> AuthResult<Session>;
+    ) -> AuthResult<Self::Session>;
 }
 
 /// In-memory database adapter for testing and development
@@ -148,6 +172,14 @@ impl Default for MemoryDatabaseAdapter {
 
 #[async_trait]
 impl DatabaseAdapter for MemoryDatabaseAdapter {
+    type User = User;
+    type Session = Session;
+    type Account = Account;
+    type Organization = Organization;
+    type Member = Member;
+    type Invitation = Invitation;
+    type Verification = Verification;
+
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<User> {
         let mut users = self.users.lock().unwrap();
         let mut email_index = self.email_index.lock().unwrap();
@@ -664,29 +696,9 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
         Ok(member)
     }
 
-    async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<MemberWithUser>> {
+    async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
         let members = self.members.lock().unwrap();
-        let users = self.users.lock().unwrap();
-
-        if let Some(member) = members.get(id)
-            && let Some(user) = users.get(&member.user_id)
-        {
-            return Ok(Some(MemberWithUser {
-                id: member.id.clone(),
-                organization_id: member.organization_id.clone(),
-                user_id: member.user_id.clone(),
-                role: member.role.clone(),
-                created_at: member.created_at,
-                user: MemberUser {
-                    id: user.id.clone(),
-                    email: user.email.clone(),
-                    name: user.name.clone(),
-                    image: user.image.clone(),
-                },
-            }));
-        }
-
-        Ok(None)
+        Ok(members.get(id).cloned())
     }
 
     async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member> {
@@ -707,34 +719,16 @@ impl DatabaseAdapter for MemoryDatabaseAdapter {
         Ok(())
     }
 
-    async fn list_organization_members(
-        &self,
-        organization_id: &str,
-    ) -> AuthResult<Vec<MemberWithUser>> {
+    async fn list_organization_members(&self, organization_id: &str) -> AuthResult<Vec<Member>> {
         let members = self.members.lock().unwrap();
-        let users = self.users.lock().unwrap();
 
-        let members_with_users = members
+        let org_members = members
             .values()
             .filter(|m| m.organization_id == organization_id)
-            .filter_map(|member| {
-                users.get(&member.user_id).map(|user| MemberWithUser {
-                    id: member.id.clone(),
-                    organization_id: member.organization_id.clone(),
-                    user_id: member.user_id.clone(),
-                    role: member.role.clone(),
-                    created_at: member.created_at,
-                    user: MemberUser {
-                        id: user.id.clone(),
-                        email: user.email.clone(),
-                        name: user.name.clone(),
-                        image: user.image.clone(),
-                    },
-                })
-            })
+            .cloned()
             .collect();
 
-        Ok(members_with_users)
+        Ok(org_members)
     }
 
     async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize> {
@@ -953,6 +947,14 @@ pub mod sqlx_adapter {
 
     #[async_trait]
     impl DatabaseAdapter for SqlxAdapter {
+        type User = User;
+        type Session = Session;
+        type Account = Account;
+        type Organization = Organization;
+        type Member = Member;
+        type Invitation = Invitation;
+        type Verification = Verification;
+
         async fn create_user(&self, create_user: CreateUser) -> AuthResult<User> {
             let id = create_user.id.unwrap_or_else(|| Uuid::new_v4().to_string());
             let now = Utc::now();
@@ -1500,38 +1502,19 @@ pub mod sqlx_adapter {
             Ok(member)
         }
 
-        async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<MemberWithUser>> {
-            let row = sqlx::query(
+        async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
+            let member = sqlx::query_as::<_, Member>(
                 r#"
-                SELECT m.id, m.organization_id, m.user_id, m.role, m.created_at,
-                       u.id as uid, u.email, u.name, u.image
-                FROM member m
-                INNER JOIN users u ON m.user_id = u.id
-                WHERE m.id = $1
+                SELECT id, organization_id, user_id, role, created_at
+                FROM member
+                WHERE id = $1
                 "#,
             )
             .bind(id)
             .fetch_optional(&self.pool)
             .await?;
 
-            if let Some(row) = row {
-                use sqlx::Row;
-                Ok(Some(MemberWithUser {
-                    id: row.try_get("id")?,
-                    organization_id: row.try_get("organization_id")?,
-                    user_id: row.try_get("user_id")?,
-                    role: row.try_get("role")?,
-                    created_at: row.try_get("created_at")?,
-                    user: MemberUser {
-                        id: row.try_get("uid")?,
-                        email: row.try_get("email")?,
-                        name: row.try_get("name")?,
-                        image: row.try_get("image")?,
-                    },
-                }))
-            } else {
-                Ok(None)
-            }
+            Ok(member)
         }
 
         async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member> {
@@ -1562,40 +1545,18 @@ pub mod sqlx_adapter {
         async fn list_organization_members(
             &self,
             organization_id: &str,
-        ) -> AuthResult<Vec<MemberWithUser>> {
-            let rows = sqlx::query(
+        ) -> AuthResult<Vec<Member>> {
+            let members = sqlx::query_as::<_, Member>(
                 r#"
-                SELECT m.id, m.organization_id, m.user_id, m.role, m.created_at,
-                       u.id as uid, u.email, u.name, u.image
-                FROM member m
-                INNER JOIN users u ON m.user_id = u.id
-                WHERE m.organization_id = $1
-                ORDER BY m.created_at ASC
+                SELECT id, organization_id, user_id, role, created_at
+                FROM member
+                WHERE organization_id = $1
+                ORDER BY created_at ASC
                 "#,
             )
             .bind(organization_id)
             .fetch_all(&self.pool)
             .await?;
-
-            use sqlx::Row;
-            let members = rows
-                .iter()
-                .map(|row| {
-                    Ok(MemberWithUser {
-                        id: row.try_get("id")?,
-                        organization_id: row.try_get("organization_id")?,
-                        user_id: row.try_get("user_id")?,
-                        role: row.try_get("role")?,
-                        created_at: row.try_get("created_at")?,
-                        user: MemberUser {
-                            id: row.try_get("uid")?,
-                            email: row.try_get("email")?,
-                            name: row.try_get("name")?,
-                            image: row.try_get("image")?,
-                        },
-                    })
-                })
-                .collect::<Result<Vec<_>, sqlx::Error>>()?;
 
             Ok(members)
         }

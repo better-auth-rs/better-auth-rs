@@ -11,18 +11,18 @@ use std::sync::Arc;
 
 #[cfg(feature = "axum")]
 use crate::BetterAuth;
-use better_auth_core::{AuthError, AuthRequest, AuthResponse, HttpMethod};
+use better_auth_core::{AuthError, AuthRequest, AuthResponse, DatabaseAdapter, HttpMethod};
 
 /// Integration trait for Axum web framework
 #[cfg(feature = "axum")]
-pub trait AxumIntegration {
+pub trait AxumIntegration<DB: DatabaseAdapter> {
     /// Create an Axum router with all authentication routes
-    fn axum_router(self) -> Router<Arc<BetterAuth>>;
+    fn axum_router(self) -> Router<Arc<BetterAuth<DB>>>;
 }
 
 #[cfg(feature = "axum")]
-impl AxumIntegration for Arc<BetterAuth> {
-    fn axum_router(self) -> Router<Arc<BetterAuth>> {
+impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
+    fn axum_router(self) -> Router<Arc<BetterAuth<DB>>> {
         let mut router = Router::new();
 
         // Add status endpoints
@@ -33,16 +33,19 @@ impl AxumIntegration for Arc<BetterAuth> {
         router = router.route("/health", get(health_check));
 
         // Add OpenAPI spec endpoint
-        router = router.route("/reference/openapi.json", get(create_plugin_handler()));
+        router = router.route(
+            "/reference/openapi.json",
+            get(create_plugin_handler::<DB>()),
+        );
 
         // Add core user management routes
-        router = router.route("/update-user", post(create_plugin_handler()));
-        router = router.route("/delete-user", post(create_plugin_handler()));
+        router = router.route("/update-user", post(create_plugin_handler::<DB>()));
+        router = router.route("/delete-user", post(create_plugin_handler::<DB>()));
 
         // Register plugin routes
         for plugin in self.plugins() {
             for route in plugin.routes() {
-                let handler_fn = create_plugin_handler();
+                let handler_fn = create_plugin_handler::<DB>();
                 match route.method {
                     HttpMethod::Get => {
                         router = router.route(&route.path, get(handler_fn.clone()));
@@ -89,13 +92,13 @@ async fn health_check() -> impl IntoResponse {
 }
 
 #[cfg(feature = "axum")]
-fn create_plugin_handler() -> impl Fn(
-    State<Arc<BetterAuth>>,
+fn create_plugin_handler<DB: DatabaseAdapter>() -> impl Fn(
+    State<Arc<BetterAuth<DB>>>,
     Request,
 ) -> std::pin::Pin<
     Box<dyn std::future::Future<Output = Response> + Send>,
 > + Clone {
-    |State(auth): State<Arc<BetterAuth>>, req: Request| {
+    |State(auth): State<Arc<BetterAuth<DB>>>, req: Request| {
         Box::pin(async move {
             match convert_axum_request(req).await {
                 Ok(auth_req) => match auth.handle_request(auth_req).await {

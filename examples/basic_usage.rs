@@ -4,7 +4,7 @@ use better_auth::plugins::{
     PasswordManagementPlugin, SessionManagementPlugin,
 };
 use better_auth::types::{AuthRequest, HttpMethod};
-use better_auth::{AuthConfig, BetterAuth};
+use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -17,7 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .password_min_length(8);
 
     // Build the authentication system with all plugins
-    let auth = BetterAuth::new(config)
+    let auth = AuthBuilder::new(config)
         .database(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(PasswordManagementPlugin::new())
@@ -268,7 +268,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Helper: send a request through the auth handler
 async fn send(
-    auth: &BetterAuth,
+    auth: &BetterAuth<MemoryDatabaseAdapter>,
     method: HttpMethod,
     path: &str,
     body: Option<&serde_json::Value>,

@@ -3,31 +3,32 @@ use std::sync::Arc;
 
 use crate::adapters::DatabaseAdapter;
 use crate::config::AuthConfig;
+use crate::entity::{AuthSession, AuthUser};
 use crate::error::AuthResult;
-use crate::types::{CreateSession, Session, User};
+use crate::types::CreateSession;
 
 /// Session manager handles session creation, validation, and cleanup
-pub struct SessionManager {
+pub struct SessionManager<DB: DatabaseAdapter> {
     config: Arc<AuthConfig>,
-    database: Arc<dyn DatabaseAdapter>,
+    database: Arc<DB>,
 }
 
-impl SessionManager {
-    pub fn new(config: Arc<AuthConfig>, database: Arc<dyn DatabaseAdapter>) -> Self {
+impl<DB: DatabaseAdapter> SessionManager<DB> {
+    pub fn new(config: Arc<AuthConfig>, database: Arc<DB>) -> Self {
         Self { config, database }
     }
 
     /// Create a new session for a user
     pub async fn create_session(
         &self,
-        user: &User,
+        user: &impl AuthUser,
         ip_address: Option<String>,
         user_agent: Option<String>,
-    ) -> AuthResult<Session> {
+    ) -> AuthResult<DB::Session> {
         let expires_at = Utc::now() + self.config.session.expires_in;
 
         let create_session = CreateSession {
-            user_id: user.id.clone(),
+            user_id: user.id().to_string(),
             expires_at,
             ip_address,
             user_agent,
@@ -40,12 +41,12 @@ impl SessionManager {
     }
 
     /// Get session by token
-    pub async fn get_session(&self, token: &str) -> AuthResult<Option<Session>> {
+    pub async fn get_session(&self, token: &str) -> AuthResult<Option<DB::Session>> {
         let session = self.database.get_session(token).await?;
 
         // Check if session exists and is not expired
         if let Some(ref session) = session {
-            if session.expires_at < Utc::now() || !session.active {
+            if session.expires_at() < Utc::now() || !session.active() {
                 // Session expired or inactive - delete it
                 self.database.delete_session(token).await?;
                 return Ok(None);
@@ -77,14 +78,14 @@ impl SessionManager {
     }
 
     /// Get all active sessions for a user
-    pub async fn list_user_sessions(&self, user_id: &str) -> AuthResult<Vec<Session>> {
+    pub async fn list_user_sessions(&self, user_id: &str) -> AuthResult<Vec<DB::Session>> {
         let sessions = self.database.get_user_sessions(user_id).await?;
         let now = Utc::now();
 
         // Filter out expired sessions
-        let active_sessions: Vec<Session> = sessions
+        let active_sessions: Vec<DB::Session> = sessions
             .into_iter()
-            .filter(|session| session.expires_at > now && session.active)
+            .filter(|session| session.expires_at() > now && session.active())
             .collect();
 
         Ok(active_sessions)
@@ -123,8 +124,8 @@ impl SessionManager {
         let mut count = 0;
 
         for session in sessions {
-            if session.token != current_token {
-                self.delete_session(&session.token).await?;
+            if session.token() != current_token {
+                self.delete_session(session.token()).await?;
                 count += 1;
             }
         }

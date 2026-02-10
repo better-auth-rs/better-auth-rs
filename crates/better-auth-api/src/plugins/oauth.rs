@@ -5,7 +5,8 @@ use validator::Validate;
 
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, CreateAccount, CreateUser, HttpMethod, User};
+use better_auth_core::{AuthRequest, AuthResponse, CreateAccount, CreateUser, HttpMethod};
+use better_auth_core::{AuthSession, AuthUser, DatabaseAdapter};
 
 /// OAuth authentication plugin for social sign-in
 pub struct OAuthPlugin {
@@ -83,11 +84,11 @@ struct LinkSocialRequest {
 }
 
 #[derive(Debug, Serialize)]
-struct SocialSignInResponse {
+struct SocialSignInResponse<U: Serialize> {
     redirect: bool,
     token: String,
     url: Option<String>,
-    user: User,
+    user: U,
 }
 
 #[derive(Debug, Serialize)]
@@ -97,7 +98,7 @@ struct LinkSocialResponse {
 }
 
 #[async_trait]
-impl AuthPlugin for OAuthPlugin {
+impl<DB: DatabaseAdapter> AuthPlugin<DB> for OAuthPlugin {
     fn name(&self) -> &'static str {
         "oauth"
     }
@@ -112,7 +113,7 @@ impl AuthPlugin for OAuthPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/sign-in/social") => {
@@ -128,10 +129,10 @@ impl AuthPlugin for OAuthPlugin {
 
 // Implementation methods outside the trait
 impl OAuthPlugin {
-    async fn handle_social_sign_in(
+    async fn handle_social_sign_in<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let signin_req: SocialSignInRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -157,10 +158,10 @@ impl OAuthPlugin {
         self.generate_auth_url(&signin_req, ctx).await
     }
 
-    async fn handle_link_social(
+    async fn handle_link_social<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let link_req: LinkSocialRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -207,11 +208,11 @@ impl OAuthPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_id_token_sign_in(
+    async fn handle_id_token_sign_in<DB: DatabaseAdapter>(
         &self,
         id_token: &str,
         signin_req: &SocialSignInRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         // TODO: Implement proper JWT verification
         // For now, return a mock implementation that creates a user
@@ -238,7 +239,7 @@ impl OAuthPlugin {
         let create_account = CreateAccount {
             account_id: format!("{}_{}", signin_req.provider, uuid::Uuid::new_v4()),
             provider_id: signin_req.provider.clone(),
-            user_id: user.id.clone(),
+            user_id: user.id().to_string(),
             access_token: Some("mock_access_token".to_string()),
             refresh_token: None,
             id_token: Some(id_token.to_string()),
@@ -265,7 +266,7 @@ impl OAuthPlugin {
 
         let response = SocialSignInResponse {
             redirect: false,
-            token: session.token,
+            token: session.token().to_string(),
             url: None,
             user,
         };
@@ -273,10 +274,10 @@ impl OAuthPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn generate_auth_url(
+    async fn generate_auth_url<DB: DatabaseAdapter>(
         &self,
         signin_req: &SocialSignInRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let provider = &self.config.providers[&signin_req.provider];
         let callback_url = signin_req.callback_url.clone().unwrap_or_else(|| {

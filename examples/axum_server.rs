@@ -12,7 +12,7 @@ use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, OrganizationPlugin, PasswordManagementPlugin,
     SessionManagementPlugin,
 };
-use better_auth::{AuthConfig, BetterAuth};
+use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
 use chrono;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build the authentication system
     let auth = Arc::new(
-        BetterAuth::new(config)
+        AuthBuilder::new(config)
             .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
@@ -152,7 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn create_app_router(auth: Arc<BetterAuth>) -> Router {
+async fn create_app_router(auth: Arc<BetterAuth<MemoryDatabaseAdapter>>) -> Router {
     // Create auth router using the BetterAuth AxumIntegration
     // This automatically registers all plugin routes
     let auth_router = auth.clone().axum_router();
@@ -177,7 +177,7 @@ async fn create_app_router(auth: Arc<BetterAuth>) -> Router {
 
 // Middleware to extract and validate session
 async fn auth_middleware(
-    State(_auth): State<Arc<BetterAuth>>,
+    State(_auth): State<Arc<BetterAuth<MemoryDatabaseAdapter>>>,
     mut req: Request,
     next: Next,
 ) -> Response {
@@ -220,7 +220,7 @@ fn extract_session_token(req: &Request) -> Option<String> {
 
 // API route handlers
 async fn get_user_profile(
-    State(_auth): State<Arc<BetterAuth>>,
+    State(_auth): State<Arc<BetterAuth<MemoryDatabaseAdapter>>>,
     req: Request,
 ) -> Result<Json<ApiResponse<UserProfile>>, StatusCode> {
     // Extract session token from request

@@ -6,25 +6,27 @@ pub use invitation::*;
 pub use member::*;
 pub use org::*;
 
+use better_auth_core::adapters::DatabaseAdapter;
+use better_auth_core::entity::{AuthMember, AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
 use better_auth_core::session::SessionManager;
-use better_auth_core::types::{AuthRequest, AuthResponse, Session, User};
+use better_auth_core::types::{AuthRequest, AuthResponse};
 
 use super::config::OrganizationConfig;
 use super::rbac::{Action, Resource, has_permission_any};
 use super::types::{HasPermissionRequest, HasPermissionResponse};
 
 /// Helper function to require authenticated session
-pub(crate) async fn require_session(
+pub(crate) async fn require_session<DB: DatabaseAdapter>(
     req: &AuthRequest,
-    ctx: &AuthContext,
-) -> AuthResult<(User, Session)> {
+    ctx: &AuthContext<DB>,
+) -> AuthResult<(DB::User, DB::Session)> {
     let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
 
     if let Some(token) = session_manager.extract_session_token(req)
         && let Some(session) = session_manager.get_session(&token).await?
-        && let Some(user) = ctx.database.get_user_by_id(&session.user_id).await?
+        && let Some(user) = ctx.database.get_user_by_id(session.user_id()).await?
     {
         return Ok((user, session));
     }
@@ -33,11 +35,11 @@ pub(crate) async fn require_session(
 }
 
 /// Helper function to get organization ID from request or session
-pub(crate) async fn resolve_organization_id(
+pub(crate) async fn resolve_organization_id<DB: DatabaseAdapter>(
     org_id: Option<&str>,
     org_slug: Option<&str>,
-    session: &Session,
-    ctx: &AuthContext,
+    session: &DB::Session,
+    ctx: &AuthContext<DB>,
 ) -> AuthResult<String> {
     // If org_id is provided, use it
     if let Some(id) = org_id {
@@ -47,22 +49,23 @@ pub(crate) async fn resolve_organization_id(
     // If org_slug is provided, resolve it
     if let Some(slug) = org_slug {
         if let Some(org) = ctx.database.get_organization_by_slug(slug).await? {
-            return Ok(org.id);
+            use better_auth_core::entity::AuthOrganization;
+            return Ok(org.id().to_string());
         }
         return Err(AuthError::not_found("Organization not found"));
     }
 
     // Fall back to active organization from session
     session
-        .active_organization_id
-        .clone()
+        .active_organization_id()
+        .map(|s| s.to_string())
         .ok_or_else(|| AuthError::bad_request("No active organization"))
 }
 
 /// Handle has-permission request
-pub async fn handle_has_permission(
+pub async fn handle_has_permission<DB: DatabaseAdapter>(
     req: &AuthRequest,
-    ctx: &AuthContext,
+    ctx: &AuthContext<DB>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
@@ -78,7 +81,7 @@ pub async fn handle_has_permission(
     // Get member to check their role
     let member = ctx
         .database
-        .get_member(&org_id, &user.id)
+        .get_member(&org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -103,7 +106,7 @@ pub async fn handle_has_permission(
                 }
             };
 
-            if !has_permission_any(&member.role, &resource, &action, &config.roles) {
+            if !has_permission_any(member.role(), &resource, &action, &config.roles) {
                 has_all_permissions = false;
                 break;
             }

@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 
+use better_auth_core::DatabaseAdapter;
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
@@ -22,7 +23,7 @@ impl Default for TwoFactorPlugin {
 }
 
 #[async_trait]
-impl AuthPlugin for TwoFactorPlugin {
+impl<DB: DatabaseAdapter> AuthPlugin<DB> for TwoFactorPlugin {
     fn name(&self) -> &'static str {
         "two-factor"
     }
@@ -38,7 +39,7 @@ impl AuthPlugin for TwoFactorPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        _ctx: &AuthContext,
+        _ctx: &AuthContext<DB>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, path) if path.starts_with("/2fa/") => Err(

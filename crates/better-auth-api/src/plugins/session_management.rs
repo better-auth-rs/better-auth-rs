@@ -2,9 +2,11 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
+use better_auth_core::adapters::DatabaseAdapter;
+use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute, SessionManager};
 use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, Session, User};
+use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
 /// Session management plugin for handling session operations
 pub struct SessionManagementPlugin {
@@ -27,14 +29,14 @@ struct RevokeSessionRequest {
 
 // Response structures
 #[derive(Debug, Serialize, Deserialize)]
-struct GetSessionResponse {
-    session: Session,
-    user: User,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 struct SignOutResponse {
     success: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct GetSessionResponse<S: Serialize, U: Serialize> {
+    session: S,
+    user: U,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -86,7 +88,7 @@ impl Default for SessionManagementConfig {
 }
 
 #[async_trait]
-impl AuthPlugin for SessionManagementPlugin {
+impl<DB: DatabaseAdapter> AuthPlugin<DB> for SessionManagementPlugin {
     fn name(&self) -> &'static str {
         "session-management"
     }
@@ -106,7 +108,7 @@ impl AuthPlugin for SessionManagementPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Get | HttpMethod::Post, "/get-session") => {
@@ -134,24 +136,24 @@ impl AuthPlugin for SessionManagementPlugin {
 
 // Implementation methods outside the trait
 impl SessionManagementPlugin {
-    async fn handle_get_session(
+    async fn handle_get_session<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, session) = self.require_session(req, ctx).await?;
         let response = GetSessionResponse { session, user };
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_sign_out(
+    async fn handle_sign_out<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (_user, current_session) = self.require_session(req, ctx).await?;
 
-        ctx.database.delete_session(&current_session.token).await?;
+        ctx.database.delete_session(current_session.token()).await?;
 
         let response = SignOutResponse { success: true };
         let clear_cookie_header = self.create_clear_session_cookie(ctx);
@@ -159,7 +161,7 @@ impl SessionManagementPlugin {
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", clear_cookie_header))
     }
 
-    fn create_clear_session_cookie(&self, ctx: &AuthContext) -> String {
+    fn create_clear_session_cookie<DB: DatabaseAdapter>(&self, ctx: &AuthContext<DB>) -> String {
         let session_config = &ctx.config.session;
         let secure = if session_config.cookie_secure {
             "; Secure"
@@ -183,20 +185,20 @@ impl SessionManagementPlugin {
         )
     }
 
-    async fn handle_list_sessions(
+    async fn handle_list_sessions<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = self.require_session(req, ctx).await?;
-        let sessions = self.get_user_sessions(&user.id, ctx).await?;
+        let sessions = self.get_user_sessions(user.id(), ctx).await?;
         Ok(AuthResponse::json(200, &sessions)?)
     }
 
-    async fn handle_revoke_session(
+    async fn handle_revoke_session<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = self.require_session(req, ctx).await?;
 
@@ -207,7 +209,7 @@ impl SessionManagementPlugin {
         // Verify the session belongs to the current user before revoking
         let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
         if let Some(session_to_revoke) = session_manager.get_session(&revoke_req.token).await?
-            && session_to_revoke.user_id != user.id
+            && session_to_revoke.user_id() != user.id()
         {
             return Err(AuthError::forbidden(
                 "Cannot revoke session that belongs to another user",
@@ -220,29 +222,29 @@ impl SessionManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_revoke_sessions(
+    async fn handle_revoke_sessions<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = self.require_session(req, ctx).await?;
-        ctx.database.delete_user_sessions(&user.id).await?;
+        ctx.database.delete_user_sessions(user.id()).await?;
 
         let response = StatusResponse { status: true };
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_revoke_other_sessions(
+    async fn handle_revoke_other_sessions<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, current_session) = self.require_session(req, ctx).await?;
 
-        let all_sessions = self.get_user_sessions(&user.id, ctx).await?;
+        let all_sessions = self.get_user_sessions(user.id(), ctx).await?;
         for session in all_sessions {
-            if session.token != current_session.token {
-                ctx.database.delete_session(&session.token).await?;
+            if session.token() != current_session.token() {
+                ctx.database.delete_session(session.token()).await?;
             }
         }
 
@@ -252,26 +254,26 @@ impl SessionManagementPlugin {
 
     /// Extract and validate the current user + session from the request.
     /// Returns `Err(AuthError::Unauthenticated)` if no valid session.
-    async fn require_session(
+    async fn require_session<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
-    ) -> AuthResult<(User, Session)> {
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<(DB::User, DB::Session)> {
         self.get_current_user_and_session(req, ctx)
             .await?
             .ok_or(AuthError::Unauthenticated)
     }
 
-    async fn get_current_user_and_session(
+    async fn get_current_user_and_session<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
-    ) -> AuthResult<Option<(User, Session)>> {
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<Option<(DB::User, DB::Session)>> {
         let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
 
         if let Some(token) = session_manager.extract_session_token(req)
             && let Some(session) = session_manager.get_session(&token).await?
-            && let Some(user) = ctx.database.get_user_by_id(&session.user_id).await?
+            && let Some(user) = ctx.database.get_user_by_id(session.user_id()).await?
         {
             return Ok(Some((user, session)));
         }
@@ -279,11 +281,11 @@ impl SessionManagementPlugin {
         Ok(None)
     }
 
-    async fn get_user_sessions(
+    async fn get_user_sessions<DB: DatabaseAdapter>(
         &self,
         user_id: &str,
-        ctx: &AuthContext,
-    ) -> AuthResult<Vec<Session>> {
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<Vec<DB::Session>> {
         ctx.database.get_user_sessions(user_id).await
     }
 }
@@ -293,12 +295,13 @@ mod tests {
     use super::*;
     use better_auth_core::adapters::{DatabaseAdapter, MemoryDatabaseAdapter};
     use better_auth_core::config::AuthConfig;
-    use better_auth_core::{CreateSession, CreateUser};
+    use better_auth_core::{CreateSession, CreateUser, Session, User};
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    async fn create_test_context_with_user() -> (AuthContext, User, Session) {
+    async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>, User, Session)
+    {
         let config = Arc::new(AuthConfig::new("test-secret-key-at-least-32-chars-long"));
         let database = Arc::new(MemoryDatabaseAdapter::new());
         let ctx = AuthContext::new(config.clone(), database.clone());
@@ -352,10 +355,15 @@ mod tests {
         assert_eq!(response.status, 200);
 
         let body_str = String::from_utf8(response.body).unwrap();
-        let response_data: GetSessionResponse = serde_json::from_str(&body_str).unwrap();
-        assert_eq!(response_data.session.token, session.token);
+        let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
         assert_eq!(
-            response_data.user.email,
+            response_data["session"]["token"].as_str().unwrap(),
+            session.token
+        );
+        assert_eq!(
+            response_data["user"]["email"]
+                .as_str()
+                .map(|s| s.to_string()),
             Some("test@example.com".to_string())
         );
     }
@@ -520,7 +528,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_routes() {
         let plugin = SessionManagementPlugin::new();
-        let routes = plugin.routes();
+        let routes = AuthPlugin::<MemoryDatabaseAdapter>::routes(&plugin);
 
         assert_eq!(routes.len(), 7);
         assert!(

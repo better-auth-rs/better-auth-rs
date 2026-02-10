@@ -6,11 +6,14 @@ use crate::adapters::DatabaseAdapter;
 use crate::config::AuthConfig;
 use crate::email::EmailProvider;
 use crate::error::{AuthError, AuthResult};
-use crate::types::{AuthRequest, AuthResponse, HttpMethod, Session, User};
+use crate::types::{AuthRequest, AuthResponse, HttpMethod};
 
-/// Plugin trait that all authentication plugins must implement
+/// Plugin trait that all authentication plugins must implement.
+///
+/// Generic over `DB` so that lifecycle hooks receive the adapter's concrete
+/// entity types (e.g., `DB::User`, `DB::Session`).
 #[async_trait]
-pub trait AuthPlugin: Send + Sync {
+pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
     /// Plugin name - should be unique
     fn name(&self) -> &'static str;
 
@@ -18,7 +21,7 @@ pub trait AuthPlugin: Send + Sync {
     fn routes(&self) -> Vec<AuthRoute>;
 
     /// Called when the plugin is initialized
-    async fn on_init(&self, ctx: &mut AuthContext) -> AuthResult<()> {
+    async fn on_init(&self, ctx: &mut AuthContext<DB>) -> AuthResult<()> {
         let _ = ctx;
         Ok(())
     }
@@ -27,29 +30,37 @@ pub trait AuthPlugin: Send + Sync {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext,
+        ctx: &AuthContext<DB>,
     ) -> AuthResult<Option<AuthResponse>>;
 
     /// Called after a user is created
-    async fn on_user_created(&self, user: &User, ctx: &AuthContext) -> AuthResult<()> {
+    async fn on_user_created(&self, user: &DB::User, ctx: &AuthContext<DB>) -> AuthResult<()> {
         let _ = (user, ctx);
         Ok(())
     }
 
     /// Called after a session is created
-    async fn on_session_created(&self, session: &Session, ctx: &AuthContext) -> AuthResult<()> {
+    async fn on_session_created(
+        &self,
+        session: &DB::Session,
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<()> {
         let _ = (session, ctx);
         Ok(())
     }
 
     /// Called before a user is deleted
-    async fn on_user_deleted(&self, user_id: &str, ctx: &AuthContext) -> AuthResult<()> {
+    async fn on_user_deleted(&self, user_id: &str, ctx: &AuthContext<DB>) -> AuthResult<()> {
         let _ = (user_id, ctx);
         Ok(())
     }
 
     /// Called before a session is deleted
-    async fn on_session_deleted(&self, session_token: &str, ctx: &AuthContext) -> AuthResult<()> {
+    async fn on_session_deleted(
+        &self,
+        session_token: &str,
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<()> {
         let _ = (session_token, ctx);
         Ok(())
     }
@@ -64,9 +75,9 @@ pub struct AuthRoute {
 }
 
 /// Context passed to plugin methods
-pub struct AuthContext {
+pub struct AuthContext<DB: DatabaseAdapter> {
     pub config: Arc<AuthConfig>,
-    pub database: Arc<dyn DatabaseAdapter>,
+    pub database: Arc<DB>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -97,8 +108,8 @@ impl AuthRoute {
     }
 }
 
-impl AuthContext {
-    pub fn new(config: Arc<AuthConfig>, database: Arc<dyn DatabaseAdapter>) -> Self {
+impl<DB: DatabaseAdapter> AuthContext<DB> {
+    pub fn new(config: Arc<AuthConfig>, database: Arc<DB>) -> Self {
         let email_provider = config.email_provider.clone();
         Self {
             config,

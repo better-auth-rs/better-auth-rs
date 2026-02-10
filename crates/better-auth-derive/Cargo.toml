@@ -1,0 +1,15 @@
+[package]
+name = "better-auth-derive"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "Derive macros for better-auth entity traits"
+repository = { workspace = true }
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }

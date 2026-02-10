@@ -1,53 +1,50 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
 use crate::adapters::DatabaseAdapter;
 use crate::error::AuthResult;
 use crate::types::{
-    Account, CreateAccount, CreateSession, CreateUser, CreateVerification, Session, UpdateUser,
-    User, Verification,
+    CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession, CreateUser,
+    CreateVerification, InvitationStatus, UpdateOrganization, UpdateUser,
 };
-use chrono::{DateTime, Utc};
 
 /// Database lifecycle hooks for intercepting operations.
 ///
 /// All methods have default no-op implementations. Override only the hooks
 /// you need. Returning `Err` from a `before_*` hook aborts the operation.
+///
+/// The `DB` type parameter determines the concrete entity types used in
+/// `after_*` hooks (e.g., `after_create_user` receives `&DB::User`).
 #[async_trait]
-pub trait DatabaseHooks: Send + Sync {
+pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
     // --- User hooks ---
 
-    /// Called before a user is created. Can modify the `CreateUser` or reject the operation.
     async fn before_create_user(&self, user: &mut CreateUser) -> AuthResult<()> {
         let _ = user;
         Ok(())
     }
 
-    /// Called after a user is created.
-    async fn after_create_user(&self, user: &User) -> AuthResult<()> {
+    async fn after_create_user(&self, user: &DB::User) -> AuthResult<()> {
         let _ = user;
         Ok(())
     }
 
-    /// Called before a user is updated. Can modify the `UpdateUser` or reject the operation.
     async fn before_update_user(&self, id: &str, update: &mut UpdateUser) -> AuthResult<()> {
         let _ = (id, update);
         Ok(())
     }
 
-    /// Called after a user is updated.
-    async fn after_update_user(&self, user: &User) -> AuthResult<()> {
+    async fn after_update_user(&self, user: &DB::User) -> AuthResult<()> {
         let _ = user;
         Ok(())
     }
 
-    /// Called before a user is deleted.
     async fn before_delete_user(&self, id: &str) -> AuthResult<()> {
         let _ = id;
         Ok(())
     }
 
-    /// Called after a user is deleted.
     async fn after_delete_user(&self, id: &str) -> AuthResult<()> {
         let _ = id;
         Ok(())
@@ -55,25 +52,21 @@ pub trait DatabaseHooks: Send + Sync {
 
     // --- Session hooks ---
 
-    /// Called before a session is created. Can modify the `CreateSession` or reject.
     async fn before_create_session(&self, session: &mut CreateSession) -> AuthResult<()> {
         let _ = session;
         Ok(())
     }
 
-    /// Called after a session is created.
-    async fn after_create_session(&self, session: &Session) -> AuthResult<()> {
+    async fn after_create_session(&self, session: &DB::Session) -> AuthResult<()> {
         let _ = session;
         Ok(())
     }
 
-    /// Called before a session is deleted.
     async fn before_delete_session(&self, token: &str) -> AuthResult<()> {
         let _ = token;
         Ok(())
     }
 
-    /// Called after a session is deleted.
     async fn after_delete_session(&self, token: &str) -> AuthResult<()> {
         let _ = token;
         Ok(())
@@ -81,34 +74,42 @@ pub trait DatabaseHooks: Send + Sync {
 }
 
 /// A database adapter wrapper that calls hooks around the inner adapter's operations.
-pub struct HookedDatabaseAdapter {
-    inner: Arc<dyn DatabaseAdapter>,
-    hooks: Vec<Arc<dyn DatabaseHooks>>,
+pub struct HookedDatabaseAdapter<DB: DatabaseAdapter> {
+    inner: Arc<DB>,
+    hooks: Vec<Arc<dyn DatabaseHooks<DB>>>,
 }
 
-impl HookedDatabaseAdapter {
-    pub fn new(inner: Arc<dyn DatabaseAdapter>) -> Self {
+impl<DB: DatabaseAdapter> HookedDatabaseAdapter<DB> {
+    pub fn new(inner: Arc<DB>) -> Self {
         Self {
             inner,
             hooks: Vec::new(),
         }
     }
 
-    pub fn with_hook(mut self, hook: Arc<dyn DatabaseHooks>) -> Self {
+    pub fn with_hook(mut self, hook: Arc<dyn DatabaseHooks<DB>>) -> Self {
         self.hooks.push(hook);
         self
     }
 
-    pub fn add_hook(&mut self, hook: Arc<dyn DatabaseHooks>) {
+    pub fn add_hook(&mut self, hook: Arc<dyn DatabaseHooks<DB>>) {
         self.hooks.push(hook);
     }
 }
 
 #[async_trait]
-impl DatabaseAdapter for HookedDatabaseAdapter {
+impl<DB: DatabaseAdapter> DatabaseAdapter for HookedDatabaseAdapter<DB> {
+    type User = DB::User;
+    type Session = DB::Session;
+    type Account = DB::Account;
+    type Organization = DB::Organization;
+    type Member = DB::Member;
+    type Invitation = DB::Invitation;
+    type Verification = DB::Verification;
+
     // --- User operations ---
 
-    async fn create_user(&self, mut user: CreateUser) -> AuthResult<User> {
+    async fn create_user(&self, mut user: CreateUser) -> AuthResult<Self::User> {
         for hook in &self.hooks {
             hook.before_create_user(&mut user).await?;
         }
@@ -119,19 +120,19 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         Ok(result)
     }
 
-    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<User>> {
+    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<Self::User>> {
         self.inner.get_user_by_id(id).await
     }
 
-    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<User>> {
+    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<Self::User>> {
         self.inner.get_user_by_email(email).await
     }
 
-    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<User>> {
+    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<Self::User>> {
         self.inner.get_user_by_username(username).await
     }
 
-    async fn update_user(&self, id: &str, mut update: UpdateUser) -> AuthResult<User> {
+    async fn update_user(&self, id: &str, mut update: UpdateUser) -> AuthResult<Self::User> {
         for hook in &self.hooks {
             hook.before_update_user(id, &mut update).await?;
         }
@@ -155,7 +156,7 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
 
     // --- Session operations ---
 
-    async fn create_session(&self, mut session: CreateSession) -> AuthResult<Session> {
+    async fn create_session(&self, mut session: CreateSession) -> AuthResult<Self::Session> {
         for hook in &self.hooks {
             hook.before_create_session(&mut session).await?;
         }
@@ -166,11 +167,11 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         Ok(result)
     }
 
-    async fn get_session(&self, token: &str) -> AuthResult<Option<Session>> {
+    async fn get_session(&self, token: &str) -> AuthResult<Option<Self::Session>> {
         self.inner.get_session(token).await
     }
 
-    async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<Session>> {
+    async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<Self::Session>> {
         self.inner.get_user_sessions(user_id).await
     }
 
@@ -201,9 +202,9 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         self.inner.delete_expired_sessions().await
     }
 
-    // --- Account operations (pass-through, no hooks) ---
+    // --- Account operations (pass-through) ---
 
-    async fn create_account(&self, account: CreateAccount) -> AuthResult<Account> {
+    async fn create_account(&self, account: CreateAccount) -> AuthResult<Self::Account> {
         self.inner.create_account(account).await
     }
 
@@ -211,11 +212,11 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         &self,
         provider: &str,
         provider_account_id: &str,
-    ) -> AuthResult<Option<Account>> {
+    ) -> AuthResult<Option<Self::Account>> {
         self.inner.get_account(provider, provider_account_id).await
     }
 
-    async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<Account>> {
+    async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<Self::Account>> {
         self.inner.get_user_accounts(user_id).await
     }
 
@@ -223,12 +224,12 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         self.inner.delete_account(id).await
     }
 
-    // --- Verification operations (pass-through, no hooks) ---
+    // --- Verification operations (pass-through) ---
 
     async fn create_verification(
         &self,
         verification: CreateVerification,
-    ) -> AuthResult<Verification> {
+    ) -> AuthResult<Self::Verification> {
         self.inner.create_verification(verification).await
     }
 
@@ -236,11 +237,14 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         &self,
         identifier: &str,
         value: &str,
-    ) -> AuthResult<Option<Verification>> {
+    ) -> AuthResult<Option<Self::Verification>> {
         self.inner.get_verification(identifier, value).await
     }
 
-    async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<Verification>> {
+    async fn get_verification_by_value(
+        &self,
+        value: &str,
+    ) -> AuthResult<Option<Self::Verification>> {
         self.inner.get_verification_by_value(value).await
     }
 
@@ -252,34 +256,25 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         self.inner.delete_expired_verifications().await
     }
 
-    // --- Organization operations (pass-through, no hooks yet) ---
+    // --- Organization operations (pass-through) ---
 
-    async fn create_organization(
-        &self,
-        org: crate::types::CreateOrganization,
-    ) -> AuthResult<crate::types::Organization> {
+    async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Self::Organization> {
         self.inner.create_organization(org).await
     }
 
-    async fn get_organization_by_id(
-        &self,
-        id: &str,
-    ) -> AuthResult<Option<crate::types::Organization>> {
+    async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Self::Organization>> {
         self.inner.get_organization_by_id(id).await
     }
 
-    async fn get_organization_by_slug(
-        &self,
-        slug: &str,
-    ) -> AuthResult<Option<crate::types::Organization>> {
+    async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Self::Organization>> {
         self.inner.get_organization_by_slug(slug).await
     }
 
     async fn update_organization(
         &self,
         id: &str,
-        update: crate::types::UpdateOrganization,
-    ) -> AuthResult<crate::types::Organization> {
+        update: UpdateOrganization,
+    ) -> AuthResult<Self::Organization> {
         self.inner.update_organization(id, update).await
     }
 
@@ -287,19 +282,13 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         self.inner.delete_organization(id).await
     }
 
-    async fn list_user_organizations(
-        &self,
-        user_id: &str,
-    ) -> AuthResult<Vec<crate::types::Organization>> {
+    async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Self::Organization>> {
         self.inner.list_user_organizations(user_id).await
     }
 
-    // --- Member operations (pass-through, no hooks yet) ---
+    // --- Member operations (pass-through) ---
 
-    async fn create_member(
-        &self,
-        member: crate::types::CreateMember,
-    ) -> AuthResult<crate::types::Member> {
+    async fn create_member(&self, member: CreateMember) -> AuthResult<Self::Member> {
         self.inner.create_member(member).await
     }
 
@@ -307,19 +296,15 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         &self,
         organization_id: &str,
         user_id: &str,
-    ) -> AuthResult<Option<crate::types::Member>> {
+    ) -> AuthResult<Option<Self::Member>> {
         self.inner.get_member(organization_id, user_id).await
     }
 
-    async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<crate::types::MemberWithUser>> {
+    async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Self::Member>> {
         self.inner.get_member_by_id(id).await
     }
 
-    async fn update_member_role(
-        &self,
-        member_id: &str,
-        role: &str,
-    ) -> AuthResult<crate::types::Member> {
+    async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Self::Member> {
         self.inner.update_member_role(member_id, role).await
     }
 
@@ -330,7 +315,7 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
     async fn list_organization_members(
         &self,
         organization_id: &str,
-    ) -> AuthResult<Vec<crate::types::MemberWithUser>> {
+    ) -> AuthResult<Vec<Self::Member>> {
         self.inner.list_organization_members(organization_id).await
     }
 
@@ -342,16 +327,16 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         self.inner.count_organization_owners(organization_id).await
     }
 
-    // --- Invitation operations (pass-through, no hooks yet) ---
+    // --- Invitation operations (pass-through) ---
 
     async fn create_invitation(
         &self,
-        invitation: crate::types::CreateInvitation,
-    ) -> AuthResult<crate::types::Invitation> {
+        invitation: CreateInvitation,
+    ) -> AuthResult<Self::Invitation> {
         self.inner.create_invitation(invitation).await
     }
 
-    async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<crate::types::Invitation>> {
+    async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Self::Invitation>> {
         self.inner.get_invitation_by_id(id).await
     }
 
@@ -359,7 +344,7 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         &self,
         organization_id: &str,
         email: &str,
-    ) -> AuthResult<Option<crate::types::Invitation>> {
+    ) -> AuthResult<Option<Self::Invitation>> {
         self.inner
             .get_pending_invitation(organization_id, email)
             .await
@@ -368,24 +353,21 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
     async fn update_invitation_status(
         &self,
         id: &str,
-        status: crate::types::InvitationStatus,
-    ) -> AuthResult<crate::types::Invitation> {
+        status: InvitationStatus,
+    ) -> AuthResult<Self::Invitation> {
         self.inner.update_invitation_status(id, status).await
     }
 
     async fn list_organization_invitations(
         &self,
         organization_id: &str,
-    ) -> AuthResult<Vec<crate::types::Invitation>> {
+    ) -> AuthResult<Vec<Self::Invitation>> {
         self.inner
             .list_organization_invitations(organization_id)
             .await
     }
 
-    async fn list_user_invitations(
-        &self,
-        email: &str,
-    ) -> AuthResult<Vec<crate::types::Invitation>> {
+    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Self::Invitation>> {
         self.inner.list_user_invitations(email).await
     }
 
@@ -395,7 +377,7 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
         &self,
         token: &str,
         organization_id: Option<&str>,
-    ) -> AuthResult<Session> {
+    ) -> AuthResult<Self::Session> {
         self.inner
             .update_session_active_organization(token, organization_id)
             .await
@@ -406,6 +388,7 @@ impl DatabaseAdapter for HookedDatabaseAdapter {
 mod tests {
     use super::*;
     use crate::adapters::MemoryDatabaseAdapter;
+    use crate::types::{CreateUser, UpdateUser, User};
     use std::sync::atomic::{AtomicU32, Ordering};
 
     struct CountingHook {
@@ -431,7 +414,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl DatabaseHooks for CountingHook {
+    impl DatabaseHooks<MemoryDatabaseAdapter> for CountingHook {
         async fn before_create_user(&self, _user: &mut CreateUser) -> AuthResult<()> {
             self.before_create_count.fetch_add(1, Ordering::SeqCst);
             Ok(())
@@ -526,7 +509,7 @@ mod tests {
         struct RejectHook;
 
         #[async_trait]
-        impl DatabaseHooks for RejectHook {
+        impl DatabaseHooks<MemoryDatabaseAdapter> for RejectHook {
             async fn before_create_user(&self, _user: &mut CreateUser) -> AuthResult<()> {
                 Err(crate::error::AuthError::forbidden("Hook rejected"))
             }
@@ -567,7 +550,6 @@ mod tests {
     async fn test_passthrough_operations() {
         let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()));
 
-        // get_user_by_email should work without hooks
         let result = db.get_user_by_email("nonexistent@test.com").await.unwrap();
         assert!(result.is_none());
     }

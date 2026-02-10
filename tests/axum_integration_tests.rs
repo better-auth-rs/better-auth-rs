@@ -9,20 +9,20 @@ use better_auth::handlers::AxumIntegration;
 use better_auth::plugins::{
     EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
 };
-use better_auth::{AuthConfig, BetterAuth};
+use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tower::ServiceExt; // for oneshot
 use tower_http::cors::CorsLayer;
 
 /// Helper to create test BetterAuth instance with all plugins
-async fn create_test_auth() -> Arc<BetterAuth> {
+async fn create_test_auth() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
     let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
         .base_url("http://localhost:3000")
         .password_min_length(6);
 
     Arc::new(
-        BetterAuth::new(config)
+        AuthBuilder::new(config)
             .database(MemoryDatabaseAdapter::new())
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
@@ -34,7 +34,7 @@ async fn create_test_auth() -> Arc<BetterAuth> {
 }
 
 /// Helper to create the complete Axum router (mimics the example server)
-fn create_test_router(auth: Arc<BetterAuth>) -> axum::Router {
+fn create_test_router(auth: Arc<BetterAuth<MemoryDatabaseAdapter>>) -> axum::Router {
     use axum::{Router, routing::get};
 
     // Create auth router using the BetterAuth AxumIntegration

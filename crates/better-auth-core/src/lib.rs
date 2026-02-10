@@ -6,6 +6,7 @@
 pub mod adapters;
 pub mod config;
 pub mod email;
+pub mod entity;
 pub mod error;
 pub mod hooks;
 pub mod middleware;
@@ -14,10 +15,20 @@ pub mod plugin;
 pub mod session;
 pub mod types;
 
+// Re-export derive macros when the `derive` feature is enabled
+#[cfg(feature = "derive")]
+pub use better_auth_derive::*;
+
 // Re-export commonly used items
+#[cfg(feature = "sqlx-postgres")]
+pub use adapters::SqlxAdapter;
 pub use adapters::{CacheAdapter, DatabaseAdapter, MemoryCacheAdapter, MemoryDatabaseAdapter};
 pub use config::{Argon2Config, AuthConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig};
 pub use email::{ConsoleEmailProvider, EmailProvider};
+pub use entity::{
+    AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey, AuthSession,
+    AuthTwoFactor, AuthUser, AuthVerification, MemberUserView,
+};
 pub use error::{
     AuthError, AuthResult, DatabaseError, validate_request_body, validation_error_response,
 };

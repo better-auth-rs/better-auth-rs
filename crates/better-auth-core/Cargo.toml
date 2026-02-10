@@ -39,7 +39,11 @@ sqlx = { workspace = true, optional = true }
 # Cache (optional)
 redis = { workspace = true, optional = true }
 
+# Derive macros (optional)
+better-auth-derive = { workspace = true, optional = true }
+
 [features]
 default = []
+derive = ["dep:better-auth-derive"]
 sqlx-postgres = ["dep:sqlx"]
 redis-cache = ["dep:redis"]
