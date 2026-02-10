@@ -77,7 +77,7 @@ changelog_path = "./CHANGELOG.md"
 changelog_include = [
   "better-auth-core",
   "better-auth-api",
-  "better-auth-entity",
+  "better-auth-derive",
 ]
 git_tag_name = "v{{ version }}"
 git_tag_enable = true
@@ -92,5 +92,5 @@ name = "better-auth-api"
 version_group = "workspace"
 
 [[package]]
-name = "better-auth-entity"
+name = "better-auth-derive"
 version_group = "workspace"

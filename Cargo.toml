@@ -9,11 +9,9 @@ repository = { workspace = true }
 [workspace]
 resolver = "2"
 members = [
-    "crates/better-auth-core",
-    "crates/better-auth-api",
-    "crates/better-auth-derive",
-    "crates/better-auth-entity",
-    "crates/better-auth-migration",
+    "crates/core",
+    "crates/api",
+    "crates/derive",
 ]
 
 [workspace.package]
@@ -24,43 +22,13 @@ repository = "https://github.com/better-auth-rs/better-auth-rs"
 
 [workspace.dependencies]
 # Sub-crates
-better-auth-core = { version = "0.2.0", path = "crates/better-auth-core" }
-better-auth-api = { version = "0.2.0", path = "crates/better-auth-api" }
-better-auth-derive = { version = "0.2.0", path = "crates/better-auth-derive" }
-better-auth-entity = { version = "0.2.0", path = "crates/better-auth-entity" }
-better-auth-migration = { version = "0.2.0", path = "crates/better-auth-migration" }
-
-# Database migrations
-sea-orm-migration = { version = "1.1", features = [
-    "runtime-tokio-rustls",
-    "sqlx-postgres",
-] }
+better-auth-core = { version = "0.2.0", path = "crates/core" }
+better-auth-api = { version = "0.2.0", path = "crates/api" }
+better-auth-derive = { version = "0.2.0", path = "crates/derive" }
 
 # Asynchronous runtime
 tokio = { version = "1.0", features = ["full"] }
-tokio-util = "0.7"
 async-trait = "0.1"
-futures = "0.3"
-
-# OpenAPI
-utoipa = { version = "5", features = [
-    "axum_extras",
-    "uuid",
-    "chrono",
-    "time",
-    "url",
-    "preserve_path_order",
-] }
-
-# Database
-sea-orm = { version = "1.1.16", features = [
-    "runtime-tokio-rustls",
-    "macros",
-    "with-uuid",
-    "with-chrono",
-    "with-json",
-    "with-ipnetwork",
-] }
 
 # SQL
 sqlx = { version = "0.8", features = [
@@ -71,37 +39,22 @@ sqlx = { version = "0.8", features = [
     "json",
 ] }
 
-# Crypto provider
-rustls = { version = "0.23", default-features = false, features = [
-    "aws-lc-rs",
-] }
-
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-
-# Configuration management
-config = "0.15"
-clap = { version = "4.5", features = ["derive", "env"] }
-lazy_static = "1.4"
 
 # Logging and tracing
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Error handling
-anyhow = "1.0"
 thiserror = "2.0"
-backoff = "0.4"
 
 # Time handling
 chrono = { version = "0.4", features = ["serde"] }
 
 # Data structures
 uuid = { version = "1.18", features = ["v4", "v7", "serde"] }
-
-# HTTP client
-reqwest = { version = "0.12", features = ["json"] }
 
 # Validation
 validator = { version = "0.19", features = ["derive"] }

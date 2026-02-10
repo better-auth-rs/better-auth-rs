@@ -75,7 +75,7 @@ All notable changes to this project will be documented in this file.
   - `organization` table with name, slug, logo, metadata
   - `member` table linking users to organizations with roles
   - `invitation` table for pending invitations with status and expiration
-  - Sea-ORM migration support via `better-auth-migration` crate
+  - Plain SQL migration files in `migrations/`
 
 - **DatabaseAdapter Extensions**
   - 17 new methods for organization, member, and invitation operations
@@ -84,5 +84,4 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- `better-auth-entity` now exports Organization, Member, and Invitation entities
 - Session model now includes `active_organization_id` field

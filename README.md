@@ -94,8 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | [`better-auth`](https://crates.io/crates/better-auth) | Main crate, re-exports and Axum integration |
 | [`better-auth-core`](https://crates.io/crates/better-auth-core) | Core abstractions: traits, config, middleware, error handling |
 | [`better-auth-api`](https://crates.io/crates/better-auth-api) | Plugin implementations (email/password, session management, organization, etc.) |
-| [`better-auth-entity`](https://crates.io/crates/better-auth-entity) | Entity definitions (User, Session, Account, Organization, Member, Invitation) |
-| [`better-auth-migration`](https://crates.io/crates/better-auth-migration) | Database migrations using sea-orm-migration |
+| [`better-auth-derive`](https://crates.io/crates/better-auth-derive) | Derive macros for custom entity types (`AuthUser`, `MemoryUser`, etc.) |
 
 ## Plugins
 
@@ -173,12 +172,12 @@ POST /organization/has-permission   # Check permissions
 
 ### Migrations
 
-Database migrations are managed via `better-auth-migration` (sea-orm-migration):
+SQL migration files are provided in the `migrations/` directory. Apply them with any migration tool or directly:
 
 ```bash
-cargo install sea-orm-cli
 export DATABASE_URL="postgresql://user:pass@localhost:5432/better_auth"
-sea-orm-cli migrate up -d crates/better-auth-migration
+psql "$DATABASE_URL" -f migrations/001_create_core_tables.sql
+psql "$DATABASE_URL" -f migrations/002_create_organization_tables.sql
 ```
 
 ## Feature Flags
