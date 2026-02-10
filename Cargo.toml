@@ -17,18 +17,18 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/better-auth-rs/better-auth-rs"
 
 [workspace.dependencies]
 # Sub-crates
-better-auth-core = { version = "0.1.0", path = "crates/better-auth-core" }
-better-auth-api = { version = "0.1.0", path = "crates/better-auth-api" }
-better-auth-derive = { version = "0.1.0", path = "crates/better-auth-derive" }
-better-auth-entity = { version = "0.1.0", path = "crates/better-auth-entity" }
-better-auth-migration = { version = "0.1.0", path = "crates/better-auth-migration" }
+better-auth-core = { version = "0.2.0", path = "crates/better-auth-core" }
+better-auth-api = { version = "0.2.0", path = "crates/better-auth-api" }
+better-auth-derive = { version = "0.2.0", path = "crates/better-auth-derive" }
+better-auth-entity = { version = "0.2.0", path = "crates/better-auth-entity" }
+better-auth-migration = { version = "0.2.0", path = "crates/better-auth-migration" }
 
 # Database migrations
 sea-orm-migration = { version = "1.1", features = [
