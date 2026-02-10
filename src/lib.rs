@@ -33,13 +33,16 @@ pub use better_auth_core as types_mod;
 pub use better_auth_core::{
     Account, Argon2Config, AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest,
     AuthResponse, AuthResult, AuthRoute, BodyLimitConfig, BodyLimitMiddleware, CacheAdapter,
-    ConsoleEmailProvider, CorsConfig, CorsMiddleware, CreateAccount, CreateSession, CreateUser,
-    CreateVerification, CsrfConfig, CsrfMiddleware, DatabaseAdapter, DatabaseError, DatabaseHooks,
-    DeleteUserResponse, EmailProvider, EndpointRateLimit, HookedDatabaseAdapter, HttpMethod,
-    JwtConfig, MemoryCacheAdapter, MemoryDatabaseAdapter, Middleware, OpenApiBuilder, OpenApiSpec,
-    Passkey, PasswordConfig, RateLimitConfig, RateLimitMiddleware, SameSite, Session,
-    SessionConfig, SessionManager, TwoFactor, UpdateUser, UpdateUserRequest, UpdateUserResponse,
-    User, Verification,
+    ConsoleEmailProvider, CorsConfig, CorsMiddleware, CreateAccount, CreateInvitation,
+    CreateMember, CreateOrganization, CreateSession, CreateUser, CreateVerification, CsrfConfig,
+    CsrfMiddleware, DatabaseAdapter, DatabaseError, DatabaseHooks, DeleteUserResponse,
+    EmailProvider, EndpointRateLimit, HookedDatabaseAdapter, HttpMethod, Invitation,
+    InvitationStatus, JwtConfig, MemoryAccount, MemoryCacheAdapter, MemoryDatabaseAdapter,
+    MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession, MemoryUser,
+    MemoryVerification, Middleware, OpenApiBuilder, OpenApiSpec, Passkey, PasswordConfig,
+    RateLimitConfig, RateLimitMiddleware, SameSite, Session, SessionConfig, SessionManager,
+    TwoFactor, UpdateOrganization, UpdateUser, UpdateUserRequest, UpdateUserResponse, User,
+    Verification,
 };
 
 // Re-export entity traits
@@ -51,8 +54,9 @@ pub use better_auth_core::entity::{
 // Re-export types under `types` module for backwards compatibility
 pub mod types {
     pub use better_auth_core::{
-        Account, AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser,
-        CreateVerification, DeleteUserResponse, HttpMethod, Passkey, Session, TwoFactor,
+        Account, AuthRequest, AuthResponse, CreateAccount, CreateInvitation, CreateMember,
+        CreateOrganization, CreateSession, CreateUser, CreateVerification, DeleteUserResponse,
+        HttpMethod, Invitation, InvitationStatus, Passkey, Session, TwoFactor, UpdateOrganization,
         UpdateUser, UpdateUserRequest, UpdateUserResponse, User, Verification,
     };
 }
@@ -60,7 +64,9 @@ pub mod types {
 // Re-export adapters
 pub mod adapters {
     pub use better_auth_core::{
-        CacheAdapter, DatabaseAdapter, MemoryCacheAdapter, MemoryDatabaseAdapter,
+        CacheAdapter, DatabaseAdapter, MemoryAccount, MemoryCacheAdapter, MemoryDatabaseAdapter,
+        MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession, MemoryUser,
+        MemoryVerification,
     };
 
     #[cfg(feature = "sqlx-postgres")]

@@ -1,18 +1,14 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use uuid::Uuid;
 
 use crate::entity::{
     AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthSession, AuthUser,
     AuthVerification,
 };
-use crate::error::{AuthError, AuthResult};
+use crate::error::AuthResult;
 use crate::types::{
-    Account, CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
-    CreateUser, CreateVerification, Invitation, InvitationStatus, Member, Organization, Session,
-    UpdateOrganization, UpdateUser, User, Verification,
+    CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession, CreateUser,
+    CreateVerification, InvitationStatus, UpdateOrganization, UpdateUser,
 };
 
 /// Database adapter trait for persistence.
@@ -132,735 +128,6 @@ pub trait DatabaseAdapter: Send + Sync + 'static {
     ) -> AuthResult<Self::Session>;
 }
 
-/// In-memory database adapter for testing and development
-pub struct MemoryDatabaseAdapter {
-    users: Arc<Mutex<HashMap<String, User>>>,
-    sessions: Arc<Mutex<HashMap<String, Session>>>,
-    accounts: Arc<Mutex<HashMap<String, Account>>>,
-    verifications: Arc<Mutex<HashMap<String, Verification>>>,
-    email_index: Arc<Mutex<HashMap<String, String>>>, // email -> user_id
-    username_index: Arc<Mutex<HashMap<String, String>>>, // username -> user_id
-    // Organization data
-    organizations: Arc<Mutex<HashMap<String, Organization>>>,
-    members: Arc<Mutex<HashMap<String, Member>>>,
-    invitations: Arc<Mutex<HashMap<String, Invitation>>>,
-    slug_index: Arc<Mutex<HashMap<String, String>>>, // slug -> organization_id
-}
-
-impl MemoryDatabaseAdapter {
-    pub fn new() -> Self {
-        Self {
-            users: Arc::new(Mutex::new(HashMap::new())),
-            sessions: Arc::new(Mutex::new(HashMap::new())),
-            accounts: Arc::new(Mutex::new(HashMap::new())),
-            verifications: Arc::new(Mutex::new(HashMap::new())),
-            email_index: Arc::new(Mutex::new(HashMap::new())),
-            username_index: Arc::new(Mutex::new(HashMap::new())),
-            organizations: Arc::new(Mutex::new(HashMap::new())),
-            members: Arc::new(Mutex::new(HashMap::new())),
-            invitations: Arc::new(Mutex::new(HashMap::new())),
-            slug_index: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-}
-
-impl Default for MemoryDatabaseAdapter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[async_trait]
-impl DatabaseAdapter for MemoryDatabaseAdapter {
-    type User = User;
-    type Session = Session;
-    type Account = Account;
-    type Organization = Organization;
-    type Member = Member;
-    type Invitation = Invitation;
-    type Verification = Verification;
-
-    async fn create_user(&self, create_user: CreateUser) -> AuthResult<User> {
-        let mut users = self.users.lock().unwrap();
-        let mut email_index = self.email_index.lock().unwrap();
-        let mut username_index = self.username_index.lock().unwrap();
-
-        let id = create_user.id.unwrap_or_else(|| Uuid::new_v4().to_string());
-
-        // Check if email already exists
-        if let Some(email) = &create_user.email
-            && email_index.contains_key(email)
-        {
-            return Err(AuthError::config("Email already exists"));
-        }
-
-        // Check if username already exists
-        if let Some(username) = &create_user.username
-            && username_index.contains_key(username)
-        {
-            return Err(AuthError::conflict(
-                "A user with this username already exists",
-            ));
-        }
-
-        let now = Utc::now();
-        let user = User {
-            id: id.clone(),
-            name: create_user.name,
-            email: create_user.email.clone(),
-            email_verified: create_user.email_verified.unwrap_or(false),
-            image: create_user.image,
-            created_at: now,
-            updated_at: now,
-            username: create_user.username.clone(),
-            display_username: create_user.display_username,
-            two_factor_enabled: false,
-            role: create_user.role,
-            banned: false,
-            ban_reason: None,
-            ban_expires: None,
-            metadata: create_user.metadata.unwrap_or_default(),
-        };
-
-        users.insert(id.clone(), user.clone());
-
-        if let Some(email) = &create_user.email {
-            email_index.insert(email.clone(), id.clone());
-        }
-
-        if let Some(username) = &create_user.username {
-            username_index.insert(username.clone(), id);
-        }
-
-        Ok(user)
-    }
-
-    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<User>> {
-        let users = self.users.lock().unwrap();
-        Ok(users.get(id).cloned())
-    }
-
-    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<User>> {
-        let email_index = self.email_index.lock().unwrap();
-        let users = self.users.lock().unwrap();
-
-        if let Some(user_id) = email_index.get(email) {
-            Ok(users.get(user_id).cloned())
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<User>> {
-        let username_index = self.username_index.lock().unwrap();
-        let users = self.users.lock().unwrap();
-
-        if let Some(user_id) = username_index.get(username) {
-            Ok(users.get(user_id).cloned())
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<User> {
-        let mut users = self.users.lock().unwrap();
-        let mut email_index = self.email_index.lock().unwrap();
-        let mut username_index = self.username_index.lock().unwrap();
-
-        let user = users.get_mut(id).ok_or(AuthError::UserNotFound)?;
-
-        // Update email index if email changed
-        if let Some(new_email) = &update.email {
-            if let Some(old_email) = &user.email {
-                email_index.remove(old_email);
-            }
-            email_index.insert(new_email.clone(), id.to_string());
-            user.email = Some(new_email.clone());
-        }
-
-        if let Some(name) = update.name {
-            user.name = Some(name);
-        }
-
-        if let Some(image) = update.image {
-            user.image = Some(image);
-        }
-
-        if let Some(email_verified) = update.email_verified {
-            user.email_verified = email_verified;
-        }
-
-        if let Some(ref username) = update.username {
-            // Update username index
-            if let Some(old_username) = &user.username {
-                username_index.remove(old_username);
-            }
-            username_index.insert(username.clone(), id.to_string());
-            user.username = Some(username.clone());
-        }
-
-        if let Some(display_username) = update.display_username {
-            user.display_username = Some(display_username);
-        }
-
-        if let Some(role) = update.role {
-            user.role = Some(role);
-        }
-
-        if let Some(banned) = update.banned {
-            user.banned = banned;
-        }
-
-        if let Some(ban_reason) = update.ban_reason {
-            user.ban_reason = Some(ban_reason);
-        }
-
-        if let Some(ban_expires) = update.ban_expires {
-            user.ban_expires = Some(ban_expires);
-        }
-
-        if let Some(two_factor_enabled) = update.two_factor_enabled {
-            user.two_factor_enabled = two_factor_enabled;
-        }
-
-        if let Some(metadata) = update.metadata {
-            user.metadata = metadata;
-        }
-
-        user.updated_at = Utc::now();
-
-        Ok(user.clone())
-    }
-
-    async fn delete_user(&self, id: &str) -> AuthResult<()> {
-        let mut users = self.users.lock().unwrap();
-        let mut email_index = self.email_index.lock().unwrap();
-        let mut username_index = self.username_index.lock().unwrap();
-
-        if let Some(user) = users.remove(id) {
-            if let Some(email) = &user.email {
-                email_index.remove(email);
-            }
-            if let Some(username) = &user.username {
-                username_index.remove(username);
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn create_session(&self, create_session: CreateSession) -> AuthResult<Session> {
-        let mut sessions = self.sessions.lock().unwrap();
-
-        let token = format!("session_{}", Uuid::new_v4());
-        let now = Utc::now();
-        let session = Session {
-            id: Uuid::new_v4().to_string(),
-            expires_at: create_session.expires_at,
-            token: token.clone(),
-            created_at: now,
-            updated_at: now,
-            ip_address: create_session.ip_address,
-            user_agent: create_session.user_agent,
-            user_id: create_session.user_id,
-            impersonated_by: create_session.impersonated_by,
-            active_organization_id: create_session.active_organization_id,
-            active: true,
-        };
-
-        sessions.insert(token, session.clone());
-        Ok(session)
-    }
-
-    async fn get_session(&self, token: &str) -> AuthResult<Option<Session>> {
-        let sessions = self.sessions.lock().unwrap();
-        Ok(sessions.get(token).cloned())
-    }
-
-    async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<Session>> {
-        let sessions = self.sessions.lock().unwrap();
-        Ok(sessions
-            .values()
-            .filter(|session| session.user_id == user_id && session.active)
-            .cloned()
-            .collect())
-    }
-
-    async fn update_session_expiry(
-        &self,
-        token: &str,
-        expires_at: DateTime<Utc>,
-    ) -> AuthResult<()> {
-        let mut sessions = self.sessions.lock().unwrap();
-        if let Some(session) = sessions.get_mut(token) {
-            session.expires_at = expires_at;
-        }
-        Ok(())
-    }
-
-    async fn delete_session(&self, token: &str) -> AuthResult<()> {
-        let mut sessions = self.sessions.lock().unwrap();
-        sessions.remove(token);
-        Ok(())
-    }
-
-    async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
-        let mut sessions = self.sessions.lock().unwrap();
-        sessions.retain(|_, session| session.user_id != user_id);
-        Ok(())
-    }
-
-    async fn delete_expired_sessions(&self) -> AuthResult<usize> {
-        let mut sessions = self.sessions.lock().unwrap();
-        let now = Utc::now();
-        let initial_count = sessions.len();
-
-        sessions.retain(|_, session| session.expires_at > now && session.active);
-
-        Ok(initial_count - sessions.len())
-    }
-
-    async fn create_account(&self, create_account: CreateAccount) -> AuthResult<Account> {
-        let mut accounts = self.accounts.lock().unwrap();
-
-        let now = Utc::now();
-        let account = Account {
-            id: Uuid::new_v4().to_string(),
-            account_id: create_account.account_id,
-            provider_id: create_account.provider_id,
-            user_id: create_account.user_id,
-            access_token: create_account.access_token,
-            refresh_token: create_account.refresh_token,
-            id_token: create_account.id_token,
-            access_token_expires_at: create_account.access_token_expires_at,
-            refresh_token_expires_at: create_account.refresh_token_expires_at,
-            scope: create_account.scope,
-            password: create_account.password,
-            created_at: now,
-            updated_at: now,
-        };
-
-        accounts.insert(account.id.clone(), account.clone());
-        Ok(account)
-    }
-
-    async fn get_account(
-        &self,
-        provider: &str,
-        provider_account_id: &str,
-    ) -> AuthResult<Option<Account>> {
-        let accounts = self.accounts.lock().unwrap();
-        Ok(accounts
-            .values()
-            .find(|acc| acc.provider_id == provider && acc.account_id == provider_account_id)
-            .cloned())
-    }
-
-    async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<Account>> {
-        let accounts = self.accounts.lock().unwrap();
-        Ok(accounts
-            .values()
-            .filter(|acc| acc.user_id == user_id)
-            .cloned()
-            .collect())
-    }
-
-    async fn delete_account(&self, id: &str) -> AuthResult<()> {
-        let mut accounts = self.accounts.lock().unwrap();
-        accounts.remove(id);
-        Ok(())
-    }
-
-    async fn create_verification(
-        &self,
-        create_verification: CreateVerification,
-    ) -> AuthResult<Verification> {
-        let mut verifications = self.verifications.lock().unwrap();
-
-        let now = Utc::now();
-        let verification = Verification {
-            id: Uuid::new_v4().to_string(),
-            identifier: create_verification.identifier,
-            value: create_verification.value.clone(),
-            expires_at: create_verification.expires_at,
-            created_at: now,
-            updated_at: now,
-        };
-
-        verifications.insert(verification.id.clone(), verification.clone());
-        Ok(verification)
-    }
-
-    async fn get_verification(
-        &self,
-        identifier: &str,
-        value: &str,
-    ) -> AuthResult<Option<Verification>> {
-        let verifications = self.verifications.lock().unwrap();
-        let now = Utc::now();
-
-        Ok(verifications
-            .values()
-            .find(|v| v.identifier == identifier && v.value == value && v.expires_at > now)
-            .cloned())
-    }
-
-    async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<Verification>> {
-        let verifications = self.verifications.lock().unwrap();
-        let now = Utc::now();
-
-        Ok(verifications
-            .values()
-            .find(|v| v.value == value && v.expires_at > now)
-            .cloned())
-    }
-
-    async fn delete_verification(&self, id: &str) -> AuthResult<()> {
-        let mut verifications = self.verifications.lock().unwrap();
-        verifications.remove(id);
-        Ok(())
-    }
-
-    async fn delete_expired_verifications(&self) -> AuthResult<usize> {
-        let mut verifications = self.verifications.lock().unwrap();
-        let now = Utc::now();
-        let initial_count = verifications.len();
-
-        verifications.retain(|_, verification| verification.expires_at > now);
-
-        Ok(initial_count - verifications.len())
-    }
-
-    // Organization operations
-    async fn create_organization(
-        &self,
-        create_org: CreateOrganization,
-    ) -> AuthResult<Organization> {
-        let mut organizations = self.organizations.lock().unwrap();
-        let mut slug_index = self.slug_index.lock().unwrap();
-
-        // Check if slug already exists
-        if slug_index.contains_key(&create_org.slug) {
-            return Err(AuthError::conflict("Organization slug already exists"));
-        }
-
-        let id = create_org.id.unwrap_or_else(|| Uuid::new_v4().to_string());
-        let now = Utc::now();
-
-        let organization = Organization {
-            id: id.clone(),
-            name: create_org.name,
-            slug: create_org.slug.clone(),
-            logo: create_org.logo,
-            metadata: create_org.metadata,
-            created_at: now,
-            updated_at: now,
-        };
-
-        organizations.insert(id.clone(), organization.clone());
-        slug_index.insert(create_org.slug, id);
-
-        Ok(organization)
-    }
-
-    async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>> {
-        let organizations = self.organizations.lock().unwrap();
-        Ok(organizations.get(id).cloned())
-    }
-
-    async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>> {
-        let slug_index = self.slug_index.lock().unwrap();
-        let organizations = self.organizations.lock().unwrap();
-
-        if let Some(org_id) = slug_index.get(slug) {
-            Ok(organizations.get(org_id).cloned())
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn update_organization(
-        &self,
-        id: &str,
-        update: UpdateOrganization,
-    ) -> AuthResult<Organization> {
-        let mut organizations = self.organizations.lock().unwrap();
-        let mut slug_index = self.slug_index.lock().unwrap();
-
-        let org = organizations
-            .get_mut(id)
-            .ok_or_else(|| AuthError::not_found("Organization not found"))?;
-
-        // Update slug index if slug changed
-        if let Some(new_slug) = &update.slug
-            && new_slug != &org.slug
-        {
-            // Check if new slug already exists
-            if slug_index.contains_key(new_slug) {
-                return Err(AuthError::conflict("Organization slug already exists"));
-            }
-            slug_index.remove(&org.slug);
-            slug_index.insert(new_slug.clone(), id.to_string());
-            org.slug = new_slug.clone();
-        }
-
-        if let Some(name) = update.name {
-            org.name = name;
-        }
-        if let Some(logo) = update.logo {
-            org.logo = Some(logo);
-        }
-        if let Some(metadata) = update.metadata {
-            org.metadata = Some(metadata);
-        }
-
-        org.updated_at = Utc::now();
-
-        Ok(org.clone())
-    }
-
-    async fn delete_organization(&self, id: &str) -> AuthResult<()> {
-        let mut organizations = self.organizations.lock().unwrap();
-        let mut slug_index = self.slug_index.lock().unwrap();
-        let mut members = self.members.lock().unwrap();
-        let mut invitations = self.invitations.lock().unwrap();
-
-        if let Some(org) = organizations.remove(id) {
-            slug_index.remove(&org.slug);
-        }
-
-        // Delete all related members and invitations
-        members.retain(|_, m| m.organization_id != id);
-        invitations.retain(|_, i| i.organization_id != id);
-
-        Ok(())
-    }
-
-    async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
-        let members = self.members.lock().unwrap();
-        let organizations = self.organizations.lock().unwrap();
-
-        let org_ids: Vec<String> = members
-            .values()
-            .filter(|m| m.user_id == user_id)
-            .map(|m| m.organization_id.clone())
-            .collect();
-
-        let orgs = org_ids
-            .iter()
-            .filter_map(|id| organizations.get(id).cloned())
-            .collect();
-
-        Ok(orgs)
-    }
-
-    // Member operations
-    async fn create_member(&self, create_member: CreateMember) -> AuthResult<Member> {
-        let mut members = self.members.lock().unwrap();
-
-        // Check if member already exists
-        let exists = members.values().any(|m| {
-            m.organization_id == create_member.organization_id && m.user_id == create_member.user_id
-        });
-
-        if exists {
-            return Err(AuthError::conflict(
-                "User is already a member of this organization",
-            ));
-        }
-
-        let id = Uuid::new_v4().to_string();
-        let now = Utc::now();
-
-        let member = Member {
-            id: id.clone(),
-            organization_id: create_member.organization_id,
-            user_id: create_member.user_id,
-            role: create_member.role,
-            created_at: now,
-        };
-
-        members.insert(id, member.clone());
-
-        Ok(member)
-    }
-
-    async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>> {
-        let members = self.members.lock().unwrap();
-
-        let member = members
-            .values()
-            .find(|m| m.organization_id == organization_id && m.user_id == user_id)
-            .cloned();
-
-        Ok(member)
-    }
-
-    async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
-        let members = self.members.lock().unwrap();
-        Ok(members.get(id).cloned())
-    }
-
-    async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member> {
-        let mut members = self.members.lock().unwrap();
-
-        let member = members
-            .get_mut(member_id)
-            .ok_or_else(|| AuthError::not_found("Member not found"))?;
-
-        member.role = role.to_string();
-
-        Ok(member.clone())
-    }
-
-    async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
-        let mut members = self.members.lock().unwrap();
-        members.remove(member_id);
-        Ok(())
-    }
-
-    async fn list_organization_members(&self, organization_id: &str) -> AuthResult<Vec<Member>> {
-        let members = self.members.lock().unwrap();
-
-        let org_members = members
-            .values()
-            .filter(|m| m.organization_id == organization_id)
-            .cloned()
-            .collect();
-
-        Ok(org_members)
-    }
-
-    async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize> {
-        let members = self.members.lock().unwrap();
-        let count = members
-            .values()
-            .filter(|m| m.organization_id == organization_id)
-            .count();
-        Ok(count)
-    }
-
-    async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<usize> {
-        let members = self.members.lock().unwrap();
-        let count = members
-            .values()
-            .filter(|m| m.organization_id == organization_id && m.role == "owner")
-            .count();
-        Ok(count)
-    }
-
-    // Invitation operations
-    async fn create_invitation(&self, create_inv: CreateInvitation) -> AuthResult<Invitation> {
-        let mut invitations = self.invitations.lock().unwrap();
-
-        let id = Uuid::new_v4().to_string();
-        let now = Utc::now();
-
-        let invitation = Invitation {
-            id: id.clone(),
-            organization_id: create_inv.organization_id,
-            email: create_inv.email,
-            role: create_inv.role,
-            status: InvitationStatus::Pending,
-            inviter_id: create_inv.inviter_id,
-            expires_at: create_inv.expires_at,
-            created_at: now,
-        };
-
-        invitations.insert(id, invitation.clone());
-
-        Ok(invitation)
-    }
-
-    async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
-        let invitations = self.invitations.lock().unwrap();
-        Ok(invitations.get(id).cloned())
-    }
-
-    async fn get_pending_invitation(
-        &self,
-        organization_id: &str,
-        email: &str,
-    ) -> AuthResult<Option<Invitation>> {
-        let invitations = self.invitations.lock().unwrap();
-
-        let invitation = invitations
-            .values()
-            .find(|i| {
-                i.organization_id == organization_id
-                    && i.email.to_lowercase() == email.to_lowercase()
-                    && i.status == InvitationStatus::Pending
-            })
-            .cloned();
-
-        Ok(invitation)
-    }
-
-    async fn update_invitation_status(
-        &self,
-        id: &str,
-        status: InvitationStatus,
-    ) -> AuthResult<Invitation> {
-        let mut invitations = self.invitations.lock().unwrap();
-
-        let invitation = invitations
-            .get_mut(id)
-            .ok_or_else(|| AuthError::not_found("Invitation not found"))?;
-
-        invitation.status = status;
-
-        Ok(invitation.clone())
-    }
-
-    async fn list_organization_invitations(
-        &self,
-        organization_id: &str,
-    ) -> AuthResult<Vec<Invitation>> {
-        let invitations = self.invitations.lock().unwrap();
-
-        let org_invitations = invitations
-            .values()
-            .filter(|i| i.organization_id == organization_id)
-            .cloned()
-            .collect();
-
-        Ok(org_invitations)
-    }
-
-    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>> {
-        let invitations = self.invitations.lock().unwrap();
-        let now = Utc::now();
-
-        let user_invitations = invitations
-            .values()
-            .filter(|i| {
-                i.email.to_lowercase() == email.to_lowercase()
-                    && i.status == InvitationStatus::Pending
-                    && i.expires_at > now
-            })
-            .cloned()
-            .collect();
-
-        Ok(user_invitations)
-    }
-
-    // Session organization support
-    async fn update_session_active_organization(
-        &self,
-        token: &str,
-        organization_id: Option<&str>,
-    ) -> AuthResult<Session> {
-        let mut sessions = self.sessions.lock().unwrap();
-
-        let session = sessions.get_mut(token).ok_or(AuthError::SessionNotFound)?;
-
-        session.active_organization_id = organization_id.map(|s| s.to_string());
-        session.updated_at = Utc::now();
-
-        Ok(session.clone())
-    }
-}
-
 #[cfg(feature = "sqlx-postgres")]
 pub mod sqlx_adapter {
     use super::*;
@@ -944,6 +211,10 @@ pub mod sqlx_adapter {
         pub size: u32,
         pub idle: usize,
     }
+
+    use crate::error::AuthError;
+    use crate::types::{Account, Invitation, Member, Organization, Session, User, Verification};
+    use uuid::Uuid;
 
     #[async_trait]
     impl DatabaseAdapter for SqlxAdapter {
@@ -1112,7 +383,7 @@ pub mod sqlx_adapter {
             let session = sqlx::query_as::<_, Session>(
                 r#"
                 SELECT id, user_id, token, expires_at, created_at, updated_at, ip_address, user_agent, active, impersonated_by, active_organization_id
-                FROM sessions 
+                FROM sessions
                 WHERE token = $1 AND active = true
                 "#
             )
@@ -1127,7 +398,7 @@ pub mod sqlx_adapter {
             let sessions = sqlx::query_as::<_, Session>(
                 r#"
                 SELECT id, user_id, token, expires_at, created_at, updated_at, ip_address, user_agent, active, impersonated_by, active_organization_id
-                FROM sessions 
+                FROM sessions
                 WHERE user_id = $1 AND active = true
                 ORDER BY created_at DESC
                 "#
@@ -1146,8 +417,8 @@ pub mod sqlx_adapter {
         ) -> AuthResult<()> {
             sqlx::query(
                 r#"
-                UPDATE sessions 
-                SET expires_at = $1 
+                UPDATE sessions
+                SET expires_at = $1
                 WHERE token = $2 AND active = true
                 "#,
             )
@@ -1224,7 +495,7 @@ pub mod sqlx_adapter {
             let account = sqlx::query_as::<_, Account>(
                 r#"
                 SELECT *
-                FROM accounts 
+                FROM accounts
                 WHERE provider_id = $1 AND account_id = $2
                 "#,
             )
@@ -1240,7 +511,7 @@ pub mod sqlx_adapter {
             let accounts = sqlx::query_as::<_, Account>(
                 r#"
                 SELECT id, user_id, provider, provider_account_id, access_token, refresh_token, expires_at, token_type, scope, created_at
-                FROM accounts 
+                FROM accounts
                 WHERE user_id = $1
                 ORDER BY created_at DESC
                 "#
@@ -1295,7 +566,7 @@ pub mod sqlx_adapter {
             let verification = sqlx::query_as::<_, Verification>(
                 r#"
                 SELECT *
-                FROM verifications 
+                FROM verifications
                 WHERE identifier = $1 AND value = $2 AND expires_at > NOW()
                 "#,
             )
@@ -1311,7 +582,7 @@ pub mod sqlx_adapter {
             let verification = sqlx::query_as::<_, Verification>(
                 r#"
                 SELECT *
-                FROM verifications 
+                FROM verifications
                 WHERE value = $1 AND expires_at > NOW()
                 "#,
             )

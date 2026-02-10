@@ -103,9 +103,9 @@ fn create_plugin_handler<DB: DatabaseAdapter>() -> impl Fn(
             match convert_axum_request(req).await {
                 Ok(auth_req) => match auth.handle_request(auth_req).await {
                     Ok(auth_response) => convert_auth_response(auth_response),
-                    Err(err) => err.into_response(),
+                    Err(err) => convert_auth_error(err),
                 },
-                Err(err) => err.into_response(),
+                Err(err) => convert_auth_error(err),
             }
         })
     }
@@ -200,20 +200,18 @@ fn convert_auth_response(auth_response: AuthResponse) -> Response {
 }
 
 #[cfg(feature = "axum")]
-impl IntoResponse for AuthError {
-    fn into_response(self) -> Response {
-        let status_code =
-            StatusCode::from_u16(self.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+fn convert_auth_error(err: AuthError) -> Response {
+    let status_code =
+        StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
-        let message = match self.status_code() {
-            500 => "Internal server error".to_string(),
-            _ => self.to_string(),
-        };
+    let message = match err.status_code() {
+        500 => "Internal server error".to_string(),
+        _ => err.to_string(),
+    };
 
-        let body = serde_json::json!({
-            "message": message
-        });
+    let body = serde_json::json!({
+        "message": message
+    });
 
-        (status_code, axum::Json(body)).into_response()
-    }
+    (status_code, axum::Json(body)).into_response()
 }

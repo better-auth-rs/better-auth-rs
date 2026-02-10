@@ -22,7 +22,11 @@ pub use better_auth_derive::*;
 // Re-export commonly used items
 #[cfg(feature = "sqlx-postgres")]
 pub use adapters::SqlxAdapter;
-pub use adapters::{CacheAdapter, DatabaseAdapter, MemoryCacheAdapter, MemoryDatabaseAdapter};
+pub use adapters::{
+    CacheAdapter, DatabaseAdapter, MemoryAccount, MemoryCacheAdapter, MemoryDatabaseAdapter,
+    MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession, MemoryUser,
+    MemoryVerification,
+};
 pub use config::{Argon2Config, AuthConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig};
 pub use email::{ConsoleEmailProvider, EmailProvider};
 pub use entity::{
@@ -41,7 +45,8 @@ pub use openapi::{OpenApiBuilder, OpenApiInfo, OpenApiOperation, OpenApiResponse
 pub use plugin::{AuthContext, AuthPlugin, AuthRoute};
 pub use session::SessionManager;
 pub use types::{
-    Account, AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser,
-    CreateVerification, DeleteUserResponse, HttpMethod, Passkey, Session, TwoFactor, UpdateUser,
-    UpdateUserRequest, UpdateUserResponse, User, Verification,
+    Account, AuthRequest, AuthResponse, CreateAccount, CreateInvitation, CreateMember,
+    CreateOrganization, CreateSession, CreateUser, CreateVerification, DeleteUserResponse,
+    HttpMethod, Invitation, InvitationStatus, Passkey, Session, TwoFactor, UpdateOrganization,
+    UpdateUser, UpdateUserRequest, UpdateUserResponse, User, Verification,
 };

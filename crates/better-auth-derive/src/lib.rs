@@ -80,29 +80,39 @@ struct FieldInfo {
     ident: syn::Ident,
     /// If the field has `#[auth(field = "...")]`, the overridden getter name.
     auth_field_name: Option<String>,
+    /// If the field has `#[auth(default = "...")]`, the default expression.
+    auth_default: Option<TokenStream2>,
 }
 
-/// Parse `#[auth(field = "getter_name")]` from field attributes.
-fn parse_auth_attr(attrs: &[syn::Attribute]) -> Option<String> {
+/// Parse `#[auth(...)]` attributes from a field.
+///
+/// Supported:
+/// - `#[auth(field = "getter_name")]` — remap field to a getter name
+/// - `#[auth(default = "expr")]` — default expression for Memory* derives
+fn parse_auth_attrs(attrs: &[syn::Attribute]) -> (Option<String>, Option<TokenStream2>) {
+    let mut field_name = None;
+    let mut default_expr = None;
     for attr in attrs {
         if !attr.path().is_ident("auth") {
             continue;
         }
-        // Parse: #[auth(field = "some_name")]
-        let mut field_name = None;
         let _ = attr.parse_nested_meta(|meta| {
             if meta.path.is_ident("field") {
                 let value = meta.value()?;
                 let lit: syn::LitStr = value.parse()?;
                 field_name = Some(lit.value());
+            } else if meta.path.is_ident("default") {
+                let value = meta.value()?;
+                let lit: syn::LitStr = value.parse()?;
+                let parsed: syn::Expr = syn::parse_str(&lit.value()).map_err(|e| {
+                    syn::Error::new_spanned(&lit, format!("invalid default expression: {e}"))
+                })?;
+                default_expr = Some(quote! { #parsed });
             }
             Ok(())
         });
-        if field_name.is_some() {
-            return field_name;
-        }
     }
-    None
+    (field_name, default_expr)
 }
 
 /// Given a list of parsed fields and a getter name, find the matching field.
@@ -206,10 +216,11 @@ fn derive_entity_trait(
         .iter()
         .filter_map(|f| {
             let ident = f.ident.clone()?;
-            let auth_field_name = parse_auth_attr(&f.attrs);
+            let (auth_field_name, auth_default) = parse_auth_attrs(&f.attrs);
             Some(FieldInfo {
                 ident,
                 auth_field_name,
+                auth_default,
             })
         })
         .collect();
@@ -684,5 +695,643 @@ pub fn derive_auth_passkey(input: TokenStream) -> TokenStream {
         "AuthPasskey",
         &getters,
     )
+    .into()
+}
+
+// ===========================================================================
+// Memory trait derive macros
+//
+// Generate `MemoryUser`, `MemorySession`, etc. implementations that tell
+// the generic `MemoryDatabaseAdapter` how to construct and mutate custom
+// entity types.
+// ===========================================================================
+
+// -- Helpers for from_create code generation --
+
+/// How a struct field is initialised inside `from_create`.
+enum CreateInit {
+    /// The `id` parameter.
+    IdParam,
+    /// The `token` parameter (sessions only).
+    TokenParam,
+    /// The `now` parameter.
+    NowParam,
+    /// `create.<field>.clone()`
+    CloneCreate(&'static str),
+    /// `create.<field>` (Copy types like DateTime)
+    CopyCreate(&'static str),
+    /// `create.<field>.unwrap_or(false)`
+    UnwrapBoolCreate(&'static str),
+    /// `create.<field>.clone().unwrap_or_default()`
+    UnwrapDefaultCreate(&'static str),
+    /// A literal `true` or `false`.
+    StaticBool(bool),
+    /// `None`
+    StaticNone,
+    /// `InvitationStatus::Pending`
+    InvitationPending,
+}
+
+fn gen_create_init_expr(init: &CreateInit) -> TokenStream2 {
+    match init {
+        CreateInit::IdParam => quote! { id },
+        CreateInit::TokenParam => quote! { token },
+        CreateInit::NowParam => quote! { now },
+        CreateInit::CloneCreate(f) => {
+            let field = mk_ident(f);
+            quote! { create.#field.clone() }
+        }
+        CreateInit::CopyCreate(f) => {
+            let field = mk_ident(f);
+            quote! { create.#field }
+        }
+        CreateInit::UnwrapBoolCreate(f) => {
+            let field = mk_ident(f);
+            quote! { create.#field.unwrap_or(false) }
+        }
+        CreateInit::UnwrapDefaultCreate(f) => {
+            let field = mk_ident(f);
+            quote! { create.#field.clone().unwrap_or_default() }
+        }
+        CreateInit::StaticBool(b) => quote! { #b },
+        CreateInit::StaticNone => quote! { ::core::option::Option::None },
+        CreateInit::InvitationPending => {
+            quote! { ::better_auth_core::types::InvitationStatus::Pending }
+        }
+    }
+}
+
+/// Build the `Self { field: expr, ... }` body for `from_create`.
+fn gen_from_create_body(
+    field_infos: &[FieldInfo],
+    create_mappings: &[(&str, CreateInit)],
+) -> TokenStream2 {
+    let field_inits: Vec<TokenStream2> = field_infos
+        .iter()
+        .map(|info| {
+            let field_ident = &info.ident;
+            let ident_str = info.ident.to_string();
+            let getter_name = info.auth_field_name.as_deref().unwrap_or(&ident_str);
+
+            let init_expr = create_mappings
+                .iter()
+                .find(|(name, _)| *name == getter_name)
+                .map(|(_, init)| gen_create_init_expr(init))
+                .unwrap_or_else(|| {
+                    if let Some(ref expr) = info.auth_default {
+                        expr.clone()
+                    } else {
+                        quote! { ::core::default::Default::default() }
+                    }
+                });
+
+            quote! { #field_ident: #init_expr }
+        })
+        .collect();
+
+    quote! { Self { #(#field_inits),* } }
+}
+
+// -- Helpers for apply_update code generation --
+
+/// How an update field is applied to the struct.
+#[derive(Clone, Copy)]
+enum UpdateApply {
+    /// `if let Some(v) = &update.f { self.f = Some(v.clone()); }`
+    CloneIntoOption,
+    /// `if let Some(v) = update.f { self.f = v; }`
+    CopyDirect,
+    /// `if let Some(v) = update.f { self.f = Some(v); }`
+    CopyIntoOption,
+    /// `if let Some(v) = &update.f { self.f = v.clone(); }`
+    CloneDirect,
+}
+
+fn gen_update_apply_stmt(
+    struct_field: &syn::Ident,
+    update_field: &syn::Ident,
+    apply: UpdateApply,
+) -> TokenStream2 {
+    match apply {
+        UpdateApply::CloneIntoOption => quote! {
+            if let ::core::option::Option::Some(ref v) = update.#update_field {
+                self.#struct_field = ::core::option::Option::Some(v.clone());
+            }
+        },
+        UpdateApply::CopyDirect => quote! {
+            if let ::core::option::Option::Some(v) = update.#update_field {
+                self.#struct_field = v;
+            }
+        },
+        UpdateApply::CopyIntoOption => quote! {
+            if let ::core::option::Option::Some(v) = update.#update_field {
+                self.#struct_field = ::core::option::Option::Some(v);
+            }
+        },
+        UpdateApply::CloneDirect => quote! {
+            if let ::core::option::Option::Some(ref v) = update.#update_field {
+                self.#struct_field = v.clone();
+            }
+        },
+    }
+}
+
+/// Build the body of `apply_update`, including the final `updated_at = now()`.
+fn gen_apply_update_body(
+    field_infos: &[FieldInfo],
+    update_mappings: &[(&str, &str, UpdateApply)],
+) -> TokenStream2 {
+    let mut stmts = Vec::new();
+
+    for &(update_field_name, getter_name, apply) in update_mappings {
+        if let Some(struct_field) = find_field_for_getter(field_infos, getter_name) {
+            let update_ident = mk_ident(update_field_name);
+            stmts.push(gen_update_apply_stmt(struct_field, &update_ident, apply));
+        }
+    }
+
+    // Always set updated_at at the end
+    if let Some(field) = find_field_for_getter(field_infos, "updated_at") {
+        stmts.push(quote! { self.#field = ::chrono::Utc::now(); });
+    }
+
+    quote! { #(#stmts)* }
+}
+
+// -- Shared utility --
+
+fn mk_ident(s: &str) -> syn::Ident {
+    syn::Ident::new(s, proc_macro2::Span::call_site())
+}
+
+/// Parse named fields from a DeriveInput, returning field infos or a compile error.
+fn parse_memory_fields(
+    input: &DeriveInput,
+    trait_name: &str,
+) -> Result<Vec<FieldInfo>, TokenStream2> {
+    let struct_name = &input.ident;
+    let named_fields = match &input.data {
+        syn::Data::Struct(data) => match &data.fields {
+            syn::Fields::Named(fields) => &fields.named,
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    struct_name,
+                    format!("{trait_name} can only be derived for structs with named fields"),
+                )
+                .to_compile_error());
+            }
+        },
+        _ => {
+            return Err(syn::Error::new_spanned(
+                struct_name,
+                format!("{trait_name} requires a struct"),
+            )
+            .to_compile_error());
+        }
+    };
+
+    Ok(named_fields
+        .iter()
+        .filter_map(|f| {
+            let ident = f.ident.clone()?;
+            let (auth_field_name, auth_default) = parse_auth_attrs(&f.attrs);
+            Some(FieldInfo {
+                ident,
+                auth_field_name,
+                auth_default,
+            })
+        })
+        .collect())
+}
+
+// ---------------------------------------------------------------------------
+// MemoryUser
+// ---------------------------------------------------------------------------
+
+#[proc_macro_derive(MemoryUser, attributes(auth))]
+pub fn derive_memory_user(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let struct_name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    let field_infos = match parse_memory_fields(&input, "MemoryUser") {
+        Ok(fi) => fi,
+        Err(err) => return err.into(),
+    };
+
+    let create_mappings: Vec<(&str, CreateInit)> = vec![
+        ("id", CreateInit::IdParam),
+        ("email", CreateInit::CloneCreate("email")),
+        ("name", CreateInit::CloneCreate("name")),
+        (
+            "email_verified",
+            CreateInit::UnwrapBoolCreate("email_verified"),
+        ),
+        ("image", CreateInit::CloneCreate("image")),
+        ("created_at", CreateInit::NowParam),
+        ("updated_at", CreateInit::NowParam),
+        ("username", CreateInit::CloneCreate("username")),
+        (
+            "display_username",
+            CreateInit::CloneCreate("display_username"),
+        ),
+        ("two_factor_enabled", CreateInit::StaticBool(false)),
+        ("role", CreateInit::CloneCreate("role")),
+        ("banned", CreateInit::StaticBool(false)),
+        ("ban_reason", CreateInit::StaticNone),
+        ("ban_expires", CreateInit::StaticNone),
+        ("metadata", CreateInit::UnwrapDefaultCreate("metadata")),
+    ];
+
+    use UpdateApply::*;
+    let update_mappings: Vec<(&str, &str, UpdateApply)> = vec![
+        ("email", "email", CloneIntoOption),
+        ("name", "name", CloneIntoOption),
+        ("image", "image", CloneIntoOption),
+        ("email_verified", "email_verified", CopyDirect),
+        ("username", "username", CloneIntoOption),
+        ("display_username", "display_username", CloneIntoOption),
+        ("role", "role", CloneIntoOption),
+        ("banned", "banned", CopyDirect),
+        ("ban_reason", "ban_reason", CloneIntoOption),
+        ("ban_expires", "ban_expires", CopyIntoOption),
+        ("two_factor_enabled", "two_factor_enabled", CopyDirect),
+        ("metadata", "metadata", CloneDirect),
+    ];
+
+    let create_body = gen_from_create_body(&field_infos, &create_mappings);
+    let update_body = gen_apply_update_body(&field_infos, &update_mappings);
+
+    quote! {
+        impl #impl_generics ::better_auth_core::adapters::memory::MemoryUser
+            for #struct_name #ty_generics #where_clause
+        {
+            fn from_create(
+                id: ::std::string::String,
+                create: &::better_auth_core::types::CreateUser,
+                now: ::chrono::DateTime<::chrono::Utc>,
+            ) -> Self {
+                #create_body
+            }
+
+            fn apply_update(&mut self, update: &::better_auth_core::types::UpdateUser) {
+                #update_body
+            }
+        }
+    }
+    .into()
+}
+
+// ---------------------------------------------------------------------------
+// MemorySession
+// ---------------------------------------------------------------------------
+
+#[proc_macro_derive(MemorySession, attributes(auth))]
+pub fn derive_memory_session(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let struct_name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    let field_infos = match parse_memory_fields(&input, "MemorySession") {
+        Ok(fi) => fi,
+        Err(err) => return err.into(),
+    };
+
+    let create_mappings: Vec<(&str, CreateInit)> = vec![
+        ("id", CreateInit::IdParam),
+        ("token", CreateInit::TokenParam),
+        ("expires_at", CreateInit::CopyCreate("expires_at")),
+        ("created_at", CreateInit::NowParam),
+        ("updated_at", CreateInit::NowParam),
+        ("ip_address", CreateInit::CloneCreate("ip_address")),
+        ("user_agent", CreateInit::CloneCreate("user_agent")),
+        ("user_id", CreateInit::CloneCreate("user_id")),
+        (
+            "impersonated_by",
+            CreateInit::CloneCreate("impersonated_by"),
+        ),
+        (
+            "active_organization_id",
+            CreateInit::CloneCreate("active_organization_id"),
+        ),
+        ("active", CreateInit::StaticBool(true)),
+    ];
+
+    let create_body = gen_from_create_body(&field_infos, &create_mappings);
+
+    // Setters: find the struct fields for each setter target
+    let expires_at_field = find_field_for_getter(&field_infos, "expires_at");
+    let active_org_field = find_field_for_getter(&field_infos, "active_organization_id");
+    let updated_at_field = find_field_for_getter(&field_infos, "updated_at");
+
+    let set_expires = expires_at_field.map(|f| {
+        quote! {
+            fn set_expires_at(&mut self, at: ::chrono::DateTime<::chrono::Utc>) {
+                self.#f = at;
+            }
+        }
+    });
+    let set_active_org = active_org_field.map(|f| {
+        quote! {
+            fn set_active_organization_id(
+                &mut self,
+                org_id: ::core::option::Option<::std::string::String>,
+            ) {
+                self.#f = org_id;
+            }
+        }
+    });
+    let set_updated = updated_at_field.map(|f| {
+        quote! {
+            fn set_updated_at(&mut self, at: ::chrono::DateTime<::chrono::Utc>) {
+                self.#f = at;
+            }
+        }
+    });
+
+    quote! {
+        impl #impl_generics ::better_auth_core::adapters::memory::MemorySession
+            for #struct_name #ty_generics #where_clause
+        {
+            fn from_create(
+                id: ::std::string::String,
+                token: ::std::string::String,
+                create: &::better_auth_core::types::CreateSession,
+                now: ::chrono::DateTime<::chrono::Utc>,
+            ) -> Self {
+                #create_body
+            }
+
+            #set_expires
+            #set_active_org
+            #set_updated
+        }
+    }
+    .into()
+}
+
+// ---------------------------------------------------------------------------
+// MemoryAccount
+// ---------------------------------------------------------------------------
+
+#[proc_macro_derive(MemoryAccount, attributes(auth))]
+pub fn derive_memory_account(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let struct_name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    let field_infos = match parse_memory_fields(&input, "MemoryAccount") {
+        Ok(fi) => fi,
+        Err(err) => return err.into(),
+    };
+
+    let create_mappings: Vec<(&str, CreateInit)> = vec![
+        ("id", CreateInit::IdParam),
+        ("account_id", CreateInit::CloneCreate("account_id")),
+        ("provider_id", CreateInit::CloneCreate("provider_id")),
+        ("user_id", CreateInit::CloneCreate("user_id")),
+        ("access_token", CreateInit::CloneCreate("access_token")),
+        ("refresh_token", CreateInit::CloneCreate("refresh_token")),
+        ("id_token", CreateInit::CloneCreate("id_token")),
+        (
+            "access_token_expires_at",
+            CreateInit::CopyCreate("access_token_expires_at"),
+        ),
+        (
+            "refresh_token_expires_at",
+            CreateInit::CopyCreate("refresh_token_expires_at"),
+        ),
+        ("scope", CreateInit::CloneCreate("scope")),
+        ("password", CreateInit::CloneCreate("password")),
+        ("created_at", CreateInit::NowParam),
+        ("updated_at", CreateInit::NowParam),
+    ];
+
+    let create_body = gen_from_create_body(&field_infos, &create_mappings);
+
+    quote! {
+        impl #impl_generics ::better_auth_core::adapters::memory::MemoryAccount
+            for #struct_name #ty_generics #where_clause
+        {
+            fn from_create(
+                id: ::std::string::String,
+                create: &::better_auth_core::types::CreateAccount,
+                now: ::chrono::DateTime<::chrono::Utc>,
+            ) -> Self {
+                #create_body
+            }
+        }
+    }
+    .into()
+}
+
+// ---------------------------------------------------------------------------
+// MemoryOrganization
+// ---------------------------------------------------------------------------
+
+#[proc_macro_derive(MemoryOrganization, attributes(auth))]
+pub fn derive_memory_organization(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let struct_name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    let field_infos = match parse_memory_fields(&input, "MemoryOrganization") {
+        Ok(fi) => fi,
+        Err(err) => return err.into(),
+    };
+
+    let create_mappings: Vec<(&str, CreateInit)> = vec![
+        ("id", CreateInit::IdParam),
+        ("name", CreateInit::CloneCreate("name")),
+        ("slug", CreateInit::CloneCreate("slug")),
+        ("logo", CreateInit::CloneCreate("logo")),
+        ("metadata", CreateInit::CloneCreate("metadata")),
+        ("created_at", CreateInit::NowParam),
+        ("updated_at", CreateInit::NowParam),
+    ];
+
+    use UpdateApply::*;
+    let update_mappings: Vec<(&str, &str, UpdateApply)> = vec![
+        ("name", "name", CloneDirect),
+        ("slug", "slug", CloneDirect),
+        ("logo", "logo", CloneIntoOption),
+        ("metadata", "metadata", CloneIntoOption),
+    ];
+
+    let create_body = gen_from_create_body(&field_infos, &create_mappings);
+    let update_body = gen_apply_update_body(&field_infos, &update_mappings);
+
+    quote! {
+        impl #impl_generics ::better_auth_core::adapters::memory::MemoryOrganization
+            for #struct_name #ty_generics #where_clause
+        {
+            fn from_create(
+                id: ::std::string::String,
+                create: &::better_auth_core::types::CreateOrganization,
+                now: ::chrono::DateTime<::chrono::Utc>,
+            ) -> Self {
+                #create_body
+            }
+
+            fn apply_update(&mut self, update: &::better_auth_core::types::UpdateOrganization) {
+                #update_body
+            }
+        }
+    }
+    .into()
+}
+
+// ---------------------------------------------------------------------------
+// MemoryMember
+// ---------------------------------------------------------------------------
+
+#[proc_macro_derive(MemoryMember, attributes(auth))]
+pub fn derive_memory_member(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let struct_name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    let field_infos = match parse_memory_fields(&input, "MemoryMember") {
+        Ok(fi) => fi,
+        Err(err) => return err.into(),
+    };
+
+    let create_mappings: Vec<(&str, CreateInit)> = vec![
+        ("id", CreateInit::IdParam),
+        (
+            "organization_id",
+            CreateInit::CloneCreate("organization_id"),
+        ),
+        ("user_id", CreateInit::CloneCreate("user_id")),
+        ("role", CreateInit::CloneCreate("role")),
+        ("created_at", CreateInit::NowParam),
+    ];
+
+    let create_body = gen_from_create_body(&field_infos, &create_mappings);
+
+    let role_field = find_field_for_getter(&field_infos, "role");
+    let set_role = role_field.map(|f| {
+        quote! {
+            fn set_role(&mut self, role: ::std::string::String) {
+                self.#f = role;
+            }
+        }
+    });
+
+    quote! {
+        impl #impl_generics ::better_auth_core::adapters::memory::MemoryMember
+            for #struct_name #ty_generics #where_clause
+        {
+            fn from_create(
+                id: ::std::string::String,
+                create: &::better_auth_core::types::CreateMember,
+                now: ::chrono::DateTime<::chrono::Utc>,
+            ) -> Self {
+                #create_body
+            }
+
+            #set_role
+        }
+    }
+    .into()
+}
+
+// ---------------------------------------------------------------------------
+// MemoryInvitation
+// ---------------------------------------------------------------------------
+
+#[proc_macro_derive(MemoryInvitation, attributes(auth))]
+pub fn derive_memory_invitation(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let struct_name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    let field_infos = match parse_memory_fields(&input, "MemoryInvitation") {
+        Ok(fi) => fi,
+        Err(err) => return err.into(),
+    };
+
+    let create_mappings: Vec<(&str, CreateInit)> = vec![
+        ("id", CreateInit::IdParam),
+        (
+            "organization_id",
+            CreateInit::CloneCreate("organization_id"),
+        ),
+        ("email", CreateInit::CloneCreate("email")),
+        ("role", CreateInit::CloneCreate("role")),
+        ("status", CreateInit::InvitationPending),
+        ("inviter_id", CreateInit::CloneCreate("inviter_id")),
+        ("expires_at", CreateInit::CopyCreate("expires_at")),
+        ("created_at", CreateInit::NowParam),
+    ];
+
+    let create_body = gen_from_create_body(&field_infos, &create_mappings);
+
+    let status_field = find_field_for_getter(&field_infos, "status");
+    let set_status = status_field.map(|f| {
+        quote! {
+            fn set_status(&mut self, status: ::better_auth_core::types::InvitationStatus) {
+                self.#f = status;
+            }
+        }
+    });
+
+    quote! {
+        impl #impl_generics ::better_auth_core::adapters::memory::MemoryInvitation
+            for #struct_name #ty_generics #where_clause
+        {
+            fn from_create(
+                id: ::std::string::String,
+                create: &::better_auth_core::types::CreateInvitation,
+                now: ::chrono::DateTime<::chrono::Utc>,
+            ) -> Self {
+                #create_body
+            }
+
+            #set_status
+        }
+    }
+    .into()
+}
+
+// ---------------------------------------------------------------------------
+// MemoryVerification
+// ---------------------------------------------------------------------------
+
+#[proc_macro_derive(MemoryVerification, attributes(auth))]
+pub fn derive_memory_verification(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let struct_name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    let field_infos = match parse_memory_fields(&input, "MemoryVerification") {
+        Ok(fi) => fi,
+        Err(err) => return err.into(),
+    };
+
+    let create_mappings: Vec<(&str, CreateInit)> = vec![
+        ("id", CreateInit::IdParam),
+        ("identifier", CreateInit::CloneCreate("identifier")),
+        ("value", CreateInit::CloneCreate("value")),
+        ("expires_at", CreateInit::CopyCreate("expires_at")),
+        ("created_at", CreateInit::NowParam),
+        ("updated_at", CreateInit::NowParam),
+    ];
+
+    let create_body = gen_from_create_body(&field_infos, &create_mappings);
+
+    quote! {
+        impl #impl_generics ::better_auth_core::adapters::memory::MemoryVerification
+            for #struct_name #ty_generics #where_clause
+        {
+            fn from_create(
+                id: ::std::string::String,
+                create: &::better_auth_core::types::CreateVerification,
+                now: ::chrono::DateTime<::chrono::Utc>,
+            ) -> Self {
+                #create_body
+            }
+        }
+    }
     .into()
 }
