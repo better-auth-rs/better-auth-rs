@@ -15,16 +15,16 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/better-auth-rs/better-auth-rs"
 
 [workspace.dependencies]
 # Sub-crates
-better-auth-core = { version = "0.2.0", path = "crates/core" }
-better-auth-api = { version = "0.2.0", path = "crates/api" }
-better-auth-derive = { version = "0.2.0", path = "crates/derive" }
+better-auth-core = { version = "0.3.0", path = "crates/core" }
+better-auth-api = { version = "0.3.0", path = "crates/api" }
+better-auth-derive = { version = "0.3.0", path = "crates/derive" }
 
 # Asynchronous runtime
 tokio = { version = "1.0", features = ["full"] }

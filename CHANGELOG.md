@@ -3,6 +3,24 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [0.3.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.2.0...v0.3.0) - 2026-02-10
+
+### Documentation
+
+- update database docs for generic adapters and custom entity types
+
+
+### Features
+
+- add Memory* derive macros and generic MemoryDatabaseAdapter
+
+- make SqlxAdapter generic over entity types
+
+
+### Refactoring
+
+- remove unused crates and rename workspace directories
+
 ## [0.2.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.0.1-alpha.2...v0.2.0) - 2026-02-10
 
 ### Bug Fixes
