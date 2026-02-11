@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [0.4.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.3.0...v0.4.0) - 2026-02-11
+
+### Features
+
+- add #[auth(from_row)] derive macro and Sea-ORM example
+
+
+### Refactoring
+
+- split large files into modules and
+
+- split DatabaseAdapter into sub-traits and clean up architecture
+
+- convert sea-orm example to use sea-orm-migration and add READMEs
+
 ## [0.3.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.2.0...v0.3.0) - 2026-02-10
 
 ### Documentation
