@@ -1,10 +1,11 @@
-//! # Sea-ORM Custom Entities Example
+//! # Sea-ORM Migration Example
 //!
-//! Demonstrates how to use better-auth alongside Sea-ORM in the same application.
-//! Both share the same PostgreSQL connection pool:
+//! Demonstrates how to use better-auth alongside Sea-ORM in the same application,
+//! with schema migrations managed by `sea-orm-migration` (Rust code, not raw SQL).
 //!
 //! - **Sea-ORM** (`DatabaseConnection`) — for app-level queries (e.g., find users by plan)
 //! - **better-auth** (`SqlxAdapter`) — for authentication (sign-up, sign-in, sessions)
+//! - **sea-orm-migration** — for schema migrations in Rust
 //!
 //! The key pattern: extract the underlying `sqlx::PgPool` from Sea-ORM's
 //! `DatabaseConnection` via `get_postgres_connection_pool()`, then pass it
@@ -15,15 +16,16 @@
 //! ```bash
 //! createdb better_auth_example
 //! export DATABASE_URL="postgresql://user:pass@localhost:5432/better_auth_example"
-//! psql "$DATABASE_URL" -f examples/sea-orm-custom-entities/migrations/001_init.sql
-//! cargo run -p sea-orm-custom-entities
+//! cargo run -p sea-orm-migration-example
 //! ```
 
 mod auth_entities;
 mod entities;
+mod migration;
 
 use crate::auth_entities::{AppAdapter, AppUser};
 use crate::entities::UserEntity;
+use crate::migration::Migrator;
 use axum::extract::{Request, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -35,6 +37,7 @@ use better_auth::plugins::{
 };
 use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm_migration::MigratorTrait;
 use serde::Serialize;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
@@ -58,14 +61,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db: DatabaseConnection = sea_orm::Database::connect(&database_url).await?;
     println!("[*] Sea-ORM connected");
 
-    // 2. Run migrations using the underlying sqlx pool
-    let pg_pool = db.get_postgres_connection_pool();
-    let migration_sql = include_str!("../migrations/001_init.sql");
-    sqlx::raw_sql(migration_sql).execute(pg_pool).await?;
+    // 2. Run migrations via sea-orm-migration (Rust code, not raw SQL)
+    Migrator::up(&db, None).await?;
     println!("[*] Migrations applied");
 
     // 3. Create the better-auth SqlxAdapter from the SAME pool
     //    Both Sea-ORM and better-auth share one connection pool.
+    let pg_pool = db.get_postgres_connection_pool();
     let adapter = AppAdapter::from_pool(pg_pool.clone());
 
     let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")

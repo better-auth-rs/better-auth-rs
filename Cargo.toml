@@ -15,7 +15,7 @@ members = [
 ]
 exclude = [
     "examples/sqlx-custom-entities",
-    "examples/sea-orm-custom-entities",
+    "examples/sea-orm-migration",
 ]
 
 [workspace.package]
