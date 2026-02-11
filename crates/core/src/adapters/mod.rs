@@ -1,6 +1,8 @@
 pub mod cache;
 pub mod database;
 pub mod memory;
+pub mod memory_traits;
+pub mod traits;
 
 pub use cache::{CacheAdapter, MemoryCacheAdapter};
 pub use database::{

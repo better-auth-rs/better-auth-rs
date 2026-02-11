@@ -3,10 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use validator::Validate;
 
-// ============================================================================
-// Organization Requests
-// ============================================================================
-
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateOrganizationRequest {
     #[validate(length(min = 1, message = "Name is required"))]
@@ -60,10 +56,6 @@ pub struct GetFullOrganizationQuery {
     pub organization_slug: Option<String>,
 }
 
-// ============================================================================
-// Member Requests
-// ============================================================================
-
 #[derive(Debug, Deserialize, Validate)]
 pub struct InviteMemberRequest {
     #[validate(email(message = "Invalid email address"))]
@@ -102,10 +94,6 @@ pub struct ListMembersQuery {
     pub offset: Option<usize>,
 }
 
-// ============================================================================
-// Invitation Requests
-// ============================================================================
-
 #[derive(Debug, Deserialize)]
 pub struct AcceptInvitationRequest {
     #[serde(rename = "invitationId")]
@@ -135,20 +123,12 @@ pub struct ListInvitationsQuery {
     pub organization_id: Option<String>,
 }
 
-// ============================================================================
-// Permission Requests
-// ============================================================================
-
 #[derive(Debug, Deserialize)]
 pub struct HasPermissionRequest {
     pub permissions: HashMap<String, Vec<String>>,
     #[serde(rename = "organizationId")]
     pub organization_id: Option<String>,
 }
-
-// ============================================================================
-// Responses
-// ============================================================================
 
 #[derive(Debug, Serialize)]
 pub struct CheckSlugResponse {

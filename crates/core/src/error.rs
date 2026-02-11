@@ -7,7 +7,6 @@ use thiserror::Error;
 /// matching the better-auth OpenAPI spec: `{ "message": "..." }`.
 #[derive(Error, Debug)]
 pub enum AuthError {
-    // --- 400 Bad Request ---
     #[error("{0}")]
     BadRequest(String),
 
@@ -17,7 +16,6 @@ pub enum AuthError {
     #[error("Validation error: {0}")]
     Validation(String),
 
-    // --- 401 Unauthorized ---
     #[error("Invalid credentials")]
     InvalidCredentials,
 
@@ -27,33 +25,27 @@ pub enum AuthError {
     #[error("Session not found or expired")]
     SessionNotFound,
 
-    // --- 403 Forbidden ---
     #[error("{0}")]
     Forbidden(String),
 
     #[error("Insufficient permissions")]
     Unauthorized,
 
-    // --- 404 Not Found ---
     #[error("User not found")]
     UserNotFound,
 
     #[error("{0}")]
     NotFound(String),
 
-    // --- 409 Conflict ---
     #[error("{0}")]
     Conflict(String),
 
-    // --- 429 Too Many Requests ---
     #[error("Too many requests")]
     RateLimited,
 
-    // --- 501 Not Implemented ---
     #[error("{0}")]
     NotImplemented(String),
 
-    // --- 500 Internal Server Error ---
     #[error("Configuration error: {0}")]
     Config(String),
 
@@ -124,8 +116,6 @@ impl AuthError {
         )
         .unwrap_or_else(|_| crate::types::AuthResponse::text(status, &message))
     }
-
-    // --- Constructors ---
 
     pub fn bad_request(message: impl Into<String>) -> Self {
         Self::BadRequest(message.into())

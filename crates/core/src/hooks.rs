@@ -21,8 +21,6 @@ use crate::types::{
 /// `after_*` hooks (e.g., `after_create_user` receives `&DB::User`).
 #[async_trait]
 pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
-    // --- User hooks ---
-
     async fn before_create_user(&self, user: &mut CreateUser) -> AuthResult<()> {
         let _ = user;
         Ok(())
@@ -52,8 +50,6 @@ pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
         let _ = id;
         Ok(())
     }
-
-    // --- Session hooks ---
 
     async fn before_create_session(&self, session: &mut CreateSession) -> AuthResult<()> {
         let _ = session;
@@ -99,8 +95,6 @@ impl<DB: DatabaseAdapter> HookedDatabaseAdapter<DB> {
         self.hooks.push(hook);
     }
 }
-
-// -- UserOps (hooked) --
 
 #[async_trait]
 impl<DB: DatabaseAdapter> UserOps for HookedDatabaseAdapter<DB> {
@@ -151,8 +145,6 @@ impl<DB: DatabaseAdapter> UserOps for HookedDatabaseAdapter<DB> {
         Ok(())
     }
 }
-
-// -- SessionOps (hooked) --
 
 #[async_trait]
 impl<DB: DatabaseAdapter> SessionOps for HookedDatabaseAdapter<DB> {
@@ -215,8 +207,6 @@ impl<DB: DatabaseAdapter> SessionOps for HookedDatabaseAdapter<DB> {
     }
 }
 
-// -- AccountOps (pass-through) --
-
 #[async_trait]
 impl<DB: DatabaseAdapter> AccountOps for HookedDatabaseAdapter<DB> {
     type Account = DB::Account;
@@ -241,8 +231,6 @@ impl<DB: DatabaseAdapter> AccountOps for HookedDatabaseAdapter<DB> {
         self.inner.delete_account(id).await
     }
 }
-
-// -- VerificationOps (pass-through) --
 
 #[async_trait]
 impl<DB: DatabaseAdapter> VerificationOps for HookedDatabaseAdapter<DB> {
@@ -279,8 +267,6 @@ impl<DB: DatabaseAdapter> VerificationOps for HookedDatabaseAdapter<DB> {
     }
 }
 
-// -- OrganizationOps (pass-through) --
-
 #[async_trait]
 impl<DB: DatabaseAdapter> OrganizationOps for HookedDatabaseAdapter<DB> {
     type Organization = DB::Organization;
@@ -313,8 +299,6 @@ impl<DB: DatabaseAdapter> OrganizationOps for HookedDatabaseAdapter<DB> {
         self.inner.list_user_organizations(user_id).await
     }
 }
-
-// -- MemberOps (pass-through) --
 
 #[async_trait]
 impl<DB: DatabaseAdapter> MemberOps for HookedDatabaseAdapter<DB> {
@@ -359,8 +343,6 @@ impl<DB: DatabaseAdapter> MemberOps for HookedDatabaseAdapter<DB> {
         self.inner.count_organization_owners(organization_id).await
     }
 }
-
-// -- InvitationOps (pass-through) --
 
 #[async_trait]
 impl<DB: DatabaseAdapter> InvitationOps for HookedDatabaseAdapter<DB> {

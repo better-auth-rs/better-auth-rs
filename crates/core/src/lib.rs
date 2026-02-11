@@ -14,6 +14,8 @@ pub mod openapi;
 pub mod plugin;
 pub mod session;
 pub mod types;
+pub mod types_impls;
+pub mod types_org;
 
 // Re-export derive macros when the `derive` feature is enabled
 #[cfg(feature = "derive")]
