@@ -7,7 +7,7 @@ description: Add Better Auth RS to your Rust project.
 
 ```toml title="Cargo.toml"
 [dependencies]
-better-auth = "0.1"
+better-auth = "0.4"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -17,12 +17,13 @@ Enable additional functionality with feature flags:
 
 ```toml title="Cargo.toml"
 [dependencies]
-better-auth = { version = "0.1", features = ["axum", "sqlx-postgres"] }
+better-auth = { version = "0.4", features = ["axum", "sqlx-postgres", "derive"] }
 ```
 
 | Feature | Description |
 |---------|-------------|
 | `axum` | Axum web framework integration with automatic route mounting |
+| `derive` | Custom entity derive macros (`AuthUser`, `MemoryUser`, etc.) for custom types |
 | `sqlx-postgres` | PostgreSQL database support via SQLx with connection pooling |
 
 No features are enabled by default. The core library works with the in-memory database adapter and the framework-agnostic request/response types.

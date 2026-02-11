@@ -3,20 +3,25 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
 ## [0.4.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.3.0...v0.4.0) - 2026-02-11
 
 ### Features
 
-- add #[auth(from_row)] derive macro and Sea-ORM example
-
+- add `#[auth(from_row)]` derive macro for automatic sqlx::FromRow generation from Sea-ORM models
+- add Sea-ORM integration example with custom entities and shared connection pool
 
 ### Refactoring
 
-- split large files into modules and
+- split DatabaseAdapter into focused sub-traits (UserOps, SessionOps, AccountOps, etc.)
+- split large files into modules and remove separator comments
+- convert sea-orm example to use sea-orm-migration instead of raw SQL
 
-- split DatabaseAdapter into sub-traits and clean up architecture
+### Documentation
 
-- convert sea-orm example to use sea-orm-migration and add READMEs
+- add comprehensive README.md to examples/ directory
+- add detailed READMEs to sqlx-custom-entities and sea-orm-migration examples
+- update main README with v0.4.0 version and new examples
 
 ## [0.3.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.2.0...v0.3.0) - 2026-02-10
 

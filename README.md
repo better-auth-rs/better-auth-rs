@@ -23,7 +23,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-better-auth = "0.1"
+better-auth = "0.4"
 ```
 
 ```rust
@@ -56,7 +56,7 @@ Enable the `axum` feature:
 
 ```toml
 [dependencies]
-better-auth = { version = "0.1", features = ["axum"] }
+better-auth = { version = "0.4", features = ["axum"] }
 ```
 
 ```rust
@@ -185,11 +185,14 @@ psql "$DATABASE_URL" -f migrations/002_create_organization_tables.sql
 ```toml
 [features]
 axum = []           # Axum web framework integration
+derive = []         # Custom entity derive macros (AuthUser, MemoryUser, etc.)
 sqlx-postgres = []  # PostgreSQL database support
 redis-cache = []    # Redis caching (planned)
 ```
 
 ## Examples
+
+See [examples/README.md](examples/README.md) for detailed documentation.
 
 ```bash
 # Basic usage (in-memory)
@@ -201,6 +204,15 @@ cargo run --example postgres_usage --features sqlx-postgres
 
 # Axum web server with interactive demo
 cargo run --example axum_server --features axum
+
+# Custom entity types with derive macros
+cargo run --example custom_entities --features derive
+
+# SQLx custom entities (standalone project)
+cargo run -p sqlx-custom-entities
+
+# Sea-ORM with migration (standalone project)
+cargo run -p sea-orm-migration-example
 ```
 
 ## License
