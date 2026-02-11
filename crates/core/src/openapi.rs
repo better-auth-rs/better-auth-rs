@@ -101,7 +101,7 @@ impl OpenApiBuilder {
     pub fn plugin<DB: DatabaseAdapter>(mut self, plugin: &dyn AuthPlugin<DB>) -> Self {
         let tag = plugin.name();
         for route in plugin.routes() {
-            self = self.route(&route.method, &route.path, &route.handler, tag);
+            self = self.route(&route.method, &route.path, &route.operation_id, tag);
         }
         self
     }

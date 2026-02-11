@@ -3,7 +3,10 @@ pub mod database;
 pub mod memory;
 
 pub use cache::{CacheAdapter, MemoryCacheAdapter};
-pub use database::DatabaseAdapter;
+pub use database::{
+    AccountOps, DatabaseAdapter, InvitationOps, MemberOps, OrganizationOps, SessionOps, UserOps,
+    VerificationOps,
+};
 pub use memory::{
     MemoryAccount, MemoryDatabaseAdapter, MemoryInvitation, MemoryMember, MemoryOrganization,
     MemorySession, MemoryUser, MemoryVerification,

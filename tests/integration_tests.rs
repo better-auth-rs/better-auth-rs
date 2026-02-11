@@ -1,4 +1,6 @@
-use better_auth::adapters::MemoryDatabaseAdapter;
+use better_auth::adapters::{
+    AccountOps, MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps,
+};
 use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
 };
@@ -187,14 +189,8 @@ async fn test_revoke_session_integration() {
     let (user_id, session_token1) = create_test_user_and_session(auth.clone()).await;
 
     // Create a second session for the same user
-    use better_auth::SessionManager;
     use better_auth::types::CreateSession;
     use chrono::{Duration, Utc};
-
-    use better_auth::adapters::DatabaseAdapter;
-
-    let session_manager =
-        SessionManager::new(Arc::new(auth.config().clone()), auth.database().clone());
 
     let create_session = CreateSession {
         user_id: user_id.clone(),
@@ -335,7 +331,7 @@ async fn test_reset_password_integration() {
     let (_user_id, _session_token) = create_test_user_and_session(auth.clone()).await;
 
     // First, create a verification token manually
-    use better_auth::adapters::DatabaseAdapter;
+
     use better_auth::types::CreateVerification;
     use chrono::{Duration, Utc};
     use uuid::Uuid;
@@ -466,7 +462,7 @@ async fn test_reset_password_token_integration() {
     let (_user_id, _session_token) = create_test_user_and_session(auth.clone()).await;
 
     // Create a verification token manually
-    use better_auth::adapters::DatabaseAdapter;
+
     use better_auth::types::CreateVerification;
     use chrono::{Duration, Utc};
     use uuid::Uuid;
@@ -620,7 +616,6 @@ async fn test_delete_user_post_method() {
 async fn test_set_password_success() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::adapters::DatabaseAdapter;
     use better_auth::types::{AuthRequest, CreateSession, CreateUser};
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
@@ -738,7 +733,7 @@ async fn test_revoke_other_sessions_integration() {
     let (user_id, session_token1) = create_test_user_and_session(auth.clone()).await;
 
     // Create a second session for the same user
-    use better_auth::adapters::DatabaseAdapter;
+
     use better_auth::types::{AuthRequest, CreateSession};
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
@@ -915,9 +910,7 @@ async fn test_change_email_success() {
 async fn test_change_email_duplicate() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::adapters::DatabaseAdapter;
-    use better_auth::types::{AuthRequest, CreateSession, CreateUser};
-    use chrono::{Duration, Utc};
+    use better_auth::types::{AuthRequest, CreateUser};
     use std::collections::HashMap;
 
     // Create first user
@@ -981,7 +974,6 @@ async fn test_delete_user_callback_success() {
     let auth = create_test_auth_memory().await;
     let (user_id, _session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::adapters::DatabaseAdapter;
     use better_auth::types::{AuthRequest, CreateVerification};
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
@@ -1081,7 +1073,6 @@ async fn test_list_accounts_with_account() {
     let auth = create_test_auth_memory().await;
     let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::adapters::DatabaseAdapter;
     use better_auth::types::{AuthRequest, CreateAccount};
     use std::collections::HashMap;
 
@@ -1135,7 +1126,6 @@ async fn test_unlink_account_success() {
     let auth = create_test_auth_memory().await;
     let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::adapters::DatabaseAdapter;
     use better_auth::types::{AuthRequest, CreateAccount};
     use std::collections::HashMap;
 
@@ -1192,7 +1182,6 @@ async fn test_unlink_account_success() {
 async fn test_unlink_last_account_fails() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::adapters::DatabaseAdapter;
     use better_auth::types::{AuthRequest, CreateAccount, CreateSession, CreateUser};
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
@@ -1878,7 +1867,7 @@ async fn test_sign_in_username_nonexistent() {
 /// get_user_by_username works via database adapter
 #[tokio::test]
 async fn test_get_user_by_username_adapter() {
-    use better_auth::adapters::{DatabaseAdapter, MemoryDatabaseAdapter};
+    use better_auth::adapters::MemoryDatabaseAdapter;
     use better_auth::types::CreateUser;
 
     let db = MemoryDatabaseAdapter::new();

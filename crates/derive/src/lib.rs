@@ -62,13 +62,7 @@ enum ReturnKind {
     OptionRefValue,
 }
 
-/// One getter that needs to be generated for a trait.
-struct GetterDef {
-    /// The name of the getter method (e.g. `"user_id"`).
-    getter_name: &'static str,
-    /// How the value is returned.
-    kind: ReturnKind,
-}
+use ReturnKind::*;
 
 // ---------------------------------------------------------------------------
 // Field resolution helpers
@@ -138,37 +132,77 @@ fn find_field_for_getter<'a>(fields: &'a [FieldInfo], getter_name: &str) -> Opti
     None
 }
 
+/// Parse named fields from a DeriveInput, returning field infos or a compile error.
+fn parse_named_fields(
+    input: &DeriveInput,
+    trait_name: &str,
+) -> Result<Vec<FieldInfo>, TokenStream2> {
+    let struct_name = &input.ident;
+    let named_fields = match &input.data {
+        syn::Data::Struct(data) => match &data.fields {
+            syn::Fields::Named(fields) => &fields.named,
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    struct_name,
+                    format!("{trait_name} can only be derived for structs with named fields"),
+                )
+                .to_compile_error());
+            }
+        },
+        _ => {
+            return Err(syn::Error::new_spanned(
+                struct_name,
+                format!("{trait_name} requires a struct"),
+            )
+            .to_compile_error());
+        }
+    };
+
+    Ok(named_fields
+        .iter()
+        .filter_map(|f| {
+            let ident = f.ident.clone()?;
+            let (auth_field_name, auth_default) = parse_auth_attrs(&f.attrs);
+            Some(FieldInfo {
+                ident,
+                auth_field_name,
+                auth_default,
+            })
+        })
+        .collect())
+}
+
 // ---------------------------------------------------------------------------
-// Code generation
+// Code generation — Auth* trait getters
 // ---------------------------------------------------------------------------
 
 /// Generate the return-type tokens and method-body tokens for a single getter.
 fn gen_getter_tokens(field_ident: &syn::Ident, kind: ReturnKind) -> (TokenStream2, TokenStream2) {
     match kind {
-        ReturnKind::RefStr => (quote! { &str }, quote! { &self.#field_ident }),
-        ReturnKind::OptionRefStr => (
+        RefStr => (quote! { &str }, quote! { &self.#field_ident }),
+        OptionRefStr => (
             quote! { ::core::option::Option<&str> },
             quote! { self.#field_ident.as_deref() },
         ),
-        ReturnKind::Bool => (quote! { bool }, quote! { self.#field_ident }),
-        ReturnKind::U64 => (quote! { u64 }, quote! { self.#field_ident }),
-        ReturnKind::DateTime => (
+        Bool => (quote! { bool }, quote! { self.#field_ident }),
+        U64 => (quote! { u64 }, quote! { self.#field_ident }),
+        DateTime => (
             quote! { ::chrono::DateTime<::chrono::Utc> },
             quote! { self.#field_ident },
         ),
-        ReturnKind::OptionDateTime => (
+        OptionDateTime => (
             quote! { ::core::option::Option<::chrono::DateTime<::chrono::Utc>> },
             quote! { self.#field_ident },
         ),
-        ReturnKind::RefValue => (
+        RefValue => (
             quote! { &::serde_json::Value },
             quote! { &self.#field_ident },
         ),
-        ReturnKind::RefStatus => (
+        RefStatus => (
             quote! { &::better_auth_core::types::InvitationStatus },
             quote! { &self.#field_ident },
         ),
-        ReturnKind::OptionRefValue => (
+        OptionRefValue => (
             quote! { ::core::option::Option<&::serde_json::Value> },
             quote! { self.#field_ident.as_ref() },
         ),
@@ -244,13 +278,12 @@ fn parse_from_row_fields(input: &DeriveInput) -> Result<Vec<FromRowField>, Token
                     } else if meta.path.is_ident("default") {
                         let value = meta.value()?;
                         let lit: syn::LitStr = value.parse()?;
-                        let parsed: syn::Expr =
-                            syn::parse_str(&lit.value()).map_err(|e| {
-                                syn::Error::new_spanned(
-                                    &lit,
-                                    format!("invalid default expression: {e}"),
-                                )
-                            })?;
+                        let parsed: syn::Expr = syn::parse_str(&lit.value()).map_err(|e| {
+                            syn::Error::new_spanned(
+                                &lit,
+                                format!("invalid default expression: {e}"),
+                            )
+                        })?;
                         default_expr = Some(quote! { #parsed });
                     }
                     Ok(())
@@ -290,11 +323,7 @@ fn type_last_segment_name(ty: &syn::Type) -> Option<String> {
     let syn::Type::Path(type_path) = ty else {
         return None;
     };
-    type_path
-        .path
-        .segments
-        .last()
-        .map(|s| s.ident.to_string())
+    type_path.path.segments.last().map(|s| s.ident.to_string())
 }
 
 /// Known types that sqlx can decode directly (no special handling needed).
@@ -330,10 +359,10 @@ fn is_json_type_name(name: &str) -> bool {
 /// Generate the expression for a single field in a `FromRow` impl.
 ///
 /// Classification logic:
-/// 1. Explicit `#[auth(json)]` or auto-detected `Json`/`Value` type → JSON unwrap
-/// 2. `#[auth(default = "expr")]` → `try_get(...).unwrap_or_else(|_| expr)`
-/// 3. Unknown non-Option type (not in known list) → assume `From<String>` enum
-/// 4. Everything else → simple `try_get`
+/// 1. Explicit `#[auth(json)]` or auto-detected `Json`/`Value` type -> JSON unwrap
+/// 2. `#[auth(default = "expr")]` -> `try_get(...).unwrap_or_else(|_| expr)`
+/// 3. Unknown non-Option type (not in known list) -> assume `From<String>` enum
+/// 4. Everything else -> simple `try_get`
 fn gen_from_row_field_expr(field: &FromRowField) -> TokenStream2 {
     let ident = &field.ident;
     let col_name = ident.to_string();
@@ -349,26 +378,23 @@ fn gen_from_row_field_expr(field: &FromRowField) -> TokenStream2 {
     let is_known = inner_name.as_deref().is_some_and(is_known_sqlx_type_name);
 
     if is_json && is_option {
-        // Option<Json> / Option<serde_json::Value>
         quote! {
             #ident: row.try_get::<
                 ::core::option::Option<::sqlx::types::Json<::serde_json::Value>>, _
             >(#col_name)?.map(|j| j.0)
         }
     } else if is_json {
-        // Json / serde_json::Value
         quote! {
             #ident: row.try_get::<
                 ::sqlx::types::Json<::serde_json::Value>, _
             >(#col_name)?.0
         }
     } else if let Some(ref default_expr) = field.default_expr {
-        // Field with a default value
         quote! {
             #ident: row.try_get(#col_name).unwrap_or_else(|_| #default_expr)
         }
     } else if !is_known && !is_option {
-        // Unknown non-Option type → assume enum implementing From<String>
+        // Unknown non-Option type -> assume enum implementing From<String>
         quote! {
             #ident: {
                 let __s: ::std::string::String = row.try_get(#col_name)?;
@@ -376,7 +402,6 @@ fn gen_from_row_field_expr(field: &FromRowField) -> TokenStream2 {
             }
         }
     } else {
-        // Known type or Option<known> → simple try_get
         quote! {
             #ident: row.try_get(#col_name)?
         }
@@ -416,79 +441,46 @@ fn maybe_gen_from_row(input: &DeriveInput) -> TokenStream2 {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Code generation
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Auth* trait derive — shared core + static getter definitions
+// ===========================================================================
 
 /// Core function: given a `DeriveInput`, trait path tokens, trait name (for
-/// error messages), and a list of getter definitions, generate the full
-/// `impl Trait for Struct { ... }` block.
+/// error messages), and a list of `(getter_name, ReturnKind)` pairs, generate
+/// the full `impl Trait for Struct { ... }` block.
 fn derive_entity_trait(
     input: &DeriveInput,
     trait_path: TokenStream2,
     trait_name: &str,
-    getters: &[GetterDef],
+    getters: &[(&str, ReturnKind)],
 ) -> TokenStream2 {
     let struct_name = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
-    // Extract named fields
-    let named_fields = match &input.data {
-        syn::Data::Struct(data) => match &data.fields {
-            syn::Fields::Named(fields) => &fields.named,
-            _ => {
-                return syn::Error::new_spanned(
-                    struct_name,
-                    format!(
-                        "{} can only be derived for structs with named fields",
-                        trait_name
-                    ),
-                )
-                .to_compile_error();
-            }
-        },
-        _ => {
-            return syn::Error::new_spanned(
-                struct_name,
-                format!("{} can only be derived for structs", trait_name),
-            )
-            .to_compile_error();
-        }
+    let field_infos = match parse_named_fields(input, trait_name) {
+        Ok(fi) => fi,
+        Err(err) => return err,
     };
-
-    // Parse field info
-    let field_infos: Vec<FieldInfo> = named_fields
-        .iter()
-        .filter_map(|f| {
-            let ident = f.ident.clone()?;
-            let (auth_field_name, auth_default) = parse_auth_attrs(&f.attrs);
-            Some(FieldInfo {
-                ident,
-                auth_field_name,
-                auth_default,
-            })
-        })
-        .collect();
 
     // Generate each getter method
     let mut methods = Vec::new();
-    for getter in getters {
-        let getter_ident = syn::Ident::new(getter.getter_name, proc_macro2::Span::call_site());
+    for &(getter_name, kind) in getters {
+        let getter_ident = syn::Ident::new(getter_name, proc_macro2::Span::call_site());
 
-        let field_ident = match find_field_for_getter(&field_infos, getter.getter_name) {
+        let field_ident = match find_field_for_getter(&field_infos, getter_name) {
             Some(ident) => ident.clone(),
             None => {
                 let msg = format!(
                     "Missing field '{}' for {} derive. \
                      Add a field `{}: <appropriate_type>` or use \
                      `#[auth(field = \"{}\")]` on an existing field.",
-                    getter.getter_name, trait_name, getter.getter_name, getter.getter_name,
+                    getter_name, trait_name, getter_name, getter_name,
                 );
                 return syn::Error::new_spanned(struct_name, msg).to_compile_error();
             }
         };
 
-        let (ret_type, body) = gen_getter_tokens(&field_ident, getter.kind);
+        let (ret_type, body) = gen_getter_tokens(&field_ident, kind);
 
         methods.push(quote! {
             fn #getter_ident(&self) -> #ret_type {
@@ -505,511 +497,316 @@ fn derive_entity_trait(
 }
 
 // ---------------------------------------------------------------------------
-// Macro definitions — one per entity trait
+// Auth* getter definitions (static arrays)
+// ---------------------------------------------------------------------------
+
+const AUTH_USER_GETTERS: &[(&str, ReturnKind)] = &[
+    ("id", RefStr),
+    ("email", OptionRefStr),
+    ("name", OptionRefStr),
+    ("email_verified", Bool),
+    ("image", OptionRefStr),
+    ("created_at", DateTime),
+    ("updated_at", DateTime),
+    ("username", OptionRefStr),
+    ("display_username", OptionRefStr),
+    ("two_factor_enabled", Bool),
+    ("role", OptionRefStr),
+    ("banned", Bool),
+    ("ban_reason", OptionRefStr),
+    ("ban_expires", OptionDateTime),
+    ("metadata", RefValue),
+];
+
+const AUTH_SESSION_GETTERS: &[(&str, ReturnKind)] = &[
+    ("id", RefStr),
+    ("expires_at", DateTime),
+    ("token", RefStr),
+    ("created_at", DateTime),
+    ("updated_at", DateTime),
+    ("ip_address", OptionRefStr),
+    ("user_agent", OptionRefStr),
+    ("user_id", RefStr),
+    ("impersonated_by", OptionRefStr),
+    ("active_organization_id", OptionRefStr),
+    ("active", Bool),
+];
+
+const AUTH_ACCOUNT_GETTERS: &[(&str, ReturnKind)] = &[
+    ("id", RefStr),
+    ("account_id", RefStr),
+    ("provider_id", RefStr),
+    ("user_id", RefStr),
+    ("access_token", OptionRefStr),
+    ("refresh_token", OptionRefStr),
+    ("id_token", OptionRefStr),
+    ("access_token_expires_at", OptionDateTime),
+    ("refresh_token_expires_at", OptionDateTime),
+    ("scope", OptionRefStr),
+    ("password", OptionRefStr),
+    ("created_at", DateTime),
+    ("updated_at", DateTime),
+];
+
+const AUTH_ORGANIZATION_GETTERS: &[(&str, ReturnKind)] = &[
+    ("id", RefStr),
+    ("name", RefStr),
+    ("slug", RefStr),
+    ("logo", OptionRefStr),
+    ("metadata", OptionRefValue),
+    ("created_at", DateTime),
+    ("updated_at", DateTime),
+];
+
+const AUTH_MEMBER_GETTERS: &[(&str, ReturnKind)] = &[
+    ("id", RefStr),
+    ("organization_id", RefStr),
+    ("user_id", RefStr),
+    ("role", RefStr),
+    ("created_at", DateTime),
+];
+
+const AUTH_INVITATION_GETTERS: &[(&str, ReturnKind)] = &[
+    ("id", RefStr),
+    ("organization_id", RefStr),
+    ("email", RefStr),
+    ("role", RefStr),
+    ("status", RefStatus),
+    ("inviter_id", RefStr),
+    ("expires_at", DateTime),
+    ("created_at", DateTime),
+];
+
+const AUTH_VERIFICATION_GETTERS: &[(&str, ReturnKind)] = &[
+    ("id", RefStr),
+    ("identifier", RefStr),
+    ("value", RefStr),
+    ("expires_at", DateTime),
+    ("created_at", DateTime),
+    ("updated_at", DateTime),
+];
+
+const AUTH_TWO_FACTOR_GETTERS: &[(&str, ReturnKind)] = &[
+    ("id", RefStr),
+    ("secret", RefStr),
+    ("backup_codes", OptionRefStr),
+    ("user_id", RefStr),
+];
+
+const AUTH_PASSKEY_GETTERS: &[(&str, ReturnKind)] = &[
+    ("id", RefStr),
+    ("name", RefStr),
+    ("public_key", RefStr),
+    ("user_id", RefStr),
+    ("credential_id", RefStr),
+    ("counter", U64),
+    ("device_type", RefStr),
+    ("backed_up", Bool),
+];
+
+// ---------------------------------------------------------------------------
+// Auth* macro entry points
 // ---------------------------------------------------------------------------
 
 #[proc_macro_derive(AuthUser, attributes(auth))]
 pub fn derive_auth_user(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let getters = vec![
-        GetterDef {
-            getter_name: "id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "email",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "name",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "email_verified",
-            kind: ReturnKind::Bool,
-        },
-        GetterDef {
-            getter_name: "image",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "created_at",
-            kind: ReturnKind::DateTime,
-        },
-        GetterDef {
-            getter_name: "updated_at",
-            kind: ReturnKind::DateTime,
-        },
-        GetterDef {
-            getter_name: "username",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "display_username",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "two_factor_enabled",
-            kind: ReturnKind::Bool,
-        },
-        GetterDef {
-            getter_name: "role",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "banned",
-            kind: ReturnKind::Bool,
-        },
-        GetterDef {
-            getter_name: "ban_reason",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "ban_expires",
-            kind: ReturnKind::OptionDateTime,
-        },
-        GetterDef {
-            getter_name: "metadata",
-            kind: ReturnKind::RefValue,
-        },
-    ];
-    let trait_impl = derive_entity_trait(
+    let t = derive_entity_trait(
         &input,
         quote! { ::better_auth_core::entity::AuthUser },
         "AuthUser",
-        &getters,
+        AUTH_USER_GETTERS,
     );
-    let from_row_impl = maybe_gen_from_row(&input);
-    quote! { #trait_impl #from_row_impl }.into()
+    let r = maybe_gen_from_row(&input);
+    quote! { #t #r }.into()
 }
 
 #[proc_macro_derive(AuthSession, attributes(auth))]
 pub fn derive_auth_session(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let getters = vec![
-        GetterDef {
-            getter_name: "id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "expires_at",
-            kind: ReturnKind::DateTime,
-        },
-        GetterDef {
-            getter_name: "token",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "created_at",
-            kind: ReturnKind::DateTime,
-        },
-        GetterDef {
-            getter_name: "updated_at",
-            kind: ReturnKind::DateTime,
-        },
-        GetterDef {
-            getter_name: "ip_address",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "user_agent",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "user_id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "impersonated_by",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "active_organization_id",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "active",
-            kind: ReturnKind::Bool,
-        },
-    ];
-    let trait_impl = derive_entity_trait(
+    let t = derive_entity_trait(
         &input,
         quote! { ::better_auth_core::entity::AuthSession },
         "AuthSession",
-        &getters,
+        AUTH_SESSION_GETTERS,
     );
-    let from_row_impl = maybe_gen_from_row(&input);
-    quote! { #trait_impl #from_row_impl }.into()
+    let r = maybe_gen_from_row(&input);
+    quote! { #t #r }.into()
 }
 
 #[proc_macro_derive(AuthAccount, attributes(auth))]
 pub fn derive_auth_account(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let getters = vec![
-        GetterDef {
-            getter_name: "id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "account_id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "provider_id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "user_id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "access_token",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "refresh_token",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "id_token",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "access_token_expires_at",
-            kind: ReturnKind::OptionDateTime,
-        },
-        GetterDef {
-            getter_name: "refresh_token_expires_at",
-            kind: ReturnKind::OptionDateTime,
-        },
-        GetterDef {
-            getter_name: "scope",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "password",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "created_at",
-            kind: ReturnKind::DateTime,
-        },
-        GetterDef {
-            getter_name: "updated_at",
-            kind: ReturnKind::DateTime,
-        },
-    ];
-    let trait_impl = derive_entity_trait(
+    let t = derive_entity_trait(
         &input,
         quote! { ::better_auth_core::entity::AuthAccount },
         "AuthAccount",
-        &getters,
+        AUTH_ACCOUNT_GETTERS,
     );
-    let from_row_impl = maybe_gen_from_row(&input);
-    quote! { #trait_impl #from_row_impl }.into()
+    let r = maybe_gen_from_row(&input);
+    quote! { #t #r }.into()
 }
 
 #[proc_macro_derive(AuthOrganization, attributes(auth))]
 pub fn derive_auth_organization(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let getters = vec![
-        GetterDef {
-            getter_name: "id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "name",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "slug",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "logo",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "metadata",
-            kind: ReturnKind::OptionRefValue,
-        },
-        GetterDef {
-            getter_name: "created_at",
-            kind: ReturnKind::DateTime,
-        },
-        GetterDef {
-            getter_name: "updated_at",
-            kind: ReturnKind::DateTime,
-        },
-    ];
-    let trait_impl = derive_entity_trait(
+    let t = derive_entity_trait(
         &input,
         quote! { ::better_auth_core::entity::AuthOrganization },
         "AuthOrganization",
-        &getters,
+        AUTH_ORGANIZATION_GETTERS,
     );
-    let from_row_impl = maybe_gen_from_row(&input);
-    quote! { #trait_impl #from_row_impl }.into()
+    let r = maybe_gen_from_row(&input);
+    quote! { #t #r }.into()
 }
 
 #[proc_macro_derive(AuthMember, attributes(auth))]
 pub fn derive_auth_member(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let getters = vec![
-        GetterDef {
-            getter_name: "id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "organization_id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "user_id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "role",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "created_at",
-            kind: ReturnKind::DateTime,
-        },
-    ];
-    let trait_impl = derive_entity_trait(
+    let t = derive_entity_trait(
         &input,
         quote! { ::better_auth_core::entity::AuthMember },
         "AuthMember",
-        &getters,
+        AUTH_MEMBER_GETTERS,
     );
-    let from_row_impl = maybe_gen_from_row(&input);
-    quote! { #trait_impl #from_row_impl }.into()
+    let r = maybe_gen_from_row(&input);
+    quote! { #t #r }.into()
 }
 
 #[proc_macro_derive(AuthInvitation, attributes(auth))]
 pub fn derive_auth_invitation(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    // Only required methods — `is_pending` and `is_expired` have default impls.
-    let getters = vec![
-        GetterDef {
-            getter_name: "id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "organization_id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "email",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "role",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "status",
-            kind: ReturnKind::RefStatus,
-        },
-        GetterDef {
-            getter_name: "inviter_id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "expires_at",
-            kind: ReturnKind::DateTime,
-        },
-        GetterDef {
-            getter_name: "created_at",
-            kind: ReturnKind::DateTime,
-        },
-    ];
-    let trait_impl = derive_entity_trait(
+    let t = derive_entity_trait(
         &input,
         quote! { ::better_auth_core::entity::AuthInvitation },
         "AuthInvitation",
-        &getters,
+        AUTH_INVITATION_GETTERS,
     );
-    let from_row_impl = maybe_gen_from_row(&input);
-    quote! { #trait_impl #from_row_impl }.into()
+    let r = maybe_gen_from_row(&input);
+    quote! { #t #r }.into()
 }
 
 #[proc_macro_derive(AuthVerification, attributes(auth))]
 pub fn derive_auth_verification(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let getters = vec![
-        GetterDef {
-            getter_name: "id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "identifier",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "value",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "expires_at",
-            kind: ReturnKind::DateTime,
-        },
-        GetterDef {
-            getter_name: "created_at",
-            kind: ReturnKind::DateTime,
-        },
-        GetterDef {
-            getter_name: "updated_at",
-            kind: ReturnKind::DateTime,
-        },
-    ];
-    let trait_impl = derive_entity_trait(
+    let t = derive_entity_trait(
         &input,
         quote! { ::better_auth_core::entity::AuthVerification },
         "AuthVerification",
-        &getters,
+        AUTH_VERIFICATION_GETTERS,
     );
-    let from_row_impl = maybe_gen_from_row(&input);
-    quote! { #trait_impl #from_row_impl }.into()
+    let r = maybe_gen_from_row(&input);
+    quote! { #t #r }.into()
 }
 
 #[proc_macro_derive(AuthTwoFactor, attributes(auth))]
 pub fn derive_auth_two_factor(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let getters = vec![
-        GetterDef {
-            getter_name: "id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "secret",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "backup_codes",
-            kind: ReturnKind::OptionRefStr,
-        },
-        GetterDef {
-            getter_name: "user_id",
-            kind: ReturnKind::RefStr,
-        },
-    ];
-    let trait_impl = derive_entity_trait(
+    let t = derive_entity_trait(
         &input,
         quote! { ::better_auth_core::entity::AuthTwoFactor },
         "AuthTwoFactor",
-        &getters,
+        AUTH_TWO_FACTOR_GETTERS,
     );
-    let from_row_impl = maybe_gen_from_row(&input);
-    quote! { #trait_impl #from_row_impl }.into()
+    let r = maybe_gen_from_row(&input);
+    quote! { #t #r }.into()
 }
 
 #[proc_macro_derive(AuthPasskey, attributes(auth))]
 pub fn derive_auth_passkey(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let getters = vec![
-        GetterDef {
-            getter_name: "id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "name",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "public_key",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "user_id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "credential_id",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "counter",
-            kind: ReturnKind::U64,
-        },
-        GetterDef {
-            getter_name: "device_type",
-            kind: ReturnKind::RefStr,
-        },
-        GetterDef {
-            getter_name: "backed_up",
-            kind: ReturnKind::Bool,
-        },
-    ];
-    let trait_impl = derive_entity_trait(
+    let t = derive_entity_trait(
         &input,
         quote! { ::better_auth_core::entity::AuthPasskey },
         "AuthPasskey",
-        &getters,
+        AUTH_PASSKEY_GETTERS,
     );
-    let from_row_impl = maybe_gen_from_row(&input);
-    quote! { #trait_impl #from_row_impl }.into()
+    let r = maybe_gen_from_row(&input);
+    quote! { #t #r }.into()
 }
 
 // ===========================================================================
-// Memory trait derive macros
-//
-// Generate `MemoryUser`, `MemorySession`, etc. implementations that tell
-// the generic `MemoryDatabaseAdapter` how to construct and mutate custom
-// entity types.
+// Memory* trait derive macros — shared core + static field definitions
 // ===========================================================================
 
-// -- Helpers for from_create code generation --
+// -- Enums for from_create / apply_update code generation --
 
 /// How a struct field is initialised inside `from_create`.
+#[derive(Clone, Copy)]
 enum CreateInit {
-    /// The `id` parameter.
     IdParam,
-    /// The `token` parameter (sessions only).
     TokenParam,
-    /// The `now` parameter.
     NowParam,
-    /// `create.<field>.clone()`
     CloneCreate(&'static str),
-    /// `create.<field>` (Copy types like DateTime)
     CopyCreate(&'static str),
-    /// `create.<field>.unwrap_or(false)`
     UnwrapBoolCreate(&'static str),
-    /// `create.<field>.clone().unwrap_or_default()`
     UnwrapDefaultCreate(&'static str),
-    /// A literal `true` or `false`.
     StaticBool(bool),
-    /// `None`
     StaticNone,
-    /// `InvitationStatus::Pending`
     InvitationPending,
+}
+
+/// How an update field is applied to the struct.
+#[derive(Clone, Copy)]
+enum UpdateApply {
+    /// `if let Some(v) = &update.f { self.f = Some(v.clone()); }`
+    CloneIntoOption,
+    /// `if let Some(v) = update.f { self.f = v; }`
+    CopyDirect,
+    /// `if let Some(v) = update.f { self.f = Some(v); }`
+    CopyIntoOption,
+    /// `if let Some(v) = &update.f { self.f = v.clone(); }`
+    CloneDirect,
+}
+
+/// Setter methods that some Memory* traits require.
+#[derive(Clone, Copy)]
+enum SetterDef {
+    /// `fn set_expires_at(&mut self, at: DateTime<Utc>)` — field "expires_at"
+    ExpiresAt,
+    /// `fn set_active_organization_id(&mut self, org_id: Option<String>)` — field "active_organization_id"
+    ActiveOrganizationId,
+    /// `fn set_updated_at(&mut self, at: DateTime<Utc>)` — field "updated_at"
+    UpdatedAt,
+    /// `fn set_role(&mut self, role: String)` — field "role"
+    Role,
+    /// `fn set_status(&mut self, status: InvitationStatus)` — field "status"
+    Status,
+}
+
+use CreateInit::*;
+use UpdateApply::*;
+
+// -- Code generation helpers --
+
+fn mk_ident(s: &str) -> syn::Ident {
+    syn::Ident::new(s, proc_macro2::Span::call_site())
 }
 
 fn gen_create_init_expr(init: &CreateInit) -> TokenStream2 {
     match init {
-        CreateInit::IdParam => quote! { id },
-        CreateInit::TokenParam => quote! { token },
-        CreateInit::NowParam => quote! { now },
-        CreateInit::CloneCreate(f) => {
+        IdParam => quote! { id },
+        TokenParam => quote! { token },
+        NowParam => quote! { now },
+        CloneCreate(f) => {
             let field = mk_ident(f);
             quote! { create.#field.clone() }
         }
-        CreateInit::CopyCreate(f) => {
+        CopyCreate(f) => {
             let field = mk_ident(f);
             quote! { create.#field }
         }
-        CreateInit::UnwrapBoolCreate(f) => {
+        UnwrapBoolCreate(f) => {
             let field = mk_ident(f);
             quote! { create.#field.unwrap_or(false) }
         }
-        CreateInit::UnwrapDefaultCreate(f) => {
+        UnwrapDefaultCreate(f) => {
             let field = mk_ident(f);
             quote! { create.#field.clone().unwrap_or_default() }
         }
-        CreateInit::StaticBool(b) => quote! { #b },
-        CreateInit::StaticNone => quote! { ::core::option::Option::None },
-        CreateInit::InvitationPending => {
+        StaticBool(b) => quote! { #b },
+        StaticNone => quote! { ::core::option::Option::None },
+        InvitationPending => {
             quote! { ::better_auth_core::types::InvitationStatus::Pending }
         }
     }
@@ -1044,21 +841,6 @@ fn gen_from_create_body(
         .collect();
 
     quote! { Self { #(#field_inits),* } }
-}
-
-// -- Helpers for apply_update code generation --
-
-/// How an update field is applied to the struct.
-#[derive(Clone, Copy)]
-enum UpdateApply {
-    /// `if let Some(v) = &update.f { self.f = Some(v.clone()); }`
-    CloneIntoOption,
-    /// `if let Some(v) = update.f { self.f = v; }`
-    CopyDirect,
-    /// `if let Some(v) = update.f { self.f = Some(v); }`
-    CopyIntoOption,
-    /// `if let Some(v) = &update.f { self.f = v.clone(); }`
-    CloneDirect,
 }
 
 fn gen_update_apply_stmt(
@@ -1112,93 +894,170 @@ fn gen_apply_update_body(
     quote! { #(#stmts)* }
 }
 
-// -- Shared utility --
-
-fn mk_ident(s: &str) -> syn::Ident {
-    syn::Ident::new(s, proc_macro2::Span::call_site())
-}
-
-/// Parse named fields from a DeriveInput, returning field infos or a compile error.
-fn parse_memory_fields(
-    input: &DeriveInput,
-    trait_name: &str,
-) -> Result<Vec<FieldInfo>, TokenStream2> {
-    let struct_name = &input.ident;
-    let named_fields = match &input.data {
-        syn::Data::Struct(data) => match &data.fields {
-            syn::Fields::Named(fields) => &fields.named,
-            _ => {
-                return Err(syn::Error::new_spanned(
-                    struct_name,
-                    format!("{trait_name} can only be derived for structs with named fields"),
-                )
-                .to_compile_error());
+/// Generate setter method implementations from SetterDef descriptors.
+fn gen_setter_methods(field_infos: &[FieldInfo], setters: &[SetterDef]) -> TokenStream2 {
+    let mut methods = Vec::new();
+    for setter in setters {
+        match setter {
+            SetterDef::ExpiresAt => {
+                if let Some(f) = find_field_for_getter(field_infos, "expires_at") {
+                    methods.push(quote! {
+                        fn set_expires_at(&mut self, at: ::chrono::DateTime<::chrono::Utc>) {
+                            self.#f = at;
+                        }
+                    });
+                }
             }
-        },
-        _ => {
-            return Err(syn::Error::new_spanned(
-                struct_name,
-                format!("{trait_name} requires a struct"),
-            )
-            .to_compile_error());
+            SetterDef::ActiveOrganizationId => {
+                if let Some(f) = find_field_for_getter(field_infos, "active_organization_id") {
+                    methods.push(quote! {
+                        fn set_active_organization_id(
+                            &mut self,
+                            org_id: ::core::option::Option<::std::string::String>,
+                        ) {
+                            self.#f = org_id;
+                        }
+                    });
+                }
+            }
+            SetterDef::UpdatedAt => {
+                if let Some(f) = find_field_for_getter(field_infos, "updated_at") {
+                    methods.push(quote! {
+                        fn set_updated_at(&mut self, at: ::chrono::DateTime<::chrono::Utc>) {
+                            self.#f = at;
+                        }
+                    });
+                }
+            }
+            SetterDef::Role => {
+                if let Some(f) = find_field_for_getter(field_infos, "role") {
+                    methods.push(quote! {
+                        fn set_role(&mut self, role: ::std::string::String) {
+                            self.#f = role;
+                        }
+                    });
+                }
+            }
+            SetterDef::Status => {
+                if let Some(f) = find_field_for_getter(field_infos, "status") {
+                    methods.push(quote! {
+                        fn set_status(&mut self, status: ::better_auth_core::types::InvitationStatus) {
+                            self.#f = status;
+                        }
+                    });
+                }
+            }
         }
-    };
-
-    Ok(named_fields
-        .iter()
-        .filter_map(|f| {
-            let ident = f.ident.clone()?;
-            let (auth_field_name, auth_default) = parse_auth_attrs(&f.attrs);
-            Some(FieldInfo {
-                ident,
-                auth_field_name,
-                auth_default,
-            })
-        })
-        .collect())
+    }
+    quote! { #(#methods)* }
 }
 
 // ---------------------------------------------------------------------------
-// MemoryUser
+// Memory* trait definition descriptor
 // ---------------------------------------------------------------------------
 
-#[proc_macro_derive(MemoryUser, attributes(auth))]
-pub fn derive_memory_user(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
+/// Configuration for a Memory* trait derive macro. Each Memory* macro
+/// is fully described by one of these — the shared `derive_memory_trait`
+/// function does all the code generation.
+struct MemoryTraitDef {
+    trait_name: &'static str,
+    create_type: &'static str,
+    has_token_param: bool,
+    create_mappings: &'static [(&'static str, CreateInit)],
+    update_type: Option<&'static str>,
+    update_mappings: &'static [(&'static str, &'static str, UpdateApply)],
+    setters: &'static [SetterDef],
+}
+
+/// Shared code generation for all Memory* traits.
+fn derive_memory_trait(input: &DeriveInput, def: &MemoryTraitDef) -> TokenStream2 {
     let struct_name = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
-    let field_infos = match parse_memory_fields(&input, "MemoryUser") {
+    let field_infos = match parse_named_fields(input, def.trait_name) {
         Ok(fi) => fi,
-        Err(err) => return err.into(),
+        Err(err) => return err,
     };
 
-    let create_mappings: Vec<(&str, CreateInit)> = vec![
-        ("id", CreateInit::IdParam),
-        ("email", CreateInit::CloneCreate("email")),
-        ("name", CreateInit::CloneCreate("name")),
-        (
-            "email_verified",
-            CreateInit::UnwrapBoolCreate("email_verified"),
-        ),
-        ("image", CreateInit::CloneCreate("image")),
-        ("created_at", CreateInit::NowParam),
-        ("updated_at", CreateInit::NowParam),
-        ("username", CreateInit::CloneCreate("username")),
-        (
-            "display_username",
-            CreateInit::CloneCreate("display_username"),
-        ),
-        ("two_factor_enabled", CreateInit::StaticBool(false)),
-        ("role", CreateInit::CloneCreate("role")),
-        ("banned", CreateInit::StaticBool(false)),
-        ("ban_reason", CreateInit::StaticNone),
-        ("ban_expires", CreateInit::StaticNone),
-        ("metadata", CreateInit::UnwrapDefaultCreate("metadata")),
-    ];
+    let create_body = gen_from_create_body(&field_infos, def.create_mappings);
+    let trait_ident = mk_ident(def.trait_name);
+    let create_type_ident = mk_ident(def.create_type);
 
-    use UpdateApply::*;
-    let update_mappings: Vec<(&str, &str, UpdateApply)> = vec![
+    let from_create_fn = if def.has_token_param {
+        quote! {
+            fn from_create(
+                id: ::std::string::String,
+                token: ::std::string::String,
+                create: &::better_auth_core::types::#create_type_ident,
+                now: ::chrono::DateTime<::chrono::Utc>,
+            ) -> Self {
+                #create_body
+            }
+        }
+    } else {
+        quote! {
+            fn from_create(
+                id: ::std::string::String,
+                create: &::better_auth_core::types::#create_type_ident,
+                now: ::chrono::DateTime<::chrono::Utc>,
+            ) -> Self {
+                #create_body
+            }
+        }
+    };
+
+    let update_fn = if let Some(update_type_name) = def.update_type {
+        let update_type_ident = mk_ident(update_type_name);
+        let update_body = gen_apply_update_body(&field_infos, def.update_mappings);
+        quote! {
+            fn apply_update(&mut self, update: &::better_auth_core::types::#update_type_ident) {
+                #update_body
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let setter_fns = gen_setter_methods(&field_infos, def.setters);
+
+    quote! {
+        impl #impl_generics ::better_auth_core::adapters::memory::#trait_ident
+            for #struct_name #ty_generics #where_clause
+        {
+            #from_create_fn
+            #update_fn
+            #setter_fns
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Memory* static field definitions
+// ---------------------------------------------------------------------------
+
+const MEMORY_USER_DEF: MemoryTraitDef = MemoryTraitDef {
+    trait_name: "MemoryUser",
+    create_type: "CreateUser",
+    has_token_param: false,
+    create_mappings: &[
+        ("id", IdParam),
+        ("email", CloneCreate("email")),
+        ("name", CloneCreate("name")),
+        ("email_verified", UnwrapBoolCreate("email_verified")),
+        ("image", CloneCreate("image")),
+        ("created_at", NowParam),
+        ("updated_at", NowParam),
+        ("username", CloneCreate("username")),
+        ("display_username", CloneCreate("display_username")),
+        ("two_factor_enabled", StaticBool(false)),
+        ("role", CloneCreate("role")),
+        ("banned", StaticBool(false)),
+        ("ban_reason", StaticNone),
+        ("ban_expires", StaticNone),
+        ("metadata", UnwrapDefaultCreate("metadata")),
+    ],
+    update_type: Some("UpdateUser"),
+    update_mappings: &[
         ("email", "email", CloneIntoOption),
         ("name", "name", CloneIntoOption),
         ("image", "image", CloneIntoOption),
@@ -1211,381 +1070,186 @@ pub fn derive_memory_user(input: TokenStream) -> TokenStream {
         ("ban_expires", "ban_expires", CopyIntoOption),
         ("two_factor_enabled", "two_factor_enabled", CopyDirect),
         ("metadata", "metadata", CloneDirect),
-    ];
+    ],
+    setters: &[],
+};
 
-    let create_body = gen_from_create_body(&field_infos, &create_mappings);
-    let update_body = gen_apply_update_body(&field_infos, &update_mappings);
-
-    quote! {
-        impl #impl_generics ::better_auth_core::adapters::memory::MemoryUser
-            for #struct_name #ty_generics #where_clause
-        {
-            fn from_create(
-                id: ::std::string::String,
-                create: &::better_auth_core::types::CreateUser,
-                now: ::chrono::DateTime<::chrono::Utc>,
-            ) -> Self {
-                #create_body
-            }
-
-            fn apply_update(&mut self, update: &::better_auth_core::types::UpdateUser) {
-                #update_body
-            }
-        }
-    }
-    .into()
-}
-
-// ---------------------------------------------------------------------------
-// MemorySession
-// ---------------------------------------------------------------------------
-
-#[proc_macro_derive(MemorySession, attributes(auth))]
-pub fn derive_memory_session(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let struct_name = &input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
-    let field_infos = match parse_memory_fields(&input, "MemorySession") {
-        Ok(fi) => fi,
-        Err(err) => return err.into(),
-    };
-
-    let create_mappings: Vec<(&str, CreateInit)> = vec![
-        ("id", CreateInit::IdParam),
-        ("token", CreateInit::TokenParam),
-        ("expires_at", CreateInit::CopyCreate("expires_at")),
-        ("created_at", CreateInit::NowParam),
-        ("updated_at", CreateInit::NowParam),
-        ("ip_address", CreateInit::CloneCreate("ip_address")),
-        ("user_agent", CreateInit::CloneCreate("user_agent")),
-        ("user_id", CreateInit::CloneCreate("user_id")),
-        (
-            "impersonated_by",
-            CreateInit::CloneCreate("impersonated_by"),
-        ),
+const MEMORY_SESSION_DEF: MemoryTraitDef = MemoryTraitDef {
+    trait_name: "MemorySession",
+    create_type: "CreateSession",
+    has_token_param: true,
+    create_mappings: &[
+        ("id", IdParam),
+        ("token", TokenParam),
+        ("expires_at", CopyCreate("expires_at")),
+        ("created_at", NowParam),
+        ("updated_at", NowParam),
+        ("ip_address", CloneCreate("ip_address")),
+        ("user_agent", CloneCreate("user_agent")),
+        ("user_id", CloneCreate("user_id")),
+        ("impersonated_by", CloneCreate("impersonated_by")),
         (
             "active_organization_id",
-            CreateInit::CloneCreate("active_organization_id"),
+            CloneCreate("active_organization_id"),
         ),
-        ("active", CreateInit::StaticBool(true)),
-    ];
+        ("active", StaticBool(true)),
+    ],
+    update_type: None,
+    update_mappings: &[],
+    setters: &[
+        SetterDef::ExpiresAt,
+        SetterDef::ActiveOrganizationId,
+        SetterDef::UpdatedAt,
+    ],
+};
 
-    let create_body = gen_from_create_body(&field_infos, &create_mappings);
-
-    // Setters: find the struct fields for each setter target
-    let expires_at_field = find_field_for_getter(&field_infos, "expires_at");
-    let active_org_field = find_field_for_getter(&field_infos, "active_organization_id");
-    let updated_at_field = find_field_for_getter(&field_infos, "updated_at");
-
-    let set_expires = expires_at_field.map(|f| {
-        quote! {
-            fn set_expires_at(&mut self, at: ::chrono::DateTime<::chrono::Utc>) {
-                self.#f = at;
-            }
-        }
-    });
-    let set_active_org = active_org_field.map(|f| {
-        quote! {
-            fn set_active_organization_id(
-                &mut self,
-                org_id: ::core::option::Option<::std::string::String>,
-            ) {
-                self.#f = org_id;
-            }
-        }
-    });
-    let set_updated = updated_at_field.map(|f| {
-        quote! {
-            fn set_updated_at(&mut self, at: ::chrono::DateTime<::chrono::Utc>) {
-                self.#f = at;
-            }
-        }
-    });
-
-    quote! {
-        impl #impl_generics ::better_auth_core::adapters::memory::MemorySession
-            for #struct_name #ty_generics #where_clause
-        {
-            fn from_create(
-                id: ::std::string::String,
-                token: ::std::string::String,
-                create: &::better_auth_core::types::CreateSession,
-                now: ::chrono::DateTime<::chrono::Utc>,
-            ) -> Self {
-                #create_body
-            }
-
-            #set_expires
-            #set_active_org
-            #set_updated
-        }
-    }
-    .into()
-}
-
-// ---------------------------------------------------------------------------
-// MemoryAccount
-// ---------------------------------------------------------------------------
-
-#[proc_macro_derive(MemoryAccount, attributes(auth))]
-pub fn derive_memory_account(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let struct_name = &input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
-    let field_infos = match parse_memory_fields(&input, "MemoryAccount") {
-        Ok(fi) => fi,
-        Err(err) => return err.into(),
-    };
-
-    let create_mappings: Vec<(&str, CreateInit)> = vec![
-        ("id", CreateInit::IdParam),
-        ("account_id", CreateInit::CloneCreate("account_id")),
-        ("provider_id", CreateInit::CloneCreate("provider_id")),
-        ("user_id", CreateInit::CloneCreate("user_id")),
-        ("access_token", CreateInit::CloneCreate("access_token")),
-        ("refresh_token", CreateInit::CloneCreate("refresh_token")),
-        ("id_token", CreateInit::CloneCreate("id_token")),
+const MEMORY_ACCOUNT_DEF: MemoryTraitDef = MemoryTraitDef {
+    trait_name: "MemoryAccount",
+    create_type: "CreateAccount",
+    has_token_param: false,
+    create_mappings: &[
+        ("id", IdParam),
+        ("account_id", CloneCreate("account_id")),
+        ("provider_id", CloneCreate("provider_id")),
+        ("user_id", CloneCreate("user_id")),
+        ("access_token", CloneCreate("access_token")),
+        ("refresh_token", CloneCreate("refresh_token")),
+        ("id_token", CloneCreate("id_token")),
         (
             "access_token_expires_at",
-            CreateInit::CopyCreate("access_token_expires_at"),
+            CopyCreate("access_token_expires_at"),
         ),
         (
             "refresh_token_expires_at",
-            CreateInit::CopyCreate("refresh_token_expires_at"),
+            CopyCreate("refresh_token_expires_at"),
         ),
-        ("scope", CreateInit::CloneCreate("scope")),
-        ("password", CreateInit::CloneCreate("password")),
-        ("created_at", CreateInit::NowParam),
-        ("updated_at", CreateInit::NowParam),
-    ];
+        ("scope", CloneCreate("scope")),
+        ("password", CloneCreate("password")),
+        ("created_at", NowParam),
+        ("updated_at", NowParam),
+    ],
+    update_type: None,
+    update_mappings: &[],
+    setters: &[],
+};
 
-    let create_body = gen_from_create_body(&field_infos, &create_mappings);
-
-    quote! {
-        impl #impl_generics ::better_auth_core::adapters::memory::MemoryAccount
-            for #struct_name #ty_generics #where_clause
-        {
-            fn from_create(
-                id: ::std::string::String,
-                create: &::better_auth_core::types::CreateAccount,
-                now: ::chrono::DateTime<::chrono::Utc>,
-            ) -> Self {
-                #create_body
-            }
-        }
-    }
-    .into()
-}
-
-// ---------------------------------------------------------------------------
-// MemoryOrganization
-// ---------------------------------------------------------------------------
-
-#[proc_macro_derive(MemoryOrganization, attributes(auth))]
-pub fn derive_memory_organization(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let struct_name = &input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
-    let field_infos = match parse_memory_fields(&input, "MemoryOrganization") {
-        Ok(fi) => fi,
-        Err(err) => return err.into(),
-    };
-
-    let create_mappings: Vec<(&str, CreateInit)> = vec![
-        ("id", CreateInit::IdParam),
-        ("name", CreateInit::CloneCreate("name")),
-        ("slug", CreateInit::CloneCreate("slug")),
-        ("logo", CreateInit::CloneCreate("logo")),
-        ("metadata", CreateInit::CloneCreate("metadata")),
-        ("created_at", CreateInit::NowParam),
-        ("updated_at", CreateInit::NowParam),
-    ];
-
-    use UpdateApply::*;
-    let update_mappings: Vec<(&str, &str, UpdateApply)> = vec![
+const MEMORY_ORGANIZATION_DEF: MemoryTraitDef = MemoryTraitDef {
+    trait_name: "MemoryOrganization",
+    create_type: "CreateOrganization",
+    has_token_param: false,
+    create_mappings: &[
+        ("id", IdParam),
+        ("name", CloneCreate("name")),
+        ("slug", CloneCreate("slug")),
+        ("logo", CloneCreate("logo")),
+        ("metadata", CloneCreate("metadata")),
+        ("created_at", NowParam),
+        ("updated_at", NowParam),
+    ],
+    update_type: Some("UpdateOrganization"),
+    update_mappings: &[
         ("name", "name", CloneDirect),
         ("slug", "slug", CloneDirect),
         ("logo", "logo", CloneIntoOption),
         ("metadata", "metadata", CloneIntoOption),
-    ];
+    ],
+    setters: &[],
+};
 
-    let create_body = gen_from_create_body(&field_infos, &create_mappings);
-    let update_body = gen_apply_update_body(&field_infos, &update_mappings);
+const MEMORY_MEMBER_DEF: MemoryTraitDef = MemoryTraitDef {
+    trait_name: "MemoryMember",
+    create_type: "CreateMember",
+    has_token_param: false,
+    create_mappings: &[
+        ("id", IdParam),
+        ("organization_id", CloneCreate("organization_id")),
+        ("user_id", CloneCreate("user_id")),
+        ("role", CloneCreate("role")),
+        ("created_at", NowParam),
+    ],
+    update_type: None,
+    update_mappings: &[],
+    setters: &[SetterDef::Role],
+};
 
-    quote! {
-        impl #impl_generics ::better_auth_core::adapters::memory::MemoryOrganization
-            for #struct_name #ty_generics #where_clause
-        {
-            fn from_create(
-                id: ::std::string::String,
-                create: &::better_auth_core::types::CreateOrganization,
-                now: ::chrono::DateTime<::chrono::Utc>,
-            ) -> Self {
-                #create_body
-            }
+const MEMORY_INVITATION_DEF: MemoryTraitDef = MemoryTraitDef {
+    trait_name: "MemoryInvitation",
+    create_type: "CreateInvitation",
+    has_token_param: false,
+    create_mappings: &[
+        ("id", IdParam),
+        ("organization_id", CloneCreate("organization_id")),
+        ("email", CloneCreate("email")),
+        ("role", CloneCreate("role")),
+        ("status", InvitationPending),
+        ("inviter_id", CloneCreate("inviter_id")),
+        ("expires_at", CopyCreate("expires_at")),
+        ("created_at", NowParam),
+    ],
+    update_type: None,
+    update_mappings: &[],
+    setters: &[SetterDef::Status],
+};
 
-            fn apply_update(&mut self, update: &::better_auth_core::types::UpdateOrganization) {
-                #update_body
-            }
-        }
-    }
-    .into()
+const MEMORY_VERIFICATION_DEF: MemoryTraitDef = MemoryTraitDef {
+    trait_name: "MemoryVerification",
+    create_type: "CreateVerification",
+    has_token_param: false,
+    create_mappings: &[
+        ("id", IdParam),
+        ("identifier", CloneCreate("identifier")),
+        ("value", CloneCreate("value")),
+        ("expires_at", CopyCreate("expires_at")),
+        ("created_at", NowParam),
+        ("updated_at", NowParam),
+    ],
+    update_type: None,
+    update_mappings: &[],
+    setters: &[],
+};
+
+// ---------------------------------------------------------------------------
+// Memory* macro entry points
+// ---------------------------------------------------------------------------
+
+#[proc_macro_derive(MemoryUser, attributes(auth))]
+pub fn derive_memory_user(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    derive_memory_trait(&input, &MEMORY_USER_DEF).into()
 }
 
-// ---------------------------------------------------------------------------
-// MemoryMember
-// ---------------------------------------------------------------------------
+#[proc_macro_derive(MemorySession, attributes(auth))]
+pub fn derive_memory_session(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    derive_memory_trait(&input, &MEMORY_SESSION_DEF).into()
+}
+
+#[proc_macro_derive(MemoryAccount, attributes(auth))]
+pub fn derive_memory_account(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    derive_memory_trait(&input, &MEMORY_ACCOUNT_DEF).into()
+}
+
+#[proc_macro_derive(MemoryOrganization, attributes(auth))]
+pub fn derive_memory_organization(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    derive_memory_trait(&input, &MEMORY_ORGANIZATION_DEF).into()
+}
 
 #[proc_macro_derive(MemoryMember, attributes(auth))]
 pub fn derive_memory_member(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let struct_name = &input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
-    let field_infos = match parse_memory_fields(&input, "MemoryMember") {
-        Ok(fi) => fi,
-        Err(err) => return err.into(),
-    };
-
-    let create_mappings: Vec<(&str, CreateInit)> = vec![
-        ("id", CreateInit::IdParam),
-        (
-            "organization_id",
-            CreateInit::CloneCreate("organization_id"),
-        ),
-        ("user_id", CreateInit::CloneCreate("user_id")),
-        ("role", CreateInit::CloneCreate("role")),
-        ("created_at", CreateInit::NowParam),
-    ];
-
-    let create_body = gen_from_create_body(&field_infos, &create_mappings);
-
-    let role_field = find_field_for_getter(&field_infos, "role");
-    let set_role = role_field.map(|f| {
-        quote! {
-            fn set_role(&mut self, role: ::std::string::String) {
-                self.#f = role;
-            }
-        }
-    });
-
-    quote! {
-        impl #impl_generics ::better_auth_core::adapters::memory::MemoryMember
-            for #struct_name #ty_generics #where_clause
-        {
-            fn from_create(
-                id: ::std::string::String,
-                create: &::better_auth_core::types::CreateMember,
-                now: ::chrono::DateTime<::chrono::Utc>,
-            ) -> Self {
-                #create_body
-            }
-
-            #set_role
-        }
-    }
-    .into()
+    derive_memory_trait(&input, &MEMORY_MEMBER_DEF).into()
 }
-
-// ---------------------------------------------------------------------------
-// MemoryInvitation
-// ---------------------------------------------------------------------------
 
 #[proc_macro_derive(MemoryInvitation, attributes(auth))]
 pub fn derive_memory_invitation(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let struct_name = &input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
-    let field_infos = match parse_memory_fields(&input, "MemoryInvitation") {
-        Ok(fi) => fi,
-        Err(err) => return err.into(),
-    };
-
-    let create_mappings: Vec<(&str, CreateInit)> = vec![
-        ("id", CreateInit::IdParam),
-        (
-            "organization_id",
-            CreateInit::CloneCreate("organization_id"),
-        ),
-        ("email", CreateInit::CloneCreate("email")),
-        ("role", CreateInit::CloneCreate("role")),
-        ("status", CreateInit::InvitationPending),
-        ("inviter_id", CreateInit::CloneCreate("inviter_id")),
-        ("expires_at", CreateInit::CopyCreate("expires_at")),
-        ("created_at", CreateInit::NowParam),
-    ];
-
-    let create_body = gen_from_create_body(&field_infos, &create_mappings);
-
-    let status_field = find_field_for_getter(&field_infos, "status");
-    let set_status = status_field.map(|f| {
-        quote! {
-            fn set_status(&mut self, status: ::better_auth_core::types::InvitationStatus) {
-                self.#f = status;
-            }
-        }
-    });
-
-    quote! {
-        impl #impl_generics ::better_auth_core::adapters::memory::MemoryInvitation
-            for #struct_name #ty_generics #where_clause
-        {
-            fn from_create(
-                id: ::std::string::String,
-                create: &::better_auth_core::types::CreateInvitation,
-                now: ::chrono::DateTime<::chrono::Utc>,
-            ) -> Self {
-                #create_body
-            }
-
-            #set_status
-        }
-    }
-    .into()
+    derive_memory_trait(&input, &MEMORY_INVITATION_DEF).into()
 }
-
-// ---------------------------------------------------------------------------
-// MemoryVerification
-// ---------------------------------------------------------------------------
 
 #[proc_macro_derive(MemoryVerification, attributes(auth))]
 pub fn derive_memory_verification(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let struct_name = &input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
-    let field_infos = match parse_memory_fields(&input, "MemoryVerification") {
-        Ok(fi) => fi,
-        Err(err) => return err.into(),
-    };
-
-    let create_mappings: Vec<(&str, CreateInit)> = vec![
-        ("id", CreateInit::IdParam),
-        ("identifier", CreateInit::CloneCreate("identifier")),
-        ("value", CreateInit::CloneCreate("value")),
-        ("expires_at", CreateInit::CopyCreate("expires_at")),
-        ("created_at", CreateInit::NowParam),
-        ("updated_at", CreateInit::NowParam),
-    ];
-
-    let create_body = gen_from_create_body(&field_infos, &create_mappings);
-
-    quote! {
-        impl #impl_generics ::better_auth_core::adapters::memory::MemoryVerification
-            for #struct_name #ty_generics #where_clause
-        {
-            fn from_create(
-                id: ::std::string::String,
-                create: &::better_auth_core::types::CreateVerification,
-                now: ::chrono::DateTime<::chrono::Utc>,
-            ) -> Self {
-                #create_body
-            }
-        }
-    }
-    .into()
+    derive_memory_trait(&input, &MEMORY_VERIFICATION_DEF).into()
 }

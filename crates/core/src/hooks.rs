@@ -3,6 +3,9 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
 use crate::adapters::DatabaseAdapter;
+use crate::adapters::database::{
+    AccountOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, UserOps, VerificationOps,
+};
 use crate::error::AuthResult;
 use crate::types::{
     CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession, CreateUser,
@@ -97,17 +100,11 @@ impl<DB: DatabaseAdapter> HookedDatabaseAdapter<DB> {
     }
 }
 
-#[async_trait]
-impl<DB: DatabaseAdapter> DatabaseAdapter for HookedDatabaseAdapter<DB> {
-    type User = DB::User;
-    type Session = DB::Session;
-    type Account = DB::Account;
-    type Organization = DB::Organization;
-    type Member = DB::Member;
-    type Invitation = DB::Invitation;
-    type Verification = DB::Verification;
+// -- UserOps (hooked) --
 
-    // --- User operations ---
+#[async_trait]
+impl<DB: DatabaseAdapter> UserOps for HookedDatabaseAdapter<DB> {
+    type User = DB::User;
 
     async fn create_user(&self, mut user: CreateUser) -> AuthResult<Self::User> {
         for hook in &self.hooks {
@@ -153,8 +150,13 @@ impl<DB: DatabaseAdapter> DatabaseAdapter for HookedDatabaseAdapter<DB> {
         }
         Ok(())
     }
+}
 
-    // --- Session operations ---
+// -- SessionOps (hooked) --
+
+#[async_trait]
+impl<DB: DatabaseAdapter> SessionOps for HookedDatabaseAdapter<DB> {
+    type Session = DB::Session;
 
     async fn create_session(&self, mut session: CreateSession) -> AuthResult<Self::Session> {
         for hook in &self.hooks {
@@ -202,7 +204,22 @@ impl<DB: DatabaseAdapter> DatabaseAdapter for HookedDatabaseAdapter<DB> {
         self.inner.delete_expired_sessions().await
     }
 
-    // --- Account operations (pass-through) ---
+    async fn update_session_active_organization(
+        &self,
+        token: &str,
+        organization_id: Option<&str>,
+    ) -> AuthResult<Self::Session> {
+        self.inner
+            .update_session_active_organization(token, organization_id)
+            .await
+    }
+}
+
+// -- AccountOps (pass-through) --
+
+#[async_trait]
+impl<DB: DatabaseAdapter> AccountOps for HookedDatabaseAdapter<DB> {
+    type Account = DB::Account;
 
     async fn create_account(&self, account: CreateAccount) -> AuthResult<Self::Account> {
         self.inner.create_account(account).await
@@ -223,8 +240,13 @@ impl<DB: DatabaseAdapter> DatabaseAdapter for HookedDatabaseAdapter<DB> {
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
         self.inner.delete_account(id).await
     }
+}
 
-    // --- Verification operations (pass-through) ---
+// -- VerificationOps (pass-through) --
+
+#[async_trait]
+impl<DB: DatabaseAdapter> VerificationOps for HookedDatabaseAdapter<DB> {
+    type Verification = DB::Verification;
 
     async fn create_verification(
         &self,
@@ -255,8 +277,13 @@ impl<DB: DatabaseAdapter> DatabaseAdapter for HookedDatabaseAdapter<DB> {
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
         self.inner.delete_expired_verifications().await
     }
+}
 
-    // --- Organization operations (pass-through) ---
+// -- OrganizationOps (pass-through) --
+
+#[async_trait]
+impl<DB: DatabaseAdapter> OrganizationOps for HookedDatabaseAdapter<DB> {
+    type Organization = DB::Organization;
 
     async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Self::Organization> {
         self.inner.create_organization(org).await
@@ -285,8 +312,13 @@ impl<DB: DatabaseAdapter> DatabaseAdapter for HookedDatabaseAdapter<DB> {
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Self::Organization>> {
         self.inner.list_user_organizations(user_id).await
     }
+}
 
-    // --- Member operations (pass-through) ---
+// -- MemberOps (pass-through) --
+
+#[async_trait]
+impl<DB: DatabaseAdapter> MemberOps for HookedDatabaseAdapter<DB> {
+    type Member = DB::Member;
 
     async fn create_member(&self, member: CreateMember) -> AuthResult<Self::Member> {
         self.inner.create_member(member).await
@@ -326,8 +358,13 @@ impl<DB: DatabaseAdapter> DatabaseAdapter for HookedDatabaseAdapter<DB> {
     async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<usize> {
         self.inner.count_organization_owners(organization_id).await
     }
+}
 
-    // --- Invitation operations (pass-through) ---
+// -- InvitationOps (pass-through) --
+
+#[async_trait]
+impl<DB: DatabaseAdapter> InvitationOps for HookedDatabaseAdapter<DB> {
+    type Invitation = DB::Invitation;
 
     async fn create_invitation(
         &self,
@@ -369,18 +406,6 @@ impl<DB: DatabaseAdapter> DatabaseAdapter for HookedDatabaseAdapter<DB> {
 
     async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Self::Invitation>> {
         self.inner.list_user_invitations(email).await
-    }
-
-    // --- Session organization support ---
-
-    async fn update_session_active_organization(
-        &self,
-        token: &str,
-        organization_id: Option<&str>,
-    ) -> AuthResult<Self::Session> {
-        self.inner
-            .update_session_active_organization(token, organization_id)
-            .await
     }
 }
 

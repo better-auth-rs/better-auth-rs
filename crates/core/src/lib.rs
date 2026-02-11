@@ -21,9 +21,10 @@ pub use better_auth_derive::*;
 
 // Re-export commonly used items
 pub use adapters::{
-    CacheAdapter, DatabaseAdapter, MemoryAccount, MemoryCacheAdapter, MemoryDatabaseAdapter,
-    MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession, MemoryUser,
-    MemoryVerification,
+    AccountOps, CacheAdapter, DatabaseAdapter, InvitationOps, MemberOps, MemoryAccount,
+    MemoryCacheAdapter, MemoryDatabaseAdapter, MemoryInvitation, MemoryMember, MemoryOrganization,
+    MemorySession, MemoryUser, MemoryVerification, OrganizationOps, SessionOps, UserOps,
+    VerificationOps,
 };
 #[cfg(feature = "sqlx-postgres")]
 pub use adapters::{SqlxAdapter, SqlxEntity};

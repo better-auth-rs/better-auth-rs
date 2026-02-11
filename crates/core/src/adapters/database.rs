@@ -11,30 +11,28 @@ use crate::types::{
     CreateVerification, InvitationStatus, UpdateOrganization, UpdateUser,
 };
 
-/// Database adapter trait for persistence.
-///
-/// Associated types allow users to define their own entity structs.
-/// Use the default types (`User`, `Session`, etc.) or implement entity traits
-/// on custom structs via `#[derive(AuthUser)]` etc.
-#[async_trait]
-pub trait DatabaseAdapter: Send + Sync + 'static {
-    type User: AuthUser;
-    type Session: AuthSession;
-    type Account: AuthAccount;
-    type Organization: AuthOrganization;
-    type Member: AuthMember;
-    type Invitation: AuthInvitation;
-    type Verification: AuthVerification;
+// ===========================================================================
+// Sub-traits — one per entity domain
+// ===========================================================================
 
-    // User operations
+/// User persistence operations.
+#[async_trait]
+pub trait UserOps: Send + Sync + 'static {
+    type User: AuthUser;
+
     async fn create_user(&self, user: CreateUser) -> AuthResult<Self::User>;
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<Self::User>>;
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<Self::User>>;
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<Self::User>>;
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<Self::User>;
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
+}
 
-    // Session operations
+/// Session persistence operations.
+#[async_trait]
+pub trait SessionOps: Send + Sync + 'static {
+    type Session: AuthSession;
+
     async fn create_session(&self, session: CreateSession) -> AuthResult<Self::Session>;
     async fn get_session(&self, token: &str) -> AuthResult<Option<Self::Session>>;
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<Self::Session>>;
@@ -43,8 +41,18 @@ pub trait DatabaseAdapter: Send + Sync + 'static {
     async fn delete_session(&self, token: &str) -> AuthResult<()>;
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()>;
     async fn delete_expired_sessions(&self) -> AuthResult<usize>;
+    async fn update_session_active_organization(
+        &self,
+        token: &str,
+        organization_id: Option<&str>,
+    ) -> AuthResult<Self::Session>;
+}
 
-    // Account operations (for OAuth)
+/// Account (OAuth provider linking) persistence operations.
+#[async_trait]
+pub trait AccountOps: Send + Sync + 'static {
+    type Account: AuthAccount;
+
     async fn create_account(&self, account: CreateAccount) -> AuthResult<Self::Account>;
     async fn get_account(
         &self,
@@ -53,8 +61,13 @@ pub trait DatabaseAdapter: Send + Sync + 'static {
     ) -> AuthResult<Option<Self::Account>>;
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<Self::Account>>;
     async fn delete_account(&self, id: &str) -> AuthResult<()>;
+}
 
-    // Verification token operations
+/// Verification token persistence operations.
+#[async_trait]
+pub trait VerificationOps: Send + Sync + 'static {
+    type Verification: AuthVerification;
+
     async fn create_verification(
         &self,
         verification: CreateVerification,
@@ -70,8 +83,13 @@ pub trait DatabaseAdapter: Send + Sync + 'static {
     ) -> AuthResult<Option<Self::Verification>>;
     async fn delete_verification(&self, id: &str) -> AuthResult<()>;
     async fn delete_expired_verifications(&self) -> AuthResult<usize>;
+}
 
-    // Organization operations
+/// Organization persistence operations.
+#[async_trait]
+pub trait OrganizationOps: Send + Sync + 'static {
+    type Organization: AuthOrganization;
+
     async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Self::Organization>;
     async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Self::Organization>>;
     async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Self::Organization>>;
@@ -82,8 +100,13 @@ pub trait DatabaseAdapter: Send + Sync + 'static {
     ) -> AuthResult<Self::Organization>;
     async fn delete_organization(&self, id: &str) -> AuthResult<()>;
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Self::Organization>>;
+}
 
-    // Member operations
+/// Organization member persistence operations.
+#[async_trait]
+pub trait MemberOps: Send + Sync + 'static {
+    type Member: AuthMember;
+
     async fn create_member(&self, member: CreateMember) -> AuthResult<Self::Member>;
     async fn get_member(
         &self,
@@ -99,8 +122,13 @@ pub trait DatabaseAdapter: Send + Sync + 'static {
     ) -> AuthResult<Vec<Self::Member>>;
     async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize>;
     async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<usize>;
+}
 
-    // Invitation operations
+/// Invitation persistence operations.
+#[async_trait]
+pub trait InvitationOps: Send + Sync + 'static {
+    type Invitation: AuthInvitation;
+
     async fn create_invitation(&self, invitation: CreateInvitation)
     -> AuthResult<Self::Invitation>;
     async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Self::Invitation>>;
@@ -119,14 +147,39 @@ pub trait DatabaseAdapter: Send + Sync + 'static {
         organization_id: &str,
     ) -> AuthResult<Vec<Self::Invitation>>;
     async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Self::Invitation>>;
-
-    // Session organization support
-    async fn update_session_active_organization(
-        &self,
-        token: &str,
-        organization_id: Option<&str>,
-    ) -> AuthResult<Self::Session>;
 }
+
+// ===========================================================================
+// DatabaseAdapter — combined supertrait
+// ===========================================================================
+
+/// Database adapter trait for persistence.
+///
+/// Combines all entity-specific operation traits. Any type that implements
+/// all sub-traits (`UserOps`, `SessionOps`, etc.) automatically implements
+/// `DatabaseAdapter` via the blanket impl.
+///
+/// Use the sub-traits directly when you only need a subset of operations
+/// (e.g., a plugin that only accesses users and sessions).
+pub trait DatabaseAdapter:
+    UserOps + SessionOps + AccountOps + VerificationOps + OrganizationOps + MemberOps + InvitationOps
+{
+}
+
+impl<T> DatabaseAdapter for T where
+    T: UserOps
+        + SessionOps
+        + AccountOps
+        + VerificationOps
+        + OrganizationOps
+        + MemberOps
+        + InvitationOps
+{
+}
+
+// ===========================================================================
+// SQLx PostgreSQL adapter
+// ===========================================================================
 
 #[cfg(feature = "sqlx-postgres")]
 pub mod sqlx_adapter {
@@ -158,16 +211,6 @@ pub mod sqlx_adapter {
     ///
     /// Generic over entity types — use default type parameters for the built-in
     /// types, or supply your own custom structs that implement `Auth*` + `sqlx::FromRow`.
-    ///
-    /// ```rust,ignore
-    /// // Using built-in types (no turbofish needed):
-    /// let adapter = SqlxAdapter::new("postgresql://...").await?;
-    ///
-    /// // Using custom types via type alias:
-    /// type AppDb = SqlxAdapter<AppUser, AppSession, AppAccount,
-    ///     AppOrg, AppMember, AppInvitation, AppVerification>;
-    /// let adapter = AppDb::from_pool(pool);
-    /// ```
     pub struct SqlxAdapter<
         U = User,
         S = Session,
@@ -182,7 +225,6 @@ pub mod sqlx_adapter {
     }
 
     /// Constructors for the default (built-in) entity types.
-    /// Use `from_pool()` with a type alias for custom type parameterizations.
     impl SqlxAdapter {
         pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
             let pool = PgPool::connect(database_url).await?;
@@ -192,7 +234,6 @@ pub mod sqlx_adapter {
             })
         }
 
-        /// Create adapter with custom pool configuration
         pub async fn with_config(
             database_url: &str,
             config: PoolConfig,
@@ -212,7 +253,7 @@ pub mod sqlx_adapter {
         }
     }
 
-    /// Methods available for all type parameterizations (including custom types).
+    /// Methods available for all type parameterizations.
     impl<U, S, A, O, M, I, V> SqlxAdapter<U, S, A, O, M, I, V> {
         pub fn from_pool(pool: PgPool) -> Self {
             Self {
@@ -221,13 +262,11 @@ pub mod sqlx_adapter {
             }
         }
 
-        /// Test database connection
         pub async fn test_connection(&self) -> Result<(), sqlx::Error> {
             sqlx::query("SELECT 1").execute(&self.pool).await?;
             Ok(())
         }
 
-        /// Get connection pool statistics
         pub fn pool_stats(&self) -> PoolStats {
             PoolStats {
                 size: self.pool.size(),
@@ -235,13 +274,11 @@ pub mod sqlx_adapter {
             }
         }
 
-        /// Close the connection pool
         pub async fn close(&self) {
             self.pool.close().await;
         }
     }
 
-    /// Database connection pool configuration
     #[derive(Debug, Clone)]
     pub struct PoolConfig {
         pub max_connections: u32,
@@ -257,21 +294,22 @@ pub mod sqlx_adapter {
                 max_connections: 10,
                 min_connections: 0,
                 acquire_timeout: std::time::Duration::from_secs(30),
-                idle_timeout: Some(std::time::Duration::from_secs(600)), // 10 minutes
-                max_lifetime: Some(std::time::Duration::from_secs(1800)), // 30 minutes
+                idle_timeout: Some(std::time::Duration::from_secs(600)),
+                max_lifetime: Some(std::time::Duration::from_secs(1800)),
             }
         }
     }
 
-    /// Connection pool statistics
     #[derive(Debug, Clone)]
     pub struct PoolStats {
         pub size: u32,
         pub idle: usize,
     }
 
+    // -- UserOps --
+
     #[async_trait]
-    impl<U, S, A, O, M, I, V> DatabaseAdapter for SqlxAdapter<U, S, A, O, M, I, V>
+    impl<U, S, A, O, M, I, V> UserOps for SqlxAdapter<U, S, A, O, M, I, V>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -282,12 +320,6 @@ pub mod sqlx_adapter {
         V: AuthVerification + SqlxEntity,
     {
         type User = U;
-        type Session = S;
-        type Account = A;
-        type Organization = O;
-        type Member = M;
-        type Invitation = I;
-        type Verification = V;
 
         async fn create_user(&self, create_user: CreateUser) -> AuthResult<U> {
             let id = create_user.id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -319,7 +351,6 @@ pub mod sqlx_adapter {
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
-
             Ok(user)
         }
 
@@ -328,7 +359,6 @@ pub mod sqlx_adapter {
                 .bind(email)
                 .fetch_optional(&self.pool)
                 .await?;
-
             Ok(user)
         }
 
@@ -337,7 +367,6 @@ pub mod sqlx_adapter {
                 .bind(username)
                 .fetch_optional(&self.pool)
                 .await?;
-
             Ok(user)
         }
 
@@ -350,25 +379,21 @@ pub mod sqlx_adapter {
                 query.push_bind(email);
                 has_updates = true;
             }
-
             if let Some(name) = &update.name {
                 query.push(", name = ");
                 query.push_bind(name);
                 has_updates = true;
             }
-
             if let Some(image) = &update.image {
                 query.push(", image = ");
                 query.push_bind(image);
                 has_updates = true;
             }
-
             if let Some(email_verified) = update.email_verified {
                 query.push(", email_verified = ");
                 query.push_bind(email_verified);
                 has_updates = true;
             }
-
             if let Some(metadata) = &update.metadata {
                 query.push(", metadata = ");
                 query.push_bind(sqlx::types::Json(metadata.clone()));
@@ -387,7 +412,6 @@ pub mod sqlx_adapter {
             query.push(" RETURNING *");
 
             let user = query.build_query_as::<U>().fetch_one(&self.pool).await?;
-
             Ok(user)
         }
 
@@ -396,9 +420,24 @@ pub mod sqlx_adapter {
                 .bind(id)
                 .execute(&self.pool)
                 .await?;
-
             Ok(())
         }
+    }
+
+    // -- SessionOps --
+
+    #[async_trait]
+    impl<U, S, A, O, M, I, V> SessionOps for SqlxAdapter<U, S, A, O, M, I, V>
+    where
+        U: AuthUser + SqlxEntity,
+        S: AuthSession + SqlxEntity,
+        A: AuthAccount + SqlxEntity,
+        O: AuthOrganization + SqlxEntity,
+        M: AuthMember + SqlxEntity,
+        I: AuthInvitation + SqlxEntity,
+        V: AuthVerification + SqlxEntity,
+    {
+        type Session = S;
 
         async fn create_session(&self, create_session: CreateSession) -> AuthResult<S> {
             let id = Uuid::new_v4().to_string();
@@ -432,22 +471,16 @@ pub mod sqlx_adapter {
                     .bind(token)
                     .fetch_optional(&self.pool)
                     .await?;
-
             Ok(session)
         }
 
         async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<S>> {
             let sessions = sqlx::query_as::<_, S>(
-                r#"
-                SELECT * FROM sessions
-                WHERE user_id = $1 AND active = true
-                ORDER BY created_at DESC
-                "#,
+                "SELECT * FROM sessions WHERE user_id = $1 AND active = true ORDER BY created_at DESC",
             )
             .bind(user_id)
             .fetch_all(&self.pool)
             .await?;
-
             Ok(sessions)
         }
 
@@ -461,7 +494,6 @@ pub mod sqlx_adapter {
                 .bind(token)
                 .execute(&self.pool)
                 .await?;
-
             Ok(())
         }
 
@@ -470,7 +502,6 @@ pub mod sqlx_adapter {
                 .bind(token)
                 .execute(&self.pool)
                 .await?;
-
             Ok(())
         }
 
@@ -479,7 +510,6 @@ pub mod sqlx_adapter {
                 .bind(user_id)
                 .execute(&self.pool)
                 .await?;
-
             Ok(())
         }
 
@@ -488,9 +518,39 @@ pub mod sqlx_adapter {
                 sqlx::query("DELETE FROM sessions WHERE expires_at < NOW() OR active = false")
                     .execute(&self.pool)
                     .await?;
-
             Ok(result.rows_affected() as usize)
         }
+
+        async fn update_session_active_organization(
+            &self,
+            token: &str,
+            organization_id: Option<&str>,
+        ) -> AuthResult<S> {
+            let session = sqlx::query_as::<_, S>(
+                "UPDATE sessions SET active_organization_id = $1, updated_at = NOW() WHERE token = $2 AND active = true RETURNING *",
+            )
+            .bind(organization_id)
+            .bind(token)
+            .fetch_one(&self.pool)
+            .await?;
+            Ok(session)
+        }
+    }
+
+    // -- AccountOps --
+
+    #[async_trait]
+    impl<U, S, A, O, M, I, V> AccountOps for SqlxAdapter<U, S, A, O, M, I, V>
+    where
+        U: AuthUser + SqlxEntity,
+        S: AuthSession + SqlxEntity,
+        A: AuthAccount + SqlxEntity,
+        O: AuthOrganization + SqlxEntity,
+        M: AuthMember + SqlxEntity,
+        I: AuthInvitation + SqlxEntity,
+        V: AuthVerification + SqlxEntity,
+    {
+        type Account = A;
 
         async fn create_account(&self, create_account: CreateAccount) -> AuthResult<A> {
             let id = Uuid::new_v4().to_string();
@@ -534,7 +594,6 @@ pub mod sqlx_adapter {
             .bind(provider_account_id)
             .fetch_optional(&self.pool)
             .await?;
-
             Ok(account)
         }
 
@@ -545,7 +604,6 @@ pub mod sqlx_adapter {
             .bind(user_id)
             .fetch_all(&self.pool)
             .await?;
-
             Ok(accounts)
         }
 
@@ -554,9 +612,24 @@ pub mod sqlx_adapter {
                 .bind(id)
                 .execute(&self.pool)
                 .await?;
-
             Ok(())
         }
+    }
+
+    // -- VerificationOps --
+
+    #[async_trait]
+    impl<U, S, A, O, M, I, V> VerificationOps for SqlxAdapter<U, S, A, O, M, I, V>
+    where
+        U: AuthUser + SqlxEntity,
+        S: AuthSession + SqlxEntity,
+        A: AuthAccount + SqlxEntity,
+        O: AuthOrganization + SqlxEntity,
+        M: AuthMember + SqlxEntity,
+        I: AuthInvitation + SqlxEntity,
+        V: AuthVerification + SqlxEntity,
+    {
+        type Verification = V;
 
         async fn create_verification(
             &self,
@@ -592,7 +665,6 @@ pub mod sqlx_adapter {
             .bind(value)
             .fetch_optional(&self.pool)
             .await?;
-
             Ok(verification)
         }
 
@@ -603,7 +675,6 @@ pub mod sqlx_adapter {
             .bind(value)
             .fetch_optional(&self.pool)
             .await?;
-
             Ok(verification)
         }
 
@@ -612,7 +683,6 @@ pub mod sqlx_adapter {
                 .bind(id)
                 .execute(&self.pool)
                 .await?;
-
             Ok(())
         }
 
@@ -620,11 +690,25 @@ pub mod sqlx_adapter {
             let result = sqlx::query("DELETE FROM verifications WHERE expires_at < NOW()")
                 .execute(&self.pool)
                 .await?;
-
             Ok(result.rows_affected() as usize)
         }
+    }
 
-        // Organization operations
+    // -- OrganizationOps --
+
+    #[async_trait]
+    impl<U, S, A, O, M, I, V> OrganizationOps for SqlxAdapter<U, S, A, O, M, I, V>
+    where
+        U: AuthUser + SqlxEntity,
+        S: AuthSession + SqlxEntity,
+        A: AuthAccount + SqlxEntity,
+        O: AuthOrganization + SqlxEntity,
+        M: AuthMember + SqlxEntity,
+        I: AuthInvitation + SqlxEntity,
+        V: AuthVerification + SqlxEntity,
+    {
+        type Organization = O;
+
         async fn create_organization(&self, create_org: CreateOrganization) -> AuthResult<O> {
             let id = create_org.id.unwrap_or_else(|| Uuid::new_v4().to_string());
             let now = Utc::now();
@@ -656,7 +740,6 @@ pub mod sqlx_adapter {
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
-
             Ok(organization)
         }
 
@@ -665,7 +748,6 @@ pub mod sqlx_adapter {
                 .bind(slug)
                 .fetch_optional(&self.pool)
                 .await?;
-
             Ok(organization)
         }
 
@@ -694,7 +776,6 @@ pub mod sqlx_adapter {
             query.push(" RETURNING *");
 
             let organization = query.build_query_as::<O>().fetch_one(&self.pool).await?;
-
             Ok(organization)
         }
 
@@ -703,7 +784,6 @@ pub mod sqlx_adapter {
                 .bind(id)
                 .execute(&self.pool)
                 .await?;
-
             Ok(())
         }
 
@@ -720,11 +800,25 @@ pub mod sqlx_adapter {
             .bind(user_id)
             .fetch_all(&self.pool)
             .await?;
-
             Ok(organizations)
         }
+    }
 
-        // Member operations
+    // -- MemberOps --
+
+    #[async_trait]
+    impl<U, S, A, O, M, I, V> MemberOps for SqlxAdapter<U, S, A, O, M, I, V>
+    where
+        U: AuthUser + SqlxEntity,
+        S: AuthSession + SqlxEntity,
+        A: AuthAccount + SqlxEntity,
+        O: AuthOrganization + SqlxEntity,
+        M: AuthMember + SqlxEntity,
+        I: AuthInvitation + SqlxEntity,
+        V: AuthVerification + SqlxEntity,
+    {
+        type Member = M;
+
         async fn create_member(&self, create_member: CreateMember) -> AuthResult<M> {
             let id = Uuid::new_v4().to_string();
             let now = Utc::now();
@@ -755,7 +849,6 @@ pub mod sqlx_adapter {
             .bind(user_id)
             .fetch_optional(&self.pool)
             .await?;
-
             Ok(member)
         }
 
@@ -764,7 +857,6 @@ pub mod sqlx_adapter {
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
-
             Ok(member)
         }
 
@@ -775,7 +867,6 @@ pub mod sqlx_adapter {
                     .bind(member_id)
                     .fetch_one(&self.pool)
                     .await?;
-
             Ok(member)
         }
 
@@ -784,7 +875,6 @@ pub mod sqlx_adapter {
                 .bind(member_id)
                 .execute(&self.pool)
                 .await?;
-
             Ok(())
         }
 
@@ -795,7 +885,6 @@ pub mod sqlx_adapter {
             .bind(organization_id)
             .fetch_all(&self.pool)
             .await?;
-
             Ok(members)
         }
 
@@ -805,7 +894,6 @@ pub mod sqlx_adapter {
                     .bind(organization_id)
                     .fetch_one(&self.pool)
                     .await?;
-
             Ok(count.0 as usize)
         }
 
@@ -816,11 +904,25 @@ pub mod sqlx_adapter {
             .bind(organization_id)
             .fetch_one(&self.pool)
             .await?;
-
             Ok(count.0 as usize)
         }
+    }
 
-        // Invitation operations
+    // -- InvitationOps --
+
+    #[async_trait]
+    impl<U, S, A, O, M, I, V> InvitationOps for SqlxAdapter<U, S, A, O, M, I, V>
+    where
+        U: AuthUser + SqlxEntity,
+        S: AuthSession + SqlxEntity,
+        A: AuthAccount + SqlxEntity,
+        O: AuthOrganization + SqlxEntity,
+        M: AuthMember + SqlxEntity,
+        I: AuthInvitation + SqlxEntity,
+        V: AuthVerification + SqlxEntity,
+    {
+        type Invitation = I;
+
         async fn create_invitation(&self, create_inv: CreateInvitation) -> AuthResult<I> {
             let id = Uuid::new_v4().to_string();
             let now = Utc::now();
@@ -850,7 +952,6 @@ pub mod sqlx_adapter {
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
-
             Ok(invitation)
         }
 
@@ -866,7 +967,6 @@ pub mod sqlx_adapter {
             .bind(email)
             .fetch_optional(&self.pool)
             .await?;
-
             Ok(invitation)
         }
 
@@ -882,7 +982,6 @@ pub mod sqlx_adapter {
             .bind(id)
             .fetch_one(&self.pool)
             .await?;
-
             Ok(invitation)
         }
 
@@ -893,7 +992,6 @@ pub mod sqlx_adapter {
             .bind(organization_id)
             .fetch_all(&self.pool)
             .await?;
-
             Ok(invitations)
         }
 
@@ -904,25 +1002,7 @@ pub mod sqlx_adapter {
             .bind(email)
             .fetch_all(&self.pool)
             .await?;
-
             Ok(invitations)
-        }
-
-        // Session organization support
-        async fn update_session_active_organization(
-            &self,
-            token: &str,
-            organization_id: Option<&str>,
-        ) -> AuthResult<S> {
-            let session = sqlx::query_as::<_, S>(
-                "UPDATE sessions SET active_organization_id = $1, updated_at = NOW() WHERE token = $2 AND active = true RETURNING *",
-            )
-            .bind(organization_id)
-            .bind(token)
-            .fetch_one(&self.pool)
-            .await?;
-
-            Ok(session)
         }
     }
 }

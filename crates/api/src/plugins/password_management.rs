@@ -602,7 +602,7 @@ impl PasswordManagementPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use better_auth_core::adapters::{DatabaseAdapter, MemoryDatabaseAdapter};
+    use better_auth_core::adapters::{MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps};
     use better_auth_core::config::{Argon2Config, AuthConfig, PasswordConfig};
     use better_auth_core::{CreateSession, CreateUser, CreateVerification, Session, User};
     use chrono::{Duration, Utc};

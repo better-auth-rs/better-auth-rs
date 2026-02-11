@@ -31,18 +31,18 @@ pub mod handlers;
 // Re-export core abstractions
 pub use better_auth_core as types_mod;
 pub use better_auth_core::{
-    Account, Argon2Config, AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest,
+    Account, AccountOps, Argon2Config, AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest,
     AuthResponse, AuthResult, AuthRoute, BodyLimitConfig, BodyLimitMiddleware, CacheAdapter,
     ConsoleEmailProvider, CorsConfig, CorsMiddleware, CreateAccount, CreateInvitation,
     CreateMember, CreateOrganization, CreateSession, CreateUser, CreateVerification, CsrfConfig,
     CsrfMiddleware, DatabaseAdapter, DatabaseError, DatabaseHooks, DeleteUserResponse,
-    EmailProvider, EndpointRateLimit, HookedDatabaseAdapter, HttpMethod, Invitation,
-    InvitationStatus, JwtConfig, MemoryAccount, MemoryCacheAdapter, MemoryDatabaseAdapter,
-    MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession, MemoryUser,
-    MemoryVerification, Middleware, OpenApiBuilder, OpenApiSpec, Passkey, PasswordConfig,
-    RateLimitConfig, RateLimitMiddleware, SameSite, Session, SessionConfig, SessionManager,
-    TwoFactor, UpdateOrganization, UpdateUser, UpdateUserRequest, UpdateUserResponse, User,
-    Verification,
+    EmailProvider, EndpointRateLimit, HookedDatabaseAdapter, HttpMethod, Invitation, InvitationOps,
+    InvitationStatus, JwtConfig, MemberOps, MemoryAccount, MemoryCacheAdapter,
+    MemoryDatabaseAdapter, MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession,
+    MemoryUser, MemoryVerification, Middleware, OpenApiBuilder, OpenApiSpec, OrganizationOps,
+    Passkey, PasswordConfig, RateLimitConfig, RateLimitMiddleware, SameSite, Session,
+    SessionConfig, SessionManager, SessionOps, TwoFactor, UpdateOrganization, UpdateUser,
+    UpdateUserRequest, UpdateUserResponse, User, UserOps, Verification, VerificationOps,
 };
 
 // Re-export entity traits
@@ -64,9 +64,10 @@ pub mod types {
 // Re-export adapters
 pub mod adapters {
     pub use better_auth_core::{
-        CacheAdapter, DatabaseAdapter, MemoryAccount, MemoryCacheAdapter, MemoryDatabaseAdapter,
-        MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession, MemoryUser,
-        MemoryVerification,
+        AccountOps, CacheAdapter, DatabaseAdapter, InvitationOps, MemberOps, MemoryAccount,
+        MemoryCacheAdapter, MemoryDatabaseAdapter, MemoryInvitation, MemoryMember,
+        MemoryOrganization, MemorySession, MemoryUser, MemoryVerification, OrganizationOps,
+        SessionOps, UserOps, VerificationOps,
     };
 
     #[cfg(feature = "sqlx-postgres")]

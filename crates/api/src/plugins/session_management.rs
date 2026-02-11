@@ -293,7 +293,7 @@ impl SessionManagementPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use better_auth_core::adapters::{DatabaseAdapter, MemoryDatabaseAdapter};
+    use better_auth_core::adapters::{MemoryDatabaseAdapter, SessionOps, UserOps};
     use better_auth_core::config::AuthConfig;
     use better_auth_core::{CreateSession, CreateUser, Session, User};
     use chrono::{Duration, Utc};

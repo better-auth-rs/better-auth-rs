@@ -71,7 +71,8 @@ pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
 pub struct AuthRoute {
     pub path: String,
     pub method: HttpMethod,
-    pub handler: String,
+    /// Identifier used as the OpenAPI `operationId` for this route.
+    pub operation_id: String,
 }
 
 /// Context passed to plugin methods
@@ -83,28 +84,32 @@ pub struct AuthContext<DB: DatabaseAdapter> {
 }
 
 impl AuthRoute {
-    pub fn new(method: HttpMethod, path: impl Into<String>, handler: impl Into<String>) -> Self {
+    pub fn new(
+        method: HttpMethod,
+        path: impl Into<String>,
+        operation_id: impl Into<String>,
+    ) -> Self {
         Self {
             path: path.into(),
             method,
-            handler: handler.into(),
+            operation_id: operation_id.into(),
         }
     }
 
-    pub fn get(path: impl Into<String>, handler: impl Into<String>) -> Self {
-        Self::new(HttpMethod::Get, path, handler)
+    pub fn get(path: impl Into<String>, operation_id: impl Into<String>) -> Self {
+        Self::new(HttpMethod::Get, path, operation_id)
     }
 
-    pub fn post(path: impl Into<String>, handler: impl Into<String>) -> Self {
-        Self::new(HttpMethod::Post, path, handler)
+    pub fn post(path: impl Into<String>, operation_id: impl Into<String>) -> Self {
+        Self::new(HttpMethod::Post, path, operation_id)
     }
 
-    pub fn put(path: impl Into<String>, handler: impl Into<String>) -> Self {
-        Self::new(HttpMethod::Put, path, handler)
+    pub fn put(path: impl Into<String>, operation_id: impl Into<String>) -> Self {
+        Self::new(HttpMethod::Put, path, operation_id)
     }
 
-    pub fn delete(path: impl Into<String>, handler: impl Into<String>) -> Self {
-        Self::new(HttpMethod::Delete, path, handler)
+    pub fn delete(path: impl Into<String>, operation_id: impl Into<String>) -> Self {
+        Self::new(HttpMethod::Delete, path, operation_id)
     }
 }
 

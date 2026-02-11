@@ -15,7 +15,9 @@ use crate::types::{
     UpdateOrganization, UpdateUser, User, Verification,
 };
 
-use super::DatabaseAdapter;
+use super::database::{
+    AccountOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, UserOps, VerificationOps,
+};
 
 // ─── Memory entity traits ──────────────────────────────────────────────
 //
@@ -322,8 +324,14 @@ impl<U, S, A, O, M, I, V> Default for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
     }
 }
 
+// ===========================================================================
+// Sub-trait implementations
+// ===========================================================================
+
+// -- UserOps --
+
 #[async_trait]
-impl<U, S, A, O, M, I, V> DatabaseAdapter for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+impl<U, S, A, O, M, I, V> UserOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
 where
     U: MemoryUser,
     S: MemorySession,
@@ -334,14 +342,6 @@ where
     V: MemoryVerification,
 {
     type User = U;
-    type Session = S;
-    type Account = A;
-    type Organization = O;
-    type Member = M;
-    type Invitation = I;
-    type Verification = V;
-
-    // ── User operations ──
 
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<U> {
         let mut users = self.users.lock().unwrap();
@@ -451,8 +451,22 @@ where
 
         Ok(())
     }
+}
 
-    // ── Session operations ──
+// -- SessionOps --
+
+#[async_trait]
+impl<U, S, A, O, M, I, V> SessionOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+where
+    U: MemoryUser,
+    S: MemorySession,
+    A: MemoryAccount,
+    O: MemoryOrganization,
+    M: MemoryMember,
+    I: MemoryInvitation,
+    V: MemoryVerification,
+{
+    type Session = S;
 
     async fn create_session(&self, create_session: CreateSession) -> AuthResult<S> {
         let mut sessions = self.sessions.lock().unwrap();
@@ -512,7 +526,33 @@ where
         Ok(initial_count - sessions.len())
     }
 
-    // ── Account operations ──
+    async fn update_session_active_organization(
+        &self,
+        token: &str,
+        organization_id: Option<&str>,
+    ) -> AuthResult<S> {
+        let mut sessions = self.sessions.lock().unwrap();
+        let session = sessions.get_mut(token).ok_or(AuthError::SessionNotFound)?;
+        session.set_active_organization_id(organization_id.map(|s| s.to_string()));
+        session.set_updated_at(Utc::now());
+        Ok(session.clone())
+    }
+}
+
+// -- AccountOps --
+
+#[async_trait]
+impl<U, S, A, O, M, I, V> AccountOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+where
+    U: MemoryUser,
+    S: MemorySession,
+    A: MemoryAccount,
+    O: MemoryOrganization,
+    M: MemoryMember,
+    I: MemoryInvitation,
+    V: MemoryVerification,
+{
+    type Account = A;
 
     async fn create_account(&self, create_account: CreateAccount) -> AuthResult<A> {
         let mut accounts = self.accounts.lock().unwrap();
@@ -551,8 +591,22 @@ where
         accounts.remove(id);
         Ok(())
     }
+}
 
-    // ── Verification operations ──
+// -- VerificationOps --
+
+#[async_trait]
+impl<U, S, A, O, M, I, V> VerificationOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+where
+    U: MemoryUser,
+    S: MemorySession,
+    A: MemoryAccount,
+    O: MemoryOrganization,
+    M: MemoryMember,
+    I: MemoryInvitation,
+    V: MemoryVerification,
+{
+    type Verification = V;
 
     async fn create_verification(&self, create_verification: CreateVerification) -> AuthResult<V> {
         let mut verifications = self.verifications.lock().unwrap();
@@ -596,8 +650,22 @@ where
         verifications.retain(|_, v| v.expires_at() > now);
         Ok(initial_count - verifications.len())
     }
+}
 
-    // ── Organization operations ──
+// -- OrganizationOps --
+
+#[async_trait]
+impl<U, S, A, O, M, I, V> OrganizationOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+where
+    U: MemoryUser,
+    S: MemorySession,
+    A: MemoryAccount,
+    O: MemoryOrganization,
+    M: MemoryMember,
+    I: MemoryInvitation,
+    V: MemoryVerification,
+{
+    type Organization = O;
 
     async fn create_organization(&self, create_org: CreateOrganization) -> AuthResult<O> {
         let mut organizations = self.organizations.lock().unwrap();
@@ -693,8 +761,22 @@ where
 
         Ok(orgs)
     }
+}
 
-    // ── Member operations ──
+// -- MemberOps --
+
+#[async_trait]
+impl<U, S, A, O, M, I, V> MemberOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+where
+    U: MemoryUser,
+    S: MemorySession,
+    A: MemoryAccount,
+    O: MemoryOrganization,
+    M: MemoryMember,
+    I: MemoryInvitation,
+    V: MemoryVerification,
+{
+    type Member = M;
 
     async fn create_member(&self, create_member: CreateMember) -> AuthResult<M> {
         let mut members = self.members.lock().unwrap();
@@ -770,8 +852,22 @@ where
             .filter(|m| m.organization_id() == organization_id && m.role() == "owner")
             .count())
     }
+}
 
-    // ── Invitation operations ──
+// -- InvitationOps --
+
+#[async_trait]
+impl<U, S, A, O, M, I, V> InvitationOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+where
+    U: MemoryUser,
+    S: MemorySession,
+    A: MemoryAccount,
+    O: MemoryOrganization,
+    M: MemoryMember,
+    I: MemoryInvitation,
+    V: MemoryVerification,
+{
+    type Invitation = I;
 
     async fn create_invitation(&self, create_inv: CreateInvitation) -> AuthResult<I> {
         let mut invitations = self.invitations.lock().unwrap();
@@ -835,19 +931,5 @@ where
             })
             .cloned()
             .collect())
-    }
-
-    // ── Session–organization support ──
-
-    async fn update_session_active_organization(
-        &self,
-        token: &str,
-        organization_id: Option<&str>,
-    ) -> AuthResult<S> {
-        let mut sessions = self.sessions.lock().unwrap();
-        let session = sessions.get_mut(token).ok_or(AuthError::SessionNotFound)?;
-        session.set_active_organization_id(organization_id.map(|s| s.to_string()));
-        session.set_updated_at(Utc::now());
-        Ok(session.clone())
     }
 }

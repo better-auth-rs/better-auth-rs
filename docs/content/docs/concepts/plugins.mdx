@@ -74,7 +74,7 @@ All lifecycle methods have default no-op implementations. Override only what you
 
 ## AuthRoute
 
-Routes are defined with a method, path, and handler name:
+Routes are defined with a method, path, and operation ID (used as the OpenAPI `operationId`):
 
 ```rust
 use better_auth::plugin::AuthRoute;
