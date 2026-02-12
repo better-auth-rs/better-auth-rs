@@ -1071,6 +1071,427 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_generate_register_options_returns_challenge_and_stores_verification() {
+        let plugin = PasskeyPlugin::new();
+        let (ctx, user, session) = create_test_context_with_user().await;
+
+        let req = create_auth_request(
+            HttpMethod::Get,
+            "/passkey/generate-register-options",
+            Some(&session.token),
+            None,
+        );
+
+        let response = plugin
+            .handle_generate_register_options(&req, &ctx)
+            .await
+            .unwrap();
+        assert_eq!(response.status, 200);
+
+        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert!(body["challenge"].is_string());
+        assert_eq!(body["rp"]["id"], "localhost");
+        assert_eq!(body["rp"]["name"], "Better Auth");
+        assert!(body["user"]["id"].is_string());
+        assert!(body["pubKeyCredParams"].is_array());
+        assert!(body["excludeCredentials"].is_array());
+
+        // Verify challenge was stored
+        let challenge = body["challenge"].as_str().unwrap();
+        let identifier = format!("passkey_reg:{}", user.id);
+        let verification = ctx
+            .database
+            .get_verification(&identifier, challenge)
+            .await
+            .unwrap();
+        assert!(verification.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_generate_register_options_unauthenticated() {
+        let plugin = PasskeyPlugin::new();
+        let (ctx, _user, _session) = create_test_context_with_user().await;
+
+        let req = create_auth_request(
+            HttpMethod::Get,
+            "/passkey/generate-register-options",
+            None,
+            None,
+        );
+
+        let err = plugin
+            .handle_generate_register_options(&req, &ctx)
+            .await
+            .unwrap_err();
+        assert_eq!(err.status_code(), 401);
+    }
+
+    #[tokio::test]
+    async fn test_generate_authenticate_options_returns_challenge() {
+        let plugin = PasskeyPlugin::new();
+        let (ctx, _user, _session) = create_test_context_with_user().await;
+
+        // No auth required for this endpoint
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/passkey/generate-authenticate-options",
+            None,
+            None,
+        );
+
+        let response = plugin
+            .handle_generate_authenticate_options(&req, &ctx)
+            .await
+            .unwrap();
+        assert_eq!(response.status, 200);
+
+        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert!(body["challenge"].is_string());
+        assert_eq!(body["rpId"], "localhost");
+        assert!(body["allowCredentials"].is_array());
+        assert_eq!(body["allowCredentials"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_generate_authenticate_options_with_auth_includes_credentials() {
+        let plugin = PasskeyPlugin::new();
+        let (ctx, user, session) = create_test_context_with_user().await;
+
+        // Create a passkey for the user
+        ctx.database
+            .create_passkey(CreatePasskey {
+                user_id: user.id.clone(),
+                name: "Test Key".to_string(),
+                credential_id: "cred-gen-auth-1".to_string(),
+                public_key: "pk".to_string(),
+                counter: 0,
+                device_type: "singleDevice".to_string(),
+                backed_up: false,
+                transports: Some("[\"usb\"]".to_string()),
+            })
+            .await
+            .unwrap();
+
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/passkey/generate-authenticate-options",
+            Some(&session.token),
+            None,
+        );
+
+        let response = plugin
+            .handle_generate_authenticate_options(&req, &ctx)
+            .await
+            .unwrap();
+        assert_eq!(response.status, 200);
+
+        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        let allow = body["allowCredentials"].as_array().unwrap();
+        assert_eq!(allow.len(), 1);
+        assert_eq!(allow[0]["id"], "cred-gen-auth-1");
+    }
+
+    #[tokio::test]
+    async fn test_list_user_passkeys() {
+        let plugin = PasskeyPlugin::new();
+        let (ctx, user, session) = create_test_context_with_user().await;
+
+        // No passkeys yet
+        let req = create_auth_request(
+            HttpMethod::Get,
+            "/passkey/list-user-passkeys",
+            Some(&session.token),
+            None,
+        );
+        let response = plugin.handle_list_user_passkeys(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+        let body: Vec<serde_json::Value> = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(body.len(), 0);
+
+        // Create a passkey
+        ctx.database
+            .create_passkey(CreatePasskey {
+                user_id: user.id.clone(),
+                name: "My Key".to_string(),
+                credential_id: "cred-list-1".to_string(),
+                public_key: "pk".to_string(),
+                counter: 0,
+                device_type: "singleDevice".to_string(),
+                backed_up: false,
+                transports: None,
+            })
+            .await
+            .unwrap();
+
+        let response = plugin.handle_list_user_passkeys(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+        let body: Vec<serde_json::Value> = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(body.len(), 1);
+        assert_eq!(body[0]["name"], "My Key");
+        assert_eq!(body[0]["credentialID"], "cred-list-1");
+    }
+
+    #[tokio::test]
+    async fn test_list_user_passkeys_unauthenticated() {
+        let plugin = PasskeyPlugin::new();
+        let (ctx, _user, _session) = create_test_context_with_user().await;
+
+        let req = create_auth_request(HttpMethod::Get, "/passkey/list-user-passkeys", None, None);
+        let err = plugin
+            .handle_list_user_passkeys(&req, &ctx)
+            .await
+            .unwrap_err();
+        assert_eq!(err.status_code(), 401);
+    }
+
+    #[tokio::test]
+    async fn test_delete_passkey_success() {
+        let plugin = PasskeyPlugin::new();
+        let (ctx, user, session) = create_test_context_with_user().await;
+
+        let passkey = ctx
+            .database
+            .create_passkey(CreatePasskey {
+                user_id: user.id.clone(),
+                name: "To Delete".to_string(),
+                credential_id: "cred-del-1".to_string(),
+                public_key: "pk".to_string(),
+                counter: 0,
+                device_type: "singleDevice".to_string(),
+                backed_up: false,
+                transports: None,
+            })
+            .await
+            .unwrap();
+
+        let body = serde_json::json!({ "id": passkey.id });
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/passkey/delete-passkey",
+            Some(&session.token),
+            Some(body),
+        );
+
+        let response = plugin.handle_delete_passkey(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        // Verify deleted
+        let result = ctx.database.get_passkey_by_id(&passkey.id).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_delete_passkey_non_owner_rejected() {
+        let plugin = PasskeyPlugin::new();
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        // Create another user's passkey
+        let other_user = ctx
+            .database
+            .create_user(
+                CreateUser::new()
+                    .with_email("other@example.com")
+                    .with_name("Other User"),
+            )
+            .await
+            .unwrap();
+
+        let passkey = ctx
+            .database
+            .create_passkey(CreatePasskey {
+                user_id: other_user.id.clone(),
+                name: "Other's Key".to_string(),
+                credential_id: "cred-other-del".to_string(),
+                public_key: "pk".to_string(),
+                counter: 0,
+                device_type: "singleDevice".to_string(),
+                backed_up: false,
+                transports: None,
+            })
+            .await
+            .unwrap();
+
+        let body = serde_json::json!({ "id": passkey.id });
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/passkey/delete-passkey",
+            Some(&session.token),
+            Some(body),
+        );
+
+        let err = plugin.handle_delete_passkey(&req, &ctx).await.unwrap_err();
+        assert_eq!(err.status_code(), 404);
+
+        // Verify NOT deleted
+        let result = ctx.database.get_passkey_by_id(&passkey.id).await.unwrap();
+        assert!(result.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_update_passkey_success() {
+        let plugin = PasskeyPlugin::new();
+        let (ctx, user, session) = create_test_context_with_user().await;
+
+        let passkey = ctx
+            .database
+            .create_passkey(CreatePasskey {
+                user_id: user.id.clone(),
+                name: "Old Name".to_string(),
+                credential_id: "cred-upd-1".to_string(),
+                public_key: "pk".to_string(),
+                counter: 0,
+                device_type: "singleDevice".to_string(),
+                backed_up: false,
+                transports: None,
+            })
+            .await
+            .unwrap();
+
+        let body = serde_json::json!({ "id": passkey.id, "name": "New Name" });
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/passkey/update-passkey",
+            Some(&session.token),
+            Some(body),
+        );
+
+        let response = plugin.handle_update_passkey(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        let resp_body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(resp_body["passkey"]["name"], "New Name");
+
+        // Verify persisted
+        let updated = ctx
+            .database
+            .get_passkey_by_id(&passkey.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.name(), "New Name");
+    }
+
+    #[tokio::test]
+    async fn test_update_passkey_non_owner_rejected() {
+        let plugin = PasskeyPlugin::new();
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        let other_user = ctx
+            .database
+            .create_user(
+                CreateUser::new()
+                    .with_email("other-upd@example.com")
+                    .with_name("Other"),
+            )
+            .await
+            .unwrap();
+
+        let passkey = ctx
+            .database
+            .create_passkey(CreatePasskey {
+                user_id: other_user.id.clone(),
+                name: "Other's Key".to_string(),
+                credential_id: "cred-other-upd".to_string(),
+                public_key: "pk".to_string(),
+                counter: 0,
+                device_type: "singleDevice".to_string(),
+                backed_up: false,
+                transports: None,
+            })
+            .await
+            .unwrap();
+
+        let body = serde_json::json!({ "id": passkey.id, "name": "Hijacked" });
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/passkey/update-passkey",
+            Some(&session.token),
+            Some(body),
+        );
+
+        let err = plugin.handle_update_passkey(&req, &ctx).await.unwrap_err();
+        assert_eq!(err.status_code(), 404);
+
+        // Verify unchanged
+        let unchanged = ctx
+            .database
+            .get_passkey_by_id(&passkey.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(unchanged.name(), "Other's Key");
+    }
+
+    #[tokio::test]
+    async fn test_expired_challenge_rejected() {
+        let plugin = PasskeyPlugin::new().allow_insecure_unverified_assertion(true);
+        let (ctx, user, session) = create_test_context_with_user().await;
+
+        let challenge = "expired-challenge";
+        let identifier = format!("passkey_reg:{}", user.id);
+
+        // Create an already-expired verification
+        ctx.database
+            .create_verification(CreateVerification {
+                identifier: identifier.clone(),
+                value: challenge.to_string(),
+                expires_at: Utc::now() - Duration::seconds(1),
+            })
+            .await
+            .unwrap();
+
+        let body = serde_json::json!({
+            "response": {
+                "id": "cred-exp-1",
+                "response": {
+                    "clientDataJSON": encoded_client_data(challenge, "webauthn.create", "http://localhost:3000"),
+                    "attestationObject": "fake",
+                }
+            }
+        });
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/passkey/verify-registration",
+            Some(&session.token),
+            Some(body),
+        );
+
+        let err = plugin
+            .handle_verify_registration(&req, &ctx)
+            .await
+            .unwrap_err();
+        assert_eq!(err.status_code(), 400);
+    }
+
+    #[tokio::test]
+    async fn test_verify_authentication_requires_insecure_opt_in() {
+        let plugin = PasskeyPlugin::new(); // default: insecure=false
+        let (ctx, _user, _session) = create_test_context_with_user().await;
+
+        let body = serde_json::json!({
+            "response": {
+                "id": "cred-1",
+                "response": {
+                    "clientDataJSON": encoded_client_data("c", "webauthn.get", "http://localhost:3000"),
+                }
+            }
+        });
+
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/passkey/verify-authentication",
+            None,
+            Some(body),
+        );
+
+        let err = plugin
+            .handle_verify_authentication(&req, &ctx)
+            .await
+            .unwrap_err();
+        assert_eq!(err.status_code(), 501);
+    }
+
+    #[tokio::test]
     async fn test_memory_passkey_list_is_sorted_by_created_at_desc() {
         let (ctx, user, _session) = create_test_context_with_user().await;
 
