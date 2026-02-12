@@ -132,6 +132,7 @@ impl CacheAdapter for MemoryCacheAdapter {
 #[cfg(feature = "redis-cache")]
 pub mod redis_adapter {
     use super::*;
+    use crate::error::AuthError;
     use redis::{Client, Commands};
 
     pub struct RedisAdapter {
@@ -153,8 +154,10 @@ pub mod redis_adapter {
                 .get_connection()
                 .map_err(|e| AuthError::internal(format!("Redis connection error: {}", e)))?;
 
-            let seconds = expires_in.num_seconds() as u64;
-            conn.set_ex(key, value, seconds)
+            let seconds = u64::try_from(expires_in.num_seconds())
+                .map_err(|_| AuthError::internal("Redis set_ex requires non-negative TTL"))?;
+            let _: () = conn
+                .set_ex(key, value, seconds)
                 .map_err(|e| AuthError::internal(format!("Redis set error: {}", e)))?;
 
             Ok(())
@@ -179,7 +182,8 @@ pub mod redis_adapter {
                 .get_connection()
                 .map_err(|e| AuthError::internal(format!("Redis connection error: {}", e)))?;
 
-            conn.del(key)
+            let _: usize = conn
+                .del(key)
                 .map_err(|e| AuthError::internal(format!("Redis delete error: {}", e)))?;
 
             Ok(())
@@ -204,8 +208,9 @@ pub mod redis_adapter {
                 .get_connection()
                 .map_err(|e| AuthError::internal(format!("Redis connection error: {}", e)))?;
 
-            let seconds = expires_in.num_seconds() as u64;
-            conn.expire(key, seconds)
+            let seconds = expires_in.num_seconds();
+            let _: bool = conn
+                .expire(key, seconds)
                 .map_err(|e| AuthError::internal(format!("Redis expire error: {}", e)))?;
 
             Ok(())
@@ -217,7 +222,9 @@ pub mod redis_adapter {
                 .get_connection()
                 .map_err(|e| AuthError::internal(format!("Redis connection error: {}", e)))?;
 
-            redis::cmd("FLUSHDB").execute(&mut conn);
+            redis::cmd("FLUSHDB")
+                .query::<()>(&mut conn)
+                .map_err(|e| AuthError::internal(format!("Redis flushdb error: {}", e)))?;
 
             Ok(())
         }

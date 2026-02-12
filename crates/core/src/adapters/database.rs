@@ -77,6 +77,8 @@ pub mod sqlx_adapter {
     {
     }
 
+    type SqlxAdapterEntities<U, S, A, O, M, I, V, TF, AK, PK> = (U, S, A, O, M, I, V, TF, AK, PK);
+
     /// PostgreSQL database adapter via SQLx.
     ///
     /// Generic over entity types — use default type parameters for the built-in
@@ -94,7 +96,8 @@ pub mod sqlx_adapter {
         PK = Passkey,
     > {
         pool: PgPool,
-        _phantom: PhantomData<(U, S, A, O, M, I, V, TF, AK, PK)>,
+        #[allow(clippy::type_complexity)]
+        _phantom: PhantomData<SqlxAdapterEntities<U, S, A, O, M, I, V, TF, AK, PK>>,
     }
 
     /// Constructors for the default (built-in) entity types.
@@ -213,8 +216,8 @@ pub mod sqlx_adapter {
             .bind(&create_user.name)
             .bind(&create_user.image)
             .bind(false)
-            .bind(&now)
-            .bind(&now)
+            .bind(now)
+            .bind(now)
             .bind(sqlx::types::Json(create_user.metadata.unwrap_or(serde_json::json!({}))))
             .fetch_one(&self.pool)
             .await?;
@@ -333,8 +336,8 @@ pub mod sqlx_adapter {
             .bind(&id)
             .bind(&create_session.user_id)
             .bind(&token)
-            .bind(&create_session.expires_at)
-            .bind(&now)
+            .bind(create_session.expires_at)
+            .bind(now)
             .bind(&create_session.ip_address)
             .bind(&create_session.user_agent)
             .bind(true)
@@ -369,7 +372,7 @@ pub mod sqlx_adapter {
             expires_at: DateTime<Utc>,
         ) -> AuthResult<()> {
             sqlx::query("UPDATE sessions SET expires_at = $1 WHERE token = $2 AND active = true")
-                .bind(&expires_at)
+                .bind(expires_at)
                 .bind(token)
                 .execute(&self.pool)
                 .await?;
@@ -452,12 +455,12 @@ pub mod sqlx_adapter {
             .bind(&create_account.access_token)
             .bind(&create_account.refresh_token)
             .bind(&create_account.id_token)
-            .bind(&create_account.access_token_expires_at)
-            .bind(&create_account.refresh_token_expires_at)
+            .bind(create_account.access_token_expires_at)
+            .bind(create_account.refresh_token_expires_at)
             .bind(&create_account.scope)
             .bind(&create_account.password)
-            .bind(&now)
-            .bind(&now)
+            .bind(now)
+            .bind(now)
             .fetch_one(&self.pool)
             .await?;
 
@@ -570,9 +573,9 @@ pub mod sqlx_adapter {
             .bind(&id)
             .bind(&create_verification.identifier)
             .bind(&create_verification.value)
-            .bind(&create_verification.expires_at)
-            .bind(&now)
-            .bind(&now)
+            .bind(create_verification.expires_at)
+            .bind(now)
+            .bind(now)
             .fetch_one(&self.pool)
             .await?;
 
@@ -683,8 +686,8 @@ pub mod sqlx_adapter {
             .bind(sqlx::types::Json(
                 create_org.metadata.unwrap_or(serde_json::json!({})),
             ))
-            .bind(&now)
-            .bind(&now)
+            .bind(now)
+            .bind(now)
             .fetch_one(&self.pool)
             .await?;
 
@@ -793,7 +796,7 @@ pub mod sqlx_adapter {
             .bind(&create_member.organization_id)
             .bind(&create_member.user_id)
             .bind(&create_member.role)
-            .bind(&now)
+            .bind(now)
             .fetch_one(&self.pool)
             .await?;
 
@@ -901,8 +904,8 @@ pub mod sqlx_adapter {
             .bind(&create_inv.email)
             .bind(&create_inv.role)
             .bind(&create_inv.inviter_id)
-            .bind(&create_inv.expires_at)
-            .bind(&now)
+            .bind(create_inv.expires_at)
+            .bind(now)
             .fetch_one(&self.pool)
             .await?;
 
@@ -1001,8 +1004,8 @@ pub mod sqlx_adapter {
             .bind(&create.secret)
             .bind(&create.backup_codes)
             .bind(&create.user_id)
-            .bind(&now)
-            .bind(&now)
+            .bind(now)
+            .bind(now)
             .fetch_one(&self.pool)
             .await?;
 
@@ -1079,16 +1082,16 @@ pub mod sqlx_adapter {
             .bind(&input.prefix)
             .bind(&input.key_hash)
             .bind(&input.user_id)
-            .bind(&input.refill_interval)
-            .bind(&input.refill_amount)
+            .bind(input.refill_interval)
+            .bind(input.refill_amount)
             .bind(input.enabled)
             .bind(input.rate_limit_enabled)
-            .bind(&input.rate_limit_time_window)
-            .bind(&input.rate_limit_max)
-            .bind(&input.remaining)
+            .bind(input.rate_limit_time_window)
+            .bind(input.rate_limit_max)
+            .bind(input.remaining)
             .bind(&input.expires_at)
-            .bind(&now)
-            .bind(&now)
+            .bind(now)
+            .bind(now)
             .bind(&input.permissions)
             .bind(&input.metadata)
             .fetch_one(&self.pool)
