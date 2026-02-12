@@ -271,6 +271,14 @@ impl<DB: DatabaseAdapter> VerificationOps for HookedDatabaseAdapter<DB> {
         self.inner.get_verification_by_identifier(identifier).await
     }
 
+    async fn consume_verification(
+        &self,
+        identifier: &str,
+        value: &str,
+    ) -> AuthResult<Option<Self::Verification>> {
+        self.inner.consume_verification(identifier, value).await
+    }
+
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
         self.inner.delete_verification(id).await
     }

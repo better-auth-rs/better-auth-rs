@@ -2,14 +2,14 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 use crate::entity::{
-    AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthSession,
-    AuthTwoFactor, AuthUser, AuthVerification,
+    AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,
+    AuthSession, AuthTwoFactor, AuthUser, AuthVerification,
 };
 use crate::error::AuthResult;
 use crate::types::{
-    CreateAccount, CreateApiKey, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
-    CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus, UpdateAccount, UpdateApiKey,
-    UpdateOrganization, UpdateUser,
+    CreateAccount, CreateApiKey, CreateInvitation, CreateMember, CreateOrganization, CreatePasskey,
+    CreateSession, CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus,
+    UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser,
 };
 
 /// User persistence operations.
@@ -86,6 +86,16 @@ pub trait VerificationOps: Send + Sync + 'static {
         let _ = identifier;
         Ok(None)
     }
+    /// Atomically consume a verification token identified by `(identifier, value)`.
+    ///
+    /// Implementations should remove the token if it exists and is valid, then
+    /// return the removed record. This prevents replay and race windows from
+    /// split read-then-delete flows.
+    async fn consume_verification(
+        &self,
+        identifier: &str,
+        value: &str,
+    ) -> AuthResult<Option<Self::Verification>>;
     async fn delete_verification(&self, id: &str) -> AuthResult<()>;
     async fn delete_expired_verifications(&self) -> AuthResult<usize>;
 }
@@ -181,4 +191,21 @@ pub trait ApiKeyOps: Send + Sync + 'static {
     async fn list_api_keys_by_user(&self, user_id: &str) -> AuthResult<Vec<Self::ApiKey>>;
     async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<Self::ApiKey>;
     async fn delete_api_key(&self, id: &str) -> AuthResult<()>;
+}
+
+/// Passkey persistence operations.
+#[async_trait]
+pub trait PasskeyOps: Send + Sync + 'static {
+    type Passkey: AuthPasskey;
+
+    async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Self::Passkey>;
+    async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Self::Passkey>>;
+    async fn get_passkey_by_credential_id(
+        &self,
+        credential_id: &str,
+    ) -> AuthResult<Option<Self::Passkey>>;
+    async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Self::Passkey>>;
+    async fn update_passkey_counter(&self, id: &str, counter: u64) -> AuthResult<Self::Passkey>;
+    async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Self::Passkey>;
+    async fn delete_passkey(&self, id: &str) -> AuthResult<()>;
 }

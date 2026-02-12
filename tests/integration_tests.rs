@@ -8,9 +8,6 @@ use better_auth::plugins::{
 use better_auth::{AuthConfig, BetterAuth};
 use std::sync::Arc;
 
-#[cfg(feature = "sqlx-postgres")]
-use better_auth::adapters::{PoolConfig, SqlxAdapter};
-
 /// Helper to create test BetterAuth instance with memory database
 async fn create_test_auth_memory() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
     let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
@@ -1450,6 +1447,7 @@ async fn test_axum_duplicate_email() {
 #[cfg(feature = "sqlx-postgres")]
 mod postgres_tests {
     use super::*;
+    use better_auth::adapters::{PoolConfig, SqlxAdapter};
     use std::env;
 
     /// Helper to create test BetterAuth instance with PostgreSQL

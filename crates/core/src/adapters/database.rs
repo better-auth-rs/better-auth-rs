@@ -1,6 +1,6 @@
 pub use super::traits::{
-    AccountOps, ApiKeyOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, TwoFactorOps,
-    UserOps, VerificationOps,
+    AccountOps, ApiKeyOps, InvitationOps, MemberOps, OrganizationOps, PasskeyOps, SessionOps,
+    TwoFactorOps, UserOps, VerificationOps,
 };
 
 /// Database adapter trait for persistence.
@@ -21,6 +21,7 @@ pub trait DatabaseAdapter:
     + InvitationOps
     + TwoFactorOps
     + ApiKeyOps
+    + PasskeyOps
 {
 }
 
@@ -34,6 +35,7 @@ impl<T> DatabaseAdapter for T where
         + InvitationOps
         + TwoFactorOps
         + ApiKeyOps
+        + PasskeyOps
 {
 }
 
@@ -44,15 +46,15 @@ pub mod sqlx_adapter {
     use chrono::{DateTime, Utc};
 
     use crate::entity::{
-        AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthSession,
-        AuthTwoFactor, AuthUser, AuthVerification,
+        AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,
+        AuthSession, AuthTwoFactor, AuthUser, AuthVerification,
     };
     use crate::error::{AuthError, AuthResult};
     use crate::types::{
         Account, ApiKey, CreateAccount, CreateApiKey, CreateInvitation, CreateMember,
-        CreateOrganization, CreateSession, CreateTwoFactor, CreateUser, CreateVerification,
-        Invitation, InvitationStatus, Member, Organization, Session, TwoFactor, UpdateAccount,
-        UpdateApiKey, UpdateOrganization, UpdateUser, User, Verification,
+        CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
+        CreateVerification, Invitation, InvitationStatus, Member, Organization, Passkey, Session,
+        TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser, User, Verification,
     };
     use sqlx::PgPool;
     use sqlx::postgres::PgRow;
@@ -89,9 +91,10 @@ pub mod sqlx_adapter {
         V = Verification,
         TF = TwoFactor,
         AK = ApiKey,
+        PK = Passkey,
     > {
         pool: PgPool,
-        _phantom: PhantomData<(U, S, A, O, M, I, V, TF, AK)>,
+        _phantom: PhantomData<(U, S, A, O, M, I, V, TF, AK, PK)>,
     }
 
     /// Constructors for the default (built-in) entity types.
@@ -124,7 +127,7 @@ pub mod sqlx_adapter {
     }
 
     /// Methods available for all type parameterizations.
-    impl<U, S, A, O, M, I, V, TF, AK> SqlxAdapter<U, S, A, O, M, I, V, TF, AK> {
+    impl<U, S, A, O, M, I, V, TF, AK, PK> SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK> {
         pub fn from_pool(pool: PgPool) -> Self {
             Self {
                 pool,
@@ -179,7 +182,7 @@ pub mod sqlx_adapter {
     // -- UserOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF, AK> UserOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
+    impl<U, S, A, O, M, I, V, TF, AK, PK> UserOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -190,6 +193,7 @@ pub mod sqlx_adapter {
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
         AK: AuthApiKey + SqlxEntity,
+        PK: AuthPasskey + SqlxEntity,
     {
         type User = U;
 
@@ -299,7 +303,7 @@ pub mod sqlx_adapter {
     // -- SessionOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF, AK> SessionOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
+    impl<U, S, A, O, M, I, V, TF, AK, PK> SessionOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -310,6 +314,7 @@ pub mod sqlx_adapter {
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
         AK: AuthApiKey + SqlxEntity,
+        PK: AuthPasskey + SqlxEntity,
     {
         type Session = S;
 
@@ -414,7 +419,7 @@ pub mod sqlx_adapter {
     // -- AccountOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF, AK> AccountOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
+    impl<U, S, A, O, M, I, V, TF, AK, PK> AccountOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -425,6 +430,7 @@ pub mod sqlx_adapter {
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
         AK: AuthApiKey + SqlxEntity,
+        PK: AuthPasskey + SqlxEntity,
     {
         type Account = A;
 
@@ -531,7 +537,8 @@ pub mod sqlx_adapter {
     // -- VerificationOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF, AK> VerificationOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
+    impl<U, S, A, O, M, I, V, TF, AK, PK> VerificationOps
+        for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -542,6 +549,7 @@ pub mod sqlx_adapter {
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
         AK: AuthApiKey + SqlxEntity,
+        PK: AuthPasskey + SqlxEntity,
     {
         type Verification = V;
 
@@ -602,6 +610,26 @@ pub mod sqlx_adapter {
             Ok(verification)
         }
 
+        async fn consume_verification(
+            &self,
+            identifier: &str,
+            value: &str,
+        ) -> AuthResult<Option<V>> {
+            let verification = sqlx::query_as::<_, V>(
+                "DELETE FROM verifications WHERE id IN (
+                    SELECT id FROM verifications
+                    WHERE identifier = $1 AND value = $2 AND expires_at > NOW()
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ) RETURNING *",
+            )
+            .bind(identifier)
+            .bind(value)
+            .fetch_optional(&self.pool)
+            .await?;
+            Ok(verification)
+        }
+
         async fn delete_verification(&self, id: &str) -> AuthResult<()> {
             sqlx::query("DELETE FROM verifications WHERE id = $1")
                 .bind(id)
@@ -621,7 +649,8 @@ pub mod sqlx_adapter {
     // -- OrganizationOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF, AK> OrganizationOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
+    impl<U, S, A, O, M, I, V, TF, AK, PK> OrganizationOps
+        for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -632,6 +661,7 @@ pub mod sqlx_adapter {
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
         AK: AuthApiKey + SqlxEntity,
+        PK: AuthPasskey + SqlxEntity,
     {
         type Organization = O;
 
@@ -733,7 +763,7 @@ pub mod sqlx_adapter {
     // -- MemberOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF, AK> MemberOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
+    impl<U, S, A, O, M, I, V, TF, AK, PK> MemberOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -744,6 +774,7 @@ pub mod sqlx_adapter {
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
         AK: AuthApiKey + SqlxEntity,
+        PK: AuthPasskey + SqlxEntity,
     {
         type Member = M;
 
@@ -839,7 +870,7 @@ pub mod sqlx_adapter {
     // -- InvitationOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF, AK> InvitationOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
+    impl<U, S, A, O, M, I, V, TF, AK, PK> InvitationOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -850,6 +881,7 @@ pub mod sqlx_adapter {
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
         AK: AuthApiKey + SqlxEntity,
+        PK: AuthPasskey + SqlxEntity,
     {
         type Invitation = I;
 
@@ -939,7 +971,7 @@ pub mod sqlx_adapter {
     // -- TwoFactorOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF, AK> TwoFactorOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
+    impl<U, S, A, O, M, I, V, TF, AK, PK> TwoFactorOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -950,6 +982,7 @@ pub mod sqlx_adapter {
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
         AK: AuthApiKey + SqlxEntity,
+        PK: AuthPasskey + SqlxEntity,
     {
         type TwoFactor = TF;
 
@@ -1011,7 +1044,7 @@ pub mod sqlx_adapter {
     // -- ApiKeyOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF, AK> ApiKeyOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
+    impl<U, S, A, O, M, I, V, TF, AK, PK> ApiKeyOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -1022,6 +1055,7 @@ pub mod sqlx_adapter {
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
         AK: AuthApiKey + SqlxEntity,
+        PK: AuthPasskey + SqlxEntity,
     {
         type ApiKey = AK;
 
@@ -1150,6 +1184,129 @@ pub mod sqlx_adapter {
 
         async fn delete_api_key(&self, id: &str) -> AuthResult<()> {
             sqlx::query("DELETE FROM api_keys WHERE id = $1")
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+            Ok(())
+        }
+    }
+
+    // -- PasskeyOps --
+
+    #[async_trait]
+    impl<U, S, A, O, M, I, V, TF, AK, PK> PasskeyOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
+    where
+        U: AuthUser + SqlxEntity,
+        S: AuthSession + SqlxEntity,
+        A: AuthAccount + SqlxEntity,
+        O: AuthOrganization + SqlxEntity,
+        M: AuthMember + SqlxEntity,
+        I: AuthInvitation + SqlxEntity,
+        V: AuthVerification + SqlxEntity,
+        TF: AuthTwoFactor + SqlxEntity,
+        AK: AuthApiKey + SqlxEntity,
+        PK: AuthPasskey + SqlxEntity,
+    {
+        type Passkey = PK;
+
+        async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<PK> {
+            let id = Uuid::new_v4().to_string();
+            let now = Utc::now();
+            let counter = i64::try_from(input.counter)
+                .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
+
+            let passkey = sqlx::query_as::<_, PK>(
+                r#"
+                INSERT INTO passkeys (id, name, public_key, user_id, credential_id, counter, device_type, backed_up, transports, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                RETURNING *
+                "#,
+            )
+            .bind(&id)
+            .bind(&input.name)
+            .bind(&input.public_key)
+            .bind(&input.user_id)
+            .bind(&input.credential_id)
+            .bind(counter)
+            .bind(&input.device_type)
+            .bind(input.backed_up)
+            .bind(&input.transports)
+            .bind(now)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::Database(ref db_err) if db_err.is_unique_violation() => {
+                    AuthError::conflict("A passkey with this credential ID already exists")
+                }
+                other => AuthError::from(other),
+            })?;
+
+            Ok(passkey)
+        }
+
+        async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<PK>> {
+            let passkey = sqlx::query_as::<_, PK>("SELECT * FROM passkeys WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
+            Ok(passkey)
+        }
+
+        async fn get_passkey_by_credential_id(
+            &self,
+            credential_id: &str,
+        ) -> AuthResult<Option<PK>> {
+            let passkey =
+                sqlx::query_as::<_, PK>("SELECT * FROM passkeys WHERE credential_id = $1")
+                    .bind(credential_id)
+                    .fetch_optional(&self.pool)
+                    .await?;
+            Ok(passkey)
+        }
+
+        async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<PK>> {
+            let passkeys = sqlx::query_as::<_, PK>(
+                "SELECT * FROM passkeys WHERE user_id = $1 ORDER BY created_at DESC",
+            )
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+            Ok(passkeys)
+        }
+
+        async fn update_passkey_counter(&self, id: &str, counter: u64) -> AuthResult<PK> {
+            let counter = i64::try_from(counter)
+                .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
+            let passkey = sqlx::query_as::<_, PK>(
+                "UPDATE passkeys SET counter = $2 WHERE id = $1 RETURNING *",
+            )
+            .bind(id)
+            .bind(counter)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|err| match err {
+                sqlx::Error::RowNotFound => AuthError::not_found("Passkey not found"),
+                other => AuthError::from(other),
+            })?;
+            Ok(passkey)
+        }
+
+        async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<PK> {
+            let passkey =
+                sqlx::query_as::<_, PK>("UPDATE passkeys SET name = $2 WHERE id = $1 RETURNING *")
+                    .bind(id)
+                    .bind(name)
+                    .fetch_one(&self.pool)
+                    .await
+                    .map_err(|err| match err {
+                        sqlx::Error::RowNotFound => AuthError::not_found("Passkey not found"),
+                        other => AuthError::from(other),
+                    })?;
+            Ok(passkey)
+        }
+
+        async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
+            sqlx::query("DELETE FROM passkeys WHERE id = $1")
                 .bind(id)
                 .execute(&self.pool)
                 .await?;

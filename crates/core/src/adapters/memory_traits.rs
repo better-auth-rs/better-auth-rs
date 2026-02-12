@@ -1,14 +1,14 @@
 use chrono::{DateTime, Utc};
 
 use crate::entity::{
-    AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthSession,
-    AuthTwoFactor, AuthUser, AuthVerification,
+    AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,
+    AuthSession, AuthTwoFactor, AuthUser, AuthVerification,
 };
 use crate::types::{
     Account, ApiKey, CreateAccount, CreateApiKey, CreateInvitation, CreateMember,
-    CreateOrganization, CreateSession, CreateTwoFactor, CreateUser, CreateVerification, Invitation,
-    InvitationStatus, Member, Organization, Session, TwoFactor, UpdateAccount, UpdateApiKey,
-    UpdateOrganization, UpdateUser, User, Verification,
+    CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
+    CreateVerification, Invitation, InvitationStatus, Member, Organization, Passkey, Session,
+    TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser, User, Verification,
 };
 
 /// Construction and mutation for user entities stored in memory.
@@ -298,6 +298,13 @@ pub trait MemoryApiKey: AuthApiKey {
     fn apply_update(&mut self, update: &UpdateApiKey);
 }
 
+/// Construction and mutation for passkey entities stored in memory.
+pub trait MemoryPasskey: AuthPasskey {
+    fn from_create(id: String, input: &CreatePasskey, now: DateTime<Utc>) -> Self;
+    fn set_counter(&mut self, counter: u64);
+    fn set_name(&mut self, name: String);
+}
+
 impl MemoryApiKey for ApiKey {
     fn from_create(id: String, input: &CreateApiKey, now: DateTime<Utc>) -> Self {
         let now_str = now.to_rfc3339();
@@ -358,5 +365,30 @@ impl MemoryApiKey for ApiKey {
             self.metadata = Some(metadata.clone());
         }
         self.updated_at = Utc::now().to_rfc3339();
+    }
+}
+
+impl MemoryPasskey for Passkey {
+    fn from_create(id: String, input: &CreatePasskey, now: DateTime<Utc>) -> Self {
+        Self {
+            id,
+            name: input.name.clone(),
+            public_key: input.public_key.clone(),
+            user_id: input.user_id.clone(),
+            credential_id: input.credential_id.clone(),
+            counter: input.counter,
+            device_type: input.device_type.clone(),
+            backed_up: input.backed_up,
+            transports: input.transports.clone(),
+            created_at: now,
+        }
+    }
+
+    fn set_counter(&mut self, counter: u64) {
+        self.counter = counter;
+    }
+
+    fn set_name(&mut self, name: String) {
+        self.name = name;
     }
 }

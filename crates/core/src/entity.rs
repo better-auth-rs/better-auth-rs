@@ -162,6 +162,8 @@ pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
     fn counter(&self) -> u64;
     fn device_type(&self) -> &str;
     fn backed_up(&self) -> bool;
+    fn transports(&self) -> Option<&str>;
+    fn created_at(&self) -> DateTime<Utc>;
 }
 
 /// Minimal user info for member-related API responses.

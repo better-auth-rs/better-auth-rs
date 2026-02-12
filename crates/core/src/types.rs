@@ -134,6 +134,29 @@ pub struct Passkey {
     pub device_type: String,
     #[serde(rename = "backedUp")]
     pub backed_up: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transports: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: DateTime<Utc>,
+}
+
+/// Input for creating a new passkey
+#[derive(Debug, Clone)]
+pub struct CreatePasskey {
+    pub user_id: String,
+    pub name: String,
+    pub credential_id: String,
+    pub public_key: String,
+    pub counter: u64,
+    pub device_type: String,
+    pub backed_up: bool,
+    pub transports: Option<String>,
+}
+
+/// Input for updating a passkey
+#[derive(Debug, Clone)]
+pub struct UpdatePasskey {
+    pub name: Option<String>,
 }
 
 /// HTTP method enumeration

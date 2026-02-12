@@ -25,8 +25,9 @@ pub use better_auth_derive::*;
 pub use adapters::{
     AccountOps, ApiKeyOps, CacheAdapter, DatabaseAdapter, InvitationOps, MemberOps, MemoryAccount,
     MemoryApiKey, MemoryCacheAdapter, MemoryDatabaseAdapter, MemoryInvitation, MemoryMember,
-    MemoryOrganization, MemorySession, MemoryTwoFactor, MemoryUser, MemoryVerification,
-    OrganizationOps, SessionOps, TwoFactorOps, UserOps, VerificationOps,
+    MemoryOrganization, MemoryPasskey, MemorySession, MemoryTwoFactor, MemoryUser,
+    MemoryVerification, OrganizationOps, PasskeyOps, SessionOps, TwoFactorOps, UserOps,
+    VerificationOps,
 };
 #[cfg(feature = "sqlx-postgres")]
 pub use adapters::{SqlxAdapter, SqlxEntity};
@@ -49,8 +50,8 @@ pub use plugin::{AuthContext, AuthPlugin, AuthRoute};
 pub use session::SessionManager;
 pub use types::{
     Account, ApiKey, AuthRequest, AuthResponse, CreateAccount, CreateApiKey, CreateInvitation,
-    CreateMember, CreateOrganization, CreateSession, CreateTwoFactor, CreateUser,
+    CreateMember, CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
     CreateVerification, DeleteUserResponse, HttpMethod, Invitation, InvitationStatus, Passkey,
-    Session, TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser,
+    Session, TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdatePasskey, UpdateUser,
     UpdateUserRequest, UpdateUserResponse, User, Verification,
 };

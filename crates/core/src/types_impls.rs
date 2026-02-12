@@ -330,6 +330,12 @@ impl AuthPasskey for Passkey {
     fn backed_up(&self) -> bool {
         self.backed_up
     }
+    fn transports(&self) -> Option<&str> {
+        self.transports.as_deref()
+    }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
 }
 
 // Manual FromRow implementations for PostgreSQL
@@ -454,6 +460,42 @@ mod postgres_impls {
                 expires_at: row.try_get("expires_at")?,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
+            })
+        }
+    }
+
+    impl FromRow<'_, PgRow> for TwoFactor {
+        fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
+            Ok(Self {
+                id: row.try_get("id")?,
+                secret: row.try_get("secret")?,
+                backup_codes: row.try_get("backup_codes")?,
+                user_id: row.try_get("user_id")?,
+            })
+        }
+    }
+
+    impl FromRow<'_, PgRow> for Passkey {
+        fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
+            let counter_raw = row.try_get::<i64, _>("counter")?;
+            let counter = u64::try_from(counter_raw).map_err(|_| {
+                sqlx::Error::Decode(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "passkey counter cannot be negative",
+                )))
+            })?;
+
+            Ok(Self {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                public_key: row.try_get("public_key")?,
+                user_id: row.try_get("user_id")?,
+                credential_id: row.try_get("credential_id")?,
+                counter,
+                device_type: row.try_get("device_type")?,
+                backed_up: row.try_get("backed_up")?,
+                transports: row.try_get("transports")?,
+                created_at: row.try_get("created_at")?,
             })
         }
     }

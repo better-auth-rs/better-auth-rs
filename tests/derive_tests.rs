@@ -121,6 +121,8 @@ struct MyPasskey {
     counter: u64,
     device_type: String,
     backed_up: bool,
+    transports: Option<String>,
+    created_at: DateTime<Utc>,
 }
 
 #[test]
@@ -264,6 +266,8 @@ fn test_derive_auth_passkey() {
         counter: 42,
         device_type: "usb".into(),
         backed_up: true,
+        transports: Some("[\"usb\"]".into()),
+        created_at: Utc::now(),
     };
 
     assert_eq!(AuthPasskeyTrait::id(&pk), "pk_1");
@@ -271,4 +275,5 @@ fn test_derive_auth_passkey() {
     assert_eq!(pk.counter(), 42);
     assert!(pk.backed_up());
     assert_eq!(pk.credential_id(), "cred_abc");
+    assert_eq!(pk.transports(), Some("[\"usb\"]"));
 }

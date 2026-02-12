@@ -6,12 +6,13 @@ pub mod traits;
 
 pub use cache::{CacheAdapter, MemoryCacheAdapter};
 pub use database::{
-    AccountOps, ApiKeyOps, DatabaseAdapter, InvitationOps, MemberOps, OrganizationOps, SessionOps,
-    TwoFactorOps, UserOps, VerificationOps,
+    AccountOps, ApiKeyOps, DatabaseAdapter, InvitationOps, MemberOps, OrganizationOps, PasskeyOps,
+    SessionOps, TwoFactorOps, UserOps, VerificationOps,
 };
 pub use memory::{
     MemoryAccount, MemoryApiKey, MemoryDatabaseAdapter, MemoryInvitation, MemoryMember,
-    MemoryOrganization, MemorySession, MemoryTwoFactor, MemoryUser, MemoryVerification,
+    MemoryOrganization, MemoryPasskey, MemorySession, MemoryTwoFactor, MemoryUser,
+    MemoryVerification,
 };
 
 #[cfg(feature = "sqlx-postgres")]

@@ -7,19 +7,19 @@ use uuid::Uuid;
 use crate::error::{AuthError, AuthResult};
 use crate::types::{
     Account, ApiKey, CreateAccount, CreateApiKey, CreateInvitation, CreateMember,
-    CreateOrganization, CreateSession, CreateTwoFactor, CreateUser, CreateVerification, Invitation,
-    InvitationStatus, Member, Organization, Session, TwoFactor, UpdateAccount, UpdateApiKey,
-    UpdateOrganization, UpdateUser, User, Verification,
+    CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
+    CreateVerification, Invitation, InvitationStatus, Member, Organization, Passkey, Session,
+    TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser, User, Verification,
 };
 
 pub use super::memory_traits::{
-    MemoryAccount, MemoryApiKey, MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession,
-    MemoryTwoFactor, MemoryUser, MemoryVerification,
+    MemoryAccount, MemoryApiKey, MemoryInvitation, MemoryMember, MemoryOrganization, MemoryPasskey,
+    MemorySession, MemoryTwoFactor, MemoryUser, MemoryVerification,
 };
 
 use super::traits::{
-    AccountOps, ApiKeyOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, TwoFactorOps,
-    UserOps, VerificationOps,
+    AccountOps, ApiKeyOps, InvitationOps, MemberOps, OrganizationOps, PasskeyOps, SessionOps,
+    TwoFactorOps, UserOps, VerificationOps,
 };
 
 /// In-memory database adapter for testing and development.
@@ -44,6 +44,7 @@ pub struct MemoryDatabaseAdapter<
     M = Member,
     I = Invitation,
     V = Verification,
+    P = Passkey,
 > {
     users: Arc<Mutex<HashMap<String, U>>>,
     sessions: Arc<Mutex<HashMap<String, S>>>,
@@ -57,6 +58,8 @@ pub struct MemoryDatabaseAdapter<
     slug_index: Arc<Mutex<HashMap<String, String>>>,
     two_factors: Arc<Mutex<HashMap<String, TwoFactor>>>,
     api_keys: Arc<Mutex<HashMap<String, ApiKey>>>,
+    passkeys: Arc<Mutex<HashMap<String, P>>>,
+    passkey_credential_index: Arc<Mutex<HashMap<String, String>>>,
 }
 
 /// Constructor for the default (built-in) entity types.
@@ -67,7 +70,7 @@ impl MemoryDatabaseAdapter {
     }
 }
 
-impl<U, S, A, O, M, I, V> Default for MemoryDatabaseAdapter<U, S, A, O, M, I, V> {
+impl<U, S, A, O, M, I, V, P> Default for MemoryDatabaseAdapter<U, S, A, O, M, I, V, P> {
     fn default() -> Self {
         Self {
             users: Arc::new(Mutex::new(HashMap::new())),
@@ -82,6 +85,8 @@ impl<U, S, A, O, M, I, V> Default for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
             slug_index: Arc::new(Mutex::new(HashMap::new())),
             two_factors: Arc::new(Mutex::new(HashMap::new())),
             api_keys: Arc::new(Mutex::new(HashMap::new())),
+            passkeys: Arc::new(Mutex::new(HashMap::new())),
+            passkey_credential_index: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -89,7 +94,7 @@ impl<U, S, A, O, M, I, V> Default for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
 // -- UserOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V> UserOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+impl<U, S, A, O, M, I, V, P> UserOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V, P>
 where
     U: MemoryUser,
     S: MemorySession,
@@ -98,6 +103,7 @@ where
     M: MemoryMember,
     I: MemoryInvitation,
     V: MemoryVerification,
+    P: MemoryPasskey,
 {
     type User = U;
 
@@ -214,7 +220,7 @@ where
 // -- SessionOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V> SessionOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+impl<U, S, A, O, M, I, V, P> SessionOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V, P>
 where
     U: MemoryUser,
     S: MemorySession,
@@ -223,6 +229,7 @@ where
     M: MemoryMember,
     I: MemoryInvitation,
     V: MemoryVerification,
+    P: MemoryPasskey,
 {
     type Session = S;
 
@@ -300,7 +307,7 @@ where
 // -- AccountOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V> AccountOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+impl<U, S, A, O, M, I, V, P> AccountOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V, P>
 where
     U: MemoryUser,
     S: MemorySession,
@@ -309,6 +316,7 @@ where
     M: MemoryMember,
     I: MemoryInvitation,
     V: MemoryVerification,
+    P: MemoryPasskey,
 {
     type Account = A;
 
@@ -363,7 +371,7 @@ where
 // -- VerificationOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V> VerificationOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+impl<U, S, A, O, M, I, V, P> VerificationOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V, P>
 where
     U: MemoryUser,
     S: MemorySession,
@@ -372,6 +380,7 @@ where
     M: MemoryMember,
     I: MemoryInvitation,
     V: MemoryVerification,
+    P: MemoryPasskey,
 {
     type Verification = V;
 
@@ -413,6 +422,32 @@ where
             .cloned())
     }
 
+    async fn consume_verification(&self, identifier: &str, value: &str) -> AuthResult<Option<V>> {
+        let mut verifications = self.verifications.lock().unwrap();
+        let now = Utc::now();
+
+        let matched_id = verifications
+            .iter()
+            .filter_map(|(id, verification)| {
+                if verification.identifier() == identifier
+                    && verification.value() == value
+                    && verification.expires_at() > now
+                {
+                    Some((id, verification.created_at()))
+                } else {
+                    None
+                }
+            })
+            .max_by_key(|(_, created_at)| *created_at)
+            .map(|(id, _)| id.clone());
+
+        if let Some(id) = matched_id {
+            Ok(verifications.remove(&id))
+        } else {
+            Ok(None)
+        }
+    }
+
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
         let mut verifications = self.verifications.lock().unwrap();
         verifications.remove(id);
@@ -431,7 +466,7 @@ where
 // -- OrganizationOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V> OrganizationOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+impl<U, S, A, O, M, I, V, P> OrganizationOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V, P>
 where
     U: MemoryUser,
     S: MemorySession,
@@ -440,6 +475,7 @@ where
     M: MemoryMember,
     I: MemoryInvitation,
     V: MemoryVerification,
+    P: MemoryPasskey,
 {
     type Organization = O;
 
@@ -542,7 +578,7 @@ where
 // -- MemberOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V> MemberOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+impl<U, S, A, O, M, I, V, P> MemberOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V, P>
 where
     U: MemoryUser,
     S: MemorySession,
@@ -551,6 +587,7 @@ where
     M: MemoryMember,
     I: MemoryInvitation,
     V: MemoryVerification,
+    P: MemoryPasskey,
 {
     type Member = M;
 
@@ -633,7 +670,7 @@ where
 // -- InvitationOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V> InvitationOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+impl<U, S, A, O, M, I, V, P> InvitationOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V, P>
 where
     U: MemoryUser,
     S: MemorySession,
@@ -642,6 +679,7 @@ where
     M: MemoryMember,
     I: MemoryInvitation,
     V: MemoryVerification,
+    P: MemoryPasskey,
 {
     type Invitation = I;
 
@@ -713,7 +751,7 @@ where
 // -- TwoFactorOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V> TwoFactorOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+impl<U, S, A, O, M, I, V, P> TwoFactorOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V, P>
 where
     U: MemoryUser,
     S: MemorySession,
@@ -722,6 +760,7 @@ where
     M: MemoryMember,
     I: MemoryInvitation,
     V: MemoryVerification,
+    P: MemoryPasskey,
 {
     type TwoFactor = TwoFactor;
 
@@ -775,7 +814,7 @@ where
 // -- ApiKeyOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V> ApiKeyOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+impl<U, S, A, O, M, I, V, P> ApiKeyOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V, P>
 where
     U: MemoryUser,
     S: MemorySession,
@@ -784,6 +823,7 @@ where
     M: MemoryMember,
     I: MemoryInvitation,
     V: MemoryVerification,
+    P: MemoryPasskey,
 {
     type ApiKey = ApiKey;
 
@@ -835,6 +875,101 @@ where
     async fn delete_api_key(&self, id: &str) -> AuthResult<()> {
         let mut api_keys = self.api_keys.lock().unwrap();
         api_keys.remove(id);
+        Ok(())
+    }
+}
+
+// -- PasskeyOps --
+
+#[async_trait]
+impl<U, S, A, O, M, I, V, P> PasskeyOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V, P>
+where
+    U: MemoryUser,
+    S: MemorySession,
+    A: MemoryAccount,
+    O: MemoryOrganization,
+    M: MemoryMember,
+    I: MemoryInvitation,
+    V: MemoryVerification,
+    P: MemoryPasskey,
+{
+    type Passkey = P;
+
+    async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<P> {
+        let mut credential_index = self.passkey_credential_index.lock().unwrap();
+        let mut passkeys = self.passkeys.lock().unwrap();
+
+        if credential_index.contains_key(&input.credential_id) {
+            return Err(AuthError::conflict(
+                "A passkey with this credential ID already exists",
+            ));
+        }
+
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now();
+        let passkey = P::from_create(id.clone(), &input, now);
+
+        credential_index.insert(input.credential_id.clone(), id.clone());
+        passkeys.insert(id, passkey.clone());
+        Ok(passkey)
+    }
+
+    async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<P>> {
+        let passkeys = self.passkeys.lock().unwrap();
+        Ok(passkeys.get(id).cloned())
+    }
+
+    async fn get_passkey_by_credential_id(&self, credential_id: &str) -> AuthResult<Option<P>> {
+        let passkey_id = {
+            let credential_index = self.passkey_credential_index.lock().unwrap();
+            credential_index.get(credential_id).cloned()
+        };
+
+        let passkeys = self.passkeys.lock().unwrap();
+
+        if let Some(id) = passkey_id {
+            Ok(passkeys.get(&id).cloned())
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<P>> {
+        let passkeys = self.passkeys.lock().unwrap();
+        let mut matched: Vec<P> = passkeys
+            .values()
+            .filter(|p| p.user_id() == user_id)
+            .cloned()
+            .collect();
+        matched.sort_by(|a, b| b.created_at().cmp(&a.created_at()));
+        Ok(matched)
+    }
+
+    async fn update_passkey_counter(&self, id: &str, counter: u64) -> AuthResult<P> {
+        let mut passkeys = self.passkeys.lock().unwrap();
+        let passkey = passkeys
+            .get_mut(id)
+            .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
+        passkey.set_counter(counter);
+        Ok(passkey.clone())
+    }
+
+    async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<P> {
+        let mut passkeys = self.passkeys.lock().unwrap();
+        let passkey = passkeys
+            .get_mut(id)
+            .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
+        passkey.set_name(name.to_string());
+        Ok(passkey.clone())
+    }
+
+    async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
+        let mut credential_index = self.passkey_credential_index.lock().unwrap();
+        let mut passkeys = self.passkeys.lock().unwrap();
+
+        if let Some(passkey) = passkeys.remove(id) {
+            credential_index.remove(passkey.credential_id());
+        }
         Ok(())
     }
 }
