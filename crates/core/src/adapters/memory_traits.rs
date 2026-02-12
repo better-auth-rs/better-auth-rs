@@ -1,13 +1,14 @@
 use chrono::{DateTime, Utc};
 
 use crate::entity::{
-    AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthSession, AuthUser,
-    AuthVerification,
+    AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthSession, AuthTwoFactor,
+    AuthUser, AuthVerification,
 };
 use crate::types::{
     Account, CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
-    CreateUser, CreateVerification, Invitation, InvitationStatus, Member, Organization, Session,
-    UpdateOrganization, UpdateUser, User, Verification,
+    CreateTwoFactor, CreateUser, CreateVerification, Invitation, InvitationStatus, Member,
+    Organization, Session, TwoFactor, UpdateAccount, UpdateOrganization, UpdateUser, User,
+    Verification,
 };
 
 /// Construction and mutation for user entities stored in memory.
@@ -27,9 +28,10 @@ pub trait MemorySession: AuthSession {
     fn set_updated_at(&mut self, at: DateTime<Utc>);
 }
 
-/// Construction for account entities stored in memory.
+/// Construction and mutation for account entities stored in memory.
 pub trait MemoryAccount: AuthAccount {
     fn from_create(id: String, create: &CreateAccount, now: DateTime<Utc>) -> Self;
+    fn apply_update(&mut self, update: &UpdateAccount);
 }
 
 /// Construction for verification entities stored in memory.
@@ -53,6 +55,12 @@ pub trait MemoryMember: AuthMember {
 pub trait MemoryInvitation: AuthInvitation {
     fn from_create(id: String, create: &CreateInvitation, now: DateTime<Utc>) -> Self;
     fn set_status(&mut self, status: InvitationStatus);
+}
+
+/// Construction and mutation for two-factor entities stored in memory.
+pub trait MemoryTwoFactor: AuthTwoFactor {
+    fn from_create(id: String, create: &CreateTwoFactor, now: DateTime<Utc>) -> Self;
+    fn set_backup_codes(&mut self, codes: String);
 }
 
 // -- Default implementations for built-in types --
@@ -167,6 +175,28 @@ impl MemoryAccount for Account {
             updated_at: now,
         }
     }
+
+    fn apply_update(&mut self, update: &UpdateAccount) {
+        if let Some(access_token) = &update.access_token {
+            self.access_token = Some(access_token.clone());
+        }
+        if let Some(refresh_token) = &update.refresh_token {
+            self.refresh_token = Some(refresh_token.clone());
+        }
+        if let Some(id_token) = &update.id_token {
+            self.id_token = Some(id_token.clone());
+        }
+        if let Some(at) = update.access_token_expires_at {
+            self.access_token_expires_at = Some(at);
+        }
+        if let Some(at) = update.refresh_token_expires_at {
+            self.refresh_token_expires_at = Some(at);
+        }
+        if let Some(scope) = &update.scope {
+            self.scope = Some(scope.clone());
+        }
+        self.updated_at = Utc::now();
+    }
 }
 
 impl MemoryVerification for Verification {
@@ -244,5 +274,20 @@ impl MemoryInvitation for Invitation {
 
     fn set_status(&mut self, status: InvitationStatus) {
         self.status = status;
+    }
+}
+
+impl MemoryTwoFactor for TwoFactor {
+    fn from_create(id: String, create: &CreateTwoFactor, _now: DateTime<Utc>) -> Self {
+        TwoFactor {
+            id,
+            secret: create.secret.clone(),
+            backup_codes: create.backup_codes.clone(),
+            user_id: create.user_id.clone(),
+        }
+    }
+
+    fn set_backup_codes(&mut self, codes: String) {
+        self.backup_codes = Some(codes);
     }
 }

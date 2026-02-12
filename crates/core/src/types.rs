@@ -224,6 +224,25 @@ pub struct CreateAccount {
     pub password: Option<String>,
 }
 
+/// Account update data (for refreshing OAuth tokens)
+#[derive(Debug, Clone, Default)]
+pub struct UpdateAccount {
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>,
+    pub id_token: Option<String>,
+    pub access_token_expires_at: Option<DateTime<Utc>>,
+    pub refresh_token_expires_at: Option<DateTime<Utc>>,
+    pub scope: Option<String>,
+}
+
+/// Two-factor authentication creation data
+#[derive(Debug, Clone)]
+pub struct CreateTwoFactor {
+    pub user_id: String,
+    pub secret: String,
+    pub backup_codes: Option<String>,
+}
+
 /// Verification token creation data
 #[derive(Debug, Clone)]
 pub struct CreateVerification {

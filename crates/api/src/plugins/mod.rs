@@ -13,3 +13,4 @@ pub use email_verification::EmailVerificationPlugin;
 pub use organization::{OrganizationConfig, OrganizationPlugin};
 pub use password_management::PasswordManagementPlugin;
 pub use session_management::SessionManagementPlugin;
+pub use two_factor::{TwoFactorConfig, TwoFactorPlugin};

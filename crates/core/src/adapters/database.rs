@@ -1,5 +1,6 @@
 pub use super::traits::{
-    AccountOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, UserOps, VerificationOps,
+    AccountOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, TwoFactorOps, UserOps,
+    VerificationOps,
 };
 
 /// Database adapter trait for persistence.
@@ -11,7 +12,14 @@ pub use super::traits::{
 /// Use the sub-traits directly when you only need a subset of operations
 /// (e.g., a plugin that only accesses users and sessions).
 pub trait DatabaseAdapter:
-    UserOps + SessionOps + AccountOps + VerificationOps + OrganizationOps + MemberOps + InvitationOps
+    UserOps
+    + SessionOps
+    + AccountOps
+    + VerificationOps
+    + OrganizationOps
+    + MemberOps
+    + InvitationOps
+    + TwoFactorOps
 {
 }
 
@@ -23,6 +31,7 @@ impl<T> DatabaseAdapter for T where
         + OrganizationOps
         + MemberOps
         + InvitationOps
+        + TwoFactorOps
 {
 }
 
@@ -33,14 +42,15 @@ pub mod sqlx_adapter {
     use chrono::{DateTime, Utc};
 
     use crate::entity::{
-        AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthSession, AuthUser,
-        AuthVerification,
+        AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthSession, AuthTwoFactor,
+        AuthUser, AuthVerification,
     };
     use crate::error::{AuthError, AuthResult};
     use crate::types::{
         Account, CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
-        CreateUser, CreateVerification, Invitation, InvitationStatus, Member, Organization,
-        Session, UpdateOrganization, UpdateUser, User, Verification,
+        CreateTwoFactor, CreateUser, CreateVerification, Invitation, InvitationStatus, Member,
+        Organization, Session, TwoFactor, UpdateAccount, UpdateOrganization, UpdateUser, User,
+        Verification,
     };
     use sqlx::PgPool;
     use sqlx::postgres::PgRow;
@@ -75,9 +85,10 @@ pub mod sqlx_adapter {
         M = Member,
         I = Invitation,
         V = Verification,
+        TF = TwoFactor,
     > {
         pool: PgPool,
-        _phantom: PhantomData<(U, S, A, O, M, I, V)>,
+        _phantom: PhantomData<(U, S, A, O, M, I, V, TF)>,
     }
 
     /// Constructors for the default (built-in) entity types.
@@ -110,7 +121,7 @@ pub mod sqlx_adapter {
     }
 
     /// Methods available for all type parameterizations.
-    impl<U, S, A, O, M, I, V> SqlxAdapter<U, S, A, O, M, I, V> {
+    impl<U, S, A, O, M, I, V, TF> SqlxAdapter<U, S, A, O, M, I, V, TF> {
         pub fn from_pool(pool: PgPool) -> Self {
             Self {
                 pool,
@@ -165,7 +176,7 @@ pub mod sqlx_adapter {
     // -- UserOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V> UserOps for SqlxAdapter<U, S, A, O, M, I, V>
+    impl<U, S, A, O, M, I, V, TF> UserOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -174,6 +185,7 @@ pub mod sqlx_adapter {
         M: AuthMember + SqlxEntity,
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
+        TF: AuthTwoFactor + SqlxEntity,
     {
         type User = U;
 
@@ -283,7 +295,7 @@ pub mod sqlx_adapter {
     // -- SessionOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V> SessionOps for SqlxAdapter<U, S, A, O, M, I, V>
+    impl<U, S, A, O, M, I, V, TF> SessionOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -292,6 +304,7 @@ pub mod sqlx_adapter {
         M: AuthMember + SqlxEntity,
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
+        TF: AuthTwoFactor + SqlxEntity,
     {
         type Session = S;
 
@@ -396,7 +409,7 @@ pub mod sqlx_adapter {
     // -- AccountOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V> AccountOps for SqlxAdapter<U, S, A, O, M, I, V>
+    impl<U, S, A, O, M, I, V, TF> AccountOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -405,6 +418,7 @@ pub mod sqlx_adapter {
         M: AuthMember + SqlxEntity,
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
+        TF: AuthTwoFactor + SqlxEntity,
     {
         type Account = A;
 
@@ -463,6 +477,42 @@ pub mod sqlx_adapter {
             Ok(accounts)
         }
 
+        async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<A> {
+            let mut query = sqlx::QueryBuilder::new("UPDATE accounts SET updated_at = NOW()");
+
+            if let Some(access_token) = &update.access_token {
+                query.push(", access_token = ");
+                query.push_bind(access_token);
+            }
+            if let Some(refresh_token) = &update.refresh_token {
+                query.push(", refresh_token = ");
+                query.push_bind(refresh_token);
+            }
+            if let Some(id_token) = &update.id_token {
+                query.push(", id_token = ");
+                query.push_bind(id_token);
+            }
+            if let Some(access_token_expires_at) = &update.access_token_expires_at {
+                query.push(", access_token_expires_at = ");
+                query.push_bind(access_token_expires_at);
+            }
+            if let Some(refresh_token_expires_at) = &update.refresh_token_expires_at {
+                query.push(", refresh_token_expires_at = ");
+                query.push_bind(refresh_token_expires_at);
+            }
+            if let Some(scope) = &update.scope {
+                query.push(", scope = ");
+                query.push_bind(scope);
+            }
+
+            query.push(" WHERE id = ");
+            query.push_bind(id);
+            query.push(" RETURNING *");
+
+            let account = query.build_query_as::<A>().fetch_one(&self.pool).await?;
+            Ok(account)
+        }
+
         async fn delete_account(&self, id: &str) -> AuthResult<()> {
             sqlx::query("DELETE FROM accounts WHERE id = $1")
                 .bind(id)
@@ -475,7 +525,7 @@ pub mod sqlx_adapter {
     // -- VerificationOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V> VerificationOps for SqlxAdapter<U, S, A, O, M, I, V>
+    impl<U, S, A, O, M, I, V, TF> VerificationOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -484,6 +534,7 @@ pub mod sqlx_adapter {
         M: AuthMember + SqlxEntity,
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
+        TF: AuthTwoFactor + SqlxEntity,
     {
         type Verification = V;
 
@@ -534,6 +585,16 @@ pub mod sqlx_adapter {
             Ok(verification)
         }
 
+        async fn get_verification_by_identifier(&self, identifier: &str) -> AuthResult<Option<V>> {
+            let verification = sqlx::query_as::<_, V>(
+                "SELECT * FROM verifications WHERE identifier = $1 AND expires_at > NOW()",
+            )
+            .bind(identifier)
+            .fetch_optional(&self.pool)
+            .await?;
+            Ok(verification)
+        }
+
         async fn delete_verification(&self, id: &str) -> AuthResult<()> {
             sqlx::query("DELETE FROM verifications WHERE id = $1")
                 .bind(id)
@@ -553,7 +614,7 @@ pub mod sqlx_adapter {
     // -- OrganizationOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V> OrganizationOps for SqlxAdapter<U, S, A, O, M, I, V>
+    impl<U, S, A, O, M, I, V, TF> OrganizationOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -562,6 +623,7 @@ pub mod sqlx_adapter {
         M: AuthMember + SqlxEntity,
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
+        TF: AuthTwoFactor + SqlxEntity,
     {
         type Organization = O;
 
@@ -663,7 +725,7 @@ pub mod sqlx_adapter {
     // -- MemberOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V> MemberOps for SqlxAdapter<U, S, A, O, M, I, V>
+    impl<U, S, A, O, M, I, V, TF> MemberOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -672,6 +734,7 @@ pub mod sqlx_adapter {
         M: AuthMember + SqlxEntity,
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
+        TF: AuthTwoFactor + SqlxEntity,
     {
         type Member = M;
 
@@ -767,7 +830,7 @@ pub mod sqlx_adapter {
     // -- InvitationOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V> InvitationOps for SqlxAdapter<U, S, A, O, M, I, V>
+    impl<U, S, A, O, M, I, V, TF> InvitationOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -776,6 +839,7 @@ pub mod sqlx_adapter {
         M: AuthMember + SqlxEntity,
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
+        TF: AuthTwoFactor + SqlxEntity,
     {
         type Invitation = I;
 
@@ -859,6 +923,77 @@ pub mod sqlx_adapter {
             .fetch_all(&self.pool)
             .await?;
             Ok(invitations)
+        }
+    }
+
+    // -- TwoFactorOps --
+
+    #[async_trait]
+    impl<U, S, A, O, M, I, V, TF> TwoFactorOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
+    where
+        U: AuthUser + SqlxEntity,
+        S: AuthSession + SqlxEntity,
+        A: AuthAccount + SqlxEntity,
+        O: AuthOrganization + SqlxEntity,
+        M: AuthMember + SqlxEntity,
+        I: AuthInvitation + SqlxEntity,
+        V: AuthVerification + SqlxEntity,
+        TF: AuthTwoFactor + SqlxEntity,
+    {
+        type TwoFactor = TF;
+
+        async fn create_two_factor(&self, create: CreateTwoFactor) -> AuthResult<TF> {
+            let id = Uuid::new_v4().to_string();
+            let now = Utc::now();
+
+            let two_factor = sqlx::query_as::<_, TF>(
+                r#"
+                INSERT INTO two_factor (id, secret, backup_codes, user_id, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING *
+                "#,
+            )
+            .bind(&id)
+            .bind(&create.secret)
+            .bind(&create.backup_codes)
+            .bind(&create.user_id)
+            .bind(&now)
+            .bind(&now)
+            .fetch_one(&self.pool)
+            .await?;
+
+            Ok(two_factor)
+        }
+
+        async fn get_two_factor_by_user_id(&self, user_id: &str) -> AuthResult<Option<TF>> {
+            let two_factor = sqlx::query_as::<_, TF>("SELECT * FROM two_factor WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_optional(&self.pool)
+                .await?;
+            Ok(two_factor)
+        }
+
+        async fn update_two_factor_backup_codes(
+            &self,
+            user_id: &str,
+            backup_codes: &str,
+        ) -> AuthResult<TF> {
+            let two_factor = sqlx::query_as::<_, TF>(
+                "UPDATE two_factor SET backup_codes = $1, updated_at = NOW() WHERE user_id = $2 RETURNING *",
+            )
+            .bind(backup_codes)
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+            Ok(two_factor)
+        }
+
+        async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
+            sqlx::query("DELETE FROM two_factor WHERE user_id = $1")
+                .bind(user_id)
+                .execute(&self.pool)
+                .await?;
+            Ok(())
         }
     }
 }

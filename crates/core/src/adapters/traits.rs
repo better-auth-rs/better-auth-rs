@@ -2,13 +2,14 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 use crate::entity::{
-    AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthSession, AuthUser,
-    AuthVerification,
+    AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthSession, AuthTwoFactor,
+    AuthUser, AuthVerification,
 };
 use crate::error::AuthResult;
 use crate::types::{
-    CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession, CreateUser,
-    CreateVerification, InvitationStatus, UpdateOrganization, UpdateUser,
+    CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
+    CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus, UpdateAccount,
+    UpdateOrganization, UpdateUser,
 };
 
 /// User persistence operations.
@@ -56,6 +57,7 @@ pub trait AccountOps: Send + Sync + 'static {
         provider_account_id: &str,
     ) -> AuthResult<Option<Self::Account>>;
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<Self::Account>>;
+    async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<Self::Account>;
     async fn delete_account(&self, id: &str) -> AuthResult<()>;
 }
 
@@ -77,6 +79,13 @@ pub trait VerificationOps: Send + Sync + 'static {
         &self,
         value: &str,
     ) -> AuthResult<Option<Self::Verification>>;
+    async fn get_verification_by_identifier(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<Self::Verification>> {
+        let _ = identifier;
+        Ok(None)
+    }
     async fn delete_verification(&self, id: &str) -> AuthResult<()>;
     async fn delete_expired_verifications(&self) -> AuthResult<usize>;
 }
@@ -143,4 +152,20 @@ pub trait InvitationOps: Send + Sync + 'static {
         organization_id: &str,
     ) -> AuthResult<Vec<Self::Invitation>>;
     async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Self::Invitation>>;
+}
+
+/// Two-factor authentication persistence operations.
+#[async_trait]
+pub trait TwoFactorOps: Send + Sync + 'static {
+    type TwoFactor: AuthTwoFactor;
+
+    async fn create_two_factor(&self, two_factor: CreateTwoFactor) -> AuthResult<Self::TwoFactor>;
+    async fn get_two_factor_by_user_id(&self, user_id: &str)
+    -> AuthResult<Option<Self::TwoFactor>>;
+    async fn update_two_factor_backup_codes(
+        &self,
+        user_id: &str,
+        backup_codes: &str,
+    ) -> AuthResult<Self::TwoFactor>;
+    async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()>;
 }

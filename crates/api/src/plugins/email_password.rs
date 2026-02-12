@@ -8,7 +8,7 @@ use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, CreateUser, HttpMethod};
+use better_auth_core::{AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod};
 
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
@@ -193,6 +193,25 @@ impl EmailPasswordPlugin {
 
         self.verify_password(&signin_req.password, stored_hash)?;
 
+        // Check if 2FA is enabled
+        if user.two_factor_enabled() {
+            let pending_token = format!("2fa_{}", uuid::Uuid::new_v4());
+            ctx.database
+                .create_verification(CreateVerification {
+                    identifier: format!("2fa_pending:{}", pending_token),
+                    value: user.id().to_string(),
+                    expires_at: chrono::Utc::now() + chrono::Duration::minutes(5),
+                })
+                .await?;
+            return Ok(AuthResponse::json(
+                200,
+                &serde_json::json!({
+                    "twoFactorRedirect": true,
+                    "token": pending_token,
+                }),
+            )?);
+        }
+
         // Create session
         let session_manager =
             better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
@@ -236,6 +255,25 @@ impl EmailPasswordPlugin {
             .ok_or(AuthError::InvalidCredentials)?;
 
         self.verify_password(&signin_req.password, stored_hash)?;
+
+        // Check if 2FA is enabled
+        if user.two_factor_enabled() {
+            let pending_token = format!("2fa_{}", uuid::Uuid::new_v4());
+            ctx.database
+                .create_verification(CreateVerification {
+                    identifier: format!("2fa_pending:{}", pending_token),
+                    value: user.id().to_string(),
+                    expires_at: chrono::Utc::now() + chrono::Duration::minutes(5),
+                })
+                .await?;
+            return Ok(AuthResponse::json(
+                200,
+                &serde_json::json!({
+                    "twoFactorRedirect": true,
+                    "token": pending_token,
+                }),
+            )?);
+        }
 
         // Create session
         let session_manager =

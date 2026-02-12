@@ -68,6 +68,11 @@ argon2 = "0.5"
 rand = "0.8"
 base64 = "0.22"
 jsonwebtoken = "9"
+sha2 = "0.10"
+totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
 
 # Web frameworks
 axum = "0.8"

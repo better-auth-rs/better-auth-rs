@@ -7,17 +7,19 @@ use uuid::Uuid;
 use crate::error::{AuthError, AuthResult};
 use crate::types::{
     Account, CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
-    CreateUser, CreateVerification, Invitation, InvitationStatus, Member, Organization, Session,
-    UpdateOrganization, UpdateUser, User, Verification,
+    CreateTwoFactor, CreateUser, CreateVerification, Invitation, InvitationStatus, Member,
+    Organization, Session, TwoFactor, UpdateAccount, UpdateOrganization, UpdateUser, User,
+    Verification,
 };
 
 pub use super::memory_traits::{
-    MemoryAccount, MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession, MemoryUser,
-    MemoryVerification,
+    MemoryAccount, MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession,
+    MemoryTwoFactor, MemoryUser, MemoryVerification,
 };
 
 use super::traits::{
-    AccountOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, UserOps, VerificationOps,
+    AccountOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, TwoFactorOps, UserOps,
+    VerificationOps,
 };
 
 /// In-memory database adapter for testing and development.
@@ -53,6 +55,7 @@ pub struct MemoryDatabaseAdapter<
     members: Arc<Mutex<HashMap<String, M>>>,
     invitations: Arc<Mutex<HashMap<String, I>>>,
     slug_index: Arc<Mutex<HashMap<String, String>>>,
+    two_factors: Arc<Mutex<HashMap<String, TwoFactor>>>,
 }
 
 /// Constructor for the default (built-in) entity types.
@@ -76,6 +79,7 @@ impl<U, S, A, O, M, I, V> Default for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
             members: Arc::new(Mutex::new(HashMap::new())),
             invitations: Arc::new(Mutex::new(HashMap::new())),
             slug_index: Arc::new(Mutex::new(HashMap::new())),
+            two_factors: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -338,6 +342,15 @@ where
             .collect())
     }
 
+    async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<A> {
+        let mut accounts = self.accounts.lock().unwrap();
+        let account = accounts
+            .get_mut(id)
+            .ok_or_else(|| AuthError::not_found("Account not found"))?;
+        account.apply_update(&update);
+        Ok(account.clone())
+    }
+
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
         let mut accounts = self.accounts.lock().unwrap();
         accounts.remove(id);
@@ -386,6 +399,15 @@ where
         Ok(verifications
             .values()
             .find(|v| v.value() == value && v.expires_at() > now)
+            .cloned())
+    }
+
+    async fn get_verification_by_identifier(&self, identifier: &str) -> AuthResult<Option<V>> {
+        let verifications = self.verifications.lock().unwrap();
+        let now = Utc::now();
+        Ok(verifications
+            .values()
+            .find(|v| v.identifier() == identifier && v.expires_at() > now)
             .cloned())
     }
 
@@ -683,5 +705,67 @@ where
             })
             .cloned()
             .collect())
+    }
+}
+
+// -- TwoFactorOps --
+
+#[async_trait]
+impl<U, S, A, O, M, I, V> TwoFactorOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+where
+    U: MemoryUser,
+    S: MemorySession,
+    A: MemoryAccount,
+    O: MemoryOrganization,
+    M: MemoryMember,
+    I: MemoryInvitation,
+    V: MemoryVerification,
+{
+    type TwoFactor = TwoFactor;
+
+    async fn create_two_factor(&self, create: CreateTwoFactor) -> AuthResult<TwoFactor> {
+        let mut two_factors = self.two_factors.lock().unwrap();
+
+        // Check if user already has 2FA
+        if two_factors.values().any(|tf| tf.user_id == create.user_id) {
+            return Err(AuthError::conflict(
+                "Two-factor authentication already enabled for this user",
+            ));
+        }
+
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now();
+        let two_factor: TwoFactor = MemoryTwoFactor::from_create(id.clone(), &create, now);
+
+        two_factors.insert(id, two_factor.clone());
+        Ok(two_factor)
+    }
+
+    async fn get_two_factor_by_user_id(&self, user_id: &str) -> AuthResult<Option<TwoFactor>> {
+        let two_factors = self.two_factors.lock().unwrap();
+        Ok(two_factors
+            .values()
+            .find(|tf| tf.user_id == user_id)
+            .cloned())
+    }
+
+    async fn update_two_factor_backup_codes(
+        &self,
+        user_id: &str,
+        backup_codes: &str,
+    ) -> AuthResult<TwoFactor> {
+        let mut two_factors = self.two_factors.lock().unwrap();
+        let two_factor = two_factors
+            .values_mut()
+            .find(|tf| tf.user_id == user_id)
+            .ok_or_else(|| AuthError::not_found("Two-factor record not found"))?;
+        two_factor.set_backup_codes(backup_codes.to_string());
+        Ok(two_factor.clone())
+    }
+
+    async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
+        let mut two_factors = self.two_factors.lock().unwrap();
+        two_factors.retain(|_, tf| tf.user_id != user_id);
+        Ok(())
     }
 }

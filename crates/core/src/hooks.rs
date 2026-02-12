@@ -4,12 +4,14 @@ use std::sync::Arc;
 
 use crate::adapters::DatabaseAdapter;
 use crate::adapters::database::{
-    AccountOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, UserOps, VerificationOps,
+    AccountOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, TwoFactorOps, UserOps,
+    VerificationOps,
 };
 use crate::error::AuthResult;
 use crate::types::{
-    CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession, CreateUser,
-    CreateVerification, InvitationStatus, UpdateOrganization, UpdateUser,
+    CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
+    CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus, UpdateAccount,
+    UpdateOrganization, UpdateUser,
 };
 
 /// Database lifecycle hooks for intercepting operations.
@@ -227,6 +229,10 @@ impl<DB: DatabaseAdapter> AccountOps for HookedDatabaseAdapter<DB> {
         self.inner.get_user_accounts(user_id).await
     }
 
+    async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<Self::Account> {
+        self.inner.update_account(id, update).await
+    }
+
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
         self.inner.delete_account(id).await
     }
@@ -256,6 +262,13 @@ impl<DB: DatabaseAdapter> VerificationOps for HookedDatabaseAdapter<DB> {
         value: &str,
     ) -> AuthResult<Option<Self::Verification>> {
         self.inner.get_verification_by_value(value).await
+    }
+
+    async fn get_verification_by_identifier(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<Self::Verification>> {
+        self.inner.get_verification_by_identifier(identifier).await
     }
 
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
@@ -388,6 +401,36 @@ impl<DB: DatabaseAdapter> InvitationOps for HookedDatabaseAdapter<DB> {
 
     async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Self::Invitation>> {
         self.inner.list_user_invitations(email).await
+    }
+}
+
+#[async_trait]
+impl<DB: DatabaseAdapter> TwoFactorOps for HookedDatabaseAdapter<DB> {
+    type TwoFactor = DB::TwoFactor;
+
+    async fn create_two_factor(&self, two_factor: CreateTwoFactor) -> AuthResult<Self::TwoFactor> {
+        self.inner.create_two_factor(two_factor).await
+    }
+
+    async fn get_two_factor_by_user_id(
+        &self,
+        user_id: &str,
+    ) -> AuthResult<Option<Self::TwoFactor>> {
+        self.inner.get_two_factor_by_user_id(user_id).await
+    }
+
+    async fn update_two_factor_backup_codes(
+        &self,
+        user_id: &str,
+        backup_codes: &str,
+    ) -> AuthResult<Self::TwoFactor> {
+        self.inner
+            .update_two_factor_backup_codes(user_id, backup_codes)
+            .await
+    }
+
+    async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
+        self.inner.delete_two_factor(user_id).await
     }
 }
 
