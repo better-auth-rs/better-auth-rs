@@ -243,6 +243,81 @@ pub struct CreateTwoFactor {
     pub backup_codes: Option<String>,
 }
 
+/// API key - matches OpenAPI schema
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiKey {
+    pub id: String,
+    pub name: Option<String>,
+    pub start: Option<String>,
+    pub prefix: Option<String>,
+    /// SHA-256 hash of the key (column name: `key` in SQL)
+    #[serde(rename = "key")]
+    pub key_hash: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
+    #[serde(rename = "refillInterval")]
+    pub refill_interval: Option<i64>,
+    #[serde(rename = "refillAmount")]
+    pub refill_amount: Option<i64>,
+    #[serde(rename = "lastRefillAt")]
+    pub last_refill_at: Option<String>,
+    pub enabled: bool,
+    #[serde(rename = "rateLimitEnabled")]
+    pub rate_limit_enabled: bool,
+    #[serde(rename = "rateLimitTimeWindow")]
+    pub rate_limit_time_window: Option<i64>,
+    #[serde(rename = "rateLimitMax")]
+    pub rate_limit_max: Option<i64>,
+    #[serde(rename = "requestCount")]
+    pub request_count: Option<i64>,
+    pub remaining: Option<i64>,
+    #[serde(rename = "lastRequest")]
+    pub last_request: Option<String>,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+    pub permissions: Option<String>,
+    pub metadata: Option<String>,
+}
+
+/// API key creation data
+#[derive(Debug, Clone)]
+pub struct CreateApiKey {
+    pub user_id: String,
+    pub name: Option<String>,
+    pub prefix: Option<String>,
+    pub key_hash: String,
+    pub start: Option<String>,
+    pub expires_at: Option<String>,
+    pub remaining: Option<i64>,
+    pub rate_limit_enabled: bool,
+    pub rate_limit_time_window: Option<i64>,
+    pub rate_limit_max: Option<i64>,
+    pub refill_interval: Option<i64>,
+    pub refill_amount: Option<i64>,
+    pub permissions: Option<String>,
+    pub metadata: Option<String>,
+    pub enabled: bool,
+}
+
+/// API key update data
+#[derive(Debug, Clone, Default)]
+pub struct UpdateApiKey {
+    pub name: Option<String>,
+    pub enabled: Option<bool>,
+    pub remaining: Option<i64>,
+    pub rate_limit_enabled: Option<bool>,
+    pub rate_limit_time_window: Option<i64>,
+    pub rate_limit_max: Option<i64>,
+    pub refill_interval: Option<i64>,
+    pub refill_amount: Option<i64>,
+    pub permissions: Option<String>,
+    pub metadata: Option<String>,
+}
+
 /// Verification token creation data
 #[derive(Debug, Clone)]
 pub struct CreateVerification {

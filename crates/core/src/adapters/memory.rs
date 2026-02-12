@@ -6,20 +6,20 @@ use uuid::Uuid;
 
 use crate::error::{AuthError, AuthResult};
 use crate::types::{
-    Account, CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
-    CreateTwoFactor, CreateUser, CreateVerification, Invitation, InvitationStatus, Member,
-    Organization, Session, TwoFactor, UpdateAccount, UpdateOrganization, UpdateUser, User,
-    Verification,
+    Account, ApiKey, CreateAccount, CreateApiKey, CreateInvitation, CreateMember,
+    CreateOrganization, CreateSession, CreateTwoFactor, CreateUser, CreateVerification, Invitation,
+    InvitationStatus, Member, Organization, Session, TwoFactor, UpdateAccount, UpdateApiKey,
+    UpdateOrganization, UpdateUser, User, Verification,
 };
 
 pub use super::memory_traits::{
-    MemoryAccount, MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession,
+    MemoryAccount, MemoryApiKey, MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession,
     MemoryTwoFactor, MemoryUser, MemoryVerification,
 };
 
 use super::traits::{
-    AccountOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, TwoFactorOps, UserOps,
-    VerificationOps,
+    AccountOps, ApiKeyOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, TwoFactorOps,
+    UserOps, VerificationOps,
 };
 
 /// In-memory database adapter for testing and development.
@@ -56,6 +56,7 @@ pub struct MemoryDatabaseAdapter<
     invitations: Arc<Mutex<HashMap<String, I>>>,
     slug_index: Arc<Mutex<HashMap<String, String>>>,
     two_factors: Arc<Mutex<HashMap<String, TwoFactor>>>,
+    api_keys: Arc<Mutex<HashMap<String, ApiKey>>>,
 }
 
 /// Constructor for the default (built-in) entity types.
@@ -80,6 +81,7 @@ impl<U, S, A, O, M, I, V> Default for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
             invitations: Arc::new(Mutex::new(HashMap::new())),
             slug_index: Arc::new(Mutex::new(HashMap::new())),
             two_factors: Arc::new(Mutex::new(HashMap::new())),
+            api_keys: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -766,6 +768,73 @@ where
     async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
         let mut two_factors = self.two_factors.lock().unwrap();
         two_factors.retain(|_, tf| tf.user_id != user_id);
+        Ok(())
+    }
+}
+
+// -- ApiKeyOps --
+
+#[async_trait]
+impl<U, S, A, O, M, I, V> ApiKeyOps for MemoryDatabaseAdapter<U, S, A, O, M, I, V>
+where
+    U: MemoryUser,
+    S: MemorySession,
+    A: MemoryAccount,
+    O: MemoryOrganization,
+    M: MemoryMember,
+    I: MemoryInvitation,
+    V: MemoryVerification,
+{
+    type ApiKey = ApiKey;
+
+    async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<ApiKey> {
+        let mut api_keys = self.api_keys.lock().unwrap();
+
+        if api_keys.values().any(|k| k.key_hash == input.key_hash) {
+            return Err(AuthError::conflict("API key already exists"));
+        }
+
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now();
+        let api_key: ApiKey = MemoryApiKey::from_create(id.clone(), &input, now);
+
+        api_keys.insert(id, api_key.clone());
+        Ok(api_key)
+    }
+
+    async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
+        let api_keys = self.api_keys.lock().unwrap();
+        Ok(api_keys.get(id).cloned())
+    }
+
+    async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>> {
+        let api_keys = self.api_keys.lock().unwrap();
+        Ok(api_keys.values().find(|k| k.key_hash == hash).cloned())
+    }
+
+    async fn list_api_keys_by_user(&self, user_id: &str) -> AuthResult<Vec<ApiKey>> {
+        let api_keys = self.api_keys.lock().unwrap();
+        let mut keys: Vec<ApiKey> = api_keys
+            .values()
+            .filter(|k| k.user_id == user_id)
+            .cloned()
+            .collect();
+        keys.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(keys)
+    }
+
+    async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<ApiKey> {
+        let mut api_keys = self.api_keys.lock().unwrap();
+        let api_key = api_keys
+            .get_mut(id)
+            .ok_or_else(|| AuthError::not_found("API key not found"))?;
+        api_key.apply_update(&update);
+        Ok(api_key.clone())
+    }
+
+    async fn delete_api_key(&self, id: &str) -> AuthResult<()> {
+        let mut api_keys = self.api_keys.lock().unwrap();
+        api_keys.remove(id);
         Ok(())
     }
 }

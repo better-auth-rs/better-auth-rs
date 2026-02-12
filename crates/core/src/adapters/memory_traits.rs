@@ -1,14 +1,14 @@
 use chrono::{DateTime, Utc};
 
 use crate::entity::{
-    AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthSession, AuthTwoFactor,
-    AuthUser, AuthVerification,
+    AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthSession,
+    AuthTwoFactor, AuthUser, AuthVerification,
 };
 use crate::types::{
-    Account, CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
-    CreateTwoFactor, CreateUser, CreateVerification, Invitation, InvitationStatus, Member,
-    Organization, Session, TwoFactor, UpdateAccount, UpdateOrganization, UpdateUser, User,
-    Verification,
+    Account, ApiKey, CreateAccount, CreateApiKey, CreateInvitation, CreateMember,
+    CreateOrganization, CreateSession, CreateTwoFactor, CreateUser, CreateVerification, Invitation,
+    InvitationStatus, Member, Organization, Session, TwoFactor, UpdateAccount, UpdateApiKey,
+    UpdateOrganization, UpdateUser, User, Verification,
 };
 
 /// Construction and mutation for user entities stored in memory.
@@ -289,5 +289,74 @@ impl MemoryTwoFactor for TwoFactor {
 
     fn set_backup_codes(&mut self, codes: String) {
         self.backup_codes = Some(codes);
+    }
+}
+
+/// Construction and mutation for API key entities stored in memory.
+pub trait MemoryApiKey: AuthApiKey {
+    fn from_create(id: String, input: &CreateApiKey, now: DateTime<Utc>) -> Self;
+    fn apply_update(&mut self, update: &UpdateApiKey);
+}
+
+impl MemoryApiKey for ApiKey {
+    fn from_create(id: String, input: &CreateApiKey, now: DateTime<Utc>) -> Self {
+        let now_str = now.to_rfc3339();
+        ApiKey {
+            id,
+            name: input.name.clone(),
+            start: input.start.clone(),
+            prefix: input.prefix.clone(),
+            key_hash: input.key_hash.clone(),
+            user_id: input.user_id.clone(),
+            refill_interval: input.refill_interval,
+            refill_amount: input.refill_amount,
+            last_refill_at: None,
+            enabled: input.enabled,
+            rate_limit_enabled: input.rate_limit_enabled,
+            rate_limit_time_window: input.rate_limit_time_window,
+            rate_limit_max: input.rate_limit_max,
+            request_count: Some(0),
+            remaining: input.remaining,
+            last_request: None,
+            expires_at: input.expires_at.clone(),
+            created_at: now_str.clone(),
+            updated_at: now_str,
+            permissions: input.permissions.clone(),
+            metadata: input.metadata.clone(),
+        }
+    }
+
+    fn apply_update(&mut self, update: &UpdateApiKey) {
+        if let Some(name) = &update.name {
+            self.name = Some(name.clone());
+        }
+        if let Some(enabled) = update.enabled {
+            self.enabled = enabled;
+        }
+        if let Some(remaining) = update.remaining {
+            self.remaining = Some(remaining);
+        }
+        if let Some(rate_limit_enabled) = update.rate_limit_enabled {
+            self.rate_limit_enabled = rate_limit_enabled;
+        }
+        if let Some(rate_limit_time_window) = update.rate_limit_time_window {
+            self.rate_limit_time_window = Some(rate_limit_time_window);
+        }
+        if let Some(rate_limit_max) = update.rate_limit_max {
+            self.rate_limit_max = Some(rate_limit_max);
+        }
+        if let Some(refill_interval) = update.refill_interval {
+            self.refill_interval = Some(refill_interval);
+        }
+        if let Some(refill_amount) = update.refill_amount {
+            self.refill_amount = Some(refill_amount);
+        }
+        if let Some(permissions) = &update.permissions {
+            self.permissions = Some(permissions.clone());
+        }
+        if let Some(metadata) = &update.metadata {
+            self.metadata = Some(metadata.clone());
+        }
+        self.updated_at = Utc::now().to_rfc3339();
     }
 }

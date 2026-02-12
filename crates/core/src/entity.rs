@@ -127,6 +127,31 @@ pub trait AuthTwoFactor: Clone + Send + Sync + Serialize + std::fmt::Debug + 'st
     fn user_id(&self) -> &str;
 }
 
+/// Trait representing an API key entity.
+pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    fn id(&self) -> &str;
+    fn name(&self) -> Option<&str>;
+    fn start(&self) -> Option<&str>;
+    fn prefix(&self) -> Option<&str>;
+    fn key_hash(&self) -> &str;
+    fn user_id(&self) -> &str;
+    fn refill_interval(&self) -> Option<i64>;
+    fn refill_amount(&self) -> Option<i64>;
+    fn last_refill_at(&self) -> Option<&str>;
+    fn enabled(&self) -> bool;
+    fn rate_limit_enabled(&self) -> bool;
+    fn rate_limit_time_window(&self) -> Option<i64>;
+    fn rate_limit_max(&self) -> Option<i64>;
+    fn request_count(&self) -> Option<i64>;
+    fn remaining(&self) -> Option<i64>;
+    fn last_request(&self) -> Option<&str>;
+    fn expires_at(&self) -> Option<&str>;
+    fn created_at(&self) -> &str;
+    fn updated_at(&self) -> &str;
+    fn permissions(&self) -> Option<&str>;
+    fn metadata(&self) -> Option<&str>;
+}
+
 /// Trait representing a passkey entity.
 pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
     fn id(&self) -> &str;

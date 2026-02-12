@@ -7,7 +7,7 @@
 
 use crate::adapters::{MemoryDatabaseAdapter, VerificationOps};
 use crate::plugins::{
-    AccountManagementPlugin, EmailPasswordPlugin, EmailVerificationPlugin,
+    AccountManagementPlugin, ApiKeyPlugin, EmailPasswordPlugin, EmailVerificationPlugin,
     PasswordManagementPlugin, SessionManagementPlugin,
 };
 use crate::{AuthBuilder, AuthConfig, AuthRequest, BetterAuth, CreateVerification, HttpMethod};
@@ -30,6 +30,7 @@ async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
         .plugin(PasswordManagementPlugin::new().require_current_password(true))
         .plugin(AccountManagementPlugin::new())
         .plugin(EmailVerificationPlugin::new())
+        .plugin(ApiKeyPlugin::new())
         .build()
         .await
         .expect("Failed to create test auth instance")
@@ -540,6 +541,222 @@ async fn test_list_accounts_response_shape() {
             );
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// API Key response shape tests
+// ---------------------------------------------------------------------------
+
+/// Spec: POST /api-key/create => { key: string, id: string, userId: string, ... }
+#[tokio::test]
+async fn test_api_key_create_response_shape() {
+    let auth = create_test_auth().await;
+    let (token, _) = signup_user(&auth, "ak_create@example.com", "password123", "AK User").await;
+
+    let req = post_json_with_auth(
+        "/api-key/create",
+        serde_json::json!({
+            "name": "shape-test-key",
+            "prefix": "sk_"
+        }),
+        &token,
+    );
+    let resp = auth
+        .handle_request(req)
+        .await
+        .expect("api-key/create request failed");
+    assert_eq!(resp.status, 200);
+
+    let json: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+
+    // Must have raw key (only returned on creation)
+    assert!(
+        json["key"].is_string(),
+        "key must be a string, got: {:?}",
+        json["key"]
+    );
+    assert!(
+        json["key"].as_str().unwrap().starts_with("sk_"),
+        "key should start with prefix"
+    );
+
+    // Must have standard fields
+    assert!(json["id"].is_string(), "id must be a string");
+    assert!(
+        json["userId"].is_string(),
+        "userId must be a string, got: {:?}",
+        json["userId"]
+    );
+    assert_eq!(json["name"], "shape-test-key");
+    assert!(json["enabled"].is_boolean(), "enabled must be a boolean");
+    assert!(
+        json["rateLimitEnabled"].is_boolean(),
+        "rateLimitEnabled must be a boolean"
+    );
+    assert!(json["createdAt"].is_string(), "createdAt must be a string");
+    assert!(json["updatedAt"].is_string(), "updatedAt must be a string");
+
+    // Must NOT expose the key hash
+    assert!(
+        json.get("keyHash").is_none(),
+        "keyHash must not be in response"
+    );
+    assert!(
+        json.get("key_hash").is_none(),
+        "key_hash must not be in response"
+    );
+}
+
+/// Spec: GET /api-key/get => { id, name, userId, enabled, ... }
+#[tokio::test]
+async fn test_api_key_get_response_shape() {
+    let auth = create_test_auth().await;
+    let (token, _) = signup_user(&auth, "ak_get@example.com", "password123", "AK Get User").await;
+
+    // Create a key first
+    let create_req = post_json_with_auth(
+        "/api-key/create",
+        serde_json::json!({"name": "get-shape-key"}),
+        &token,
+    );
+    let create_resp = auth.handle_request(create_req).await.unwrap();
+    let create_json: serde_json::Value = serde_json::from_slice(&create_resp.body).unwrap();
+    let key_id = create_json["id"].as_str().unwrap();
+
+    // Get the key
+    let mut req = AuthRequest::new(HttpMethod::Get, "/api-key/get");
+    req.headers
+        .insert("authorization".to_string(), format!("Bearer {}", token));
+    req.headers
+        .insert("origin".to_string(), "http://localhost:3000".to_string());
+    req.query.insert("id".to_string(), key_id.to_string());
+
+    let resp = auth.handle_request(req).await.expect("api-key/get failed");
+    assert_eq!(resp.status, 200);
+
+    let json: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+
+    assert!(json["id"].is_string(), "id must be a string");
+    assert_eq!(json["name"], "get-shape-key");
+    assert!(json["userId"].is_string(), "userId must be a string");
+    assert!(json["enabled"].is_boolean(), "enabled must be a boolean");
+    assert!(json["createdAt"].is_string(), "createdAt must be a string");
+    assert!(json["updatedAt"].is_string(), "updatedAt must be a string");
+
+    // Raw key should NOT be returned on get
+    assert!(
+        json.get("key").is_none(),
+        "key must not be returned on get endpoint"
+    );
+}
+
+/// Spec: GET /api-key/list => array of ApiKeyView objects
+#[tokio::test]
+async fn test_api_key_list_response_shape() {
+    let auth = create_test_auth().await;
+    let (token, _) = signup_user(&auth, "ak_list@example.com", "password123", "AK List User").await;
+
+    // Create two keys
+    for name in &["list-key-1", "list-key-2"] {
+        let req = post_json_with_auth("/api-key/create", serde_json::json!({"name": name}), &token);
+        auth.handle_request(req).await.unwrap();
+    }
+
+    let req = get_with_auth("/api-key/list", &token);
+    let resp = auth.handle_request(req).await.expect("api-key/list failed");
+    assert_eq!(resp.status, 200);
+
+    let json: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    assert!(json.is_array(), "list response must be an array");
+
+    let arr = json.as_array().unwrap();
+    assert_eq!(arr.len(), 2, "should have 2 keys");
+
+    for item in arr {
+        assert!(item["id"].is_string(), "item.id must be a string");
+        assert!(item["userId"].is_string(), "item.userId must be a string");
+        assert!(
+            item["enabled"].is_boolean(),
+            "item.enabled must be a boolean"
+        );
+        // Raw key must NOT appear in list
+        assert!(
+            item.get("key").is_none(),
+            "key must not appear in list items"
+        );
+    }
+}
+
+/// Spec: POST /api-key/update => { id, name, enabled, ... }
+#[tokio::test]
+async fn test_api_key_update_response_shape() {
+    let auth = create_test_auth().await;
+    let (token, _) = signup_user(&auth, "ak_upd@example.com", "password123", "AK Upd User").await;
+
+    // Create
+    let create_req = post_json_with_auth(
+        "/api-key/create",
+        serde_json::json!({"name": "original"}),
+        &token,
+    );
+    let create_resp = auth.handle_request(create_req).await.unwrap();
+    let create_json: serde_json::Value = serde_json::from_slice(&create_resp.body).unwrap();
+    let key_id = create_json["id"].as_str().unwrap();
+
+    // Update
+    let req = post_json_with_auth(
+        "/api-key/update",
+        serde_json::json!({
+            "id": key_id,
+            "name": "updated",
+            "enabled": false
+        }),
+        &token,
+    );
+    let resp = auth
+        .handle_request(req)
+        .await
+        .expect("api-key/update failed");
+    assert_eq!(resp.status, 200);
+
+    let json: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    assert_eq!(json["id"], key_id);
+    assert_eq!(json["name"], "updated");
+    assert_eq!(json["enabled"], false);
+    assert!(json["updatedAt"].is_string(), "updatedAt must be a string");
+}
+
+/// Spec: POST /api-key/delete => { status: true }
+#[tokio::test]
+async fn test_api_key_delete_response_shape() {
+    let auth = create_test_auth().await;
+    let (token, _) = signup_user(&auth, "ak_del@example.com", "password123", "AK Del User").await;
+
+    // Create
+    let create_req = post_json_with_auth(
+        "/api-key/create",
+        serde_json::json!({"name": "to-delete"}),
+        &token,
+    );
+    let create_resp = auth.handle_request(create_req).await.unwrap();
+    let create_json: serde_json::Value = serde_json::from_slice(&create_resp.body).unwrap();
+    let key_id = create_json["id"].as_str().unwrap();
+
+    // Delete
+    let req = post_json_with_auth("/api-key/delete", serde_json::json!({"id": key_id}), &token);
+    let resp = auth
+        .handle_request(req)
+        .await
+        .expect("api-key/delete failed");
+    assert_eq!(resp.status, 200);
+
+    let json: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    assert!(
+        json["status"].is_boolean(),
+        "status must be a boolean, got: {:?}",
+        json
+    );
+    assert_eq!(json["status"], true);
 }
 
 /// Spec: POST /unlink-account => { status: bool }

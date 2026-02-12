@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
 
 use crate::entity::{
-    AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey, AuthSession,
-    AuthTwoFactor, AuthUser, AuthVerification,
+    AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,
+    AuthSession, AuthTwoFactor, AuthUser, AuthVerification,
 };
 
-use super::types::{Account, Passkey, Session, TwoFactor, User, Verification};
+use super::types::{Account, ApiKey, Passkey, Session, TwoFactor, User, Verification};
 use super::types_org::{Invitation, InvitationStatus, Member, Organization};
 
 impl AuthUser for User {
@@ -239,6 +239,72 @@ impl AuthTwoFactor for TwoFactor {
     }
 }
 
+impl AuthApiKey for ApiKey {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+    fn start(&self) -> Option<&str> {
+        self.start.as_deref()
+    }
+    fn prefix(&self) -> Option<&str> {
+        self.prefix.as_deref()
+    }
+    fn key_hash(&self) -> &str {
+        &self.key_hash
+    }
+    fn user_id(&self) -> &str {
+        &self.user_id
+    }
+    fn refill_interval(&self) -> Option<i64> {
+        self.refill_interval
+    }
+    fn refill_amount(&self) -> Option<i64> {
+        self.refill_amount
+    }
+    fn last_refill_at(&self) -> Option<&str> {
+        self.last_refill_at.as_deref()
+    }
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+    fn rate_limit_enabled(&self) -> bool {
+        self.rate_limit_enabled
+    }
+    fn rate_limit_time_window(&self) -> Option<i64> {
+        self.rate_limit_time_window
+    }
+    fn rate_limit_max(&self) -> Option<i64> {
+        self.rate_limit_max
+    }
+    fn request_count(&self) -> Option<i64> {
+        self.request_count
+    }
+    fn remaining(&self) -> Option<i64> {
+        self.remaining
+    }
+    fn last_request(&self) -> Option<&str> {
+        self.last_request.as_deref()
+    }
+    fn expires_at(&self) -> Option<&str> {
+        self.expires_at.as_deref()
+    }
+    fn created_at(&self) -> &str {
+        &self.created_at
+    }
+    fn updated_at(&self) -> &str {
+        &self.updated_at
+    }
+    fn permissions(&self) -> Option<&str> {
+        self.permissions.as_deref()
+    }
+    fn metadata(&self) -> Option<&str> {
+        self.metadata.as_deref()
+    }
+}
+
 impl AuthPasskey for Passkey {
     fn id(&self) -> &str {
         &self.id
@@ -388,6 +454,42 @@ mod postgres_impls {
                 expires_at: row.try_get("expires_at")?,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
+            })
+        }
+    }
+
+    impl FromRow<'_, PgRow> for ApiKey {
+        fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
+            let created_at: chrono::DateTime<chrono::Utc> = row.try_get("created_at")?;
+            let updated_at: chrono::DateTime<chrono::Utc> = row.try_get("updated_at")?;
+            let last_refill_at: Option<chrono::DateTime<chrono::Utc>> =
+                row.try_get("last_refill_at")?;
+            let last_request: Option<chrono::DateTime<chrono::Utc>> =
+                row.try_get("last_request")?;
+            let expires_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("expires_at")?;
+
+            Ok(Self {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                start: row.try_get("start")?,
+                prefix: row.try_get("prefix")?,
+                key_hash: row.try_get("key")?,
+                user_id: row.try_get("user_id")?,
+                refill_interval: row.try_get("refill_interval")?,
+                refill_amount: row.try_get("refill_amount")?,
+                last_refill_at: last_refill_at.map(|dt| dt.to_rfc3339()),
+                enabled: row.try_get("enabled")?,
+                rate_limit_enabled: row.try_get("rate_limit_enabled")?,
+                rate_limit_time_window: row.try_get("rate_limit_time_window")?,
+                rate_limit_max: row.try_get("rate_limit_max")?,
+                request_count: row.try_get("request_count")?,
+                remaining: row.try_get("remaining")?,
+                last_request: last_request.map(|dt| dt.to_rfc3339()),
+                expires_at: expires_at.map(|dt| dt.to_rfc3339()),
+                created_at: created_at.to_rfc3339(),
+                updated_at: updated_at.to_rfc3339(),
+                permissions: row.try_get("permissions")?,
+                metadata: row.try_get("metadata")?,
             })
         }
     }

@@ -1,6 +1,6 @@
 pub use super::traits::{
-    AccountOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, TwoFactorOps, UserOps,
-    VerificationOps,
+    AccountOps, ApiKeyOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, TwoFactorOps,
+    UserOps, VerificationOps,
 };
 
 /// Database adapter trait for persistence.
@@ -20,6 +20,7 @@ pub trait DatabaseAdapter:
     + MemberOps
     + InvitationOps
     + TwoFactorOps
+    + ApiKeyOps
 {
 }
 
@@ -32,6 +33,7 @@ impl<T> DatabaseAdapter for T where
         + MemberOps
         + InvitationOps
         + TwoFactorOps
+        + ApiKeyOps
 {
 }
 
@@ -42,15 +44,15 @@ pub mod sqlx_adapter {
     use chrono::{DateTime, Utc};
 
     use crate::entity::{
-        AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthSession, AuthTwoFactor,
-        AuthUser, AuthVerification,
+        AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthSession,
+        AuthTwoFactor, AuthUser, AuthVerification,
     };
     use crate::error::{AuthError, AuthResult};
     use crate::types::{
-        Account, CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
-        CreateTwoFactor, CreateUser, CreateVerification, Invitation, InvitationStatus, Member,
-        Organization, Session, TwoFactor, UpdateAccount, UpdateOrganization, UpdateUser, User,
-        Verification,
+        Account, ApiKey, CreateAccount, CreateApiKey, CreateInvitation, CreateMember,
+        CreateOrganization, CreateSession, CreateTwoFactor, CreateUser, CreateVerification,
+        Invitation, InvitationStatus, Member, Organization, Session, TwoFactor, UpdateAccount,
+        UpdateApiKey, UpdateOrganization, UpdateUser, User, Verification,
     };
     use sqlx::PgPool;
     use sqlx::postgres::PgRow;
@@ -86,9 +88,10 @@ pub mod sqlx_adapter {
         I = Invitation,
         V = Verification,
         TF = TwoFactor,
+        AK = ApiKey,
     > {
         pool: PgPool,
-        _phantom: PhantomData<(U, S, A, O, M, I, V, TF)>,
+        _phantom: PhantomData<(U, S, A, O, M, I, V, TF, AK)>,
     }
 
     /// Constructors for the default (built-in) entity types.
@@ -121,7 +124,7 @@ pub mod sqlx_adapter {
     }
 
     /// Methods available for all type parameterizations.
-    impl<U, S, A, O, M, I, V, TF> SqlxAdapter<U, S, A, O, M, I, V, TF> {
+    impl<U, S, A, O, M, I, V, TF, AK> SqlxAdapter<U, S, A, O, M, I, V, TF, AK> {
         pub fn from_pool(pool: PgPool) -> Self {
             Self {
                 pool,
@@ -176,7 +179,7 @@ pub mod sqlx_adapter {
     // -- UserOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF> UserOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
+    impl<U, S, A, O, M, I, V, TF, AK> UserOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -186,6 +189,7 @@ pub mod sqlx_adapter {
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
+        AK: AuthApiKey + SqlxEntity,
     {
         type User = U;
 
@@ -295,7 +299,7 @@ pub mod sqlx_adapter {
     // -- SessionOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF> SessionOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
+    impl<U, S, A, O, M, I, V, TF, AK> SessionOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -305,6 +309,7 @@ pub mod sqlx_adapter {
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
+        AK: AuthApiKey + SqlxEntity,
     {
         type Session = S;
 
@@ -409,7 +414,7 @@ pub mod sqlx_adapter {
     // -- AccountOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF> AccountOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
+    impl<U, S, A, O, M, I, V, TF, AK> AccountOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -419,6 +424,7 @@ pub mod sqlx_adapter {
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
+        AK: AuthApiKey + SqlxEntity,
     {
         type Account = A;
 
@@ -525,7 +531,7 @@ pub mod sqlx_adapter {
     // -- VerificationOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF> VerificationOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
+    impl<U, S, A, O, M, I, V, TF, AK> VerificationOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -535,6 +541,7 @@ pub mod sqlx_adapter {
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
+        AK: AuthApiKey + SqlxEntity,
     {
         type Verification = V;
 
@@ -614,7 +621,7 @@ pub mod sqlx_adapter {
     // -- OrganizationOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF> OrganizationOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
+    impl<U, S, A, O, M, I, V, TF, AK> OrganizationOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -624,6 +631,7 @@ pub mod sqlx_adapter {
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
+        AK: AuthApiKey + SqlxEntity,
     {
         type Organization = O;
 
@@ -725,7 +733,7 @@ pub mod sqlx_adapter {
     // -- MemberOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF> MemberOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
+    impl<U, S, A, O, M, I, V, TF, AK> MemberOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -735,6 +743,7 @@ pub mod sqlx_adapter {
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
+        AK: AuthApiKey + SqlxEntity,
     {
         type Member = M;
 
@@ -830,7 +839,7 @@ pub mod sqlx_adapter {
     // -- InvitationOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF> InvitationOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
+    impl<U, S, A, O, M, I, V, TF, AK> InvitationOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -840,6 +849,7 @@ pub mod sqlx_adapter {
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
+        AK: AuthApiKey + SqlxEntity,
     {
         type Invitation = I;
 
@@ -929,7 +939,7 @@ pub mod sqlx_adapter {
     // -- TwoFactorOps --
 
     #[async_trait]
-    impl<U, S, A, O, M, I, V, TF> TwoFactorOps for SqlxAdapter<U, S, A, O, M, I, V, TF>
+    impl<U, S, A, O, M, I, V, TF, AK> TwoFactorOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
     where
         U: AuthUser + SqlxEntity,
         S: AuthSession + SqlxEntity,
@@ -939,6 +949,7 @@ pub mod sqlx_adapter {
         I: AuthInvitation + SqlxEntity,
         V: AuthVerification + SqlxEntity,
         TF: AuthTwoFactor + SqlxEntity,
+        AK: AuthApiKey + SqlxEntity,
     {
         type TwoFactor = TF;
 
@@ -991,6 +1002,155 @@ pub mod sqlx_adapter {
         async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
             sqlx::query("DELETE FROM two_factor WHERE user_id = $1")
                 .bind(user_id)
+                .execute(&self.pool)
+                .await?;
+            Ok(())
+        }
+    }
+
+    // -- ApiKeyOps --
+
+    #[async_trait]
+    impl<U, S, A, O, M, I, V, TF, AK> ApiKeyOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK>
+    where
+        U: AuthUser + SqlxEntity,
+        S: AuthSession + SqlxEntity,
+        A: AuthAccount + SqlxEntity,
+        O: AuthOrganization + SqlxEntity,
+        M: AuthMember + SqlxEntity,
+        I: AuthInvitation + SqlxEntity,
+        V: AuthVerification + SqlxEntity,
+        TF: AuthTwoFactor + SqlxEntity,
+        AK: AuthApiKey + SqlxEntity,
+    {
+        type ApiKey = AK;
+
+        async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<AK> {
+            let id = Uuid::new_v4().to_string();
+            let now = Utc::now();
+
+            let api_key = sqlx::query_as::<_, AK>(
+                r#"
+                INSERT INTO api_keys (id, name, start, prefix, key, user_id, refill_interval, refill_amount,
+                    enabled, rate_limit_enabled, rate_limit_time_window, rate_limit_max, remaining,
+                    expires_at, created_at, updated_at, permissions, metadata)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                    $14::timestamptz, $15, $16, $17, $18)
+                RETURNING *
+                "#,
+            )
+            .bind(&id)
+            .bind(&input.name)
+            .bind(&input.start)
+            .bind(&input.prefix)
+            .bind(&input.key_hash)
+            .bind(&input.user_id)
+            .bind(&input.refill_interval)
+            .bind(&input.refill_amount)
+            .bind(input.enabled)
+            .bind(input.rate_limit_enabled)
+            .bind(&input.rate_limit_time_window)
+            .bind(&input.rate_limit_max)
+            .bind(&input.remaining)
+            .bind(&input.expires_at)
+            .bind(&now)
+            .bind(&now)
+            .bind(&input.permissions)
+            .bind(&input.metadata)
+            .fetch_one(&self.pool)
+            .await?;
+
+            Ok(api_key)
+        }
+
+        async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<AK>> {
+            let api_key = sqlx::query_as::<_, AK>("SELECT * FROM api_keys WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
+            Ok(api_key)
+        }
+
+        async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<AK>> {
+            let api_key = sqlx::query_as::<_, AK>("SELECT * FROM api_keys WHERE key = $1")
+                .bind(hash)
+                .fetch_optional(&self.pool)
+                .await?;
+            Ok(api_key)
+        }
+
+        async fn list_api_keys_by_user(&self, user_id: &str) -> AuthResult<Vec<AK>> {
+            let keys = sqlx::query_as::<_, AK>(
+                "SELECT * FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC",
+            )
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+            Ok(keys)
+        }
+
+        async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<AK> {
+            let mut query = sqlx::QueryBuilder::new("UPDATE api_keys SET updated_at = NOW()");
+
+            if let Some(name) = &update.name {
+                query.push(", name = ");
+                query.push_bind(name);
+            }
+            if let Some(enabled) = update.enabled {
+                query.push(", enabled = ");
+                query.push_bind(enabled);
+            }
+            if let Some(remaining) = update.remaining {
+                query.push(", remaining = ");
+                query.push_bind(remaining);
+            }
+            if let Some(rate_limit_enabled) = update.rate_limit_enabled {
+                query.push(", rate_limit_enabled = ");
+                query.push_bind(rate_limit_enabled);
+            }
+            if let Some(rate_limit_time_window) = update.rate_limit_time_window {
+                query.push(", rate_limit_time_window = ");
+                query.push_bind(rate_limit_time_window);
+            }
+            if let Some(rate_limit_max) = update.rate_limit_max {
+                query.push(", rate_limit_max = ");
+                query.push_bind(rate_limit_max);
+            }
+            if let Some(refill_interval) = update.refill_interval {
+                query.push(", refill_interval = ");
+                query.push_bind(refill_interval);
+            }
+            if let Some(refill_amount) = update.refill_amount {
+                query.push(", refill_amount = ");
+                query.push_bind(refill_amount);
+            }
+            if let Some(permissions) = &update.permissions {
+                query.push(", permissions = ");
+                query.push_bind(permissions);
+            }
+            if let Some(metadata) = &update.metadata {
+                query.push(", metadata = ");
+                query.push_bind(metadata);
+            }
+
+            query.push(" WHERE id = ");
+            query.push_bind(id);
+            query.push(" RETURNING *");
+
+            let api_key = query
+                .build_query_as::<AK>()
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|err| match err {
+                    sqlx::Error::RowNotFound => AuthError::not_found("API key not found"),
+                    other => AuthError::from(other),
+                })?;
+            Ok(api_key)
+        }
+
+        async fn delete_api_key(&self, id: &str) -> AuthResult<()> {
+            sqlx::query("DELETE FROM api_keys WHERE id = $1")
+                .bind(id)
                 .execute(&self.pool)
                 .await?;
             Ok(())

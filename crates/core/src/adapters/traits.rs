@@ -2,13 +2,13 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 use crate::entity::{
-    AuthAccount, AuthInvitation, AuthMember, AuthOrganization, AuthSession, AuthTwoFactor,
-    AuthUser, AuthVerification,
+    AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthSession,
+    AuthTwoFactor, AuthUser, AuthVerification,
 };
 use crate::error::AuthResult;
 use crate::types::{
-    CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
-    CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus, UpdateAccount,
+    CreateAccount, CreateApiKey, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
+    CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus, UpdateAccount, UpdateApiKey,
     UpdateOrganization, UpdateUser,
 };
 
@@ -168,4 +168,17 @@ pub trait TwoFactorOps: Send + Sync + 'static {
         backup_codes: &str,
     ) -> AuthResult<Self::TwoFactor>;
     async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()>;
+}
+
+/// API key persistence operations.
+#[async_trait]
+pub trait ApiKeyOps: Send + Sync + 'static {
+    type ApiKey: AuthApiKey;
+
+    async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<Self::ApiKey>;
+    async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<Self::ApiKey>>;
+    async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<Self::ApiKey>>;
+    async fn list_api_keys_by_user(&self, user_id: &str) -> AuthResult<Vec<Self::ApiKey>>;
+    async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<Self::ApiKey>;
+    async fn delete_api_key(&self, id: &str) -> AuthResult<()>;
 }

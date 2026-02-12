@@ -4,13 +4,13 @@ use std::sync::Arc;
 
 use crate::adapters::DatabaseAdapter;
 use crate::adapters::database::{
-    AccountOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, TwoFactorOps, UserOps,
-    VerificationOps,
+    AccountOps, ApiKeyOps, InvitationOps, MemberOps, OrganizationOps, SessionOps, TwoFactorOps,
+    UserOps, VerificationOps,
 };
 use crate::error::AuthResult;
 use crate::types::{
-    CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
-    CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus, UpdateAccount,
+    CreateAccount, CreateApiKey, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
+    CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus, UpdateAccount, UpdateApiKey,
     UpdateOrganization, UpdateUser,
 };
 
@@ -431,6 +431,35 @@ impl<DB: DatabaseAdapter> TwoFactorOps for HookedDatabaseAdapter<DB> {
 
     async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
         self.inner.delete_two_factor(user_id).await
+    }
+}
+
+#[async_trait]
+impl<DB: DatabaseAdapter> ApiKeyOps for HookedDatabaseAdapter<DB> {
+    type ApiKey = DB::ApiKey;
+
+    async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<Self::ApiKey> {
+        self.inner.create_api_key(input).await
+    }
+
+    async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<Self::ApiKey>> {
+        self.inner.get_api_key_by_id(id).await
+    }
+
+    async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<Self::ApiKey>> {
+        self.inner.get_api_key_by_hash(hash).await
+    }
+
+    async fn list_api_keys_by_user(&self, user_id: &str) -> AuthResult<Vec<Self::ApiKey>> {
+        self.inner.list_api_keys_by_user(user_id).await
+    }
+
+    async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<Self::ApiKey> {
+        self.inner.update_api_key(id, update).await
+    }
+
+    async fn delete_api_key(&self, id: &str) -> AuthResult<()> {
+        self.inner.delete_api_key(id).await
     }
 }
 

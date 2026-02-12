@@ -2,7 +2,8 @@ use better_auth::adapters::{
     AccountOps, MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps,
 };
 use better_auth::plugins::{
-    AccountManagementPlugin, EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
+    AccountManagementPlugin, ApiKeyPlugin, EmailPasswordPlugin, PasswordManagementPlugin,
+    SessionManagementPlugin,
 };
 use better_auth::{AuthConfig, BetterAuth};
 use std::sync::Arc;
@@ -23,6 +24,7 @@ async fn create_test_auth_memory() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new())
             .plugin(AccountManagementPlugin::new())
+            .plugin(ApiKeyPlugin::new())
             .build()
             .await
             .expect("Failed to create test auth instance"),
@@ -1866,6 +1868,542 @@ async fn test_sign_in_username_nonexistent() {
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 401);
+}
+
+// ---------------------------------------------------------------------------
+// API Key Plugin Integration Tests
+// ---------------------------------------------------------------------------
+
+/// Helper: create auth with ApiKeyPlugin and return auth + session token
+async fn create_auth_with_apikey() -> (Arc<BetterAuth<MemoryDatabaseAdapter>>, String, String) {
+    let auth = create_test_auth_memory().await;
+    let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+    (auth, user_id, session_token)
+}
+
+/// Create an API key and return (raw_key, key_id)
+async fn create_api_key(
+    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    token: &str,
+    body: serde_json::Value,
+) -> (String, String) {
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    headers.insert("authorization".to_string(), format!("Bearer {}", token));
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/api-key/create".to_string(),
+        headers,
+        body: Some(body.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+
+    let key = data["key"].as_str().unwrap().to_string();
+    let id = data["id"].as_str().unwrap().to_string();
+    (key, id)
+}
+
+/// Integration test: create API key
+#[tokio::test]
+async fn test_api_key_create() {
+    let (auth, _user_id, token) = create_auth_with_apikey().await;
+
+    let (key, id) = create_api_key(
+        &auth,
+        &token,
+        serde_json::json!({
+            "name": "test-key",
+            "prefix": "sk_"
+        }),
+    )
+    .await;
+
+    assert!(!key.is_empty(), "key should not be empty");
+    assert!(key.starts_with("sk_"), "key should start with prefix");
+    assert!(!id.is_empty(), "id should not be empty");
+}
+
+/// Integration test: create API key with remaining and expiry
+#[tokio::test]
+async fn test_api_key_create_with_options() {
+    let (auth, _user_id, token) = create_auth_with_apikey().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    headers.insert("authorization".to_string(), format!("Bearer {}", token));
+
+    let body = serde_json::json!({
+        "name": "limited-key",
+        "remaining": 100,
+        "expiresIn": 3600000,
+        "rateLimitEnabled": true,
+        "rateLimitMax": 10,
+        "rateLimitTimeWindow": 60000
+    });
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/api-key/create".to_string(),
+        headers,
+        body: Some(body.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+
+    assert!(data["key"].is_string());
+    assert_eq!(data["name"], "limited-key");
+    assert_eq!(data["remaining"], 100);
+    assert_eq!(data["rateLimitEnabled"], true);
+    assert_eq!(data["rateLimitMax"], 10);
+    assert!(data["expiresAt"].is_string());
+}
+
+/// Integration test: get API key by ID
+#[tokio::test]
+async fn test_api_key_get() {
+    let (auth, _user_id, token) = create_auth_with_apikey().await;
+    let (_key, id) = create_api_key(&auth, &token, serde_json::json!({"name": "get-test"})).await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("authorization".to_string(), format!("Bearer {}", token));
+
+    let mut query = HashMap::new();
+    query.insert("id".to_string(), id.clone());
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/api-key/get".to_string(),
+        headers,
+        body: None,
+        query,
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+
+    assert_eq!(data["id"], id);
+    assert_eq!(data["name"], "get-test");
+    assert!(data["enabled"].as_bool().unwrap());
+    // key_hash should NOT be in the response
+    assert!(data.get("keyHash").is_none());
+    assert!(data.get("key_hash").is_none());
+}
+
+/// Integration test: list API keys
+#[tokio::test]
+async fn test_api_key_list() {
+    let (auth, _user_id, token) = create_auth_with_apikey().await;
+
+    // Create two keys
+    create_api_key(&auth, &token, serde_json::json!({"name": "key-1"})).await;
+    create_api_key(&auth, &token, serde_json::json!({"name": "key-2"})).await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("authorization".to_string(), format!("Bearer {}", token));
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/api-key/list".to_string(),
+        headers,
+        body: None,
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let data: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
+
+    assert_eq!(data.len(), 2);
+}
+
+/// Integration test: update API key
+#[tokio::test]
+async fn test_api_key_update() {
+    let (auth, _user_id, token) = create_auth_with_apikey().await;
+    let (_key, id) =
+        create_api_key(&auth, &token, serde_json::json!({"name": "original-name"})).await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    headers.insert("authorization".to_string(), format!("Bearer {}", token));
+
+    let update_body = serde_json::json!({
+        "id": id,
+        "name": "updated-name",
+        "enabled": false,
+        "remaining": 50
+    });
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/api-key/update".to_string(),
+        headers,
+        body: Some(update_body.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+
+    assert_eq!(data["id"], id);
+    assert_eq!(data["name"], "updated-name");
+    assert_eq!(data["enabled"], false);
+    assert_eq!(data["remaining"], 50);
+}
+
+/// Integration test: delete API key
+#[tokio::test]
+async fn test_api_key_delete() {
+    let (auth, _user_id, token) = create_auth_with_apikey().await;
+    let (_key, id) = create_api_key(&auth, &token, serde_json::json!({"name": "delete-me"})).await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    headers.insert("authorization".to_string(), format!("Bearer {}", token));
+
+    let delete_body = serde_json::json!({"id": id});
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/api-key/delete".to_string(),
+        headers,
+        body: Some(delete_body.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    assert_eq!(data["status"], true);
+
+    // Verify it's gone by listing
+    let mut headers2 = HashMap::new();
+    headers2.insert("authorization".to_string(), format!("Bearer {}", token));
+
+    let list_request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/api-key/list".to_string(),
+        headers: headers2,
+        body: None,
+        query: HashMap::new(),
+    };
+
+    let list_response = auth.handle_request(list_request).await.unwrap();
+    let list_body: Vec<serde_json::Value> = serde_json::from_slice(&list_response.body).unwrap();
+    assert_eq!(list_body.len(), 0);
+}
+
+/// Integration test: unauthenticated create → 401
+#[tokio::test]
+async fn test_api_key_create_unauthenticated() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+
+    let body = serde_json::json!({"name": "no-auth"});
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/api-key/create".to_string(),
+        headers,
+        body: Some(body.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 401);
+}
+
+/// Integration test: unauthenticated list → 401
+#[tokio::test]
+async fn test_api_key_list_unauthenticated() {
+    let auth = create_test_auth_memory().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/api-key/list".to_string(),
+        headers: HashMap::new(),
+        body: None,
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 401);
+}
+
+/// Integration test: get key owned by another user → 404
+#[tokio::test]
+async fn test_api_key_get_other_users_key() {
+    let (auth, _user_id, token1) = create_auth_with_apikey().await;
+    let (_key, id) = create_api_key(&auth, &token1, serde_json::json!({"name": "user1-key"})).await;
+
+    // Create a second user
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+
+    let signup_data = serde_json::json!({
+        "email": "user2@test.com",
+        "password": "password123",
+        "name": "Second User"
+    });
+
+    let signup_request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/sign-up/email".to_string(),
+        headers,
+        body: Some(signup_data.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let signup_resp = auth.handle_request(signup_request).await.unwrap();
+    let signup_body: serde_json::Value = serde_json::from_slice(&signup_resp.body).unwrap();
+    let token2 = signup_body["token"].as_str().unwrap();
+
+    // Try to get user1's key with user2's token
+    let mut headers2 = HashMap::new();
+    headers2.insert("authorization".to_string(), format!("Bearer {}", token2));
+
+    let mut query = HashMap::new();
+    query.insert("id".to_string(), id.clone());
+
+    let get_request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/api-key/get".to_string(),
+        headers: headers2,
+        body: None,
+        query,
+    };
+
+    let response = auth.handle_request(get_request).await.unwrap();
+    assert_eq!(response.status, 404);
+}
+
+/// Integration test: delete key owned by another user → 404
+#[tokio::test]
+async fn test_api_key_delete_other_users_key() {
+    let (auth, _user_id, token1) = create_auth_with_apikey().await;
+    let (_key, id) = create_api_key(&auth, &token1, serde_json::json!({"name": "user1-key"})).await;
+
+    // Create a second user
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+
+    let signup_data = serde_json::json!({
+        "email": "user3@test.com",
+        "password": "password123",
+        "name": "Third User"
+    });
+
+    let signup_request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/sign-up/email".to_string(),
+        headers,
+        body: Some(signup_data.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let signup_resp = auth.handle_request(signup_request).await.unwrap();
+    let signup_body: serde_json::Value = serde_json::from_slice(&signup_resp.body).unwrap();
+    let token2 = signup_body["token"].as_str().unwrap();
+
+    // Try to delete user1's key with user2's token
+    let mut headers2 = HashMap::new();
+    headers2.insert("content-type".to_string(), "application/json".to_string());
+    headers2.insert("authorization".to_string(), format!("Bearer {}", token2));
+
+    let delete_body = serde_json::json!({"id": id});
+
+    let delete_request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/api-key/delete".to_string(),
+        headers: headers2,
+        body: Some(delete_body.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(delete_request).await.unwrap();
+    assert_eq!(response.status, 404);
+}
+
+/// Integration test: update key owned by another user → 404
+#[tokio::test]
+async fn test_api_key_update_other_users_key() {
+    let (auth, _user_id, token1) = create_auth_with_apikey().await;
+    let (_key, id) = create_api_key(&auth, &token1, serde_json::json!({"name": "user1-key"})).await;
+
+    // Create a second user
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+
+    let signup_data = serde_json::json!({
+        "email": "user4@test.com",
+        "password": "password123",
+        "name": "Fourth User"
+    });
+
+    let signup_request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/sign-up/email".to_string(),
+        headers,
+        body: Some(signup_data.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let signup_resp = auth.handle_request(signup_request).await.unwrap();
+    let signup_body: serde_json::Value = serde_json::from_slice(&signup_resp.body).unwrap();
+    let token2 = signup_body["token"].as_str().unwrap();
+
+    // Try to update user1's key with user2's token
+    let mut headers2 = HashMap::new();
+    headers2.insert("content-type".to_string(), "application/json".to_string());
+    headers2.insert("authorization".to_string(), format!("Bearer {}", token2));
+
+    let update_body = serde_json::json!({
+        "id": id,
+        "name": "hijacked-name"
+    });
+
+    let update_request = AuthRequest {
+        method: better_auth::types::HttpMethod::Post,
+        path: "/api-key/update".to_string(),
+        headers: headers2,
+        body: Some(update_body.to_string().into_bytes()),
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(update_request).await.unwrap();
+    assert_eq!(response.status, 404);
+}
+
+/// Integration test: list keys for user with no keys → empty array
+#[tokio::test]
+async fn test_api_key_list_empty() {
+    let (auth, _user_id, token) = create_auth_with_apikey().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("authorization".to_string(), format!("Bearer {}", token));
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/api-key/list".to_string(),
+        headers,
+        body: None,
+        query: HashMap::new(),
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let data: Vec<serde_json::Value> = serde_json::from_slice(&response.body).unwrap();
+    assert_eq!(data.len(), 0);
+}
+
+/// Integration test: get key with missing 'id' query param → 400
+#[tokio::test]
+async fn test_api_key_get_missing_id() {
+    let (auth, _user_id, token) = create_auth_with_apikey().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("authorization".to_string(), format!("Bearer {}", token));
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/api-key/get".to_string(),
+        headers,
+        body: None,
+        query: HashMap::new(), // no 'id' param
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 400);
+}
+
+/// Integration test: get nonexistent key → 404
+#[tokio::test]
+async fn test_api_key_get_nonexistent() {
+    let (auth, _user_id, token) = create_auth_with_apikey().await;
+
+    use better_auth::types::AuthRequest;
+    use std::collections::HashMap;
+
+    let mut headers = HashMap::new();
+    headers.insert("authorization".to_string(), format!("Bearer {}", token));
+
+    let mut query = HashMap::new();
+    query.insert("id".to_string(), "nonexistent-id".to_string());
+
+    let request = AuthRequest {
+        method: better_auth::types::HttpMethod::Get,
+        path: "/api-key/get".to_string(),
+        headers,
+        body: None,
+        query,
+    };
+
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 404);
 }
 
 /// get_user_by_username works via database adapter

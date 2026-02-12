@@ -1,4 +1,5 @@
 pub mod account_management;
+pub mod api_key;
 pub mod email_password;
 pub mod email_verification;
 pub mod oauth;
@@ -8,6 +9,7 @@ pub mod session_management;
 pub mod two_factor;
 
 pub use account_management::AccountManagementPlugin;
+pub use api_key::{ApiKeyConfig, ApiKeyPlugin};
 pub use email_password::EmailPasswordPlugin;
 pub use email_verification::EmailVerificationPlugin;
 pub use organization::{OrganizationConfig, OrganizationPlugin};
