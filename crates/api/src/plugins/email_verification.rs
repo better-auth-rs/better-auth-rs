@@ -35,7 +35,6 @@ struct SendVerificationEmailRequest {
 #[derive(Debug, Serialize)]
 struct StatusResponse {
     status: bool,
-    description: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -183,10 +182,7 @@ impl EmailVerificationPlugin {
         )
         .await?;
 
-        let response = StatusResponse {
-            status: true,
-            description: Some("Verification email sent successfully".to_string()),
-        };
+        let response = StatusResponse { status: true };
         Ok(AuthResponse::json(200, &response)?)
     }
 

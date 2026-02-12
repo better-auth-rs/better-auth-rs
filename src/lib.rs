@@ -89,6 +89,10 @@ pub use core::{AuthBuilder, BetterAuth, TypedAuthBuilder};
 pub use handlers::axum::AxumIntegration;
 
 #[cfg(test)]
+#[path = "tests/response_shape_tests.rs"]
+mod response_shape_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;

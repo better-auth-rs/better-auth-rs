@@ -5,7 +5,7 @@ use serde::Deserialize;
 use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
     DatabaseAdapter, DatabaseHooks, DeleteUserResponse, EmailProvider, HttpMethod, OpenApiBuilder,
-    OpenApiSpec, SessionManager, UpdateUser, UpdateUserRequest, UpdateUserResponse,
+    OpenApiSpec, SessionManager, UpdateUser, UpdateUserRequest,
     entity::{AuthAccount, AuthSession, AuthUser, AuthVerification},
     middleware::{
         self, BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig,
@@ -376,14 +376,14 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
             metadata: update_req.metadata,
         };
 
-        let updated_user = self
-            .database
+        self.database
             .update_user(current_user.id(), update_user)
             .await?;
 
-        let response = UpdateUserResponse { user: updated_user };
-
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(AuthResponse::json(
+            200,
+            &serde_json::json!({ "status": true }),
+        )?)
     }
 
     /// Handle user deletion.
@@ -439,14 +439,14 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
             metadata: None,
         };
 
-        let updated_user = self
-            .database
+        self.database
             .update_user(current_user.id(), update_user)
             .await?;
 
-        let response = UpdateUserResponse { user: updated_user };
-
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(AuthResponse::json(
+            200,
+            &serde_json::json!({ "status": true, "message": "Email updated" }),
+        )?)
     }
 
     /// Handle delete-user callback (token-based deletion confirmation).

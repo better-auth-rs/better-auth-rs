@@ -844,10 +844,7 @@ async fn test_axum_update_user() {
         .unwrap();
     let response_data: Value = serde_json::from_slice(&body_bytes).unwrap();
 
-    assert_eq!(response_data["user"]["name"], "Updated Test User");
-    assert_eq!(response_data["user"]["email"], "updated@example.com");
-    assert_eq!(response_data["user"]["username"], "updateduser");
-    assert_eq!(response_data["user"]["displayUsername"], "Updated User");
+    assert_eq!(response_data["status"], true);
 }
 
 /// Test unauthorized user profile update
@@ -1016,13 +1013,8 @@ async fn test_axum_user_profile_workflow() {
         .unwrap();
     let response_data: Value = serde_json::from_slice(&body_bytes).unwrap();
 
-    // Should have both updates
-    assert_eq!(response_data["user"]["name"], "Second Update");
-    assert_eq!(response_data["user"]["username"], "firstupdate"); // Should persist from first update
-    assert_eq!(
-        response_data["user"]["image"],
-        "https://example.com/avatar.jpg"
-    );
+    // Response should be { status: true }
+    assert_eq!(response_data["status"], true);
 
     // 4. Get current session to verify user data is updated
     let session_request = Request::builder()

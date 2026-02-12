@@ -901,8 +901,8 @@ async fn test_change_email_success() {
 
     let body_str = String::from_utf8(response.body).unwrap();
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(data["user"]["email"], "newemail@test.com");
-    assert_eq!(data["user"]["emailVerified"], false);
+    assert_eq!(data["status"], true);
+    assert_eq!(data["message"], "Email updated");
 }
 
 /// Integration test for change-email duplicate → 409
@@ -1114,7 +1114,11 @@ async fn test_list_accounts_with_account() {
     let body_str = String::from_utf8(response.body).unwrap();
     let accounts: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
     assert_eq!(accounts.len(), 1);
-    assert_eq!(accounts[0]["providerId"], "google");
+    assert_eq!(accounts[0]["provider"], "google");
+    assert_eq!(
+        accounts[0]["scopes"],
+        serde_json::json!(["email", "profile"])
+    );
     // Sensitive fields should NOT be present
     assert!(accounts[0].get("access_token").is_none());
     assert!(accounts[0].get("password").is_none());

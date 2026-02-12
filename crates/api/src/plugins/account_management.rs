@@ -30,15 +30,12 @@ struct AccountResponse {
     id: String,
     #[serde(rename = "accountId")]
     account_id: String,
-    #[serde(rename = "providerId")]
-    provider_id: String,
-    #[serde(rename = "userId")]
-    user_id: String,
+    provider: String,
     #[serde(rename = "createdAt")]
     created_at: String,
     #[serde(rename = "updatedAt")]
     updated_at: String,
-    scope: Option<String>,
+    scopes: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -140,11 +137,18 @@ impl AccountManagementPlugin {
             .map(|acc| AccountResponse {
                 id: acc.id().to_string(),
                 account_id: acc.account_id().to_string(),
-                provider_id: acc.provider_id().to_string(),
-                user_id: acc.user_id().to_string(),
+                provider: acc.provider_id().to_string(),
                 created_at: acc.created_at().to_rfc3339(),
                 updated_at: acc.updated_at().to_rfc3339(),
-                scope: acc.scope().map(|s| s.to_string()),
+                scopes: acc
+                    .scope()
+                    .map(|s| {
+                        s.split([' ', ','])
+                            .filter(|s| !s.is_empty())
+                            .map(|s| s.to_string())
+                            .collect()
+                    })
+                    .unwrap_or_default(),
             })
             .collect();
 
