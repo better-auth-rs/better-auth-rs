@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [0.6.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.5.0...v0.6.0) - 2026-02-12
+
+### Features
+
+- add API Key management plugin with full CRUD endpoints
+
 ## [0.5.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.4.0...v0.5.0) - 2026-02-12
 
 ### Bug Fixes
