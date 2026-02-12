@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [0.5.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.4.0...v0.5.0) - 2026-02-12
+
+### Bug Fixes
+
+- align response shapes with original better-auth OpenAPI spec
+
+
+### Chores
+
+- release v0.4.0 ([#8](https://github.com/better-auth-rs/better-auth-rs/pull/8))
+
+
+### Features
+
+- add OAuth social login and two-factor authentication
+
 
 ## [0.4.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.3.0...v0.4.0) - 2026-02-11
 
