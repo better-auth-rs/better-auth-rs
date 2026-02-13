@@ -102,9 +102,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let response = send(&auth, HttpMethod::Get, "/list-sessions", None, Some(&token)).await;
     println!("Status: {}", response.status);
     let data = parse_body(&response.body);
+    let session_count = data.as_array().map(|a| a.len()).unwrap_or(0);
     println!(
         "Active sessions: {}\n",
-        data["sessions"].as_array().map(|a| a.len()).unwrap_or(0)
+        session_count
     );
 
     // --- Change password ---
@@ -143,7 +144,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let response = send(&auth, HttpMethod::Get, "/list-accounts", None, Some(&token)).await;
     println!("Status: {}", response.status);
     let data = parse_body(&response.body);
-    println!("Accounts: {}\n", data["accounts"]);
+    let account_count = data.as_array().map(|a| a.len()).unwrap_or(0);
+    println!("Linked accounts: {}\n", account_count);
 
     // --- Create organization ---
     println!("=== Create organization ===");

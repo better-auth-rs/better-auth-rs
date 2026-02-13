@@ -41,7 +41,7 @@ Requires the `sqlx-postgres` feature flag:
 
 ```toml title="Cargo.toml"
 [dependencies]
-better-auth = { version = "0.4", features = ["sqlx-postgres"] }
+better-auth = { version = "0.6", features = ["sqlx-postgres"] }
 ```
 
 ```rust
@@ -226,7 +226,7 @@ Enable the `derive` feature:
 
 ```toml title="Cargo.toml"
 [dependencies]
-better-auth = { version = "0.4", features = ["derive"] }
+better-auth = { version = "0.6", features = ["derive"] }
 ```
 
 Each entity needs two derive macros:
@@ -264,7 +264,7 @@ struct AppUser {
     banned: bool,
     ban_reason: Option<String>,
     ban_expires: Option<DateTime<Utc>>,
-    metadata: HashMap<String, serde_json::Value>,
+    metadata: serde_json::Value,
     // --- Custom fields ---
     #[auth(default = r#""free".to_string()"#)]  // default for Memory adapter
     plan: String,

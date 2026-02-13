@@ -43,7 +43,7 @@ struct AppUser {
     banned: bool,
     ban_reason: Option<String>,
     ban_expires: Option<DateTime<Utc>>,
-    metadata: HashMap<String, serde_json::Value>,
+    metadata: serde_json::Value,
     // --- Custom fields ---
     #[auth(default = r#""free".to_string()"#)]
     plan: String,
@@ -251,7 +251,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let resp = send(&auth, HttpMethod::Get, "/list-sessions", None, Some(&token)).await;
     println!("Status: {}", resp.status);
     let data = parse_body(&resp.body);
-    let count = data["sessions"].as_array().map(|a| a.len()).unwrap_or(0);
+    let count = data.as_array().map(|a| a.len()).unwrap_or(0);
     println!("Active sessions: {}", count);
     println!();
 

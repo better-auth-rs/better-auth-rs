@@ -14,7 +14,7 @@ Demonstrates how to use better-auth alongside Sea-ORM in the same application, w
 ```bash
 createdb better_auth_example
 export DATABASE_URL="postgresql://user:pass@localhost:5432/better_auth_example"
-cargo run -p sea-orm-migration-example
+cargo run --manifest-path examples/sea-orm-migration/Cargo.toml
 ```
 
 Migrations are applied automatically on startup via `Migrator::up()`.

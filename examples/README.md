@@ -23,7 +23,6 @@ Custom entity types with PostgreSQL via raw SQLx. Each struct has extra applicat
 createdb better_auth_example
 export DATABASE_URL="postgresql://user:pass@localhost:5432/better_auth_example"
 psql "$DATABASE_URL" -f examples/sqlx-custom-entities/migrations/001_init.sql
-cargo run -p sqlx-custom-entities
 cargo run --manifest-path examples/sqlx-custom-entities/Cargo.toml
 ```
 
@@ -34,6 +33,5 @@ Sea-ORM + better-auth sharing the same PostgreSQL connection pool. Schema migrat
 ```bash
 createdb better_auth_example
 export DATABASE_URL="postgresql://user:pass@localhost:5432/better_auth_example"
-cargo run -p sea-orm-migration-example
 cargo run --manifest-path examples/sea-orm-migration/Cargo.toml
 ```

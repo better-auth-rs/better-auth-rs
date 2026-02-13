@@ -391,8 +391,23 @@ pub(crate) const MEMORY_ACCOUNT_DEF: MemoryTraitDef = MemoryTraitDef {
         ("created_at", NowParam),
         ("updated_at", NowParam),
     ],
-    update_type: None,
-    update_mappings: &[],
+    update_type: Some("UpdateAccount"),
+    update_mappings: &[
+        ("access_token", "access_token", CloneIntoOption),
+        ("refresh_token", "refresh_token", CloneIntoOption),
+        ("id_token", "id_token", CloneIntoOption),
+        (
+            "access_token_expires_at",
+            "access_token_expires_at",
+            CopyIntoOption,
+        ),
+        (
+            "refresh_token_expires_at",
+            "refresh_token_expires_at",
+            CopyIntoOption,
+        ),
+        ("scope", "scope", CloneIntoOption),
+    ],
     setters: &[],
 };
 
