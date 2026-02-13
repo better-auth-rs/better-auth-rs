@@ -3,6 +3,34 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [0.6.2](https://github.com/better-auth-rs/better-auth-rs/compare/v0.6.1...v0.6.2) - 2026-02-13
+
+### Bug Fixes
+
+- transparent logo, version refs, example response parsing, and account update mappings
+
+
+### Chores
+
+- set release title format to Better Auth Rust v{{version}}
+
+
+### Documentation
+
+- rebrand to Better Auth in Rust, add orange theme, and misc fixes
+
+
+### Features
+
+- add Axum session extractors and update docs
+
+- add OpenAPI sync and plugin-level alignment reporting tools
+
+
+### Tests
+
+- add comprehensive passkey endpoint test coverage
+
 ## [0.6.1](https://github.com/better-auth-rs/better-auth-rs/compare/v0.6.0...v0.6.1) - 2026-02-12
 
 ### Bug Fixes
