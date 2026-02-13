@@ -99,6 +99,8 @@ async-trait = { workspace = true }
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = "0.9"
+clap = { version = "4.5", features = ["derive"] }
 
 # Error handling
 thiserror = { workspace = true }
@@ -143,6 +145,14 @@ required-features = ["sqlx-postgres"]
 [[example]]
 name = "custom_entities"
 required-features = ["derive"]
+
+[[bin]]
+name = "sync_better_auth_openapi"
+path = "scripts/sync_better_auth_openapi.rs"
+
+[[bin]]
+name = "openapi_alignment_report"
+path = "scripts/openapi_alignment_report.rs"
 
 [profile.release]
 opt-level = 3
