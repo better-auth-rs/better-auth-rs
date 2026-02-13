@@ -103,10 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Status: {}", response.status);
     let data = parse_body(&response.body);
     let session_count = data.as_array().map(|a| a.len()).unwrap_or(0);
-    println!(
-        "Active sessions: {}\n",
-        session_count
-    );
+    println!("Active sessions: {}\n", session_count);
 
     // --- Change password ---
     println!("=== Change password ===");

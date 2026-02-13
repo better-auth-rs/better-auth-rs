@@ -1,9 +1,9 @@
 ---
 title: Axum
-description: Integrate Better Auth RS with the Axum web framework.
+description: Integrate Better Auth with the Axum web framework.
 ---
 
-Better Auth RS provides first-class integration with [Axum](https://github.com/tokio-rs/axum) via the `axum` feature flag, including automatic route mounting, session extractors, and type-safe access to the current user.
+Better Auth provides first-class integration with [Axum](https://github.com/tokio-rs/axum) via the `axum` feature flag, including automatic route mounting, session extractors, and type-safe access to the current user.
 
 ## Setup
 
@@ -74,7 +74,7 @@ With the router nested under `/auth`, endpoints become `/auth/sign-up/email`, `/
 
 ## Session Extractors
 
-Better Auth RS provides Axum extractors that automatically validate the session token and give you the current user — no manual middleware needed.
+Better Auth provides Axum extractors that automatically validate the session token and give you the current user — no manual middleware needed.
 
 ### `CurrentSession` — Require Authentication
 

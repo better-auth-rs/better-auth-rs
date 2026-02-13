@@ -1074,7 +1074,7 @@ async fn test_axum_complete_workflow() {
         .await
         .unwrap();
     let signup_response: Value = serde_json::from_slice(&body_bytes).unwrap();
-    let signup_token = signup_response["token"].as_str().unwrap();
+    let _signup_token = signup_response["token"].as_str().unwrap();
 
     // 2. Sign in to get a new session
     let signin_data = json!({

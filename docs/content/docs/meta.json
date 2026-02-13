@@ -2,6 +2,7 @@
   "title": "Documentation",
   "root": true,
   "pages": [
+    "---Introduction---",
     "index",
     "installation",
     "quick-start",

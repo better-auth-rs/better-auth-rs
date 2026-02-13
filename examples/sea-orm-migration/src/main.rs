@@ -16,7 +16,7 @@
 //! ```bash
 //! createdb better_auth_example
 //! export DATABASE_URL="postgresql://user:pass@localhost:5432/better_auth_example"
-//! cargo run -p sea-orm-migration-example
+//! cargo run --manifest-path examples/sea-orm-migration/Cargo.toml
 //! ```
 
 mod auth_entities;

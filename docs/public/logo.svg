@@ -2,18 +2,18 @@
 
   <g id="logo" transform="translate(100, 100)">
     <g transform="translate(-40, -40) scale(0.16)">
-      <rect x="69" y="121" width="86.9879" height="259" fill="black"/>
-      <rect x="337.575" y="121" width="92.4247" height="259" fill="black"/>
-      <rect x="427.282" y="121" width="83.4555" height="174.52" transform="rotate(90 427.282 121)" fill="black"/>
-      <rect x="430" y="296.544" width="83.4555" height="177.238" transform="rotate(90 430 296.544)" fill="black"/>
-      <rect x="252.762" y="204.455" width="92.0888" height="96.7741" transform="rotate(90 252.762 204.455)" fill="black"/>
+      <rect x="69" y="121" width="86.9879" height="259" fill="currentColor"/>
+      <rect x="337.575" y="121" width="92.4247" height="259" fill="currentColor"/>
+      <rect x="427.282" y="121" width="83.4555" height="174.52" transform="rotate(90 427.282 121)" fill="currentColor"/>
+      <rect x="430" y="296.544" width="83.4555" height="177.238" transform="rotate(90 430 296.544)" fill="currentColor"/>
+      <rect x="252.762" y="204.455" width="92.0888" height="96.7741" transform="rotate(90 252.762 204.455)" fill="currentColor"/>
     </g>
 
     <g id="gear" mask="url(#holes)">
-      <circle r="80" fill="none" stroke="black" stroke-width="16"/>
+      <circle r="80" fill="none" stroke="currentColor" stroke-width="16"/>
 
       <g id="cogs">
-        <polygon id="cog" stroke="black" stroke-width="5" stroke-linejoin="round" points="86,5.5 95,0 86,-5.5"/>
+        <polygon id="cog" stroke="currentColor" stroke-width="5" stroke-linejoin="round" points="86,5.5 95,0 86,-5.5"/>
         <use xlink:href="#cog" transform="rotate(11.25)"/>
         <use xlink:href="#cog" transform="rotate(22.50)"/>
         <use xlink:href="#cog" transform="rotate(33.75)"/>
@@ -48,14 +48,14 @@
       </g>
 
       <g id="mounts">
-        <polygon stroke="black" stroke-width="10" stroke-linejoin="round" points="-13,-78 0,-65 13,-78" transform="rotate(45)"/>
-        <polygon stroke="black" stroke-width="10" stroke-linejoin="round" points="-13,-78 0,-65 13,-78" transform="rotate(135)"/>
-        <polygon stroke="black" stroke-width="10" stroke-linejoin="round" points="-13,-78 0,-65 13,-78" transform="rotate(225)"/>
-        <polygon stroke="black" stroke-width="10" stroke-linejoin="round" points="-13,-78 0,-65 13,-78" transform="rotate(315)"/>
+        <polygon stroke="currentColor" stroke-width="10" stroke-linejoin="round" points="-13,-78 0,-65 13,-78" transform="rotate(45)"/>
+        <polygon stroke="currentColor" stroke-width="10" stroke-linejoin="round" points="-13,-78 0,-65 13,-78" transform="rotate(135)"/>
+        <polygon stroke="currentColor" stroke-width="10" stroke-linejoin="round" points="-13,-78 0,-65 13,-78" transform="rotate(225)"/>
+        <polygon stroke="currentColor" stroke-width="10" stroke-linejoin="round" points="-13,-78 0,-65 13,-78" transform="rotate(315)"/>
       </g>
     </g>
 
-    <g fill="black">
+    <g fill="currentColor">
       <circle cx="45" cy="-45" r="5"/>
       <circle cx="45" cy="45" r="5"/>
       <circle cx="-45" cy="45" r="5"/>

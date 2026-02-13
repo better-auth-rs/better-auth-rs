@@ -15,7 +15,7 @@
 //! psql "$DATABASE_URL" -f examples/sqlx-custom-entities/migrations/001_init.sql
 //!
 //! # Run the server
-//! cargo run -p sqlx-custom-entities
+//! cargo run --manifest-path examples/sqlx-custom-entities/Cargo.toml
 //! ```
 
 mod entities;

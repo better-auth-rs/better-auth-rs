@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     http::request::Parts,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 #[cfg(feature = "axum")]
 use std::sync::Arc;
@@ -46,6 +46,7 @@ impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
         // Add core user management routes
         router = router.route("/update-user", post(create_plugin_handler::<DB>()));
         router = router.route("/delete-user", post(create_plugin_handler::<DB>()));
+        router = router.route("/delete-user", delete(create_plugin_handler::<DB>()));
 
         // Register plugin routes
         for plugin in self.plugins() {

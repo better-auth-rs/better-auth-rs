@@ -3,7 +3,7 @@ import Link from 'next/link';
 export default function HomePage() {
   return (
     <div className="flex flex-col justify-center text-center flex-1 px-4">
-      <h1 className="text-4xl font-bold mb-4">Better Auth RS</h1>
+      <h1 className="text-4xl font-bold mb-4">Better Auth <span className="opacity-50">in Rust</span></h1>
       <p className="text-lg text-fd-muted-foreground mb-8 max-w-2xl mx-auto">
         A comprehensive, plugin-based authentication framework for Rust.
         Type-safe, async-first, and extensible.

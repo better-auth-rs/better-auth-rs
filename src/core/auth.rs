@@ -344,7 +344,9 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
                 Ok(Some(AuthResponse::json(200, &spec)?))
             }
             (HttpMethod::Post, "/update-user") => Ok(Some(self.handle_update_user(req).await?)),
-            (HttpMethod::Post, "/delete-user") => Ok(Some(self.handle_delete_user(req).await?)),
+            (HttpMethod::Post | HttpMethod::Delete, "/delete-user") => {
+                Ok(Some(self.handle_delete_user(req).await?))
+            }
             (HttpMethod::Post, "/change-email") => Ok(Some(self.handle_change_email(req).await?)),
             (HttpMethod::Get, "/delete-user/callback") => {
                 Ok(Some(self.handle_delete_user_callback(req).await?))
