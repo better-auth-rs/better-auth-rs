@@ -1,8 +1,9 @@
 #[cfg(feature = "axum")]
 use axum::{
     Router,
-    extract::{Request, State},
+    extract::{FromRequestParts, Request, State},
     http::StatusCode,
+    http::request::Parts,
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -11,6 +12,10 @@ use std::sync::Arc;
 
 #[cfg(feature = "axum")]
 use crate::BetterAuth;
+#[cfg(feature = "axum")]
+use better_auth_core::SessionManager;
+#[cfg(feature = "axum")]
+use better_auth_core::entity::AuthSession as AuthSessionTrait;
 use better_auth_core::{AuthError, AuthRequest, AuthResponse, DatabaseAdapter, HttpMethod};
 
 /// Integration trait for Axum web framework
@@ -92,6 +97,7 @@ async fn health_check() -> impl IntoResponse {
 }
 
 #[cfg(feature = "axum")]
+#[allow(clippy::type_complexity)]
 fn create_plugin_handler<DB: DatabaseAdapter>() -> impl Fn(
     State<Arc<BetterAuth<DB>>>,
     Request,
@@ -214,4 +220,130 @@ fn convert_auth_error(err: AuthError) -> Response {
     });
 
     (status_code, axum::Json(body)).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Axum extractors
+// ---------------------------------------------------------------------------
+
+/// Authenticated session extractor.
+///
+/// Extracts and validates the current user and session from the request.
+/// Returns `401 Unauthorized` if no valid session is found.
+///
+/// Requires `State<Arc<BetterAuth<DB>>>` to be present in the router.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use better_auth::handlers::axum::CurrentSession;
+///
+/// async fn profile(session: CurrentSession<MyDB>) -> impl IntoResponse {
+///     let user = &session.user;
+///     let session = &session.session;
+///     axum::Json(serde_json::json!({ "id": user.id() }))
+/// }
+/// ```
+#[cfg(feature = "axum")]
+pub struct CurrentSession<DB: DatabaseAdapter> {
+    pub user: DB::User,
+    pub session: DB::Session,
+}
+
+/// Optional authenticated session extractor.
+///
+/// Like [`CurrentSession`] but returns `None` instead of a 401 error when
+/// no valid session is found. Useful for routes that behave differently
+/// for authenticated vs anonymous users.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// async fn home(session: OptionalSession<MyDB>) -> impl IntoResponse {
+///     if let Some(session) = session.0 {
+///         axum::Json(serde_json::json!({ "user": session.user.id() }))
+///     } else {
+///         axum::Json(serde_json::json!({ "user": null }))
+///     }
+/// }
+/// ```
+#[cfg(feature = "axum")]
+pub struct OptionalSession<DB: DatabaseAdapter>(pub Option<CurrentSession<DB>>);
+
+/// Extract a session token from the request parts.
+///
+/// Checks the `Authorization: Bearer <token>` header first, then falls
+/// back to the configured session cookie.
+#[cfg(feature = "axum")]
+fn extract_token_from_parts(parts: &Parts, cookie_name: &str) -> Option<String> {
+    // Try Bearer token first
+    if let Some(auth_header) = parts.headers.get("authorization")
+        && let Ok(auth_str) = auth_header.to_str()
+        && let Some(token) = auth_str.strip_prefix("Bearer ")
+    {
+        return Some(token.to_string());
+    }
+
+    // Fall back to cookie
+    if let Some(cookie_header) = parts.headers.get("cookie")
+        && let Ok(cookie_str) = cookie_header.to_str()
+    {
+        for part in cookie_str.split(';') {
+            let part = part.trim();
+            if let Some(value) = part.strip_prefix(&format!("{}=", cookie_name))
+                && !value.is_empty()
+            {
+                return Some(value.to_string());
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(feature = "axum")]
+impl<DB: DatabaseAdapter> FromRequestParts<Arc<BetterAuth<DB>>> for CurrentSession<DB> {
+    type Rejection = Response;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<BetterAuth<DB>>,
+    ) -> Result<Self, Self::Rejection> {
+        let cookie_name = &state.config().session.cookie_name;
+        let token = extract_token_from_parts(parts, cookie_name)
+            .ok_or_else(|| convert_auth_error(AuthError::Unauthenticated))?;
+
+        let session_manager =
+            SessionManager::new(Arc::new(state.config().clone()), state.database().clone());
+
+        let session = session_manager
+            .get_session(&token)
+            .await
+            .map_err(convert_auth_error)?
+            .ok_or_else(|| convert_auth_error(AuthError::SessionNotFound))?;
+
+        let user = state
+            .database()
+            .get_user_by_id(session.user_id())
+            .await
+            .map_err(convert_auth_error)?
+            .ok_or_else(|| convert_auth_error(AuthError::UserNotFound))?;
+
+        Ok(CurrentSession { user, session })
+    }
+}
+
+#[cfg(feature = "axum")]
+impl<DB: DatabaseAdapter> FromRequestParts<Arc<BetterAuth<DB>>> for OptionalSession<DB> {
+    type Rejection = Response;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<BetterAuth<DB>>,
+    ) -> Result<Self, Self::Rejection> {
+        match CurrentSession::from_request_parts(parts, state).await {
+            Ok(session) => Ok(OptionalSession(Some(session))),
+            Err(_) => Ok(OptionalSession(None)),
+        }
+    }
 }

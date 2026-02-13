@@ -23,7 +23,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-better-auth = "0.4"
+better-auth = "0.6"
 ```
 
 ```rust
@@ -56,7 +56,7 @@ Enable the `axum` feature:
 
 ```toml
 [dependencies]
-better-auth = { version = "0.4", features = ["axum"] }
+better-auth = { version = "0.6", features = ["axum"] }
 ```
 
 ```rust
@@ -127,14 +127,14 @@ POST /set-password           # Set password (authenticated)
 
 # Email Verification
 POST /send-verification-email
-POST /verify-email
+GET  /verify-email
 
 # Session Management
-GET  /sessions               # List active sessions
+GET  /list-sessions          # List active sessions
 POST /revoke-session         # Revoke a session
 
 # Account Management
-GET  /accounts               # List linked accounts
+GET  /list-accounts          # List linked accounts
 POST /unlink-account         # Unlink an account
 
 # Organization (multi-tenant)
@@ -209,10 +209,10 @@ cargo run --example axum_server --features axum
 cargo run --example custom_entities --features derive
 
 # SQLx custom entities (standalone project)
-cargo run -p sqlx-custom-entities
+cargo run --manifest-path examples/sqlx-custom-entities/Cargo.toml
 
 # Sea-ORM with migration (standalone project)
-cargo run -p sea-orm-migration-example
+cargo run --manifest-path examples/sea-orm-migration/Cargo.toml
 ```
 
 ## License

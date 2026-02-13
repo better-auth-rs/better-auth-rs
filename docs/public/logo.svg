@@ -1,0 +1,74 @@
+<svg version="1.1" height="200" width="200" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <rect width="200" height="200" fill="white"/>
+
+  <g id="logo" transform="translate(100, 100)">
+    <g transform="translate(-40, -40) scale(0.16)">
+      <rect x="69" y="121" width="86.9879" height="259" fill="black"/>
+      <rect x="337.575" y="121" width="92.4247" height="259" fill="black"/>
+      <rect x="427.282" y="121" width="83.4555" height="174.52" transform="rotate(90 427.282 121)" fill="black"/>
+      <rect x="430" y="296.544" width="83.4555" height="177.238" transform="rotate(90 430 296.544)" fill="black"/>
+      <rect x="252.762" y="204.455" width="92.0888" height="96.7741" transform="rotate(90 252.762 204.455)" fill="black"/>
+    </g>
+
+    <g id="gear" mask="url(#holes)">
+      <circle r="80" fill="none" stroke="black" stroke-width="16"/>
+
+      <g id="cogs">
+        <polygon id="cog" stroke="black" stroke-width="5" stroke-linejoin="round" points="86,5.5 95,0 86,-5.5"/>
+        <use xlink:href="#cog" transform="rotate(11.25)"/>
+        <use xlink:href="#cog" transform="rotate(22.50)"/>
+        <use xlink:href="#cog" transform="rotate(33.75)"/>
+        <use xlink:href="#cog" transform="rotate(45.00)"/>
+        <use xlink:href="#cog" transform="rotate(56.25)"/>
+        <use xlink:href="#cog" transform="rotate(67.50)"/>
+        <use xlink:href="#cog" transform="rotate(78.75)"/>
+        <use xlink:href="#cog" transform="rotate(90.00)"/>
+        <use xlink:href="#cog" transform="rotate(101.25)"/>
+        <use xlink:href="#cog" transform="rotate(112.50)"/>
+        <use xlink:href="#cog" transform="rotate(123.75)"/>
+        <use xlink:href="#cog" transform="rotate(135.00)"/>
+        <use xlink:href="#cog" transform="rotate(146.25)"/>
+        <use xlink:href="#cog" transform="rotate(157.50)"/>
+        <use xlink:href="#cog" transform="rotate(168.75)"/>
+        <use xlink:href="#cog" transform="rotate(180.00)"/>
+        <use xlink:href="#cog" transform="rotate(191.25)"/>
+        <use xlink:href="#cog" transform="rotate(202.50)"/>
+        <use xlink:href="#cog" transform="rotate(213.75)"/>
+        <use xlink:href="#cog" transform="rotate(225.00)"/>
+        <use xlink:href="#cog" transform="rotate(236.25)"/>
+        <use xlink:href="#cog" transform="rotate(247.50)"/>
+        <use xlink:href="#cog" transform="rotate(258.75)"/>
+        <use xlink:href="#cog" transform="rotate(270.00)"/>
+        <use xlink:href="#cog" transform="rotate(281.25)"/>
+        <use xlink:href="#cog" transform="rotate(292.50)"/>
+        <use xlink:href="#cog" transform="rotate(303.75)"/>
+        <use xlink:href="#cog" transform="rotate(315.00)"/>
+        <use xlink:href="#cog" transform="rotate(326.25)"/>
+        <use xlink:href="#cog" transform="rotate(337.50)"/>
+        <use xlink:href="#cog" transform="rotate(348.75)"/>
+      </g>
+
+      <g id="mounts">
+        <polygon stroke="black" stroke-width="10" stroke-linejoin="round" points="-13,-78 0,-65 13,-78" transform="rotate(45)"/>
+        <polygon stroke="black" stroke-width="10" stroke-linejoin="round" points="-13,-78 0,-65 13,-78" transform="rotate(135)"/>
+        <polygon stroke="black" stroke-width="10" stroke-linejoin="round" points="-13,-78 0,-65 13,-78" transform="rotate(225)"/>
+        <polygon stroke="black" stroke-width="10" stroke-linejoin="round" points="-13,-78 0,-65 13,-78" transform="rotate(315)"/>
+      </g>
+    </g>
+
+    <g fill="black">
+      <circle cx="45" cy="-45" r="5"/>
+      <circle cx="45" cy="45" r="5"/>
+      <circle cx="-45" cy="45" r="5"/>
+      <circle cx="-45" cy="-45" r="5"/>
+    </g>
+
+    <mask id="holes">
+      <rect x="-110" y="-110" width="220" height="220" fill="white"/>
+      <circle cx="53" cy="-53" r="5.5"/>
+      <circle cx="53" cy="53" r="5.5"/>
+      <circle cx="-53" cy="53" r="5.5"/>
+      <circle cx="-53" cy="-53" r="5.5"/>
+    </mask>
+  </g>
+</svg>

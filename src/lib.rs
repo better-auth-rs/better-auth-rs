@@ -88,7 +88,7 @@ pub mod plugins {
 pub use core::{AuthBuilder, BetterAuth, TypedAuthBuilder};
 
 #[cfg(feature = "axum")]
-pub use handlers::axum::AxumIntegration;
+pub use handlers::axum::{AxumIntegration, CurrentSession, OptionalSession};
 
 #[cfg(test)]
 #[path = "tests/response_shape_tests.rs"]

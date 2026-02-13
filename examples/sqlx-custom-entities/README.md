@@ -16,7 +16,7 @@ Each entity struct has extra application-specific columns (billing plan, Stripe 
 createdb better_auth_example
 export DATABASE_URL="postgresql://user:pass@localhost:5432/better_auth_example"
 psql "$DATABASE_URL" -f examples/sqlx-custom-entities/migrations/001_init.sql
-cargo run -p sqlx-custom-entities
+cargo run --manifest-path examples/sqlx-custom-entities/Cargo.toml
 ```
 
 ## Project Structure

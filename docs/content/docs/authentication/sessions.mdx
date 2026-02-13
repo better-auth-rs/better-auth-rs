@@ -149,6 +149,26 @@ Revokes all sessions except the current one:
 }
 ```
 
+## Using Sessions in Axum Handlers
+
+With the `axum` feature, use the `CurrentSession` extractor to access the authenticated user directly in your handler — no manual token parsing needed:
+
+```rust
+use better_auth::handlers::CurrentSession;
+use better_auth::adapters::MemoryDatabaseAdapter;
+use better_auth::AuthUser;
+use axum::{Json, response::IntoResponse};
+
+async fn profile(session: CurrentSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
+    Json(serde_json::json!({
+        "user_id": session.user.id(),
+        "session_token": session.session.token(),
+    }))
+}
+```
+
+Use `OptionalSession` for routes that should work for both authenticated and anonymous users. See [Axum Integration](/docs/integrations/axum) for full details.
+
 ## Session Configuration
 
 Session behavior is configured via `AuthConfig`:

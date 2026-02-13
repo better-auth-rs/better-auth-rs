@@ -13,7 +13,7 @@ These live in the workspace and are run via `cargo run --example`.
 
 ## Standalone projects
 
-These are separate Cargo projects (excluded from the workspace) under `examples/`. Run with `cargo run -p <name>`.
+These are separate Cargo projects (excluded from the workspace) under `examples/`. Run them with `cargo run --manifest-path <path-to-Cargo.toml>`.
 
 ### `sqlx-custom-entities`
 
@@ -24,6 +24,7 @@ createdb better_auth_example
 export DATABASE_URL="postgresql://user:pass@localhost:5432/better_auth_example"
 psql "$DATABASE_URL" -f examples/sqlx-custom-entities/migrations/001_init.sql
 cargo run -p sqlx-custom-entities
+cargo run --manifest-path examples/sqlx-custom-entities/Cargo.toml
 ```
 
 ### `sea-orm-migration`
@@ -34,4 +35,5 @@ Sea-ORM + better-auth sharing the same PostgreSQL connection pool. Schema migrat
 createdb better_auth_example
 export DATABASE_URL="postgresql://user:pass@localhost:5432/better_auth_example"
 cargo run -p sea-orm-migration-example
+cargo run --manifest-path examples/sea-orm-migration/Cargo.toml
 ```
