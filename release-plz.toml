@@ -82,6 +82,7 @@ changelog_include = [
 git_tag_name = "v{{ version }}"
 git_tag_enable = true
 git_release_enable = true
+git_release_name = "Better Auth Rust v{{ version }}"
 
 [[package]]
 name = "better-auth-core"
