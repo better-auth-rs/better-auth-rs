@@ -10,62 +10,62 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(Users::Table)
+                    .table(User::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(Users::Id).text().not_null().primary_key())
-                    .col(ColumnDef::new(Users::Name).text())
-                    .col(ColumnDef::new(Users::Email).text().unique_key())
+                    .col(ColumnDef::new(User::Id).text().not_null().primary_key())
+                    .col(ColumnDef::new(User::Name).text())
+                    .col(ColumnDef::new(User::Email).text().unique_key())
                     .col(
-                        ColumnDef::new(Users::EmailVerified)
+                        ColumnDef::new(User::EmailVerified)
                             .boolean()
                             .not_null()
                             .default(false),
                     )
-                    .col(ColumnDef::new(Users::Image).text())
-                    .col(ColumnDef::new(Users::Username).text().unique_key())
-                    .col(ColumnDef::new(Users::DisplayUsername).text())
+                    .col(ColumnDef::new(User::Image).text())
+                    .col(ColumnDef::new(User::Username).text().unique_key())
+                    .col(ColumnDef::new(User::DisplayUsername).text())
                     .col(
-                        ColumnDef::new(Users::TwoFactorEnabled)
+                        ColumnDef::new(User::TwoFactorEnabled)
                             .boolean()
                             .not_null()
                             .default(false),
                     )
-                    .col(ColumnDef::new(Users::Role).text())
+                    .col(ColumnDef::new(User::Role).text())
                     .col(
-                        ColumnDef::new(Users::Banned)
+                        ColumnDef::new(User::Banned)
                             .boolean()
                             .not_null()
                             .default(false),
                     )
-                    .col(ColumnDef::new(Users::BanReason).text())
-                    .col(ColumnDef::new(Users::BanExpires).timestamp_with_time_zone())
+                    .col(ColumnDef::new(User::BanReason).text())
+                    .col(ColumnDef::new(User::BanExpires).timestamp_with_time_zone())
                     .col(
-                        ColumnDef::new(Users::Metadata)
+                        ColumnDef::new(User::Metadata)
                             .json_binary()
                             .not_null()
                             .default(Expr::cust("'{}'::jsonb")),
                     )
                     .col(
-                        ColumnDef::new(Users::CreatedAt)
+                        ColumnDef::new(User::CreatedAt)
                             .timestamp_with_time_zone()
                             .not_null()
                             .default(Expr::cust("NOW()")),
                     )
                     .col(
-                        ColumnDef::new(Users::UpdatedAt)
+                        ColumnDef::new(User::UpdatedAt)
                             .timestamp_with_time_zone()
                             .not_null()
                             .default(Expr::cust("NOW()")),
                     )
                     // SaaS custom columns
                     .col(
-                        ColumnDef::new(Users::Plan)
+                        ColumnDef::new(User::Plan)
                             .text()
                             .not_null()
                             .default("free"),
                     )
-                    .col(ColumnDef::new(Users::StripeCustomerId).text())
-                    .col(ColumnDef::new(Users::Phone).text())
+                    .col(ColumnDef::new(User::StripeCustomerId).text())
+                    .col(ColumnDef::new(User::Phone).text())
                     .to_owned(),
             )
             .await?;
@@ -74,50 +74,50 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(Sessions::Table)
+                    .table(Session::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(Sessions::Id).text().not_null().primary_key())
+                    .col(ColumnDef::new(Session::Id).text().not_null().primary_key())
                     .col(
-                        ColumnDef::new(Sessions::ExpiresAt)
+                        ColumnDef::new(Session::ExpiresAt)
                             .timestamp_with_time_zone()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(Sessions::Token)
+                        ColumnDef::new(Session::Token)
                             .text()
                             .not_null()
                             .unique_key(),
                     )
-                    .col(ColumnDef::new(Sessions::IpAddress).text())
-                    .col(ColumnDef::new(Sessions::UserAgent).text())
-                    .col(ColumnDef::new(Sessions::UserId).text().not_null())
-                    .col(ColumnDef::new(Sessions::ImpersonatedBy).text())
-                    .col(ColumnDef::new(Sessions::ActiveOrganizationId).text())
+                    .col(ColumnDef::new(Session::IpAddress).text())
+                    .col(ColumnDef::new(Session::UserAgent).text())
+                    .col(ColumnDef::new(Session::UserId).text().not_null())
+                    .col(ColumnDef::new(Session::ImpersonatedBy).text())
+                    .col(ColumnDef::new(Session::ActiveOrganizationId).text())
                     .col(
-                        ColumnDef::new(Sessions::Active)
+                        ColumnDef::new(Session::Active)
                             .boolean()
                             .not_null()
                             .default(true),
                     )
                     .col(
-                        ColumnDef::new(Sessions::CreatedAt)
+                        ColumnDef::new(Session::CreatedAt)
                             .timestamp_with_time_zone()
                             .not_null()
                             .default(Expr::cust("NOW()")),
                     )
                     .col(
-                        ColumnDef::new(Sessions::UpdatedAt)
+                        ColumnDef::new(Session::UpdatedAt)
                             .timestamp_with_time_zone()
                             .not_null()
                             .default(Expr::cust("NOW()")),
                     )
                     // SaaS custom columns
-                    .col(ColumnDef::new(Sessions::DeviceId).text())
-                    .col(ColumnDef::new(Sessions::Country).text())
+                    .col(ColumnDef::new(Session::DeviceId).text())
+                    .col(ColumnDef::new(Session::Country).text())
                     .foreign_key(
                         ForeignKey::create()
-                            .from(Sessions::Table, Sessions::UserId)
-                            .to(Users::Table, Users::Id)
+                            .from(Session::Table, Session::UserId)
+                            .to(User::Table, User::Id)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
@@ -128,41 +128,41 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(Accounts::Table)
+                    .table(Account::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(Accounts::Id).text().not_null().primary_key())
-                    .col(ColumnDef::new(Accounts::AccountId).text().not_null())
-                    .col(ColumnDef::new(Accounts::ProviderId).text().not_null())
-                    .col(ColumnDef::new(Accounts::UserId).text().not_null())
-                    .col(ColumnDef::new(Accounts::AccessToken).text())
-                    .col(ColumnDef::new(Accounts::RefreshToken).text())
-                    .col(ColumnDef::new(Accounts::IdToken).text())
+                    .col(ColumnDef::new(Account::Id).text().not_null().primary_key())
+                    .col(ColumnDef::new(Account::AccountId).text().not_null())
+                    .col(ColumnDef::new(Account::ProviderId).text().not_null())
+                    .col(ColumnDef::new(Account::UserId).text().not_null())
+                    .col(ColumnDef::new(Account::AccessToken).text())
+                    .col(ColumnDef::new(Account::RefreshToken).text())
+                    .col(ColumnDef::new(Account::IdToken).text())
                     .col(
-                        ColumnDef::new(Accounts::AccessTokenExpiresAt)
+                        ColumnDef::new(Account::AccessTokenExpiresAt)
                             .timestamp_with_time_zone(),
                     )
                     .col(
-                        ColumnDef::new(Accounts::RefreshTokenExpiresAt)
+                        ColumnDef::new(Account::RefreshTokenExpiresAt)
                             .timestamp_with_time_zone(),
                     )
-                    .col(ColumnDef::new(Accounts::Scope).text())
-                    .col(ColumnDef::new(Accounts::Password).text())
+                    .col(ColumnDef::new(Account::Scope).text())
+                    .col(ColumnDef::new(Account::Password).text())
                     .col(
-                        ColumnDef::new(Accounts::CreatedAt)
+                        ColumnDef::new(Account::CreatedAt)
                             .timestamp_with_time_zone()
                             .not_null()
                             .default(Expr::cust("NOW()")),
                     )
                     .col(
-                        ColumnDef::new(Accounts::UpdatedAt)
+                        ColumnDef::new(Account::UpdatedAt)
                             .timestamp_with_time_zone()
                             .not_null()
                             .default(Expr::cust("NOW()")),
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .from(Accounts::Table, Accounts::UserId)
-                            .to(Users::Table, Users::Id)
+                            .from(Account::Table, Account::UserId)
+                            .to(User::Table, User::Id)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
@@ -173,10 +173,10 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("idx_accounts_provider_account")
-                    .table(Accounts::Table)
-                    .col(Accounts::ProviderId)
-                    .col(Accounts::AccountId)
+                    .name("idx_account_provider_account")
+                    .table(Account::Table)
+                    .col(Account::ProviderId)
+                    .col(Account::AccountId)
                     .unique()
                     .to_owned(),
             )
@@ -186,29 +186,29 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(Verifications::Table)
+                    .table(Verification::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(Verifications::Id)
+                        ColumnDef::new(Verification::Id)
                             .text()
                             .not_null()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Verifications::Identifier).text().not_null())
-                    .col(ColumnDef::new(Verifications::Value).text().not_null())
+                    .col(ColumnDef::new(Verification::Identifier).text().not_null())
+                    .col(ColumnDef::new(Verification::Value).text().not_null())
                     .col(
-                        ColumnDef::new(Verifications::ExpiresAt)
+                        ColumnDef::new(Verification::ExpiresAt)
                             .timestamp_with_time_zone()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(Verifications::CreatedAt)
+                        ColumnDef::new(Verification::CreatedAt)
                             .timestamp_with_time_zone()
                             .not_null()
                             .default(Expr::cust("NOW()")),
                     )
                     .col(
-                        ColumnDef::new(Verifications::UpdatedAt)
+                        ColumnDef::new(Verification::UpdatedAt)
                             .timestamp_with_time_zone()
                             .not_null()
                             .default(Expr::cust("NOW()")),
@@ -297,7 +297,7 @@ impl MigrationTrait for Migration {
                     .foreign_key(
                         ForeignKey::create()
                             .from(Member::Table, Member::UserId)
-                            .to(Users::Table, Users::Id)
+                            .to(User::Table, User::Id)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
@@ -364,7 +364,7 @@ impl MigrationTrait for Migration {
                     .foreign_key(
                         ForeignKey::create()
                             .from(Invitation::Table, Invitation::InviterId)
-                            .to(Users::Table, Users::Id)
+                            .to(User::Table, User::Id)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
@@ -375,36 +375,36 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("idx_users_email")
-                    .table(Users::Table)
-                    .col(Users::Email)
+                    .name("idx_user_email")
+                    .table(User::Table)
+                    .col(User::Email)
                     .to_owned(),
             )
             .await?;
         manager
             .create_index(
                 Index::create()
-                    .name("idx_sessions_token")
-                    .table(Sessions::Table)
-                    .col(Sessions::Token)
+                    .name("idx_session_token")
+                    .table(Session::Table)
+                    .col(Session::Token)
                     .to_owned(),
             )
             .await?;
         manager
             .create_index(
                 Index::create()
-                    .name("idx_sessions_user_id")
-                    .table(Sessions::Table)
-                    .col(Sessions::UserId)
+                    .name("idx_session_user_id")
+                    .table(Session::Table)
+                    .col(Session::UserId)
                     .to_owned(),
             )
             .await?;
         manager
             .create_index(
                 Index::create()
-                    .name("idx_accounts_user_id")
-                    .table(Accounts::Table)
-                    .col(Accounts::UserId)
+                    .name("idx_account_user_id")
+                    .table(Account::Table)
+                    .col(Account::UserId)
                     .to_owned(),
             )
             .await?;
@@ -441,38 +441,45 @@ impl MigrationTrait for Migration {
             .drop_table(Table::drop().table(Organization::Table).to_owned())
             .await?;
         manager
-            .drop_table(Table::drop().table(Verifications::Table).to_owned())
+            .drop_table(Table::drop().table(Verification::Table).to_owned())
             .await?;
         manager
-            .drop_table(Table::drop().table(Accounts::Table).to_owned())
+            .drop_table(Table::drop().table(Account::Table).to_owned())
             .await?;
         manager
-            .drop_table(Table::drop().table(Sessions::Table).to_owned())
+            .drop_table(Table::drop().table(Session::Table).to_owned())
             .await?;
         manager
-            .drop_table(Table::drop().table(Users::Table).to_owned())
+            .drop_table(Table::drop().table(User::Table).to_owned())
             .await?;
         Ok(())
     }
 }
 
 #[derive(DeriveIden)]
-enum Users {
+enum User {
     Table,
     Id,
     Name,
     Email,
+    #[sea_orm(iden = "emailVerified")]
     EmailVerified,
     Image,
     Username,
+    #[sea_orm(iden = "displayUsername")]
     DisplayUsername,
+    #[sea_orm(iden = "twoFactorEnabled")]
     TwoFactorEnabled,
     Role,
     Banned,
+    #[sea_orm(iden = "banReason")]
     BanReason,
+    #[sea_orm(iden = "banExpires")]
     BanExpires,
     Metadata,
+    #[sea_orm(iden = "createdAt")]
     CreatedAt,
+    #[sea_orm(iden = "updatedAt")]
     UpdatedAt,
     Plan,
     StripeCustomerId,
@@ -480,49 +487,70 @@ enum Users {
 }
 
 #[derive(DeriveIden)]
-enum Sessions {
+enum Session {
     Table,
     Id,
+    #[sea_orm(iden = "expiresAt")]
     ExpiresAt,
     Token,
+    #[sea_orm(iden = "ipAddress")]
     IpAddress,
+    #[sea_orm(iden = "userAgent")]
     UserAgent,
+    #[sea_orm(iden = "userId")]
     UserId,
+    #[sea_orm(iden = "impersonatedBy")]
     ImpersonatedBy,
+    #[sea_orm(iden = "activeOrganizationId")]
     ActiveOrganizationId,
     Active,
+    #[sea_orm(iden = "createdAt")]
     CreatedAt,
+    #[sea_orm(iden = "updatedAt")]
     UpdatedAt,
     DeviceId,
     Country,
 }
 
 #[derive(DeriveIden)]
-enum Accounts {
+enum Account {
     Table,
     Id,
+    #[sea_orm(iden = "accountId")]
     AccountId,
+    #[sea_orm(iden = "providerId")]
     ProviderId,
+    #[sea_orm(iden = "userId")]
     UserId,
+    #[sea_orm(iden = "accessToken")]
     AccessToken,
+    #[sea_orm(iden = "refreshToken")]
     RefreshToken,
+    #[sea_orm(iden = "idToken")]
     IdToken,
+    #[sea_orm(iden = "accessTokenExpiresAt")]
     AccessTokenExpiresAt,
+    #[sea_orm(iden = "refreshTokenExpiresAt")]
     RefreshTokenExpiresAt,
     Scope,
     Password,
+    #[sea_orm(iden = "createdAt")]
     CreatedAt,
+    #[sea_orm(iden = "updatedAt")]
     UpdatedAt,
 }
 
 #[derive(DeriveIden)]
-enum Verifications {
+enum Verification {
     Table,
     Id,
     Identifier,
     Value,
+    #[sea_orm(iden = "expiresAt")]
     ExpiresAt,
+    #[sea_orm(iden = "createdAt")]
     CreatedAt,
+    #[sea_orm(iden = "updatedAt")]
     UpdatedAt,
 }
 
@@ -534,7 +562,9 @@ enum Organization {
     Slug,
     Logo,
     Metadata,
+    #[sea_orm(iden = "createdAt")]
     CreatedAt,
+    #[sea_orm(iden = "updatedAt")]
     UpdatedAt,
     BillingEmail,
     Plan,
@@ -544,9 +574,12 @@ enum Organization {
 enum Member {
     Table,
     Id,
+    #[sea_orm(iden = "organizationId")]
     OrganizationId,
+    #[sea_orm(iden = "userId")]
     UserId,
     Role,
+    #[sea_orm(iden = "createdAt")]
     CreatedAt,
 }
 
@@ -554,11 +587,15 @@ enum Member {
 enum Invitation {
     Table,
     Id,
+    #[sea_orm(iden = "organizationId")]
     OrganizationId,
     Email,
     Role,
     Status,
+    #[sea_orm(iden = "inviterId")]
     InviterId,
+    #[sea_orm(iden = "expiresAt")]
     ExpiresAt,
+    #[sea_orm(iden = "createdAt")]
     CreatedAt,
 }

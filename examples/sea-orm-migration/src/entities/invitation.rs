@@ -8,6 +8,8 @@ use serde::Serialize;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
+    #[sea_orm(column_name = "organizationId")]
+    #[auth(column = "organizationId")]
     pub organization_id: String,
     pub email: String,
     pub role: String,
@@ -16,8 +18,14 @@ pub struct Model {
     /// non-primitive type and generates `From<String>` conversion in `FromRow`.
     #[sea_orm(ignore)]
     pub status: InvitationStatus,
+    #[sea_orm(column_name = "inviterId")]
+    #[auth(column = "inviterId")]
     pub inviter_id: String,
+    #[sea_orm(column_name = "expiresAt")]
+    #[auth(column = "expiresAt")]
     pub expires_at: DateTimeUtc,
+    #[sea_orm(column_name = "createdAt")]
+    #[auth(column = "createdAt")]
     pub created_at: DateTimeUtc,
 }
 

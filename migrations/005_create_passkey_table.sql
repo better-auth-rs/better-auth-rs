@@ -1,16 +1,16 @@
 -- Passkey table for WebAuthn/Passkey authentication
-CREATE TABLE IF NOT EXISTS passkeys (
+CREATE TABLE IF NOT EXISTS passkey (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    public_key TEXT NOT NULL,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    credential_id TEXT NOT NULL UNIQUE,
+    "publicKey" TEXT NOT NULL,
+    "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    "credentialId" TEXT NOT NULL UNIQUE,
     counter BIGINT NOT NULL DEFAULT 0,
-    device_type TEXT NOT NULL DEFAULT 'singleDevice',
-    backed_up BOOLEAN NOT NULL DEFAULT FALSE,
+    "deviceType" TEXT NOT NULL DEFAULT 'singleDevice',
+    "backedUp" BOOLEAN NOT NULL DEFAULT FALSE,
     transports TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_passkeys_user_id ON passkeys(user_id);
-CREATE INDEX IF NOT EXISTS idx_passkeys_credential_id ON passkeys(credential_id);
+CREATE INDEX IF NOT EXISTS idx_passkey_user_id ON passkey("userId");
+CREATE INDEX IF NOT EXISTS idx_passkey_credential_id ON passkey("credentialId");

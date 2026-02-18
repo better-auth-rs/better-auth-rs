@@ -169,12 +169,10 @@ impl AccountManagementPlugin {
 
         let accounts = ctx.database.get_user_accounts(user.id()).await?;
 
-        // Check if user has a password (credential provider)
-        let has_password = user
-            .metadata()
-            .get("password_hash")
-            .and_then(|v| v.as_str())
-            .is_some();
+        // Check if user has a credential account with a password
+        let has_password = accounts
+            .iter()
+            .any(|acc| acc.provider_id() == "credential" && acc.password().is_some());
 
         // Count remaining credentials after unlinking
         let remaining_accounts = accounts

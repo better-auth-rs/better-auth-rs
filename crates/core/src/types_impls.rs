@@ -351,17 +351,17 @@ mod postgres_impls {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
                 email: row.try_get("email")?,
-                email_verified: row.try_get("email_verified")?,
+                email_verified: row.try_get("emailVerified")?,
                 image: row.try_get("image")?,
-                created_at: row.try_get("created_at")?,
-                updated_at: row.try_get("updated_at")?,
+                created_at: row.try_get("createdAt")?,
+                updated_at: row.try_get("updatedAt")?,
                 username: row.try_get("username")?,
-                display_username: row.try_get("display_username")?,
-                two_factor_enabled: row.try_get("two_factor_enabled").unwrap_or(false),
+                display_username: row.try_get("displayUsername")?,
+                two_factor_enabled: row.try_get("twoFactorEnabled").unwrap_or(false),
                 role: row.try_get("role")?,
                 banned: row.try_get("banned").unwrap_or(false),
-                ban_reason: row.try_get("ban_reason")?,
-                ban_expires: row.try_get("ban_expires")?,
+                ban_reason: row.try_get("banReason")?,
+                ban_expires: row.try_get("banExpires")?,
                 metadata: row
                     .try_get::<sqlx::types::Json<serde_json::Value>, _>("metadata")?
                     .0,
@@ -373,15 +373,15 @@ mod postgres_impls {
         fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
             Ok(Self {
                 id: row.try_get("id")?,
-                expires_at: row.try_get("expires_at")?,
+                expires_at: row.try_get("expiresAt")?,
                 token: row.try_get("token")?,
-                created_at: row.try_get("created_at")?,
-                updated_at: row.try_get("updated_at")?,
-                ip_address: row.try_get("ip_address")?,
-                user_agent: row.try_get("user_agent")?,
-                user_id: row.try_get("user_id")?,
-                impersonated_by: row.try_get("impersonated_by")?,
-                active_organization_id: row.try_get("active_organization_id")?,
+                created_at: row.try_get("createdAt")?,
+                updated_at: row.try_get("updatedAt")?,
+                ip_address: row.try_get("ipAddress")?,
+                user_agent: row.try_get("userAgent")?,
+                user_id: row.try_get("userId")?,
+                impersonated_by: row.try_get("impersonatedBy")?,
+                active_organization_id: row.try_get("activeOrganizationId")?,
                 active: row.try_get("active").unwrap_or(true),
             })
         }
@@ -391,18 +391,18 @@ mod postgres_impls {
         fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
             Ok(Self {
                 id: row.try_get("id")?,
-                account_id: row.try_get("account_id")?,
-                provider_id: row.try_get("provider_id")?,
-                user_id: row.try_get("user_id")?,
-                access_token: row.try_get("access_token")?,
-                refresh_token: row.try_get("refresh_token")?,
-                id_token: row.try_get("id_token")?,
-                access_token_expires_at: row.try_get("access_token_expires_at")?,
-                refresh_token_expires_at: row.try_get("refresh_token_expires_at")?,
+                account_id: row.try_get("accountId")?,
+                provider_id: row.try_get("providerId")?,
+                user_id: row.try_get("userId")?,
+                access_token: row.try_get("accessToken")?,
+                refresh_token: row.try_get("refreshToken")?,
+                id_token: row.try_get("idToken")?,
+                access_token_expires_at: row.try_get("accessTokenExpiresAt")?,
+                refresh_token_expires_at: row.try_get("refreshTokenExpiresAt")?,
                 scope: row.try_get("scope")?,
                 password: row.try_get("password")?,
-                created_at: row.try_get("created_at")?,
-                updated_at: row.try_get("updated_at")?,
+                created_at: row.try_get("createdAt")?,
+                updated_at: row.try_get("updatedAt")?,
             })
         }
     }
@@ -417,8 +417,8 @@ mod postgres_impls {
                 metadata: row
                     .try_get::<Option<sqlx::types::Json<serde_json::Value>>, _>("metadata")?
                     .map(|j| j.0),
-                created_at: row.try_get("created_at")?,
-                updated_at: row.try_get("updated_at")?,
+                created_at: row.try_get("createdAt")?,
+                updated_at: row.try_get("updatedAt")?,
             })
         }
     }
@@ -427,10 +427,10 @@ mod postgres_impls {
         fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
             Ok(Self {
                 id: row.try_get("id")?,
-                organization_id: row.try_get("organization_id")?,
-                user_id: row.try_get("user_id")?,
+                organization_id: row.try_get("organizationId")?,
+                user_id: row.try_get("userId")?,
                 role: row.try_get("role")?,
-                created_at: row.try_get("created_at")?,
+                created_at: row.try_get("createdAt")?,
             })
         }
     }
@@ -440,13 +440,13 @@ mod postgres_impls {
             let status_str: String = row.try_get("status")?;
             Ok(Self {
                 id: row.try_get("id")?,
-                organization_id: row.try_get("organization_id")?,
+                organization_id: row.try_get("organizationId")?,
                 email: row.try_get("email")?,
                 role: row.try_get("role")?,
                 status: InvitationStatus::from(status_str),
-                inviter_id: row.try_get("inviter_id")?,
-                expires_at: row.try_get("expires_at")?,
-                created_at: row.try_get("created_at")?,
+                inviter_id: row.try_get("inviterId")?,
+                expires_at: row.try_get("expiresAt")?,
+                created_at: row.try_get("createdAt")?,
             })
         }
     }
@@ -457,9 +457,9 @@ mod postgres_impls {
                 id: row.try_get("id")?,
                 identifier: row.try_get("identifier")?,
                 value: row.try_get("value")?,
-                expires_at: row.try_get("expires_at")?,
-                created_at: row.try_get("created_at")?,
-                updated_at: row.try_get("updated_at")?,
+                expires_at: row.try_get("expiresAt")?,
+                created_at: row.try_get("createdAt")?,
+                updated_at: row.try_get("updatedAt")?,
             })
         }
     }
@@ -469,8 +469,8 @@ mod postgres_impls {
             Ok(Self {
                 id: row.try_get("id")?,
                 secret: row.try_get("secret")?,
-                backup_codes: row.try_get("backup_codes")?,
-                user_id: row.try_get("user_id")?,
+                backup_codes: row.try_get("backupCodes")?,
+                user_id: row.try_get("userId")?,
             })
         }
     }
@@ -488,27 +488,27 @@ mod postgres_impls {
             Ok(Self {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
-                public_key: row.try_get("public_key")?,
-                user_id: row.try_get("user_id")?,
-                credential_id: row.try_get("credential_id")?,
+                public_key: row.try_get("publicKey")?,
+                user_id: row.try_get("userId")?,
+                credential_id: row.try_get("credentialId")?,
                 counter,
-                device_type: row.try_get("device_type")?,
-                backed_up: row.try_get("backed_up")?,
+                device_type: row.try_get("deviceType")?,
+                backed_up: row.try_get("backedUp")?,
                 transports: row.try_get("transports")?,
-                created_at: row.try_get("created_at")?,
+                created_at: row.try_get("createdAt")?,
             })
         }
     }
 
     impl FromRow<'_, PgRow> for ApiKey {
         fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
-            let created_at: chrono::DateTime<chrono::Utc> = row.try_get("created_at")?;
-            let updated_at: chrono::DateTime<chrono::Utc> = row.try_get("updated_at")?;
+            let created_at: chrono::DateTime<chrono::Utc> = row.try_get("createdAt")?;
+            let updated_at: chrono::DateTime<chrono::Utc> = row.try_get("updatedAt")?;
             let last_refill_at: Option<chrono::DateTime<chrono::Utc>> =
-                row.try_get("last_refill_at")?;
+                row.try_get("lastRefillAt")?;
             let last_request: Option<chrono::DateTime<chrono::Utc>> =
-                row.try_get("last_request")?;
-            let expires_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("expires_at")?;
+                row.try_get("lastRequest")?;
+            let expires_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("expiresAt")?;
 
             Ok(Self {
                 id: row.try_get("id")?,
@@ -516,15 +516,15 @@ mod postgres_impls {
                 start: row.try_get("start")?,
                 prefix: row.try_get("prefix")?,
                 key_hash: row.try_get("key")?,
-                user_id: row.try_get("user_id")?,
-                refill_interval: row.try_get("refill_interval")?,
-                refill_amount: row.try_get("refill_amount")?,
+                user_id: row.try_get("userId")?,
+                refill_interval: row.try_get("refillInterval")?,
+                refill_amount: row.try_get("refillAmount")?,
                 last_refill_at: last_refill_at.map(|dt| dt.to_rfc3339()),
                 enabled: row.try_get("enabled")?,
-                rate_limit_enabled: row.try_get("rate_limit_enabled")?,
-                rate_limit_time_window: row.try_get("rate_limit_time_window")?,
-                rate_limit_max: row.try_get("rate_limit_max")?,
-                request_count: row.try_get("request_count")?,
+                rate_limit_enabled: row.try_get("rateLimitEnabled")?,
+                rate_limit_time_window: row.try_get("rateLimitTimeWindow")?,
+                rate_limit_max: row.try_get("rateLimitMax")?,
+                request_count: row.try_get("requestCount")?,
                 remaining: row.try_get("remaining")?,
                 last_request: last_request.map(|dt| dt.to_rfc3339()),
                 expires_at: expires_at.map(|dt| dt.to_rfc3339()),

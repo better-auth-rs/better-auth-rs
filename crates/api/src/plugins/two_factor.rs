@@ -6,7 +6,9 @@ use totp_rs::{Algorithm, Secret, TOTP};
 use validator::Validate;
 
 use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::entity::{AuthSession, AuthTwoFactor, AuthUser, AuthVerification};
+use better_auth_core::entity::{
+    AuthAccount, AuthSession, AuthTwoFactor, AuthUser, AuthVerification,
+};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
@@ -250,11 +252,19 @@ impl TwoFactorPlugin {
         Ok((user, verification.id().to_string()))
     }
 
-    fn verify_user_password<U: AuthUser>(user: &U, password: &str) -> AuthResult<()> {
-        let stored_hash = user
-            .metadata()
-            .get("password_hash")
-            .and_then(|v| v.as_str())
+    async fn verify_user_password_from_account<DB: DatabaseAdapter>(
+        user_id: &str,
+        password: &str,
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<()> {
+        let account = ctx
+            .database
+            .get_account("credential", user_id)
+            .await?
+            .ok_or(AuthError::InvalidCredentials)?;
+
+        let stored_hash = account
+            .password()
             .ok_or(AuthError::InvalidCredentials)?;
 
         let parsed_hash = PasswordHash::new(stored_hash)
@@ -269,6 +279,7 @@ impl TwoFactorPlugin {
 
     fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
         let session_config = &ctx.config.session;
+        let signed_token = better_auth_core::sign_session_token(token, &ctx.config.secret);
         let secure = if session_config.cookie_secure {
             "; Secure"
         } else {
@@ -290,7 +301,7 @@ impl TwoFactorPlugin {
 
         format!(
             "{}={}; Path=/; Expires={}{}{}{}",
-            session_config.cookie_name, token, expires_str, secure, http_only, same_site
+            session_config.cookie_name, signed_token, expires_str, secure, http_only, same_site
         )
     }
 
@@ -308,7 +319,7 @@ impl TwoFactorPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        Self::verify_user_password(&user, &enable_req.password)?;
+        Self::verify_user_password_from_account(user.id(), &enable_req.password, ctx).await?;
 
         // Generate TOTP secret
         let secret = Secret::generate_secret();
@@ -376,7 +387,7 @@ impl TwoFactorPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        Self::verify_user_password(&user, &disable_req.password)?;
+        Self::verify_user_password_from_account(user.id(), &disable_req.password, ctx).await?;
 
         ctx.database.delete_two_factor(user.id()).await?;
 
@@ -419,7 +430,7 @@ impl TwoFactorPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        Self::verify_user_password(&user, &uri_req.password)?;
+        Self::verify_user_password_from_account(user.id(), &uri_req.password, ctx).await?;
 
         let two_factor = ctx
             .database
@@ -594,7 +605,7 @@ impl TwoFactorPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        Self::verify_user_password(&user, &gen_req.password)?;
+        Self::verify_user_password_from_account(user.id(), &gen_req.password, ctx).await?;
 
         // Generate new codes
         let backup_codes = self.generate_backup_codes();

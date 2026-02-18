@@ -695,7 +695,7 @@ async fn test_axum_signup_sets_cookie() {
 
     let cookie_value = cookie_header.unwrap().to_str().unwrap();
     assert!(
-        cookie_value.contains("better-auth.session-token="),
+        cookie_value.contains("better-auth.session_token="),
         "Cookie should contain session token"
     );
     assert!(cookie_value.contains("Path=/"), "Cookie should have Path=/");
@@ -744,7 +744,7 @@ async fn test_axum_signin_sets_cookie() {
 
     let cookie_value = cookie_header.unwrap().to_str().unwrap();
     assert!(
-        cookie_value.contains("better-auth.session-token="),
+        cookie_value.contains("better-auth.session_token="),
         "Cookie should contain session token"
     );
     assert!(cookie_value.contains("Path=/"), "Cookie should have Path=/");
@@ -787,7 +787,7 @@ async fn test_axum_signout_clears_cookie() {
 
     let cookie_value = cookie_header.unwrap().to_str().unwrap();
     assert!(
-        cookie_value.contains("better-auth.session-token="),
+        cookie_value.contains("better-auth.session_token="),
         "Cookie should contain session token name"
     );
     assert!(

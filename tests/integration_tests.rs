@@ -786,11 +786,17 @@ async fn test_cookie_based_auth() {
     use better_auth::types::AuthRequest;
     use std::collections::HashMap;
 
+    // Sign the token with HMAC before putting it in the cookie
+    let signed_token = better_auth::sign_session_token(
+        &session_token,
+        "test-secret-key-that-is-at-least-32-characters-long",
+    );
+
     // Use cookie header instead of Bearer token
     let mut headers = HashMap::new();
     headers.insert(
         "cookie".to_string(),
-        format!("better-auth.session-token={}; other=value", session_token),
+        format!("better-auth.session_token={}; other=value", signed_token),
     );
 
     let request = AuthRequest {
@@ -826,7 +832,7 @@ async fn test_bearer_takes_precedence_over_cookie() {
     );
     headers.insert(
         "cookie".to_string(),
-        "better-auth.session-token=invalid_token".to_string(),
+        "better-auth.session_token=invalid_token".to_string(),
     );
 
     let request = AuthRequest {
@@ -1063,7 +1069,7 @@ async fn test_list_accounts_empty() {
 
     let body_str = String::from_utf8(response.body).unwrap();
     let accounts: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(accounts.len(), 0); // No linked accounts yet
+    assert_eq!(accounts.len(), 1); // Only the credential account from signup
 }
 
 /// Integration test for list-accounts with an account
@@ -1112,15 +1118,18 @@ async fn test_list_accounts_with_account() {
 
     let body_str = String::from_utf8(response.body).unwrap();
     let accounts: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(accounts.len(), 1);
-    assert_eq!(accounts[0]["provider"], "google");
+    assert_eq!(accounts.len(), 2); // credential account from signup + google account
+    let google_account = accounts
+        .iter()
+        .find(|a| a["provider"] == "google")
+        .expect("google account should exist");
     assert_eq!(
-        accounts[0]["scopes"],
+        google_account["scopes"],
         serde_json::json!(["email", "profile"])
     );
     // Sensitive fields should NOT be present
-    assert!(accounts[0].get("access_token").is_none());
-    assert!(accounts[0].get("password").is_none());
+    assert!(google_account.get("access_token").is_none());
+    assert!(google_account.get("password").is_none());
 }
 
 /// Integration test for unlink-account success
@@ -1174,10 +1183,11 @@ async fn test_unlink_account_success() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    // Verify only one account remains
+    // Verify credential + github accounts remain (google was unlinked)
     let accounts = auth.database().get_user_accounts(&user_id).await.unwrap();
-    assert_eq!(accounts.len(), 1);
-    assert_eq!(accounts[0].provider_id, "github");
+    assert_eq!(accounts.len(), 2); // credential + github
+    assert!(accounts.iter().any(|a| a.provider_id == "github"));
+    assert!(!accounts.iter().any(|a| a.provider_id == "google"));
 }
 
 /// Integration test for unlink-account last credential → 400
@@ -1487,12 +1497,12 @@ mod postgres_tests {
         let pool = sqlx::PgPool::connect(&database_url).await.ok()?;
 
         // Clean up test data
-        sqlx::query("DELETE FROM sessions WHERE user_id LIKE 'test_%'")
+        sqlx::query("DELETE FROM session WHERE user_id LIKE 'test_%'")
             .execute(&pool)
             .await
             .ok()?;
 
-        sqlx::query("DELETE FROM users WHERE email LIKE '%test.example%'")
+        sqlx::query("DELETE FROM \"user\" WHERE email LIKE '%test.example%'")
             .execute(&pool)
             .await
             .ok()?;

@@ -1,68 +1,68 @@
 -- SaaS example: core tables + organization tables with extra business columns
 
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS "user" (
     id TEXT PRIMARY KEY,
     name TEXT,
     email TEXT UNIQUE,
-    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    "emailVerified" BOOLEAN NOT NULL DEFAULT FALSE,
     image TEXT,
     username TEXT UNIQUE,
-    display_username TEXT,
-    two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    "displayUsername" TEXT,
+    "twoFactorEnabled" BOOLEAN NOT NULL DEFAULT FALSE,
     role TEXT,
     banned BOOLEAN NOT NULL DEFAULT FALSE,
-    ban_reason TEXT,
-    ban_expires TIMESTAMPTZ,
+    "banReason" TEXT,
+    "banExpires" TIMESTAMPTZ,
     metadata JSONB NOT NULL DEFAULT '{}',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     -- SaaS custom columns
     plan TEXT NOT NULL DEFAULT 'free',
     stripe_customer_id TEXT,
     phone TEXT
 );
 
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE IF NOT EXISTS session (
     id TEXT PRIMARY KEY,
-    expires_at TIMESTAMPTZ NOT NULL,
+    "expiresAt" TIMESTAMPTZ NOT NULL,
     token TEXT NOT NULL UNIQUE,
-    ip_address TEXT,
-    user_agent TEXT,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    impersonated_by TEXT,
-    active_organization_id TEXT,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    "impersonatedBy" TEXT,
+    "activeOrganizationId" TEXT,
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     -- SaaS custom columns
     device_id TEXT,
     country TEXT
 );
 
-CREATE TABLE IF NOT EXISTS accounts (
+CREATE TABLE IF NOT EXISTS account (
     id TEXT PRIMARY KEY,
-    account_id TEXT NOT NULL,
-    provider_id TEXT NOT NULL,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    access_token TEXT,
-    refresh_token TEXT,
-    id_token TEXT,
-    access_token_expires_at TIMESTAMPTZ,
-    refresh_token_expires_at TIMESTAMPTZ,
+    "accountId" TEXT NOT NULL,
+    "providerId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    "accessToken" TEXT,
+    "refreshToken" TEXT,
+    "idToken" TEXT,
+    "accessTokenExpiresAt" TIMESTAMPTZ,
+    "refreshTokenExpiresAt" TIMESTAMPTZ,
     scope TEXT,
     password TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(provider_id, account_id)
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE("providerId", "accountId")
 );
 
-CREATE TABLE IF NOT EXISTS verifications (
+CREATE TABLE IF NOT EXISTS verification (
     id TEXT PRIMARY KEY,
     identifier TEXT NOT NULL,
     value TEXT NOT NULL,
-    expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    "expiresAt" TIMESTAMPTZ NOT NULL,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS organization (
@@ -71,8 +71,8 @@ CREATE TABLE IF NOT EXISTS organization (
     slug TEXT NOT NULL UNIQUE,
     logo TEXT,
     metadata JSONB NOT NULL DEFAULT '{}',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     -- SaaS custom columns
     billing_email TEXT,
     plan TEXT NOT NULL DEFAULT 'free'
@@ -80,29 +80,29 @@ CREATE TABLE IF NOT EXISTS organization (
 
 CREATE TABLE IF NOT EXISTS member (
     id TEXT PRIMARY KEY,
-    organization_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    "organizationId" TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+    "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
     role TEXT NOT NULL DEFAULT 'member',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(organization_id, user_id)
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE("organizationId", "userId")
 );
 
 CREATE TABLE IF NOT EXISTS invitation (
     id TEXT PRIMARY KEY,
-    organization_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+    "organizationId" TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'member',
     status TEXT NOT NULL DEFAULT 'pending',
-    inviter_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    "inviterId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    "expiresAt" TIMESTAMPTZ NOT NULL,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Indexes
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
-CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_email ON "user"(email);
+CREATE INDEX IF NOT EXISTS idx_session_token ON session(token);
+CREATE INDEX IF NOT EXISTS idx_session_user_id ON session("userId");
+CREATE INDEX IF NOT EXISTS idx_account_user_id ON account("userId");
 CREATE INDEX IF NOT EXISTS idx_organization_slug ON organization(slug);
-CREATE INDEX IF NOT EXISTS idx_member_org_user ON member(organization_id, user_id);
-CREATE INDEX IF NOT EXISTS idx_invitation_org ON invitation(organization_id);
+CREATE INDEX IF NOT EXISTS idx_member_org_user ON member("organizationId", "userId");
+CREATE INDEX IF NOT EXISTS idx_invitation_org ON invitation("organizationId");

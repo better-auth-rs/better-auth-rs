@@ -41,7 +41,7 @@ pub use better_auth_core::{
     MemoryDatabaseAdapter, MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession,
     MemoryUser, MemoryVerification, Middleware, OpenApiBuilder, OpenApiSpec, OrganizationOps,
     Passkey, PasskeyOps, PasswordConfig, RateLimitConfig, RateLimitMiddleware, SameSite, Session,
-    SessionConfig, SessionManager, SessionOps, TwoFactor, UpdateOrganization, UpdatePasskey,
+    SessionConfig, SessionManager, SessionOps, TwoFactor, UpdateOrganization, UpdatePasskey, sign_session_token,
     UpdateUser, UpdateUserRequest, UpdateUserResponse, User, UserOps, Verification,
     VerificationOps,
 };
@@ -305,7 +305,8 @@ mod tests {
             .await
             .expect("Failed to create session");
 
-        assert!(session.token.starts_with("session_"));
+        assert_eq!(session.token.len(), 64);
+        assert!(session.token.chars().all(|c| c.is_ascii_hexdigit()));
         assert_eq!(session.user_id, user.id);
         assert!(session.active);
 
@@ -335,12 +336,16 @@ mod tests {
         let auth = create_test_auth().await;
         let session_manager = auth.session_manager();
 
+        // Valid: 64-character hex string (32 bytes)
         assert!(
             session_manager
-                .validate_token_format("session_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN")
+                .validate_token_format("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
         );
+        // Invalid: too short
         assert!(!session_manager.validate_token_format("invalid_token"));
+        // Invalid: old format
         assert!(!session_manager.validate_token_format("session_short"));
+        // Invalid: empty
         assert!(!session_manager.validate_token_format(""));
     }
 

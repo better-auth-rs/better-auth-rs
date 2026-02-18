@@ -6,8 +6,10 @@ use validator::Validate;
 
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, CreateVerification, HttpMethod, UpdateUser};
-use better_auth_core::{AuthSession, AuthUser, AuthVerification, DatabaseAdapter};
+use better_auth_core::{
+    AuthRequest, AuthResponse, CreateAccount, CreateVerification, HttpMethod, UpdateAccount,
+};
+use better_auth_core::{AuthAccount, AuthSession, AuthUser, AuthVerification, DatabaseAdapter};
 
 /// Password management plugin for password reset and change functionality
 pub struct PasswordManagementPlugin {
@@ -267,26 +269,22 @@ impl PasswordManagementPlugin {
         // Hash new password
         let password_hash = self.hash_password(&reset_req.new_password)?;
 
-        // Update user password
-        let mut metadata = user.metadata().clone();
-        metadata["password_hash"] = serde_json::Value::String(password_hash);
+        // Update password in credential account
+        let account = ctx
+            .database
+            .get_account("credential", user.id())
+            .await?
+            .ok_or_else(|| AuthError::bad_request("No credential account found"))?;
 
-        let update_user = UpdateUser {
-            email: None,
-            name: None,
-            image: None,
-            email_verified: None,
-            username: None,
-            display_username: None,
-            role: None,
-            banned: None,
-            ban_reason: None,
-            ban_expires: None,
-            two_factor_enabled: None,
-            metadata: Some(metadata),
-        };
-
-        ctx.database.update_user(user.id(), update_user).await?;
+        ctx.database
+            .update_account(
+                account.id(),
+                UpdateAccount {
+                    password: Some(password_hash),
+                    ..Default::default()
+                },
+            )
+            .await?;
 
         // Delete the used verification token
         ctx.database.delete_verification(verification.id()).await?;
@@ -314,12 +312,17 @@ impl PasswordManagementPlugin {
             .await?
             .ok_or(AuthError::Unauthenticated)?;
 
+        // Get credential account
+        let account = ctx
+            .database
+            .get_account("credential", user.id())
+            .await?
+            .ok_or_else(|| AuthError::bad_request("No password set for this user"))?;
+
         // Verify current password
         if self.config.require_current_password {
-            let stored_hash = user
-                .metadata()
-                .get("password_hash")
-                .and_then(|v| v.as_str())
+            let stored_hash = account
+                .password()
                 .ok_or_else(|| AuthError::bad_request("No password set for this user"))?;
 
             self.verify_password(&change_req.current_password, stored_hash)
@@ -332,26 +335,18 @@ impl PasswordManagementPlugin {
         // Hash new password
         let password_hash = self.hash_password(&change_req.new_password)?;
 
-        // Update user password
-        let mut metadata = user.metadata().clone();
-        metadata["password_hash"] = serde_json::Value::String(password_hash);
+        // Update password in credential account
+        ctx.database
+            .update_account(
+                account.id(),
+                UpdateAccount {
+                    password: Some(password_hash),
+                    ..Default::default()
+                },
+            )
+            .await?;
 
-        let update_user = UpdateUser {
-            email: None,
-            name: None,
-            image: None,
-            email_verified: None,
-            username: None,
-            display_username: None,
-            role: None,
-            banned: None,
-            ban_reason: None,
-            ban_expires: None,
-            two_factor_enabled: None,
-            metadata: Some(metadata),
-        };
-
-        let updated_user = ctx.database.update_user(user.id(), update_user).await?;
+        let updated_user = ctx.database.get_user_by_id(user.id()).await?.unwrap();
 
         // Handle session revocation
         let new_token = if change_req.revoke_other_sessions.as_deref() == Some("true") {
@@ -393,16 +388,18 @@ impl PasswordManagementPlugin {
             .await?
             .ok_or(AuthError::Unauthenticated)?;
 
-        // Verify the user does NOT already have a password
-        if user
-            .metadata()
-            .get("password_hash")
-            .and_then(|v| v.as_str())
-            .is_some()
-        {
-            return Err(AuthError::bad_request(
-                "User already has a password. Use /change-password instead.",
-            ));
+        // Check if user already has a credential account with a password
+        let existing_account = ctx
+            .database
+            .get_account("credential", user.id())
+            .await?;
+
+        if let Some(ref acc) = existing_account {
+            if acc.password().is_some() {
+                return Err(AuthError::bad_request(
+                    "User already has a password. Use /change-password instead.",
+                ));
+            }
         }
 
         // Validate new password
@@ -411,25 +408,34 @@ impl PasswordManagementPlugin {
         // Hash and store the new password
         let password_hash = self.hash_password(&set_req.new_password)?;
 
-        let mut metadata = user.metadata().clone();
-        metadata["password_hash"] = serde_json::Value::String(password_hash);
-
-        let update_user = UpdateUser {
-            email: None,
-            name: None,
-            image: None,
-            email_verified: None,
-            username: None,
-            display_username: None,
-            role: None,
-            banned: None,
-            ban_reason: None,
-            ban_expires: None,
-            two_factor_enabled: None,
-            metadata: Some(metadata),
-        };
-
-        ctx.database.update_user(user.id(), update_user).await?;
+        if let Some(acc) = existing_account {
+            // Update existing credential account with password
+            ctx.database
+                .update_account(
+                    acc.id(),
+                    UpdateAccount {
+                        password: Some(password_hash),
+                        ..Default::default()
+                    },
+                )
+                .await?;
+        } else {
+            // Create new credential account with password
+            ctx.database
+                .create_account(CreateAccount {
+                    user_id: user.id().to_string(),
+                    account_id: user.id().to_string(),
+                    provider_id: "credential".to_string(),
+                    password: Some(password_hash),
+                    access_token: None,
+                    refresh_token: None,
+                    id_token: None,
+                    access_token_expires_at: None,
+                    refresh_token_expires_at: None,
+                    scope: None,
+                })
+                .await?;
+        }
 
         let response = StatusResponse { status: true };
         Ok(AuthResponse::json(200, &response)?)
@@ -602,7 +608,9 @@ impl PasswordManagementPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use better_auth_core::adapters::{MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps};
+    use better_auth_core::adapters::{
+        AccountOps, MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps,
+    };
     use better_auth_core::config::{Argon2Config, AuthConfig, PasswordConfig};
     use better_auth_core::{CreateSession, CreateUser, CreateVerification, Session, User};
     use chrono::{Duration, Utc};
@@ -625,19 +633,31 @@ mod tests {
         let database = Arc::new(MemoryDatabaseAdapter::new());
         let ctx = AuthContext::new(config.clone(), database.clone());
 
-        // Create test user with hashed password
+        // Create test user
         let plugin = PasswordManagementPlugin::new();
         let password_hash = plugin.hash_password("Password123!").unwrap();
 
-        let metadata = serde_json::json!({
-            "password_hash": password_hash,
-        });
-
         let create_user = CreateUser::new()
             .with_email("test@example.com")
-            .with_name("Test User")
-            .with_metadata(metadata);
+            .with_name("Test User");
         let user = database.create_user(create_user).await.unwrap();
+
+        // Create credential account with password hash
+        database
+            .create_account(CreateAccount {
+                user_id: user.id.clone(),
+                account_id: user.id.clone(),
+                provider_id: "credential".to_string(),
+                password: Some(password_hash),
+                access_token: None,
+                refresh_token: None,
+                id_token: None,
+                access_token_expires_at: None,
+                refresh_token_expires_at: None,
+                scope: None,
+            })
+            .await
+            .unwrap();
 
         // Create test session
         let create_session = CreateSession {
@@ -759,19 +779,14 @@ mod tests {
         let response_data: StatusResponse = serde_json::from_str(&body_str).unwrap();
         assert!(response_data.status);
 
-        // Verify password was updated
-        let updated_user = ctx
+        // Verify password was updated in credential account
+        let account = ctx
             .database
-            .get_user_by_id(&user.id)
+            .get_account("credential", &user.id)
             .await
             .unwrap()
             .unwrap();
-        let stored_hash = updated_user
-            .metadata
-            .get("password_hash")
-            .unwrap()
-            .as_str()
-            .unwrap();
+        let stored_hash = account.password.as_ref().unwrap();
         assert!(
             plugin
                 .verify_password("NewPassword123!", stored_hash)
@@ -866,15 +881,15 @@ mod tests {
         let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
         assert!(response_data["token"].is_null()); // No new token when not revoking sessions
 
-        // Verify password was updated by checking the database directly
+        // Verify password was updated in credential account
         let user_id = response_data["user"]["id"].as_str().unwrap();
-        let updated_user = ctx.database.get_user_by_id(user_id).await.unwrap().unwrap();
-        let stored_hash = updated_user
-            .metadata
-            .get("password_hash")
+        let account = ctx
+            .database
+            .get_account("credential", user_id)
+            .await
             .unwrap()
-            .as_str()
             .unwrap();
+        let stored_hash = account.password.as_ref().unwrap();
         assert!(
             plugin
                 .verify_password("NewPassword123!", stored_hash)

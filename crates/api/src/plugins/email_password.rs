@@ -5,10 +5,12 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::entity::{AuthSession, AuthUser};
+use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod};
+use better_auth_core::{
+    AuthRequest, AuthResponse, CreateAccount, CreateUser, CreateVerification, HttpMethod,
+};
 
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
@@ -133,11 +135,7 @@ impl EmailPasswordPlugin {
         // Hash password
         let password_hash = self.hash_password(&signup_req.password)?;
 
-        // Create user with password hash in metadata
-        let metadata = serde_json::json!({
-            "password_hash": password_hash,
-        });
-
+        // Create user
         let mut create_user = CreateUser::new()
             .with_email(&signup_req.email)
             .with_name(&signup_req.name);
@@ -147,9 +145,24 @@ impl EmailPasswordPlugin {
         if let Some(display_username) = signup_req.display_username {
             create_user.display_username = Some(display_username);
         }
-        create_user.metadata = Some(metadata);
 
         let user = ctx.database.create_user(create_user).await?;
+
+        // Create credential account with password hash
+        ctx.database
+            .create_account(CreateAccount {
+                user_id: user.id().to_string(),
+                account_id: user.id().to_string(),
+                provider_id: "credential".to_string(),
+                password: Some(password_hash),
+                access_token: None,
+                refresh_token: None,
+                id_token: None,
+                access_token_expires_at: None,
+                refresh_token_expires_at: None,
+                scope: None,
+            })
+            .await?;
 
         // Create session
         let session_manager =
@@ -184,11 +197,15 @@ impl EmailPasswordPlugin {
             .await?
             .ok_or(AuthError::InvalidCredentials)?;
 
-        // Verify password
-        let stored_hash = user
-            .metadata()
-            .get("password_hash")
-            .and_then(|v| v.as_str())
+        // Get credential account and verify password
+        let account = ctx
+            .database
+            .get_account("credential", user.id())
+            .await?
+            .ok_or(AuthError::InvalidCredentials)?;
+
+        let stored_hash = account
+            .password()
             .ok_or(AuthError::InvalidCredentials)?;
 
         self.verify_password(&signin_req.password, stored_hash)?;
@@ -247,11 +264,15 @@ impl EmailPasswordPlugin {
             .await?
             .ok_or(AuthError::InvalidCredentials)?;
 
-        // Verify password
-        let stored_hash = user
-            .metadata()
-            .get("password_hash")
-            .and_then(|v| v.as_str())
+        // Get credential account and verify password
+        let account = ctx
+            .database
+            .get_account("credential", user.id())
+            .await?
+            .ok_or(AuthError::InvalidCredentials)?;
+
+        let stored_hash = account
+            .password()
             .ok_or(AuthError::InvalidCredentials)?;
 
         self.verify_password(&signin_req.password, stored_hash)?;
@@ -324,6 +345,7 @@ impl EmailPasswordPlugin {
         ctx: &AuthContext<DB>,
     ) -> String {
         let session_config = &ctx.config.session;
+        let signed_token = better_auth_core::sign_session_token(token, &ctx.config.secret);
         let secure = if session_config.cookie_secure {
             "; Secure"
         } else {
@@ -345,7 +367,7 @@ impl EmailPasswordPlugin {
 
         format!(
             "{}={}; Path=/; Expires={}{}{}{}",
-            session_config.cookie_name, token, expires_str, secure, http_only, same_site
+            session_config.cookie_name, signed_token, expires_str, secure, http_only, same_site
         )
     }
 

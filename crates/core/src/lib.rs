@@ -47,7 +47,7 @@ pub use middleware::{
 };
 pub use openapi::{OpenApiBuilder, OpenApiInfo, OpenApiOperation, OpenApiResponse, OpenApiSpec};
 pub use plugin::{AuthContext, AuthPlugin, AuthRoute};
-pub use session::SessionManager;
+pub use session::{SessionManager, sign_session_token};
 pub use types::{
     Account, ApiKey, AuthRequest, AuthResponse, CreateAccount, CreateApiKey, CreateInvitation,
     CreateMember, CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,

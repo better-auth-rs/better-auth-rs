@@ -6,34 +6,34 @@ CREATE TABLE IF NOT EXISTS organization (
     slug TEXT NOT NULL UNIQUE,
     logo TEXT,
     metadata JSONB NOT NULL DEFAULT '{}',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS member (
     id TEXT PRIMARY KEY,
-    organization_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    "organizationId" TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+    "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
     role TEXT NOT NULL DEFAULT 'member',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(organization_id, user_id)
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE("organizationId", "userId")
 );
 
 CREATE TABLE IF NOT EXISTS invitation (
     id TEXT PRIMARY KEY,
-    organization_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+    "organizationId" TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'member',
     status TEXT NOT NULL DEFAULT 'pending',
-    inviter_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    "inviterId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    "expiresAt" TIMESTAMPTZ NOT NULL,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_organization_slug ON organization(slug);
-CREATE INDEX IF NOT EXISTS idx_member_organization_id ON member(organization_id);
-CREATE INDEX IF NOT EXISTS idx_member_user_id ON member(user_id);
-CREATE INDEX IF NOT EXISTS idx_invitation_organization_id ON invitation(organization_id);
+CREATE INDEX IF NOT EXISTS idx_member_organization_id ON member("organizationId");
+CREATE INDEX IF NOT EXISTS idx_member_user_id ON member("userId");
+CREATE INDEX IF NOT EXISTS idx_invitation_organization_id ON invitation("organizationId");
 CREATE INDEX IF NOT EXISTS idx_invitation_email ON invitation(email);
 CREATE INDEX IF NOT EXISTS idx_invitation_status ON invitation(status);

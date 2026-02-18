@@ -47,17 +47,17 @@ impl FromRow<'_, PgRow> for SaasUser {
             id: row.try_get("id")?,
             display_name: row.try_get("name")?,
             email: row.try_get("email")?,
-            email_verified: row.try_get("email_verified")?,
+            email_verified: row.try_get("emailVerified")?,
             image: row.try_get("image")?,
-            created_at: row.try_get("created_at")?,
-            updated_at: row.try_get("updated_at")?,
+            created_at: row.try_get("createdAt")?,
+            updated_at: row.try_get("updatedAt")?,
             username: row.try_get("username")?,
-            display_username: row.try_get("display_username")?,
-            two_factor_enabled: row.try_get("two_factor_enabled").unwrap_or(false),
+            display_username: row.try_get("displayUsername")?,
+            two_factor_enabled: row.try_get("twoFactorEnabled").unwrap_or(false),
             role: row.try_get("role")?,
             banned: row.try_get("banned").unwrap_or(false),
-            ban_reason: row.try_get("ban_reason")?,
-            ban_expires: row.try_get("ban_expires")?,
+            ban_reason: row.try_get("banReason")?,
+            ban_expires: row.try_get("banExpires")?,
             metadata: row.try_get::<sqlx::types::Json<serde_json::Value>, _>("metadata")?.0,
             plan: row.try_get("plan").unwrap_or_else(|_| "free".to_string()),
             stripe_customer_id: row.try_get("stripe_customer_id")?,
@@ -92,15 +92,15 @@ impl FromRow<'_, PgRow> for SaasSession {
     fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
         Ok(Self {
             id: row.try_get("id")?,
-            expires_at: row.try_get("expires_at")?,
+            expires_at: row.try_get("expiresAt")?,
             token: row.try_get("token")?,
-            created_at: row.try_get("created_at")?,
-            updated_at: row.try_get("updated_at")?,
-            ip_address: row.try_get("ip_address")?,
-            user_agent: row.try_get("user_agent")?,
-            user_id: row.try_get("user_id")?,
-            impersonated_by: row.try_get("impersonated_by")?,
-            active_organization_id: row.try_get("active_organization_id")?,
+            created_at: row.try_get("createdAt")?,
+            updated_at: row.try_get("updatedAt")?,
+            ip_address: row.try_get("ipAddress")?,
+            user_agent: row.try_get("userAgent")?,
+            user_id: row.try_get("userId")?,
+            impersonated_by: row.try_get("impersonatedBy")?,
+            active_organization_id: row.try_get("activeOrganizationId")?,
             active: row.try_get("active").unwrap_or(true),
             device_id: row.try_get("device_id")?,
             country: row.try_get("country")?,
@@ -115,17 +115,27 @@ impl FromRow<'_, PgRow> for SaasSession {
 #[derive(Clone, Debug, Serialize, sqlx::FromRow, AuthAccount)]
 pub struct SaasAccount {
     pub id: String,
+    #[sqlx(rename = "accountId")]
     pub account_id: String,
+    #[sqlx(rename = "providerId")]
     pub provider_id: String,
+    #[sqlx(rename = "userId")]
     pub user_id: String,
+    #[sqlx(rename = "accessToken")]
     pub access_token: Option<String>,
+    #[sqlx(rename = "refreshToken")]
     pub refresh_token: Option<String>,
+    #[sqlx(rename = "idToken")]
     pub id_token: Option<String>,
+    #[sqlx(rename = "accessTokenExpiresAt")]
     pub access_token_expires_at: Option<DateTime<Utc>>,
+    #[sqlx(rename = "refreshTokenExpiresAt")]
     pub refresh_token_expires_at: Option<DateTime<Utc>>,
     pub scope: Option<String>,
     pub password: Option<String>,
+    #[sqlx(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
+    #[sqlx(rename = "updatedAt")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -157,8 +167,8 @@ impl FromRow<'_, PgRow> for SaasOrganization {
             metadata: row
                 .try_get::<Option<sqlx::types::Json<serde_json::Value>>, _>("metadata")?
                 .map(|j| j.0),
-            created_at: row.try_get("created_at")?,
-            updated_at: row.try_get("updated_at")?,
+            created_at: row.try_get("createdAt")?,
+            updated_at: row.try_get("updatedAt")?,
             billing_email: row.try_get("billing_email")?,
             plan: row.try_get("plan").unwrap_or_else(|_| "free".to_string()),
         })
@@ -172,9 +182,12 @@ impl FromRow<'_, PgRow> for SaasOrganization {
 #[derive(Clone, Debug, Serialize, sqlx::FromRow, AuthMember)]
 pub struct SaasMember {
     pub id: String,
+    #[sqlx(rename = "organizationId")]
     pub organization_id: String,
+    #[sqlx(rename = "userId")]
     pub user_id: String,
     pub role: String,
+    #[sqlx(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
 }
 
@@ -199,13 +212,13 @@ impl FromRow<'_, PgRow> for SaasInvitation {
         let status_str: String = row.try_get("status")?;
         Ok(Self {
             id: row.try_get("id")?,
-            organization_id: row.try_get("organization_id")?,
+            organization_id: row.try_get("organizationId")?,
             email: row.try_get("email")?,
             role: row.try_get("role")?,
             status: InvitationStatus::from(status_str),
-            inviter_id: row.try_get("inviter_id")?,
-            expires_at: row.try_get("expires_at")?,
-            created_at: row.try_get("created_at")?,
+            inviter_id: row.try_get("inviterId")?,
+            expires_at: row.try_get("expiresAt")?,
+            created_at: row.try_get("createdAt")?,
         })
     }
 }
@@ -219,8 +232,11 @@ pub struct SaasVerification {
     pub id: String,
     pub identifier: String,
     pub value: String,
+    #[sqlx(rename = "expiresAt")]
     pub expires_at: DateTime<Utc>,
+    #[sqlx(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
+    #[sqlx(rename = "updatedAt")]
     pub updated_at: DateTime<Utc>,
 }
 

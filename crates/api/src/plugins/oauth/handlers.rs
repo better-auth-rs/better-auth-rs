@@ -644,6 +644,7 @@ fn extract_query_param(path: &str, key: &str) -> Option<String> {
 
 fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
     let session_config = &ctx.config.session;
+    let signed_token = better_auth_core::sign_session_token(token, &ctx.config.secret);
     let secure = if session_config.cookie_secure {
         "; Secure"
     } else {
@@ -665,6 +666,6 @@ fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>
 
     format!(
         "{}={}; Path=/; Expires={}{}{}{}",
-        session_config.cookie_name, token, expires_str, secure, http_only, same_site
+        session_config.cookie_name, signed_token, expires_str, secure, http_only, same_site
     )
 }
