@@ -10,8 +10,8 @@ use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
-    AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, HttpMethod, SessionManager,
-    UpdateUser,
+    AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, HttpMethod,
+    SessionManager, UpdateUser,
 };
 
 // ---------------------------------------------------------------------------
@@ -231,19 +231,10 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for AdminPlugin {
             AuthRoute::post("/admin/unban-user", "admin_unban_user"),
             AuthRoute::post("/admin/impersonate-user", "admin_impersonate_user"),
             AuthRoute::post("/admin/stop-impersonating", "admin_stop_impersonating"),
-            AuthRoute::post(
-                "/admin/revoke-user-session",
-                "admin_revoke_user_session",
-            ),
-            AuthRoute::post(
-                "/admin/revoke-user-sessions",
-                "admin_revoke_user_sessions",
-            ),
+            AuthRoute::post("/admin/revoke-user-session", "admin_revoke_user_session"),
+            AuthRoute::post("/admin/revoke-user-sessions", "admin_revoke_user_sessions"),
             AuthRoute::post("/admin/remove-user", "admin_remove_user"),
-            AuthRoute::post(
-                "/admin/set-user-password",
-                "admin_set_user_password",
-            ),
+            AuthRoute::post("/admin/set-user-password", "admin_set_user_password"),
             AuthRoute::post("/admin/has-permission", "admin_has_permission"),
         ]
     }
@@ -416,9 +407,7 @@ impl AdminPlugin {
 
         let updated_user = ctx.database.update_user(&body.user_id, update).await?;
 
-        let response = UserResponse {
-            user: updated_user,
-        };
+        let response = UserResponse { user: updated_user };
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -449,7 +438,10 @@ impl AdminPlugin {
 
         let mut metadata = body.data.unwrap_or(serde_json::json!({}));
         if let Some(obj) = metadata.as_object_mut() {
-            obj.insert("password_hash".to_string(), serde_json::json!(password_hash));
+            obj.insert(
+                "password_hash".to_string(),
+                serde_json::json!(password_hash),
+            );
         }
 
         let create_user = CreateUser::new()
@@ -540,18 +532,14 @@ impl AdminPlugin {
         if let Some(ref search_value) = search_value {
             match search_field.as_str() {
                 "email" => {
-                    if let Some(user) =
-                        ctx.database.get_user_by_email(search_value).await?
-                    {
+                    if let Some(user) = ctx.database.get_user_by_email(search_value).await? {
                         all_users.push(user);
                     }
                 }
                 "name" => {
                     // Name search not directly supported by DatabaseAdapter;
                     // try email as a fallback since we can't enumerate all users.
-                    if let Some(user) =
-                        ctx.database.get_user_by_email(search_value).await?
-                    {
+                    if let Some(user) = ctx.database.get_user_by_email(search_value).await? {
                         all_users.push(user);
                     }
                 }
@@ -583,16 +571,12 @@ impl AdminPlugin {
             if let Some(ref filter_field) = filter_field {
                 match filter_field.as_str() {
                     "email" => {
-                        if let Some(user) =
-                            ctx.database.get_user_by_email(filter_value).await?
-                        {
+                        if let Some(user) = ctx.database.get_user_by_email(filter_value).await? {
                             all_users.push(user);
                         }
                     }
                     "username" => {
-                        if let Some(user) =
-                            ctx.database.get_user_by_username(filter_value).await?
-                        {
+                        if let Some(user) = ctx.database.get_user_by_username(filter_value).await? {
                             all_users.push(user);
                         }
                     }
@@ -606,14 +590,8 @@ impl AdminPlugin {
             let desc = sort_direction == "desc";
             all_users.sort_by(|a, b| {
                 let cmp = match sort_by.as_str() {
-                    "email" => a
-                        .email()
-                        .unwrap_or("")
-                        .cmp(b.email().unwrap_or("")),
-                    "name" => a
-                        .name()
-                        .unwrap_or("")
-                        .cmp(b.name().unwrap_or("")),
+                    "email" => a.email().unwrap_or("").cmp(b.email().unwrap_or("")),
+                    "name" => a.name().unwrap_or("").cmp(b.name().unwrap_or("")),
                     "createdAt" => a.created_at().cmp(&b.created_at()),
                     _ => std::cmp::Ordering::Equal,
                 };
@@ -687,15 +665,14 @@ impl AdminPlugin {
             .ok_or_else(|| AuthError::not_found("User not found"))?;
 
         // Prevent banning other admins unless explicitly allowed
-        if !self.config.allow_ban_admin
-            && target.role().unwrap_or("user") == self.config.admin_role
+        if !self.config.allow_ban_admin && target.role().unwrap_or("user") == self.config.admin_role
         {
             return Err(AuthError::forbidden("Cannot ban an admin user"));
         }
 
         let ban_expires = body
             .ban_expires_in
-            .and_then(|secs| Duration::try_seconds(secs))
+            .and_then(Duration::try_seconds)
             .map(|d| Utc::now() + d);
 
         let update = UpdateUser {
@@ -721,9 +698,7 @@ impl AdminPlugin {
             .revoke_all_user_sessions(&body.user_id)
             .await;
 
-        let response = UserResponse {
-            user: updated_user,
-        };
+        let response = UserResponse { user: updated_user };
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -763,9 +738,7 @@ impl AdminPlugin {
 
         let updated_user = ctx.database.update_user(&body.user_id, update).await?;
 
-        let response = UserResponse {
-            user: updated_user,
-        };
+        let response = UserResponse { user: updated_user };
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -835,7 +808,9 @@ impl AdminPlugin {
         // Must be an impersonation session
         let admin_id = session
             .impersonated_by()
-            .ok_or_else(|| AuthError::bad_request("Current session is not an impersonation session"))?
+            .ok_or_else(|| {
+                AuthError::bad_request("Current session is not an impersonation session")
+            })?
             .to_string();
 
         // Delete the impersonation session
@@ -1075,9 +1050,9 @@ mod tests {
         User,
         Session,
     ) {
-        let config = Arc::new(
-            better_auth_core::AuthConfig::new("test-secret-key-at-least-32-chars-long"),
-        );
+        let config = Arc::new(better_auth_core::AuthConfig::new(
+            "test-secret-key-at-least-32-chars-long",
+        ));
         let database = Arc::new(MemoryDatabaseAdapter::new());
         let ctx = AuthContext::new(config, database.clone());
 
@@ -1137,10 +1112,7 @@ mod tests {
         body: Option<serde_json::Value>,
     ) -> AuthRequest {
         let mut headers = HashMap::new();
-        headers.insert(
-            "authorization".to_string(),
-            format!("Bearer {}", token),
-        );
+        headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
         AuthRequest {
             method,
@@ -1316,11 +1288,7 @@ mod tests {
         assert_eq!(body["success"], true);
 
         // Verify user is deleted
-        let deleted = ctx
-            .database
-            .get_user_by_id(&user.id)
-            .await
-            .unwrap();
+        let deleted = ctx.database.get_user_by_id(&user.id).await.unwrap();
         assert!(deleted.is_none());
     }
 
