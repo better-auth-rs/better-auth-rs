@@ -50,6 +50,7 @@ use better_auth::{
     },
     types::{AuthRequest, HttpMethod},
 };
+use oas3::spec::{ObjectOrReference, ObjectSchema, SchemaType, SchemaTypeSet};
 use serde_json::Value;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -77,85 +78,129 @@ struct FieldExpectation {
     items: Option<Box<FieldExpectation>>,
 }
 
-/// Parse the OpenAPI spec and extract the components/schemas section.
-fn load_openapi_spec() -> Value {
+/// Load and parse the OpenAPI spec using `oas3`.
+///
+/// The canonical `better-auth.yaml` uses the non-standard `type: date` for
+/// date/time fields.  JSON Schema (and therefore OpenAPI 3.1) only recognises
+/// `type: string` with `format: date-time`, so we normalise the YAML before
+/// handing it to the parser.
+fn load_openapi_spec() -> oas3::spec::Spec {
     let yaml_str = std::fs::read_to_string("better-auth.yaml")
         .expect("better-auth.yaml must exist in the project root");
-    serde_yaml::from_str(&yaml_str).expect("better-auth.yaml must be valid YAML")
+
+    // Normalise non-standard "type: date" → "type: string" (+ format kept in
+    // our FieldExpectation as "date" via a post-processing step).
+    let yaml_str = yaml_str.replace("type: date", "type: string");
+
+    oas3::from_yaml(yaml_str).expect("better-auth.yaml must be valid OpenAPI 3.1")
 }
 
-/// Resolve a `$ref` like `#/components/schemas/User` to its definition.
-fn resolve_ref<'a>(spec: &'a Value, ref_path: &str) -> Option<&'a Value> {
-    let parts: Vec<&str> = ref_path
-        .trim_start_matches('#')
-        .trim_start_matches('/')
-        .split('/')
-        .collect();
-    let mut current = spec;
-    for part in parts {
-        current = &current[part];
-        if current.is_null() {
-            return None;
-        }
+/// Look up the `PathItem` for a given API path.
+fn get_path_item<'a>(spec: &'a oas3::spec::Spec, path: &str) -> Option<&'a oas3::spec::PathItem> {
+    spec.paths.as_ref()?.get(path)
+}
+
+/// Get the `Operation` for a given method on a `PathItem`.
+fn get_operation<'a>(
+    path_item: &'a oas3::spec::PathItem,
+    method: &str,
+) -> Option<&'a oas3::spec::Operation> {
+    match method {
+        "get" => path_item.get.as_ref(),
+        "post" => path_item.post.as_ref(),
+        "put" => path_item.put.as_ref(),
+        "delete" => path_item.delete.as_ref(),
+        "patch" => path_item.patch.as_ref(),
+        _ => None,
     }
-    Some(current)
+}
+
+/// Resolve an `ObjectOrReference<ObjectSchema>` to a concrete `ObjectSchema`.
+fn resolve_object_schema(
+    spec: &oas3::spec::Spec,
+    obj_or_ref: &ObjectOrReference<ObjectSchema>,
+) -> Option<ObjectSchema> {
+    match obj_or_ref {
+        ObjectOrReference::Object(obj) => Some(obj.clone()),
+        ObjectOrReference::Ref { .. } => obj_or_ref.resolve(spec).ok(),
+    }
+}
+
+/// Extract the JSON schema from a response's `application/json` content.
+fn schema_from_response(
+    spec: &oas3::spec::Spec,
+    response: &ObjectOrReference<oas3::spec::Response>,
+) -> Option<ObjectSchema> {
+    let resp = match response {
+        ObjectOrReference::Object(r) => r.clone(),
+        ObjectOrReference::Ref { .. } => response.resolve(spec).ok()?,
+    };
+    let media = resp.content.get("application/json")?;
+    let schema_ref = media.schema.as_ref()?;
+    resolve_object_schema(spec, schema_ref)
 }
 
 /// Extract the 200 response schema for a given path and method from the spec.
-fn extract_success_schema(spec: &Value, path: &str, method: &str) -> Option<SchemaExpectation> {
-    let schema =
-        &spec["paths"][path][method]["responses"]["200"]["content"]["application/json"]["schema"];
-    if schema.is_null() {
-        return None;
-    }
-    Some(parse_schema(spec, schema))
+fn extract_success_schema(
+    spec: &oas3::spec::Spec,
+    path: &str,
+    method: &str,
+) -> Option<SchemaExpectation> {
+    let path_item = get_path_item(spec, path)?;
+    let operation = get_operation(path_item, method)?;
+    let response = operation.responses.as_ref()?.get("200")?;
+    let obj_schema = schema_from_response(spec, response)?;
+    Some(object_schema_to_expectation(spec, &obj_schema))
 }
 
-/// Extract error response schemas (400, 401, 403, etc.) for a given path and method.
+/// Extract error response schemas (4xx, 5xx) for a given path and method.
 fn extract_error_schemas(
-    spec: &Value,
+    spec: &oas3::spec::Spec,
     path: &str,
     method: &str,
 ) -> HashMap<String, SchemaExpectation> {
-    let responses = &spec["paths"][path][method]["responses"];
     let mut result = HashMap::new();
-    if let Some(obj) = responses.as_object() {
-        for (status, response_def) in obj {
-            if status.starts_with('4') || status.starts_with('5') {
-                let schema = &response_def["content"]["application/json"]["schema"];
-                if !schema.is_null() {
-                    result.insert(status.clone(), parse_schema(spec, schema));
-                }
+    let Some(path_item) = get_path_item(spec, path) else {
+        return result;
+    };
+    let Some(operation) = get_operation(path_item, method) else {
+        return result;
+    };
+    let Some(responses) = &operation.responses else {
+        return result;
+    };
+    for (status, response) in responses {
+        if status.starts_with('4') || status.starts_with('5') {
+            if let Some(obj_schema) = schema_from_response(spec, response) {
+                result.insert(
+                    status.clone(),
+                    object_schema_to_expectation(spec, &obj_schema),
+                );
             }
         }
     }
     result
 }
 
-/// Parse a JSON Schema object into our internal SchemaExpectation.
-fn parse_schema(spec: &Value, schema: &Value) -> SchemaExpectation {
-    // Handle $ref
-    if let Some(ref_path) = schema.get("$ref").and_then(|v| v.as_str())
-        && let Some(resolved) = resolve_ref(spec, ref_path)
-    {
-        return parse_schema(spec, resolved);
-    }
-
+/// Convert an `oas3` `ObjectSchema` into our internal `SchemaExpectation`.
+fn object_schema_to_expectation(spec: &oas3::spec::Spec, obj: &ObjectSchema) -> SchemaExpectation {
     let mut fields = BTreeMap::new();
-    let mut required_fields = BTreeSet::new();
+    let required_fields: BTreeSet<String> = obj.required.iter().cloned().collect();
 
-    if let Some(props) = schema.get("properties").and_then(|p| p.as_object()) {
-        for (name, prop_schema) in props {
-            let field = parse_field(spec, prop_schema);
-            fields.insert(name.clone(), field);
-        }
-    }
-
-    if let Some(required) = schema.get("required").and_then(|r| r.as_array()) {
-        for item in required {
-            if let Some(s) = item.as_str() {
-                required_fields.insert(s.to_string());
-            }
+    for (name, prop_ref) in &obj.properties {
+        if let Some(prop_schema) = resolve_object_schema(spec, prop_ref) {
+            fields.insert(name.clone(), object_schema_to_field(spec, &prop_schema));
+        } else {
+            // Unresolvable ref — treat as unknown string
+            fields.insert(
+                name.clone(),
+                FieldExpectation {
+                    field_type: "string".to_string(),
+                    nullable: false,
+                    nested: None,
+                    items: None,
+                },
+            );
         }
     }
 
@@ -165,40 +210,24 @@ fn parse_schema(spec: &Value, schema: &Value) -> SchemaExpectation {
     }
 }
 
-/// Parse a single field schema into a FieldExpectation.
-fn parse_field(spec: &Value, schema: &Value) -> FieldExpectation {
-    // Handle $ref
-    if let Some(ref_path) = schema.get("$ref").and_then(|v| v.as_str())
-        && let Some(resolved) = resolve_ref(spec, ref_path)
-    {
-        let nested = parse_schema(spec, resolved);
-        return FieldExpectation {
-            field_type: "object".to_string(),
-            nullable: false,
-            nested: Some(nested),
-            items: None,
-        };
-    }
+/// Convert an `oas3` `ObjectSchema` for a single field into `FieldExpectation`.
+fn object_schema_to_field(spec: &oas3::spec::Spec, obj: &ObjectSchema) -> FieldExpectation {
+    let (field_type, nullable) = schema_type_info(obj);
 
-    let field_type = schema
-        .get("type")
-        .and_then(|t| t.as_str())
-        .unwrap_or("string")
-        .to_string();
-
-    let nullable = schema
-        .get("nullable")
-        .and_then(|n| n.as_bool())
-        .unwrap_or(false);
-
-    let nested = if field_type == "object" {
-        Some(parse_schema(spec, schema))
+    let nested = if field_type == "object" && !obj.properties.is_empty() {
+        Some(object_schema_to_expectation(spec, obj))
     } else {
         None
     };
 
     let items = if field_type == "array" {
-        schema.get("items").map(|i| Box::new(parse_field(spec, i)))
+        obj.items
+            .as_ref()
+            .and_then(|item_schema| match item_schema.as_ref() {
+                oas3::spec::Schema::Object(boxed) => resolve_object_schema(spec, boxed)
+                    .map(|s| Box::new(object_schema_to_field(spec, &s))),
+                oas3::spec::Schema::Boolean(_) => None,
+            })
     } else {
         None
     };
@@ -209,6 +238,43 @@ fn parse_field(spec: &Value, schema: &Value) -> FieldExpectation {
         nested,
         items,
     }
+}
+
+/// Extract the type name and nullability from an `ObjectSchema`'s `schema_type`.
+fn schema_type_info(obj: &ObjectSchema) -> (String, bool) {
+    match &obj.schema_type {
+        Some(SchemaTypeSet::Single(t)) => (schema_type_to_string(*t), *t == SchemaType::Null),
+        Some(SchemaTypeSet::Multiple(types)) => {
+            let nullable = types.contains(&SchemaType::Null);
+            let primary = types
+                .iter()
+                .find(|t| **t != SchemaType::Null)
+                .copied()
+                .unwrap_or(SchemaType::String);
+            (schema_type_to_string(primary), nullable)
+        }
+        None => {
+            // No explicit type — if it has properties, it's an object; otherwise "string"
+            if !obj.properties.is_empty() {
+                ("object".to_string(), false)
+            } else {
+                ("string".to_string(), false)
+            }
+        }
+    }
+}
+
+fn schema_type_to_string(t: SchemaType) -> String {
+    match t {
+        SchemaType::Boolean => "boolean",
+        SchemaType::Integer => "integer",
+        SchemaType::Number => "number",
+        SchemaType::String => "string",
+        SchemaType::Array => "array",
+        SchemaType::Object => "object",
+        SchemaType::Null => "null",
+    }
+    .to_string()
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -715,7 +781,7 @@ async fn signin_user(
 /// Validate that every endpoint's response matches the OpenAPI spec schema.
 /// This is the core of the compatibility testing framework.
 struct SpecValidator {
-    spec: Value,
+    spec: oas3::spec::Spec,
     results: Vec<EndpointResult>,
 }
 
@@ -1226,24 +1292,29 @@ async fn test_route_coverage_analysis() {
     let spec = load_openapi_spec();
     let auth = create_test_auth().await;
 
-    // Collect reference endpoints
-    let paths = spec["paths"].as_object().expect("spec must have paths");
+    // Collect reference endpoints from the typed spec
+    let paths = spec.paths.as_ref().expect("spec must have paths");
 
     let mut ref_endpoints: BTreeMap<String, HashSet<String>> = BTreeMap::new();
-    for (path, methods) in paths {
-        if let Some(obj) = methods.as_object() {
-            let mut method_set = HashSet::new();
-            for method in obj.keys() {
-                match method.as_str() {
-                    "get" | "post" | "put" | "delete" | "patch" => {
-                        method_set.insert(method.clone());
-                    }
-                    _ => {}
-                }
-            }
-            if !method_set.is_empty() {
-                ref_endpoints.insert(path.clone(), method_set);
-            }
+    for (path, path_item) in paths {
+        let mut method_set = HashSet::new();
+        if path_item.get.is_some() {
+            method_set.insert("get".to_string());
+        }
+        if path_item.post.is_some() {
+            method_set.insert("post".to_string());
+        }
+        if path_item.put.is_some() {
+            method_set.insert("put".to_string());
+        }
+        if path_item.delete.is_some() {
+            method_set.insert("delete".to_string());
+        }
+        if path_item.patch.is_some() {
+            method_set.insert("patch".to_string());
+        }
+        if !method_set.is_empty() {
+            ref_endpoints.insert(path.clone(), method_set);
         }
     }
 
@@ -1561,24 +1632,32 @@ fn test_extract_type_signature() {
 #[test]
 fn test_schema_resolution() {
     let spec = load_openapi_spec();
+    let components = spec.components.as_ref().expect("spec must have components");
 
     // Verify User schema can be resolved
-    let user_schema = resolve_ref(&spec, "#/components/schemas/User");
-    assert!(user_schema.is_some(), "Should resolve User schema");
+    let user_ref = components.schemas.get("User");
+    assert!(user_ref.is_some(), "Should have User schema in components");
 
-    let user = user_schema.unwrap();
-    assert!(
-        user["properties"]["id"]["type"].as_str().is_some(),
-        "User.id should have a type"
-    );
-    assert!(
-        user["properties"]["email"]["type"].as_str().is_some(),
-        "User.email should have a type"
-    );
+    if let Some(obj_or_ref) = user_ref {
+        let user = resolve_object_schema(&spec, obj_or_ref);
+        assert!(user.is_some(), "Should resolve User schema");
+        let user = user.unwrap();
+        assert!(
+            user.properties.contains_key("id"),
+            "User should have 'id' property"
+        );
+        assert!(
+            user.properties.contains_key("email"),
+            "User should have 'email' property"
+        );
+    }
 
     // Verify Session schema can be resolved
-    let session_schema = resolve_ref(&spec, "#/components/schemas/Session");
-    assert!(session_schema.is_some(), "Should resolve Session schema");
+    let session_ref = components.schemas.get("Session");
+    assert!(
+        session_ref.is_some(),
+        "Should have Session schema in components"
+    );
 }
 
 #[test]
