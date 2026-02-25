@@ -42,7 +42,7 @@ export default function SettingsPage() {
     setProfileMessage("");
     setProfileLoading(true);
 
-    const { error } = await authClient.updateUser(
+    await authClient.updateUser(
       { name },
       {
         onSuccess: () => {
@@ -53,10 +53,6 @@ export default function SettingsPage() {
         },
       },
     );
-
-    if (error) {
-      setProfileError(error.message || "Failed to update profile");
-    }
 
     setProfileLoading(false);
   }
@@ -78,7 +74,7 @@ export default function SettingsPage() {
 
     setPasswordLoading(true);
 
-    const { error } = await authClient.changePassword(
+    await authClient.changePassword(
       {
         currentPassword,
         newPassword,
@@ -96,10 +92,6 @@ export default function SettingsPage() {
         },
       },
     );
-
-    if (error) {
-      setPasswordError(error.message || "Failed to change password");
-    }
 
     setPasswordLoading(false);
   }

@@ -25,7 +25,7 @@ export default function SignInPage() {
     setError("");
     setLoading(true);
 
-    const { error } = await signIn.email(
+    await signIn.email(
       { email, password },
       {
         onSuccess: () => {
@@ -36,10 +36,6 @@ export default function SignInPage() {
         },
       },
     );
-
-    if (error) {
-      setError(error.message || "Invalid email or password");
-    }
 
     setLoading(false);
   }

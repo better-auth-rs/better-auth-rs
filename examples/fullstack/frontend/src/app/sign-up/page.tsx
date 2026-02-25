@@ -26,7 +26,7 @@ export default function SignUpPage() {
     setError("");
     setLoading(true);
 
-    const { error } = await signUp.email(
+    await signUp.email(
       { name, email, password },
       {
         onSuccess: () => {
@@ -37,10 +37,6 @@ export default function SignUpPage() {
         },
       },
     );
-
-    if (error) {
-      setError(error.message || "Sign up failed");
-    }
 
     setLoading(false);
   }
