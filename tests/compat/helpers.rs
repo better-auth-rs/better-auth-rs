@@ -3,9 +3,9 @@
 use better_auth::{
     AuthBuilder, AuthConfig, BetterAuth, MemoryDatabaseAdapter,
     plugins::{
-        AccountManagementPlugin, ApiKeyPlugin, EmailPasswordPlugin, EmailVerificationPlugin,
-        OAuthPlugin, OrganizationPlugin, PasskeyPlugin, PasswordManagementPlugin,
-        SessionManagementPlugin, TwoFactorPlugin,
+        AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, EmailPasswordPlugin,
+        EmailVerificationPlugin, OAuthPlugin, OrganizationPlugin, PasskeyPlugin,
+        PasswordManagementPlugin, SessionManagementPlugin, TwoFactorPlugin,
     },
     types::{AuthRequest, HttpMethod},
 };
@@ -45,6 +45,7 @@ pub async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
                 .origin("http://localhost:3000")
                 .allow_insecure_unverified_assertion(true),
         )
+        .plugin(AdminPlugin::new())
         .build()
         .await
         .expect("Failed to create test auth instance")

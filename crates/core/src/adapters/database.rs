@@ -53,8 +53,9 @@ pub mod sqlx_adapter {
     use crate::types::{
         Account, ApiKey, CreateAccount, CreateApiKey, CreateInvitation, CreateMember,
         CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
-        CreateVerification, Invitation, InvitationStatus, Member, Organization, Passkey, Session,
-        TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser, User, Verification,
+        CreateVerification, Invitation, InvitationStatus, ListUsersParams, Member, Organization,
+        Passkey, Session, TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser,
+        User, Verification,
     };
     use sqlx::PgPool;
     use sqlx::postgres::PgRow;
@@ -273,6 +274,41 @@ pub mod sqlx_adapter {
                 query.push_bind(email_verified);
                 has_updates = true;
             }
+            if let Some(role) = &update.role {
+                query.push(", role = ");
+                query.push_bind(role);
+                has_updates = true;
+            }
+            if let Some(banned) = update.banned {
+                query.push(", banned = ");
+                query.push_bind(banned);
+                has_updates = true;
+            }
+            if let Some(ban_reason) = &update.ban_reason {
+                query.push(", ban_reason = ");
+                query.push_bind(ban_reason);
+                has_updates = true;
+            }
+            if let Some(ban_expires) = update.ban_expires {
+                query.push(", ban_expires = ");
+                query.push_bind(ban_expires);
+                has_updates = true;
+            }
+            if let Some(username) = &update.username {
+                query.push(", username = ");
+                query.push_bind(username);
+                has_updates = true;
+            }
+            if let Some(display_username) = &update.display_username {
+                query.push(", display_username = ");
+                query.push_bind(display_username);
+                has_updates = true;
+            }
+            if let Some(two_factor_enabled) = update.two_factor_enabled {
+                query.push(", two_factor_enabled = ");
+                query.push_bind(two_factor_enabled);
+                has_updates = true;
+            }
             if let Some(metadata) = &update.metadata {
                 query.push(", metadata = ");
                 query.push_bind(sqlx::types::Json(metadata.clone()));
@@ -300,6 +336,108 @@ pub mod sqlx_adapter {
                 .execute(&self.pool)
                 .await?;
             Ok(())
+        }
+
+        async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<U>, usize)> {
+            let limit = params.limit.unwrap_or(100) as i64;
+            let offset = params.offset.unwrap_or(0) as i64;
+
+            // Build WHERE clause
+            let mut conditions: Vec<String> = Vec::new();
+            let mut bind_values: Vec<String> = Vec::new();
+
+            if let Some(search_value) = &params.search_value {
+                let field = params.search_field.as_deref().unwrap_or("email");
+                let col = match field {
+                    "name" => "name",
+                    _ => "email",
+                };
+                let op = params.search_operator.as_deref().unwrap_or("contains");
+                let escaped = search_value.replace('%', "\\%").replace('_', "\\_");
+                let pattern = match op {
+                    "starts_with" => format!("{}%", escaped),
+                    "ends_with" => format!("%{}", escaped),
+                    _ => format!("%{}%", escaped),
+                };
+                let idx = bind_values.len() + 1;
+                conditions.push(format!("{} ILIKE ${}", col, idx));
+                bind_values.push(pattern);
+            }
+
+            if let Some(filter_value) = &params.filter_value {
+                let field = params.filter_field.as_deref().unwrap_or("email");
+                let col = match field {
+                    "name" => "name",
+                    "role" => "role",
+                    _ => "email",
+                };
+                let op = params.filter_operator.as_deref().unwrap_or("eq");
+                let idx = bind_values.len() + 1;
+                match op {
+                    "contains" => {
+                        let escaped = filter_value.replace('%', "\\%").replace('_', "\\_");
+                        conditions.push(format!("{} ILIKE ${}", col, idx));
+                        bind_values.push(format!("%{}%", escaped));
+                    }
+                    "ne" => {
+                        conditions.push(format!("{} != ${}", col, idx));
+                        bind_values.push(filter_value.clone());
+                    }
+                    _ => {
+                        conditions.push(format!("{} = ${}", col, idx));
+                        bind_values.push(filter_value.clone());
+                    }
+                }
+            }
+
+            let where_clause = if conditions.is_empty() {
+                String::new()
+            } else {
+                format!(" WHERE {}", conditions.join(" AND "))
+            };
+
+            // Sort
+            let order_clause = if let Some(sort_by) = &params.sort_by {
+                let col = match sort_by.as_str() {
+                    "name" => "name",
+                    "createdAt" | "created_at" => "created_at",
+                    _ => "email",
+                };
+                let dir = if params.sort_direction.as_deref() == Some("desc") {
+                    "DESC"
+                } else {
+                    "ASC"
+                };
+                format!(" ORDER BY {} {}", col, dir)
+            } else {
+                " ORDER BY created_at DESC".to_string()
+            };
+
+            // Count query
+            let count_idx = bind_values.len() + 1;
+            let _count_idx = count_idx; // suppress unused warning
+            let count_sql = format!("SELECT COUNT(*) as count FROM users{}", where_clause);
+            let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
+            for v in &bind_values {
+                count_query = count_query.bind(v);
+            }
+            let total = count_query.fetch_one(&self.pool).await? as usize;
+
+            // Data query
+            let limit_idx = bind_values.len() + 1;
+            let offset_idx = bind_values.len() + 2;
+            let data_sql = format!(
+                "SELECT * FROM users{}{} LIMIT ${} OFFSET ${}",
+                where_clause, order_clause, limit_idx, offset_idx
+            );
+            let mut data_query = sqlx::query_as::<_, U>(&data_sql);
+            for v in &bind_values {
+                data_query = data_query.bind(v);
+            }
+            data_query = data_query.bind(limit).bind(offset);
+            let users = data_query.fetch_all(&self.pool).await?;
+
+            Ok((users, total))
         }
     }
 

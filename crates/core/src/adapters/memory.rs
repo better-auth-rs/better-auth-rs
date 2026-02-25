@@ -8,8 +8,9 @@ use crate::error::{AuthError, AuthResult};
 use crate::types::{
     Account, ApiKey, CreateAccount, CreateApiKey, CreateInvitation, CreateMember,
     CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
-    CreateVerification, Invitation, InvitationStatus, Member, Organization, Passkey, Session,
-    TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser, User, Verification,
+    CreateVerification, Invitation, InvitationStatus, ListUsersParams, Member, Organization,
+    Passkey, Session, TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser, User,
+    Verification,
 };
 
 pub use super::memory_traits::{
@@ -214,6 +215,75 @@ where
         }
 
         Ok(())
+    }
+
+    async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<U>, usize)> {
+        let users = self.users.lock().unwrap();
+        let mut result: Vec<U> = users.values().cloned().collect();
+
+        // Apply search filter
+        if let Some(search_value) = &params.search_value {
+            let field = params.search_field.as_deref().unwrap_or("email");
+            let op = params.search_operator.as_deref().unwrap_or("contains");
+            let sv = search_value.to_lowercase();
+            result.retain(|u| {
+                let field_val = match field {
+                    "name" => u.name().unwrap_or("").to_lowercase(),
+                    _ => u.email().unwrap_or("").to_lowercase(),
+                };
+                match op {
+                    "starts_with" => field_val.starts_with(&sv),
+                    "ends_with" => field_val.ends_with(&sv),
+                    _ => field_val.contains(&sv),
+                }
+            });
+        }
+
+        // Apply filter
+        if let Some(filter_value) = &params.filter_value {
+            let field = params.filter_field.as_deref().unwrap_or("email");
+            let op = params.filter_operator.as_deref().unwrap_or("eq");
+            let fv = filter_value.to_lowercase();
+            result.retain(|u| {
+                let field_val = match field {
+                    "name" => u.name().unwrap_or("").to_lowercase(),
+                    "role" => u.role().unwrap_or("").to_lowercase(),
+                    _ => u.email().unwrap_or("").to_lowercase(),
+                };
+                match op {
+                    "contains" => field_val.contains(&fv),
+                    "starts_with" => field_val.starts_with(&fv),
+                    "ends_with" => field_val.ends_with(&fv),
+                    "ne" => field_val != fv,
+                    _ => field_val == fv,
+                }
+            });
+        }
+
+        // Apply sort
+        if let Some(sort_by) = &params.sort_by {
+            let desc = params.sort_direction.as_deref() == Some("desc");
+            result.sort_by(|a, b| {
+                let av = match sort_by.as_str() {
+                    "name" => a.name().unwrap_or("").to_string(),
+                    "createdAt" => a.created_at().to_rfc3339(),
+                    _ => a.email().unwrap_or("").to_string(),
+                };
+                let bv = match sort_by.as_str() {
+                    "name" => b.name().unwrap_or("").to_string(),
+                    "createdAt" => b.created_at().to_rfc3339(),
+                    _ => b.email().unwrap_or("").to_string(),
+                };
+                if desc { bv.cmp(&av) } else { av.cmp(&bv) }
+            });
+        }
+
+        let total = result.len();
+        let offset = params.offset.unwrap_or(0);
+        let limit = params.limit.unwrap_or(100);
+        let paged: Vec<U> = result.into_iter().skip(offset).take(limit).collect();
+
+        Ok((paged, total))
     }
 }
 
