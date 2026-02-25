@@ -723,7 +723,7 @@ impl AdminPlugin {
 
         let update = UpdateUser {
             banned: Some(false),
-            ban_reason: Some(String::new()),
+            ban_reason: None,
             ban_expires: None,
             email: None,
             name: None,
@@ -736,6 +736,8 @@ impl AdminPlugin {
             metadata: None,
         };
 
+        // The adapter's apply_update clears ban_reason and ban_expires
+        // when banned is explicitly set to false.
         let updated_user = ctx.database.update_user(&body.user_id, update).await?;
 
         let response = UserResponse { user: updated_user };
@@ -816,15 +818,34 @@ impl AdminPlugin {
         // Delete the impersonation session
         session_manager.delete_session(&token).await?;
 
-        // Return the original admin user
+        // Look up the original admin user
         let admin_user = ctx
             .database
             .get_user_by_id(&admin_id)
             .await?
             .ok_or(AuthError::UserNotFound)?;
 
-        let response = UserResponse { user: admin_user };
-        AuthResponse::json(200, &response).map_err(AuthError::from)
+        // Create a new session for the admin user so the client
+        // transitions back to a valid admin session.
+        let expires_at = Utc::now() + ctx.config.session.expires_in;
+        let create_session = CreateSession {
+            user_id: admin_id,
+            expires_at,
+            ip_address: req.headers.get("x-forwarded-for").cloned(),
+            user_agent: req.headers.get("user-agent").cloned(),
+            impersonated_by: None,
+            active_organization_id: None,
+        };
+
+        let admin_session = ctx.database.create_session(create_session).await?;
+
+        let cookie_header = Self::create_session_cookie(admin_session.token(), ctx);
+        let response = SessionUserResponse {
+            session: admin_session,
+            user: admin_user,
+        };
+
+        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
     /// POST /admin/revoke-user-session — Revoke a specific session by token.

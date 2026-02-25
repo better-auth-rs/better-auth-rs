@@ -110,6 +110,11 @@ impl MemoryUser for User {
         }
         if let Some(banned) = update.banned {
             self.banned = banned;
+            // When explicitly unbanning, clear ban_reason and ban_expires
+            if !banned {
+                self.ban_reason = None;
+                self.ban_expires = None;
+            }
         }
         if let Some(ban_reason) = &update.ban_reason {
             self.ban_reason = Some(ban_reason.clone());
