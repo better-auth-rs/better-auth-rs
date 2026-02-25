@@ -73,7 +73,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run spec-driven compatibility tests
-        run: cargo test --test spec_driven_compat_tests -- --nocapture
+        run: |
+          cargo test --test compat_endpoint_tests -- --nocapture
+          cargo test --test compat_field_tests -- --nocapture
+          cargo test --test compat_coverage_tests -- --nocapture
+          cargo test --test compat_consistency_tests -- --nocapture
+          cargo test --test compat_unit_tests -- --nocapture
 
   standalone-examples:
     name: Check Standalone Examples
