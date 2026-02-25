@@ -81,12 +81,12 @@ impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
 
 #[cfg(feature = "axum")]
 async fn ok_check() -> impl IntoResponse {
-    axum::Json(serde_json::json!({ "status": true }))
+    axum::Json(serde_json::json!({ "ok": true }))
 }
 
 #[cfg(feature = "axum")]
 async fn error_check() -> impl IntoResponse {
-    axum::Json(serde_json::json!({ "status": false }))
+    axum::Json(serde_json::json!({ "ok": false }))
 }
 
 #[cfg(feature = "axum")]
