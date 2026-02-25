@@ -195,6 +195,25 @@ pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
 // at the struct level.
 
 /// SQL column/table metadata for [`AuthUser`] entities.
+///
+/// These `Auth*Meta` traits are used by the `SqlxAdapter` to build SQL
+/// statements (INSERT/UPDATE/DELETE/SELECT) using the *correct* table and column
+/// names for your entity types.
+///
+/// # Customizing mappings
+///
+/// When using the derive macros (`#[derive(AuthUser)]`, etc.), you can customize
+/// the names used by the generated `Auth*Meta` impls:
+///
+/// - Struct-level: override the table name with `#[auth(table = "...")]`
+/// - Field-level: override the SQL column name with `#[auth(column = "...")]`
+///
+/// # `FromRow` consistency
+///
+/// If you implement `sqlx::FromRow` manually, ensure the column names you read
+/// match the names returned by the corresponding `Auth*Meta` trait. Alternatively,
+/// you can use `#[auth(from_row)]` to generate a `FromRow` implementation that
+/// stays in sync with the `Auth*Meta` mappings.
 pub trait AuthUserMeta {
     fn table() -> &'static str {
         "users"
@@ -480,6 +499,11 @@ pub trait AuthApiKeyMeta {
     fn col_prefix() -> &'static str {
         "prefix"
     }
+    /// Database column for the API key hash.
+    ///
+    /// The default better-auth schema uses the column name `key` (even though it
+    /// may be a reserved word in some SQL dialects). The `SqlxAdapter` quotes SQL
+    /// identifiers, so using `key` here is safe.
     fn col_key_hash() -> &'static str {
         "key"
     }
@@ -491,6 +515,9 @@ pub trait AuthApiKeyMeta {
     }
     fn col_refill_amount() -> &'static str {
         "refill_amount"
+    }
+    fn col_last_refill_at() -> &'static str {
+        "last_refill_at"
     }
     fn col_enabled() -> &'static str {
         "enabled"
@@ -504,8 +531,14 @@ pub trait AuthApiKeyMeta {
     fn col_rate_limit_max() -> &'static str {
         "rate_limit_max"
     }
+    fn col_request_count() -> &'static str {
+        "request_count"
+    }
     fn col_remaining() -> &'static str {
         "remaining"
+    }
+    fn col_last_request() -> &'static str {
+        "last_request"
     }
     fn col_expires_at() -> &'static str {
         "expires_at"
