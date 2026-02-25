@@ -35,3 +35,19 @@ createdb better_auth_example
 export DATABASE_URL="postgresql://user:pass@localhost:5432/better_auth_example"
 cargo run --manifest-path examples/sea-orm-migration/Cargo.toml
 ```
+
+### `fullstack`
+
+Full-stack integration example using the [better-auth](https://www.better-auth.com/) **frontend SDK** (Next.js / React) with a **better-auth-rs** (Rust / Axum) backend. Demonstrates email/password sign-up, sign-in, cookie-based sessions, and protected routes.
+
+```bash
+# Terminal 1 — start the Rust backend (port 3001)
+cargo run --manifest-path examples/fullstack/backend/Cargo.toml
+
+# Terminal 2 — start the Next.js frontend (port 3000)
+cd examples/fullstack/frontend
+npm install
+npm run dev
+```
+
+See [`examples/fullstack/README.md`](fullstack/README.md) for full details.
