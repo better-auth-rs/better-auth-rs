@@ -371,6 +371,12 @@ fn validate_response(
         };
 
         if let Some(actual_value) = obj.get(field_name) {
+            // Non-required fields that are null are implicitly nullable — the spec
+            // may say `type: string` but the implementation legitimately returns
+            // null for optional/unset fields.
+            if actual_value.is_null() && !schema.required_fields.contains(field_name) {
+                continue;
+            }
             validate_field(actual_value, field_expectation, &field_path, &mut diffs);
         }
     }
@@ -880,7 +886,6 @@ impl SpecValidator {
         report
     }
 
-    #[allow(dead_code)]
     fn all_passed(&self) -> bool {
         self.results.iter().all(|r| r.passed)
     }
@@ -943,20 +948,44 @@ async fn test_spec_driven_endpoint_validation() {
     // --- GET /list-sessions ---
     let (status, body) = send_request(&auth, get_with_auth("/list-sessions", &signin_token)).await;
     // list-sessions returns an array, validate the first element against Session schema
-    if let Some(arr) = body.as_array()
-        && let Some(first) = arr.first()
-    {
-        let _session_schema = extract_success_schema(&validator.spec, "/list-sessions", "get");
-        // list-sessions spec says array of Session — validate element fields
-        let camel_violations = check_camel_case_fields(first, "sessions[0]");
-        let passed = camel_violations.is_empty();
+    if let Some(arr) = body.as_array() {
+        if let Some(first) = arr.first() {
+            let _session_schema = extract_success_schema(&validator.spec, "/list-sessions", "get");
+            let camel_violations = check_camel_case_fields(first, "sessions[0]");
+            let passed = camel_violations.is_empty();
+            validator.results.push(EndpointResult {
+                endpoint: "/list-sessions".to_string(),
+                method: "GET".to_string(),
+                status,
+                passed,
+                diffs: vec![],
+                camel_case_violations: camel_violations,
+            });
+        } else {
+            // Empty array — valid but nothing to validate
+            validator.results.push(EndpointResult {
+                endpoint: "/list-sessions".to_string(),
+                method: "GET".to_string(),
+                status,
+                passed: true,
+                diffs: vec![],
+                camel_case_violations: vec![],
+            });
+        }
+    } else {
         validator.results.push(EndpointResult {
             endpoint: "/list-sessions".to_string(),
             method: "GET".to_string(),
             status,
-            passed,
-            diffs: vec![],
-            camel_case_violations: camel_violations,
+            passed: false,
+            diffs: vec![ShapeDiff {
+                path: "".to_string(),
+                kind: DiffKind::TypeMismatch {
+                    expected: "array".to_string(),
+                    actual: json_type_name(&body).to_string(),
+                },
+            }],
+            camel_case_violations: vec![],
         });
     }
 
@@ -1043,18 +1072,43 @@ async fn test_spec_driven_endpoint_validation() {
     let (la_token, _) = signup_user(&auth, "la@example.com", "password123", "LA User").await;
     let (status, body) = send_request(&auth, get_with_auth("/list-accounts", &la_token)).await;
     // list-accounts returns an array, validate camelCase
-    if let Some(arr) = body.as_array()
-        && let Some(first) = arr.first()
-    {
-        let camel_violations = check_camel_case_fields(first, "accounts[0]");
-        let passed = camel_violations.is_empty();
+    if let Some(arr) = body.as_array() {
+        if let Some(first) = arr.first() {
+            let camel_violations = check_camel_case_fields(first, "accounts[0]");
+            let passed = camel_violations.is_empty();
+            validator.results.push(EndpointResult {
+                endpoint: "/list-accounts".to_string(),
+                method: "GET".to_string(),
+                status,
+                passed,
+                diffs: vec![],
+                camel_case_violations: camel_violations,
+            });
+        } else {
+            // Empty array — valid but nothing to validate
+            validator.results.push(EndpointResult {
+                endpoint: "/list-accounts".to_string(),
+                method: "GET".to_string(),
+                status,
+                passed: true,
+                diffs: vec![],
+                camel_case_violations: vec![],
+            });
+        }
+    } else {
         validator.results.push(EndpointResult {
             endpoint: "/list-accounts".to_string(),
             method: "GET".to_string(),
             status,
-            passed,
-            diffs: vec![],
-            camel_case_violations: camel_violations,
+            passed: false,
+            diffs: vec![ShapeDiff {
+                path: "".to_string(),
+                kind: DiffKind::TypeMismatch {
+                    expected: "array".to_string(),
+                    actual: json_type_name(&body).to_string(),
+                },
+            }],
+            camel_case_violations: vec![],
         });
     }
 
@@ -1067,6 +1121,28 @@ async fn test_spec_driven_endpoint_validation() {
     // Print report
     let report = validator.report();
     eprintln!("\n{}\n", report);
+
+    // Known incompatibilities that need separate fixes in the implementation:
+    //   - GET /ok: Rust returns {"status": true} but spec expects {"ok": true}
+    // Track these so the gate catches *new* regressions without blocking on
+    // pre-existing gaps.
+    let known_failing: HashSet<&str> = HashSet::from(["/ok"]);
+
+    let unexpected_failures: Vec<_> = validator
+        .results
+        .iter()
+        .filter(|r| !r.passed && !known_failing.contains(r.endpoint.as_str()))
+        .collect();
+
+    assert!(
+        unexpected_failures.is_empty(),
+        "Spec-driven validation found unexpected failures (not in the known-failing list):\n{}",
+        unexpected_failures
+            .iter()
+            .map(|r| format!("  {} {}", r.method, r.endpoint))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
