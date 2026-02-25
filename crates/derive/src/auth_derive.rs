@@ -207,6 +207,8 @@ pub(crate) const AUTH_TWO_FACTOR_GETTERS: &[(&str, ReturnKind)] = &[
     ("secret", RefStr),
     ("backup_codes", OptionRefStr),
     ("user_id", RefStr),
+    ("created_at", DateTime),
+    ("updated_at", DateTime),
 ];
 
 pub(crate) const AUTH_PASSKEY_GETTERS: &[(&str, ReturnKind)] = &[

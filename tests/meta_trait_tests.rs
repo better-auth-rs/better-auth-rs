@@ -141,6 +141,8 @@ fn test_builtin_two_factor_meta_defaults() {
     assert_eq!(TwoFactor::col_secret(), "secret");
     assert_eq!(TwoFactor::col_backup_codes(), "backup_codes");
     assert_eq!(TwoFactor::col_user_id(), "user_id");
+    assert_eq!(TwoFactor::col_created_at(), "created_at");
+    assert_eq!(TwoFactor::col_updated_at(), "updated_at");
 }
 
 #[test]
@@ -411,6 +413,8 @@ struct CustomTwoFactor {
     secret: String,
     backup_codes: Option<String>,
     user_id: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 }
 
 #[test]
@@ -418,6 +422,8 @@ fn test_derive_custom_two_factor_meta() {
     assert_eq!(CustomTwoFactor::table(), "totp_secrets");
     assert_eq!(CustomTwoFactor::col_secret(), "secret");
     assert_eq!(CustomTwoFactor::col_user_id(), "user_id");
+    assert_eq!(CustomTwoFactor::col_created_at(), "created_at");
+    assert_eq!(CustomTwoFactor::col_updated_at(), "updated_at");
 }
 
 #[derive(Clone, Debug, Serialize, AuthPasskey)]
@@ -543,6 +549,8 @@ fn test_all_builtin_meta_traits_callable() {
     let _ = TwoFactor::col_secret();
     let _ = TwoFactor::col_backup_codes();
     let _ = TwoFactor::col_user_id();
+    let _ = TwoFactor::col_created_at();
+    let _ = TwoFactor::col_updated_at();
 
     // ApiKey
     let _ = ApiKey::table();

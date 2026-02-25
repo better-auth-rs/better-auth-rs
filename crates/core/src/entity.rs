@@ -125,6 +125,8 @@ pub trait AuthTwoFactor: Clone + Send + Sync + Serialize + std::fmt::Debug + 'st
     fn secret(&self) -> &str;
     fn backup_codes(&self) -> Option<&str>;
     fn user_id(&self) -> &str;
+    fn created_at(&self) -> DateTime<Utc>;
+    fn updated_at(&self) -> DateTime<Utc>;
 }
 
 /// Trait representing an API key entity.

@@ -107,6 +107,8 @@ struct MyTwoFactor {
     secret: String,
     backup_codes: Option<String>,
     user_id: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 }
 
 // --- Custom Passkey ---
@@ -243,16 +245,21 @@ fn test_derive_auth_verification() {
 
 #[test]
 fn test_derive_auth_two_factor() {
+    let now = Utc::now();
     let tf = MyTwoFactor {
         id: "tf_1".into(),
         secret: "JBSWY3DPEHPK3PXP".into(),
         backup_codes: Some("code1,code2".into()),
         user_id: "user_1".into(),
+        created_at: now,
+        updated_at: now,
     };
 
     assert_eq!(AuthTwoFactorTrait::id(&tf), "tf_1");
     assert_eq!(tf.secret(), "JBSWY3DPEHPK3PXP");
     assert_eq!(tf.backup_codes(), Some("code1,code2"));
+    assert_eq!(tf.created_at(), now);
+    assert_eq!(tf.updated_at(), now);
 }
 
 #[test]
