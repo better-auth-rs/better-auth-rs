@@ -53,7 +53,11 @@ struct ChangePasswordRequest {
     #[serde(rename = "currentPassword")]
     #[validate(length(min = 1, message = "Current password is required"))]
     current_password: String,
-    #[serde(default, rename = "revokeOtherSessions", deserialize_with = "deserialize_bool_or_string")]
+    #[serde(
+        default,
+        rename = "revokeOtherSessions",
+        deserialize_with = "deserialize_bool_or_string"
+    )]
     revoke_other_sessions: Option<bool>,
 }
 
@@ -71,9 +75,15 @@ where
         Some(serde_json::Value::String(s)) => match s.to_lowercase().as_str() {
             "true" => Ok(Some(true)),
             "false" => Ok(Some(false)),
-            _ => Err(serde::de::Error::custom(format!("invalid value for revokeOtherSessions: {}", s))),
+            _ => Err(serde::de::Error::custom(format!(
+                "invalid value for revokeOtherSessions: {}",
+                s
+            ))),
         },
-        Some(other) => Err(serde::de::Error::custom(format!("invalid type for revokeOtherSessions: {}", other))),
+        Some(other) => Err(serde::de::Error::custom(format!(
+            "invalid type for revokeOtherSessions: {}",
+            other
+        ))),
     }
 }
 
