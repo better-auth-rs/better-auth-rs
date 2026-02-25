@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -53,8 +53,28 @@ struct ChangePasswordRequest {
     #[serde(rename = "currentPassword")]
     #[validate(length(min = 1, message = "Current password is required"))]
     current_password: String,
-    #[serde(rename = "revokeOtherSessions")]
-    revoke_other_sessions: Option<String>,
+    #[serde(default, rename = "revokeOtherSessions", deserialize_with = "deserialize_bool_or_string")]
+    revoke_other_sessions: Option<bool>,
+}
+
+/// Deserialize a value that can be either a boolean or a string ("true"/"false") into Option<bool>.
+/// This is needed because the better-auth TypeScript SDK sends `revokeOtherSessions` as a boolean,
+/// while some clients may send it as a string.
+fn deserialize_bool_or_string<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value: Option<serde_json::Value> = Option::deserialize(deserializer)?;
+    match value {
+        None => Ok(None),
+        Some(serde_json::Value::Bool(b)) => Ok(Some(b)),
+        Some(serde_json::Value::String(s)) => match s.to_lowercase().as_str() {
+            "true" => Ok(Some(true)),
+            "false" => Ok(Some(false)),
+            _ => Err(serde::de::Error::custom(format!("invalid value for revokeOtherSessions: {}", s))),
+        },
+        Some(other) => Err(serde::de::Error::custom(format!("invalid type for revokeOtherSessions: {}", other))),
+    }
 }
 
 // Response structures
@@ -354,7 +374,7 @@ impl PasswordManagementPlugin {
         let updated_user = ctx.database.update_user(user.id(), update_user).await?;
 
         // Handle session revocation
-        let new_token = if change_req.revoke_other_sessions.as_deref() == Some("true") {
+        let new_token = if change_req.revoke_other_sessions == Some(true) {
             // Revoke all sessions except current one
             ctx.database.delete_user_sessions(user.id()).await?;
 

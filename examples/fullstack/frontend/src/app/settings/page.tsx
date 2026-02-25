@@ -82,6 +82,7 @@ export default function SettingsPage() {
       {
         currentPassword,
         newPassword,
+        revokeOtherSessions: true,
       },
       {
         onSuccess: () => {
