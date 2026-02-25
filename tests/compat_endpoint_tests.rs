@@ -162,10 +162,14 @@ async fn test_spec_driven_endpoint_validation() {
     .await;
     validator.validate_endpoint("/update-user", "post", status, &body);
 
-    // --- DELETE /delete-user ---
+    // --- POST /delete-user (spec method) ---
     let (del_token, _) = signup_user(&auth, "del@example.com", "password123", "DEL User").await;
-    let (status, body) = send_request(&auth, delete_with_auth("/delete-user", &del_token)).await;
-    validator.validate_endpoint("/delete-user", "delete", status, &body);
+    let (status, body) = send_request(
+        &auth,
+        post_json_with_auth("/delete-user", serde_json::json!({}), &del_token),
+    )
+    .await;
+    validator.validate_endpoint("/delete-user", "post", status, &body);
 
     // --- POST /change-email ---
     let (ce_token, _) = signup_user(&auth, "ce@example.com", "password123", "CE User").await;
@@ -236,11 +240,9 @@ async fn test_spec_driven_endpoint_validation() {
     let report = validator.report();
     eprintln!("\n{}\n", report);
 
-    // Known incompatibilities that need separate fixes in the implementation:
-    //   - GET /ok: Rust returns {"status": true} but spec expects {"ok": true}
-    // Track these so the gate catches *new* regressions without blocking on
-    // pre-existing gaps.
-    let known_failing: HashSet<&str> = HashSet::from(["/ok"]);
+    // All known incompatibilities have been fixed.
+    // Track any future gaps here so the gate catches *new* regressions.
+    let known_failing: HashSet<&str> = HashSet::new();
 
     let unexpected_failures: Vec<_> = validator
         .results

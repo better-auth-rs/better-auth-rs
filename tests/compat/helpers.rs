@@ -4,7 +4,8 @@ use better_auth::{
     AuthBuilder, AuthConfig, BetterAuth, MemoryDatabaseAdapter,
     plugins::{
         AccountManagementPlugin, ApiKeyPlugin, EmailPasswordPlugin, EmailVerificationPlugin,
-        OAuthPlugin, PasswordManagementPlugin, SessionManagementPlugin, TwoFactorPlugin,
+        OAuthPlugin, OrganizationPlugin, PasskeyPlugin, PasswordManagementPlugin,
+        SessionManagementPlugin, TwoFactorPlugin,
     },
     types::{AuthRequest, HttpMethod},
 };
@@ -36,6 +37,14 @@ pub async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
         .plugin(ApiKeyPlugin::new())
         .plugin(OAuthPlugin::new())
         .plugin(TwoFactorPlugin::new())
+        .plugin(OrganizationPlugin::new())
+        .plugin(
+            PasskeyPlugin::new()
+                .rp_id("localhost")
+                .rp_name("Better Auth Test")
+                .origin("http://localhost:3000")
+                .allow_insecure_unverified_assertion(true),
+        )
         .build()
         .await
         .expect("Failed to create test auth instance")
@@ -68,6 +77,18 @@ pub fn get_with_auth(path: &str, token: &str) -> AuthRequest {
         .insert("authorization".to_string(), format!("Bearer {}", token));
     req.headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
+    req
+}
+
+pub fn get_with_auth_and_query(path: &str, token: &str, query: Vec<(&str, &str)>) -> AuthRequest {
+    let mut req = AuthRequest::new(HttpMethod::Get, path);
+    req.headers
+        .insert("authorization".to_string(), format!("Bearer {}", token));
+    req.headers
+        .insert("origin".to_string(), "http://localhost:3000".to_string());
+    for (k, v) in query {
+        req.query.insert(k.to_string(), v.to_string());
+    }
     req
 }
 
