@@ -256,6 +256,7 @@ pub struct UpdateAccount {
     pub access_token_expires_at: Option<DateTime<Utc>>,
     pub refresh_token_expires_at: Option<DateTime<Utc>>,
     pub scope: Option<String>,
+    pub password: Option<String>,
 }
 
 /// Two-factor authentication creation data

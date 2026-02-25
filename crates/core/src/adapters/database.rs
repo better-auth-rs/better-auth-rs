@@ -207,8 +207,8 @@ pub mod sqlx_adapter {
 
             let user = sqlx::query_as::<_, U>(
                 r#"
-                INSERT INTO users (id, email, name, image, email_verified, created_at, updated_at, metadata)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                INSERT INTO users (id, email, name, image, email_verified, username, display_username, role, created_at, updated_at, metadata)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                 RETURNING *
                 "#,
             )
@@ -216,7 +216,10 @@ pub mod sqlx_adapter {
             .bind(&create_user.email)
             .bind(&create_user.name)
             .bind(&create_user.image)
-            .bind(false)
+            .bind(create_user.email_verified.unwrap_or(false))
+            .bind(&create_user.username)
+            .bind(&create_user.display_username)
+            .bind(&create_user.role)
             .bind(now)
             .bind(now)
             .bind(sqlx::types::Json(create_user.metadata.unwrap_or(serde_json::json!({}))))
@@ -274,26 +277,6 @@ pub mod sqlx_adapter {
                 query.push_bind(email_verified);
                 has_updates = true;
             }
-            if let Some(role) = &update.role {
-                query.push(", role = ");
-                query.push_bind(role);
-                has_updates = true;
-            }
-            if let Some(banned) = update.banned {
-                query.push(", banned = ");
-                query.push_bind(banned);
-                has_updates = true;
-            }
-            if let Some(ban_reason) = &update.ban_reason {
-                query.push(", ban_reason = ");
-                query.push_bind(ban_reason);
-                has_updates = true;
-            }
-            if let Some(ban_expires) = update.ban_expires {
-                query.push(", ban_expires = ");
-                query.push_bind(ban_expires);
-                has_updates = true;
-            }
             if let Some(username) = &update.username {
                 query.push(", username = ");
                 query.push_bind(username);
@@ -303,6 +286,36 @@ pub mod sqlx_adapter {
                 query.push(", display_username = ");
                 query.push_bind(display_username);
                 has_updates = true;
+            }
+            if let Some(role) = &update.role {
+                query.push(", role = ");
+                query.push_bind(role);
+                has_updates = true;
+            }
+            if let Some(banned) = update.banned {
+                query.push(", banned = ");
+                query.push_bind(banned);
+                has_updates = true;
+                // When explicitly unbanning, clear ban_reason and ban_expires
+                if !banned {
+                    query.push(", ban_reason = NULL, ban_expires = NULL");
+                }
+            }
+            // Only process ban_reason and ban_expires when we are NOT
+            // explicitly unbanning.  When banned == Some(false) the block
+            // above already emits `ban_reason = NULL, ban_expires = NULL`,
+            // so applying these fields again would overwrite the NULLs.
+            if update.banned != Some(false) {
+                if let Some(ban_reason) = &update.ban_reason {
+                    query.push(", ban_reason = ");
+                    query.push_bind(ban_reason);
+                    has_updates = true;
+                }
+                if let Some(ban_expires) = update.ban_expires {
+                    query.push(", ban_expires = ");
+                    query.push_bind(ban_expires);
+                    has_updates = true;
+                }
             }
             if let Some(two_factor_enabled) = update.two_factor_enabled {
                 query.push(", two_factor_enabled = ");
@@ -414,8 +427,6 @@ pub mod sqlx_adapter {
             };
 
             // Count query
-            let count_idx = bind_values.len() + 1;
-            let _count_idx = count_idx; // suppress unused warning
             let count_sql = format!("SELECT COUNT(*) as count FROM users{}", where_clause);
             let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
             for v in &bind_values {
@@ -466,8 +477,8 @@ pub mod sqlx_adapter {
 
             let session = sqlx::query_as::<_, S>(
                 r#"
-                INSERT INTO sessions (id, user_id, token, expires_at, created_at, ip_address, user_agent, active)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                INSERT INTO sessions (id, user_id, token, expires_at, created_at, ip_address, user_agent, impersonated_by, active_organization_id, active)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                 RETURNING *
                 "#,
             )
@@ -478,6 +489,8 @@ pub mod sqlx_adapter {
             .bind(now)
             .bind(&create_session.ip_address)
             .bind(&create_session.user_agent)
+            .bind(&create_session.impersonated_by)
+            .bind(&create_session.active_organization_id)
             .bind(true)
             .fetch_one(&self.pool)
             .await?;
@@ -656,6 +669,10 @@ pub mod sqlx_adapter {
             if let Some(scope) = &update.scope {
                 query.push(", scope = ");
                 query.push_bind(scope);
+            }
+            if let Some(password) = &update.password {
+                query.push(", password = ");
+                query.push_bind(password);
             }
 
             query.push(" WHERE id = ");
