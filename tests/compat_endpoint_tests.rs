@@ -3,8 +3,6 @@
 //! These tests exercise each API endpoint and validate responses against the
 //! OpenAPI spec schema.
 
-#![feature(let_chains)]
-
 mod compat;
 
 use std::collections::HashSet;
