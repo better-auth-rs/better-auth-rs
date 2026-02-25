@@ -40,14 +40,20 @@ pub(crate) struct FieldInfo {
     pub auth_default: Option<TokenStream2>,
 }
 
+/// Parsed result of `#[auth(...)]` field-level attributes.
+pub(crate) struct ParsedAuthAttrs {
+    pub field_name: Option<String>,
+    pub column_name: Option<String>,
+    pub default_expr: Option<TokenStream2>,
+}
+
 /// Parse `#[auth(...)]` attributes from a field.
 ///
 /// Supported:
 /// - `#[auth(field = "getter_name")]` — remap field to a getter name
+/// - `#[auth(column = "col")]` — explicit DB column name
 /// - `#[auth(default = "expr")]` — default expression for Memory* derives
-pub(crate) fn parse_auth_attrs(
-    attrs: &[syn::Attribute],
-) -> Result<(Option<String>, Option<String>, Option<TokenStream2>), syn::Error> {
+pub(crate) fn parse_auth_attrs(attrs: &[syn::Attribute]) -> Result<ParsedAuthAttrs, syn::Error> {
     let mut field_name = None;
     let mut column_name = None;
     let mut default_expr = None;
@@ -81,7 +87,11 @@ pub(crate) fn parse_auth_attrs(
             Ok(())
         })?;
     }
-    Ok((field_name, column_name, default_expr))
+    Ok(ParsedAuthAttrs {
+        field_name,
+        column_name,
+        default_expr,
+    })
 }
 
 /// Parse struct-level `#[auth(table = "...")]` attribute.
@@ -172,13 +182,12 @@ pub(crate) fn parse_named_fields(
         let Some(ident) = f.ident.clone() else {
             continue;
         };
-        let (auth_field_name, auth_column, auth_default) =
-            parse_auth_attrs(&f.attrs).map_err(|e| e.to_compile_error())?;
+        let parsed = parse_auth_attrs(&f.attrs).map_err(|e| e.to_compile_error())?;
         fields.push(FieldInfo {
             ident,
-            auth_field_name,
-            auth_column,
-            auth_default,
+            auth_field_name: parsed.field_name,
+            auth_column: parsed.column_name,
+            auth_default: parsed.default_expr,
         });
     }
     Ok(fields)
