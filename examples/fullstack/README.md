@@ -31,7 +31,7 @@ with a **better-auth-rs** (Rust/Axum) backend.
 
 ## Prerequisites
 
-- **Rust** (latest stable, edition 2024)
+- **Rust** (latest stable, edition 2021)
 - **Node.js** >= 18 and **npm**
 
 ## Quick Start
