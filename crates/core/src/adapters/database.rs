@@ -46,8 +46,10 @@ pub mod sqlx_adapter {
     use chrono::{DateTime, Utc};
 
     use crate::entity::{
-        AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,
-        AuthSession, AuthTwoFactor, AuthUser, AuthVerification,
+        AuthAccount, AuthAccountMeta, AuthApiKey, AuthApiKeyMeta, AuthInvitation,
+        AuthInvitationMeta, AuthMember, AuthMemberMeta, AuthOrganization, AuthOrganizationMeta,
+        AuthPasskey, AuthPasskeyMeta, AuthSession, AuthSessionMeta, AuthTwoFactor,
+        AuthTwoFactorMeta, AuthUser, AuthUserMeta, AuthVerification, AuthVerificationMeta,
     };
     use crate::error::{AuthError, AuthResult};
     use crate::types::{
@@ -188,16 +190,16 @@ pub mod sqlx_adapter {
     #[async_trait]
     impl<U, S, A, O, M, I, V, TF, AK, PK> UserOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
-        U: AuthUser + SqlxEntity,
-        S: AuthSession + SqlxEntity,
-        A: AuthAccount + SqlxEntity,
-        O: AuthOrganization + SqlxEntity,
-        M: AuthMember + SqlxEntity,
-        I: AuthInvitation + SqlxEntity,
-        V: AuthVerification + SqlxEntity,
-        TF: AuthTwoFactor + SqlxEntity,
-        AK: AuthApiKey + SqlxEntity,
-        PK: AuthPasskey + SqlxEntity,
+        U: AuthUser + AuthUserMeta + SqlxEntity,
+        S: AuthSession + AuthSessionMeta + SqlxEntity,
+        A: AuthAccount + AuthAccountMeta + SqlxEntity,
+        O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
+        M: AuthMember + AuthMemberMeta + SqlxEntity,
+        I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
+        V: AuthVerification + AuthVerificationMeta + SqlxEntity,
+        TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
+        AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
+        PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
     {
         type User = U;
 
@@ -205,29 +207,38 @@ pub mod sqlx_adapter {
             let id = create_user.id.unwrap_or_else(|| Uuid::new_v4().to_string());
             let now = Utc::now();
 
-            let user = sqlx::query_as::<_, U>(
-                r#"
-                INSERT INTO users (id, email, name, image, email_verified, created_at, updated_at, metadata)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING *
-                "#,
-            )
-            .bind(&id)
-            .bind(&create_user.email)
-            .bind(&create_user.name)
-            .bind(&create_user.image)
-            .bind(false)
-            .bind(now)
-            .bind(now)
-            .bind(sqlx::types::Json(create_user.metadata.unwrap_or(serde_json::json!({}))))
-            .fetch_one(&self.pool)
-            .await?;
+            let sql = format!(
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
+                U::table(),
+                U::col_id(),
+                U::col_email(),
+                U::col_name(),
+                U::col_image(),
+                U::col_email_verified(),
+                U::col_created_at(),
+                U::col_updated_at(),
+                U::col_metadata(),
+            );
+            let user = sqlx::query_as::<_, U>(&sql)
+                .bind(&id)
+                .bind(&create_user.email)
+                .bind(&create_user.name)
+                .bind(&create_user.image)
+                .bind(false)
+                .bind(now)
+                .bind(now)
+                .bind(sqlx::types::Json(
+                    create_user.metadata.unwrap_or(serde_json::json!({})),
+                ))
+                .fetch_one(&self.pool)
+                .await?;
 
             Ok(user)
         }
 
         async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<U>> {
-            let user = sqlx::query_as::<_, U>("SELECT * FROM users WHERE id = $1")
+            let sql = format!("SELECT * FROM {} WHERE {} = $1", U::table(), U::col_id());
+            let user = sqlx::query_as::<_, U>(&sql)
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -235,7 +246,8 @@ pub mod sqlx_adapter {
         }
 
         async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<U>> {
-            let user = sqlx::query_as::<_, U>("SELECT * FROM users WHERE email = $1")
+            let sql = format!("SELECT * FROM {} WHERE {} = $1", U::table(), U::col_email());
+            let user = sqlx::query_as::<_, U>(&sql)
                 .bind(email)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -243,7 +255,12 @@ pub mod sqlx_adapter {
         }
 
         async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<U>> {
-            let user = sqlx::query_as::<_, U>("SELECT * FROM users WHERE username = $1")
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1",
+                U::table(),
+                U::col_username()
+            );
+            let user = sqlx::query_as::<_, U>(&sql)
                 .bind(username)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -251,66 +268,70 @@ pub mod sqlx_adapter {
         }
 
         async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<U> {
-            let mut query = sqlx::QueryBuilder::new("UPDATE users SET updated_at = NOW()");
+            let mut query = sqlx::QueryBuilder::new(format!(
+                "UPDATE {} SET {} = NOW()",
+                U::table(),
+                U::col_updated_at()
+            ));
             let mut has_updates = false;
 
             if let Some(email) = &update.email {
-                query.push(", email = ");
+                query.push(format!(", {} = ", U::col_email()));
                 query.push_bind(email);
                 has_updates = true;
             }
             if let Some(name) = &update.name {
-                query.push(", name = ");
+                query.push(format!(", {} = ", U::col_name()));
                 query.push_bind(name);
                 has_updates = true;
             }
             if let Some(image) = &update.image {
-                query.push(", image = ");
+                query.push(format!(", {} = ", U::col_image()));
                 query.push_bind(image);
                 has_updates = true;
             }
             if let Some(email_verified) = update.email_verified {
-                query.push(", email_verified = ");
+                query.push(format!(", {} = ", U::col_email_verified()));
                 query.push_bind(email_verified);
                 has_updates = true;
             }
             if let Some(role) = &update.role {
-                query.push(", role = ");
+                query.push(format!(", {} = ", U::col_role()));
                 query.push_bind(role);
                 has_updates = true;
             }
             if let Some(banned) = update.banned {
-                query.push(", banned = ");
+                query.push(format!(", {} = ", U::col_banned()));
                 query.push_bind(banned);
                 has_updates = true;
             }
             if let Some(ban_reason) = &update.ban_reason {
-                query.push(", ban_reason = ");
+                query.push(format!(", {} = ", U::col_ban_reason()));
                 query.push_bind(ban_reason);
                 has_updates = true;
             }
             if let Some(ban_expires) = update.ban_expires {
-                query.push(", ban_expires = ");
+                query.push(format!(", {} = ", U::col_ban_expires()));
                 query.push_bind(ban_expires);
                 has_updates = true;
             }
             if let Some(username) = &update.username {
-                query.push(", username = ");
+                query.push(format!(", {} = ", U::col_username()));
                 query.push_bind(username);
                 has_updates = true;
             }
             if let Some(display_username) = &update.display_username {
-                query.push(", display_username = ");
+                query.push(format!(", {} = ", U::col_display_username()));
                 query.push_bind(display_username);
                 has_updates = true;
             }
             if let Some(two_factor_enabled) = update.two_factor_enabled {
-                query.push(", two_factor_enabled = ");
+                query.push(format!(", {} = ", U::col_two_factor_enabled()));
                 query.push_bind(two_factor_enabled);
                 has_updates = true;
             }
             if let Some(metadata) = &update.metadata {
-                query.push(", metadata = ");
+                query.push(format!(", {} = ", U::col_metadata()));
                 query.push_bind(sqlx::types::Json(metadata.clone()));
                 has_updates = true;
             }
@@ -322,7 +343,7 @@ pub mod sqlx_adapter {
                     .ok_or(AuthError::UserNotFound);
             }
 
-            query.push(" WHERE id = ");
+            query.push(format!(" WHERE {} = ", U::col_id()));
             query.push_bind(id);
             query.push(" RETURNING *");
 
@@ -331,10 +352,8 @@ pub mod sqlx_adapter {
         }
 
         async fn delete_user(&self, id: &str) -> AuthResult<()> {
-            sqlx::query("DELETE FROM users WHERE id = $1")
-                .bind(id)
-                .execute(&self.pool)
-                .await?;
+            let sql = format!("DELETE FROM {} WHERE {} = $1", U::table(), U::col_id());
+            sqlx::query(&sql).bind(id).execute(&self.pool).await?;
             Ok(())
         }
 
@@ -349,8 +368,8 @@ pub mod sqlx_adapter {
             if let Some(search_value) = &params.search_value {
                 let field = params.search_field.as_deref().unwrap_or("email");
                 let col = match field {
-                    "name" => "name",
-                    _ => "email",
+                    "name" => U::col_name(),
+                    _ => U::col_email(),
                 };
                 let op = params.search_operator.as_deref().unwrap_or("contains");
                 let escaped = search_value.replace('%', "\\%").replace('_', "\\_");
@@ -367,9 +386,9 @@ pub mod sqlx_adapter {
             if let Some(filter_value) = &params.filter_value {
                 let field = params.filter_field.as_deref().unwrap_or("email");
                 let col = match field {
-                    "name" => "name",
-                    "role" => "role",
-                    _ => "email",
+                    "name" => U::col_name(),
+                    "role" => U::col_role(),
+                    _ => U::col_email(),
                 };
                 let op = params.filter_operator.as_deref().unwrap_or("eq");
                 let idx = bind_values.len() + 1;
@@ -399,9 +418,9 @@ pub mod sqlx_adapter {
             // Sort
             let order_clause = if let Some(sort_by) = &params.sort_by {
                 let col = match sort_by.as_str() {
-                    "name" => "name",
-                    "createdAt" | "created_at" => "created_at",
-                    _ => "email",
+                    "name" => U::col_name(),
+                    "createdAt" | "created_at" => U::col_created_at(),
+                    _ => U::col_email(),
                 };
                 let dir = if params.sort_direction.as_deref() == Some("desc") {
                     "DESC"
@@ -410,13 +429,17 @@ pub mod sqlx_adapter {
                 };
                 format!(" ORDER BY {} {}", col, dir)
             } else {
-                " ORDER BY created_at DESC".to_string()
+                format!(" ORDER BY {} DESC", U::col_created_at())
             };
 
             // Count query
             let count_idx = bind_values.len() + 1;
             let _count_idx = count_idx; // suppress unused warning
-            let count_sql = format!("SELECT COUNT(*) as count FROM users{}", where_clause);
+            let count_sql = format!(
+                "SELECT COUNT(*) as count FROM {}{}",
+                U::table(),
+                where_clause
+            );
             let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
             for v in &bind_values {
                 count_query = count_query.bind(v);
@@ -427,8 +450,12 @@ pub mod sqlx_adapter {
             let limit_idx = bind_values.len() + 1;
             let offset_idx = bind_values.len() + 2;
             let data_sql = format!(
-                "SELECT * FROM users{}{} LIMIT ${} OFFSET ${}",
-                where_clause, order_clause, limit_idx, offset_idx
+                "SELECT * FROM {}{}{} LIMIT ${} OFFSET ${}",
+                U::table(),
+                where_clause,
+                order_clause,
+                limit_idx,
+                offset_idx
             );
             let mut data_query = sqlx::query_as::<_, U>(&data_sql);
             for v in &bind_values {
@@ -446,16 +473,16 @@ pub mod sqlx_adapter {
     #[async_trait]
     impl<U, S, A, O, M, I, V, TF, AK, PK> SessionOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
-        U: AuthUser + SqlxEntity,
-        S: AuthSession + SqlxEntity,
-        A: AuthAccount + SqlxEntity,
-        O: AuthOrganization + SqlxEntity,
-        M: AuthMember + SqlxEntity,
-        I: AuthInvitation + SqlxEntity,
-        V: AuthVerification + SqlxEntity,
-        TF: AuthTwoFactor + SqlxEntity,
-        AK: AuthApiKey + SqlxEntity,
-        PK: AuthPasskey + SqlxEntity,
+        U: AuthUser + AuthUserMeta + SqlxEntity,
+        S: AuthSession + AuthSessionMeta + SqlxEntity,
+        A: AuthAccount + AuthAccountMeta + SqlxEntity,
+        O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
+        M: AuthMember + AuthMemberMeta + SqlxEntity,
+        I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
+        V: AuthVerification + AuthVerificationMeta + SqlxEntity,
+        TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
+        AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
+        PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
     {
         type Session = S;
 
@@ -464,43 +491,59 @@ pub mod sqlx_adapter {
             let token = format!("session_{}", Uuid::new_v4());
             let now = Utc::now();
 
-            let session = sqlx::query_as::<_, S>(
-                r#"
-                INSERT INTO sessions (id, user_id, token, expires_at, created_at, ip_address, user_agent, active)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING *
-                "#,
-            )
-            .bind(&id)
-            .bind(&create_session.user_id)
-            .bind(&token)
-            .bind(create_session.expires_at)
-            .bind(now)
-            .bind(&create_session.ip_address)
-            .bind(&create_session.user_agent)
-            .bind(true)
-            .fetch_one(&self.pool)
-            .await?;
+            let sql = format!(
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
+                S::table(),
+                S::col_id(),
+                S::col_user_id(),
+                S::col_token(),
+                S::col_expires_at(),
+                S::col_created_at(),
+                S::col_ip_address(),
+                S::col_user_agent(),
+                S::col_active(),
+            );
+            let session = sqlx::query_as::<_, S>(&sql)
+                .bind(&id)
+                .bind(&create_session.user_id)
+                .bind(&token)
+                .bind(create_session.expires_at)
+                .bind(now)
+                .bind(&create_session.ip_address)
+                .bind(&create_session.user_agent)
+                .bind(true)
+                .fetch_one(&self.pool)
+                .await?;
 
             Ok(session)
         }
 
         async fn get_session(&self, token: &str) -> AuthResult<Option<S>> {
-            let session =
-                sqlx::query_as::<_, S>("SELECT * FROM sessions WHERE token = $1 AND active = true")
-                    .bind(token)
-                    .fetch_optional(&self.pool)
-                    .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1 AND {} = true",
+                S::table(),
+                S::col_token(),
+                S::col_active()
+            );
+            let session = sqlx::query_as::<_, S>(&sql)
+                .bind(token)
+                .fetch_optional(&self.pool)
+                .await?;
             Ok(session)
         }
 
         async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<S>> {
-            let sessions = sqlx::query_as::<_, S>(
-                "SELECT * FROM sessions WHERE user_id = $1 AND active = true ORDER BY created_at DESC",
-            )
-            .bind(user_id)
-            .fetch_all(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1 AND {} = true ORDER BY {} DESC",
+                S::table(),
+                S::col_user_id(),
+                S::col_active(),
+                S::col_created_at()
+            );
+            let sessions = sqlx::query_as::<_, S>(&sql)
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await?;
             Ok(sessions)
         }
 
@@ -509,7 +552,14 @@ pub mod sqlx_adapter {
             token: &str,
             expires_at: DateTime<Utc>,
         ) -> AuthResult<()> {
-            sqlx::query("UPDATE sessions SET expires_at = $1 WHERE token = $2 AND active = true")
+            let sql = format!(
+                "UPDATE {} SET {} = $1 WHERE {} = $2 AND {} = true",
+                S::table(),
+                S::col_expires_at(),
+                S::col_token(),
+                S::col_active()
+            );
+            sqlx::query(&sql)
                 .bind(expires_at)
                 .bind(token)
                 .execute(&self.pool)
@@ -518,26 +568,25 @@ pub mod sqlx_adapter {
         }
 
         async fn delete_session(&self, token: &str) -> AuthResult<()> {
-            sqlx::query("DELETE FROM sessions WHERE token = $1")
-                .bind(token)
-                .execute(&self.pool)
-                .await?;
+            let sql = format!("DELETE FROM {} WHERE {} = $1", S::table(), S::col_token());
+            sqlx::query(&sql).bind(token).execute(&self.pool).await?;
             Ok(())
         }
 
         async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
-            sqlx::query("DELETE FROM sessions WHERE user_id = $1")
-                .bind(user_id)
-                .execute(&self.pool)
-                .await?;
+            let sql = format!("DELETE FROM {} WHERE {} = $1", S::table(), S::col_user_id());
+            sqlx::query(&sql).bind(user_id).execute(&self.pool).await?;
             Ok(())
         }
 
         async fn delete_expired_sessions(&self) -> AuthResult<usize> {
-            let result =
-                sqlx::query("DELETE FROM sessions WHERE expires_at < NOW() OR active = false")
-                    .execute(&self.pool)
-                    .await?;
+            let sql = format!(
+                "DELETE FROM {} WHERE {} < NOW() OR {} = false",
+                S::table(),
+                S::col_expires_at(),
+                S::col_active()
+            );
+            let result = sqlx::query(&sql).execute(&self.pool).await?;
             Ok(result.rows_affected() as usize)
         }
 
@@ -546,13 +595,19 @@ pub mod sqlx_adapter {
             token: &str,
             organization_id: Option<&str>,
         ) -> AuthResult<S> {
-            let session = sqlx::query_as::<_, S>(
-                "UPDATE sessions SET active_organization_id = $1, updated_at = NOW() WHERE token = $2 AND active = true RETURNING *",
-            )
-            .bind(organization_id)
-            .bind(token)
-            .fetch_one(&self.pool)
-            .await?;
+            let sql = format!(
+                "UPDATE {} SET {} = $1, {} = NOW() WHERE {} = $2 AND {} = true RETURNING *",
+                S::table(),
+                S::col_active_organization_id(),
+                S::col_updated_at(),
+                S::col_token(),
+                S::col_active()
+            );
+            let session = sqlx::query_as::<_, S>(&sql)
+                .bind(organization_id)
+                .bind(token)
+                .fetch_one(&self.pool)
+                .await?;
             Ok(session)
         }
     }
@@ -562,16 +617,16 @@ pub mod sqlx_adapter {
     #[async_trait]
     impl<U, S, A, O, M, I, V, TF, AK, PK> AccountOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
-        U: AuthUser + SqlxEntity,
-        S: AuthSession + SqlxEntity,
-        A: AuthAccount + SqlxEntity,
-        O: AuthOrganization + SqlxEntity,
-        M: AuthMember + SqlxEntity,
-        I: AuthInvitation + SqlxEntity,
-        V: AuthVerification + SqlxEntity,
-        TF: AuthTwoFactor + SqlxEntity,
-        AK: AuthApiKey + SqlxEntity,
-        PK: AuthPasskey + SqlxEntity,
+        U: AuthUser + AuthUserMeta + SqlxEntity,
+        S: AuthSession + AuthSessionMeta + SqlxEntity,
+        A: AuthAccount + AuthAccountMeta + SqlxEntity,
+        O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
+        M: AuthMember + AuthMemberMeta + SqlxEntity,
+        I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
+        V: AuthVerification + AuthVerificationMeta + SqlxEntity,
+        TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
+        AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
+        PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
     {
         type Account = A;
 
@@ -579,28 +634,40 @@ pub mod sqlx_adapter {
             let id = Uuid::new_v4().to_string();
             let now = Utc::now();
 
-            let account = sqlx::query_as::<_, A>(
-                r#"
-                INSERT INTO accounts (id, account_id, provider_id, user_id, access_token, refresh_token, id_token, access_token_expires_at, refresh_token_expires_at, scope, password, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-                RETURNING *
-                "#,
-            )
-            .bind(&id)
-            .bind(&create_account.account_id)
-            .bind(&create_account.provider_id)
-            .bind(&create_account.user_id)
-            .bind(&create_account.access_token)
-            .bind(&create_account.refresh_token)
-            .bind(&create_account.id_token)
-            .bind(create_account.access_token_expires_at)
-            .bind(create_account.refresh_token_expires_at)
-            .bind(&create_account.scope)
-            .bind(&create_account.password)
-            .bind(now)
-            .bind(now)
-            .fetch_one(&self.pool)
-            .await?;
+            let sql = format!(
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *",
+                A::table(),
+                A::col_id(),
+                A::col_account_id(),
+                A::col_provider_id(),
+                A::col_user_id(),
+                A::col_access_token(),
+                A::col_refresh_token(),
+                A::col_id_token(),
+                A::col_access_token_expires_at(),
+                A::col_refresh_token_expires_at(),
+                A::col_scope(),
+                A::col_password(),
+                A::col_created_at(),
+                A::col_updated_at(),
+            );
+            let account = sqlx::query_as::<_, A>(&sql)
+                .bind(&id)
+                .bind(&create_account.account_id)
+                .bind(&create_account.provider_id)
+                .bind(&create_account.user_id)
+                .bind(&create_account.access_token)
+                .bind(&create_account.refresh_token)
+                .bind(&create_account.id_token)
+                .bind(create_account.access_token_expires_at)
+                .bind(create_account.refresh_token_expires_at)
+                .bind(&create_account.scope)
+                .bind(&create_account.password)
+                .bind(now)
+                .bind(now)
+                .fetch_one(&self.pool)
+                .await?;
 
             Ok(account)
         }
@@ -610,55 +677,67 @@ pub mod sqlx_adapter {
             provider: &str,
             provider_account_id: &str,
         ) -> AuthResult<Option<A>> {
-            let account = sqlx::query_as::<_, A>(
-                "SELECT * FROM accounts WHERE provider_id = $1 AND account_id = $2",
-            )
-            .bind(provider)
-            .bind(provider_account_id)
-            .fetch_optional(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1 AND {} = $2",
+                A::table(),
+                A::col_provider_id(),
+                A::col_account_id()
+            );
+            let account = sqlx::query_as::<_, A>(&sql)
+                .bind(provider)
+                .bind(provider_account_id)
+                .fetch_optional(&self.pool)
+                .await?;
             Ok(account)
         }
 
         async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<A>> {
-            let accounts = sqlx::query_as::<_, A>(
-                "SELECT * FROM accounts WHERE user_id = $1 ORDER BY created_at DESC",
-            )
-            .bind(user_id)
-            .fetch_all(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1 ORDER BY {} DESC",
+                A::table(),
+                A::col_user_id(),
+                A::col_created_at()
+            );
+            let accounts = sqlx::query_as::<_, A>(&sql)
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await?;
             Ok(accounts)
         }
 
         async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<A> {
-            let mut query = sqlx::QueryBuilder::new("UPDATE accounts SET updated_at = NOW()");
+            let mut query = sqlx::QueryBuilder::new(format!(
+                "UPDATE {} SET {} = NOW()",
+                A::table(),
+                A::col_updated_at()
+            ));
 
             if let Some(access_token) = &update.access_token {
-                query.push(", access_token = ");
+                query.push(format!(", {} = ", A::col_access_token()));
                 query.push_bind(access_token);
             }
             if let Some(refresh_token) = &update.refresh_token {
-                query.push(", refresh_token = ");
+                query.push(format!(", {} = ", A::col_refresh_token()));
                 query.push_bind(refresh_token);
             }
             if let Some(id_token) = &update.id_token {
-                query.push(", id_token = ");
+                query.push(format!(", {} = ", A::col_id_token()));
                 query.push_bind(id_token);
             }
             if let Some(access_token_expires_at) = &update.access_token_expires_at {
-                query.push(", access_token_expires_at = ");
+                query.push(format!(", {} = ", A::col_access_token_expires_at()));
                 query.push_bind(access_token_expires_at);
             }
             if let Some(refresh_token_expires_at) = &update.refresh_token_expires_at {
-                query.push(", refresh_token_expires_at = ");
+                query.push(format!(", {} = ", A::col_refresh_token_expires_at()));
                 query.push_bind(refresh_token_expires_at);
             }
             if let Some(scope) = &update.scope {
-                query.push(", scope = ");
+                query.push(format!(", {} = ", A::col_scope()));
                 query.push_bind(scope);
             }
 
-            query.push(" WHERE id = ");
+            query.push(format!(" WHERE {} = ", A::col_id()));
             query.push_bind(id);
             query.push(" RETURNING *");
 
@@ -667,10 +746,8 @@ pub mod sqlx_adapter {
         }
 
         async fn delete_account(&self, id: &str) -> AuthResult<()> {
-            sqlx::query("DELETE FROM accounts WHERE id = $1")
-                .bind(id)
-                .execute(&self.pool)
-                .await?;
+            let sql = format!("DELETE FROM {} WHERE {} = $1", A::table(), A::col_id());
+            sqlx::query(&sql).bind(id).execute(&self.pool).await?;
             Ok(())
         }
     }
@@ -681,16 +758,16 @@ pub mod sqlx_adapter {
     impl<U, S, A, O, M, I, V, TF, AK, PK> VerificationOps
         for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
-        U: AuthUser + SqlxEntity,
-        S: AuthSession + SqlxEntity,
-        A: AuthAccount + SqlxEntity,
-        O: AuthOrganization + SqlxEntity,
-        M: AuthMember + SqlxEntity,
-        I: AuthInvitation + SqlxEntity,
-        V: AuthVerification + SqlxEntity,
-        TF: AuthTwoFactor + SqlxEntity,
-        AK: AuthApiKey + SqlxEntity,
-        PK: AuthPasskey + SqlxEntity,
+        U: AuthUser + AuthUserMeta + SqlxEntity,
+        S: AuthSession + AuthSessionMeta + SqlxEntity,
+        A: AuthAccount + AuthAccountMeta + SqlxEntity,
+        O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
+        M: AuthMember + AuthMemberMeta + SqlxEntity,
+        I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
+        V: AuthVerification + AuthVerificationMeta + SqlxEntity,
+        TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
+        AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
+        PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
     {
         type Verification = V;
 
@@ -701,53 +778,70 @@ pub mod sqlx_adapter {
             let id = Uuid::new_v4().to_string();
             let now = Utc::now();
 
-            let verification = sqlx::query_as::<_, V>(
-                r#"
-                INSERT INTO verifications (id, identifier, value, expires_at, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING *
-                "#,
-            )
-            .bind(&id)
-            .bind(&create_verification.identifier)
-            .bind(&create_verification.value)
-            .bind(create_verification.expires_at)
-            .bind(now)
-            .bind(now)
-            .fetch_one(&self.pool)
-            .await?;
+            let sql = format!(
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+                V::table(),
+                V::col_id(),
+                V::col_identifier(),
+                V::col_value(),
+                V::col_expires_at(),
+                V::col_created_at(),
+                V::col_updated_at(),
+            );
+            let verification = sqlx::query_as::<_, V>(&sql)
+                .bind(&id)
+                .bind(&create_verification.identifier)
+                .bind(&create_verification.value)
+                .bind(create_verification.expires_at)
+                .bind(now)
+                .bind(now)
+                .fetch_one(&self.pool)
+                .await?;
 
             Ok(verification)
         }
 
         async fn get_verification(&self, identifier: &str, value: &str) -> AuthResult<Option<V>> {
-            let verification = sqlx::query_as::<_, V>(
-                "SELECT * FROM verifications WHERE identifier = $1 AND value = $2 AND expires_at > NOW()",
-            )
-            .bind(identifier)
-            .bind(value)
-            .fetch_optional(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1 AND {} = $2 AND {} > NOW()",
+                V::table(),
+                V::col_identifier(),
+                V::col_value(),
+                V::col_expires_at()
+            );
+            let verification = sqlx::query_as::<_, V>(&sql)
+                .bind(identifier)
+                .bind(value)
+                .fetch_optional(&self.pool)
+                .await?;
             Ok(verification)
         }
 
         async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<V>> {
-            let verification = sqlx::query_as::<_, V>(
-                "SELECT * FROM verifications WHERE value = $1 AND expires_at > NOW()",
-            )
-            .bind(value)
-            .fetch_optional(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1 AND {} > NOW()",
+                V::table(),
+                V::col_value(),
+                V::col_expires_at()
+            );
+            let verification = sqlx::query_as::<_, V>(&sql)
+                .bind(value)
+                .fetch_optional(&self.pool)
+                .await?;
             Ok(verification)
         }
 
         async fn get_verification_by_identifier(&self, identifier: &str) -> AuthResult<Option<V>> {
-            let verification = sqlx::query_as::<_, V>(
-                "SELECT * FROM verifications WHERE identifier = $1 AND expires_at > NOW()",
-            )
-            .bind(identifier)
-            .fetch_optional(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1 AND {} > NOW()",
+                V::table(),
+                V::col_identifier(),
+                V::col_expires_at()
+            );
+            let verification = sqlx::query_as::<_, V>(&sql)
+                .bind(identifier)
+                .fetch_optional(&self.pool)
+                .await?;
             Ok(verification)
         }
 
@@ -756,33 +850,41 @@ pub mod sqlx_adapter {
             identifier: &str,
             value: &str,
         ) -> AuthResult<Option<V>> {
-            let verification = sqlx::query_as::<_, V>(
-                "DELETE FROM verifications WHERE id IN (
-                    SELECT id FROM verifications
-                    WHERE identifier = $1 AND value = $2 AND expires_at > NOW()
-                    ORDER BY created_at DESC
-                    LIMIT 1
+            let sql = format!(
+                "DELETE FROM {tbl} WHERE {id} IN (\
+                    SELECT {id} FROM {tbl} \
+                    WHERE {ident} = $1 AND {val} = $2 AND {exp} > NOW() \
+                    ORDER BY {ca} DESC \
+                    LIMIT 1\
                 ) RETURNING *",
-            )
-            .bind(identifier)
-            .bind(value)
-            .fetch_optional(&self.pool)
-            .await?;
+                tbl = V::table(),
+                id = V::col_id(),
+                ident = V::col_identifier(),
+                val = V::col_value(),
+                exp = V::col_expires_at(),
+                ca = V::col_created_at(),
+            );
+            let verification = sqlx::query_as::<_, V>(&sql)
+                .bind(identifier)
+                .bind(value)
+                .fetch_optional(&self.pool)
+                .await?;
             Ok(verification)
         }
 
         async fn delete_verification(&self, id: &str) -> AuthResult<()> {
-            sqlx::query("DELETE FROM verifications WHERE id = $1")
-                .bind(id)
-                .execute(&self.pool)
-                .await?;
+            let sql = format!("DELETE FROM {} WHERE {} = $1", V::table(), V::col_id());
+            sqlx::query(&sql).bind(id).execute(&self.pool).await?;
             Ok(())
         }
 
         async fn delete_expired_verifications(&self) -> AuthResult<usize> {
-            let result = sqlx::query("DELETE FROM verifications WHERE expires_at < NOW()")
-                .execute(&self.pool)
-                .await?;
+            let sql = format!(
+                "DELETE FROM {} WHERE {} < NOW()",
+                V::table(),
+                V::col_expires_at()
+            );
+            let result = sqlx::query(&sql).execute(&self.pool).await?;
             Ok(result.rows_affected() as usize)
         }
     }
@@ -793,16 +895,16 @@ pub mod sqlx_adapter {
     impl<U, S, A, O, M, I, V, TF, AK, PK> OrganizationOps
         for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
-        U: AuthUser + SqlxEntity,
-        S: AuthSession + SqlxEntity,
-        A: AuthAccount + SqlxEntity,
-        O: AuthOrganization + SqlxEntity,
-        M: AuthMember + SqlxEntity,
-        I: AuthInvitation + SqlxEntity,
-        V: AuthVerification + SqlxEntity,
-        TF: AuthTwoFactor + SqlxEntity,
-        AK: AuthApiKey + SqlxEntity,
-        PK: AuthPasskey + SqlxEntity,
+        U: AuthUser + AuthUserMeta + SqlxEntity,
+        S: AuthSession + AuthSessionMeta + SqlxEntity,
+        A: AuthAccount + AuthAccountMeta + SqlxEntity,
+        O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
+        M: AuthMember + AuthMemberMeta + SqlxEntity,
+        I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
+        V: AuthVerification + AuthVerificationMeta + SqlxEntity,
+        TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
+        AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
+        PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
     {
         type Organization = O;
 
@@ -810,30 +912,36 @@ pub mod sqlx_adapter {
             let id = create_org.id.unwrap_or_else(|| Uuid::new_v4().to_string());
             let now = Utc::now();
 
-            let organization = sqlx::query_as::<_, O>(
-                r#"
-                INSERT INTO organization (id, name, slug, logo, metadata, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING *
-                "#,
-            )
-            .bind(&id)
-            .bind(&create_org.name)
-            .bind(&create_org.slug)
-            .bind(&create_org.logo)
-            .bind(sqlx::types::Json(
-                create_org.metadata.unwrap_or(serde_json::json!({})),
-            ))
-            .bind(now)
-            .bind(now)
-            .fetch_one(&self.pool)
-            .await?;
+            let sql = format!(
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
+                O::table(),
+                O::col_id(),
+                O::col_name(),
+                O::col_slug(),
+                O::col_logo(),
+                O::col_metadata(),
+                O::col_created_at(),
+                O::col_updated_at(),
+            );
+            let organization = sqlx::query_as::<_, O>(&sql)
+                .bind(&id)
+                .bind(&create_org.name)
+                .bind(&create_org.slug)
+                .bind(&create_org.logo)
+                .bind(sqlx::types::Json(
+                    create_org.metadata.unwrap_or(serde_json::json!({})),
+                ))
+                .bind(now)
+                .bind(now)
+                .fetch_one(&self.pool)
+                .await?;
 
             Ok(organization)
         }
 
         async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<O>> {
-            let organization = sqlx::query_as::<_, O>("SELECT * FROM organization WHERE id = $1")
+            let sql = format!("SELECT * FROM {} WHERE {} = $1", O::table(), O::col_id());
+            let organization = sqlx::query_as::<_, O>(&sql)
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -841,7 +949,8 @@ pub mod sqlx_adapter {
         }
 
         async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<O>> {
-            let organization = sqlx::query_as::<_, O>("SELECT * FROM organization WHERE slug = $1")
+            let sql = format!("SELECT * FROM {} WHERE {} = $1", O::table(), O::col_slug());
+            let organization = sqlx::query_as::<_, O>(&sql)
                 .bind(slug)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -849,26 +958,30 @@ pub mod sqlx_adapter {
         }
 
         async fn update_organization(&self, id: &str, update: UpdateOrganization) -> AuthResult<O> {
-            let mut query = sqlx::QueryBuilder::new("UPDATE organization SET updated_at = NOW()");
+            let mut query = sqlx::QueryBuilder::new(format!(
+                "UPDATE {} SET {} = NOW()",
+                O::table(),
+                O::col_updated_at()
+            ));
 
             if let Some(name) = &update.name {
-                query.push(", name = ");
+                query.push(format!(", {} = ", O::col_name()));
                 query.push_bind(name);
             }
             if let Some(slug) = &update.slug {
-                query.push(", slug = ");
+                query.push(format!(", {} = ", O::col_slug()));
                 query.push_bind(slug);
             }
             if let Some(logo) = &update.logo {
-                query.push(", logo = ");
+                query.push(format!(", {} = ", O::col_logo()));
                 query.push_bind(logo);
             }
             if let Some(metadata) = &update.metadata {
-                query.push(", metadata = ");
+                query.push(format!(", {} = ", O::col_metadata()));
                 query.push_bind(sqlx::types::Json(metadata.clone()));
             }
 
-            query.push(" WHERE id = ");
+            query.push(format!(" WHERE {} = ", O::col_id()));
             query.push_bind(id);
             query.push(" RETURNING *");
 
@@ -877,26 +990,25 @@ pub mod sqlx_adapter {
         }
 
         async fn delete_organization(&self, id: &str) -> AuthResult<()> {
-            sqlx::query("DELETE FROM organization WHERE id = $1")
-                .bind(id)
-                .execute(&self.pool)
-                .await?;
+            let sql = format!("DELETE FROM {} WHERE {} = $1", O::table(), O::col_id());
+            sqlx::query(&sql).bind(id).execute(&self.pool).await?;
             Ok(())
         }
 
         async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<O>> {
-            let organizations = sqlx::query_as::<_, O>(
-                r#"
-                SELECT o.*
-                FROM organization o
-                INNER JOIN member m ON o.id = m.organization_id
-                WHERE m.user_id = $1
-                ORDER BY o.created_at DESC
-                "#,
-            )
-            .bind(user_id)
-            .fetch_all(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT o.* FROM {} o INNER JOIN {} m ON o.{} = m.{} WHERE m.{} = $1 ORDER BY o.{} DESC",
+                O::table(),
+                M::table(),
+                O::col_id(),
+                M::col_organization_id(),
+                M::col_user_id(),
+                O::col_created_at(),
+            );
+            let organizations = sqlx::query_as::<_, O>(&sql)
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await?;
             Ok(organizations)
         }
     }
@@ -906,16 +1018,16 @@ pub mod sqlx_adapter {
     #[async_trait]
     impl<U, S, A, O, M, I, V, TF, AK, PK> MemberOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
-        U: AuthUser + SqlxEntity,
-        S: AuthSession + SqlxEntity,
-        A: AuthAccount + SqlxEntity,
-        O: AuthOrganization + SqlxEntity,
-        M: AuthMember + SqlxEntity,
-        I: AuthInvitation + SqlxEntity,
-        V: AuthVerification + SqlxEntity,
-        TF: AuthTwoFactor + SqlxEntity,
-        AK: AuthApiKey + SqlxEntity,
-        PK: AuthPasskey + SqlxEntity,
+        U: AuthUser + AuthUserMeta + SqlxEntity,
+        S: AuthSession + AuthSessionMeta + SqlxEntity,
+        A: AuthAccount + AuthAccountMeta + SqlxEntity,
+        O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
+        M: AuthMember + AuthMemberMeta + SqlxEntity,
+        I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
+        V: AuthVerification + AuthVerificationMeta + SqlxEntity,
+        TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
+        AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
+        PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
     {
         type Member = M;
 
@@ -923,37 +1035,45 @@ pub mod sqlx_adapter {
             let id = Uuid::new_v4().to_string();
             let now = Utc::now();
 
-            let member = sqlx::query_as::<_, M>(
-                r#"
-                INSERT INTO member (id, organization_id, user_id, role, created_at)
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING *
-                "#,
-            )
-            .bind(&id)
-            .bind(&create_member.organization_id)
-            .bind(&create_member.user_id)
-            .bind(&create_member.role)
-            .bind(now)
-            .fetch_one(&self.pool)
-            .await?;
+            let sql = format!(
+                "INSERT INTO {} ({}, {}, {}, {}, {}) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+                M::table(),
+                M::col_id(),
+                M::col_organization_id(),
+                M::col_user_id(),
+                M::col_role(),
+                M::col_created_at(),
+            );
+            let member = sqlx::query_as::<_, M>(&sql)
+                .bind(&id)
+                .bind(&create_member.organization_id)
+                .bind(&create_member.user_id)
+                .bind(&create_member.role)
+                .bind(now)
+                .fetch_one(&self.pool)
+                .await?;
 
             Ok(member)
         }
 
         async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<M>> {
-            let member = sqlx::query_as::<_, M>(
-                "SELECT * FROM member WHERE organization_id = $1 AND user_id = $2",
-            )
-            .bind(organization_id)
-            .bind(user_id)
-            .fetch_optional(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1 AND {} = $2",
+                M::table(),
+                M::col_organization_id(),
+                M::col_user_id()
+            );
+            let member = sqlx::query_as::<_, M>(&sql)
+                .bind(organization_id)
+                .bind(user_id)
+                .fetch_optional(&self.pool)
+                .await?;
             Ok(member)
         }
 
         async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<M>> {
-            let member = sqlx::query_as::<_, M>("SELECT * FROM member WHERE id = $1")
+            let sql = format!("SELECT * FROM {} WHERE {} = $1", M::table(), M::col_id());
+            let member = sqlx::query_as::<_, M>(&sql)
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -961,17 +1081,23 @@ pub mod sqlx_adapter {
         }
 
         async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<M> {
-            let member =
-                sqlx::query_as::<_, M>("UPDATE member SET role = $1 WHERE id = $2 RETURNING *")
-                    .bind(role)
-                    .bind(member_id)
-                    .fetch_one(&self.pool)
-                    .await?;
+            let sql = format!(
+                "UPDATE {} SET {} = $1 WHERE {} = $2 RETURNING *",
+                M::table(),
+                M::col_role(),
+                M::col_id()
+            );
+            let member = sqlx::query_as::<_, M>(&sql)
+                .bind(role)
+                .bind(member_id)
+                .fetch_one(&self.pool)
+                .await?;
             Ok(member)
         }
 
         async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
-            sqlx::query("DELETE FROM member WHERE id = $1")
+            let sql = format!("DELETE FROM {} WHERE {} = $1", M::table(), M::col_id());
+            sqlx::query(&sql)
                 .bind(member_id)
                 .execute(&self.pool)
                 .await?;
@@ -979,31 +1105,43 @@ pub mod sqlx_adapter {
         }
 
         async fn list_organization_members(&self, organization_id: &str) -> AuthResult<Vec<M>> {
-            let members = sqlx::query_as::<_, M>(
-                "SELECT * FROM member WHERE organization_id = $1 ORDER BY created_at ASC",
-            )
-            .bind(organization_id)
-            .fetch_all(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1 ORDER BY {} ASC",
+                M::table(),
+                M::col_organization_id(),
+                M::col_created_at()
+            );
+            let members = sqlx::query_as::<_, M>(&sql)
+                .bind(organization_id)
+                .fetch_all(&self.pool)
+                .await?;
             Ok(members)
         }
 
         async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize> {
-            let count: (i64,) =
-                sqlx::query_as("SELECT COUNT(*) FROM member WHERE organization_id = $1")
-                    .bind(organization_id)
-                    .fetch_one(&self.pool)
-                    .await?;
+            let sql = format!(
+                "SELECT COUNT(*) FROM {} WHERE {} = $1",
+                M::table(),
+                M::col_organization_id()
+            );
+            let count: (i64,) = sqlx::query_as(&sql)
+                .bind(organization_id)
+                .fetch_one(&self.pool)
+                .await?;
             Ok(count.0 as usize)
         }
 
         async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<usize> {
-            let count: (i64,) = sqlx::query_as(
-                "SELECT COUNT(*) FROM member WHERE organization_id = $1 AND role = 'owner'",
-            )
-            .bind(organization_id)
-            .fetch_one(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT COUNT(*) FROM {} WHERE {} = $1 AND {} = 'owner'",
+                M::table(),
+                M::col_organization_id(),
+                M::col_role()
+            );
+            let count: (i64,) = sqlx::query_as(&sql)
+                .bind(organization_id)
+                .fetch_one(&self.pool)
+                .await?;
             Ok(count.0 as usize)
         }
     }
@@ -1013,16 +1151,16 @@ pub mod sqlx_adapter {
     #[async_trait]
     impl<U, S, A, O, M, I, V, TF, AK, PK> InvitationOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
-        U: AuthUser + SqlxEntity,
-        S: AuthSession + SqlxEntity,
-        A: AuthAccount + SqlxEntity,
-        O: AuthOrganization + SqlxEntity,
-        M: AuthMember + SqlxEntity,
-        I: AuthInvitation + SqlxEntity,
-        V: AuthVerification + SqlxEntity,
-        TF: AuthTwoFactor + SqlxEntity,
-        AK: AuthApiKey + SqlxEntity,
-        PK: AuthPasskey + SqlxEntity,
+        U: AuthUser + AuthUserMeta + SqlxEntity,
+        S: AuthSession + AuthSessionMeta + SqlxEntity,
+        A: AuthAccount + AuthAccountMeta + SqlxEntity,
+        O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
+        M: AuthMember + AuthMemberMeta + SqlxEntity,
+        I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
+        V: AuthVerification + AuthVerificationMeta + SqlxEntity,
+        TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
+        AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
+        PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
     {
         type Invitation = I;
 
@@ -1030,28 +1168,36 @@ pub mod sqlx_adapter {
             let id = Uuid::new_v4().to_string();
             let now = Utc::now();
 
-            let invitation = sqlx::query_as::<_, I>(
-                r#"
-                INSERT INTO invitation (id, organization_id, email, role, status, inviter_id, expires_at, created_at)
-                VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)
-                RETURNING *
-                "#,
-            )
-            .bind(&id)
-            .bind(&create_inv.organization_id)
-            .bind(&create_inv.email)
-            .bind(&create_inv.role)
-            .bind(&create_inv.inviter_id)
-            .bind(create_inv.expires_at)
-            .bind(now)
-            .fetch_one(&self.pool)
-            .await?;
+            let sql = format!(
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) \
+                 VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7) RETURNING *",
+                I::table(),
+                I::col_id(),
+                I::col_organization_id(),
+                I::col_email(),
+                I::col_role(),
+                I::col_status(),
+                I::col_inviter_id(),
+                I::col_expires_at(),
+                I::col_created_at(),
+            );
+            let invitation = sqlx::query_as::<_, I>(&sql)
+                .bind(&id)
+                .bind(&create_inv.organization_id)
+                .bind(&create_inv.email)
+                .bind(&create_inv.role)
+                .bind(&create_inv.inviter_id)
+                .bind(create_inv.expires_at)
+                .bind(now)
+                .fetch_one(&self.pool)
+                .await?;
 
             Ok(invitation)
         }
 
         async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<I>> {
-            let invitation = sqlx::query_as::<_, I>("SELECT * FROM invitation WHERE id = $1")
+            let sql = format!("SELECT * FROM {} WHERE {} = $1", I::table(), I::col_id());
+            let invitation = sqlx::query_as::<_, I>(&sql)
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1063,13 +1209,18 @@ pub mod sqlx_adapter {
             organization_id: &str,
             email: &str,
         ) -> AuthResult<Option<I>> {
-            let invitation = sqlx::query_as::<_, I>(
-                "SELECT * FROM invitation WHERE organization_id = $1 AND LOWER(email) = LOWER($2) AND status = 'pending'",
-            )
-            .bind(organization_id)
-            .bind(email)
-            .fetch_optional(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1 AND LOWER({}) = LOWER($2) AND {} = 'pending'",
+                I::table(),
+                I::col_organization_id(),
+                I::col_email(),
+                I::col_status()
+            );
+            let invitation = sqlx::query_as::<_, I>(&sql)
+                .bind(organization_id)
+                .bind(email)
+                .fetch_optional(&self.pool)
+                .await?;
             Ok(invitation)
         }
 
@@ -1078,33 +1229,47 @@ pub mod sqlx_adapter {
             id: &str,
             status: InvitationStatus,
         ) -> AuthResult<I> {
-            let invitation = sqlx::query_as::<_, I>(
-                "UPDATE invitation SET status = $1 WHERE id = $2 RETURNING *",
-            )
-            .bind(status.to_string())
-            .bind(id)
-            .fetch_one(&self.pool)
-            .await?;
+            let sql = format!(
+                "UPDATE {} SET {} = $1 WHERE {} = $2 RETURNING *",
+                I::table(),
+                I::col_status(),
+                I::col_id()
+            );
+            let invitation = sqlx::query_as::<_, I>(&sql)
+                .bind(status.to_string())
+                .bind(id)
+                .fetch_one(&self.pool)
+                .await?;
             Ok(invitation)
         }
 
         async fn list_organization_invitations(&self, organization_id: &str) -> AuthResult<Vec<I>> {
-            let invitations = sqlx::query_as::<_, I>(
-                "SELECT * FROM invitation WHERE organization_id = $1 ORDER BY created_at DESC",
-            )
-            .bind(organization_id)
-            .fetch_all(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1 ORDER BY {} DESC",
+                I::table(),
+                I::col_organization_id(),
+                I::col_created_at()
+            );
+            let invitations = sqlx::query_as::<_, I>(&sql)
+                .bind(organization_id)
+                .fetch_all(&self.pool)
+                .await?;
             Ok(invitations)
         }
 
         async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<I>> {
-            let invitations = sqlx::query_as::<_, I>(
-                "SELECT * FROM invitation WHERE LOWER(email) = LOWER($1) AND status = 'pending' AND expires_at > NOW() ORDER BY created_at DESC",
-            )
-            .bind(email)
-            .fetch_all(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE LOWER({}) = LOWER($1) AND {} = 'pending' AND {} > NOW() ORDER BY {} DESC",
+                I::table(),
+                I::col_email(),
+                I::col_status(),
+                I::col_expires_at(),
+                I::col_created_at()
+            );
+            let invitations = sqlx::query_as::<_, I>(&sql)
+                .bind(email)
+                .fetch_all(&self.pool)
+                .await?;
             Ok(invitations)
         }
     }
@@ -1114,16 +1279,16 @@ pub mod sqlx_adapter {
     #[async_trait]
     impl<U, S, A, O, M, I, V, TF, AK, PK> TwoFactorOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
-        U: AuthUser + SqlxEntity,
-        S: AuthSession + SqlxEntity,
-        A: AuthAccount + SqlxEntity,
-        O: AuthOrganization + SqlxEntity,
-        M: AuthMember + SqlxEntity,
-        I: AuthInvitation + SqlxEntity,
-        V: AuthVerification + SqlxEntity,
-        TF: AuthTwoFactor + SqlxEntity,
-        AK: AuthApiKey + SqlxEntity,
-        PK: AuthPasskey + SqlxEntity,
+        U: AuthUser + AuthUserMeta + SqlxEntity,
+        S: AuthSession + AuthSessionMeta + SqlxEntity,
+        A: AuthAccount + AuthAccountMeta + SqlxEntity,
+        O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
+        M: AuthMember + AuthMemberMeta + SqlxEntity,
+        I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
+        V: AuthVerification + AuthVerificationMeta + SqlxEntity,
+        TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
+        AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
+        PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
     {
         type TwoFactor = TF;
 
@@ -1131,27 +1296,36 @@ pub mod sqlx_adapter {
             let id = Uuid::new_v4().to_string();
             let now = Utc::now();
 
-            let two_factor = sqlx::query_as::<_, TF>(
-                r#"
-                INSERT INTO two_factor (id, secret, backup_codes, user_id, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING *
-                "#,
-            )
-            .bind(&id)
-            .bind(&create.secret)
-            .bind(&create.backup_codes)
-            .bind(&create.user_id)
-            .bind(now)
-            .bind(now)
-            .fetch_one(&self.pool)
-            .await?;
+            let sql = format!(
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+                TF::table(),
+                TF::col_id(),
+                TF::col_secret(),
+                TF::col_backup_codes(),
+                TF::col_user_id(),
+                TF::col_created_at(),
+                TF::col_updated_at(),
+            );
+            let two_factor = sqlx::query_as::<_, TF>(&sql)
+                .bind(&id)
+                .bind(&create.secret)
+                .bind(&create.backup_codes)
+                .bind(&create.user_id)
+                .bind(now)
+                .bind(now)
+                .fetch_one(&self.pool)
+                .await?;
 
             Ok(two_factor)
         }
 
         async fn get_two_factor_by_user_id(&self, user_id: &str) -> AuthResult<Option<TF>> {
-            let two_factor = sqlx::query_as::<_, TF>("SELECT * FROM two_factor WHERE user_id = $1")
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1",
+                TF::table(),
+                TF::col_user_id()
+            );
+            let two_factor = sqlx::query_as::<_, TF>(&sql)
                 .bind(user_id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1163,21 +1337,28 @@ pub mod sqlx_adapter {
             user_id: &str,
             backup_codes: &str,
         ) -> AuthResult<TF> {
-            let two_factor = sqlx::query_as::<_, TF>(
-                "UPDATE two_factor SET backup_codes = $1, updated_at = NOW() WHERE user_id = $2 RETURNING *",
-            )
-            .bind(backup_codes)
-            .bind(user_id)
-            .fetch_one(&self.pool)
-            .await?;
+            let sql = format!(
+                "UPDATE {} SET {} = $1, {} = NOW() WHERE {} = $2 RETURNING *",
+                TF::table(),
+                TF::col_backup_codes(),
+                TF::col_updated_at(),
+                TF::col_user_id()
+            );
+            let two_factor = sqlx::query_as::<_, TF>(&sql)
+                .bind(backup_codes)
+                .bind(user_id)
+                .fetch_one(&self.pool)
+                .await?;
             Ok(two_factor)
         }
 
         async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
-            sqlx::query("DELETE FROM two_factor WHERE user_id = $1")
-                .bind(user_id)
-                .execute(&self.pool)
-                .await?;
+            let sql = format!(
+                "DELETE FROM {} WHERE {} = $1",
+                TF::table(),
+                TF::col_user_id()
+            );
+            sqlx::query(&sql).bind(user_id).execute(&self.pool).await?;
             Ok(())
         }
     }
@@ -1187,16 +1368,16 @@ pub mod sqlx_adapter {
     #[async_trait]
     impl<U, S, A, O, M, I, V, TF, AK, PK> ApiKeyOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
-        U: AuthUser + SqlxEntity,
-        S: AuthSession + SqlxEntity,
-        A: AuthAccount + SqlxEntity,
-        O: AuthOrganization + SqlxEntity,
-        M: AuthMember + SqlxEntity,
-        I: AuthInvitation + SqlxEntity,
-        V: AuthVerification + SqlxEntity,
-        TF: AuthTwoFactor + SqlxEntity,
-        AK: AuthApiKey + SqlxEntity,
-        PK: AuthPasskey + SqlxEntity,
+        U: AuthUser + AuthUserMeta + SqlxEntity,
+        S: AuthSession + AuthSessionMeta + SqlxEntity,
+        A: AuthAccount + AuthAccountMeta + SqlxEntity,
+        O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
+        M: AuthMember + AuthMemberMeta + SqlxEntity,
+        I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
+        V: AuthVerification + AuthVerificationMeta + SqlxEntity,
+        TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
+        AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
+        PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
     {
         type ApiKey = AK;
 
@@ -1204,42 +1385,57 @@ pub mod sqlx_adapter {
             let id = Uuid::new_v4().to_string();
             let now = Utc::now();
 
-            let api_key = sqlx::query_as::<_, AK>(
-                r#"
-                INSERT INTO api_keys (id, name, start, prefix, key, user_id, refill_interval, refill_amount,
-                    enabled, rate_limit_enabled, rate_limit_time_window, rate_limit_max, remaining,
-                    expires_at, created_at, updated_at, permissions, metadata)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                    $14::timestamptz, $15, $16, $17, $18)
-                RETURNING *
-                "#,
-            )
-            .bind(&id)
-            .bind(&input.name)
-            .bind(&input.start)
-            .bind(&input.prefix)
-            .bind(&input.key_hash)
-            .bind(&input.user_id)
-            .bind(input.refill_interval)
-            .bind(input.refill_amount)
-            .bind(input.enabled)
-            .bind(input.rate_limit_enabled)
-            .bind(input.rate_limit_time_window)
-            .bind(input.rate_limit_max)
-            .bind(input.remaining)
-            .bind(&input.expires_at)
-            .bind(now)
-            .bind(now)
-            .bind(&input.permissions)
-            .bind(&input.metadata)
-            .fetch_one(&self.pool)
-            .await?;
+            let sql = format!(
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::timestamptz, $15, $16, $17, $18) RETURNING *",
+                AK::table(),
+                AK::col_id(),
+                AK::col_name(),
+                AK::col_start(),
+                AK::col_prefix(),
+                AK::col_key_hash(),
+                AK::col_user_id(),
+                AK::col_refill_interval(),
+                AK::col_refill_amount(),
+                AK::col_enabled(),
+                AK::col_rate_limit_enabled(),
+                AK::col_rate_limit_time_window(),
+                AK::col_rate_limit_max(),
+                AK::col_remaining(),
+                AK::col_expires_at(),
+                AK::col_created_at(),
+                AK::col_updated_at(),
+                AK::col_permissions(),
+                AK::col_metadata(),
+            );
+            let api_key = sqlx::query_as::<_, AK>(&sql)
+                .bind(&id)
+                .bind(&input.name)
+                .bind(&input.start)
+                .bind(&input.prefix)
+                .bind(&input.key_hash)
+                .bind(&input.user_id)
+                .bind(input.refill_interval)
+                .bind(input.refill_amount)
+                .bind(input.enabled)
+                .bind(input.rate_limit_enabled)
+                .bind(input.rate_limit_time_window)
+                .bind(input.rate_limit_max)
+                .bind(input.remaining)
+                .bind(&input.expires_at)
+                .bind(now)
+                .bind(now)
+                .bind(&input.permissions)
+                .bind(&input.metadata)
+                .fetch_one(&self.pool)
+                .await?;
 
             Ok(api_key)
         }
 
         async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<AK>> {
-            let api_key = sqlx::query_as::<_, AK>("SELECT * FROM api_keys WHERE id = $1")
+            let sql = format!("SELECT * FROM {} WHERE {} = $1", AK::table(), AK::col_id());
+            let api_key = sqlx::query_as::<_, AK>(&sql)
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1247,7 +1443,12 @@ pub mod sqlx_adapter {
         }
 
         async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<AK>> {
-            let api_key = sqlx::query_as::<_, AK>("SELECT * FROM api_keys WHERE key = $1")
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1",
+                AK::table(),
+                AK::col_key_hash()
+            );
+            let api_key = sqlx::query_as::<_, AK>(&sql)
                 .bind(hash)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1255,60 +1456,68 @@ pub mod sqlx_adapter {
         }
 
         async fn list_api_keys_by_user(&self, user_id: &str) -> AuthResult<Vec<AK>> {
-            let keys = sqlx::query_as::<_, AK>(
-                "SELECT * FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC",
-            )
-            .bind(user_id)
-            .fetch_all(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1 ORDER BY {} DESC",
+                AK::table(),
+                AK::col_user_id(),
+                AK::col_created_at()
+            );
+            let keys = sqlx::query_as::<_, AK>(&sql)
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await?;
             Ok(keys)
         }
 
         async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<AK> {
-            let mut query = sqlx::QueryBuilder::new("UPDATE api_keys SET updated_at = NOW()");
+            let mut query = sqlx::QueryBuilder::new(format!(
+                "UPDATE {} SET {} = NOW()",
+                AK::table(),
+                AK::col_updated_at()
+            ));
 
             if let Some(name) = &update.name {
-                query.push(", name = ");
+                query.push(format!(", {} = ", AK::col_name()));
                 query.push_bind(name);
             }
             if let Some(enabled) = update.enabled {
-                query.push(", enabled = ");
+                query.push(format!(", {} = ", AK::col_enabled()));
                 query.push_bind(enabled);
             }
             if let Some(remaining) = update.remaining {
-                query.push(", remaining = ");
+                query.push(format!(", {} = ", AK::col_remaining()));
                 query.push_bind(remaining);
             }
             if let Some(rate_limit_enabled) = update.rate_limit_enabled {
-                query.push(", rate_limit_enabled = ");
+                query.push(format!(", {} = ", AK::col_rate_limit_enabled()));
                 query.push_bind(rate_limit_enabled);
             }
             if let Some(rate_limit_time_window) = update.rate_limit_time_window {
-                query.push(", rate_limit_time_window = ");
+                query.push(format!(", {} = ", AK::col_rate_limit_time_window()));
                 query.push_bind(rate_limit_time_window);
             }
             if let Some(rate_limit_max) = update.rate_limit_max {
-                query.push(", rate_limit_max = ");
+                query.push(format!(", {} = ", AK::col_rate_limit_max()));
                 query.push_bind(rate_limit_max);
             }
             if let Some(refill_interval) = update.refill_interval {
-                query.push(", refill_interval = ");
+                query.push(format!(", {} = ", AK::col_refill_interval()));
                 query.push_bind(refill_interval);
             }
             if let Some(refill_amount) = update.refill_amount {
-                query.push(", refill_amount = ");
+                query.push(format!(", {} = ", AK::col_refill_amount()));
                 query.push_bind(refill_amount);
             }
             if let Some(permissions) = &update.permissions {
-                query.push(", permissions = ");
+                query.push(format!(", {} = ", AK::col_permissions()));
                 query.push_bind(permissions);
             }
             if let Some(metadata) = &update.metadata {
-                query.push(", metadata = ");
+                query.push(format!(", {} = ", AK::col_metadata()));
                 query.push_bind(metadata);
             }
 
-            query.push(" WHERE id = ");
+            query.push(format!(" WHERE {} = ", AK::col_id()));
             query.push_bind(id);
             query.push(" RETURNING *");
 
@@ -1324,10 +1533,8 @@ pub mod sqlx_adapter {
         }
 
         async fn delete_api_key(&self, id: &str) -> AuthResult<()> {
-            sqlx::query("DELETE FROM api_keys WHERE id = $1")
-                .bind(id)
-                .execute(&self.pool)
-                .await?;
+            let sql = format!("DELETE FROM {} WHERE {} = $1", AK::table(), AK::col_id());
+            sqlx::query(&sql).bind(id).execute(&self.pool).await?;
             Ok(())
         }
     }
@@ -1337,16 +1544,16 @@ pub mod sqlx_adapter {
     #[async_trait]
     impl<U, S, A, O, M, I, V, TF, AK, PK> PasskeyOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
     where
-        U: AuthUser + SqlxEntity,
-        S: AuthSession + SqlxEntity,
-        A: AuthAccount + SqlxEntity,
-        O: AuthOrganization + SqlxEntity,
-        M: AuthMember + SqlxEntity,
-        I: AuthInvitation + SqlxEntity,
-        V: AuthVerification + SqlxEntity,
-        TF: AuthTwoFactor + SqlxEntity,
-        AK: AuthApiKey + SqlxEntity,
-        PK: AuthPasskey + SqlxEntity,
+        U: AuthUser + AuthUserMeta + SqlxEntity,
+        S: AuthSession + AuthSessionMeta + SqlxEntity,
+        A: AuthAccount + AuthAccountMeta + SqlxEntity,
+        O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
+        M: AuthMember + AuthMemberMeta + SqlxEntity,
+        I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
+        V: AuthVerification + AuthVerificationMeta + SqlxEntity,
+        TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
+        AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
+        PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
     {
         type Passkey = PK;
 
@@ -1356,37 +1563,47 @@ pub mod sqlx_adapter {
             let counter = i64::try_from(input.counter)
                 .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
 
-            let passkey = sqlx::query_as::<_, PK>(
-                r#"
-                INSERT INTO passkeys (id, name, public_key, user_id, credential_id, counter, device_type, backed_up, transports, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                RETURNING *
-                "#,
-            )
-            .bind(&id)
-            .bind(&input.name)
-            .bind(&input.public_key)
-            .bind(&input.user_id)
-            .bind(&input.credential_id)
-            .bind(counter)
-            .bind(&input.device_type)
-            .bind(input.backed_up)
-            .bind(&input.transports)
-            .bind(now)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|e| match e {
-                sqlx::Error::Database(ref db_err) if db_err.is_unique_violation() => {
-                    AuthError::conflict("A passkey with this credential ID already exists")
-                }
-                other => AuthError::from(other),
-            })?;
+            let sql = format!(
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
+                PK::table(),
+                PK::col_id(),
+                PK::col_name(),
+                PK::col_public_key(),
+                PK::col_user_id(),
+                PK::col_credential_id(),
+                PK::col_counter(),
+                PK::col_device_type(),
+                PK::col_backed_up(),
+                PK::col_transports(),
+                PK::col_created_at(),
+            );
+            let passkey = sqlx::query_as::<_, PK>(&sql)
+                .bind(&id)
+                .bind(&input.name)
+                .bind(&input.public_key)
+                .bind(&input.user_id)
+                .bind(&input.credential_id)
+                .bind(counter)
+                .bind(&input.device_type)
+                .bind(input.backed_up)
+                .bind(&input.transports)
+                .bind(now)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|e| match e {
+                    sqlx::Error::Database(ref db_err) if db_err.is_unique_violation() => {
+                        AuthError::conflict("A passkey with this credential ID already exists")
+                    }
+                    other => AuthError::from(other),
+                })?;
 
             Ok(passkey)
         }
 
         async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<PK>> {
-            let passkey = sqlx::query_as::<_, PK>("SELECT * FROM passkeys WHERE id = $1")
+            let sql = format!("SELECT * FROM {} WHERE {} = $1", PK::table(), PK::col_id());
+            let passkey = sqlx::query_as::<_, PK>(&sql)
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1397,60 +1614,75 @@ pub mod sqlx_adapter {
             &self,
             credential_id: &str,
         ) -> AuthResult<Option<PK>> {
-            let passkey =
-                sqlx::query_as::<_, PK>("SELECT * FROM passkeys WHERE credential_id = $1")
-                    .bind(credential_id)
-                    .fetch_optional(&self.pool)
-                    .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1",
+                PK::table(),
+                PK::col_credential_id()
+            );
+            let passkey = sqlx::query_as::<_, PK>(&sql)
+                .bind(credential_id)
+                .fetch_optional(&self.pool)
+                .await?;
             Ok(passkey)
         }
 
         async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<PK>> {
-            let passkeys = sqlx::query_as::<_, PK>(
-                "SELECT * FROM passkeys WHERE user_id = $1 ORDER BY created_at DESC",
-            )
-            .bind(user_id)
-            .fetch_all(&self.pool)
-            .await?;
+            let sql = format!(
+                "SELECT * FROM {} WHERE {} = $1 ORDER BY {} DESC",
+                PK::table(),
+                PK::col_user_id(),
+                PK::col_created_at()
+            );
+            let passkeys = sqlx::query_as::<_, PK>(&sql)
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await?;
             Ok(passkeys)
         }
 
         async fn update_passkey_counter(&self, id: &str, counter: u64) -> AuthResult<PK> {
             let counter = i64::try_from(counter)
                 .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
-            let passkey = sqlx::query_as::<_, PK>(
-                "UPDATE passkeys SET counter = $2 WHERE id = $1 RETURNING *",
-            )
-            .bind(id)
-            .bind(counter)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|err| match err {
-                sqlx::Error::RowNotFound => AuthError::not_found("Passkey not found"),
-                other => AuthError::from(other),
-            })?;
+            let sql = format!(
+                "UPDATE {} SET {} = $2 WHERE {} = $1 RETURNING *",
+                PK::table(),
+                PK::col_counter(),
+                PK::col_id()
+            );
+            let passkey = sqlx::query_as::<_, PK>(&sql)
+                .bind(id)
+                .bind(counter)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|err| match err {
+                    sqlx::Error::RowNotFound => AuthError::not_found("Passkey not found"),
+                    other => AuthError::from(other),
+                })?;
             Ok(passkey)
         }
 
         async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<PK> {
-            let passkey =
-                sqlx::query_as::<_, PK>("UPDATE passkeys SET name = $2 WHERE id = $1 RETURNING *")
-                    .bind(id)
-                    .bind(name)
-                    .fetch_one(&self.pool)
-                    .await
-                    .map_err(|err| match err {
-                        sqlx::Error::RowNotFound => AuthError::not_found("Passkey not found"),
-                        other => AuthError::from(other),
-                    })?;
+            let sql = format!(
+                "UPDATE {} SET {} = $2 WHERE {} = $1 RETURNING *",
+                PK::table(),
+                PK::col_name(),
+                PK::col_id()
+            );
+            let passkey = sqlx::query_as::<_, PK>(&sql)
+                .bind(id)
+                .bind(name)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|err| match err {
+                    sqlx::Error::RowNotFound => AuthError::not_found("Passkey not found"),
+                    other => AuthError::from(other),
+                })?;
             Ok(passkey)
         }
 
         async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
-            sqlx::query("DELETE FROM passkeys WHERE id = $1")
-                .bind(id)
-                .execute(&self.pool)
-                .await?;
+            let sql = format!("DELETE FROM {} WHERE {} = $1", PK::table(), PK::col_id());
+            sqlx::query(&sql).bind(id).execute(&self.pool).await?;
             Ok(())
         }
     }

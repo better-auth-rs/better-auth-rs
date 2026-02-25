@@ -69,6 +69,27 @@ pub(crate) fn parse_auth_attrs(attrs: &[syn::Attribute]) -> (Option<String>, Opt
     (field_name, default_expr)
 }
 
+/// Parse struct-level `#[auth(table = "...")]` attribute.
+///
+/// Returns `Some(table_name)` if the attribute is present.
+pub(crate) fn parse_struct_auth_table(attrs: &[syn::Attribute]) -> Option<String> {
+    let mut table_name = None;
+    for attr in attrs {
+        if !attr.path().is_ident("auth") {
+            continue;
+        }
+        let _ = attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("table") {
+                let value = meta.value()?;
+                let lit: syn::LitStr = value.parse()?;
+                table_name = Some(lit.value());
+            }
+            Ok(())
+        });
+    }
+    table_name
+}
+
 /// Given a list of parsed fields and a getter name, find the matching field.
 ///
 /// Matching rules:

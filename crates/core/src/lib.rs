@@ -34,8 +34,10 @@ pub use adapters::{SqlxAdapter, SqlxEntity};
 pub use config::{Argon2Config, AuthConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig};
 pub use email::{ConsoleEmailProvider, EmailProvider};
 pub use entity::{
-    AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,
-    AuthSession, AuthTwoFactor, AuthUser, AuthVerification, MemberUserView,
+    AuthAccount, AuthAccountMeta, AuthApiKey, AuthApiKeyMeta, AuthInvitation, AuthInvitationMeta,
+    AuthMember, AuthMemberMeta, AuthOrganization, AuthOrganizationMeta, AuthPasskey,
+    AuthPasskeyMeta, AuthSession, AuthSessionMeta, AuthTwoFactor, AuthTwoFactorMeta, AuthUser,
+    AuthUserMeta, AuthVerification, AuthVerificationMeta, MemberUserView,
 };
 pub use error::{
     AuthError, AuthResult, DatabaseError, validate_request_body, validation_error_response,
