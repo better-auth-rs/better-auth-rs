@@ -717,6 +717,15 @@ fn post_json_with_auth(path: &str, body: Value, token: &str) -> AuthRequest {
     req
 }
 
+fn delete_with_auth(path: &str, token: &str) -> AuthRequest {
+    let mut req = AuthRequest::new(HttpMethod::Delete, path);
+    req.headers
+        .insert("authorization".to_string(), format!("Bearer {}", token));
+    req.headers
+        .insert("origin".to_string(), "http://localhost:3000".to_string());
+    req
+}
+
 async fn send_request(auth: &BetterAuth<MemoryDatabaseAdapter>, req: AuthRequest) -> (u16, Value) {
     let resp = auth
         .handle_request(req)
@@ -1044,14 +1053,10 @@ async fn test_spec_driven_endpoint_validation() {
     .await;
     validator.validate_endpoint("/update-user", "post", status, &body);
 
-    // --- POST /delete-user ---
+    // --- DELETE /delete-user ---
     let (del_token, _) = signup_user(&auth, "del@example.com", "password123", "DEL User").await;
-    let (status, body) = send_request(
-        &auth,
-        post_json_with_auth("/delete-user", serde_json::json!({}), &del_token),
-    )
-    .await;
-    validator.validate_endpoint("/delete-user", "post", status, &body);
+    let (status, body) = send_request(&auth, delete_with_auth("/delete-user", &del_token)).await;
+    validator.validate_endpoint("/delete-user", "delete", status, &body);
 
     // --- POST /change-email ---
     let (ce_token, _) = signup_user(&auth, "ce@example.com", "password123", "CE User").await;
@@ -1403,7 +1408,7 @@ async fn test_route_coverage_analysis() {
         ("/error", "get"),
         ("/reference/openapi.json", "get"),
         ("/update-user", "post"),
-        ("/delete-user", "post"),
+        ("/delete-user", "delete"),
         ("/change-email", "post"),
         ("/delete-user/callback", "get"),
     ] {
