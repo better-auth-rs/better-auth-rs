@@ -224,7 +224,7 @@ async fn test_organization_invitation_endpoints() {
     validator.validate_endpoint("/organization/invite-member", "post", status, &body);
 
     // Extract invitation ID for subsequent tests
-    let invitation_id = body["invitation"]["id"]
+    let invitation_id = body["id"]
         .as_str()
         .expect("invitation should have id")
         .to_string();
@@ -279,7 +279,7 @@ async fn test_organization_invitation_endpoints() {
         ),
     )
     .await;
-    let inv2_id = inv2_body["invitation"]["id"]
+    let inv2_id = inv2_body["id"]
         .as_str()
         .expect("second invitation should have id")
         .to_string();
@@ -312,7 +312,7 @@ async fn test_organization_invitation_endpoints() {
         ),
     )
     .await;
-    let inv3_id = inv3_body["invitation"]["id"]
+    let inv3_id = inv3_body["id"]
         .as_str()
         .expect("third invitation should have id")
         .to_string();
@@ -334,9 +334,8 @@ async fn test_organization_invitation_endpoints() {
     let report = validator.report();
     eprintln!("\n{}\n", report);
 
-    // Known spec mismatches: Rust wraps invitation in { invitation: {...} }
-    // but spec expects flat fields at top level.
-    let known_failing: HashSet<&str> = HashSet::from(["/organization/invite-member"]);
+    // All spec mismatches have been fixed — no known failures expected.
+    let known_failing: HashSet<&str> = HashSet::new();
 
     let unexpected: Vec<_> = validator
         .results
@@ -404,10 +403,7 @@ async fn test_organization_member_endpoints() {
         ),
     )
     .await;
-    let inv_id = inv_body["invitation"]["id"]
-        .as_str()
-        .expect("invitation id")
-        .to_string();
+    let inv_id = inv_body["id"].as_str().expect("invitation id").to_string();
 
     send_request(
         &auth,
@@ -508,10 +504,7 @@ async fn test_organization_member_endpoints() {
         ),
     )
     .await;
-    let inv2_id = inv2_body["invitation"]["id"]
-        .as_str()
-        .expect("invitation id")
-        .to_string();
+    let inv2_id = inv2_body["id"].as_str().expect("invitation id").to_string();
 
     send_request(
         &auth,
@@ -572,13 +565,8 @@ async fn test_organization_member_endpoints() {
     let report = validator.report();
     eprintln!("\n{}\n", report);
 
-    // Known spec mismatches:
-    //   - update-member-role: Rust returns flat MemberResponse, spec expects { member: {...} }
-    //   - remove-member: Rust returns { success: true }, spec expects { member: {...} }
-    let known_failing: HashSet<&str> = HashSet::from([
-        "/organization/update-member-role",
-        "/organization/remove-member",
-    ]);
+    // All spec mismatches have been fixed — no known failures expected.
+    let known_failing: HashSet<&str> = HashSet::new();
 
     let unexpected: Vec<_> = validator
         .results

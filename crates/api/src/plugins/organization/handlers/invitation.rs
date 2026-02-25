@@ -13,8 +13,8 @@ use crate::plugins::organization::config::OrganizationConfig;
 use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
 use crate::plugins::organization::types::{
     AcceptInvitationRequest, AcceptInvitationResponse, CancelInvitationRequest, GetInvitationQuery,
-    GetInvitationResponse, InvitationResponse, InviteMemberRequest, ListInvitationsQuery,
-    MemberResponse, RejectInvitationRequest, SuccessResponse,
+    GetInvitationResponse, InviteMemberRequest, ListInvitationsQuery, MemberResponse,
+    RejectInvitationRequest, SuccessResponse,
 };
 
 /// Handle invite member request
@@ -90,11 +90,8 @@ pub async fn handle_invite_member<DB: DatabaseAdapter>(
         .get_pending_invitation(&org_id, &body.email)
         .await?
     {
-        // Return existing invitation
-        let response = InvitationResponse {
-            invitation: existing,
-        };
-        return Ok(AuthResponse::json(200, &response)?);
+        // Return existing invitation (flat, per spec)
+        return Ok(AuthResponse::json(200, &existing)?);
     }
 
     // Calculate expiration
@@ -112,9 +109,8 @@ pub async fn handle_invite_member<DB: DatabaseAdapter>(
 
     let invitation = ctx.database.create_invitation(invitation_data).await?;
 
-    let response = InvitationResponse { invitation };
-
-    Ok(AuthResponse::json(200, &response)?)
+    // Return flat invitation object per spec
+    Ok(AuthResponse::json(200, &invitation)?)
 }
 
 /// Handle get invitation request
