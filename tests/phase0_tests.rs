@@ -1,10 +1,10 @@
 use async_trait::async_trait;
-use better_auth::{AuthConfig, BetterAuth};
-use better_auth::adapters::{MemoryDatabaseAdapter, MemoryCacheAdapter, MemoryMailerAdapter};
+use better_auth::adapters::{MemoryCacheAdapter, MemoryDatabaseAdapter, MemoryMailerAdapter};
 use better_auth::core::{AuthContext, AuthPlugin, AuthRoute, PluginCapabilities};
-use better_auth::types::{AuthRequest, AuthResponse, HttpMethod};
 use better_auth::error::AuthResult;
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
+use better_auth::types::{AuthRequest, AuthResponse, HttpMethod};
+use better_auth::{AuthConfig, BetterAuth};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 
@@ -88,13 +88,24 @@ impl AuthPlugin for HookRecorder {
         Ok(None)
     }
 
-    async fn on_user_created(&self, _user: &better_auth::types::User, _ctx: &AuthContext) -> AuthResult<()> {
+    async fn on_user_created(
+        &self,
+        _user: &better_auth::types::User,
+        _ctx: &AuthContext,
+    ) -> AuthResult<()> {
         self.events.lock().unwrap().push("user_created".to_string());
         Ok(())
     }
 
-    async fn on_session_created(&self, _session: &better_auth::types::Session, _ctx: &AuthContext) -> AuthResult<()> {
-        self.events.lock().unwrap().push("session_created".to_string());
+    async fn on_session_created(
+        &self,
+        _session: &better_auth::types::Session,
+        _ctx: &AuthContext,
+    ) -> AuthResult<()> {
+        self.events
+            .lock()
+            .unwrap()
+            .push("session_created".to_string());
         Ok(())
     }
 
@@ -104,7 +115,10 @@ impl AuthPlugin for HookRecorder {
     }
 
     async fn on_session_deleted(&self, _session_token: &str, _ctx: &AuthContext) -> AuthResult<()> {
-        self.events.lock().unwrap().push("session_deleted".to_string());
+        self.events
+            .lock()
+            .unwrap()
+            .push("session_deleted".to_string());
         Ok(())
     }
 }
@@ -141,18 +155,18 @@ async fn test_routes_include_core_and_plugin_routes() {
 
     let routes = auth.routes();
 
-    let has_update = routes.iter().any(|route| {
-        route.method == HttpMethod::Post && route.path == "/update-user"
-    });
-    let has_delete = routes.iter().any(|route| {
-        route.method == HttpMethod::Delete && route.path == "/delete-user"
-    });
-    let has_plugin_get = routes.iter().any(|route| {
-        route.method == HttpMethod::Get && route.path == "/route-test"
-    });
-    let has_plugin_post = routes.iter().any(|route| {
-        route.method == HttpMethod::Post && route.path == "/route-test"
-    });
+    let has_update = routes
+        .iter()
+        .any(|route| route.method == HttpMethod::Post && route.path == "/update-user");
+    let has_delete = routes
+        .iter()
+        .any(|route| route.method == HttpMethod::Delete && route.path == "/delete-user");
+    let has_plugin_get = routes
+        .iter()
+        .any(|route| route.method == HttpMethod::Get && route.path == "/route-test");
+    let has_plugin_post = routes
+        .iter()
+        .any(|route| route.method == HttpMethod::Post && route.path == "/route-test");
 
     assert!(has_update, "Expected core route /update-user");
     assert!(has_delete, "Expected core route /delete-user");
@@ -170,7 +184,10 @@ async fn test_runtime_capabilities_from_config() {
         .build()
         .await;
 
-    assert!(auth.is_ok(), "Expected build to succeed with cache and mailer configured");
+    assert!(
+        auth.is_ok(),
+        "Expected build to succeed with cache and mailer configured"
+    );
 }
 
 #[tokio::test]
@@ -195,19 +212,29 @@ async fn test_hook_lifecycle_events() {
 
     let mut signup_request = AuthRequest::new(HttpMethod::Post, "/sign-up/email");
     signup_request.body = Some(signup_data.to_string().into_bytes());
-    signup_request.headers.insert("content-type".to_string(), "application/json".to_string());
+    signup_request
+        .headers
+        .insert("content-type".to_string(), "application/json".to_string());
 
-    let signup_response = auth.handle_request(signup_request).await.expect("Signup failed");
+    let signup_response = auth
+        .handle_request(signup_request)
+        .await
+        .expect("Signup failed");
     assert_eq!(signup_response.status, 200);
 
-    let response_json: serde_json::Value = serde_json::from_slice(&signup_response.body)
-        .expect("Failed to parse response JSON");
+    let response_json: serde_json::Value =
+        serde_json::from_slice(&signup_response.body).expect("Failed to parse response JSON");
     let token = response_json["token"].as_str().unwrap().to_string();
 
     let mut delete_request = AuthRequest::new(HttpMethod::Delete, "/delete-user");
-    delete_request.headers.insert("authorization".to_string(), format!("Bearer {}", token));
+    delete_request
+        .headers
+        .insert("authorization".to_string(), format!("Bearer {}", token));
 
-    let delete_response = auth.handle_request(delete_request).await.expect("Delete failed");
+    let delete_response = auth
+        .handle_request(delete_request)
+        .await
+        .expect("Delete failed");
     assert_eq!(delete_response.status, 200);
 
     let events = events.lock().unwrap().clone();

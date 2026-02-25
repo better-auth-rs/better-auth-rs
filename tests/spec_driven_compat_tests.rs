@@ -596,8 +596,7 @@ fn extract_type_signature(value: &Value, indent: usize) -> String {
 
 /// Generate a deterministic test-only key (not a real secret).
 fn test_secret() -> String {
-    "t]e]s]t]-]o]n]l]y]-]k]e]y]-]n]o]t]-]a]-]r]e]a]l]-]s]e]c]r]e]t]-]3]2]c]h"
-        .replace(']', "")
+    "t]e]s]t]-]o]n]l]y]-]k]e]y]-]n]o]t]-]a]-]r]e]a]l]-]s]e]c]r]e]t]-]3]2]c]h".replace(']', "")
 }
 
 fn test_config() -> AuthConfig {
