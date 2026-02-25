@@ -274,6 +274,41 @@ pub mod sqlx_adapter {
                 query.push_bind(email_verified);
                 has_updates = true;
             }
+            if let Some(role) = &update.role {
+                query.push(", role = ");
+                query.push_bind(role);
+                has_updates = true;
+            }
+            if let Some(banned) = update.banned {
+                query.push(", banned = ");
+                query.push_bind(banned);
+                has_updates = true;
+            }
+            if let Some(ban_reason) = &update.ban_reason {
+                query.push(", ban_reason = ");
+                query.push_bind(ban_reason);
+                has_updates = true;
+            }
+            if let Some(ban_expires) = update.ban_expires {
+                query.push(", ban_expires = ");
+                query.push_bind(ban_expires);
+                has_updates = true;
+            }
+            if let Some(username) = &update.username {
+                query.push(", username = ");
+                query.push_bind(username);
+                has_updates = true;
+            }
+            if let Some(display_username) = &update.display_username {
+                query.push(", display_username = ");
+                query.push_bind(display_username);
+                has_updates = true;
+            }
+            if let Some(two_factor_enabled) = update.two_factor_enabled {
+                query.push(", two_factor_enabled = ");
+                query.push_bind(two_factor_enabled);
+                has_updates = true;
+            }
             if let Some(metadata) = &update.metadata {
                 query.push(", metadata = ");
                 query.push_bind(sqlx::types::Json(metadata.clone()));

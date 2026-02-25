@@ -92,7 +92,11 @@ async fn test_admin_list_users_pagination() {
         .await;
     }
 
-    let req = get_with_auth_and_query("/admin/list-users?limit=2&offset=0", &admin_token, vec![]);
+    let req = get_with_auth_and_query(
+        "/admin/list-users",
+        &admin_token,
+        vec![("limit", "2"), ("offset", "0")],
+    );
     let (status, json) = send_request(&auth, req).await;
 
     assert_eq!(status, 200);

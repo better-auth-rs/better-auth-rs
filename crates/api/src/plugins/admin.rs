@@ -451,25 +451,13 @@ impl AdminPlugin {
         Ok(password_hash.to_string())
     }
 
-    /// Extract a query parameter from the request path (e.g. `?limit=10`).
+    /// Extract a numeric query parameter from the request.
     fn extract_query_param(&self, req: &AuthRequest, key: &str) -> Option<usize> {
-        self.extract_query_param_str(req, key)
-            .and_then(|s| s.parse().ok())
+        req.query.get(key).and_then(|s| s.parse().ok())
     }
 
-    /// Extract a string query parameter from the request path.
+    /// Extract a string query parameter from the request.
     fn extract_query_param_str(&self, req: &AuthRequest, key: &str) -> Option<String> {
-        let path = req.path();
-        let query_start = path.find('?')?;
-        let query = &path[query_start + 1..];
-        for pair in query.split('&') {
-            let mut kv = pair.splitn(2, '=');
-            if let (Some(k), Some(v)) = (kv.next(), kv.next())
-                && k == key
-            {
-                return Some(v.to_string());
-            }
-        }
-        None
+        req.query.get(key).cloned()
     }
 }
