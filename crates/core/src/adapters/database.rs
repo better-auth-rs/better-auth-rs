@@ -353,10 +353,11 @@ pub mod sqlx_adapter {
                     _ => "email",
                 };
                 let op = params.search_operator.as_deref().unwrap_or("contains");
+                let escaped = search_value.replace('%', "\\%").replace('_', "\\_");
                 let pattern = match op {
-                    "starts_with" => format!("{}%", search_value),
-                    "ends_with" => format!("%{}", search_value),
-                    _ => format!("%{}%", search_value),
+                    "starts_with" => format!("{}%", escaped),
+                    "ends_with" => format!("%{}", escaped),
+                    _ => format!("%{}%", escaped),
                 };
                 let idx = bind_values.len() + 1;
                 conditions.push(format!("{} ILIKE ${}", col, idx));
@@ -374,8 +375,9 @@ pub mod sqlx_adapter {
                 let idx = bind_values.len() + 1;
                 match op {
                     "contains" => {
+                        let escaped = filter_value.replace('%', "\\%").replace('_', "\\_");
                         conditions.push(format!("{} ILIKE ${}", col, idx));
-                        bind_values.push(format!("%{}%", filter_value));
+                        bind_values.push(format!("%{}%", escaped));
                     }
                     "ne" => {
                         conditions.push(format!("{} != ${}", col, idx));
