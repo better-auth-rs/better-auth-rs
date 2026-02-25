@@ -391,19 +391,6 @@ fn validate_field(
             validate_field(item, item_expectation, &item_path, diffs);
         }
     }
-
-    // Check camelCase in nested objects
-    if let Some(obj) = value.as_object() {
-        for key in obj.keys() {
-            let key_path = format!("{}.{}", path, key);
-            if key.contains('_') && !key.starts_with('_') {
-                diffs.push(ShapeDiff {
-                    path: key_path,
-                    kind: DiffKind::SnakeCaseField,
-                });
-            }
-        }
-    }
 }
 
 fn json_type_name(value: &Value) -> &'static str {

@@ -46,6 +46,7 @@ jobs:
           cargo test --test integration_tests
           cargo test --test derive_tests
           cargo test --test axum_integration_tests
+          cargo test --test phase0_tests
 
   test-all-features:
     name: Test (All Features)
@@ -62,6 +63,7 @@ jobs:
           cargo test --test integration_tests --all-features
           cargo test --test derive_tests --all-features
           cargo test --test axum_integration_tests --all-features
+          cargo test --test phase0_tests --all-features
 
   compat:
     name: Compatibility Tests
