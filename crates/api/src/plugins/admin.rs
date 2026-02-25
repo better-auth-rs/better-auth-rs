@@ -598,9 +598,9 @@ impl AdminPlugin {
 
         // Revoke all sessions for the banned user
         let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let _ = session_manager
+        session_manager
             .revoke_all_user_sessions(&body.user_id)
-            .await;
+            .await?;
 
         let response = UserResponse { user: updated_user };
         AuthResponse::json(200, &response).map_err(AuthError::from)
