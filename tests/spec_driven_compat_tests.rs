@@ -341,9 +341,13 @@ fn validate_field(
             && expectation.field_type != "null"
             && expectation.field_type != "date"
         {
-            // Only report type mismatch for non-nullable fields
-            // Note: many "date" type fields in the spec are actually dates but we
-            // serialize as strings, and they can be null in practice
+            diffs.push(ShapeDiff {
+                path: path.to_string(),
+                kind: DiffKind::TypeMismatch {
+                    expected: expectation.field_type.clone(),
+                    actual: "null".to_string(),
+                },
+            });
         }
         return;
     }
