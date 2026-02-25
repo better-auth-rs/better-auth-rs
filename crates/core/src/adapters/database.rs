@@ -789,7 +789,7 @@ pub mod sqlx_adapter {
                 query.push_bind(scope);
             }
             if let Some(password) = &update.password {
-                query.push(", password = ");
+                query.push(format!(", {} = ", qi(A::col_password())));
                 query.push_bind(password);
             }
 
