@@ -200,6 +200,9 @@ impl MemoryAccount for Account {
         if let Some(scope) = &update.scope {
             self.scope = Some(scope.clone());
         }
+        if let Some(password) = &update.password {
+            self.password = Some(password.clone());
+        }
         self.updated_at = Utc::now();
     }
 }

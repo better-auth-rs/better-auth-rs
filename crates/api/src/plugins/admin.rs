@@ -7,11 +7,10 @@ use validator::Validate;
 
 use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
-use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
+use better_auth_core::{AuthContext, AuthPlugin, AuthRoute, ListUsersParams, SessionManager};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
-    AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, HttpMethod,
-    SessionManager, UpdateUser,
+    AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, HttpMethod, UpdateUser,
 };
 
 // ---------------------------------------------------------------------------
@@ -481,18 +480,6 @@ impl AdminPlugin {
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
 
-        let search_value = req.query.get("searchValue").cloned();
-        let search_field = req
-            .query
-            .get("searchField")
-            .cloned()
-            .unwrap_or_else(|| "email".to_string());
-        let search_operator = req
-            .query
-            .get("searchOperator")
-            .cloned()
-            .unwrap_or_else(|| "contains".to_string());
-
         let limit = req
             .query
             .get("limit")
@@ -506,106 +493,23 @@ impl AdminPlugin {
             .and_then(|v| v.parse::<usize>().ok())
             .unwrap_or(0);
 
-        let sort_by = req.query.get("sortBy").cloned();
-        let sort_direction = req
-            .query
-            .get("sortDirection")
-            .cloned()
-            .unwrap_or_else(|| "asc".to_string());
+        let params = ListUsersParams {
+            limit: Some(limit),
+            offset: Some(offset),
+            search_field: req.query.get("searchField").cloned(),
+            search_value: req.query.get("searchValue").cloned(),
+            search_operator: req.query.get("searchOperator").cloned(),
+            sort_by: req.query.get("sortBy").cloned(),
+            sort_direction: req.query.get("sortDirection").cloned(),
+            filter_field: req.query.get("filterField").cloned(),
+            filter_value: req.query.get("filterValue").cloned(),
+            filter_operator: req.query.get("filterOperator").cloned(),
+        };
 
-        let filter_field = req.query.get("filterField").cloned();
-        let filter_value = req.query.get("filterValue").cloned();
-        let _filter_operator = req
-            .query
-            .get("filterOperator")
-            .cloned()
-            .unwrap_or_else(|| "eq".to_string());
-
-        // Since DatabaseAdapter doesn't have a built-in list-all or search
-        // method, we use a pragmatic approach: iterate through known search
-        // fields. For a production deployment backed by SQL the adapter
-        // would typically provide a query-builder method. Here we support
-        // the common case of searching by email or name.
-        let mut all_users: Vec<DB::User> = Vec::new();
-
-        // Try to fetch by search
-        if let Some(ref search_value) = search_value {
-            match search_field.as_str() {
-                "email" => {
-                    if let Some(user) = ctx.database.get_user_by_email(search_value).await? {
-                        all_users.push(user);
-                    }
-                }
-                "name" => {
-                    // Name search not directly supported by DatabaseAdapter;
-                    // try email as a fallback since we can't enumerate all users.
-                    if let Some(user) = ctx.database.get_user_by_email(search_value).await? {
-                        all_users.push(user);
-                    }
-                }
-                _ => {}
-            }
-
-            // Apply operator-based filtering on matched results
-            all_users.retain(|user| {
-                let field_value = match search_field.as_str() {
-                    "email" => user.email().unwrap_or("").to_string(),
-                    "name" => user.name().unwrap_or("").to_string(),
-                    _ => String::new(),
-                };
-                match search_operator.as_str() {
-                    "contains" => field_value
-                        .to_lowercase()
-                        .contains(&search_value.to_lowercase()),
-                    "starts_with" => field_value
-                        .to_lowercase()
-                        .starts_with(&search_value.to_lowercase()),
-                    "ends_with" => field_value
-                        .to_lowercase()
-                        .ends_with(&search_value.to_lowercase()),
-                    _ => true,
-                }
-            });
-        } else if let Some(ref filter_value) = filter_value {
-            // Filter by a specific field value (exact match)
-            if let Some(ref filter_field) = filter_field {
-                match filter_field.as_str() {
-                    "email" => {
-                        if let Some(user) = ctx.database.get_user_by_email(filter_value).await? {
-                            all_users.push(user);
-                        }
-                    }
-                    "username" => {
-                        if let Some(user) = ctx.database.get_user_by_username(filter_value).await? {
-                            all_users.push(user);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        // Apply sorting
-        if let Some(ref sort_by) = sort_by {
-            let desc = sort_direction == "desc";
-            all_users.sort_by(|a, b| {
-                let cmp = match sort_by.as_str() {
-                    "email" => a.email().unwrap_or("").cmp(b.email().unwrap_or("")),
-                    "name" => a.name().unwrap_or("").cmp(b.name().unwrap_or("")),
-                    "createdAt" => a.created_at().cmp(&b.created_at()),
-                    _ => std::cmp::Ordering::Equal,
-                };
-                if desc { cmp.reverse() } else { cmp }
-            });
-        }
-
-        let total = all_users.len();
-
-        // Paginate
-        let paginated: Vec<DB::User> = all_users.into_iter().skip(offset).take(limit).collect();
+        let (users, total) = ctx.database.list_users(params).await?;
 
         let response = ListUsersResponse {
-            users: paginated,
+            users,
             total,
             limit,
             offset,
@@ -992,6 +896,21 @@ impl AdminPlugin {
             two_factor_enabled: None,
         };
         ctx.database.update_user(&body.user_id, update).await?;
+
+        // Also update the credential account's password field to keep it in sync
+        let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
+        for account in &accounts {
+            if account.provider_id() == "credential" {
+                let account_update = better_auth_core::UpdateAccount {
+                    password: Some(password_hash.clone()),
+                    ..Default::default()
+                };
+                ctx.database
+                    .update_account(account.id(), account_update)
+                    .await?;
+                break;
+            }
+        }
 
         let response = StatusResponse { status: true };
         AuthResponse::json(200, &response).map_err(AuthError::from)

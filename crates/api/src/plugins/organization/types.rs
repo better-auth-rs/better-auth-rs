@@ -168,6 +168,28 @@ pub struct InvitationResponse<I: Serialize> {
 }
 
 #[derive(Debug, Serialize)]
+pub struct MemberWrappedResponse {
+    pub member: MemberResponse,
+}
+
+/// Minimal member info returned when a member is removed.
+/// Does not include `user` or `createdAt` since the member no longer exists.
+#[derive(Debug, Serialize)]
+pub struct RemovedMemberResponse {
+    pub member: RemovedMemberInfo,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RemovedMemberInfo {
+    pub id: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
+    #[serde(rename = "organizationId")]
+    pub organization_id: String,
+    pub role: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct AcceptInvitationResponse<I: Serialize> {
     pub invitation: I,
     pub member: MemberResponse,

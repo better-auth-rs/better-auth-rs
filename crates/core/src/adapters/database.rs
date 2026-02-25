@@ -53,8 +53,9 @@ pub mod sqlx_adapter {
     use crate::types::{
         Account, ApiKey, CreateAccount, CreateApiKey, CreateInvitation, CreateMember,
         CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
-        CreateVerification, Invitation, InvitationStatus, Member, Organization, Passkey, Session,
-        TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser, User, Verification,
+        CreateVerification, Invitation, InvitationStatus, ListUsersParams, Member, Organization,
+        Passkey, Session, TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser,
+        User, Verification,
     };
     use sqlx::PgPool;
     use sqlx::postgres::PgRow;
@@ -343,6 +344,106 @@ pub mod sqlx_adapter {
                 .await?;
             Ok(())
         }
+
+        async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<U>, usize)> {
+            let limit = params.limit.unwrap_or(100) as i64;
+            let offset = params.offset.unwrap_or(0) as i64;
+
+            // Build WHERE clause
+            let mut conditions: Vec<String> = Vec::new();
+            let mut bind_values: Vec<String> = Vec::new();
+
+            if let Some(search_value) = &params.search_value {
+                let field = params.search_field.as_deref().unwrap_or("email");
+                let col = match field {
+                    "name" => "name",
+                    _ => "email",
+                };
+                let op = params.search_operator.as_deref().unwrap_or("contains");
+                let escaped = search_value.replace('%', "\\%").replace('_', "\\_");
+                let pattern = match op {
+                    "starts_with" => format!("{}%", escaped),
+                    "ends_with" => format!("%{}", escaped),
+                    _ => format!("%{}%", escaped),
+                };
+                let idx = bind_values.len() + 1;
+                conditions.push(format!("{} ILIKE ${}", col, idx));
+                bind_values.push(pattern);
+            }
+
+            if let Some(filter_value) = &params.filter_value {
+                let field = params.filter_field.as_deref().unwrap_or("email");
+                let col = match field {
+                    "name" => "name",
+                    "role" => "role",
+                    _ => "email",
+                };
+                let op = params.filter_operator.as_deref().unwrap_or("eq");
+                let idx = bind_values.len() + 1;
+                match op {
+                    "contains" => {
+                        let escaped = filter_value.replace('%', "\\%").replace('_', "\\_");
+                        conditions.push(format!("{} ILIKE ${}", col, idx));
+                        bind_values.push(format!("%{}%", escaped));
+                    }
+                    "ne" => {
+                        conditions.push(format!("{} != ${}", col, idx));
+                        bind_values.push(filter_value.clone());
+                    }
+                    _ => {
+                        conditions.push(format!("{} = ${}", col, idx));
+                        bind_values.push(filter_value.clone());
+                    }
+                }
+            }
+
+            let where_clause = if conditions.is_empty() {
+                String::new()
+            } else {
+                format!(" WHERE {}", conditions.join(" AND "))
+            };
+
+            // Sort
+            let order_clause = if let Some(sort_by) = &params.sort_by {
+                let col = match sort_by.as_str() {
+                    "name" => "name",
+                    "createdAt" | "created_at" => "created_at",
+                    _ => "email",
+                };
+                let dir = if params.sort_direction.as_deref() == Some("desc") {
+                    "DESC"
+                } else {
+                    "ASC"
+                };
+                format!(" ORDER BY {} {}", col, dir)
+            } else {
+                " ORDER BY created_at DESC".to_string()
+            };
+
+            // Count query
+            let count_sql = format!("SELECT COUNT(*) as count FROM users{}", where_clause);
+            let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
+            for v in &bind_values {
+                count_query = count_query.bind(v);
+            }
+            let total = count_query.fetch_one(&self.pool).await? as usize;
+
+            // Data query
+            let limit_idx = bind_values.len() + 1;
+            let offset_idx = bind_values.len() + 2;
+            let data_sql = format!(
+                "SELECT * FROM users{}{} LIMIT ${} OFFSET ${}",
+                where_clause, order_clause, limit_idx, offset_idx
+            );
+            let mut data_query = sqlx::query_as::<_, U>(&data_sql);
+            for v in &bind_values {
+                data_query = data_query.bind(v);
+            }
+            data_query = data_query.bind(limit).bind(offset);
+            let users = data_query.fetch_all(&self.pool).await?;
+
+            Ok((users, total))
+        }
     }
 
     // -- SessionOps --
@@ -370,8 +471,8 @@ pub mod sqlx_adapter {
 
             let session = sqlx::query_as::<_, S>(
                 r#"
-                INSERT INTO sessions (id, user_id, token, expires_at, created_at, ip_address, user_agent, active)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                INSERT INTO sessions (id, user_id, token, expires_at, created_at, ip_address, user_agent, impersonated_by, active_organization_id, active)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                 RETURNING *
                 "#,
             )
@@ -382,6 +483,8 @@ pub mod sqlx_adapter {
             .bind(now)
             .bind(&create_session.ip_address)
             .bind(&create_session.user_agent)
+            .bind(&create_session.impersonated_by)
+            .bind(&create_session.active_organization_id)
             .bind(true)
             .fetch_one(&self.pool)
             .await?;
@@ -560,6 +663,10 @@ pub mod sqlx_adapter {
             if let Some(scope) = &update.scope {
                 query.push(", scope = ");
                 query.push_bind(scope);
+            }
+            if let Some(password) = &update.password {
+                query.push(", password = ");
+                query.push_bind(password);
             }
 
             query.push(" WHERE id = ");

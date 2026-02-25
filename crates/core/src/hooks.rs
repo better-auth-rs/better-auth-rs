@@ -10,8 +10,8 @@ use crate::adapters::database::{
 use crate::error::AuthResult;
 use crate::types::{
     CreateAccount, CreateApiKey, CreateInvitation, CreateMember, CreateOrganization, CreateSession,
-    CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus, UpdateAccount, UpdateApiKey,
-    UpdateOrganization, UpdateUser,
+    CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus, ListUsersParams,
+    UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser,
 };
 
 /// Database lifecycle hooks for intercepting operations.
@@ -145,6 +145,10 @@ impl<DB: DatabaseAdapter> UserOps for HookedDatabaseAdapter<DB> {
             hook.after_delete_user(id).await?;
         }
         Ok(())
+    }
+
+    async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<Self::User>, usize)> {
+        self.inner.list_users(params).await
     }
 }
 

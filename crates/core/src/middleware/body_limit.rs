@@ -67,13 +67,13 @@ impl Middleware for BodyLimitMiddleware {
         {
             return Ok(Some(AuthResponse::json(
                 413,
-                &serde_json::json!({
-                    "code": "BODY_TOO_LARGE",
-                    "message": format!(
+                &crate::types::CodeMessageResponse {
+                    code: "BODY_TOO_LARGE",
+                    message: format!(
                         "Request body exceeds maximum size of {} bytes",
                         self.config.max_bytes
                     ),
-                }),
+                },
             )?));
         }
 

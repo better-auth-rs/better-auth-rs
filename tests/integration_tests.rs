@@ -518,7 +518,7 @@ async fn test_ok_endpoint() {
 
     let body_str = String::from_utf8(response.body).unwrap();
     let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(response_data["status"], true);
+    assert_eq!(response_data["ok"], true);
 }
 
 /// Integration test for /error endpoint
@@ -542,7 +542,7 @@ async fn test_error_endpoint() {
 
     let body_str = String::from_utf8(response.body).unwrap();
     let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(response_data["status"], false);
+    assert_eq!(response_data["ok"], false);
 }
 
 /// Integration test for POST /get-session (in addition to GET)

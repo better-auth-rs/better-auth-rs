@@ -320,22 +320,22 @@ async fn send_json_request(
     (status, json)
 }
 
-/// GET /ok should return { "status": true }
+/// GET /ok should return { "ok": true }
 #[tokio::test]
 async fn test_contract_ok_endpoint() {
     let auth = create_full_auth().await;
     let (status, body) = send_json_request(&auth, HttpMethod::Get, "/ok", None).await;
     assert_eq!(status, 200);
-    assert_eq!(body["status"], true);
+    assert_eq!(body["ok"], true);
 }
 
-/// GET /error should return { "status": false }
+/// GET /error should return { "ok": false }
 #[tokio::test]
 async fn test_contract_error_endpoint() {
     let auth = create_full_auth().await;
     let (status, body) = send_json_request(&auth, HttpMethod::Get, "/error", None).await;
     assert_eq!(status, 200);
-    assert_eq!(body["status"], false);
+    assert_eq!(body["ok"], false);
 }
 
 /// POST /sign-up/email should return { token, user: { id, email, name, ... } }
