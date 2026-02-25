@@ -116,6 +116,10 @@ pub struct TwoFactor {
     pub backup_codes: Option<String>,
     #[serde(rename = "userId")]
     pub user_id: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: DateTime<Utc>,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Passkey authentication - matches OpenAPI schema

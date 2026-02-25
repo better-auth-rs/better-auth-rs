@@ -41,7 +41,7 @@ use syn::{DeriveInput, parse_macro_input};
 use auth_derive::{
     AUTH_ACCOUNT_GETTERS, AUTH_INVITATION_GETTERS, AUTH_MEMBER_GETTERS, AUTH_ORGANIZATION_GETTERS,
     AUTH_PASSKEY_GETTERS, AUTH_SESSION_GETTERS, AUTH_TWO_FACTOR_GETTERS, AUTH_USER_GETTERS,
-    AUTH_VERIFICATION_GETTERS, derive_entity_trait,
+    AUTH_VERIFICATION_GETTERS, derive_entity_trait, derive_meta_trait,
 };
 use from_row::maybe_gen_from_row;
 use memory_derive::{
@@ -58,8 +58,14 @@ pub fn derive_auth_user(input: TokenStream) -> TokenStream {
         "AuthUser",
         AUTH_USER_GETTERS,
     );
+    let m = derive_meta_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthUserMeta },
+        "AuthUserMeta",
+        AUTH_USER_GETTERS,
+    );
     let r = maybe_gen_from_row(&input);
-    quote! { #t #r }.into()
+    quote! { #t #m #r }.into()
 }
 
 #[proc_macro_derive(AuthSession, attributes(auth))]
@@ -71,8 +77,14 @@ pub fn derive_auth_session(input: TokenStream) -> TokenStream {
         "AuthSession",
         AUTH_SESSION_GETTERS,
     );
+    let m = derive_meta_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthSessionMeta },
+        "AuthSessionMeta",
+        AUTH_SESSION_GETTERS,
+    );
     let r = maybe_gen_from_row(&input);
-    quote! { #t #r }.into()
+    quote! { #t #m #r }.into()
 }
 
 #[proc_macro_derive(AuthAccount, attributes(auth))]
@@ -84,8 +96,14 @@ pub fn derive_auth_account(input: TokenStream) -> TokenStream {
         "AuthAccount",
         AUTH_ACCOUNT_GETTERS,
     );
+    let m = derive_meta_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthAccountMeta },
+        "AuthAccountMeta",
+        AUTH_ACCOUNT_GETTERS,
+    );
     let r = maybe_gen_from_row(&input);
-    quote! { #t #r }.into()
+    quote! { #t #m #r }.into()
 }
 
 #[proc_macro_derive(AuthOrganization, attributes(auth))]
@@ -97,8 +115,14 @@ pub fn derive_auth_organization(input: TokenStream) -> TokenStream {
         "AuthOrganization",
         AUTH_ORGANIZATION_GETTERS,
     );
+    let m = derive_meta_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthOrganizationMeta },
+        "AuthOrganizationMeta",
+        AUTH_ORGANIZATION_GETTERS,
+    );
     let r = maybe_gen_from_row(&input);
-    quote! { #t #r }.into()
+    quote! { #t #m #r }.into()
 }
 
 #[proc_macro_derive(AuthMember, attributes(auth))]
@@ -110,8 +134,14 @@ pub fn derive_auth_member(input: TokenStream) -> TokenStream {
         "AuthMember",
         AUTH_MEMBER_GETTERS,
     );
+    let m = derive_meta_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthMemberMeta },
+        "AuthMemberMeta",
+        AUTH_MEMBER_GETTERS,
+    );
     let r = maybe_gen_from_row(&input);
-    quote! { #t #r }.into()
+    quote! { #t #m #r }.into()
 }
 
 #[proc_macro_derive(AuthInvitation, attributes(auth))]
@@ -123,8 +153,14 @@ pub fn derive_auth_invitation(input: TokenStream) -> TokenStream {
         "AuthInvitation",
         AUTH_INVITATION_GETTERS,
     );
+    let m = derive_meta_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthInvitationMeta },
+        "AuthInvitationMeta",
+        AUTH_INVITATION_GETTERS,
+    );
     let r = maybe_gen_from_row(&input);
-    quote! { #t #r }.into()
+    quote! { #t #m #r }.into()
 }
 
 #[proc_macro_derive(AuthVerification, attributes(auth))]
@@ -136,8 +172,14 @@ pub fn derive_auth_verification(input: TokenStream) -> TokenStream {
         "AuthVerification",
         AUTH_VERIFICATION_GETTERS,
     );
+    let m = derive_meta_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthVerificationMeta },
+        "AuthVerificationMeta",
+        AUTH_VERIFICATION_GETTERS,
+    );
     let r = maybe_gen_from_row(&input);
-    quote! { #t #r }.into()
+    quote! { #t #m #r }.into()
 }
 
 #[proc_macro_derive(AuthTwoFactor, attributes(auth))]
@@ -149,8 +191,14 @@ pub fn derive_auth_two_factor(input: TokenStream) -> TokenStream {
         "AuthTwoFactor",
         AUTH_TWO_FACTOR_GETTERS,
     );
+    let m = derive_meta_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthTwoFactorMeta },
+        "AuthTwoFactorMeta",
+        AUTH_TWO_FACTOR_GETTERS,
+    );
     let r = maybe_gen_from_row(&input);
-    quote! { #t #r }.into()
+    quote! { #t #m #r }.into()
 }
 
 #[proc_macro_derive(AuthPasskey, attributes(auth))]
@@ -162,8 +210,14 @@ pub fn derive_auth_passkey(input: TokenStream) -> TokenStream {
         "AuthPasskey",
         AUTH_PASSKEY_GETTERS,
     );
+    let m = derive_meta_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthPasskeyMeta },
+        "AuthPasskeyMeta",
+        AUTH_PASSKEY_GETTERS,
+    );
     let r = maybe_gen_from_row(&input);
-    quote! { #t #r }.into()
+    quote! { #t #m #r }.into()
 }
 
 #[proc_macro_derive(MemoryUser, attributes(auth))]

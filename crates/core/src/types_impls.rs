@@ -1,8 +1,10 @@
 use chrono::{DateTime, Utc};
 
 use crate::entity::{
-    AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,
-    AuthSession, AuthTwoFactor, AuthUser, AuthVerification,
+    AuthAccount, AuthAccountMeta, AuthApiKey, AuthApiKeyMeta, AuthInvitation, AuthInvitationMeta,
+    AuthMember, AuthMemberMeta, AuthOrganization, AuthOrganizationMeta, AuthPasskey,
+    AuthPasskeyMeta, AuthSession, AuthSessionMeta, AuthTwoFactor, AuthTwoFactorMeta, AuthUser,
+    AuthUserMeta, AuthVerification, AuthVerificationMeta,
 };
 
 use super::types::{Account, ApiKey, Passkey, Session, TwoFactor, User, Verification};
@@ -237,6 +239,12 @@ impl AuthTwoFactor for TwoFactor {
     fn user_id(&self) -> &str {
         &self.user_id
     }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
 }
 
 impl AuthApiKey for ApiKey {
@@ -304,6 +312,19 @@ impl AuthApiKey for ApiKey {
         self.metadata.as_deref()
     }
 }
+
+// -- Meta trait impls for built-in types --
+// Empty impls use the default column/table names which match the built-in schema.
+impl AuthUserMeta for User {}
+impl AuthSessionMeta for Session {}
+impl AuthAccountMeta for Account {}
+impl AuthOrganizationMeta for Organization {}
+impl AuthMemberMeta for Member {}
+impl AuthInvitationMeta for Invitation {}
+impl AuthVerificationMeta for Verification {}
+impl AuthTwoFactorMeta for TwoFactor {}
+impl AuthApiKeyMeta for ApiKey {}
+impl AuthPasskeyMeta for Passkey {}
 
 impl AuthPasskey for Passkey {
     fn id(&self) -> &str {
@@ -471,6 +492,8 @@ mod postgres_impls {
                 secret: row.try_get("secret")?,
                 backup_codes: row.try_get("backup_codes")?,
                 user_id: row.try_get("user_id")?,
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
             })
         }
     }

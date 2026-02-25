@@ -3,7 +3,10 @@ use quote::quote;
 use syn::DeriveInput;
 
 use crate::helpers::ReturnKind::*;
-use crate::helpers::{ReturnKind, find_field_for_getter, gen_getter_tokens, parse_named_fields};
+use crate::helpers::{
+    ReturnKind, find_field_for_getter, gen_getter_tokens, parse_named_fields,
+    parse_struct_auth_table,
+};
 
 /// Core function: given a `DeriveInput`, trait path tokens, trait name (for
 /// error messages), and a list of `(getter_name, ReturnKind)` pairs, generate
@@ -51,6 +54,86 @@ pub(crate) fn derive_entity_trait(
 
     quote! {
         impl #impl_generics #trait_path for #struct_name #ty_generics #where_clause {
+            #(#methods)*
+        }
+    }
+}
+
+/// Generate an `impl Auth*Meta for Struct` block that maps getter names to
+/// actual struct field identifiers (= DB column names).
+///
+/// For each getter in the entity trait, the generated impl returns the struct
+/// field name as a `&'static str`. If the struct has `#[auth(table = "...")]`,
+/// the `table()` method is also overridden.
+pub(crate) fn derive_meta_trait(
+    input: &DeriveInput,
+    meta_trait_path: TokenStream2,
+    meta_trait_name: &str,
+    getters: &[(&str, ReturnKind)],
+) -> TokenStream2 {
+    let struct_name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    let field_infos = match parse_named_fields(input, meta_trait_name) {
+        Ok(fi) => fi,
+        Err(err) => return err,
+    };
+
+    let table_override = match parse_struct_auth_table(&input.attrs) {
+        Ok(t) => t,
+        Err(err) => return err.to_compile_error(),
+    };
+
+    let mut methods = Vec::new();
+
+    // Table name override
+    if let Some(ref table) = table_override {
+        methods.push(quote! {
+            fn table() -> &'static str { #table }
+        });
+    }
+
+    // Column name methods — one per getter
+    for &(getter_name, _) in getters {
+        let method_name = syn::Ident::new(
+            &format!("col_{}", getter_name),
+            proc_macro2::Span::call_site(),
+        );
+
+        let field_ident = match find_field_for_getter(&field_infos, getter_name) {
+            Some(ident) => ident,
+            None => continue, // error will be caught by the entity-trait derive
+        };
+
+        // Determine the DB column name:
+        // 1. Explicit #[auth(column = "...")] takes highest priority
+        // 2. If matched via #[auth(field = "X")], use getter name X
+        //    (the field was remapped → DB column follows the logical name)
+        // 3. Otherwise, use the struct field name (field name == getter name)
+        let col_name = {
+            let fi = field_infos
+                .iter()
+                .find(|f| f.ident == *field_ident)
+                .unwrap();
+            if let Some(ref col) = fi.auth_column {
+                col.clone()
+            } else if fi.auth_field_name.is_some() {
+                // Field was matched via #[auth(field = "X")] — the DB column
+                // should be the getter name (= the standard/logical column name),
+                // not the Rust field name.
+                getter_name.to_string()
+            } else {
+                field_ident.to_string()
+            }
+        };
+
+        methods.push(quote! {
+            fn #method_name() -> &'static str { #col_name }
+        });
+    }
+
+    quote! {
+        impl #impl_generics #meta_trait_path for #struct_name #ty_generics #where_clause {
             #(#methods)*
         }
     }
@@ -147,6 +230,8 @@ pub(crate) const AUTH_TWO_FACTOR_GETTERS: &[(&str, ReturnKind)] = &[
     ("secret", RefStr),
     ("backup_codes", OptionRefStr),
     ("user_id", RefStr),
+    ("created_at", DateTime),
+    ("updated_at", DateTime),
 ];
 
 pub(crate) const AUTH_PASSKEY_GETTERS: &[(&str, ReturnKind)] = &[

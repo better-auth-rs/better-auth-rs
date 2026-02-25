@@ -286,12 +286,14 @@ impl MemoryInvitation for Invitation {
 }
 
 impl MemoryTwoFactor for TwoFactor {
-    fn from_create(id: String, create: &CreateTwoFactor, _now: DateTime<Utc>) -> Self {
+    fn from_create(id: String, create: &CreateTwoFactor, now: DateTime<Utc>) -> Self {
         TwoFactor {
             id,
             secret: create.secret.clone(),
             backup_codes: create.backup_codes.clone(),
             user_id: create.user_id.clone(),
+            created_at: now,
+            updated_at: now,
         }
     }
 

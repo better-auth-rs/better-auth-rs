@@ -25,6 +25,10 @@ struct FromRowField {
     ty: syn::Type,
     is_json: bool,
     default_expr: Option<TokenStream2>,
+    /// If the field has `#[auth(field = "...")]`, the getter/logical name.
+    auth_field_name: Option<String>,
+    /// If the field has `#[auth(column = "...")]`, the explicit DB column name.
+    auth_column: Option<String>,
 }
 
 /// Parse fields for FromRow generation, extracting type info and relevant attributes.
@@ -49,44 +53,55 @@ fn parse_from_row_fields(input: &DeriveInput) -> Result<Vec<FromRowField>, Token
         }
     };
 
-    Ok(named_fields
-        .iter()
-        .filter_map(|f| {
-            let ident = f.ident.clone()?;
-            let ty = f.ty.clone();
-            let mut is_json = false;
-            let mut default_expr = None;
+    let mut fields = Vec::new();
+    for f in named_fields {
+        let Some(ident) = f.ident.clone() else {
+            continue;
+        };
+        let ty = f.ty.clone();
+        let mut is_json = false;
+        let mut auth_field_name = None;
+        let mut auth_column = None;
+        let mut default_expr = None;
 
-            for attr in &f.attrs {
-                if !attr.path().is_ident("auth") {
-                    continue;
-                }
-                let _ = attr.parse_nested_meta(|meta| {
-                    if meta.path.is_ident("json") {
-                        is_json = true;
-                    } else if meta.path.is_ident("default") {
-                        let value = meta.value()?;
-                        let lit: syn::LitStr = value.parse()?;
-                        let parsed: syn::Expr = syn::parse_str(&lit.value()).map_err(|e| {
-                            syn::Error::new_spanned(
-                                &lit,
-                                format!("invalid default expression: {e}"),
-                            )
-                        })?;
-                        default_expr = Some(quote! { #parsed });
-                    }
-                    Ok(())
-                });
+        for attr in &f.attrs {
+            if !attr.path().is_ident("auth") {
+                continue;
             }
-
-            Some(FromRowField {
-                ident,
-                ty,
-                is_json,
-                default_expr,
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("json") {
+                    is_json = true;
+                } else if meta.path.is_ident("field") {
+                    let value = meta.value()?;
+                    let lit: syn::LitStr = value.parse()?;
+                    auth_field_name = Some(lit.value());
+                } else if meta.path.is_ident("column") {
+                    let value = meta.value()?;
+                    let lit: syn::LitStr = value.parse()?;
+                    auth_column = Some(lit.value());
+                } else if meta.path.is_ident("default") {
+                    let value = meta.value()?;
+                    let lit: syn::LitStr = value.parse()?;
+                    let parsed: syn::Expr = syn::parse_str(&lit.value()).map_err(|e| {
+                        syn::Error::new_spanned(&lit, format!("invalid default expression: {e}"))
+                    })?;
+                    default_expr = Some(quote! { #parsed });
+                }
+                Ok(())
             })
-        })
-        .collect())
+            .map_err(|e| e.to_compile_error())?;
+        }
+
+        fields.push(FromRowField {
+            ident,
+            ty,
+            is_json,
+            default_expr,
+            auth_field_name,
+            auth_column,
+        });
+    }
+    Ok(fields)
 }
 
 /// Extract the inner type `T` from `Option<T>`.
@@ -154,7 +169,17 @@ fn is_json_type_name(name: &str) -> bool {
 /// 4. Everything else -> simple `try_get`
 fn gen_from_row_field_expr(field: &FromRowField) -> TokenStream2 {
     let ident = &field.ident;
-    let col_name = ident.to_string();
+    // Determine DB column name:
+    // 1. Explicit #[auth(column = "...")] takes priority
+    // 2. If #[auth(field = "X")] is present, use getter name X
+    // 3. Otherwise, use the struct field name
+    let col_name = if let Some(ref col) = field.auth_column {
+        col.clone()
+    } else if let Some(ref field_name) = field.auth_field_name {
+        field_name.clone()
+    } else {
+        ident.to_string()
+    };
 
     // Unwrap Option<T> to inspect the inner type
     let (is_option, inner_ty) = match extract_option_inner(&field.ty) {
