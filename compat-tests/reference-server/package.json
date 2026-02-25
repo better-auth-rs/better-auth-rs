@@ -1,0 +1,14 @@
+{
+  "name": "better-auth-compat-reference",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Reference better-auth (TS) server for compatibility testing against better-auth-rs",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "better-auth": "^1.2.0",
+    "better-sqlite3": "^11.0.0"
+  }
+}

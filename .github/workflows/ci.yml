@@ -38,7 +38,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace
+      - name: Run library unit tests
+        run: cargo test --workspace --lib
+      - name: Run integration tests
+        run: |
+          cargo test --test compatibility_tests
+          cargo test --test integration_tests
+          cargo test --test derive_tests
+          cargo test --test axum_integration_tests
+          cargo test --test phase0_tests
 
   test-all-features:
     name: Test (All Features)
@@ -47,7 +55,30 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace --all-features
+      - name: Run library unit tests (all features)
+        run: cargo test --workspace --lib --all-features
+      - name: Run integration tests (all features)
+        run: |
+          cargo test --test compatibility_tests --all-features
+          cargo test --test integration_tests --all-features
+          cargo test --test derive_tests --all-features
+          cargo test --test axum_integration_tests --all-features
+          cargo test --test phase0_tests --all-features
+
+  compat:
+    name: Compatibility Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run spec-driven compatibility tests
+        run: |
+          cargo test --test compat_endpoint_tests -- --nocapture
+          cargo test --test compat_field_tests -- --nocapture
+          cargo test --test compat_coverage_tests -- --nocapture
+          cargo test --test compat_consistency_tests -- --nocapture
+          cargo test --test compat_unit_tests -- --nocapture
 
   standalone-examples:
     name: Check Standalone Examples
