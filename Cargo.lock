@@ -207,7 +207,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "better-auth"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "argon2",
  "async-trait",
@@ -236,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "better-auth-api"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "argon2",
  "async-trait",
@@ -257,7 +257,7 @@ dependencies = [
 
 [[package]]
 name = "better-auth-core"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "argon2",
  "async-trait",
@@ -278,7 +278,7 @@ dependencies = [
 
 [[package]]
 name = "better-auth-derive"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "proc-macro2",
  "quote",

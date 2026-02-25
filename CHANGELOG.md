@@ -3,6 +3,41 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [0.7.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.6.2...v0.7.0) - 2026-02-25
+
+### Bug Fixes
+
+- remove duplicate error handling and fix README edition (Copilot review) ([#24](https://github.com/better-auth-rs/better-auth-rs/pull/24))
+
+- replace hardcoded SQL column names with Auth*Meta trait methods in SqlxAdapter ([#23](https://github.com/better-auth-rs/better-auth-rs/pull/23))
+
+
+### Features
+
+- implement Admin plugin with 13 endpoints ([#16](https://github.com/better-auth-rs/better-auth-rs/pull/16))
+
+- add spec-driven compatibility testing framework and fix CI ([#17](https://github.com/better-auth-rs/better-auth-rs/pull/17))
+
+- expand compat coverage with Organization/Passkey tests and fix /ok endpoint ([#19](https://github.com/better-auth-rs/better-auth-rs/pull/19))
+
+- implement AdminPlugin Phase 1 with 6 admin endpoints ([#20](https://github.com/better-auth-rs/better-auth-rs/pull/20))
+
+- add fullstack integration example (better-auth frontend + better-auth-rs backend) ([#21](https://github.com/better-auth-rs/better-auth-rs/pull/21))
+
+
+### phase0
+
+- unify routes, add capabilities, hooks, and tests
+
+
+### phase1
+
+- jwt validation and email verification flow
+
+- oauth provider config and verification responses
+
+- oauth token exchange and userinfo
+
 ## [0.6.2](https://github.com/better-auth-rs/better-auth-rs/compare/v0.6.1...v0.6.2) - 2026-02-13
 
 ### Bug Fixes
