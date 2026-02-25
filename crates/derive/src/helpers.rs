@@ -34,6 +34,8 @@ pub(crate) struct FieldInfo {
     pub ident: syn::Ident,
     /// If the field has `#[auth(field = "...")]`, the overridden getter name.
     pub auth_field_name: Option<String>,
+    /// If the field has `#[auth(column = "...")]`, the explicit DB column name.
+    pub auth_column: Option<String>,
     /// If the field has `#[auth(default = "...")]`, the default expression.
     pub auth_default: Option<TokenStream2>,
 }
@@ -43,18 +45,25 @@ pub(crate) struct FieldInfo {
 /// Supported:
 /// - `#[auth(field = "getter_name")]` — remap field to a getter name
 /// - `#[auth(default = "expr")]` — default expression for Memory* derives
-pub(crate) fn parse_auth_attrs(attrs: &[syn::Attribute]) -> (Option<String>, Option<TokenStream2>) {
+pub(crate) fn parse_auth_attrs(
+    attrs: &[syn::Attribute],
+) -> Result<(Option<String>, Option<String>, Option<TokenStream2>), syn::Error> {
     let mut field_name = None;
+    let mut column_name = None;
     let mut default_expr = None;
     for attr in attrs {
         if !attr.path().is_ident("auth") {
             continue;
         }
-        let _ = attr.parse_nested_meta(|meta| {
+        attr.parse_nested_meta(|meta| {
             if meta.path.is_ident("field") {
                 let value = meta.value()?;
                 let lit: syn::LitStr = value.parse()?;
                 field_name = Some(lit.value());
+            } else if meta.path.is_ident("column") {
+                let value = meta.value()?;
+                let lit: syn::LitStr = value.parse()?;
+                column_name = Some(lit.value());
             } else if meta.path.is_ident("default") {
                 let value = meta.value()?;
                 let lit: syn::LitStr = value.parse()?;
@@ -62,32 +71,48 @@ pub(crate) fn parse_auth_attrs(attrs: &[syn::Attribute]) -> (Option<String>, Opt
                     syn::Error::new_spanned(&lit, format!("invalid default expression: {e}"))
                 })?;
                 default_expr = Some(quote! { #parsed });
+            } else if !meta.path.is_ident("from_row")
+                && !meta.path.is_ident("json")
+                && !meta.path.is_ident("table")
+            {
+                // Ignore known struct-level and from_row attributes;
+                // unknown attributes are silently skipped to allow forward compat.
             }
             Ok(())
-        });
+        })?;
     }
-    (field_name, default_expr)
+    Ok((field_name, column_name, default_expr))
 }
 
 /// Parse struct-level `#[auth(table = "...")]` attribute.
 ///
 /// Returns `Some(table_name)` if the attribute is present.
-pub(crate) fn parse_struct_auth_table(attrs: &[syn::Attribute]) -> Option<String> {
+pub(crate) fn parse_struct_auth_table(
+    attrs: &[syn::Attribute],
+) -> Result<Option<String>, syn::Error> {
     let mut table_name = None;
     for attr in attrs {
         if !attr.path().is_ident("auth") {
             continue;
         }
-        let _ = attr.parse_nested_meta(|meta| {
+        attr.parse_nested_meta(|meta| {
             if meta.path.is_ident("table") {
                 let value = meta.value()?;
                 let lit: syn::LitStr = value.parse()?;
                 table_name = Some(lit.value());
+            } else if !meta.path.is_ident("field")
+                && !meta.path.is_ident("column")
+                && !meta.path.is_ident("default")
+                && !meta.path.is_ident("from_row")
+                && !meta.path.is_ident("json")
+            {
+                // Ignore known field-level attributes;
+                // unknown attributes are silently skipped to allow forward compat.
             }
             Ok(())
-        });
+        })?;
     }
-    table_name
+    Ok(table_name)
 }
 
 /// Given a list of parsed fields and a getter name, find the matching field.
@@ -142,18 +167,21 @@ pub(crate) fn parse_named_fields(
         }
     };
 
-    Ok(named_fields
-        .iter()
-        .filter_map(|f| {
-            let ident = f.ident.clone()?;
-            let (auth_field_name, auth_default) = parse_auth_attrs(&f.attrs);
-            Some(FieldInfo {
-                ident,
-                auth_field_name,
-                auth_default,
-            })
-        })
-        .collect())
+    let mut fields = Vec::new();
+    for f in named_fields {
+        let Some(ident) = f.ident.clone() else {
+            continue;
+        };
+        let (auth_field_name, auth_column, auth_default) =
+            parse_auth_attrs(&f.attrs).map_err(|e| e.to_compile_error())?;
+        fields.push(FieldInfo {
+            ident,
+            auth_field_name,
+            auth_column,
+            auth_default,
+        });
+    }
+    Ok(fields)
 }
 
 /// Generate the return-type tokens and method-body tokens for a single getter.

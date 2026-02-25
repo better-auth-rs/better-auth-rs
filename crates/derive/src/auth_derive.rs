@@ -79,7 +79,10 @@ pub(crate) fn derive_meta_trait(
         Err(err) => return err,
     };
 
-    let table_override = parse_struct_auth_table(&input.attrs);
+    let table_override = match parse_struct_auth_table(&input.attrs) {
+        Ok(t) => t,
+        Err(err) => return err.to_compile_error(),
+    };
 
     let mut methods = Vec::new();
 
@@ -102,7 +105,27 @@ pub(crate) fn derive_meta_trait(
             None => continue, // error will be caught by the entity-trait derive
         };
 
-        let col_name = field_ident.to_string();
+        // Determine the DB column name:
+        // 1. Explicit #[auth(column = "...")] takes highest priority
+        // 2. If matched via #[auth(field = "X")], use getter name X
+        //    (the field was remapped → DB column follows the logical name)
+        // 3. Otherwise, use the struct field name (field name == getter name)
+        let col_name = {
+            let fi = field_infos
+                .iter()
+                .find(|f| f.ident == *field_ident)
+                .unwrap();
+            if let Some(ref col) = fi.auth_column {
+                col.clone()
+            } else if fi.auth_field_name.is_some() {
+                // Field was matched via #[auth(field = "X")] — the DB column
+                // should be the getter name (= the standard/logical column name),
+                // not the Rust field name.
+                getter_name.to_string()
+            } else {
+                field_ident.to_string()
+            }
+        };
 
         methods.push(quote! {
             fn #method_name() -> &'static str { #col_name }

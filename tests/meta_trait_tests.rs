@@ -224,8 +224,9 @@ fn test_derive_standard_user_meta() {
 }
 
 /// A user struct with `#[auth(field = "name")]` on a differently-named field.
-/// The column name should follow the struct field ident (= DB column),
-/// NOT the getter name.
+/// When `#[auth(field = "name")]` remaps a field, the column name should
+/// follow the getter name (= the logical/standard DB column name), because
+/// the user is saying "this Rust field provides the `name` concept".
 #[derive(Clone, Debug, Serialize, AuthUser)]
 struct RenamedFieldUser {
     id: String,
@@ -248,11 +249,12 @@ struct RenamedFieldUser {
 
 #[test]
 fn test_derive_renamed_field_user_meta() {
-    // The `name` getter maps to `display_name` field, so col_name() should
-    // return "display_name" (the actual DB column name).
+    // The `name` getter maps to `display_name` field via #[auth(field = "name")].
+    // col_name() should return "name" (the logical/getter name = standard DB column),
+    // NOT "display_name" (the Rust field name).
     assert_eq!(RenamedFieldUser::table(), "users"); // default table
     assert_eq!(RenamedFieldUser::col_id(), "id");
-    assert_eq!(RenamedFieldUser::col_name(), "display_name"); // KEY: follows field ident
+    assert_eq!(RenamedFieldUser::col_name(), "name"); // KEY: follows getter name
     assert_eq!(RenamedFieldUser::col_email(), "email");
     assert_eq!(RenamedFieldUser::col_role(), "role");
 }
@@ -311,10 +313,47 @@ struct FullyCustomUser {
 #[test]
 fn test_derive_fully_custom_user_meta() {
     assert_eq!(FullyCustomUser::table(), "app_users");
-    assert_eq!(FullyCustomUser::col_name(), "full_name");
-    assert_eq!(FullyCustomUser::col_role(), "user_role");
+    // #[auth(field = "name")] full_name -> col_name() = "name" (getter name)
+    assert_eq!(FullyCustomUser::col_name(), "name");
+    // #[auth(field = "role")] user_role -> col_role() = "role" (getter name)
+    assert_eq!(FullyCustomUser::col_role(), "role");
     assert_eq!(FullyCustomUser::col_id(), "id"); // unchanged
     assert_eq!(FullyCustomUser::col_email(), "email"); // unchanged
+}
+
+/// Test `#[auth(column = "...")]` explicit DB column override.
+/// When both `#[auth(field)]` and `#[auth(column)]` are present,
+/// `column` takes priority for the Meta trait.
+#[derive(Clone, Debug, Serialize, AuthUser)]
+#[auth(table = "sea_orm_users")]
+struct ExplicitColumnUser {
+    id: String,
+    email: Option<String>,
+    #[auth(field = "name")]
+    display_name: Option<String>,
+    email_verified: bool,
+    image: Option<String>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    username: Option<String>,
+    display_username: Option<String>,
+    two_factor_enabled: bool,
+    #[auth(field = "role", column = "user_role")]
+    user_role: Option<String>,
+    banned: bool,
+    ban_reason: Option<String>,
+    ban_expires: Option<DateTime<Utc>>,
+    metadata: serde_json::Value,
+}
+
+#[test]
+fn test_derive_explicit_column_override() {
+    assert_eq!(ExplicitColumnUser::table(), "sea_orm_users");
+    // #[auth(field = "name")] without column -> col_name() = "name" (getter name)
+    assert_eq!(ExplicitColumnUser::col_name(), "name");
+    // #[auth(field = "role", column = "user_role")] -> col_role() = "user_role" (explicit)
+    assert_eq!(ExplicitColumnUser::col_role(), "user_role");
+    assert_eq!(ExplicitColumnUser::col_id(), "id");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -384,7 +423,8 @@ struct CustomMember {
 #[test]
 fn test_derive_custom_member_meta() {
     assert_eq!(CustomMember::table(), "org_members");
-    assert_eq!(CustomMember::col_role(), "member_role"); // renamed field
+    // #[auth(field = "role")] member_role -> col_role() = "role" (getter name)
+    assert_eq!(CustomMember::col_role(), "role");
     assert_eq!(CustomMember::col_organization_id(), "organization_id");
 }
 

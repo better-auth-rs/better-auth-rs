@@ -7,6 +7,21 @@
 //!
 //! Use `#[derive(AuthUser)]` etc. from `better-auth-derive` to auto-implement
 //! these traits, or implement them manually.
+//!
+//! ## Meta traits
+//!
+//! Each entity trait has a corresponding `Auth*Meta` trait (e.g., `AuthUserMeta`)
+//! that provides table and column name mappings for SQL generation. The derive
+//! macros automatically implement both the entity trait and the meta trait.
+//!
+//! If you implement entity traits **manually** (without derive macros), you must
+//! also implement the corresponding `Auth*Meta` trait. An empty `impl` block is
+//! sufficient to get the default column/table names:
+//!
+//! ```rust,ignore
+//! impl AuthUserMeta for MyUser {}   // uses default column names
+//! impl AuthSessionMeta for MySession {}
+//! ```
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
