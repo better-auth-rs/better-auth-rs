@@ -380,11 +380,19 @@ impl PasswordManagementPlugin {
         };
         
         let response = ChangePasswordResponse {
-            token: new_token,
+            token: new_token.clone(),
             user: updated_user,
         };
         
-        Ok(AuthResponse::json(200, &response)?)
+        let auth_response = AuthResponse::json(200, &response)?;
+        
+        // Set session cookie if a new session was created
+        if let Some(token) = new_token {
+            let cookie_header = self.create_session_cookie(&token, ctx);
+            Ok(auth_response.with_header("Set-Cookie", cookie_header))
+        } else {
+            Ok(auth_response)
+        }
     }
     
     async fn handle_reset_password_token(&self, token: &str, _req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
@@ -519,6 +527,28 @@ impl PasswordManagementPlugin {
             .map_err(|e| AuthError::PasswordHash(format!("Failed to hash password: {}", e)))?;
             
         Ok(password_hash.to_string())
+    }
+    
+    fn create_session_cookie(&self, token: &str, ctx: &AuthContext) -> String {
+        let session_config = &ctx.config.session;
+        let secure = if session_config.cookie_secure { "; Secure" } else { "" };
+        let http_only = if session_config.cookie_http_only { "; HttpOnly" } else { "" };
+        let same_site = match session_config.cookie_same_site {
+            crate::core::config::SameSite::Strict => "; SameSite=Strict",
+            crate::core::config::SameSite::Lax => "; SameSite=Lax",
+            crate::core::config::SameSite::None => "; SameSite=None",
+        };
+        
+        let expires = chrono::Utc::now() + session_config.expires_in;
+        let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
+        
+        format!("{}={}; Path=/; Expires={}{}{}{}",
+                session_config.cookie_name,
+                token,
+                expires_str,
+                secure,
+                http_only,
+                same_site)
     }
     
     fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
