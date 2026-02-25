@@ -1,0 +1,16 @@
+[package]
+name = "fullstack-backend"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+better-auth = { path = "../../..", features = ["axum"] }
+better-auth-core = { path = "../../../crates/core" }
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tower-http = { version = "0.6", features = ["cors"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -9,7 +9,7 @@ repository = { workspace = true }
 [workspace]
 resolver = "2"
 members = ["crates/core", "crates/api", "crates/derive"]
-exclude = ["examples/sqlx-custom-entities", "examples/sea-orm-migration"]
+exclude = ["examples/sqlx-custom-entities", "examples/sea-orm-migration", "examples/fullstack/backend"]
 
 [workspace.package]
 version = "0.6.2"
