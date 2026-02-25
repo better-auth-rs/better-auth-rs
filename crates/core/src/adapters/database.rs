@@ -301,15 +301,21 @@ pub mod sqlx_adapter {
                     query.push(", ban_reason = NULL, ban_expires = NULL");
                 }
             }
-            if let Some(ban_reason) = &update.ban_reason {
-                query.push(", ban_reason = ");
-                query.push_bind(ban_reason);
-                has_updates = true;
-            }
-            if let Some(ban_expires) = update.ban_expires {
-                query.push(", ban_expires = ");
-                query.push_bind(ban_expires);
-                has_updates = true;
+            // Only process ban_reason and ban_expires when we are NOT
+            // explicitly unbanning.  When banned == Some(false) the block
+            // above already emits `ban_reason = NULL, ban_expires = NULL`,
+            // so applying these fields again would overwrite the NULLs.
+            if update.banned != Some(false) {
+                if let Some(ban_reason) = &update.ban_reason {
+                    query.push(", ban_reason = ");
+                    query.push_bind(ban_reason);
+                    has_updates = true;
+                }
+                if let Some(ban_expires) = update.ban_expires {
+                    query.push(", ban_expires = ");
+                    query.push_bind(ban_expires);
+                    has_updates = true;
+                }
             }
             if let Some(two_factor_enabled) = update.two_factor_enabled {
                 query.push(", two_factor_enabled = ");

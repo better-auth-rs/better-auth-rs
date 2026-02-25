@@ -428,6 +428,14 @@ impl AdminPlugin {
             return Err(AuthError::conflict("A user with this email already exists"));
         }
 
+        // Validate password length
+        if body.password.len() < ctx.config.password.min_length {
+            return Err(AuthError::bad_request(format!(
+                "Password must be at least {} characters long",
+                ctx.config.password.min_length
+            )));
+        }
+
         // Hash the password
         let password_hash = Self::hash_password(&body.password)?;
 
@@ -435,13 +443,22 @@ impl AdminPlugin {
             .role
             .unwrap_or_else(|| self.config.default_user_role.clone());
 
-        let mut metadata = body.data.unwrap_or(serde_json::json!({}));
-        if let Some(obj) = metadata.as_object_mut() {
+        // Normalize metadata to always be a JSON object and include the password_hash
+        let metadata_value = body.data.unwrap_or(serde_json::json!({}));
+        let metadata = if let serde_json::Value::Object(mut obj) = metadata_value {
             obj.insert(
                 "password_hash".to_string(),
                 serde_json::json!(password_hash),
             );
-        }
+            serde_json::Value::Object(obj)
+        } else {
+            let mut obj = serde_json::Map::new();
+            obj.insert(
+                "password_hash".to_string(),
+                serde_json::json!(password_hash),
+            );
+            serde_json::Value::Object(obj)
+        };
 
         let create_user = CreateUser::new()
             .with_email(&body.email)
@@ -581,7 +598,7 @@ impl AdminPlugin {
 
         let update = UpdateUser {
             banned: Some(true),
-            ban_reason: body.ban_reason.or_else(|| Some(String::new())),
+            ban_reason: body.ban_reason,
             ban_expires,
             email: None,
             name: None,
@@ -802,6 +819,12 @@ impl AdminPlugin {
     }
 
     /// POST /admin/remove-user — Delete a user and all their data.
+    ///
+    /// **Note:** This endpoint deletes sessions, accounts, and the user record.
+    /// Data owned by other plugins (passkeys, two-factor settings, API keys,
+    /// organization memberships) is **not** cleaned up here.  Those records
+    /// should be removed through the respective plugin APIs or via database
+    /// cascade rules.
     async fn handle_remove_user<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
@@ -879,6 +902,10 @@ impl AdminPlugin {
                 "password_hash".to_string(),
                 serde_json::json!(password_hash),
             );
+        } else {
+            return Err(AuthError::bad_request(
+                "User metadata must be a JSON object to store password hash",
+            ));
         }
 
         let update = UpdateUser {
@@ -897,19 +924,40 @@ impl AdminPlugin {
         };
         ctx.database.update_user(&body.user_id, update).await?;
 
-        // Also update the credential account's password field to keep it in sync
+        // Update the credential account's password field (or create one if missing)
         let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
-        for account in &accounts {
-            if account.provider_id() == "credential" {
-                let account_update = better_auth_core::UpdateAccount {
-                    password: Some(password_hash.clone()),
-                    ..Default::default()
-                };
-                ctx.database
-                    .update_account(account.id(), account_update)
-                    .await?;
-                break;
+        let has_credential = accounts.iter().any(|a| a.provider_id() == "credential");
+
+        if has_credential {
+            for account in &accounts {
+                if account.provider_id() == "credential" {
+                    let account_update = better_auth_core::UpdateAccount {
+                        password: Some(password_hash.clone()),
+                        ..Default::default()
+                    };
+                    ctx.database
+                        .update_account(account.id(), account_update)
+                        .await?;
+                    break;
+                }
             }
+        } else {
+            // User has no credential account (e.g. OAuth-only user).
+            // Create one so the password is usable for email/password sign-in.
+            ctx.database
+                .create_account(CreateAccount {
+                    user_id: body.user_id.clone(),
+                    account_id: body.user_id.clone(),
+                    provider_id: "credential".to_string(),
+                    access_token: None,
+                    refresh_token: None,
+                    id_token: None,
+                    access_token_expires_at: None,
+                    refresh_token_expires_at: None,
+                    scope: None,
+                    password: Some(password_hash.clone()),
+                })
+                .await?;
         }
 
         let response = StatusResponse { status: true };
@@ -945,7 +993,7 @@ impl AdminPlugin {
         };
 
         // Use the `permissions` field, falling back to deprecated `permission`.
-        let permissions = body.permissions.or(body.permission);
+        let _permissions = body.permissions.or(body.permission);
 
         let is_admin = user.role().unwrap_or("user") == self.config.admin_role;
 
@@ -956,13 +1004,11 @@ impl AdminPlugin {
         // and grant access if the user's role matches the admin role.
         let (success, error) = if is_admin {
             (true, None)
-        } else if permissions.is_some() {
+        } else {
             (
                 false,
                 Some("User does not have the required permissions".to_string()),
             )
-        } else {
-            (true, None)
         };
 
         let response = PermissionResponse { success, error };
