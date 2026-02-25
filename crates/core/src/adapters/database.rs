@@ -206,8 +206,8 @@ pub mod sqlx_adapter {
 
             let user = sqlx::query_as::<_, U>(
                 r#"
-                INSERT INTO users (id, email, name, image, email_verified, created_at, updated_at, metadata)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                INSERT INTO users (id, email, name, image, email_verified, username, display_username, role, created_at, updated_at, metadata)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                 RETURNING *
                 "#,
             )
@@ -215,7 +215,10 @@ pub mod sqlx_adapter {
             .bind(&create_user.email)
             .bind(&create_user.name)
             .bind(&create_user.image)
-            .bind(false)
+            .bind(create_user.email_verified.unwrap_or(false))
+            .bind(&create_user.username)
+            .bind(&create_user.display_username)
+            .bind(&create_user.role)
             .bind(now)
             .bind(now)
             .bind(sqlx::types::Json(create_user.metadata.unwrap_or(serde_json::json!({}))))
