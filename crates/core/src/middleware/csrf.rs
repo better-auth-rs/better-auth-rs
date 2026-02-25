@@ -103,10 +103,10 @@ impl Middleware for CsrfMiddleware {
             Some(origin) if self.is_origin_trusted(&origin) => Ok(None),
             Some(_origin) => Ok(Some(AuthResponse::json(
                 403,
-                &serde_json::json!({
-                    "code": "CSRF_ERROR",
-                    "message": "Cross-site request blocked"
-                }),
+                &crate::types::CodeMessageResponse {
+                    code: "CSRF_ERROR",
+                    message: "Cross-site request blocked".to_string(),
+                },
             )?)),
             // If no Origin/Referer header is present, allow the request.
             // This handles same-origin requests from older browsers and

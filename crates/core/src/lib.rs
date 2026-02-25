@@ -49,9 +49,11 @@ pub use openapi::{OpenApiBuilder, OpenApiInfo, OpenApiOperation, OpenApiResponse
 pub use plugin::{AuthContext, AuthPlugin, AuthRoute};
 pub use session::SessionManager;
 pub use types::{
-    Account, ApiKey, AuthRequest, AuthResponse, CreateAccount, CreateApiKey, CreateInvitation,
-    CreateMember, CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
-    CreateVerification, DeleteUserResponse, HttpMethod, Invitation, InvitationStatus, Passkey,
-    Session, TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdatePasskey, UpdateUser,
-    UpdateUserRequest, UpdateUserResponse, User, Verification,
+    Account, ApiKey, AuthRequest, AuthResponse, CodeMessageResponse, CreateAccount, CreateApiKey,
+    CreateInvitation, CreateMember, CreateOrganization, CreatePasskey, CreateSession,
+    CreateTwoFactor, CreateUser, CreateVerification, DeleteUserResponse, ErrorMessageResponse,
+    HealthCheckResponse, HttpMethod, Invitation, InvitationStatus, OkResponse, Passkey,
+    RateLimitErrorResponse, Session, StatusMessageResponse, StatusResponse, TwoFactor,
+    UpdateAccount, UpdateApiKey, UpdateOrganization, UpdatePasskey, UpdateUser, UpdateUserRequest,
+    UpdateUserResponse, User, ValidationErrorResponse, Verification,
 };

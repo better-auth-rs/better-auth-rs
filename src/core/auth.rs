@@ -4,8 +4,9 @@ use serde::Deserialize;
 
 use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-    DatabaseAdapter, DatabaseHooks, DeleteUserResponse, EmailProvider, HttpMethod, OpenApiBuilder,
-    OpenApiSpec, SessionManager, UpdateUser, UpdateUserRequest,
+    DatabaseAdapter, DatabaseHooks, DeleteUserResponse, EmailProvider, HttpMethod, OkResponse,
+    OpenApiBuilder, OpenApiSpec, SessionManager, StatusMessageResponse, StatusResponse, UpdateUser,
+    UpdateUserRequest,
     entity::{AuthAccount, AuthSession, AuthUser, AuthVerification},
     middleware::{
         self, BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig,
@@ -331,14 +332,12 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// Handle core authentication requests.
     async fn handle_core_request(&self, req: &AuthRequest) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
-            (HttpMethod::Get, "/ok") => Ok(Some(AuthResponse::json(
-                200,
-                &serde_json::json!({ "ok": true }),
-            )?)),
-            (HttpMethod::Get, "/error") => Ok(Some(AuthResponse::json(
-                200,
-                &serde_json::json!({ "ok": false }),
-            )?)),
+            (HttpMethod::Get, "/ok") => {
+                Ok(Some(AuthResponse::json(200, &OkResponse { ok: true })?))
+            }
+            (HttpMethod::Get, "/error") => {
+                Ok(Some(AuthResponse::json(200, &OkResponse { ok: false })?))
+            }
             (HttpMethod::Get, "/reference/openapi.json") => {
                 let spec = self.openapi_spec();
                 Ok(Some(AuthResponse::json(200, &spec)?))
@@ -382,10 +381,7 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
             .update_user(current_user.id(), update_user)
             .await?;
 
-        Ok(AuthResponse::json(
-            200,
-            &serde_json::json!({ "status": true }),
-        )?)
+        Ok(AuthResponse::json(200, &StatusResponse { status: true })?)
     }
 
     /// Handle user deletion.
@@ -447,7 +443,10 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
 
         Ok(AuthResponse::json(
             200,
-            &serde_json::json!({ "status": true, "message": "Email updated" }),
+            &StatusMessageResponse {
+                status: true,
+                message: "Email updated".to_string(),
+            },
         )?)
     }
 

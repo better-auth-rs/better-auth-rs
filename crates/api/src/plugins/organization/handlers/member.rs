@@ -8,8 +8,8 @@ use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::config::OrganizationConfig;
 use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
 use crate::plugins::organization::types::{
-    ListMembersQuery, ListMembersResponse, MemberResponse, RemoveMemberRequest,
-    UpdateMemberRoleRequest,
+    ListMembersQuery, ListMembersResponse, MemberResponse, MemberWrappedResponse,
+    RemoveMemberRequest, RemovedMemberInfo, RemovedMemberResponse, UpdateMemberRoleRequest,
 };
 
 /// Handle get active member request
@@ -179,19 +179,19 @@ pub async fn handle_remove_member<DB: DatabaseAdapter>(
     }
 
     // Build member response before deleting (spec expects {member: ...})
-    let removed_member = serde_json::json!({
-        "member": {
-            "id": target_member_id,
-            "userId": target_member_user_id,
-            "organizationId": target_member_org_id,
-            "role": target_member_role,
-        }
-    });
+    let response = RemovedMemberResponse {
+        member: RemovedMemberInfo {
+            id: target_member_id.clone(),
+            user_id: target_member_user_id,
+            organization_id: target_member_org_id,
+            role: target_member_role,
+        },
+    };
 
     // Delete member by member_id
     ctx.database.delete_member(&target_member_id).await?;
 
-    Ok(AuthResponse::json(200, &removed_member)?)
+    Ok(AuthResponse::json(200, &response)?)
 }
 
 /// Handle update member role request
@@ -261,14 +261,16 @@ pub async fn handle_update_member_role<DB: DatabaseAdapter>(
         .await?;
 
     // Return updated member wrapped in {member: ...} per spec
-    if let Some(user_info) = ctx.database.get_user_by_id(updated.user_id()).await? {
-        let member_response = MemberResponse::from_member_and_user(&updated, &user_info);
-        let wrapped = serde_json::json!({ "member": member_response });
-        return Ok(AuthResponse::json(200, &wrapped)?);
-    }
+    let user_info = ctx
+        .database
+        .get_user_by_id(updated.user_id())
+        .await?
+        .ok_or_else(|| AuthError::internal("User not found for updated member"))?;
 
-    let wrapped = serde_json::json!({ "member": updated });
-    Ok(AuthResponse::json(200, &wrapped)?)
+    let response = MemberWrappedResponse {
+        member: MemberResponse::from_member_and_user(&updated, &user_info),
+    };
+    Ok(AuthResponse::json(200, &response)?)
 }
 
 /// Helper function to parse query parameters into a struct

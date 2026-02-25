@@ -110,9 +110,9 @@ impl AuthError {
 
         crate::types::AuthResponse::json(
             status,
-            &serde_json::json!({
-                "message": message
-            }),
+            &crate::types::ErrorMessageResponse {
+                message: message.clone(),
+            },
         )
         .unwrap_or_else(|_| crate::types::AuthResponse::text(status, &message))
     }
@@ -225,11 +225,11 @@ pub fn validation_error_response(
         })
         .collect();
 
-    let body = serde_json::json!({
-        "code": "VALIDATION_ERROR",
-        "message": "Validation failed",
-        "errors": field_errors,
-    });
+    let body = crate::types::ValidationErrorResponse {
+        code: "VALIDATION_ERROR",
+        message: "Validation failed",
+        errors: field_errors,
+    };
 
     crate::types::AuthResponse::json(422, &body)
         .unwrap_or_else(|_| crate::types::AuthResponse::text(422, "Validation failed"))
@@ -245,9 +245,9 @@ where
     let value: T = req.body_as_json().map_err(|e| {
         crate::types::AuthResponse::json(
             400,
-            &serde_json::json!({
-                "message": format!("Invalid JSON: {}", e),
-            }),
+            &crate::types::ErrorMessageResponse {
+                message: format!("Invalid JSON: {}", e),
+            },
         )
         .unwrap_or_else(|_| crate::types::AuthResponse::text(400, "Invalid JSON"))
     })?;

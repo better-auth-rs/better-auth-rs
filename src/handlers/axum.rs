@@ -16,7 +16,10 @@ use crate::BetterAuth;
 use better_auth_core::SessionManager;
 #[cfg(feature = "axum")]
 use better_auth_core::entity::AuthSession as AuthSessionTrait;
-use better_auth_core::{AuthError, AuthRequest, AuthResponse, DatabaseAdapter, HttpMethod};
+use better_auth_core::{
+    AuthError, AuthRequest, AuthResponse, DatabaseAdapter, ErrorMessageResponse,
+    HealthCheckResponse, HttpMethod, OkResponse,
+};
 
 /// Integration trait for Axum web framework
 #[cfg(feature = "axum")]
@@ -81,20 +84,20 @@ impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
 
 #[cfg(feature = "axum")]
 async fn ok_check() -> impl IntoResponse {
-    axum::Json(serde_json::json!({ "ok": true }))
+    axum::Json(OkResponse { ok: true })
 }
 
 #[cfg(feature = "axum")]
 async fn error_check() -> impl IntoResponse {
-    axum::Json(serde_json::json!({ "ok": false }))
+    axum::Json(OkResponse { ok: false })
 }
 
 #[cfg(feature = "axum")]
 async fn health_check() -> impl IntoResponse {
-    axum::Json(serde_json::json!({
-        "status": "ok",
-        "service": "better-auth"
-    }))
+    axum::Json(HealthCheckResponse {
+        status: "ok",
+        service: "better-auth",
+    })
 }
 
 #[cfg(feature = "axum")]
@@ -216,9 +219,7 @@ fn convert_auth_error(err: AuthError) -> Response {
         _ => err.to_string(),
     };
 
-    let body = serde_json::json!({
-        "message": message
-    });
+    let body = ErrorMessageResponse { message };
 
     (status_code, axum::Json(body)).into_response()
 }

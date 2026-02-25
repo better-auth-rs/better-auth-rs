@@ -150,11 +150,11 @@ impl Middleware for RateLimitMiddleware {
             return Ok(Some(
                 AuthResponse::json(
                     429,
-                    &serde_json::json!({
-                        "code": "RATE_LIMIT_EXCEEDED",
-                        "message": "Too many requests",
-                        "retryAfter": retry_after,
-                    }),
+                    &crate::types::RateLimitErrorResponse {
+                        code: "RATE_LIMIT_EXCEEDED",
+                        message: "Too many requests",
+                        retry_after,
+                    },
                 )?
                 .with_header("Retry-After", retry_after.to_string()),
             ));

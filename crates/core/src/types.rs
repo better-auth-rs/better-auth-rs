@@ -501,3 +501,59 @@ pub struct DeleteUserResponse {
     pub success: bool,
     pub message: String,
 }
+
+/// Generic `{ ok: bool }` response used by `/ok` and `/error` endpoints.
+#[derive(Debug, Serialize)]
+pub struct OkResponse {
+    pub ok: bool,
+}
+
+/// Generic `{ status: bool }` response.
+#[derive(Debug, Serialize)]
+pub struct StatusResponse {
+    pub status: bool,
+}
+
+/// `{ status: bool, message: String }` response (e.g. change-email).
+#[derive(Debug, Serialize)]
+pub struct StatusMessageResponse {
+    pub status: bool,
+    pub message: String,
+}
+
+/// Health-check response for `/health`.
+#[derive(Debug, Serialize)]
+pub struct HealthCheckResponse {
+    pub status: &'static str,
+    pub service: &'static str,
+}
+
+/// Error body `{ message: String }`.
+#[derive(Debug, Serialize)]
+pub struct ErrorMessageResponse {
+    pub message: String,
+}
+
+/// Middleware error response `{ code: String, message: String }`.
+#[derive(Debug, Serialize)]
+pub struct CodeMessageResponse {
+    pub code: &'static str,
+    pub message: String,
+}
+
+/// Rate-limit error response with `retryAfter` field.
+#[derive(Debug, Serialize)]
+pub struct RateLimitErrorResponse {
+    pub code: &'static str,
+    pub message: &'static str,
+    #[serde(rename = "retryAfter")]
+    pub retry_after: u64,
+}
+
+/// Validation error response `{ code, message, errors }`.
+#[derive(Debug, Serialize)]
+pub struct ValidationErrorResponse<'a> {
+    pub code: &'static str,
+    pub message: &'static str,
+    pub errors: std::collections::HashMap<&'a str, Vec<String>>,
+}
