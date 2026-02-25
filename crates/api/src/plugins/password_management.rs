@@ -978,6 +978,107 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_change_password_sets_cookie_on_session_revocation() {
+        let plugin = PasswordManagementPlugin::new();
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        let body = serde_json::json!({
+            "currentPassword": "Password123!",
+            "newPassword": "NewPassword123!",
+            "revokeOtherSessions": true
+        });
+
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/change-password",
+            Some(&session.token),
+            Some(body.to_string().into_bytes()),
+        );
+
+        let response = plugin.handle_change_password(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        // Verify Set-Cookie header is present
+        let set_cookie = response.headers.get("Set-Cookie");
+        assert!(
+            set_cookie.is_some(),
+            "Set-Cookie header must be set when revokeOtherSessions is true"
+        );
+
+        let cookie_value = set_cookie.unwrap();
+        assert!(
+            cookie_value.contains(&ctx.config.session.cookie_name),
+            "Cookie must contain the session cookie name"
+        );
+        assert!(
+            cookie_value.contains("Path=/"),
+            "Cookie must contain Path=/"
+        );
+        assert!(
+            cookie_value.contains("Expires="),
+            "Cookie must contain an expiration"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_change_password_no_cookie_without_revocation() {
+        let plugin = PasswordManagementPlugin::new();
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        let body = serde_json::json!({
+            "currentPassword": "Password123!",
+            "newPassword": "NewPassword123!"
+        });
+
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/change-password",
+            Some(&session.token),
+            Some(body.to_string().into_bytes()),
+        );
+
+        let response = plugin.handle_change_password(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        // Verify Set-Cookie header is NOT present when not revoking sessions
+        let set_cookie = response.headers.get("Set-Cookie");
+        assert!(
+            set_cookie.is_none(),
+            "Set-Cookie header must not be set when revokeOtherSessions is not true"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_change_password_revoke_with_boolean() {
+        let plugin = PasswordManagementPlugin::new();
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        // Send revokeOtherSessions as a boolean (as better-auth TS SDK does)
+        let body = serde_json::json!({
+            "currentPassword": "Password123!",
+            "newPassword": "NewPassword123!",
+            "revokeOtherSessions": true
+        });
+
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/change-password",
+            Some(&session.token),
+            Some(body.to_string().into_bytes()),
+        );
+
+        let response = plugin.handle_change_password(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        let body_str = String::from_utf8(response.body).unwrap();
+        let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+        assert!(
+            response_data["token"].is_string(),
+            "New token must be returned when revokeOtherSessions is boolean true"
+        );
+    }
+
+    #[tokio::test]
     async fn test_change_password_wrong_current_password() {
         let plugin = PasswordManagementPlugin::new();
         let (ctx, _user, session) = create_test_context_with_user().await;
