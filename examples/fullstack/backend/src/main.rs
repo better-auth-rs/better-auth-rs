@@ -2,9 +2,10 @@ use axum::{Json, Router, response::IntoResponse, routing::get};
 use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::handlers::axum::{AxumIntegration, CurrentSession, OptionalSession};
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
-use better_auth::{AuthBuilder, AuthConfig};
+use better_auth::{AuthBuilder, AuthConfig, CsrfConfig};
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use axum::http::HeaderName;
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 
 #[tokio::main]
@@ -29,8 +30,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let database = MemoryDatabaseAdapter::new();
 
+    // Allow the frontend origin through the built-in CSRF middleware.
+    let csrf = CsrfConfig::new().trusted_origin("http://localhost:3000");
+
     let auth = Arc::new(
         AuthBuilder::new(config)
+            .csrf(csrf)
             .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
@@ -42,13 +47,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let auth_router = auth.clone().axum_router();
 
-    // CORS: allow the frontend origin (Next.js dev server on port 3000)
+    // CORS: allow the frontend origin (Next.js dev server on port 3000).
+    // When using allow_credentials(true), headers and methods must be listed
+    // explicitly — wildcards are not allowed.
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::list([
             "http://localhost:3000".parse().unwrap(),
         ]))
-        .allow_methods(AllowMethods::any())
-        .allow_headers(AllowHeaders::any())
+        .allow_methods(AllowMethods::list([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::OPTIONS,
+        ]))
+        .allow_headers(AllowHeaders::list([
+            HeaderName::from_static("content-type"),
+            HeaderName::from_static("authorization"),
+            HeaderName::from_static("cookie"),
+        ]))
         .allow_credentials(true);
 
     let app = Router::new()
