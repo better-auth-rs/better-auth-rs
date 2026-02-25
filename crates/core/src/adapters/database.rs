@@ -218,13 +218,16 @@ pub mod sqlx_adapter {
             let now = Utc::now();
 
             let sql = format!(
-                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *",
                 qi(U::table()),
                 qi(U::col_id()),
                 qi(U::col_email()),
                 qi(U::col_name()),
                 qi(U::col_image()),
                 qi(U::col_email_verified()),
+                qi(U::col_username()),
+                qi(U::col_display_username()),
+                qi(U::col_role()),
                 qi(U::col_created_at()),
                 qi(U::col_updated_at()),
                 qi(U::col_metadata()),
@@ -234,7 +237,10 @@ pub mod sqlx_adapter {
                 .bind(&create_user.email)
                 .bind(&create_user.name)
                 .bind(&create_user.image)
-                .bind(false)
+                .bind(create_user.email_verified.unwrap_or(false))
+                .bind(&create_user.username)
+                .bind(&create_user.display_username)
+                .bind(&create_user.role)
                 .bind(now)
                 .bind(now)
                 .bind(sqlx::types::Json(
@@ -313,26 +319,6 @@ pub mod sqlx_adapter {
                 query.push_bind(email_verified);
                 has_updates = true;
             }
-            if let Some(role) = &update.role {
-                query.push(format!(", {} = ", qi(U::col_role())));
-                query.push_bind(role);
-                has_updates = true;
-            }
-            if let Some(banned) = update.banned {
-                query.push(format!(", {} = ", qi(U::col_banned())));
-                query.push_bind(banned);
-                has_updates = true;
-            }
-            if let Some(ban_reason) = &update.ban_reason {
-                query.push(format!(", {} = ", qi(U::col_ban_reason())));
-                query.push_bind(ban_reason);
-                has_updates = true;
-            }
-            if let Some(ban_expires) = update.ban_expires {
-                query.push(format!(", {} = ", qi(U::col_ban_expires())));
-                query.push_bind(ban_expires);
-                has_updates = true;
-            }
             if let Some(username) = &update.username {
                 query.push(format!(", {} = ", qi(U::col_username())));
                 query.push_bind(username);
@@ -342,6 +328,40 @@ pub mod sqlx_adapter {
                 query.push(format!(", {} = ", qi(U::col_display_username())));
                 query.push_bind(display_username);
                 has_updates = true;
+            }
+            if let Some(role) = &update.role {
+                query.push(format!(", {} = ", qi(U::col_role())));
+                query.push_bind(role);
+                has_updates = true;
+            }
+            if let Some(banned) = update.banned {
+                query.push(format!(", {} = ", qi(U::col_banned())));
+                query.push_bind(banned);
+                has_updates = true;
+                // When explicitly unbanning, clear ban_reason and ban_expires
+                if !banned {
+                    query.push(format!(
+                        ", {} = NULL, {} = NULL",
+                        qi(U::col_ban_reason()),
+                        qi(U::col_ban_expires())
+                    ));
+                }
+            }
+            // Only process ban_reason and ban_expires when we are NOT
+            // explicitly unbanning.  When banned == Some(false) the block
+            // above already emits `ban_reason = NULL, ban_expires = NULL`,
+            // so applying these fields again would overwrite the NULLs.
+            if update.banned != Some(false) {
+                if let Some(ban_reason) = &update.ban_reason {
+                    query.push(format!(", {} = ", qi(U::col_ban_reason())));
+                    query.push_bind(ban_reason);
+                    has_updates = true;
+                }
+                if let Some(ban_expires) = update.ban_expires {
+                    query.push(format!(", {} = ", qi(U::col_ban_expires())));
+                    query.push_bind(ban_expires);
+                    has_updates = true;
+                }
             }
             if let Some(two_factor_enabled) = update.two_factor_enabled {
                 query.push(format!(", {} = ", qi(U::col_two_factor_enabled())));
@@ -512,7 +532,7 @@ pub mod sqlx_adapter {
             let now = Utc::now();
 
             let sql = format!(
-                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
                 qi(S::table()),
                 qi(S::col_id()),
                 qi(S::col_user_id()),
@@ -521,6 +541,8 @@ pub mod sqlx_adapter {
                 qi(S::col_created_at()),
                 qi(S::col_ip_address()),
                 qi(S::col_user_agent()),
+                qi(S::col_impersonated_by()),
+                qi(S::col_active_organization_id()),
                 qi(S::col_active()),
             );
             let session = sqlx::query_as::<_, S>(&sql)
@@ -531,6 +553,8 @@ pub mod sqlx_adapter {
                 .bind(now)
                 .bind(&create_session.ip_address)
                 .bind(&create_session.user_agent)
+                .bind(&create_session.impersonated_by)
+                .bind(&create_session.active_organization_id)
                 .bind(true)
                 .fetch_one(&self.pool)
                 .await?;
@@ -763,6 +787,10 @@ pub mod sqlx_adapter {
             if let Some(scope) = &update.scope {
                 query.push(format!(", {} = ", qi(A::col_scope())));
                 query.push_bind(scope);
+            }
+            if let Some(password) = &update.password {
+                query.push(", password = ");
+                query.push_bind(password);
             }
 
             query.push(format!(" WHERE {} = ", qi(A::col_id())));

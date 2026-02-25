@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -53,8 +53,38 @@ struct ChangePasswordRequest {
     #[serde(rename = "currentPassword")]
     #[validate(length(min = 1, message = "Current password is required"))]
     current_password: String,
-    #[serde(rename = "revokeOtherSessions")]
-    revoke_other_sessions: Option<String>,
+    #[serde(
+        default,
+        rename = "revokeOtherSessions",
+        deserialize_with = "deserialize_bool_or_string"
+    )]
+    revoke_other_sessions: Option<bool>,
+}
+
+/// Deserialize a value that can be either a boolean or a string ("true"/"false") into Option<bool>.
+/// This is needed because the better-auth TypeScript SDK sends `revokeOtherSessions` as a boolean,
+/// while some clients may send it as a string.
+fn deserialize_bool_or_string<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value: Option<serde_json::Value> = Option::deserialize(deserializer)?;
+    match value {
+        None => Ok(None),
+        Some(serde_json::Value::Bool(b)) => Ok(Some(b)),
+        Some(serde_json::Value::String(s)) => match s.to_lowercase().as_str() {
+            "true" => Ok(Some(true)),
+            "false" => Ok(Some(false)),
+            _ => Err(serde::de::Error::custom(format!(
+                "invalid value for revokeOtherSessions: {}",
+                s
+            ))),
+        },
+        Some(other) => Err(serde::de::Error::custom(format!(
+            "invalid type for revokeOtherSessions: {}",
+            other
+        ))),
+    }
 }
 
 // Response structures
@@ -354,7 +384,7 @@ impl PasswordManagementPlugin {
         let updated_user = ctx.database.update_user(user.id(), update_user).await?;
 
         // Handle session revocation
-        let new_token = if change_req.revoke_other_sessions.as_deref() == Some("true") {
+        let new_token = if change_req.revoke_other_sessions == Some(true) {
             // Revoke all sessions except current one
             ctx.database.delete_user_sessions(user.id()).await?;
 
@@ -370,11 +400,19 @@ impl PasswordManagementPlugin {
         };
 
         let response = ChangePasswordResponse {
-            token: new_token,
+            token: new_token.clone(),
             user: updated_user,
         };
 
-        Ok(AuthResponse::json(200, &response)?)
+        let auth_response = AuthResponse::json(200, &response)?;
+
+        // Set session cookie if a new session was created
+        if let Some(token) = new_token {
+            let cookie_header = self.create_session_cookie(&token, ctx);
+            Ok(auth_response.with_header("Set-Cookie", cookie_header))
+        } else {
+            Ok(auth_response)
+        }
     }
 
     async fn handle_set_password<DB: DatabaseAdapter>(
@@ -581,6 +619,37 @@ impl PasswordManagementPlugin {
             .map_err(|e| AuthError::PasswordHash(format!("Failed to hash password: {}", e)))?;
 
         Ok(password_hash.to_string())
+    }
+
+    fn create_session_cookie<DB: DatabaseAdapter>(
+        &self,
+        token: &str,
+        ctx: &AuthContext<DB>,
+    ) -> String {
+        let session_config = &ctx.config.session;
+        let secure = if session_config.cookie_secure {
+            "; Secure"
+        } else {
+            ""
+        };
+        let http_only = if session_config.cookie_http_only {
+            "; HttpOnly"
+        } else {
+            ""
+        };
+        let same_site = match session_config.cookie_same_site {
+            better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
+            better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
+            better_auth_core::config::SameSite::None => "; SameSite=None",
+        };
+
+        let expires = chrono::Utc::now() + session_config.expires_in;
+        let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
+
+        format!(
+            "{}={}; Path=/; Expires={}{}{}{}",
+            session_config.cookie_name, token, expires_str, secure, http_only, same_site
+        )
     }
 
     fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
@@ -906,6 +975,107 @@ mod tests {
         let body_str = String::from_utf8(response.body).unwrap();
         let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
         assert!(response_data["token"].is_string()); // New token when revoking sessions
+    }
+
+    #[tokio::test]
+    async fn test_change_password_sets_cookie_on_session_revocation() {
+        let plugin = PasswordManagementPlugin::new();
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        let body = serde_json::json!({
+            "currentPassword": "Password123!",
+            "newPassword": "NewPassword123!",
+            "revokeOtherSessions": true
+        });
+
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/change-password",
+            Some(&session.token),
+            Some(body.to_string().into_bytes()),
+        );
+
+        let response = plugin.handle_change_password(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        // Verify Set-Cookie header is present
+        let set_cookie = response.headers.get("Set-Cookie");
+        assert!(
+            set_cookie.is_some(),
+            "Set-Cookie header must be set when revokeOtherSessions is true"
+        );
+
+        let cookie_value = set_cookie.unwrap();
+        assert!(
+            cookie_value.contains(&ctx.config.session.cookie_name),
+            "Cookie must contain the session cookie name"
+        );
+        assert!(
+            cookie_value.contains("Path=/"),
+            "Cookie must contain Path=/"
+        );
+        assert!(
+            cookie_value.contains("Expires="),
+            "Cookie must contain an expiration"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_change_password_no_cookie_without_revocation() {
+        let plugin = PasswordManagementPlugin::new();
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        let body = serde_json::json!({
+            "currentPassword": "Password123!",
+            "newPassword": "NewPassword123!"
+        });
+
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/change-password",
+            Some(&session.token),
+            Some(body.to_string().into_bytes()),
+        );
+
+        let response = plugin.handle_change_password(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        // Verify Set-Cookie header is NOT present when not revoking sessions
+        let set_cookie = response.headers.get("Set-Cookie");
+        assert!(
+            set_cookie.is_none(),
+            "Set-Cookie header must not be set when revokeOtherSessions is not true"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_change_password_revoke_with_boolean() {
+        let plugin = PasswordManagementPlugin::new();
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        // Send revokeOtherSessions as a boolean (as better-auth TS SDK does)
+        let body = serde_json::json!({
+            "currentPassword": "Password123!",
+            "newPassword": "NewPassword123!",
+            "revokeOtherSessions": true
+        });
+
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/change-password",
+            Some(&session.token),
+            Some(body.to_string().into_bytes()),
+        );
+
+        let response = plugin.handle_change_password(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        let body_str = String::from_utf8(response.body).unwrap();
+        let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+        assert!(
+            response_data["token"].is_string(),
+            "New token must be returned when revokeOtherSessions is boolean true"
+        );
     }
 
     #[tokio::test]

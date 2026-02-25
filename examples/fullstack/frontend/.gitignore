@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+
+# production
+build/
+
+# env files (keep .env.example)
+.env
+.env.local
+.env.production
+
+# misc
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+package-lock.json
