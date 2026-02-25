@@ -371,7 +371,10 @@ async fn test_admin_has_permission_requires_admin() {
     // has-permission returns 200 with {success: false} for non-admins
     // (it checks permissions rather than requiring admin access)
     assert_eq!(status, 200, "non-admin should get 200 with success=false");
-    assert_eq!(_json["success"], false, "non-admin should have success=false");
+    assert_eq!(
+        _json["success"], false,
+        "non-admin should have success=false"
+    );
 }
 
 // ---------------------------------------------------------------------------
