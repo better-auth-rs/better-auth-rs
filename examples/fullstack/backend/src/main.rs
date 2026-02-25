@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use axum::http::HeaderName;
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
+use tower_http::trace::TraceLayer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -14,10 +15,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Starting Better Auth RS backend server...");
 
-    // Create auth configuration.
-    // The base_url should match the URL where the backend is served.
-    // The routes are nested under /api/auth to match better-auth's default basePath.
-    //
+    // ── Configuration from environment variables ──────────────────────────
+    // All values have sensible defaults for local development.
+    let backend_url =
+        std::env::var("BACKEND_URL").unwrap_or_else(|_| "http://localhost:3001".to_string());
+    let frontend_url =
+        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:3001".to_string());
+
     // Load the secret from the AUTH_SECRET environment variable.
     // For this example you can set any string that is at least 32 characters.
     let secret = std::env::var("AUTH_SECRET").unwrap_or_else(|_| {
@@ -25,13 +30,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "x".repeat(32)
     });
     let config = AuthConfig::new(secret)
-        .base_url("http://localhost:3001")
+        .base_url(&backend_url)
         .password_min_length(8);
 
     let database = MemoryDatabaseAdapter::new();
 
     // Allow the frontend origin through the built-in CSRF middleware.
-    let csrf = CsrfConfig::new().trusted_origin("http://localhost:3000");
+    let csrf = CsrfConfig::new().trusted_origin(&frontend_url);
 
     let auth = Arc::new(
         AuthBuilder::new(config)
@@ -47,12 +52,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let auth_router = auth.clone().axum_router();
 
-    // CORS: allow the frontend origin (Next.js dev server on port 3000).
+    // CORS: allow the frontend origin.
     // When using allow_credentials(true), headers and methods must be listed
     // explicitly — wildcards are not allowed.
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::list([
-            "http://localhost:3000".parse().unwrap(),
+            frontend_url.parse().unwrap(),
         ]))
         .allow_methods(AllowMethods::list([
             axum::http::Method::GET,
@@ -72,9 +77,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Mount all auth routes under /api/auth to match better-auth's default basePath.
         .nest("/api/auth", auth_router)
         .layer(cors)
+        // Log every request/response pair via tracing.
+        .layer(TraceLayer::new_for_http())
         .with_state(auth);
 
-    println!("Server listening on http://localhost:3001");
+    println!("Server listening on {backend_url}");
     println!();
     println!("Auth endpoints (under /api/auth):");
     println!("  POST /api/auth/sign-up/email    - Sign up");
@@ -87,7 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  GET  /api/me                    - Current user (protected)");
     println!("  GET  /api/public                - Public endpoint");
 
-    let listener = TcpListener::bind("0.0.0.0:3001").await?;
+    let listener = TcpListener::bind(&bind_addr).await?;
     axum::serve(listener, app).await?;
 
     Ok(())

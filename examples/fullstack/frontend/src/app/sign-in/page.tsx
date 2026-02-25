@@ -1,16 +1,24 @@
 "use client";
 
-import { useState } from "react";
-import { signIn } from "@/lib/auth-client";
+import { useState, useEffect } from "react";
+import { signIn, useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function SignInPage() {
   const router = useRouter();
+  const { data: session, isPending } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Redirect already-authenticated users to the dashboard.
+  useEffect(() => {
+    if (!isPending && session) {
+      router.push("/dashboard");
+    }
+  }, [isPending, session, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
