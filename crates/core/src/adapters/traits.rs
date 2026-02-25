@@ -9,7 +9,7 @@ use crate::error::AuthResult;
 use crate::types::{
     CreateAccount, CreateApiKey, CreateInvitation, CreateMember, CreateOrganization, CreatePasskey,
     CreateSession, CreateTwoFactor, CreateUser, CreateVerification, InvitationStatus,
-    UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser,
+    ListUsersParams, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser,
 };
 
 /// User persistence operations.
@@ -23,6 +23,9 @@ pub trait UserOps: Send + Sync + 'static {
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<Self::User>>;
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<Self::User>;
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
+    /// List users with optional filtering, sorting, and pagination.
+    /// Returns `(users, total_count)`.
+    async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<Self::User>, usize)>;
 }
 
 /// Session persistence operations.

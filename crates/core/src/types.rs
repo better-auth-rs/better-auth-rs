@@ -205,7 +205,7 @@ pub struct CreateUser {
 }
 
 /// User update data
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UpdateUser {
     pub email: Option<String>,
     pub name: Option<String>,
@@ -556,4 +556,19 @@ pub struct ValidationErrorResponse<'a> {
     pub code: &'static str,
     pub message: &'static str,
     pub errors: std::collections::HashMap<&'a str, Vec<String>>,
+}
+
+/// Parameters for listing users (admin endpoint).
+#[derive(Debug, Clone, Default)]
+pub struct ListUsersParams {
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+    pub search_field: Option<String>,
+    pub search_value: Option<String>,
+    pub search_operator: Option<String>,
+    pub sort_by: Option<String>,
+    pub sort_direction: Option<String>,
+    pub filter_field: Option<String>,
+    pub filter_value: Option<String>,
+    pub filter_operator: Option<String>,
 }
