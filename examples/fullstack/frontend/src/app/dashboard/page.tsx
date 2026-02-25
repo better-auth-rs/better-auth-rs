@@ -104,6 +104,12 @@ export default function DashboardPage() {
           </div>
 
           <div className="stack">
+            <button className="secondary" onClick={() => router.push("/settings")}>
+              Settings
+            </button>
+            <button className="secondary" onClick={() => router.push("/sessions")}>
+              Active Sessions
+            </button>
             <button className="danger" onClick={handleSignOut}>
               Sign Out
             </button>

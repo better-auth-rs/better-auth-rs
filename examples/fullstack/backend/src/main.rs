@@ -1,7 +1,7 @@
 use axum::{Json, Router, response::IntoResponse, routing::get};
 use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::handlers::axum::{AxumIntegration, CurrentSession, OptionalSession};
-use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
+use better_auth::plugins::{EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin};
 use better_auth::{AuthBuilder, AuthConfig, CsrfConfig};
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -44,6 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
+            .plugin(PasswordManagementPlugin::new())
             .build()
             .await?,
     );
@@ -88,6 +89,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  POST /api/auth/sign-in/email    - Sign in");
     println!("  GET  /api/auth/get-session      - Get session");
     println!("  POST /api/auth/sign-out         - Sign out");
+    println!("  GET  /api/auth/list-sessions    - List all sessions");
+    println!("  POST /api/auth/revoke-session   - Revoke a session");
+    println!("  POST /api/auth/revoke-other-sessions - Revoke other sessions");
+    println!("  POST /api/auth/change-password  - Change password");
     println!("  GET  /api/auth/ok               - Health check");
     println!();
     println!("App endpoints:");

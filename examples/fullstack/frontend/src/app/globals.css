@@ -137,6 +137,16 @@ button.danger {
   margin-bottom: 1rem;
 }
 
+.success {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #86efac;
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.8125rem;
+  margin-bottom: 1rem;
+}
+
 .form-footer {
   text-align: center;
   margin-top: 1.25rem;
