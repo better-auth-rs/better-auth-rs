@@ -50,6 +50,7 @@ async fn test_route_coverage_analysis() {
         ("/error", "get"),
         ("/reference/openapi.json", "get"),
         ("/update-user", "post"),
+        ("/delete-user", "post"),
         ("/delete-user", "delete"),
         ("/change-email", "post"),
         ("/delete-user/callback", "get"),

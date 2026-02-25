@@ -333,11 +333,11 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
         match (req.method(), req.path()) {
             (HttpMethod::Get, "/ok") => Ok(Some(AuthResponse::json(
                 200,
-                &serde_json::json!({ "status": true }),
+                &serde_json::json!({ "ok": true }),
             )?)),
             (HttpMethod::Get, "/error") => Ok(Some(AuthResponse::json(
                 200,
-                &serde_json::json!({ "status": false }),
+                &serde_json::json!({ "ok": false }),
             )?)),
             (HttpMethod::Get, "/reference/openapi.json") => {
                 let spec = self.openapi_spec();
