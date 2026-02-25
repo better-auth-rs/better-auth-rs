@@ -32,12 +32,30 @@ pub struct EndpointRateLimit {
 
 impl Default for RateLimitConfig {
     fn default() -> Self {
+        let mut per_endpoint = HashMap::new();
+
+        // Stricter limits for sign-in endpoints (10 req/min)
+        let sign_in_limit = EndpointRateLimit {
+            window: Duration::from_secs(60),
+            max_requests: 10,
+        };
+        per_endpoint.insert("/sign-in/email".to_string(), sign_in_limit.clone());
+        per_endpoint.insert("/sign-in/username".to_string(), sign_in_limit);
+
+        // Stricter limits for sign-up and forget-password (5 req/min)
+        let strict_limit = EndpointRateLimit {
+            window: Duration::from_secs(60),
+            max_requests: 5,
+        };
+        per_endpoint.insert("/sign-up/email".to_string(), strict_limit.clone());
+        per_endpoint.insert("/forget-password".to_string(), strict_limit);
+
         Self {
             default: EndpointRateLimit {
                 window: Duration::from_secs(60),
                 max_requests: 100,
             },
-            per_endpoint: HashMap::new(),
+            per_endpoint,
             enabled: true,
         }
     }

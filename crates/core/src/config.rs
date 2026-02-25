@@ -114,7 +114,7 @@ impl Default for SessionConfig {
         Self {
             expires_in: Duration::hours(24 * 7), // 7 days
             update_age: true,
-            cookie_name: "better-auth.session-token".to_string(),
+            cookie_name: "better-auth.session_token".to_string(),
             cookie_secure: true,
             cookie_http_only: true,
             cookie_same_site: SameSite::Lax,

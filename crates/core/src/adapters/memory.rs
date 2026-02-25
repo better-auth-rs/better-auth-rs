@@ -307,7 +307,8 @@ where
         let mut sessions = self.sessions.lock().unwrap();
 
         let id = Uuid::new_v4().to_string();
-        let token = format!("session_{}", Uuid::new_v4());
+        let random_bytes: [u8; 32] = rand::random();
+        let token: String = random_bytes.iter().map(|b| format!("{:02x}", b)).collect();
         let now = Utc::now();
         let session = S::from_create(id, token.clone(), &create_session, now);
 

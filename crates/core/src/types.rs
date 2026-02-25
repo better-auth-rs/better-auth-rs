@@ -247,7 +247,7 @@ pub struct CreateAccount {
     pub password: Option<String>,
 }
 
-/// Account update data (for refreshing OAuth tokens)
+/// Account update data (for refreshing OAuth tokens or updating passwords)
 #[derive(Debug, Clone, Default)]
 pub struct UpdateAccount {
     pub access_token: Option<String>,
@@ -256,6 +256,7 @@ pub struct UpdateAccount {
     pub access_token_expires_at: Option<DateTime<Utc>>,
     pub refresh_token_expires_at: Option<DateTime<Utc>>,
     pub scope: Option<String>,
+    pub password: Option<String>,
 }
 
 /// Two-factor authentication creation data

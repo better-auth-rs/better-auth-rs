@@ -30,11 +30,11 @@ let auth = BetterAuth::new(config)
 Session tokens can be sent via **Bearer header** or **cookie**:
 
 ```http
-Authorization: Bearer session_abc123...
+Authorization: Bearer a1b2c3d4e5f6...
 ```
 
 ```http
-Cookie: better-auth.session-token=session_abc123...
+Cookie: better-auth.session_token=a1b2c3d4e5f6...
 ```
 
 The cookie name is configurable via `SessionConfig::cookie_name`.
@@ -52,7 +52,7 @@ Authorization: Bearer <token>
 {
   "session": {
     "id": "uuid",
-    "token": "session_abc123...",
+    "token": "a1b2c3d4e5f6...",
     "userId": "uuid",
     "expiresAt": "2024-01-08T00:00:00Z",
     "createdAt": "2024-01-01T00:00:00Z",
@@ -97,8 +97,8 @@ Returns all active sessions for the authenticated user:
 ```json
 {
   "sessions": [
-    { "id": "uuid", "token": "session_...", "createdAt": "...", ... },
-    { "id": "uuid", "token": "session_...", "createdAt": "...", ... }
+    { "id": "uuid", "token": "a1b2c3...", "createdAt": "...", ... },
+    { "id": "uuid", "token": "a1b2c3...", "createdAt": "...", ... }
   ]
 }
 ```
@@ -113,7 +113,7 @@ Content-Type: application/json
 
 ```json
 {
-  "token": "session_to_revoke..."
+  "token": "a1b2c3d4e5f6..."
 }
 ```
 

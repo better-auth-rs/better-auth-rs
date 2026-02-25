@@ -12,7 +12,11 @@ pub struct Model {
     pub slug: String,
     pub logo: Option<String>,
     pub metadata: Option<Json>,
+    #[sea_orm(column_name = "createdAt")]
+    #[auth(column = "createdAt")]
     pub created_at: DateTimeUtc,
+    #[sea_orm(column_name = "updatedAt")]
+    #[auth(column = "updatedAt")]
     pub updated_at: DateTimeUtc,
     // --- Application-specific columns ---
     pub billing_email: Option<String>,

@@ -1,4 +1,8 @@
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
 use chrono::Utc;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 use std::sync::Arc;
 
 use crate::adapters::DatabaseAdapter;
@@ -6,6 +10,8 @@ use crate::config::AuthConfig;
 use crate::entity::{AuthSession, AuthUser};
 use crate::error::AuthResult;
 use crate::types::CreateSession;
+
+type HmacSha256 = Hmac<Sha256>;
 
 /// Session manager handles session creation, validation, and cleanup
 pub struct SessionManager<DB: DatabaseAdapter> {
@@ -139,24 +145,41 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
         Ok(count)
     }
 
-    /// Validate session token format
+    /// Validate session token format (64-character hex string)
     pub fn validate_token_format(&self, token: &str) -> bool {
-        token.starts_with("session_") && token.len() > 40
+        token.len() == 64 && token.chars().all(|c| c.is_ascii_hexdigit())
+    }
+
+    /// Sign a session token with HMAC-SHA256 using the config secret.
+    ///
+    /// Returns the signed value in the format `token.base64url_signature`.
+    pub fn sign_token(&self, token: &str) -> String {
+        let signature = compute_hmac_signature(token, &self.config.secret);
+        format!("{}.{}", token, signature)
+    }
+
+    /// Verify an HMAC-signed cookie value and extract the raw token.
+    ///
+    /// Expects the format `token.base64url_signature`. Returns `Some(token)` if
+    /// the signature is valid, `None` otherwise.
+    pub fn verify_signed_token(&self, signed_value: &str) -> Option<String> {
+        verify_and_extract_token(signed_value, &self.config.secret)
     }
 
     /// Extract session token from a request.
     ///
-    /// Tries Bearer token from Authorization header first, then falls back
-    /// to parsing the configured cookie from the Cookie header.
+    /// Tries Bearer token from Authorization header first (no HMAC verification),
+    /// then falls back to parsing the configured cookie from the Cookie header
+    /// (with HMAC signature verification).
     pub fn extract_session_token(&self, req: &crate::types::AuthRequest) -> Option<String> {
-        // Try Bearer token first
+        // Try Bearer token first (no HMAC signing for API clients)
         if let Some(auth_header) = req.headers.get("authorization")
             && let Some(token) = auth_header.strip_prefix("Bearer ")
         {
             return Some(token.to_string());
         }
 
-        // Fall back to cookie
+        // Fall back to cookie (with HMAC verification)
         if let Some(cookie_header) = req.headers.get("cookie") {
             let cookie_name = &self.config.session.cookie_name;
             for part in cookie_header.split(';') {
@@ -164,11 +187,54 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
                 if let Some(value) = part.strip_prefix(&format!("{}=", cookie_name))
                     && !value.is_empty()
                 {
-                    return Some(value.to_string());
+                    // Verify HMAC signature and extract raw token
+                    return self.verify_signed_token(value);
                 }
             }
         }
 
         None
     }
+}
+
+/// Compute HMAC-SHA256 signature for a token, returning base64url-encoded signature.
+fn compute_hmac_signature(token: &str, secret: &str) -> String {
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+    mac.update(token.as_bytes());
+    let result = mac.finalize();
+    URL_SAFE_NO_PAD.encode(result.into_bytes())
+}
+
+/// Verify an HMAC-signed value and extract the raw token.
+///
+/// This is a standalone function that can be used without a SessionManager.
+fn verify_and_extract_token(signed_value: &str, secret: &str) -> Option<String> {
+    let (token, signature) = signed_value.rsplit_once('.')?;
+    if token.is_empty() || signature.is_empty() {
+        return None;
+    }
+
+    let expected_signature = compute_hmac_signature(token, secret);
+
+    // Constant-time comparison to prevent timing attacks
+    if signature.len() != expected_signature.len() {
+        return None;
+    }
+    let matches = signature
+        .as_bytes()
+        .iter()
+        .zip(expected_signature.as_bytes())
+        .fold(0u8, |acc, (a, b)| acc | (a ^ b));
+    if matches != 0 {
+        return None;
+    }
+
+    Some(token.to_string())
+}
+
+/// Sign a session token with HMAC-SHA256 (standalone function for use outside SessionManager).
+pub fn sign_session_token(token: &str, secret: &str) -> String {
+    let signature = compute_hmac_signature(token, secret);
+    format!("{}.{}", token, signature)
 }

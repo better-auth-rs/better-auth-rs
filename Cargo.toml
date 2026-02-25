@@ -61,6 +61,7 @@ argon2 = "0.5"
 rand = "0.8"
 base64 = "0.22"
 jsonwebtoken = "9"
+hmac = "0.12"
 sha2 = "0.10"
 totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 

@@ -25,6 +25,7 @@ struct FromRowField {
     ty: syn::Type,
     is_json: bool,
     default_expr: Option<TokenStream2>,
+    column_name: Option<String>,
 }
 
 /// Parse fields for FromRow generation, extracting type info and relevant attributes.
@@ -56,6 +57,7 @@ fn parse_from_row_fields(input: &DeriveInput) -> Result<Vec<FromRowField>, Token
             let ty = f.ty.clone();
             let mut is_json = false;
             let mut default_expr = None;
+            let mut column_name = None;
 
             for attr in &f.attrs {
                 if !attr.path().is_ident("auth") {
@@ -74,6 +76,10 @@ fn parse_from_row_fields(input: &DeriveInput) -> Result<Vec<FromRowField>, Token
                             )
                         })?;
                         default_expr = Some(quote! { #parsed });
+                    } else if meta.path.is_ident("column") {
+                        let value = meta.value()?;
+                        let lit: syn::LitStr = value.parse()?;
+                        column_name = Some(lit.value());
                     }
                     Ok(())
                 });
@@ -84,6 +90,7 @@ fn parse_from_row_fields(input: &DeriveInput) -> Result<Vec<FromRowField>, Token
                 ty,
                 is_json,
                 default_expr,
+                column_name,
             })
         })
         .collect())
@@ -154,7 +161,10 @@ fn is_json_type_name(name: &str) -> bool {
 /// 4. Everything else -> simple `try_get`
 fn gen_from_row_field_expr(field: &FromRowField) -> TokenStream2 {
     let ident = &field.ident;
-    let col_name = ident.to_string();
+    let col_name = field
+        .column_name
+        .clone()
+        .unwrap_or_else(|| ident.to_string());
 
     // Unwrap Option<T> to inspect the inner type
     let (is_option, inner_ty) = match extract_option_inner(&field.ty) {
