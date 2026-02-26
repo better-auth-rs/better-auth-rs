@@ -14,6 +14,10 @@ use better_auth_core::{AuthSession, AuthUser, AuthVerification, DatabaseAdapter}
 
 use super::email_password::PasswordHasher;
 
+/// Type alias for the async password-reset callback to keep Clippy happy.
+pub type OnPasswordResetCallback =
+    dyn Fn(serde_json::Value) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync;
+
 /// Trait for sending password reset emails.
 ///
 /// When set in `PasswordManagementConfig`, this overrides the default
@@ -45,8 +49,7 @@ pub struct PasswordManagementConfig {
     pub send_reset_password: Option<Arc<dyn SendResetPassword>>,
     /// Callback invoked after a password is successfully reset.
     /// The user is provided as a serialized `serde_json::Value`.
-    pub on_password_reset:
-        Option<Arc<dyn Fn(serde_json::Value) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>>,
+    pub on_password_reset: Option<Arc<OnPasswordResetCallback>>,
     /// Custom password hasher. When `None`, the default Argon2 hasher is used.
     pub password_hasher: Option<Arc<dyn PasswordHasher>>,
 }
@@ -57,10 +60,22 @@ impl std::fmt::Debug for PasswordManagementConfig {
             .field("reset_token_expiry_hours", &self.reset_token_expiry_hours)
             .field("require_current_password", &self.require_current_password)
             .field("send_email_notifications", &self.send_email_notifications)
-            .field("revoke_sessions_on_password_reset", &self.revoke_sessions_on_password_reset)
-            .field("send_reset_password", &self.send_reset_password.as_ref().map(|_| "custom"))
-            .field("on_password_reset", &self.on_password_reset.as_ref().map(|_| "custom"))
-            .field("password_hasher", &self.password_hasher.as_ref().map(|_| "custom"))
+            .field(
+                "revoke_sessions_on_password_reset",
+                &self.revoke_sessions_on_password_reset,
+            )
+            .field(
+                "send_reset_password",
+                &self.send_reset_password.as_ref().map(|_| "custom"),
+            )
+            .field(
+                "on_password_reset",
+                &self.on_password_reset.as_ref().map(|_| "custom"),
+            )
+            .field(
+                "password_hasher",
+                &self.password_hasher.as_ref().map(|_| "custom"),
+            )
             .finish()
     }
 }
@@ -184,14 +199,7 @@ impl PasswordManagementPlugin {
         self
     }
 
-    pub fn on_password_reset(
-        mut self,
-        callback: Arc<
-            dyn Fn(serde_json::Value) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>>
-                + Send
-                + Sync,
-        >,
-    ) -> Self {
+    pub fn on_password_reset(mut self, callback: Arc<OnPasswordResetCallback>) -> Self {
         self.config.on_password_reset = Some(callback);
         self
     }
@@ -751,16 +759,13 @@ impl PasswordManagementPlugin {
 
     async fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
         if let Some(hasher) = &self.config.password_hasher {
-            return hasher
-                .verify(hash, password)
-                .await
-                .and_then(|valid| {
-                    if valid {
-                        Ok(())
-                    } else {
-                        Err(AuthError::InvalidCredentials)
-                    }
-                });
+            return hasher.verify(hash, password).await.and_then(|valid| {
+                if valid {
+                    Ok(())
+                } else {
+                    Err(AuthError::InvalidCredentials)
+                }
+            });
         }
         use argon2::password_hash::PasswordHash;
         use argon2::{Argon2, PasswordVerifier};
@@ -1371,7 +1376,12 @@ mod tests {
         assert!(plugin.verify_password(password, &hash).await.is_ok());
 
         // Should fail with wrong password
-        assert!(plugin.verify_password("WrongPassword123!", &hash).await.is_err());
+        assert!(
+            plugin
+                .verify_password("WrongPassword123!", &hash)
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
