@@ -136,6 +136,8 @@ pub fn post_with_auth(path: &str, token: &str) -> AuthRequest {
     req.body = Some(b"{}".to_vec());
     req.headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
+    req.headers
+        .insert("origin".to_string(), "http://localhost:3000".to_string());
     req
 }
 
