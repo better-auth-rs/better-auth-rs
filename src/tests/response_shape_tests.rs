@@ -801,6 +801,154 @@ async fn test_unlink_account_response_shape() {
     }
 }
 
+/// Verify that `enableSessionForAPIKeys` actually injects a session when a
+/// request carries an `x-api-key` header. This is the integration test that
+/// proves the `before_request` hook is wired into the request pipeline.
+#[tokio::test]
+async fn test_enable_session_for_api_keys_injects_session() {
+    // Build an auth instance with enableSessionForAPIKeys turned on
+    let auth = AuthBuilder::new(test_config())
+        .database(MemoryDatabaseAdapter::new())
+        .plugin(EmailPasswordPlugin::new().enable_signup(true))
+        .plugin(SessionManagementPlugin::new())
+        .plugin(ApiKeyPlugin::new().enable_session_for_api_keys(true))
+        .build()
+        .await
+        .expect("Failed to create auth with session-for-api-keys");
+
+    // 1. Sign up a user and get a session token
+    let (token, _) = signup_user(
+        &auth,
+        "apikey_session@example.com",
+        "password123",
+        "AK Session",
+    )
+    .await;
+
+    // 2. Create an API key for this user
+    let create_req = post_json_with_auth(
+        "/api-key/create",
+        serde_json::json!({"name": "session-emulation-key"}),
+        &token,
+    );
+    let create_resp = auth.handle_request(create_req).await.unwrap();
+    assert_eq!(create_resp.status, 200);
+    let create_json: serde_json::Value = serde_json::from_slice(&create_resp.body).unwrap();
+    let raw_key = create_json["key"]
+        .as_str()
+        .expect("create response must contain raw key")
+        .to_string();
+
+    // 3. Call a protected endpoint (/update-user) using ONLY the x-api-key header
+    //    (no Bearer token). If before_request is wired correctly, the API key plugin
+    //    will inject a real session and the request will succeed.
+    let mut req = AuthRequest::new(HttpMethod::Post, "/update-user");
+    req.body = Some(
+        serde_json::json!({"name": "Updated Via API Key"})
+            .to_string()
+            .into_bytes(),
+    );
+    req.headers
+        .insert("content-type".to_string(), "application/json".to_string());
+    req.headers
+        .insert("origin".to_string(), "http://localhost:3000".to_string());
+    req.headers.insert("x-api-key".to_string(), raw_key.clone());
+    // Deliberately NO authorization header
+
+    let resp = auth
+        .handle_request(req)
+        .await
+        .expect("update-user via api-key failed");
+
+    assert_eq!(
+        resp.status, 200,
+        "update-user via API key should succeed (session injected by before_request hook)"
+    );
+
+    let json: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    assert_eq!(
+        json["status"], true,
+        "update-user should return status: true"
+    );
+
+    // 4. Also verify /get-session with the API key returns a virtual session
+    //    (the before_request hook intercepts this path and returns a Respond action)
+    let mut get_session_req = AuthRequest::new(HttpMethod::Get, "/get-session");
+    get_session_req
+        .headers
+        .insert("origin".to_string(), "http://localhost:3000".to_string());
+    get_session_req
+        .headers
+        .insert("x-api-key".to_string(), raw_key);
+
+    let get_session_resp = auth
+        .handle_request(get_session_req)
+        .await
+        .expect("get-session via api-key failed");
+
+    assert_eq!(get_session_resp.status, 200);
+    let gs_json: serde_json::Value = serde_json::from_slice(&get_session_resp.body).unwrap();
+    assert!(
+        gs_json["user"].is_object(),
+        "get-session via API key must return user object"
+    );
+    assert_eq!(
+        gs_json["user"]["email"], "apikey_session@example.com",
+        "get-session must return the correct user"
+    );
+}
+
+/// Verify that without `enableSessionForAPIKeys`, the x-api-key header is ignored
+/// and protected endpoints return unauthenticated.
+#[tokio::test]
+async fn test_api_key_without_session_emulation_does_not_inject() {
+    // Default ApiKeyPlugin has enable_session_for_api_keys = false
+    let auth = create_test_auth().await;
+
+    let (token, _) = signup_user(
+        &auth,
+        "apikey_nosess@example.com",
+        "password123",
+        "AK NoSess",
+    )
+    .await;
+
+    // Create an API key
+    let create_req = post_json_with_auth(
+        "/api-key/create",
+        serde_json::json!({"name": "no-session-key"}),
+        &token,
+    );
+    let create_resp = auth.handle_request(create_req).await.unwrap();
+    let create_json: serde_json::Value = serde_json::from_slice(&create_resp.body).unwrap();
+    let raw_key = create_json["key"].as_str().unwrap();
+
+    // Try to call a protected endpoint with only x-api-key (no Bearer)
+    let mut req = AuthRequest::new(HttpMethod::Post, "/update-user");
+    req.body = Some(
+        serde_json::json!({"name": "Should Fail"})
+            .to_string()
+            .into_bytes(),
+    );
+    req.headers
+        .insert("content-type".to_string(), "application/json".to_string());
+    req.headers
+        .insert("origin".to_string(), "http://localhost:3000".to_string());
+    req.headers
+        .insert("x-api-key".to_string(), raw_key.to_string());
+
+    let resp = auth
+        .handle_request(req)
+        .await
+        .expect("request should not panic");
+
+    // Should fail because session emulation is disabled
+    assert_eq!(
+        resp.status, 401,
+        "without enableSessionForAPIKeys, api key should NOT inject a session"
+    );
+}
+
 /// Spec: POST /revoke-session => { status: bool }
 #[tokio::test]
 async fn test_revoke_session_response_shape() {

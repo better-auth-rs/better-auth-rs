@@ -656,7 +656,11 @@ impl ApiKeyPlugin {
             .unwrap_or("");
         let full_key = format!("{}{}", prefix, raw);
 
-        let hash = Self::hash_key(&full_key);
+        let hash = if self.config.disable_key_hashing {
+            full_key.clone()
+        } else {
+            Self::hash_key(&full_key)
+        };
 
         (full_key, hash, start)
     }
@@ -1189,9 +1193,11 @@ impl ApiKeyPlugin {
 
     async fn handle_delete_all_expired<DB: DatabaseAdapter>(
         &self,
-        _req: &AuthRequest,
+        req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
+        // Require authentication to prevent unauthenticated mass-deletion
+        let (_user, _session) = Self::get_authenticated_user(req, ctx).await?;
         let count = ctx.database.delete_expired_api_keys().await?;
         Ok(AuthResponse::json(
             200,
@@ -1865,7 +1871,7 @@ mod tests {
         let delete_req = create_auth_request(
             HttpMethod::Post,
             "/api-key/delete-all-expired-api-keys",
-            None,
+            Some(&session.token),
             None,
             None,
         );
@@ -2059,12 +2065,12 @@ mod tests {
     #[tokio::test]
     async fn test_on_request_dispatches_delete_all_expired() {
         let plugin = ApiKeyPlugin::new();
-        let (ctx, _user, _session) = create_test_context_with_user().await;
+        let (ctx, _user, session) = create_test_context_with_user().await;
 
         let req = create_auth_request(
             HttpMethod::Post,
             "/api-key/delete-all-expired-api-keys",
-            None,
+            Some(&session.token),
             None,
             None,
         );

@@ -4,9 +4,9 @@ use serde::Deserialize;
 
 use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-    DatabaseAdapter, DatabaseHooks, DeleteUserResponse, EmailProvider, HttpMethod, OkResponse,
-    OpenApiBuilder, OpenApiSpec, SessionManager, StatusMessageResponse, StatusResponse, UpdateUser,
-    UpdateUserRequest,
+    BeforeRequestAction, DatabaseAdapter, DatabaseHooks, DeleteUserResponse, EmailProvider,
+    HttpMethod, OkResponse, OpenApiBuilder, OpenApiSpec, SessionManager, StatusMessageResponse,
+    StatusResponse, UpdateUser, UpdateUserRequest,
     entity::{AuthAccount, AuthSession, AuthUser, AuthVerification},
     middleware::{
         self, BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig,
@@ -235,8 +235,8 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// Errors from plugins and core handlers are automatically converted
     /// into standardized JSON responses via [`AuthError::into_response`],
     /// producing `{ "message": "..." }` with the appropriate HTTP status code.
-    pub async fn handle_request(&self, req: AuthRequest) -> AuthResult<AuthResponse> {
-        match self.handle_request_inner(&req).await {
+    pub async fn handle_request(&self, mut req: AuthRequest) -> AuthResult<AuthResponse> {
+        match self.handle_request_inner(&mut req).await {
             Ok(response) => {
                 // Run after-request middleware chain
                 middleware::run_after(&self.middlewares, &req, response).await
@@ -250,10 +250,44 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     }
 
     /// Inner request handler that may return errors.
-    async fn handle_request_inner(&self, req: &AuthRequest) -> AuthResult<AuthResponse> {
+    async fn handle_request_inner(&self, req: &mut AuthRequest) -> AuthResult<AuthResponse> {
         // Run before-request middleware chain
         if let Some(response) = middleware::run_before(&self.middlewares, req).await? {
             return Ok(response);
+        }
+
+        // Run plugin before_request hooks (e.g. API-key → session emulation)
+        for plugin in &self.plugins {
+            if let Some(action) = plugin.before_request(req, &self.context).await? {
+                match action {
+                    BeforeRequestAction::Respond(response) => {
+                        return Ok(response);
+                    }
+                    BeforeRequestAction::InjectSession {
+                        user_id,
+                        session_token,
+                    } => {
+                        // Create a real session in the database so downstream
+                        // handlers (extract_current_user, etc.) can look it up.
+                        let user = self
+                            .database
+                            .get_user_by_id(&user_id)
+                            .await?
+                            .ok_or(AuthError::UserNotFound)?;
+                        let session = self
+                            .session_manager
+                            .create_session(&user, None, None)
+                            .await?;
+                        // Inject the real session token as a Bearer header so
+                        // extract_session_token picks it up.
+                        req.headers.insert(
+                            "authorization".to_string(),
+                            format!("Bearer {}", session.token()),
+                        );
+                        let _ = session_token; // original key, not needed further
+                    }
+                }
+            }
         }
 
         // Handle core endpoints first
