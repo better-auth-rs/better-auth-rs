@@ -8,6 +8,18 @@ use crate::email::EmailProvider;
 use crate::error::{AuthError, AuthResult};
 use crate::types::{AuthRequest, AuthResponse, HttpMethod};
 
+/// Action returned by [`AuthPlugin::before_request`].
+#[derive(Debug)]
+pub enum BeforeRequestAction {
+    /// Short-circuit with this response (e.g. return session JSON).
+    Respond(AuthResponse),
+    /// Inject a virtual session so downstream handlers see it as authenticated.
+    InjectSession {
+        user_id: String,
+        session_token: String,
+    },
+}
+
 /// Plugin trait that all authentication plugins must implement.
 ///
 /// Generic over `DB` so that lifecycle hooks receive the adapter's concrete
@@ -24,6 +36,20 @@ pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
     async fn on_init(&self, ctx: &mut AuthContext<DB>) -> AuthResult<()> {
         let _ = ctx;
         Ok(())
+    }
+
+    /// Called before route matching for every incoming request.
+    ///
+    /// Return `Some(BeforeRequestAction::Respond(..))` to short-circuit with a
+    /// response, `Some(BeforeRequestAction::InjectSession { .. })` to attach a
+    /// virtual session (e.g. API-key → session emulation), or `None` to let the
+    /// request continue to normal route matching.
+    async fn before_request(
+        &self,
+        _req: &AuthRequest,
+        _ctx: &AuthContext<DB>,
+    ) -> AuthResult<Option<BeforeRequestAction>> {
+        Ok(None)
     }
 
     /// Called for each request - return Some(response) to handle, None to pass through

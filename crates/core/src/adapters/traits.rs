@@ -194,6 +194,8 @@ pub trait ApiKeyOps: Send + Sync + 'static {
     async fn list_api_keys_by_user(&self, user_id: &str) -> AuthResult<Vec<Self::ApiKey>>;
     async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<Self::ApiKey>;
     async fn delete_api_key(&self, id: &str) -> AuthResult<()>;
+    /// Delete all API keys whose `expires_at` is in the past. Returns the count of deleted keys.
+    async fn delete_expired_api_keys(&self) -> AuthResult<usize>;
 }
 
 /// Passkey persistence operations.

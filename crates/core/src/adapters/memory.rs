@@ -947,6 +947,21 @@ where
         api_keys.remove(id);
         Ok(())
     }
+
+    async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
+        let mut api_keys = self.api_keys.lock().unwrap();
+        let now = Utc::now();
+        let initial_count = api_keys.len();
+        api_keys.retain(|_, k| {
+            if let Some(expires_at) = &k.expires_at {
+                if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(expires_at) {
+                    return exp > now;
+                }
+            }
+            true // keep keys without expiration
+        });
+        Ok(initial_count - api_keys.len())
+    }
 }
 
 // -- PasskeyOps --

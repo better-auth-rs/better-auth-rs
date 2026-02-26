@@ -344,6 +344,15 @@ pub struct UpdateApiKey {
     pub refill_amount: Option<i64>,
     pub permissions: Option<String>,
     pub metadata: Option<String>,
+    /// Update the expiration time. `Some(Some("..."))` sets a new value,
+    /// `Some(None)` clears it, `None` leaves it unchanged.
+    pub expires_at: Option<Option<String>>,
+    /// Last request timestamp (updated during verify).
+    pub last_request: Option<Option<String>>,
+    /// Request count within the current rate-limit window.
+    pub request_count: Option<i64>,
+    /// Last refill timestamp (updated during verify).
+    pub last_refill_at: Option<Option<String>>,
 }
 
 /// Verification token creation data
