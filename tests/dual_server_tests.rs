@@ -4,23 +4,50 @@
 //! reference Node.js `better-auth` server, then compares response *shapes*
 //! (not exact values, since IDs / tokens will differ).
 //!
+//! ## How it works
+//!
+//! 1. The test harness **automatically starts** the reference Node.js server
+//!    (`compat-tests/reference-server/server.mjs`) as a child process.
+//! 2. It waits for the `/__health` endpoint to respond (up to 10 seconds).
+//! 3. Each test sends the same request to both servers and compares the JSON
+//!    response *shape* (field names + value types, not values).
+//! 4. The child process is killed when the RAII guard is dropped.
+//!
 //! ## Prerequisites
 //!
-//! The reference server must be installed before running these tests:
+//! The reference server dependencies must be installed before running:
 //!
 //! ```bash
 //! cd compat-tests/reference-server && npm install
 //! ```
 //!
-//! If the reference server is not available, all tests in this module are
-//! skipped with a diagnostic message -- they never fail CI.
+//! If `node_modules` is missing, all tests are skipped with a diagnostic
+//! message — they never fail CI.
+//!
+//! ## Cookie-based auth
+//!
+//! The TypeScript better-auth uses cookie-based session auth
+//! (`set-cookie: better-auth.session_token=...`), NOT Bearer tokens.
+//! The `RefClient` in this module captures and forwards cookies to match
+//! the real TS behavior.
 
 mod compat;
 
 use compat::helpers::*;
 use serde_json::Value;
 use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+
+/// Atomic counter for generating unique emails across parallel test runs.
+/// Prevents conflicts when the TS reference server is shared across tests
+/// (in-memory DB retains state for the lifetime of the process).
+static EMAIL_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn unique_email(prefix: &str) -> String {
+    let n = EMAIL_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("{}_{}_{}@example.com", prefix, n, std::process::id())
+}
 
 // ---------------------------------------------------------------------------
 // Reference-server client
@@ -183,47 +210,169 @@ fn compare_shapes(rust_shape: &Value, ref_shape: &Value, path: &str) -> Vec<Stri
     diffs
 }
 
-/// Send a POST request to the reference server and return (status, body).
-async fn ref_post(path: &str, body: &Value) -> Result<(u16, Value), String> {
-    let client = reqwest::Client::new();
-    let url = format!("{}{}", REFERENCE_BASE, path);
+// ---------------------------------------------------------------------------
+// Cookie-aware reference server client
+// ---------------------------------------------------------------------------
 
-    let resp = client
-        .post(&url)
-        .json(body)
-        .header("content-type", "application/json")
-        .header("origin", format!("http://localhost:{}", REFERENCE_PORT))
-        .send()
-        .await
-        .map_err(|e| format!("POST {}: {}", url, e))?;
-
-    let status = resp.status().as_u16();
-    let json: Value = resp
-        .json()
-        .await
-        .unwrap_or_else(|_| Value::String("non-json".into()));
-    Ok((status, json))
+/// A client for the TS reference server that properly handles cookie-based
+/// session auth (better-auth uses `set-cookie` headers, not Bearer tokens).
+struct RefClient {
+    client: reqwest::Client,
+    /// The session cookie value captured from signup/signin responses.
+    session_cookie: Option<String>,
 }
 
-/// Send a GET request to the reference server with auth and return (status, body).
-async fn ref_get(path: &str, token: &str) -> Result<(u16, Value), String> {
-    let client = reqwest::Client::new();
-    let url = format!("{}{}", REFERENCE_BASE, path);
+impl RefClient {
+    fn new() -> Self {
+        Self {
+            // Do NOT use the default cookie store — we manage cookies manually
+            // so we can inspect and control the exact cookie sent.
+            client: reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(Duration::from_secs(10))
+                .build()
+                .unwrap(),
+            session_cookie: None,
+        }
+    }
 
-    let resp = client
-        .get(&url)
-        .header("authorization", format!("Bearer {}", token))
-        .header("origin", format!("http://localhost:{}", REFERENCE_PORT))
-        .send()
-        .await
-        .map_err(|e| format!("GET {}: {}", url, e))?;
+    /// POST a JSON body to the reference server.  Captures the
+    /// `better-auth.session_token` cookie from the response.
+    async fn post(&mut self, path: &str, body: &Value) -> Result<(u16, Value), String> {
+        let url = format!("{}{}", REFERENCE_BASE, path);
 
-    let status = resp.status().as_u16();
-    let json: Value = resp
-        .json()
-        .await
-        .unwrap_or_else(|_| Value::String("non-json".into()));
-    Ok((status, json))
+        let mut req = self
+            .client
+            .post(&url)
+            .json(body)
+            .header("content-type", "application/json")
+            .header("origin", format!("http://localhost:{}", REFERENCE_PORT));
+
+        // Attach session cookie if we have one
+        if let Some(ref cookie) = self.session_cookie {
+            req = req.header("cookie", format!("better-auth.session_token={}", cookie));
+        }
+
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| format!("POST {}: {}", url, e))?;
+
+        // Capture session cookie from set-cookie header
+        self.capture_cookie(&resp);
+
+        let status = resp.status().as_u16();
+        let json: Value = resp
+            .json()
+            .await
+            .unwrap_or_else(|_| Value::String("non-json".into()));
+        Ok((status, json))
+    }
+
+    /// GET from the reference server with cookie auth.
+    async fn get(&self, path: &str) -> Result<(u16, Value), String> {
+        let url = format!("{}{}", REFERENCE_BASE, path);
+
+        let mut req = self
+            .client
+            .get(&url)
+            .header("origin", format!("http://localhost:{}", REFERENCE_PORT));
+
+        // Attach session cookie
+        if let Some(ref cookie) = self.session_cookie {
+            req = req.header("cookie", format!("better-auth.session_token={}", cookie));
+        }
+
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| format!("GET {}: {}", url, e))?;
+
+        let status = resp.status().as_u16();
+        let json: Value = resp
+            .json()
+            .await
+            .unwrap_or_else(|_| Value::String("non-json".into()));
+        Ok((status, json))
+    }
+
+    /// Extract the `better-auth.session_token` from the response's
+    /// `set-cookie` header, if present.
+    fn capture_cookie(&mut self, resp: &reqwest::Response) {
+        for value in resp.headers().get_all("set-cookie") {
+            if let Ok(s) = value.to_str() {
+                if let Some(rest) = s.strip_prefix("better-auth.session_token=") {
+                    // Cookie value ends at the first ';'
+                    let token = rest.split(';').next().unwrap_or(rest);
+                    self.session_cookie = Some(token.to_string());
+                    return;
+                }
+            }
+        }
+    }
+}
+
+/// Known differences between Rust (with plugins) and TS (emailAndPassword only).
+/// These fields are present in Rust because `create_test_auth()` registers
+/// admin, organization, and two-factor plugins.  They are NOT bugs.
+const KNOWN_EXTRA_RUST_USER_FIELDS: &[&str] = &[
+    "banned",
+    "banReason",
+    "banExpires",
+    "role",
+    "twoFactorEnabled",
+    "username",
+    "displayUsername",
+];
+
+const KNOWN_EXTRA_RUST_SESSION_FIELDS: &[&str] = &["activeOrganizationId", "impersonatedBy"];
+
+/// Filter out known/expected differences from a diff list.
+///
+/// Known categories:
+/// - Extra user/session fields from Rust plugins (admin, org, 2FA)
+/// - Extra `url` field in signin response
+/// - Missing `code` field in Rust error responses
+/// - `ipAddress`/`userAgent` type mismatch: Rust in-memory harness doesn't
+///   populate HTTP headers → null, while TS reference server receives real
+///   HTTP requests → string.  This is a test-harness difference, not an
+///   implementation gap.
+fn filter_known_diffs(diffs: &[String]) -> Vec<String> {
+    diffs
+        .iter()
+        .filter(|d| {
+            // Skip known extra user fields from plugins
+            for field in KNOWN_EXTRA_RUST_USER_FIELDS {
+                if d.contains(&format!(".{}: present in Rust", field)) {
+                    return false;
+                }
+            }
+            // Skip known extra session fields from plugins
+            for field in KNOWN_EXTRA_RUST_SESSION_FIELDS {
+                if d.contains(&format!(".{}: present in Rust", field)) {
+                    return false;
+                }
+            }
+            // Skip known signin extra `url` field
+            if d.contains(".url: present in Rust") {
+                return false;
+            }
+            // Skip known error response `code` field (TS has it, Rust doesn't yet)
+            if d.contains(".code: missing in Rust") {
+                return false;
+            }
+            // Skip ipAddress/userAgent type mismatch (null in Rust in-memory
+            // harness vs string in TS reference server that receives real HTTP)
+            if (d.contains("ipAddress:") || d.contains("userAgent:"))
+                && d.contains("Rust=null")
+                && d.contains("reference=string")
+            {
+                return false;
+            }
+            true
+        })
+        .cloned()
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -242,10 +391,12 @@ async fn dual_server_signup_shape_comparison() {
     };
 
     let auth = create_test_auth().await;
+    let mut ref_client = RefClient::new();
 
+    let email = unique_email("dual_signup");
     let signup_body = serde_json::json!({
         "name": "Dual Test User",
-        "email": "dual_signup@example.com",
+        "email": email,
         "password": "password123"
     });
 
@@ -253,8 +404,9 @@ async fn dual_server_signup_shape_comparison() {
     let (rust_status, rust_body) =
         send_request(&auth, post_json("/sign-up/email", signup_body.clone())).await;
 
-    // Reference server
-    let (ref_status, ref_body) = ref_post("/sign-up/email", &signup_body)
+    // Reference server (also captures session cookie)
+    let (ref_status, ref_body) = ref_client
+        .post("/sign-up/email", &signup_body)
         .await
         .expect("Reference server request failed");
 
@@ -262,22 +414,28 @@ async fn dual_server_signup_shape_comparison() {
     eprintln!("  Rust status:  {}", rust_status);
     eprintln!("  Ref  status:  {}", ref_status);
 
-    let rust_shape = json_shape(&rust_body);
-    let ref_shape = json_shape(&ref_body);
+    let all_diffs = compare_shapes(&json_shape(&rust_body), &json_shape(&ref_body), "");
+    let unexpected = filter_known_diffs(&all_diffs);
 
-    let diffs = compare_shapes(&rust_shape, &ref_shape, "");
-    if diffs.is_empty() {
-        eprintln!("  Shape: MATCH");
+    if all_diffs.is_empty() {
+        eprintln!("  Shape: EXACT MATCH");
     } else {
-        eprintln!("  Shape differences:");
-        for d in &diffs {
+        eprintln!(
+            "  Shape: {} total diffs ({} known, {} unexpected)",
+            all_diffs.len(),
+            all_diffs.len() - unexpected.len(),
+            unexpected.len()
+        );
+        for d in &all_diffs {
             eprintln!("    {}", d);
         }
     }
 
-    // We report but don't fail -- this is informational for now.
-    // Uncomment the assert below once the shapes are aligned:
-    // assert!(diffs.is_empty(), "Signup response shapes differ:\n{}", diffs.join("\n"));
+    assert!(
+        unexpected.is_empty(),
+        "Unexpected signup shape differences:\n{}",
+        unexpected.join("\n")
+    );
 }
 
 /// Compare sign-in response shapes.
@@ -292,19 +450,21 @@ async fn dual_server_signin_shape_comparison() {
     };
 
     let auth = create_test_auth().await;
+    let mut ref_client = RefClient::new();
 
+    let email = unique_email("dual_signin");
     let signup_body = serde_json::json!({
         "name": "Dual Signin User",
-        "email": "dual_signin@example.com",
+        "email": email,
         "password": "password123"
     });
 
     // Sign up on both servers
     send_request(&auth, post_json("/sign-up/email", signup_body.clone())).await;
-    let _ = ref_post("/sign-up/email", &signup_body).await;
+    let _ = ref_client.post("/sign-up/email", &signup_body).await;
 
     let signin_body = serde_json::json!({
-        "email": "dual_signin@example.com",
+        "email": email,
         "password": "password123"
     });
 
@@ -312,8 +472,9 @@ async fn dual_server_signin_shape_comparison() {
     let (rust_status, rust_body) =
         send_request(&auth, post_json("/sign-in/email", signin_body.clone())).await;
 
-    // Reference server
-    let (ref_status, ref_body) = ref_post("/sign-in/email", &signin_body)
+    // Reference server (captures session cookie)
+    let (ref_status, ref_body) = ref_client
+        .post("/sign-in/email", &signin_body)
         .await
         .expect("Reference server request failed");
 
@@ -321,15 +482,28 @@ async fn dual_server_signin_shape_comparison() {
     eprintln!("  Rust status:  {}", rust_status);
     eprintln!("  Ref  status:  {}", ref_status);
 
-    let diffs = compare_shapes(&json_shape(&rust_body), &json_shape(&ref_body), "");
-    if diffs.is_empty() {
-        eprintln!("  Shape: MATCH");
+    let all_diffs = compare_shapes(&json_shape(&rust_body), &json_shape(&ref_body), "");
+    let unexpected = filter_known_diffs(&all_diffs);
+
+    if all_diffs.is_empty() {
+        eprintln!("  Shape: EXACT MATCH");
     } else {
-        eprintln!("  Shape differences:");
-        for d in &diffs {
+        eprintln!(
+            "  Shape: {} total diffs ({} known, {} unexpected)",
+            all_diffs.len(),
+            all_diffs.len() - unexpected.len(),
+            unexpected.len()
+        );
+        for d in &all_diffs {
             eprintln!("    {}", d);
         }
     }
+
+    assert!(
+        unexpected.is_empty(),
+        "Unexpected signin shape differences:\n{}",
+        unexpected.join("\n")
+    );
 }
 
 /// Compare error response shapes (invalid credentials).
@@ -344,9 +518,11 @@ async fn dual_server_error_shape_comparison() {
     };
 
     let auth = create_test_auth().await;
+    let mut ref_client = RefClient::new();
 
+    let email = unique_email("nonexistent_dual");
     let signin_body = serde_json::json!({
-        "email": "nonexistent_dual@example.com",
+        "email": email,
         "password": "password123"
     });
 
@@ -355,7 +531,8 @@ async fn dual_server_error_shape_comparison() {
         send_request(&auth, post_json("/sign-in/email", signin_body.clone())).await;
 
     // Reference server
-    let (ref_status, ref_body) = ref_post("/sign-in/email", &signin_body)
+    let (ref_status, ref_body) = ref_client
+        .post("/sign-in/email", &signin_body)
         .await
         .expect("Reference server request failed");
 
@@ -363,19 +540,32 @@ async fn dual_server_error_shape_comparison() {
     eprintln!("  Rust status:  {}", rust_status);
     eprintln!("  Ref  status:  {}", ref_status);
 
-    let diffs = compare_shapes(&json_shape(&rust_body), &json_shape(&ref_body), "");
-    if diffs.is_empty() {
-        eprintln!("  Shape: MATCH");
+    let all_diffs = compare_shapes(&json_shape(&rust_body), &json_shape(&ref_body), "");
+    let unexpected = filter_known_diffs(&all_diffs);
+
+    if all_diffs.is_empty() {
+        eprintln!("  Shape: EXACT MATCH");
     } else {
-        eprintln!("  Shape differences:");
-        for d in &diffs {
+        eprintln!(
+            "  Shape: {} total diffs ({} known, {} unexpected)",
+            all_diffs.len(),
+            all_diffs.len() - unexpected.len(),
+            unexpected.len()
+        );
+        for d in &all_diffs {
             eprintln!("    {}", d);
         }
     }
+
+    assert!(
+        unexpected.is_empty(),
+        "Unexpected error shape differences:\n{}",
+        unexpected.join("\n")
+    );
 }
 
 /// Run a broad comparison across multiple endpoints and produce a summary
-/// report.
+/// report.  Uses cookie-based auth for the reference server.
 #[tokio::test]
 async fn dual_server_comprehensive_comparison() {
     let _guard = match ensure_reference_server().await {
@@ -387,11 +577,13 @@ async fn dual_server_comprehensive_comparison() {
     };
 
     let auth = create_test_auth().await;
+    let mut ref_client = RefClient::new();
 
     // Sign up on both servers
+    let email = unique_email("dual_comp");
     let signup_body = serde_json::json!({
         "name": "Dual Comprehensive",
-        "email": "dual_comp@example.com",
+        "email": email,
         "password": "password123"
     });
 
@@ -399,18 +591,21 @@ async fn dual_server_comprehensive_comparison() {
         send_request(&auth, post_json("/sign-up/email", signup_body.clone())).await;
     let rust_token = rust_signup["token"].as_str().unwrap_or("").to_string();
 
-    let ref_signup = ref_post("/sign-up/email", &signup_body).await;
-    let ref_token = ref_signup
-        .as_ref()
-        .ok()
-        .and_then(|(_, b)| b["token"].as_str())
-        .unwrap_or("")
-        .to_string();
+    // This also captures the session cookie in ref_client
+    let _ = ref_client.post("/sign-up/email", &signup_body).await;
+
+    // Sign in on reference server to get a fresh session cookie
+    let signin_body = serde_json::json!({
+        "email": email,
+        "password": "password123"
+    });
+    let _ = ref_client.post("/sign-in/email", &signin_body).await;
 
     // Endpoints to compare
     struct EndpointCheck {
         name: &'static str,
-        diffs: Vec<String>,
+        all_diffs: Vec<String>,
+        unexpected_diffs: Vec<String>,
         rust_status: u16,
         ref_status: u16,
     }
@@ -420,10 +615,13 @@ async fn dual_server_comprehensive_comparison() {
     // GET /get-session
     {
         let (rs, rb) = send_request(&auth, get_with_auth("/get-session", &rust_token)).await;
-        if let Ok((ns, nb)) = ref_get("/get-session", &ref_token).await {
+        if let Ok((ns, nb)) = ref_client.get("/get-session").await {
+            let all_diffs = compare_shapes(&json_shape(&rb), &json_shape(&nb), "");
+            let unexpected_diffs = filter_known_diffs(&all_diffs);
             results.push(EndpointCheck {
                 name: "GET /get-session",
-                diffs: compare_shapes(&json_shape(&rb), &json_shape(&nb), ""),
+                all_diffs,
+                unexpected_diffs,
                 rust_status: rs,
                 ref_status: ns,
             });
@@ -433,48 +631,54 @@ async fn dual_server_comprehensive_comparison() {
     // GET /list-sessions
     {
         let (rs, rb) = send_request(&auth, get_with_auth("/list-sessions", &rust_token)).await;
-        if let Ok((ns, nb)) = ref_get("/list-sessions", &ref_token).await {
+        if let Ok((ns, nb)) = ref_client.get("/list-sessions").await {
+            let all_diffs = compare_shapes(&json_shape(&rb), &json_shape(&nb), "");
+            let unexpected_diffs = filter_known_diffs(&all_diffs);
             results.push(EndpointCheck {
                 name: "GET /list-sessions",
-                diffs: compare_shapes(&json_shape(&rb), &json_shape(&nb), ""),
+                all_diffs,
+                unexpected_diffs,
                 rust_status: rs,
                 ref_status: ns,
             });
         }
     }
 
-    // POST /change-password
+    // POST /change-password (use boolean for revokeOtherSessions — TS validates strictly)
     {
         let chg_body = serde_json::json!({
             "currentPassword": "password123",
             "newPassword": "newpassword456",
-            "revokeOtherSessions": "false"
+            "revokeOtherSessions": false
         });
         let (rs, rb) = send_request(
             &auth,
             post_json_with_auth("/change-password", chg_body.clone(), &rust_token),
         )
         .await;
-        if let Ok((ns, nb)) = (async {
-            let client = reqwest::Client::new();
-            let resp = client
-                .post(format!("{}/change-password", REFERENCE_BASE))
-                .json(&chg_body)
-                .header("authorization", format!("Bearer {}", ref_token))
-                .header("content-type", "application/json")
-                .header("origin", format!("http://localhost:{}", REFERENCE_PORT))
-                .send()
-                .await
-                .map_err(|e| e.to_string())?;
-            let status = resp.status().as_u16();
-            let json: Value = resp.json().await.unwrap_or(Value::Null);
-            Ok::<_, String>((status, json))
-        })
-        .await
-        {
+        if let Ok((ns, nb)) = ref_client.post("/change-password", &chg_body).await {
+            let all_diffs = compare_shapes(&json_shape(&rb), &json_shape(&nb), "");
+            let unexpected_diffs = filter_known_diffs(&all_diffs);
             results.push(EndpointCheck {
                 name: "POST /change-password",
-                diffs: compare_shapes(&json_shape(&rb), &json_shape(&nb), ""),
+                all_diffs,
+                unexpected_diffs,
+                rust_status: rs,
+                ref_status: ns,
+            });
+        }
+    }
+
+    // GET /ok
+    {
+        let (rs, rb) = send_request(&auth, get_request("/ok")).await;
+        if let Ok((ns, nb)) = ref_client.get("/ok").await {
+            let all_diffs = compare_shapes(&json_shape(&rb), &json_shape(&nb), "");
+            let unexpected_diffs = filter_known_diffs(&all_diffs);
+            results.push(EndpointCheck {
+                name: "GET /ok",
+                all_diffs,
+                unexpected_diffs,
                 rust_status: rs,
                 ref_status: ns,
             });
@@ -483,22 +687,38 @@ async fn dual_server_comprehensive_comparison() {
 
     // Print summary report
     eprintln!("\n=== Dual-Server Comparison Report ===\n");
-    let mut total_diffs = 0;
+    let mut total_unexpected = 0;
     for r in &results {
-        let icon = if r.diffs.is_empty() { "MATCH" } else { "DIFF" };
+        let icon = if r.unexpected_diffs.is_empty() {
+            "PASS"
+        } else {
+            "FAIL"
+        };
         eprintln!(
             "[{}] {} (Rust={}, Ref={})",
             icon, r.name, r.rust_status, r.ref_status
         );
-        for d in &r.diffs {
-            eprintln!("      {}", d);
-            total_diffs += 1;
+        if !r.all_diffs.is_empty() {
+            for d in &r.all_diffs {
+                let is_known = !r.unexpected_diffs.contains(d);
+                let marker = if is_known { "known" } else { "UNEXPECTED" };
+                eprintln!("      [{}] {}", marker, d);
+            }
         }
+        total_unexpected += r.unexpected_diffs.len();
     }
     eprintln!(
-        "\nEndpoints compared: {}, Differences: {}",
+        "\nEndpoints compared: {}, Unexpected differences: {}",
         results.len(),
-        total_diffs
+        total_unexpected
     );
     eprintln!("=====================================\n");
+
+    assert_eq!(
+        total_unexpected,
+        0,
+        "Found {} unexpected shape differences across {} endpoints",
+        total_unexpected,
+        results.len()
+    );
 }
