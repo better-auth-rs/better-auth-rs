@@ -637,11 +637,13 @@ impl UserManagementPlugin {
             .await?
             .ok_or_else(|| AuthError::not_found("User not found"))?;
 
-        // Consume the verification token first
-        ctx.database.delete_verification(&verification_id).await?;
-
-        // Perform the actual deletion
+        // Perform the actual deletion first, then consume the token.
+        // This ensures the token remains valid for retry if deletion fails
+        // (e.g. before_delete hook rejects or transient DB error).
         self.perform_user_deletion(&user, ctx).await?;
+
+        // Consume the verification token after successful deletion
+        ctx.database.delete_verification(&verification_id).await?;
 
         let response = StatusMessageResponse {
             status: true,
