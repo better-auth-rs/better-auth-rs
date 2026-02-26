@@ -50,6 +50,9 @@ thiserror = "2.0"
 # Time handling
 chrono = { version = "0.4", features = ["serde"] }
 
+# Cookie handling
+cookie = "0.18"
+
 # Data structures
 uuid = { version = "1.18", features = ["v4", "v7", "serde"] }
 

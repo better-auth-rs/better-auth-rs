@@ -510,31 +510,37 @@ impl EmailVerificationPlugin {
         user.email_verified() || !self.config.require_verification_for_signin
     }
 
-    /// Build a `Set-Cookie` header value for a session token.
+    /// Build a `Set-Cookie` header value for a session token using the
+    /// [`cookie`] crate for proper encoding and formatting.
     fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
+        use cookie::{Cookie, SameSite as CookieSameSite};
+
         let session_config = &ctx.config.session;
-        let secure = if session_config.cookie_secure {
-            "; Secure"
-        } else {
-            ""
-        };
-        let http_only = if session_config.cookie_http_only {
-            "; HttpOnly"
-        } else {
-            ""
-        };
+
+        let expires_offset = cookie::time::OffsetDateTime::now_utc()
+            + cookie::time::Duration::seconds(session_config.expires_in.num_seconds());
+
         let same_site = match session_config.cookie_same_site {
-            better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
-            better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
-            better_auth_core::config::SameSite::None => "; SameSite=None",
+            better_auth_core::config::SameSite::Strict => CookieSameSite::Strict,
+            better_auth_core::config::SameSite::Lax => CookieSameSite::Lax,
+            better_auth_core::config::SameSite::None => CookieSameSite::None,
         };
 
-        let expires = Utc::now() + session_config.expires_in;
-        let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
+        let mut cookie = Cookie::build((&*session_config.cookie_name, token))
+            .path("/")
+            .expires(expires_offset)
+            .secure(session_config.cookie_secure)
+            .http_only(session_config.cookie_http_only)
+            .same_site(same_site);
 
-        format!(
-            "{}={}; Path=/; Expires={}{}{}{}",
-            session_config.cookie_name, token, expires_str, secure, http_only, same_site
-        )
+        // SameSite=None requires the Secure attribute per the spec
+        if matches!(
+            session_config.cookie_same_site,
+            better_auth_core::config::SameSite::None
+        ) {
+            cookie = cookie.secure(true);
+        }
+
+        cookie.build().to_string()
     }
 }

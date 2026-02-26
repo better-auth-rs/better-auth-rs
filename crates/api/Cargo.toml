@@ -22,6 +22,9 @@ validator = { workspace = true }
 # Time handling
 chrono = { workspace = true }
 
+# Cookie handling
+cookie = { workspace = true }
+
 # Data structures
 uuid = { workspace = true }
 
