@@ -816,14 +816,13 @@ mod tests {
         }
         headers.insert("content-type".to_string(), "application/json".to_string());
 
-        AuthRequest {
+        AuthRequest::from_parts(
             method,
-            path: path.to_string(),
+            path.to_string(),
             headers,
-            body: body.map(|b| serde_json::to_vec(&b).unwrap()),
-            query: HashMap::new(),
-            virtual_user_id: None,
-        }
+            body.map(|b| serde_json::to_vec(&b).unwrap()),
+            HashMap::new(),
+        )
     }
 
     fn encoded_client_data(challenge: &str, client_type: &str, origin: &str) -> String {

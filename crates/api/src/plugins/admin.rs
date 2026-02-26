@@ -1101,14 +1101,13 @@ mod tests {
         let mut headers = HashMap::new();
         headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
-        AuthRequest {
+        AuthRequest::from_parts(
             method,
-            path: path.to_string(),
+            path.to_string(),
             headers,
-            body: body.map(|b| serde_json::to_vec(&b).unwrap()),
-            query: HashMap::new(),
-            virtual_user_id: None,
-        }
+            body.map(|b| serde_json::to_vec(&b).unwrap()),
+            HashMap::new(),
+        )
     }
 
     fn make_request_with_query(
@@ -1121,14 +1120,13 @@ mod tests {
         let mut headers = HashMap::new();
         headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
-        AuthRequest {
+        AuthRequest::from_parts(
             method,
-            path: path.to_string(),
+            path.to_string(),
             headers,
-            body: body.map(|b| serde_json::to_vec(&b).unwrap()),
+            body.map(|b| serde_json::to_vec(&b).unwrap()),
             query,
-            virtual_user_id: None,
-        }
+        )
     }
 
     fn json_body(resp: &AuthResponse) -> serde_json::Value {

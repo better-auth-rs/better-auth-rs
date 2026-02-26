@@ -1426,14 +1426,13 @@ mod tests {
             headers.insert("authorization".to_string(), format!("Bearer {}", token));
         }
 
-        AuthRequest {
+        AuthRequest::from_parts(
             method,
-            path: path.to_string(),
+            path.to_string(),
             headers,
-            body: body.map(|b| serde_json::to_vec(&b).unwrap()),
-            query: query.unwrap_or_default(),
-            virtual_user_id: None,
-        }
+            body.map(|b| serde_json::to_vec(&b).unwrap()),
+            query.unwrap_or_default(),
+        )
     }
 
     fn json_body(response: &AuthResponse) -> serde_json::Value {
@@ -2149,14 +2148,13 @@ mod tests {
         // Simulate a request to a protected route with only x-api-key header
         let mut headers = HashMap::new();
         headers.insert("x-api-key".to_string(), raw_key.clone());
-        let req = AuthRequest {
-            method: HttpMethod::Post,
-            path: "/update-user".to_string(),
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/update-user".to_string(),
             headers,
-            body: None,
-            query: HashMap::new(),
-            virtual_user_id: None,
-        };
+            None,
+            HashMap::new(),
+        );
 
         // Call before_request — should return InjectSession
         let action = plugin.before_request(&req, &ctx).await.unwrap();
@@ -2203,14 +2201,13 @@ mod tests {
         // Send request to /get-session with x-api-key header
         let mut headers = HashMap::new();
         headers.insert("x-api-key".to_string(), raw_key.clone());
-        let req = AuthRequest {
-            method: HttpMethod::Get,
-            path: "/get-session".to_string(),
+        let req = AuthRequest::from_parts(
+            HttpMethod::Get,
+            "/get-session".to_string(),
             headers,
-            body: None,
-            query: HashMap::new(),
-            virtual_user_id: None,
-        };
+            None,
+            HashMap::new(),
+        );
 
         let action = plugin.before_request(&req, &ctx).await.unwrap();
         assert!(action.is_some());
@@ -2575,14 +2572,13 @@ mod tests {
 
         let mut headers = HashMap::new();
         headers.insert("x-api-key".to_string(), raw_key);
-        let req = AuthRequest {
-            method: HttpMethod::Get,
-            path: "/get-session".to_string(),
+        let req = AuthRequest::from_parts(
+            HttpMethod::Get,
+            "/get-session".to_string(),
             headers,
-            body: None,
-            query: HashMap::new(),
-            virtual_user_id: None,
-        };
+            None,
+            HashMap::new(),
+        );
 
         let action = plugin.before_request(&req, &ctx).await.unwrap();
         assert!(

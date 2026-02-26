@@ -119,14 +119,13 @@ async fn test_revoke_session_integration() {
         "token": session2.token
     });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/revoke-session".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/revoke-session".to_string(),
         headers,
-        body: Some(revoke_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(revoke_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -217,14 +216,13 @@ async fn test_reset_password_integration() {
         "token": reset_token
     });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/reset-password".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/reset-password".to_string(),
         headers,
-        body: Some(reset_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(reset_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -311,14 +309,13 @@ async fn test_reset_password_token_integration() {
     use better_auth::types::AuthRequest;
     use std::collections::HashMap;
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: format!("/reset-password/{}", reset_token),
-        headers: HashMap::new(),
-        body: None,
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        format!("/reset-password/{}", reset_token),
+        HashMap::new(),
+        None,
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -364,14 +361,13 @@ async fn test_get_session_post_integration() {
         format!("Bearer {}", session_token),
     );
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/get-session".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/get-session".to_string(),
         headers,
-        body: Some(b"{}".to_vec()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(b"{}".to_vec()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -399,14 +395,13 @@ async fn test_delete_user_post_method() {
         format!("Bearer {}", session_token),
     );
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/delete-user".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/delete-user".to_string(),
         headers,
-        body: Some(b"{}".to_vec()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(b"{}".to_vec()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -456,14 +451,13 @@ async fn test_set_password_success() {
         "newPassword": "MyNewPassword123"
     });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/set-password".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/set-password".to_string(),
         headers,
-        body: Some(set_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(set_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -493,14 +487,13 @@ async fn test_set_password_already_has_password() {
         "newPassword": "AnotherPassword123"
     });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/set-password".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/set-password".to_string(),
         headers,
-        body: Some(set_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(set_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 400);
@@ -521,14 +514,13 @@ async fn test_set_password_unauthenticated() {
         "newPassword": "SomePassword123"
     });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/set-password".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/set-password".to_string(),
         headers,
-        body: Some(set_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(set_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 401);
@@ -566,14 +558,13 @@ async fn test_revoke_other_sessions_integration() {
         format!("Bearer {}", session_token1),
     );
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/revoke-other-sessions".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/revoke-other-sessions".to_string(),
         headers,
-        body: Some(b"{}".to_vec()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(b"{}".to_vec()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -603,14 +594,13 @@ async fn test_cookie_based_auth() {
         format!("better-auth.session-token={}; other=value", session_token),
     );
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/get-session".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/get-session".to_string(),
         headers,
-        body: None,
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        None,
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -640,14 +630,13 @@ async fn test_bearer_takes_precedence_over_cookie() {
         "better-auth.session-token=invalid_token".to_string(),
     );
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/get-session".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/get-session".to_string(),
         headers,
-        body: None,
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        None,
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     // Should succeed because Bearer token takes precedence
@@ -670,14 +659,13 @@ async fn test_unauthorized_password_operations() {
         "newPassword": "NewPassword123!"
     });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/change-password".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/change-password".to_string(),
         headers,
-        body: Some(change_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(change_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 401);
@@ -700,14 +688,13 @@ async fn test_change_email_success() {
 
     let body = serde_json::json!({ "newEmail": "newemail@test.com" });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/change-email".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/change-email".to_string(),
         headers,
-        body: Some(body.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(body.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -744,14 +731,13 @@ async fn test_change_email_duplicate() {
 
     let body = serde_json::json!({ "newEmail": "existing@test.com" });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/change-email".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/change-email".to_string(),
         headers,
-        body: Some(body.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(body.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 409);
@@ -770,14 +756,13 @@ async fn test_change_email_unauthenticated() {
 
     let body = serde_json::json!({ "newEmail": "x@y.com" });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/change-email".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/change-email".to_string(),
         headers,
-        body: Some(body.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(body.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 401);
@@ -808,14 +793,13 @@ async fn test_delete_user_callback_success() {
     let mut query = HashMap::new();
     query.insert("token".to_string(), token);
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/delete-user/callback".to_string(),
-        headers: HashMap::new(),
-        body: None,
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/delete-user/callback".to_string(),
+        HashMap::new(),
+        None,
         query,
-        virtual_user_id: None,
-    };
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -840,14 +824,13 @@ async fn test_delete_user_callback_invalid_token() {
     let mut query = HashMap::new();
     query.insert("token".to_string(), "invalid_token".to_string());
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/delete-user/callback".to_string(),
-        headers: HashMap::new(),
-        body: None,
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/delete-user/callback".to_string(),
+        HashMap::new(),
+        None,
         query,
-        virtual_user_id: None,
-    };
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 400);
@@ -868,14 +851,13 @@ async fn test_list_accounts_empty() {
         format!("Bearer {}", session_token),
     );
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/list-accounts".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/list-accounts".to_string(),
         headers,
-        body: None,
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        None,
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -918,14 +900,13 @@ async fn test_list_accounts_with_account() {
         format!("Bearer {}", session_token),
     );
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/list-accounts".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/list-accounts".to_string(),
         headers,
-        body: None,
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        None,
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -983,14 +964,13 @@ async fn test_unlink_account_success() {
         "providerId": "google"
     });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/unlink-account".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/unlink-account".to_string(),
         headers,
-        body: Some(unlink_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(unlink_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -1059,14 +1039,13 @@ async fn test_unlink_last_account_fails() {
         "providerId": "google"
     });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/unlink-account".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/unlink-account".to_string(),
         headers,
-        body: Some(unlink_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(unlink_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 400); // Cannot unlink last credential
@@ -1080,14 +1059,13 @@ async fn test_list_accounts_unauthenticated() {
     use better_auth::types::AuthRequest;
     use std::collections::HashMap;
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/list-accounts".to_string(),
-        headers: HashMap::new(),
-        body: None,
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/list-accounts".to_string(),
+        HashMap::new(),
+        None,
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 401);
@@ -1576,14 +1554,13 @@ async fn test_sign_up_with_username_and_sign_in() {
     let mut headers = HashMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/sign-up/email".to_string(),
-        headers: headers.clone(),
-        body: Some(signup_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/sign-up/email".to_string(),
+        headers.clone(),
+        Some(signup_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -1599,14 +1576,13 @@ async fn test_sign_up_with_username_and_sign_in() {
         "password": "password123"
     });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/sign-in/username".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/sign-in/username".to_string(),
         headers,
-        body: Some(signin_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(signin_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -1637,14 +1613,13 @@ async fn test_sign_in_username_wrong_password() {
     let mut headers = HashMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/sign-up/email".to_string(),
-        headers: headers.clone(),
-        body: Some(signup_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/sign-up/email".to_string(),
+        headers.clone(),
+        Some(signup_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     auth.handle_request(request).await.unwrap();
 
@@ -1654,14 +1629,13 @@ async fn test_sign_in_username_wrong_password() {
         "password": "wrong_password"
     });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/sign-in/username".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/sign-in/username".to_string(),
         headers,
-        body: Some(signin_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(signin_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 401);
@@ -1683,14 +1657,13 @@ async fn test_sign_in_username_nonexistent() {
     let mut headers = HashMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/sign-in/username".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/sign-in/username".to_string(),
         headers,
-        body: Some(signin_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(signin_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 401);
@@ -1720,14 +1693,13 @@ async fn create_api_key(
     headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/api-key/create".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/api-key/create".to_string(),
         headers,
-        body: Some(body.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(body.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -1781,14 +1753,13 @@ async fn test_api_key_create_with_options() {
         "rateLimitTimeWindow": 60000
     });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/api-key/create".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/api-key/create".to_string(),
         headers,
-        body: Some(body.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(body.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -1819,14 +1790,13 @@ async fn test_api_key_get() {
     let mut query = HashMap::new();
     query.insert("id".to_string(), id.clone());
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/api-key/get".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/api-key/get".to_string(),
         headers,
-        body: None,
+        None,
         query,
-        virtual_user_id: None,
-    };
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -1857,14 +1827,13 @@ async fn test_api_key_list() {
     let mut headers = HashMap::new();
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/api-key/list".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/api-key/list".to_string(),
         headers,
-        body: None,
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        None,
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -1896,14 +1865,13 @@ async fn test_api_key_update() {
         "remaining": 50
     });
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/api-key/update".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/api-key/update".to_string(),
         headers,
-        body: Some(update_body.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(update_body.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -1932,14 +1900,13 @@ async fn test_api_key_delete() {
 
     let delete_body = serde_json::json!({"id": id});
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/api-key/delete".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/api-key/delete".to_string(),
         headers,
-        body: Some(delete_body.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(delete_body.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -1952,14 +1919,13 @@ async fn test_api_key_delete() {
     let mut headers2 = HashMap::new();
     headers2.insert("authorization".to_string(), format!("Bearer {}", token));
 
-    let list_request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/api-key/list".to_string(),
-        headers: headers2,
-        body: None,
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+    let list_request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/api-key/list".to_string(),
+        headers2,
+        None,
+        HashMap::new(),
+    );
 
     let list_response = auth.handle_request(list_request).await.unwrap();
     let list_body: Vec<serde_json::Value> = serde_json::from_slice(&list_response.body).unwrap();
@@ -1979,14 +1945,13 @@ async fn test_api_key_create_unauthenticated() {
 
     let body = serde_json::json!({"name": "no-auth"});
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/api-key/create".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/api-key/create".to_string(),
         headers,
-        body: Some(body.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(body.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 401);
@@ -2000,14 +1965,13 @@ async fn test_api_key_list_unauthenticated() {
     use better_auth::types::AuthRequest;
     use std::collections::HashMap;
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/api-key/list".to_string(),
-        headers: HashMap::new(),
-        body: None,
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/api-key/list".to_string(),
+        HashMap::new(),
+        None,
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 401);
@@ -2032,14 +1996,13 @@ async fn test_api_key_get_other_users_key() {
         "name": "Second User"
     });
 
-    let signup_request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/sign-up/email".to_string(),
+    let signup_request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/sign-up/email".to_string(),
         headers,
-        body: Some(signup_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(signup_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let signup_resp = auth.handle_request(signup_request).await.unwrap();
     let signup_body: serde_json::Value = serde_json::from_slice(&signup_resp.body).unwrap();
@@ -2052,14 +2015,13 @@ async fn test_api_key_get_other_users_key() {
     let mut query = HashMap::new();
     query.insert("id".to_string(), id.clone());
 
-    let get_request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/api-key/get".to_string(),
-        headers: headers2,
-        body: None,
+    let get_request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/api-key/get".to_string(),
+        headers2,
+        None,
         query,
-        virtual_user_id: None,
-    };
+    );
 
     let response = auth.handle_request(get_request).await.unwrap();
     assert_eq!(response.status, 404);
@@ -2084,14 +2046,13 @@ async fn test_api_key_delete_other_users_key() {
         "name": "Third User"
     });
 
-    let signup_request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/sign-up/email".to_string(),
+    let signup_request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/sign-up/email".to_string(),
         headers,
-        body: Some(signup_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(signup_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let signup_resp = auth.handle_request(signup_request).await.unwrap();
     let signup_body: serde_json::Value = serde_json::from_slice(&signup_resp.body).unwrap();
@@ -2104,14 +2065,13 @@ async fn test_api_key_delete_other_users_key() {
 
     let delete_body = serde_json::json!({"id": id});
 
-    let delete_request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/api-key/delete".to_string(),
-        headers: headers2,
-        body: Some(delete_body.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+    let delete_request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/api-key/delete".to_string(),
+        headers2,
+        Some(delete_body.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(delete_request).await.unwrap();
     assert_eq!(response.status, 404);
@@ -2136,14 +2096,13 @@ async fn test_api_key_update_other_users_key() {
         "name": "Fourth User"
     });
 
-    let signup_request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/sign-up/email".to_string(),
+    let signup_request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/sign-up/email".to_string(),
         headers,
-        body: Some(signup_data.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        Some(signup_data.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let signup_resp = auth.handle_request(signup_request).await.unwrap();
     let signup_body: serde_json::Value = serde_json::from_slice(&signup_resp.body).unwrap();
@@ -2159,14 +2118,13 @@ async fn test_api_key_update_other_users_key() {
         "name": "hijacked-name"
     });
 
-    let update_request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/api-key/update".to_string(),
-        headers: headers2,
-        body: Some(update_body.to_string().into_bytes()),
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+    let update_request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Post,
+        "/api-key/update".to_string(),
+        headers2,
+        Some(update_body.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(update_request).await.unwrap();
     assert_eq!(response.status, 404);
@@ -2183,14 +2141,13 @@ async fn test_api_key_list_empty() {
     let mut headers = HashMap::new();
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/api-key/list".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/api-key/list".to_string(),
         headers,
-        body: None,
-        query: HashMap::new(),
-        virtual_user_id: None,
-    };
+        None,
+        HashMap::new(),
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
@@ -2210,14 +2167,13 @@ async fn test_api_key_get_missing_id() {
     let mut headers = HashMap::new();
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/api-key/get".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/api-key/get".to_string(),
         headers,
-        body: None,
-        query: HashMap::new(), // no 'id' param,
-        virtual_user_id: None,
-    };
+        None,
+        HashMap::new(),
+    ); // no 'id' param
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 400);
@@ -2237,14 +2193,13 @@ async fn test_api_key_get_nonexistent() {
     let mut query = HashMap::new();
     query.insert("id".to_string(), "nonexistent-id".to_string());
 
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/api-key/get".to_string(),
+    let request = AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/api-key/get".to_string(),
         headers,
-        body: None,
+        None,
         query,
-        virtual_user_id: None,
-    };
+    );
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 404);

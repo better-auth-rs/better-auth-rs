@@ -128,14 +128,7 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
         Err(_) => None,
     };
     
-    Ok(AuthRequest {
-        method,
-        path,
-        headers,
-        body: body_bytes,
-        query,
-        virtual_user_id: None,
-    })
+    Ok(AuthRequest::from_parts(method, path, headers, body_bytes, query))
 }
 
 #[cfg(feature = "axum")]
@@ -182,4 +175,4 @@ impl IntoResponse for AuthError {
         
         (status, axum::Json(body)).into_response()
     }
-}  
+}    

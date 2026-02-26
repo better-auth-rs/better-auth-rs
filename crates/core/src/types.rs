@@ -198,9 +198,11 @@ pub struct AuthRequest {
     /// an `AuthRequest` should always leave this as `None`; setting it to
     /// `Some(…)` externally bypasses normal authentication.
     ///
-    /// The field is intentionally **not** included in [`from_parts`] /
-    /// [`new`] constructors, which always initialise it to `None`.
-    pub virtual_user_id: Option<String>,
+    /// **`pub(crate)`** — external crates must use [`AuthRequest::from_parts`]
+    /// or [`AuthRequest::new`] (which initialise this to `None`) and then
+    /// [`set_virtual_user_id`](AuthRequest::set_virtual_user_id) only from
+    /// the trusted request pipeline.
+    pub(crate) virtual_user_id: Option<String>,
 }
 
 /// Authentication response wrapper

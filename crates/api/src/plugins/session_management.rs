@@ -335,14 +335,7 @@ mod tests {
             headers.insert("authorization".to_string(), format!("Bearer {}", token));
         }
 
-        AuthRequest {
-            method,
-            path: path.to_string(),
-            headers,
-            body,
-            query: HashMap::new(),
-            virtual_user_id: None,
-        }
+        AuthRequest::from_parts(method, path.to_string(), headers, body, HashMap::new())
     }
 
     #[tokio::test]

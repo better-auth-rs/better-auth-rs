@@ -1651,8 +1651,9 @@ pub mod sqlx_adapter {
         }
 
         async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
-            // Use $1 bind-parameter instead of NOW() / ::timestamptz so the
-            // query is database-agnostic (works on PostgreSQL, MySQL, SQLite).
+            // Use a bind-parameter with an RFC 3339 timestamp instead of
+            // NOW() / ::timestamptz so the comparison is straightforward.
+            // (This adapter is PostgreSQL-only; $1 placeholders are correct.)
             let now = Utc::now().to_rfc3339();
             let sql = format!(
                 "DELETE FROM {} WHERE {} IS NOT NULL AND {} < $1",
