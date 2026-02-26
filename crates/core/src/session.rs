@@ -169,15 +169,12 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
             return Some(token.to_string());
         }
 
-        // Fall back to cookie
+        // Fall back to cookie (using the `cookie` crate for correct parsing)
         if let Some(cookie_header) = req.headers.get("cookie") {
             let cookie_name = &self.config.session.cookie_name;
-            for part in cookie_header.split(';') {
-                let part = part.trim();
-                if let Some(value) = part.strip_prefix(&format!("{}=", cookie_name))
-                    && !value.is_empty()
-                {
-                    return Some(value.to_string());
+            for c in cookie::Cookie::split_parse(cookie_header).flatten() {
+                if c.name() == cookie_name && !c.value().is_empty() {
+                    return Some(c.value().to_string());
                 }
             }
         }

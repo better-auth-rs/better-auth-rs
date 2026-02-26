@@ -267,33 +267,6 @@ impl TwoFactorPlugin {
         Ok(())
     }
 
-    fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
-        let session_config = &ctx.config.session;
-        let secure = if session_config.cookie_secure {
-            "; Secure"
-        } else {
-            ""
-        };
-        let http_only = if session_config.cookie_http_only {
-            "; HttpOnly"
-        } else {
-            ""
-        };
-        let same_site = match session_config.cookie_same_site {
-            better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
-            better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
-            better_auth_core::config::SameSite::None => "; SameSite=None",
-        };
-
-        let expires = chrono::Utc::now() + session_config.expires_in;
-        let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
-
-        format!(
-            "{}={}; Path=/; Expires={}{}{}{}",
-            session_config.cookie_name, token, expires_str, secure, http_only, same_site
-        )
-    }
-
     // -- Handlers --
 
     async fn handle_enable<DB: DatabaseAdapter>(
@@ -482,7 +455,7 @@ impl TwoFactorPlugin {
         // Delete the pending verification
         ctx.database.delete_verification(&verification_id).await?;
 
-        let cookie_header = Self::create_session_cookie(session.token(), ctx);
+        let cookie_header = super::cookie_utils::create_session_cookie(session.token(), ctx);
         let response = VerifyTotpResponse {
             status: true,
             token: session.token().to_string(),
@@ -571,7 +544,7 @@ impl TwoFactorPlugin {
             .delete_verification(&pending_verification_id)
             .await?;
 
-        let cookie_header = Self::create_session_cookie(session.token(), ctx);
+        let cookie_header = super::cookie_utils::create_session_cookie(session.token(), ctx);
         let response = VerifyTotpResponse {
             status: true,
             token: session.token().to_string(),
@@ -675,7 +648,7 @@ impl TwoFactorPlugin {
             .delete_verification(&pending_verification_id)
             .await?;
 
-        let cookie_header = Self::create_session_cookie(session.token(), ctx);
+        let cookie_header = super::cookie_utils::create_session_cookie(session.token(), ctx);
         let response = VerifyBackupCodeResponse { user, session };
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))

@@ -72,6 +72,9 @@ axum = "0.8"
 tower = "0.5"
 url = "2"
 
+# Cookie
+cookie = "0.18"
+
 # Cache
 redis = "0.27"
 

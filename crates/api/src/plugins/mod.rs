@@ -1,6 +1,7 @@
 pub mod account_management;
 pub mod admin;
 pub mod api_key;
+pub(crate) mod cookie_utils;
 pub mod email_password;
 pub mod email_verification;
 pub mod oauth;

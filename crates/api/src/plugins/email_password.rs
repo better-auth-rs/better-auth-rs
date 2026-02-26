@@ -162,7 +162,7 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header = self.create_session_cookie(session.token(), ctx);
+        let cookie_header = super::cookie_utils::create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -225,7 +225,7 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header = self.create_session_cookie(session.token(), ctx);
+        let cookie_header = super::cookie_utils::create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -288,7 +288,7 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header = self.create_session_cookie(session.token(), ctx);
+        let cookie_header = super::cookie_utils::create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -316,37 +316,6 @@ impl EmailPasswordPlugin {
             .map_err(|e| AuthError::PasswordHash(format!("Failed to hash password: {}", e)))?;
 
         Ok(password_hash.to_string())
-    }
-
-    fn create_session_cookie<DB: DatabaseAdapter>(
-        &self,
-        token: &str,
-        ctx: &AuthContext<DB>,
-    ) -> String {
-        let session_config = &ctx.config.session;
-        let secure = if session_config.cookie_secure {
-            "; Secure"
-        } else {
-            ""
-        };
-        let http_only = if session_config.cookie_http_only {
-            "; HttpOnly"
-        } else {
-            ""
-        };
-        let same_site = match session_config.cookie_same_site {
-            better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
-            better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
-            better_auth_core::config::SameSite::None => "; SameSite=None",
-        };
-
-        let expires = chrono::Utc::now() + session_config.expires_in;
-        let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
-
-        format!(
-            "{}={}; Path=/; Expires={}{}{}{}",
-            session_config.cookie_name, token, expires_str, secure, http_only, same_site
-        )
     }
 
     fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
