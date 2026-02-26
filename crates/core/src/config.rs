@@ -282,10 +282,10 @@ impl AuthConfig {
     /// `**` matches any characters including `/`.
     pub fn is_origin_trusted(&self, origin: &str) -> bool {
         // Check base_url origin
-        if let Some(base_origin) = extract_origin(&self.base_url) {
-            if origin == base_origin {
-                return true;
-            }
+        if let Some(base_origin) = extract_origin(&self.base_url)
+            && origin == base_origin
+        {
+            return true;
         }
         // Check trusted_origins patterns
         self.trusted_origins.iter().any(|pattern| {
