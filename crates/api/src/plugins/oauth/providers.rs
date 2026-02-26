@@ -1,10 +1,24 @@
 use serde_json::Value;
 use std::collections::HashMap;
 
+/// Strategy for storing OAuth state during the authorization flow.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum OAuthStateStrategy {
+    /// Stateless: store state in an encrypted cookie (default).
+    #[default]
+    Cookie,
+    /// Stateful: store state in the verification table.
+    Database,
+}
+
 /// Configuration for the OAuth plugin, containing all registered providers.
 #[derive(Debug, Clone, Default)]
 pub struct OAuthConfig {
     pub providers: HashMap<String, OAuthProvider>,
+    /// Skip state cookie verification (default: false) - SECURITY WARNING
+    pub skip_state_cookie_check: bool,
+    /// Where to store OAuth state: Cookie (stateless) or Database (default: Cookie)
+    pub store_state_strategy: OAuthStateStrategy,
 }
 
 /// User information extracted from an OAuth provider's user info endpoint.

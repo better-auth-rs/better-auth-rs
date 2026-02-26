@@ -7,8 +7,10 @@ use sha2::{Digest, Sha256};
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser, AuthVerification};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, CreateAccount, CreateUser,
-    CreateVerification, DatabaseAdapter, SessionManager, UpdateAccount,
+    CreateVerification, DatabaseAdapter, SessionManager, UpdateAccount, UpdateUser,
 };
+
+use super::encryption::{maybe_decrypt, maybe_encrypt};
 
 use super::providers::OAuthConfig;
 use super::types::{
@@ -284,15 +286,17 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
             ));
         }
 
-        // Create account link
+        // Create account link (encrypt tokens if configured)
+        let encrypt = ctx.config.account.encrypt_oauth_tokens;
+        let secret = &ctx.config.secret;
         ctx.database
             .create_account(CreateAccount {
                 user_id: link_user_id,
                 account_id: user_info.id,
                 provider_id: provider_name.to_string(),
-                access_token: Some(access_token.to_string()),
-                refresh_token,
-                id_token,
+                access_token: maybe_encrypt(Some(access_token.to_string()), encrypt, secret)?,
+                refresh_token: maybe_encrypt(refresh_token, encrypt, secret)?,
+                id_token: maybe_encrypt(id_token, encrypt, secret)?,
                 access_token_expires_at,
                 refresh_token_expires_at: None,
                 scope: scopes,
@@ -319,27 +323,33 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
         .get_account(provider_name, &user_info.id)
         .await?
     {
-        // Update tokens on the existing account
-        ctx.database
-            .update_account(
-                existing_account.id(),
-                UpdateAccount {
-                    access_token: Some(access_token.to_string()),
-                    refresh_token: refresh_token.clone(),
-                    id_token: id_token.clone(),
-                    access_token_expires_at,
-                    scope: scopes,
-                    ..Default::default()
-                },
-            )
-            .await?;
+            let account_cfg = &ctx.config.account;
+            let encrypt = account_cfg.encrypt_oauth_tokens;
+            let secret = &ctx.config.secret;
 
-        // Get the associated user
-        let user = ctx
-            .database
-            .get_user_by_id(existing_account.user_id())
-            .await?
-            .ok_or(AuthError::UserNotFound)?;
+            // Update tokens on the existing account (respects update_account_on_sign_in)
+            if account_cfg.update_account_on_sign_in {
+                ctx.database
+                    .update_account(
+                        existing_account.id(),
+                        UpdateAccount {
+                            access_token: maybe_encrypt(Some(access_token.to_string()), encrypt, secret)?,
+                            refresh_token: maybe_encrypt(refresh_token.clone(), encrypt, secret)?,
+                            id_token: maybe_encrypt(id_token.clone(), encrypt, secret)?,
+                            access_token_expires_at,
+                            scope: scopes,
+                            ..Default::default()
+                        },
+                    )
+                    .await?;
+            }
+
+            // Get the associated user
+            let user = ctx
+                .database
+                .get_user_by_id(existing_account.user_id())
+                .await?
+                .ok_or(AuthError::UserNotFound)?;
 
         // Create session
         let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
@@ -354,11 +364,51 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
         return Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header));
     }
 
+    let account_cfg = &ctx.config.account;
+    let linking_cfg = &account_cfg.account_linking;
+    let encrypt = account_cfg.encrypt_oauth_tokens;
+    let secret = &ctx.config.secret;
+
     // Check if a user with this email already exists
     let user = if let Some(existing_user) = ctx.database.get_user_by_email(&user_info.email).await?
     {
-        // Link the new provider to the existing user
-        existing_user
+        // Account linking: check if linking is enabled and provider is trusted
+        if linking_cfg.enabled {
+            let provider_trusted = linking_cfg.trusted_providers.is_empty()
+                || linking_cfg
+                    .trusted_providers
+                    .iter()
+                    .any(|p| p == provider_name);
+
+            if !provider_trusted {
+                return Err(AuthError::bad_request(
+                    "Account linking is not allowed for this provider",
+                ));
+            }
+
+            // Update user info from the new provider if configured
+            if linking_cfg.update_user_info_on_link {
+                let mut update = UpdateUser::default();
+                if let Some(name) = &user_info.name {
+                    update.name = Some(name.clone());
+                }
+                if let Some(image) = &user_info.image {
+                    update.image = Some(image.clone());
+                }
+                ctx.database.update_user(existing_user.id(), update).await?;
+                // Re-fetch the user to get updated fields
+                ctx.database
+                    .get_user_by_id(existing_user.id())
+                    .await?
+                    .ok_or(AuthError::UserNotFound)?
+            } else {
+                existing_user
+            }
+        } else {
+            return Err(AuthError::bad_request(
+                "Account linking is disabled. Cannot sign in with a new provider for an existing email.",
+            ));
+        }
     } else {
         // Create a new user
         let create_user = CreateUser::new()
@@ -369,15 +419,15 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
         ctx.database.create_user(create_user).await?
     };
 
-    // Create account
+    // Create account (encrypt tokens if configured)
     ctx.database
         .create_account(CreateAccount {
             user_id: user.id().to_string(),
             account_id: user_info.id,
             provider_id: provider_name.to_string(),
-            access_token: Some(access_token.to_string()),
-            refresh_token,
-            id_token,
+            access_token: maybe_encrypt(Some(access_token.to_string()), encrypt, secret)?,
+            refresh_token: maybe_encrypt(refresh_token, encrypt, secret)?,
+            id_token: maybe_encrypt(id_token, encrypt, secret)?,
             access_token_expires_at,
             refresh_token_expires_at: None,
             scope: scopes,
@@ -511,8 +561,12 @@ pub async fn handle_get_access_token<DB: DatabaseAdapter>(
             ))
         })?;
 
+    // Decrypt tokens transparently if encryption is enabled
+    let encrypt = ctx.config.account.encrypt_oauth_tokens;
+    let secret = &ctx.config.secret;
+
     let response = AccessTokenResponse {
-        access_token: account.access_token().map(String::from),
+        access_token: maybe_decrypt(account.access_token(), encrypt, secret)?,
         access_token_expires_at: account.access_token_expires_at().map(|dt| dt.to_rfc3339()),
         scope: account.scope().map(String::from),
     };
@@ -560,9 +614,19 @@ pub async fn handle_refresh_token<DB: DatabaseAdapter>(
             ))
         })?;
 
-    let current_refresh_token = account
+    // Decrypt refresh token if encryption is enabled
+    let encrypt = ctx.config.account.encrypt_oauth_tokens;
+    let secret = &ctx.config.secret;
+
+    let raw_refresh_token = account
         .refresh_token()
         .ok_or_else(|| AuthError::bad_request("No refresh token available for this provider"))?;
+
+    let current_refresh_token = if encrypt {
+        super::encryption::decrypt_token(raw_refresh_token, secret)?
+    } else {
+        raw_refresh_token.to_string()
+    };
 
     // Exchange refresh token for new access token
     let client = reqwest::Client::new();
@@ -571,7 +635,7 @@ pub async fn handle_refresh_token<DB: DatabaseAdapter>(
         .header("Accept", "application/json")
         .form(&[
             ("grant_type", "refresh_token"),
-            ("refresh_token", current_refresh_token),
+            ("refresh_token", &current_refresh_token),
             ("client_id", &provider.client_id),
             ("client_secret", &provider.client_secret),
         ])
@@ -605,13 +669,13 @@ pub async fn handle_refresh_token<DB: DatabaseAdapter>(
 
     let access_token_expires_at = expires_in.map(|secs| Utc::now() + Duration::seconds(secs));
 
-    // Update the account with new tokens
+    // Update the account with new tokens (encrypt if configured)
     ctx.database
         .update_account(
             account.id(),
             UpdateAccount {
-                access_token: Some(new_access_token.to_string()),
-                refresh_token: new_refresh_token.clone(),
+                access_token: maybe_encrypt(Some(new_access_token.to_string()), encrypt, secret)?,
+                refresh_token: maybe_encrypt(new_refresh_token.clone(), encrypt, secret)?,
                 access_token_expires_at,
                 scope: new_scope.clone(),
                 ..Default::default()
