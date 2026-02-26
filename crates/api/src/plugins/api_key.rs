@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -74,24 +74,16 @@ impl ApiKeyErrorCode {
             Self::KeyNotFound => "API Key not found",
             Self::RateLimited => "Rate limit exceeded.",
             Self::UnauthorizedSession => "Unauthorized or invalid session",
-            Self::InvalidPrefixLength => {
-                "The prefix length is either too large or too small."
-            }
-            Self::InvalidNameLength => {
-                "The name length is either too large or too small."
-            }
+            Self::InvalidPrefixLength => "The prefix length is either too large or too small.",
+            Self::InvalidNameLength => "The name length is either too large or too small.",
             Self::MetadataDisabled => "Metadata is disabled.",
             Self::NoValuesToUpdate => "No values to update.",
             Self::KeyDisabledExpiration => "Custom key expiration values are disabled.",
             Self::ExpiresInTooSmall => {
                 "The expiresIn is smaller than the predefined minimum value."
             }
-            Self::ExpiresInTooLarge => {
-                "The expiresIn is larger than the predefined maximum value."
-            }
-            Self::InvalidRemaining => {
-                "The remaining count is either too large or too small."
-            }
+            Self::ExpiresInTooLarge => "The expiresIn is larger than the predefined maximum value.",
+            Self::InvalidRemaining => "The remaining count is either too large or too small.",
             Self::RefillAmountAndIntervalRequired => {
                 "refillAmount and refillInterval must both be provided together"
             }
@@ -180,7 +172,7 @@ impl Default for KeyExpirationConfig {
             default_expires_in: None,
             disable_custom_expires_time: false,
             max_expires_in: 365,
-            min_expires_in: 1,
+            min_expires_in: 0,
         }
     }
 }
@@ -370,9 +362,7 @@ impl ApiKeyView {
             expires_at: ak.expires_at().map(|s| s.to_string()),
             created_at: ak.created_at().to_string(),
             updated_at: ak.updated_at().to_string(),
-            permissions: ak
-                .permissions()
-                .and_then(|s| serde_json::from_str(s).ok()),
+            permissions: ak.permissions().and_then(|s| serde_json::from_str(s).ok()),
             metadata: ak.metadata().and_then(|s| serde_json::from_str(s).ok()),
         }
     }
@@ -432,7 +422,7 @@ fn is_rate_limited(api_key: &impl AuthApiKey, global_enabled: bool) -> RateLimit
                 message: None,
                 try_again_in: None,
                 update: None,
-            }
+            };
         }
     };
 
@@ -444,7 +434,7 @@ fn is_rate_limited(api_key: &impl AuthApiKey, global_enabled: bool) -> RateLimit
                 message: None,
                 try_again_in: None,
                 update: None,
-            }
+            };
         }
     };
 
@@ -773,18 +763,16 @@ impl ApiKeyPlugin {
         if metadata.is_some() && !self.config.enable_metadata {
             return Err(api_key_error(ApiKeyErrorCode::MetadataDisabled));
         }
-        if let Some(v) = metadata {
-            if !v.is_object() && !v.is_null() {
-                return Err(api_key_error(ApiKeyErrorCode::InvalidMetadataType));
-            }
+        if let Some(v) = metadata
+            && !v.is_object()
+            && !v.is_null()
+        {
+            return Err(api_key_error(ApiKeyErrorCode::InvalidMetadataType));
         }
         Ok(())
     }
 
-    fn validate_refill(
-        refill_interval: Option<i64>,
-        refill_amount: Option<i64>,
-    ) -> AuthResult<()> {
+    fn validate_refill(refill_interval: Option<i64>, refill_amount: Option<i64>) -> AuthResult<()> {
         match (refill_interval, refill_amount) {
             (Some(_), None) | (None, Some(_)) => Err(api_key_error(
                 ApiKeyErrorCode::RefillAmountAndIntervalRequired,
@@ -1095,14 +1083,13 @@ impl ApiKeyPlugin {
         }
 
         // 2. Expired?
-        if let Some(expires_at_str) = api_key.expires_at() {
-            if let Ok(expires_at) = chrono::DateTime::parse_from_rfc3339(expires_at_str) {
-                if chrono::Utc::now() > expires_at {
-                    // Delete expired key
-                    let _ = ctx.database.delete_api_key(api_key.id()).await;
-                    return Err(api_key_error(ApiKeyErrorCode::KeyExpired));
-                }
-            }
+        if let Some(expires_at_str) = api_key.expires_at()
+            && let Ok(expires_at) = chrono::DateTime::parse_from_rfc3339(expires_at_str)
+            && chrono::Utc::now() > expires_at
+        {
+            // Delete expired key
+            let _ = ctx.database.delete_api_key(api_key.id()).await;
+            return Err(api_key_error(ApiKeyErrorCode::KeyExpired));
         }
 
         // 3. Permissions check
@@ -1121,12 +1108,12 @@ impl ApiKeyPlugin {
         let mut new_last_refill_at: Option<String> =
             api_key.last_refill_at().map(|s| s.to_string());
 
-        if let Some(0) = api_key.remaining() {
-            if api_key.refill_amount().is_none() {
-                // Usage exhausted, no refill configured -- delete key
-                let _ = ctx.database.delete_api_key(api_key.id()).await;
-                return Err(api_key_error(ApiKeyErrorCode::UsageExceeded));
-            }
+        if let Some(0) = api_key.remaining()
+            && api_key.refill_amount().is_none()
+        {
+            // Usage exhausted, no refill configured -- delete key
+            let _ = ctx.database.delete_api_key(api_key.id()).await;
+            return Err(api_key_error(ApiKeyErrorCode::UsageExceeded));
         }
 
         if let Some(remaining) = api_key.remaining() {
@@ -1139,14 +1126,14 @@ impl ApiKeyPlugin {
                 let last_time_str = api_key
                     .last_refill_at()
                     .or_else(|| Some(api_key.created_at()));
-                if let Some(last_str) = last_time_str {
-                    if let Ok(last_dt) = chrono::DateTime::parse_from_rfc3339(last_str) {
-                        let elapsed_ms =
-                            (now - last_dt.with_timezone(&chrono::Utc)).num_milliseconds();
-                        if elapsed_ms > interval {
-                            current_remaining = amount;
-                            new_last_refill_at = Some(now.to_rfc3339());
-                        }
+                if let Some(last_str) = last_time_str
+                    && let Ok(last_dt) = chrono::DateTime::parse_from_rfc3339(last_str)
+                {
+                    let elapsed_ms =
+                        (now - last_dt.with_timezone(&chrono::Utc)).num_milliseconds();
+                    if elapsed_ms > interval {
+                        current_remaining = amount;
+                        new_last_refill_at = Some(now.to_rfc3339());
                     }
                 }
             }
@@ -1169,8 +1156,10 @@ impl ApiKeyPlugin {
         }
 
         // 6. Build update
-        let mut update = UpdateApiKey::default();
-        update.remaining = new_remaining;
+        let mut update = UpdateApiKey {
+            remaining: new_remaining,
+            ..Default::default()
+        };
         if new_last_refill_at != api_key.last_refill_at().map(|s| s.to_string()) {
             update.last_refill_at = Some(new_last_refill_at);
         }
@@ -1298,9 +1287,10 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for ApiKeyPlugin {
                     "userId": view.user_id,
                 }
             });
-            return Ok(Some(BeforeRequestAction::Respond(
-                AuthResponse::json(200, &session_json)?,
-            )));
+            return Ok(Some(BeforeRequestAction::Respond(AuthResponse::json(
+                200,
+                &session_json,
+            )?)));
         }
 
         // For all other routes, inject the session
@@ -1316,20 +1306,12 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for ApiKeyPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
-            (HttpMethod::Post, "/api-key/create") => {
-                Ok(Some(self.handle_create(req, ctx).await?))
-            }
+            (HttpMethod::Post, "/api-key/create") => Ok(Some(self.handle_create(req, ctx).await?)),
             (HttpMethod::Get, "/api-key/get") => Ok(Some(self.handle_get(req, ctx).await?)),
-            (HttpMethod::Post, "/api-key/update") => {
-                Ok(Some(self.handle_update(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/api-key/delete") => {
-                Ok(Some(self.handle_delete(req, ctx).await?))
-            }
+            (HttpMethod::Post, "/api-key/update") => Ok(Some(self.handle_update(req, ctx).await?)),
+            (HttpMethod::Post, "/api-key/delete") => Ok(Some(self.handle_delete(req, ctx).await?)),
             (HttpMethod::Get, "/api-key/list") => Ok(Some(self.handle_list(req, ctx).await?)),
-            (HttpMethod::Post, "/api-key/verify") => {
-                Ok(Some(self.handle_verify(req, ctx).await?))
-            }
+            (HttpMethod::Post, "/api-key/verify") => Ok(Some(self.handle_verify(req, ctx).await?)),
             (HttpMethod::Post, "/api-key/delete-all-expired-api-keys") => {
                 Ok(Some(self.handle_delete_all_expired(req, ctx).await?))
             }
@@ -1897,11 +1879,7 @@ mod tests {
         assert_eq!(body["deleted"], 1);
 
         // Only the non-expired key should remain
-        let remaining_keys = ctx
-            .database
-            .list_api_keys_by_user(&_user.id)
-            .await
-            .unwrap();
+        let remaining_keys = ctx.database.list_api_keys_by_user(&_user.id).await.unwrap();
         assert_eq!(remaining_keys.len(), 1);
     }
 

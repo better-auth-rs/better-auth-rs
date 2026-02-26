@@ -953,10 +953,10 @@ where
         let now = Utc::now();
         let initial_count = api_keys.len();
         api_keys.retain(|_, k| {
-            if let Some(expires_at) = &k.expires_at {
-                if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(expires_at) {
-                    return exp > now;
-                }
+            if let Some(expires_at) = &k.expires_at
+                && let Ok(exp) = chrono::DateTime::parse_from_rfc3339(expires_at)
+            {
+                return exp > now;
             }
             true // keep keys without expiration
         });
