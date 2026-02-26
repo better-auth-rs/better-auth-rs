@@ -36,8 +36,10 @@ mod compat;
 use compat::helpers::*;
 use serde_json::Value;
 use std::collections::BTreeSet;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+use tokio::sync::Mutex as TokioMutex;
 
 /// Atomic counter for generating unique emails across parallel test runs.
 /// Prevents conflicts when the TS reference server is shared across tests
@@ -98,42 +100,48 @@ fn try_start_reference_server() -> Option<std::process::Child> {
     Some(child)
 }
 
-/// RAII guard that kills the reference server child process on drop.
-struct ReferenceServerGuard {
-    child: Option<std::process::Child>,
-}
+/// Global lock that serialises all dual-server tests so they don't race on
+/// the single reference server instance or port.  Uses `tokio::sync::Mutex`
+/// because the lock is held across `.await` points inside async test fns.
+static SERIAL: TokioMutex<()> = TokioMutex::const_new(());
 
-impl Drop for ReferenceServerGuard {
-    fn drop(&mut self) {
-        if let Some(ref mut child) = self.child {
-            let _ = child.kill();
-            let _ = child.wait();
+/// Shared reference server child process.  Started once, lives for the
+/// entire test binary.  Using `Mutex<Option<Child>>` instead of RAII guard
+/// so the server is only killed when the process exits (the OS reaps it).
+static REF_SERVER: Mutex<Option<std::process::Child>> = Mutex::new(None);
+
+/// Ensure the reference server is running.  Starts it at most once across
+/// all tests.  Returns `false` if it could not be started (node_modules
+/// missing).
+async fn ensure_reference_server() -> bool {
+    // Fast path: already running?
+    if reference_server_available().await {
+        return true;
+    }
+
+    // Try to start (under lock so only one test does this)
+    {
+        let mut slot = REF_SERVER.lock().unwrap();
+        if slot.is_none() {
+            match try_start_reference_server() {
+                Some(child) => {
+                    *slot = Some(child);
+                }
+                None => return false,
+            }
         }
     }
-}
-
-/// Ensure the reference server is running.  Returns a guard that kills the
-/// process on drop, or `None` if the server could not be started.
-async fn ensure_reference_server() -> Option<ReferenceServerGuard> {
-    // Already running?
-    if reference_server_available().await {
-        return Some(ReferenceServerGuard { child: None });
-    }
-
-    // Try to start it
-    let child = try_start_reference_server()?;
-    let guard = ReferenceServerGuard { child: Some(child) };
 
     // Wait for readiness (up to 10 seconds)
     for _ in 0..20 {
         tokio::time::sleep(Duration::from_millis(500)).await;
         if reference_server_available().await {
-            return Some(guard);
+            return true;
         }
     }
 
     eprintln!("[dual-server] Reference server did not become ready in 10s, skipping.");
-    None
+    false
 }
 
 // ---------------------------------------------------------------------------
@@ -382,13 +390,11 @@ fn filter_known_diffs(diffs: &[String]) -> Vec<String> {
 /// Compare sign-up response shapes between Rust and reference servers.
 #[tokio::test]
 async fn dual_server_signup_shape_comparison() {
-    let _guard = match ensure_reference_server().await {
-        Some(g) => g,
-        None => {
-            eprintln!("[dual-server] SKIPPED: reference server not available");
-            return;
-        }
-    };
+    let _lock = SERIAL.lock().await;
+    if !ensure_reference_server().await {
+        eprintln!("[dual-server] SKIPPED: reference server not available");
+        return;
+    }
 
     let auth = create_test_auth().await;
     let mut ref_client = RefClient::new();
@@ -441,13 +447,11 @@ async fn dual_server_signup_shape_comparison() {
 /// Compare sign-in response shapes.
 #[tokio::test]
 async fn dual_server_signin_shape_comparison() {
-    let _guard = match ensure_reference_server().await {
-        Some(g) => g,
-        None => {
-            eprintln!("[dual-server] SKIPPED: reference server not available");
-            return;
-        }
-    };
+    let _lock = SERIAL.lock().await;
+    if !ensure_reference_server().await {
+        eprintln!("[dual-server] SKIPPED: reference server not available");
+        return;
+    }
 
     let auth = create_test_auth().await;
     let mut ref_client = RefClient::new();
@@ -509,13 +513,11 @@ async fn dual_server_signin_shape_comparison() {
 /// Compare error response shapes (invalid credentials).
 #[tokio::test]
 async fn dual_server_error_shape_comparison() {
-    let _guard = match ensure_reference_server().await {
-        Some(g) => g,
-        None => {
-            eprintln!("[dual-server] SKIPPED: reference server not available");
-            return;
-        }
-    };
+    let _lock = SERIAL.lock().await;
+    if !ensure_reference_server().await {
+        eprintln!("[dual-server] SKIPPED: reference server not available");
+        return;
+    }
 
     let auth = create_test_auth().await;
     let mut ref_client = RefClient::new();
@@ -568,13 +570,11 @@ async fn dual_server_error_shape_comparison() {
 /// report.  Uses cookie-based auth for the reference server.
 #[tokio::test]
 async fn dual_server_comprehensive_comparison() {
-    let _guard = match ensure_reference_server().await {
-        Some(g) => g,
-        None => {
-            eprintln!("[dual-server] SKIPPED: reference server not available");
-            return;
-        }
-    };
+    let _lock = SERIAL.lock().await;
+    if !ensure_reference_server().await {
+        eprintln!("[dual-server] SKIPPED: reference server not available");
+        return;
+    }
 
     let auth = create_test_auth().await;
     let mut ref_client = RefClient::new();
