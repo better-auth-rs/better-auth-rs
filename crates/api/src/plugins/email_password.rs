@@ -9,7 +9,7 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod};
 
-use better_auth_core::password_utils::{self, PasswordHasher};
+use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
 
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
