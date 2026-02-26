@@ -1,0 +1,5 @@
+---
+source: tests/snapshot_tests.rs
+expression: redact(&body_409)
+---
+message: A user with this email already exists

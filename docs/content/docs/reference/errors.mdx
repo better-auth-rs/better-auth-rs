@@ -78,4 +78,90 @@ AuthError::conflict("Email already exists");
 AuthError::internal("Unexpected error");
 AuthError::validation("Password too short");
 AuthError::plugin("my-plugin", "Something went wrong");
+AuthError::not_implemented("Feature not available yet");
+```
+
+## Common Error Scenarios
+
+### Authentication Errors
+
+| Error | When | Resolution |
+|-------|------|------------|
+| `Unauthenticated` | Missing or invalid session token | Include a valid `Authorization: Bearer <token>` header or session cookie |
+| `InvalidCredentials` | Wrong email/password combination | Check credentials and retry |
+| `SessionNotFound` | Expired or revoked session | Re-authenticate to get a new session |
+
+### Authorization Errors
+
+| Error | When | Resolution |
+|-------|------|------------|
+| `Forbidden` | User lacks required role (e.g., admin) | Ensure the user has the appropriate role |
+| `Unauthorized` | Insufficient RBAC permissions | Check organization role and permissions |
+
+### Validation Errors
+
+| Error | When | Resolution |
+|-------|------|------------|
+| `Validation` | Request body fails validation | Check required fields, formats, and constraints |
+| `BadRequest` | Malformed or missing request data | Ensure the request matches the expected format |
+
+### Resource Errors
+
+| Error | When | Resolution |
+|-------|------|------------|
+| `UserNotFound` | Referenced user doesn't exist | Verify the user ID |
+| `NotFound` | Resource (org, member, key, etc.) not found | Check the resource ID and ownership |
+| `Conflict` | Email, username, or slug already exists | Use a different value |
+
+### Rate Limiting
+
+| Error | When | Resolution |
+|-------|------|------------|
+| `RateLimited` | Too many requests in the time window | Wait for `retryAfter` seconds before retrying |
+
+### Plugin-Specific Errors
+
+#### OAuth Plugin
+
+| Error | When |
+|-------|------|
+| `BadRequest("Unknown provider")` | Provider name not registered |
+| `BadRequest("Missing code parameter")` | OAuth callback missing authorization code |
+| `BadRequest("Provider mismatch")` | State provider doesn't match callback provider |
+| `Conflict("Social account already linked")` | Provider account linked to another user |
+
+#### Two-Factor Plugin
+
+| Error | When |
+|-------|------|
+| `NotFound("Two-factor authentication not enabled")` | 2FA not set up for user |
+| `BadRequest("Invalid backup code")` | Backup code doesn't match |
+| `BadRequest("No backup codes available")` | All backup codes used |
+
+#### Organization Plugin
+
+| Error | When |
+|-------|------|
+| `Forbidden("Insufficient permissions")` | Role lacks required RBAC permission |
+| `Conflict("Slug already taken")` | Organization slug already in use |
+
+#### Passkey Plugin
+
+| Error | When |
+|-------|------|
+| `NotImplemented(...)` | `allow_insecure_unverified_assertion` is `false` |
+| `BadRequest("Invalid or expired ... challenge")` | Challenge expired or already used |
+
+## Error Handling in Axum
+
+When using the Axum integration, `AuthError` is automatically converted to an HTTP response:
+
+```rust
+use axum::{Json, response::IntoResponse};
+use better_auth::error::AuthError;
+
+async fn my_handler() -> Result<impl IntoResponse, AuthError> {
+    // AuthError automatically becomes the right HTTP status + JSON body
+    Err(AuthError::bad_request("Something went wrong"))
+}
 ```

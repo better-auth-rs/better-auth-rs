@@ -85,6 +85,26 @@ jobs:
           cargo test --test compat_organization_tests -- --nocapture
           cargo test --test compat_passkey_tests -- --nocapture
 
+  p2-tests:
+    name: P2 Tests (Snapshot, Property, Dual-Server)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install reference server dependencies
+        run: npm ci
+        working-directory: compat-tests/reference-server
+      - name: Run snapshot tests
+        run: cargo test --test snapshot_tests -- --nocapture
+      - name: Run property tests
+        run: cargo test --test property_tests -- --nocapture
+      - name: Run dual-server comparison tests
+        run: cargo test --test dual_server_tests -- --nocapture
+
   standalone-examples:
     name: Check Standalone Examples
     runs-on: ubuntu-latest

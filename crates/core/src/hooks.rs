@@ -72,6 +72,63 @@ pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
         let _ = token;
         Ok(())
     }
+
+    // ── Account hooks ──────────────────────────────────────────────────
+
+    async fn before_create_account(&self, account: &mut CreateAccount) -> AuthResult<()> {
+        let _ = account;
+        Ok(())
+    }
+
+    async fn after_create_account(&self, account: &DB::Account) -> AuthResult<()> {
+        let _ = account;
+        Ok(())
+    }
+
+    async fn before_update_account(&self, id: &str, update: &mut UpdateAccount) -> AuthResult<()> {
+        let _ = (id, update);
+        Ok(())
+    }
+
+    async fn after_update_account(&self, account: &DB::Account) -> AuthResult<()> {
+        let _ = account;
+        Ok(())
+    }
+
+    async fn before_delete_account(&self, id: &str) -> AuthResult<()> {
+        let _ = id;
+        Ok(())
+    }
+
+    async fn after_delete_account(&self, id: &str) -> AuthResult<()> {
+        let _ = id;
+        Ok(())
+    }
+
+    // ── Verification hooks ─────────────────────────────────────────────
+
+    async fn before_create_verification(
+        &self,
+        verification: &mut CreateVerification,
+    ) -> AuthResult<()> {
+        let _ = verification;
+        Ok(())
+    }
+
+    async fn after_create_verification(&self, verification: &DB::Verification) -> AuthResult<()> {
+        let _ = verification;
+        Ok(())
+    }
+
+    async fn before_delete_verification(&self, id: &str) -> AuthResult<()> {
+        let _ = id;
+        Ok(())
+    }
+
+    async fn after_delete_verification(&self, id: &str) -> AuthResult<()> {
+        let _ = id;
+        Ok(())
+    }
 }
 
 /// A database adapter wrapper that calls hooks around the inner adapter's operations.
@@ -98,19 +155,66 @@ impl<DB: DatabaseAdapter> HookedDatabaseAdapter<DB> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Helper macros to eliminate repeated before→execute→after hook patterns.
+// ---------------------------------------------------------------------------
+
+/// Hook pattern for **create** / **update** operations that take a mutable
+/// input, call the inner adapter, and return the resulting entity.
+macro_rules! hooked_create {
+    ($self:ident, $before:ident, $after:ident, $inner_method:ident, $input:ident) => {{
+        for hook in &$self.hooks {
+            hook.$before(&mut $input).await?;
+        }
+        let result = $self.inner.$inner_method($input).await?;
+        for hook in &$self.hooks {
+            hook.$after(&result).await?;
+        }
+        Ok(result)
+    }};
+}
+
+/// Hook pattern for **update** operations that take `(id, &mut input)`.
+macro_rules! hooked_update {
+    ($self:ident, $before:ident, $after:ident, $inner_method:ident, $id:expr, $input:ident) => {{
+        for hook in &$self.hooks {
+            hook.$before($id, &mut $input).await?;
+        }
+        let result = $self.inner.$inner_method($id, $input).await?;
+        for hook in &$self.hooks {
+            hook.$after(&result).await?;
+        }
+        Ok(result)
+    }};
+}
+
+/// Hook pattern for **delete** operations that take a single `&str` key and
+/// return `()`.
+macro_rules! hooked_delete {
+    ($self:ident, $before:ident, $after:ident, $inner_method:ident, $key:expr) => {{
+        for hook in &$self.hooks {
+            hook.$before($key).await?;
+        }
+        $self.inner.$inner_method($key).await?;
+        for hook in &$self.hooks {
+            hook.$after($key).await?;
+        }
+        Ok(())
+    }};
+}
+
 #[async_trait]
 impl<DB: DatabaseAdapter> UserOps for HookedDatabaseAdapter<DB> {
     type User = DB::User;
 
     async fn create_user(&self, mut user: CreateUser) -> AuthResult<Self::User> {
-        for hook in &self.hooks {
-            hook.before_create_user(&mut user).await?;
-        }
-        let result = self.inner.create_user(user).await?;
-        for hook in &self.hooks {
-            hook.after_create_user(&result).await?;
-        }
-        Ok(result)
+        hooked_create!(
+            self,
+            before_create_user,
+            after_create_user,
+            create_user,
+            user
+        )
     }
 
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<Self::User>> {
@@ -126,25 +230,18 @@ impl<DB: DatabaseAdapter> UserOps for HookedDatabaseAdapter<DB> {
     }
 
     async fn update_user(&self, id: &str, mut update: UpdateUser) -> AuthResult<Self::User> {
-        for hook in &self.hooks {
-            hook.before_update_user(id, &mut update).await?;
-        }
-        let result = self.inner.update_user(id, update).await?;
-        for hook in &self.hooks {
-            hook.after_update_user(&result).await?;
-        }
-        Ok(result)
+        hooked_update!(
+            self,
+            before_update_user,
+            after_update_user,
+            update_user,
+            id,
+            update
+        )
     }
 
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
-        for hook in &self.hooks {
-            hook.before_delete_user(id).await?;
-        }
-        self.inner.delete_user(id).await?;
-        for hook in &self.hooks {
-            hook.after_delete_user(id).await?;
-        }
-        Ok(())
+        hooked_delete!(self, before_delete_user, after_delete_user, delete_user, id)
     }
 
     async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<Self::User>, usize)> {
@@ -157,14 +254,13 @@ impl<DB: DatabaseAdapter> SessionOps for HookedDatabaseAdapter<DB> {
     type Session = DB::Session;
 
     async fn create_session(&self, mut session: CreateSession) -> AuthResult<Self::Session> {
-        for hook in &self.hooks {
-            hook.before_create_session(&mut session).await?;
-        }
-        let result = self.inner.create_session(session).await?;
-        for hook in &self.hooks {
-            hook.after_create_session(&result).await?;
-        }
-        Ok(result)
+        hooked_create!(
+            self,
+            before_create_session,
+            after_create_session,
+            create_session,
+            session
+        )
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<Self::Session>> {
@@ -184,14 +280,13 @@ impl<DB: DatabaseAdapter> SessionOps for HookedDatabaseAdapter<DB> {
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
-        for hook in &self.hooks {
-            hook.before_delete_session(token).await?;
-        }
-        self.inner.delete_session(token).await?;
-        for hook in &self.hooks {
-            hook.after_delete_session(token).await?;
-        }
-        Ok(())
+        hooked_delete!(
+            self,
+            before_delete_session,
+            after_delete_session,
+            delete_session,
+            token
+        )
     }
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
@@ -217,8 +312,14 @@ impl<DB: DatabaseAdapter> SessionOps for HookedDatabaseAdapter<DB> {
 impl<DB: DatabaseAdapter> AccountOps for HookedDatabaseAdapter<DB> {
     type Account = DB::Account;
 
-    async fn create_account(&self, account: CreateAccount) -> AuthResult<Self::Account> {
-        self.inner.create_account(account).await
+    async fn create_account(&self, mut account: CreateAccount) -> AuthResult<Self::Account> {
+        hooked_create!(
+            self,
+            before_create_account,
+            after_create_account,
+            create_account,
+            account
+        )
     }
 
     async fn get_account(
@@ -233,12 +334,29 @@ impl<DB: DatabaseAdapter> AccountOps for HookedDatabaseAdapter<DB> {
         self.inner.get_user_accounts(user_id).await
     }
 
-    async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<Self::Account> {
-        self.inner.update_account(id, update).await
+    async fn update_account(
+        &self,
+        id: &str,
+        mut update: UpdateAccount,
+    ) -> AuthResult<Self::Account> {
+        hooked_update!(
+            self,
+            before_update_account,
+            after_update_account,
+            update_account,
+            id,
+            update
+        )
     }
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
-        self.inner.delete_account(id).await
+        hooked_delete!(
+            self,
+            before_delete_account,
+            after_delete_account,
+            delete_account,
+            id
+        )
     }
 }
 
@@ -248,9 +366,15 @@ impl<DB: DatabaseAdapter> VerificationOps for HookedDatabaseAdapter<DB> {
 
     async fn create_verification(
         &self,
-        verification: CreateVerification,
+        mut verification: CreateVerification,
     ) -> AuthResult<Self::Verification> {
-        self.inner.create_verification(verification).await
+        hooked_create!(
+            self,
+            before_create_verification,
+            after_create_verification,
+            create_verification,
+            verification
+        )
     }
 
     async fn get_verification(
@@ -284,7 +408,13 @@ impl<DB: DatabaseAdapter> VerificationOps for HookedDatabaseAdapter<DB> {
     }
 
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
-        self.inner.delete_verification(id).await
+        hooked_delete!(
+            self,
+            before_delete_verification,
+            after_delete_verification,
+            delete_verification,
+            id
+        )
     }
 
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
@@ -483,56 +613,163 @@ impl<DB: DatabaseAdapter> ApiKeyOps for HookedDatabaseAdapter<DB> {
 mod tests {
     use super::*;
     use crate::adapters::MemoryDatabaseAdapter;
-    use crate::types::{CreateUser, UpdateUser, User};
+    use crate::types::{
+        Account, CreateAccount, CreateUser, CreateVerification, UpdateAccount, UpdateUser, User,
+        Verification,
+    };
     use std::sync::atomic::{AtomicU32, Ordering};
 
+    // ── Unified counting hook ──────────────────────────────────────────
+    //
+    // A single hook struct that counts calls for *all* entity types,
+    // replacing the previous per-entity `CountingHook`,
+    // `AccountCountingHook`, and `VerificationCountingHook` structs.
+
     struct CountingHook {
-        before_create_count: AtomicU32,
-        after_create_count: AtomicU32,
-        before_update_count: AtomicU32,
-        after_update_count: AtomicU32,
-        before_delete_count: AtomicU32,
-        after_delete_count: AtomicU32,
+        // user
+        before_create_user_count: AtomicU32,
+        after_create_user_count: AtomicU32,
+        before_update_user_count: AtomicU32,
+        after_update_user_count: AtomicU32,
+        before_delete_user_count: AtomicU32,
+        after_delete_user_count: AtomicU32,
+        // account
+        before_create_account_count: AtomicU32,
+        after_create_account_count: AtomicU32,
+        before_update_account_count: AtomicU32,
+        after_update_account_count: AtomicU32,
+        before_delete_account_count: AtomicU32,
+        after_delete_account_count: AtomicU32,
+        // verification
+        before_create_verification_count: AtomicU32,
+        after_create_verification_count: AtomicU32,
+        before_delete_verification_count: AtomicU32,
+        after_delete_verification_count: AtomicU32,
     }
 
     impl CountingHook {
         fn new() -> Self {
             Self {
-                before_create_count: AtomicU32::new(0),
-                after_create_count: AtomicU32::new(0),
-                before_update_count: AtomicU32::new(0),
-                after_update_count: AtomicU32::new(0),
-                before_delete_count: AtomicU32::new(0),
-                after_delete_count: AtomicU32::new(0),
+                before_create_user_count: AtomicU32::new(0),
+                after_create_user_count: AtomicU32::new(0),
+                before_update_user_count: AtomicU32::new(0),
+                after_update_user_count: AtomicU32::new(0),
+                before_delete_user_count: AtomicU32::new(0),
+                after_delete_user_count: AtomicU32::new(0),
+                before_create_account_count: AtomicU32::new(0),
+                after_create_account_count: AtomicU32::new(0),
+                before_update_account_count: AtomicU32::new(0),
+                after_update_account_count: AtomicU32::new(0),
+                before_delete_account_count: AtomicU32::new(0),
+                after_delete_account_count: AtomicU32::new(0),
+                before_create_verification_count: AtomicU32::new(0),
+                after_create_verification_count: AtomicU32::new(0),
+                before_delete_verification_count: AtomicU32::new(0),
+                after_delete_verification_count: AtomicU32::new(0),
             }
         }
     }
 
     #[async_trait]
     impl DatabaseHooks<MemoryDatabaseAdapter> for CountingHook {
+        // user hooks
         async fn before_create_user(&self, _user: &mut CreateUser) -> AuthResult<()> {
-            self.before_create_count.fetch_add(1, Ordering::SeqCst);
+            self.before_create_user_count.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
         async fn after_create_user(&self, _user: &User) -> AuthResult<()> {
-            self.after_create_count.fetch_add(1, Ordering::SeqCst);
+            self.after_create_user_count.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
         async fn before_update_user(&self, _id: &str, _update: &mut UpdateUser) -> AuthResult<()> {
-            self.before_update_count.fetch_add(1, Ordering::SeqCst);
+            self.before_update_user_count.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
         async fn after_update_user(&self, _user: &User) -> AuthResult<()> {
-            self.after_update_count.fetch_add(1, Ordering::SeqCst);
+            self.after_update_user_count.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
         async fn before_delete_user(&self, _id: &str) -> AuthResult<()> {
-            self.before_delete_count.fetch_add(1, Ordering::SeqCst);
+            self.before_delete_user_count.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
         async fn after_delete_user(&self, _id: &str) -> AuthResult<()> {
-            self.after_delete_count.fetch_add(1, Ordering::SeqCst);
+            self.after_delete_user_count.fetch_add(1, Ordering::SeqCst);
             Ok(())
+        }
+        // account hooks
+        async fn before_create_account(&self, _account: &mut CreateAccount) -> AuthResult<()> {
+            self.before_create_account_count
+                .fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn after_create_account(&self, _account: &Account) -> AuthResult<()> {
+            self.after_create_account_count
+                .fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn before_update_account(
+            &self,
+            _id: &str,
+            _update: &mut UpdateAccount,
+        ) -> AuthResult<()> {
+            self.before_update_account_count
+                .fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn after_update_account(&self, _account: &Account) -> AuthResult<()> {
+            self.after_update_account_count
+                .fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn before_delete_account(&self, _id: &str) -> AuthResult<()> {
+            self.before_delete_account_count
+                .fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn after_delete_account(&self, _id: &str) -> AuthResult<()> {
+            self.after_delete_account_count
+                .fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        // verification hooks
+        async fn before_create_verification(&self, _v: &mut CreateVerification) -> AuthResult<()> {
+            self.before_create_verification_count
+                .fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn after_create_verification(&self, _v: &Verification) -> AuthResult<()> {
+            self.after_create_verification_count
+                .fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn before_delete_verification(&self, _id: &str) -> AuthResult<()> {
+            self.before_delete_verification_count
+                .fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn after_delete_verification(&self, _id: &str) -> AuthResult<()> {
+            self.after_delete_verification_count
+                .fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    // ── Test helpers ───────────────────────────────────────────────────
+
+    /// Helper to construct a `CreateAccount` with sensible defaults.
+    fn test_create_account(user_id: &str) -> CreateAccount {
+        CreateAccount {
+            user_id: user_id.to_string(),
+            account_id: "provider_123".to_string(),
+            provider_id: "google".to_string(),
+            access_token: None,
+            refresh_token: None,
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: None,
+            password: None,
         }
     }
 
@@ -547,8 +784,8 @@ mod tests {
             .with_name("Test");
         db.create_user(create).await.unwrap();
 
-        assert_eq!(hook.before_create_count.load(Ordering::SeqCst), 1);
-        assert_eq!(hook.after_create_count.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.before_create_user_count.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.after_create_user_count.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]
@@ -578,8 +815,8 @@ mod tests {
         };
         db.update_user(&user.id, update).await.unwrap();
 
-        assert_eq!(hook.before_update_count.load(Ordering::SeqCst), 1);
-        assert_eq!(hook.after_update_count.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.before_update_user_count.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.after_update_user_count.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]
@@ -595,8 +832,8 @@ mod tests {
 
         db.delete_user(&user.id).await.unwrap();
 
-        assert_eq!(hook.before_delete_count.load(Ordering::SeqCst), 1);
-        assert_eq!(hook.after_delete_count.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.before_delete_user_count.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.after_delete_user_count.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]
@@ -635,10 +872,10 @@ mod tests {
             .with_name("Test");
         db.create_user(create).await.unwrap();
 
-        assert_eq!(hook1.before_create_count.load(Ordering::SeqCst), 1);
-        assert_eq!(hook2.before_create_count.load(Ordering::SeqCst), 1);
-        assert_eq!(hook1.after_create_count.load(Ordering::SeqCst), 1);
-        assert_eq!(hook2.after_create_count.load(Ordering::SeqCst), 1);
+        assert_eq!(hook1.before_create_user_count.load(Ordering::SeqCst), 1);
+        assert_eq!(hook2.before_create_user_count.load(Ordering::SeqCst), 1);
+        assert_eq!(hook1.after_create_user_count.load(Ordering::SeqCst), 1);
+        assert_eq!(hook2.after_create_user_count.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]
@@ -647,5 +884,179 @@ mod tests {
 
         let result = db.get_user_by_email("nonexistent@test.com").await.unwrap();
         assert!(result.is_none());
+    }
+
+    // ── Account hook tests ──────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_account_hooks_create() {
+        let hook = Arc::new(CountingHook::new());
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(hook.clone());
+
+        let user = db
+            .create_user(CreateUser::new().with_email("test@example.com"))
+            .await
+            .unwrap();
+
+        db.create_account(test_create_account(&user.id))
+            .await
+            .unwrap();
+
+        assert_eq!(hook.before_create_account_count.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.after_create_account_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_account_hooks_update() {
+        let hook = Arc::new(CountingHook::new());
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(hook.clone());
+
+        let user = db
+            .create_user(CreateUser::new().with_email("test@example.com"))
+            .await
+            .unwrap();
+
+        let created = db
+            .create_account(test_create_account(&user.id))
+            .await
+            .unwrap();
+
+        let update = UpdateAccount {
+            access_token: Some("new_tok".to_string()),
+            ..Default::default()
+        };
+        db.update_account(&created.id, update).await.unwrap();
+
+        assert_eq!(hook.before_update_account_count.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.after_update_account_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_account_hooks_delete() {
+        let hook = Arc::new(CountingHook::new());
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(hook.clone());
+
+        let user = db
+            .create_user(CreateUser::new().with_email("test@example.com"))
+            .await
+            .unwrap();
+
+        let created = db
+            .create_account(test_create_account(&user.id))
+            .await
+            .unwrap();
+
+        db.delete_account(&created.id).await.unwrap();
+
+        assert_eq!(hook.before_delete_account_count.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.after_delete_account_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_account_before_hook_can_reject() {
+        struct RejectAccountHook;
+
+        #[async_trait]
+        impl DatabaseHooks<MemoryDatabaseAdapter> for RejectAccountHook {
+            async fn before_create_account(&self, _account: &mut CreateAccount) -> AuthResult<()> {
+                Err(crate::error::AuthError::forbidden("Account hook rejected"))
+            }
+        }
+
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(Arc::new(RejectAccountHook));
+
+        let user = db
+            .create_user(CreateUser::new().with_email("test@example.com"))
+            .await
+            .unwrap();
+
+        let result = db.create_account(test_create_account(&user.id)).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().status_code(), 403);
+    }
+
+    // ── Verification hook tests ─────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_verification_hooks_create() {
+        let hook = Arc::new(CountingHook::new());
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(hook.clone());
+
+        let verification = CreateVerification {
+            identifier: "email_verification:test@example.com".to_string(),
+            value: "token_abc".to_string(),
+            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+        };
+        db.create_verification(verification).await.unwrap();
+
+        assert_eq!(
+            hook.before_create_verification_count.load(Ordering::SeqCst),
+            1
+        );
+        assert_eq!(
+            hook.after_create_verification_count.load(Ordering::SeqCst),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn test_verification_hooks_delete() {
+        let hook = Arc::new(CountingHook::new());
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(hook.clone());
+
+        let verification = CreateVerification {
+            identifier: "email_verification:test@example.com".to_string(),
+            value: "token_abc".to_string(),
+            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+        };
+        let created = db.create_verification(verification).await.unwrap();
+
+        db.delete_verification(&created.id).await.unwrap();
+
+        assert_eq!(
+            hook.before_delete_verification_count.load(Ordering::SeqCst),
+            1
+        );
+        assert_eq!(
+            hook.after_delete_verification_count.load(Ordering::SeqCst),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn test_verification_before_hook_can_reject() {
+        struct RejectVerificationHook;
+
+        #[async_trait]
+        impl DatabaseHooks<MemoryDatabaseAdapter> for RejectVerificationHook {
+            async fn before_create_verification(
+                &self,
+                _v: &mut CreateVerification,
+            ) -> AuthResult<()> {
+                Err(crate::error::AuthError::forbidden(
+                    "Verification hook rejected",
+                ))
+            }
+        }
+
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(Arc::new(RejectVerificationHook));
+
+        let verification = CreateVerification {
+            identifier: "test".to_string(),
+            value: "val".to_string(),
+            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+        };
+        let result = db.create_verification(verification).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().status_code(), 403);
     }
 }

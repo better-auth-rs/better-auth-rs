@@ -1,0 +1,166 @@
+---
+title: Email
+description: Email provider configuration for verification, password reset, and OTP.
+---
+
+Better Auth uses email for verification, password resets, and OTP-based two-factor authentication. You configure an email provider to handle the actual sending.
+
+## Email Provider Trait
+
+Better Auth defines an `EmailProvider` trait that you implement to integrate with your email service:
+
+```rust
+#[async_trait]
+pub trait EmailProvider: Send + Sync {
+    async fn send_email(
+        &self,
+        to: &str,
+        subject: &str,
+        body: &str,
+    ) -> Result<(), Box<dyn std::error::Error>>;
+}
+```
+
+## Setup
+
+### Using a Custom Provider
+
+```rust
+use better_auth::email::EmailProvider;
+
+struct SmtpEmailProvider {
+    // your SMTP client configuration
+}
+
+#[async_trait::async_trait]
+impl EmailProvider for SmtpEmailProvider {
+    async fn send_email(
+        &self,
+        to: &str,
+        subject: &str,
+        body: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Send email using your SMTP library
+        Ok(())
+    }
+}
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .email_provider(SmtpEmailProvider { /* ... */ })
+    .build()
+    .await?;
+```
+
+### Console Provider (Development)
+
+For development, you can use a simple provider that logs emails to the console:
+
+```rust
+struct ConsoleEmailProvider;
+
+#[async_trait::async_trait]
+impl EmailProvider for ConsoleEmailProvider {
+    async fn send_email(
+        &self,
+        to: &str,
+        subject: &str,
+        body: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        println!("=== Email to: {} ===", to);
+        println!("Subject: {}", subject);
+        println!("{}", body);
+        println!("==================");
+        Ok(())
+    }
+}
+```
+
+## When Emails Are Sent
+
+Better Auth sends emails in the following scenarios:
+
+### Email Verification
+
+When `require_email_verification` is enabled on the `EmailPasswordPlugin`, a verification email is sent after sign-up:
+
+- **Subject**: Email verification
+- **Content**: Contains a verification URL with a token
+- **Token expiry**: Configurable, typically 24 hours
+
+See [Email Verification](/docs/authentication/email-verification) for details.
+
+### Password Reset
+
+When a user requests a password reset via the `PasswordManagementPlugin`:
+
+- **Subject**: Password reset request
+- **Content**: Contains a reset URL with a token
+- **Token expiry**: Configurable, typically 1 hour
+
+See [Password Management](/docs/authentication/password-management) for details.
+
+### Two-Factor OTP
+
+When using the OTP method of the `TwoFactorPlugin`:
+
+- **Subject**: Your one-time password
+- **Content**: Contains a 6-digit OTP code
+- **Code expiry**: 5 minutes
+
+See [Two-Factor Authentication](/docs/plugins/two-factor) for details.
+
+## Email Content
+
+Email content is generated internally by Better Auth. The default templates produce simple text-based emails. The content varies by email type:
+
+| Email Type | Key Content |
+|-----------|-------------|
+| Verification | Verification URL with token |
+| Password Reset | Reset URL with token |
+| OTP | 6-digit numeric code |
+
+## Configuration
+
+Email-related settings are spread across the plugins that use email:
+
+### Email Verification Config
+
+```rust
+EmailVerificationPlugin::new()
+    .send_on_signup(true)         // Auto-send verification email on sign-up
+    .auto_signin_after_verify(true) // Create session after email verification
+```
+
+### Password Reset Config
+
+```rust
+PasswordManagementPlugin::new()
+    // Password reset is enabled when the plugin is registered
+```
+
+### 2FA OTP Config
+
+```rust
+TwoFactorPlugin::new()
+    // OTP emails are sent via the configured email provider
+```
+
+## Error Handling
+
+If no email provider is configured, any operation that requires sending an email will return an error:
+
+```json
+{
+  "code": "EMAIL_PROVIDER_NOT_CONFIGURED",
+  "message": "Email provider is not configured"
+}
+```
+
+Make sure to configure an email provider if you use any email-dependent features.
+
+## See Also
+
+- [Email Verification](/docs/authentication/email-verification) — Verification flow details
+- [Password Management](/docs/authentication/password-management) — Reset flow details
+- [Two-Factor Authentication](/docs/plugins/two-factor) — OTP via email
