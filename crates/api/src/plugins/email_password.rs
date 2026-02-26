@@ -205,7 +205,8 @@ impl EmailPasswordPlugin {
             };
 
             // Create session cookie
-            let cookie_header = self.create_session_cookie(session.token(), ctx);
+            let cookie_header =
+                better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
 
             Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
         } else {
@@ -274,7 +275,8 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header = self.create_session_cookie(session.token(), ctx);
+        let cookie_header =
+            better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -338,7 +340,8 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header = self.create_session_cookie(session.token(), ctx);
+        let cookie_header =
+            better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -358,14 +361,6 @@ impl EmailPasswordPlugin {
 
     async fn hash_password(&self, password: &str) -> AuthResult<String> {
         password_utils::hash_password(self.config.password_hasher.as_ref(), password).await
-    }
-
-    fn create_session_cookie<DB: DatabaseAdapter>(
-        &self,
-        token: &str,
-        ctx: &AuthContext<DB>,
-    ) -> String {
-        password_utils::create_session_cookie(token, ctx)
     }
 
     async fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {

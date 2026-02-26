@@ -1,0 +1,130 @@
+---
+title: OAuth / Social Login
+description: Sign in with Google, GitHub, Discord, and other OAuth providers.
+---
+
+The `OAuthPlugin` enables social sign-in via OAuth 2.0 providers. It handles the full authorization code flow with PKCE, token exchange, user info fetching, and account linking.
+
+## Setup
+
+```rust
+use better_auth::plugins::OAuthPlugin;
+use better_auth::plugins::oauth::OAuthProvider;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(
+        OAuthPlugin::new()
+            .add_provider("google", OAuthProvider::google(
+                "GOOGLE_CLIENT_ID",
+                "GOOGLE_CLIENT_SECRET",
+            ))
+            .add_provider("github", OAuthProvider::github(
+                "GITHUB_CLIENT_ID",
+                "GITHUB_CLIENT_SECRET",
+            ))
+    )
+    .build()
+    .await?;
+```
+
+## Built-in Providers
+
+Better Auth RS includes pre-configured providers with correct URLs and user info mapping:
+
+| Provider | Constructor | Default Scopes |
+|----------|------------|----------------|
+| Google | `OAuthProvider::google(client_id, client_secret)` | `openid`, `email`, `profile` |
+| GitHub | `OAuthProvider::github(client_id, client_secret)` | `user:email` |
+| Discord | `OAuthProvider::discord(client_id, client_secret)` | `identify`, `email` |
+
+## Custom Provider
+
+You can register any OAuth 2.0 provider by constructing an `OAuthProvider` manually:
+
+```rust
+use better_auth::plugins::oauth::{OAuthProvider, OAuthUserInfo};
+
+let custom_provider = OAuthProvider {
+    client_id: "your-client-id".to_string(),
+    client_secret: "your-client-secret".to_string(),
+    auth_url: "https://provider.com/oauth/authorize".to_string(),
+    token_url: "https://provider.com/oauth/token".to_string(),
+    user_info_url: "https://provider.com/api/userinfo".to_string(),
+    scopes: vec!["openid".to_string(), "email".to_string()],
+    map_user_info: |v| {
+        Ok(OAuthUserInfo {
+            id: v["sub"].as_str().ok_or("missing sub")?.to_string(),
+            email: v["email"].as_str().ok_or("missing email")?.to_string(),
+            name: v["name"].as_str().map(String::from),
+            image: v["avatar"].as_str().map(String::from),
+            email_verified: v["email_verified"].as_bool().unwrap_or(false),
+        })
+    },
+};
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(
+        OAuthPlugin::new()
+            .add_provider("custom", custom_provider)
+    )
+    .build()
+    .await?;
+```
+
+The `map_user_info` function transforms the provider's raw JSON user info response into a standardized `OAuthUserInfo` struct.
+
+## API Endpoints
+
+The OAuth plugin exposes the following endpoints. For full request/response details, see the [OpenAPI Reference](/docs/reference/openapi/default).
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/sign-in/social` | POST | Initiate OAuth sign-in flow |
+| `/callback/{provider}` | GET | OAuth callback handler |
+| `/link-social` | POST | Link a social account to an existing user |
+| `/get-access-token` | POST | Retrieve stored OAuth access token |
+| `/refresh-token` | POST | Refresh the OAuth access token |
+| `/list-accounts` | GET | List all linked accounts |
+| `/unlink-account` | POST | Unlink a social account |
+
+## How It Works
+
+### PKCE Flow
+
+All OAuth flows use PKCE (Proof Key for Code Exchange) for enhanced security:
+
+1. A random `code_verifier` is generated
+2. A `code_challenge` is derived using SHA-256
+3. The challenge is sent in the authorization URL
+4. The verifier is stored in a verification record
+5. During token exchange, the verifier proves the request originated from the same client
+
+### Account Linking Behavior
+
+When the OAuth callback completes:
+
+- **Existing account for provider**: Updates the stored tokens and creates a new session
+- **New provider, existing email**: Links the new provider to the existing user
+- **New provider, new email**: Creates a new user and links the provider account
+
+### State Management
+
+OAuth state is stored as a verification record with a 10-minute expiration. The state includes:
+
+- Provider name
+- Callback URL
+- PKCE code verifier
+- Link user ID (if linking to existing user)
+- Scopes
+
+## Errors
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Unknown provider name |
+| 400 | Missing `code` or `state` in callback |
+| 400 | Provider mismatch between state and callback |
+| 409 | Social account already linked to another user |
+| 500 | Token exchange or user info fetch failed |

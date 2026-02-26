@@ -12,7 +12,6 @@ use async_trait::async_trait;
 use serde::Serialize;
 
 use crate::adapters::DatabaseAdapter;
-use crate::config::SameSite;
 use crate::error::{AuthError, AuthResult};
 use crate::plugin::AuthContext;
 use crate::types::UpdateUser;
@@ -144,39 +143,6 @@ pub fn validate_password<DB: DatabaseAdapter>(
     }
 
     Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Session cookie construction
-// ---------------------------------------------------------------------------
-
-/// Build a `Set-Cookie` header value for the given session `token`, respecting
-/// the `SessionConfig` settings from `ctx`.
-pub fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
-    let session_config = &ctx.config.session;
-    let secure = if session_config.cookie_secure {
-        "; Secure"
-    } else {
-        ""
-    };
-    let http_only = if session_config.cookie_http_only {
-        "; HttpOnly"
-    } else {
-        ""
-    };
-    let same_site = match session_config.cookie_same_site {
-        SameSite::Strict => "; SameSite=Strict",
-        SameSite::Lax => "; SameSite=Lax",
-        SameSite::None => "; SameSite=None",
-    };
-
-    let expires = chrono::Utc::now() + session_config.expires_in;
-    let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
-
-    format!(
-        "{}={}; Path=/; Expires={}{}{}{}",
-        session_config.cookie_name, token, expires_str, secure, http_only, same_site
-    )
 }
 
 // ---------------------------------------------------------------------------
