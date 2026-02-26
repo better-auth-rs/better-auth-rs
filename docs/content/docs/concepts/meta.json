@@ -5,6 +5,10 @@
     "database",
     "middleware",
     "hooks",
-    "users-accounts"
+    "users-accounts",
+    "oauth",
+    "email",
+    "rate-limit",
+    "cookies"
   ]
 }

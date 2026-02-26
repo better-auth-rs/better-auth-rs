@@ -1,0 +1,5 @@
+---
+source: tests/snapshot_tests.rs
+expression: redact(&body_401)
+---
+message: Invalid credentials
