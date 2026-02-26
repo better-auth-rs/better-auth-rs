@@ -159,7 +159,11 @@ async fn test_organization_crud_endpoints() {
     let report = validator.report();
     eprintln!("\n{}\n", report);
 
-    let failures: Vec<_> = validator.results.iter().filter(|r| !r.passed).collect();
+    let failures: Vec<_> = validator
+        .results
+        .iter()
+        .filter(|r| !r.passed && !r.skipped)
+        .collect();
     assert!(
         failures.is_empty(),
         "Organization CRUD spec failures:\n{}",
@@ -340,7 +344,7 @@ async fn test_organization_invitation_endpoints() {
     let unexpected: Vec<_> = validator
         .results
         .iter()
-        .filter(|r| !r.passed && !known_failing.contains(r.endpoint.as_str()))
+        .filter(|r| !r.passed && !r.skipped && !known_failing.contains(r.endpoint.as_str()))
         .collect();
     assert!(
         unexpected.is_empty(),
@@ -571,7 +575,7 @@ async fn test_organization_member_endpoints() {
     let unexpected: Vec<_> = validator
         .results
         .iter()
-        .filter(|r| !r.passed && !known_failing.contains(r.endpoint.as_str()))
+        .filter(|r| !r.passed && !r.skipped && !known_failing.contains(r.endpoint.as_str()))
         .collect();
     assert!(
         unexpected.is_empty(),

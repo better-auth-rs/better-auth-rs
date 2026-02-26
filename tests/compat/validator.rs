@@ -18,13 +18,23 @@ pub struct EndpointResult {
     pub method: String,
     pub status: u16,
     pub passed: bool,
+    /// `true` when no spec schema was found for this endpoint, so validation
+    /// was not possible.  Skipped endpoints are excluded from the pass/fail
+    /// counts in the report.
+    pub skipped: bool,
     pub diffs: Vec<ShapeDiff>,
     pub camel_case_violations: Vec<String>,
 }
 
 impl std::fmt::Display for EndpointResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let icon = if self.passed { "PASS" } else { "FAIL" };
+        let icon = if self.skipped {
+            "SKIP"
+        } else if self.passed {
+            "PASS"
+        } else {
+            "FAIL"
+        };
         write!(
             f,
             "[{}] {} {} (status={})",
@@ -60,12 +70,12 @@ impl SpecValidator {
         body: &serde_json::Value,
     ) {
         let schema = extract_success_schema(&self.spec, path, method);
-        let (passed, diffs) = if let Some(schema) = &schema {
+        let (passed, skipped, diffs) = if let Some(schema) = &schema {
             let diffs = validate_response(body, schema, "");
-            (diffs.is_empty(), diffs)
+            (diffs.is_empty(), false, diffs)
         } else {
-            // No spec schema found -- can't validate, consider it passed
-            (true, vec![])
+            // No spec schema found -- mark as skipped, not passed
+            (false, true, vec![])
         };
 
         self.results.push(EndpointResult {
@@ -73,6 +83,7 @@ impl SpecValidator {
             method: method.to_uppercase(),
             status,
             passed,
+            skipped,
             diffs,
             camel_case_violations: vec![],
         });
@@ -85,12 +96,18 @@ impl SpecValidator {
         lines.push(String::new());
 
         let total = self.results.len();
-        let passed = self.results.iter().filter(|r| r.passed).count();
-        let failed = total - passed;
+        let skipped = self.results.iter().filter(|r| r.skipped).count();
+        let passed = self
+            .results
+            .iter()
+            .filter(|r| r.passed && !r.skipped)
+            .count();
+        let failed = total - passed - skipped;
 
         lines.push(format!("Total endpoints tested: {}", total));
         lines.push(format!("Passed: {}", passed));
         lines.push(format!("Failed: {}", failed));
+        lines.push(format!("Skipped (no spec schema): {}", skipped));
         lines.push(String::new());
 
         for result in &self.results {
@@ -104,6 +121,13 @@ impl SpecValidator {
 
     #[allow(dead_code)]
     pub fn all_passed(&self) -> bool {
-        self.results.iter().all(|r| r.passed)
+        self.results.iter().filter(|r| !r.skipped).all(|r| r.passed)
+    }
+
+    /// Return the number of endpoints that were skipped due to missing spec
+    /// schemas.
+    #[allow(dead_code)]
+    pub fn skipped_count(&self) -> usize {
+        self.results.iter().filter(|r| r.skipped).count()
     }
 }
