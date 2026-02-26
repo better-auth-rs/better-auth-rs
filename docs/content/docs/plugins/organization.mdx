@@ -1,0 +1,144 @@
+---
+title: Organization
+description: Multi-tenancy with organizations, members, invitations, and RBAC.
+---
+
+The `OrganizationPlugin` provides multi-tenancy support with organizations, membership management, invitation workflows, and role-based access control (RBAC).
+
+## Setup
+
+```rust
+use better_auth::plugins::OrganizationPlugin;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(OrganizationPlugin::new())
+    .build()
+    .await?;
+```
+
+### Configuration
+
+```rust
+use better_auth::plugins::organization::OrganizationConfig;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(
+        OrganizationPlugin::new()
+            .allow_user_to_create_organization(true)
+            .organization_limit(5)
+            .membership_limit(50)
+            .creator_role("owner")
+            .invitation_expires_in(172800) // 48 hours
+            .invitation_limit(100)
+    )
+    .build()
+    .await?;
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `allow_user_to_create_organization` | `bool` | `true` | Allow users to create organizations |
+| `organization_limit` | `Option<usize>` | `None` | Max organizations per user |
+| `membership_limit` | `Option<usize>` | `Some(100)` | Max members per organization |
+| `creator_role` | `String` | `"owner"` | Role assigned to organization creator |
+| `invitation_expires_in` | `u64` | `172800` (48h) | Invitation expiration in seconds |
+| `invitation_limit` | `Option<usize>` | `Some(100)` | Max pending invitations per org |
+| `disable_organization_deletion` | `bool` | `false` | Prevent organization deletion |
+
+## RBAC (Role-Based Access Control)
+
+### Default Roles
+
+| Role | Organization | Member | Invitation |
+|------|-------------|--------|------------|
+| **owner** | update, delete | create, update, delete | create, cancel |
+| **admin** | update | create, update, delete | create, cancel |
+| **member** | — | — | — |
+
+### Custom Roles
+
+Extend the default roles with custom permissions:
+
+```rust
+use better_auth::plugins::organization::config::{OrganizationConfig, RolePermissions};
+use std::collections::HashMap;
+
+let mut roles = HashMap::new();
+roles.insert("editor".to_string(), RolePermissions {
+    organization: vec!["read".to_string()],
+    member: vec!["read".to_string()],
+    invitation: vec![],
+});
+
+let config = OrganizationConfig {
+    roles,
+    ..Default::default()
+};
+
+let auth = BetterAuth::new(auth_config)
+    .database(database)
+    .plugin(OrganizationPlugin::with_config(config))
+    .build()
+    .await?;
+```
+
+### Resources and Actions
+
+**Resources**: `organization`, `member`, `invitation`
+
+**Actions**: `create`, `read`, `update`, `delete`, `cancel`
+
+## API Endpoints
+
+The Organization plugin exposes 18 endpoints. For full request/response details, see the [OpenAPI Reference](/docs/reference/openapi/organization).
+
+### Organization CRUD
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/organization/create` | POST | Create a new organization |
+| `/organization/update` | POST | Update organization details |
+| `/organization/delete` | POST | Delete an organization |
+| `/organization/list` | GET | List user's organizations |
+| `/organization/get-full-organization` | GET | Get organization with members and invitations |
+| `/organization/check-slug` | POST | Check slug availability |
+| `/organization/set-active` | POST | Set active organization on session |
+| `/organization/leave` | POST | Leave an organization |
+
+### Member Management
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/organization/get-active-member` | GET | Get current member record |
+| `/organization/list-members` | GET | List organization members (with pagination) |
+| `/organization/remove-member` | POST | Remove a member (requires `member:delete`) |
+| `/organization/update-member-role` | POST | Update member role (requires `member:update`) |
+
+### Invitations
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/organization/invite-member` | POST | Invite a user by email |
+| `/organization/get-invitation` | GET | Get invitation details |
+| `/organization/list-invitations` | GET | List organization invitations |
+| `/organization/list-user-invitations` | GET | List invitations for current user |
+| `/organization/accept-invitation` | POST | Accept an invitation |
+| `/organization/reject-invitation` | POST | Reject an invitation |
+| `/organization/cancel-invitation` | POST | Cancel an invitation (requires `invitation:cancel`) |
+
+### Permission Check
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/organization/has-permission` | POST | Check if user has specific permissions |
+
+## Errors
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Invalid slug format or missing required fields |
+| 403 | Insufficient permissions for the operation |
+| 404 | Organization, member, or invitation not found |
+| 409 | Slug already taken or user already a member |

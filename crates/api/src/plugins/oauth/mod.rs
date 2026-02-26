@@ -5,11 +5,12 @@ use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
+pub mod encryption;
 mod handlers;
 mod providers;
 mod types;
 
-pub use providers::{OAuthConfig, OAuthProvider, OAuthUserInfo};
+pub use providers::{OAuthConfig, OAuthProvider, OAuthStateStrategy, OAuthUserInfo};
 
 pub struct OAuthPlugin {
     config: OAuthConfig,

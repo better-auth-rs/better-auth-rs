@@ -16,6 +16,7 @@ pub mod session;
 pub mod types;
 pub mod types_impls;
 pub mod types_org;
+pub mod utils;
 
 // Re-export derive macros when the `derive` feature is enabled
 #[cfg(feature = "derive")]
@@ -32,8 +33,10 @@ pub use adapters::{
 #[cfg(feature = "sqlx-postgres")]
 pub use adapters::{SqlxAdapter, SqlxEntity};
 pub use config::{
-    Argon2Config, AuthConfig, CookieCacheConfig, CookieCacheStrategy, JwtConfig, PasswordConfig,
-    SameSite, SessionConfig,
+    AccountConfig, AccountLinkingConfig, AdvancedConfig, AdvancedDatabaseConfig, Argon2Config,
+    AuthConfig, CookieAttributes, CookieCacheConfig, CookieCacheStrategy, CookieOverride,
+    CrossSubDomainConfig, IpAddressConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig,
+    core_paths, extract_origin,
 };
 pub use email::{ConsoleEmailProvider, EmailProvider};
 pub use entity::{
@@ -62,3 +65,4 @@ pub use types::{
     UpdateAccount, UpdateApiKey, UpdateOrganization, UpdatePasskey, UpdateUser, UpdateUserRequest,
     UpdateUserResponse, User, ValidationErrorResponse, Verification,
 };
+pub use utils::password::{PasswordHasher, hash_password, verify_password};

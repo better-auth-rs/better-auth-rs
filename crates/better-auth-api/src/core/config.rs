@@ -37,22 +37,19 @@ pub struct SessionConfig {
     /// Session expiration duration
     pub expires_in: Duration,
 
-    /// Session refresh policy.
+    /// How often to refresh the session expiry (as a Duration).
     ///
-    /// - `None` disables session refresh entirely (equivalent to TS `disableSessionRefresh: true`)
-    /// - `Some(duration)` refreshes the session only when it was last updated more than `duration` ago
-    ///
-    /// Default: `Some(Duration::days(1))` (86,400 seconds, same as the TS default `updateAge`).
+    /// When set, session expiry is only updated if the session is older than
+    /// this duration since the last update. When `None`, every request
+    /// refreshes the session (equivalent to the old `update_age: true`).
     pub update_age: Option<Duration>,
 
-    /// How long a session is considered "fresh" after creation.
-    ///
-    /// Plugins that guard sensitive operations (password change, account deletion, …)
-    /// can call `SessionManager::is_session_fresh()` to require a recent login.
-    ///
-    /// Default: 1 day.
-    pub fresh_age: Duration,
+    /// If `true`, sessions are never automatically refreshed on access.
+    pub disable_session_refresh: bool,
 
+    /// Session freshness window. A session younger than this is considered
+    /// "fresh" (useful for step-up auth or sensitive operations).
+    pub fresh_age: Option<Duration>,
     /// Cookie name for session token
     pub cookie_name: String,
 
@@ -179,8 +176,9 @@ impl Default for SessionConfig {
     fn default() -> Self {
         Self {
             expires_in: Duration::hours(24 * 7), // 7 days
-            update_age: Some(Duration::days(1)), // refresh after 1 day of inactivity
-            fresh_age: Duration::days(1),        // session is "fresh" for 1 day
+            update_age: Some(Duration::hours(24)), // refresh once per day
+            disable_session_refresh: false,
+            fresh_age: None,
             cookie_name: "better-auth.session-token".to_string(),
             cookie_secure: true,
             cookie_http_only: true,
@@ -308,4 +306,4 @@ impl AuthConfig {
         
         Ok(())
     }
-} 
+}  

@@ -6,7 +6,7 @@ use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
     DatabaseAdapter, DatabaseHooks, DeleteUserResponse, EmailProvider, HttpMethod, OkResponse,
     OpenApiBuilder, OpenApiSpec, SessionManager, StatusMessageResponse, StatusResponse, UpdateUser,
-    UpdateUserRequest,
+    UpdateUserRequest, core_paths,
     entity::{AuthAccount, AuthSession, AuthUser, AuthVerification},
     middleware::{
         self, BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig,
@@ -205,7 +205,7 @@ impl<DB: DatabaseAdapter> TypedAuthBuilder<DB> {
             )),
             Box::new(CsrfMiddleware::new(
                 self.csrf_config.unwrap_or_default(),
-                &config.base_url,
+                config.clone(),
             )),
             Box::new(CorsMiddleware::new(self.cors_config.unwrap_or_default())),
         ];
@@ -256,14 +256,38 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
             return Ok(response);
         }
 
+        // Strip base_path prefix from the request path for internal routing.
+        // External callers send e.g. "/api/auth/sign-in/email"; internally
+        // handlers match against "/sign-in/email".
+        let base_path = &self.config.base_path;
+        let stripped_path = if !base_path.is_empty() && base_path != "/" {
+            req.path().strip_prefix(base_path).unwrap_or(req.path())
+        } else {
+            req.path()
+        };
+
+        // Check if this path is disabled
+        if self.config.is_path_disabled(stripped_path) {
+            return Err(AuthError::not_found("This endpoint has been disabled"));
+        }
+
+        // Build a request with the stripped path for internal dispatch
+        let internal_req = if stripped_path != req.path() {
+            let mut r = req.clone();
+            r.path = stripped_path.to_string();
+            r
+        } else {
+            req.clone()
+        };
+
         // Handle core endpoints first
-        if let Some(response) = self.handle_core_request(req).await? {
+        if let Some(response) = self.handle_core_request(&internal_req).await? {
             return Ok(response);
         }
 
         // Try each plugin until one handles the request
         for plugin in &self.plugins {
-            if let Some(response) = plugin.on_request(req, &self.context).await? {
+            if let Some(response) = plugin.on_request(&internal_req, &self.context).await? {
                 return Ok(response);
             }
         }
@@ -332,22 +356,26 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// Handle core authentication requests.
     async fn handle_core_request(&self, req: &AuthRequest) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
-            (HttpMethod::Get, "/ok") => {
+            (HttpMethod::Get, core_paths::OK) => {
                 Ok(Some(AuthResponse::json(200, &OkResponse { ok: true })?))
             }
-            (HttpMethod::Get, "/error") => {
+            (HttpMethod::Get, core_paths::ERROR) => {
                 Ok(Some(AuthResponse::json(200, &OkResponse { ok: false })?))
             }
-            (HttpMethod::Get, "/reference/openapi.json") => {
+            (HttpMethod::Get, core_paths::OPENAPI_SPEC) => {
                 let spec = self.openapi_spec();
                 Ok(Some(AuthResponse::json(200, &spec)?))
             }
-            (HttpMethod::Post, "/update-user") => Ok(Some(self.handle_update_user(req).await?)),
-            (HttpMethod::Post | HttpMethod::Delete, "/delete-user") => {
+            (HttpMethod::Post, core_paths::UPDATE_USER) => {
+                Ok(Some(self.handle_update_user(req).await?))
+            }
+            (HttpMethod::Post | HttpMethod::Delete, core_paths::DELETE_USER) => {
                 Ok(Some(self.handle_delete_user(req).await?))
             }
-            (HttpMethod::Post, "/change-email") => Ok(Some(self.handle_change_email(req).await?)),
-            (HttpMethod::Get, "/delete-user/callback") => {
+            (HttpMethod::Post, core_paths::CHANGE_EMAIL) => {
+                Ok(Some(self.handle_change_email(req).await?))
+            }
+            (HttpMethod::Get, core_paths::DELETE_USER_CALLBACK) => {
                 Ok(Some(self.handle_delete_user_callback(req).await?))
             }
             _ => Ok(None),

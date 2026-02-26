@@ -54,19 +54,21 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
                 return Ok(None);
             }
 
-            // Refresh the session expiry if configured and enough time has elapsed.
-            //
-            // Prefer `updated_at` as the throttle source, but also derive a fallback
-            // refresh timestamp from `expires_at - expires_in`. This keeps refresh
-            // throttling effective even if a custom adapter updates `expires_at`
-            // without advancing `updated_at`.
-            if let Some(update_age) = self.config.session.update_age {
-                let refreshed_at_from_expiry =
-                    session.expires_at() - self.config.session.expires_in;
-                let last_refresh_at = session.updated_at().max(refreshed_at_from_expiry);
-                let elapsed_since_update = now - last_refresh_at;
-                if elapsed_since_update >= update_age {
-                    let new_expires_at = now + self.config.session.expires_in;
+            // Update session if configured to do so
+            if !self.config.session.disable_session_refresh {
+                let should_refresh = match self.config.session.update_age {
+                    Some(age) => {
+                        // Only refresh if the session was last updated more than
+                        // `update_age` ago.
+                        let updated = session.updated_at();
+                        Utc::now() - updated >= age
+                    }
+                    // No update_age set → refresh on every access.
+                    None => true,
+                };
+
+                if should_refresh {
+                    let new_expires_at = Utc::now() + self.config.session.expires_in;
                     let _ = self
                         .database
                         .update_session_expiry(token, new_expires_at)
@@ -155,10 +157,14 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
     /// Check whether a session is "fresh" (created recently enough for
     /// sensitive operations like password change or account deletion).
     ///
-    /// Returns `true` when `session.created_at() + fresh_age > now`.
+    /// Returns `true` when `fresh_age` is set and
+    /// `session.created_at() + fresh_age > now`.
+    /// If `fresh_age` is `None`, the session is never considered fresh.
     pub fn is_session_fresh(&self, session: &impl AuthSession) -> bool {
-        let fresh_until = session.created_at() + self.config.session.fresh_age;
-        fresh_until > Utc::now()
+        match self.config.session.fresh_age {
+            Some(fresh_age) => session.created_at() + fresh_age > Utc::now(),
+            None => false,
+        }
     }
 
     /// Validate session token format
@@ -178,15 +184,12 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
             return Some(token.to_string());
         }
 
-        // Fall back to cookie
+        // Fall back to cookie (using the `cookie` crate for correct parsing)
         if let Some(cookie_header) = req.headers.get("cookie") {
             let cookie_name = &self.config.session.cookie_name;
-            for part in cookie_header.split(';') {
-                let part = part.trim();
-                if let Some(value) = part.strip_prefix(&format!("{}=", cookie_name))
-                    && !value.is_empty()
-                {
-                    return Some(value.to_string());
+            for c in cookie::Cookie::split_parse(cookie_header).flatten() {
+                if c.name() == cookie_name && !c.value().is_empty() {
+                    return Some(c.value().to_string());
                 }
             }
         }
