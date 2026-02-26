@@ -1,21 +1,22 @@
-mod common;
+mod compat;
 
 use better_auth::BetterAuth;
 use better_auth::adapters::{
     AccountOps, MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps,
 };
+use compat::helpers::*;
 use std::sync::Arc;
 
 /// Helper to create test BetterAuth instance with memory database
 async fn create_test_auth_memory() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
-    common::TestHarness::minimal().await.into_arc()
+    TestHarness::minimal().await.into_arc()
 }
 
 /// Helper to create user and get session token
 async fn create_test_user_and_session(
     auth: Arc<BetterAuth<MemoryDatabaseAdapter>>,
 ) -> (String, String) {
-    let req = common::post_json(
+    let req = post_json(
         "/sign-up/email",
         serde_json::json!({
             "email": "integration@test.com",
@@ -23,7 +24,7 @@ async fn create_test_user_and_session(
             "name": "Integration Test User"
         }),
     );
-    let (status, json) = common::send_request(&auth, req).await;
+    let (status, json) = send_request(&auth, req).await;
     assert_eq!(status, 200);
 
     let user_id = json["user"]["id"].as_str().unwrap().to_string();
@@ -38,7 +39,7 @@ async fn test_get_session_integration() {
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
     let (status, response_data) =
-        common::send_request(&auth, common::get_with_auth("/get-session", &session_token)).await;
+        send_request(&auth, get_with_auth("/get-session", &session_token)).await;
     assert_eq!(status, 200);
 
     assert!(response_data["session"]["token"].is_string());
@@ -53,13 +54,12 @@ async fn test_sign_out_integration() {
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
     let (status, response_data) =
-        common::send_request(&auth, common::post_with_auth("/sign-out", &session_token)).await;
+        send_request(&auth, post_with_auth("/sign-out", &session_token)).await;
     assert_eq!(status, 200);
     assert_eq!(response_data["success"], true);
 
     // Verify session is no longer valid
-    let (status2, _) =
-        common::send_request(&auth, common::get_with_auth("/get-session", &session_token)).await;
+    let (status2, _) = send_request(&auth, get_with_auth("/get-session", &session_token)).await;
     assert_eq!(status2, 401); // Session should be invalidated
 }
 
@@ -69,11 +69,8 @@ async fn test_list_sessions_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    let (status, response_data) = common::send_request(
-        &auth,
-        common::get_with_auth("/list-sessions", &session_token),
-    )
-    .await;
+    let (status, response_data) =
+        send_request(&auth, get_with_auth("/list-sessions", &session_token)).await;
     assert_eq!(status, 200);
 
     let sessions = response_data.as_array().expect("expected array response");
@@ -142,11 +139,8 @@ async fn test_revoke_sessions_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    let (status, response_data) = common::send_request(
-        &auth,
-        common::post_with_auth("/revoke-sessions", &session_token),
-    )
-    .await;
+    let (status, response_data) =
+        send_request(&auth, post_with_auth("/revoke-sessions", &session_token)).await;
     assert_eq!(status, 200);
     assert_eq!(response_data["status"], true);
 }
@@ -157,7 +151,7 @@ async fn test_unauthorized_session_access() {
     let auth = create_test_auth_memory().await;
 
     // Try to access get-session without token
-    let (status, _) = common::send_request(&auth, common::get_request("/get-session")).await;
+    let (status, _) = send_request(&auth, get_request("/get-session")).await;
     assert_eq!(status, 401);
 }
 
@@ -167,9 +161,9 @@ async fn test_forget_password_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, _session_token) = create_test_user_and_session(auth.clone()).await;
 
-    let (status, response_data) = common::send_request(
+    let (status, response_data) = send_request(
         &auth,
-        common::post_json(
+        post_json(
             "/forget-password",
             serde_json::json!({
                 "email": "integration@test.com",
@@ -239,9 +233,9 @@ async fn test_change_password_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    let (status, response_data) = common::send_request(
+    let (status, response_data) = send_request(
         &auth,
-        common::post_json_with_auth(
+        post_json_with_auth(
             "/change-password",
             serde_json::json!({
                 "currentPassword": "password123",
@@ -264,9 +258,9 @@ async fn test_change_password_with_revocation_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    let (status, response_data) = common::send_request(
+    let (status, response_data) = send_request(
         &auth,
-        common::post_json_with_auth(
+        post_json_with_auth(
             "/change-password",
             serde_json::json!({
                 "currentPassword": "password123",
@@ -331,7 +325,7 @@ async fn test_reset_password_token_integration() {
 async fn test_ok_endpoint() {
     let auth = create_test_auth_memory().await;
 
-    let (status, response_data) = common::send_request(&auth, common::get_request("/ok")).await;
+    let (status, response_data) = send_request(&auth, get_request("/ok")).await;
     assert_eq!(status, 200);
     assert_eq!(response_data["ok"], true);
 }
@@ -341,7 +335,7 @@ async fn test_ok_endpoint() {
 async fn test_error_endpoint() {
     let auth = create_test_auth_memory().await;
 
-    let (status, response_data) = common::send_request(&auth, common::get_request("/error")).await;
+    let (status, response_data) = send_request(&auth, get_request("/error")).await;
     assert_eq!(status, 200);
     assert_eq!(response_data["ok"], false);
 }

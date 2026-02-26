@@ -35,6 +35,7 @@ mod compat;
 use compat::helpers::*;
 use insta::{assert_yaml_snapshot, with_settings};
 use serde_json::Value;
+use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -78,29 +79,12 @@ fn redact(value: &Value) -> Value {
 }
 
 fn is_uuid(s: &str) -> bool {
-    if s.len() != 36 {
-        return false;
-    }
-    let parts: Vec<&str> = s.split('-').collect();
-    parts.len() == 5
-        && parts[0].len() == 8
-        && parts[1].len() == 4
-        && parts[2].len() == 4
-        && parts[3].len() == 4
-        && parts[4].len() == 12
-        && parts
-            .iter()
-            .all(|p| p.chars().all(|c| c.is_ascii_hexdigit()))
+    Uuid::parse_str(s).is_ok()
 }
 
 fn is_iso_timestamp(s: &str) -> bool {
-    if s.len() < 19 {
-        return false;
-    }
-    s.as_bytes()[4] == b'-'
-        && s.as_bytes()[7] == b'-'
-        && s.as_bytes()[10] == b'T'
-        && s[..4].chars().all(|c| c.is_ascii_digit())
+    chrono::DateTime::parse_from_rfc3339(s).is_ok()
+        || chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f").is_ok()
 }
 
 // ---------------------------------------------------------------------------

@@ -37,19 +37,8 @@ use compat::helpers::*;
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::sync::Mutex as TokioMutex;
-
-/// Atomic counter for generating unique emails across parallel test runs.
-/// Prevents conflicts when the TS reference server is shared across tests
-/// (in-memory DB retains state for the lifetime of the process).
-static EMAIL_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn unique_email(prefix: &str) -> String {
-    let n = EMAIL_COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!("{}_{}_{}@example.com", prefix, n, std::process::id())
-}
 
 // ---------------------------------------------------------------------------
 // Reference-server client
@@ -233,8 +222,6 @@ struct RefClient {
 impl RefClient {
     fn new() -> Self {
         Self {
-            // Do NOT use the default cookie store — we manage cookies manually
-            // so we can inspect and control the exact cookie sent.
             client: reqwest::Client::builder()
                 .redirect(reqwest::redirect::Policy::none())
                 .timeout(Duration::from_secs(10))
@@ -244,31 +231,43 @@ impl RefClient {
         }
     }
 
-    /// POST a JSON body to the reference server.  Captures the
-    /// `better-auth.session_token` cookie from the response.
-    async fn post(&mut self, path: &str, body: &Value) -> Result<(u16, Value), String> {
-        let url = format!("{}{}", REFERENCE_BASE, path);
-
-        let mut req = self
-            .client
-            .post(&url)
-            .json(body)
-            .header("content-type", "application/json")
-            .header("origin", format!("http://localhost:{}", REFERENCE_PORT));
-
-        // Attach session cookie if we have one
+    /// Build a request with the session cookie (if present) and origin header.
+    fn apply_headers(&self, mut req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        req = req.header("origin", format!("http://localhost:{}", REFERENCE_PORT));
         if let Some(ref cookie) = self.session_cookie {
             req = req.header("cookie", format!("better-auth.session_token={}", cookie));
         }
+        req
+    }
 
+    /// Extract the `better-auth.session_token` from the response's
+    /// `set-cookie` header, if present.
+    fn capture_cookie(&mut self, resp: &reqwest::Response) {
+        for value in resp.headers().get_all("set-cookie") {
+            if let Ok(s) = value.to_str() {
+                if let Some(rest) = s.strip_prefix("better-auth.session_token=") {
+                    let token = rest.split(';').next().unwrap_or(rest);
+                    self.session_cookie = Some(token.to_string());
+                    return;
+                }
+            }
+        }
+    }
+
+    /// POST a JSON body to the reference server. Captures the session cookie.
+    async fn post(&mut self, path: &str, body: &Value) -> Result<(u16, Value), String> {
+        let url = format!("{}{}", REFERENCE_BASE, path);
+        let req = self.apply_headers(
+            self.client
+                .post(&url)
+                .json(body)
+                .header("content-type", "application/json"),
+        );
         let resp = req
             .send()
             .await
             .map_err(|e| format!("POST {}: {}", url, e))?;
-
-        // Capture session cookie from set-cookie header
         self.capture_cookie(&resp);
-
         let status = resp.status().as_u16();
         let json: Value = resp
             .json()
@@ -280,43 +279,17 @@ impl RefClient {
     /// GET from the reference server with cookie auth.
     async fn get(&self, path: &str) -> Result<(u16, Value), String> {
         let url = format!("{}{}", REFERENCE_BASE, path);
-
-        let mut req = self
-            .client
-            .get(&url)
-            .header("origin", format!("http://localhost:{}", REFERENCE_PORT));
-
-        // Attach session cookie
-        if let Some(ref cookie) = self.session_cookie {
-            req = req.header("cookie", format!("better-auth.session_token={}", cookie));
-        }
-
+        let req = self.apply_headers(self.client.get(&url));
         let resp = req
             .send()
             .await
             .map_err(|e| format!("GET {}: {}", url, e))?;
-
         let status = resp.status().as_u16();
         let json: Value = resp
             .json()
             .await
             .unwrap_or_else(|_| Value::String("non-json".into()));
         Ok((status, json))
-    }
-
-    /// Extract the `better-auth.session_token` from the response's
-    /// `set-cookie` header, if present.
-    fn capture_cookie(&mut self, resp: &reqwest::Response) {
-        for value in resp.headers().get_all("set-cookie") {
-            if let Ok(s) = value.to_str() {
-                if let Some(rest) = s.strip_prefix("better-auth.session_token=") {
-                    // Cookie value ends at the first ';'
-                    let token = rest.split(';').next().unwrap_or(rest);
-                    self.session_cookie = Some(token.to_string());
-                    return;
-                }
-            }
-        }
     }
 }
 
@@ -581,6 +554,30 @@ async fn dual_server_comprehensive_comparison() {
 
     // Sign up on both servers
     let email = unique_email("dual_comp");
+
+    /// Compare a single endpoint between Rust and reference servers,
+    /// returning an `EndpointCheck` with shape diff results.
+    async fn compare_endpoint(
+        name: &'static str,
+        rust_status: u16,
+        rust_body: &Value,
+        ref_result: Result<(u16, Value), String>,
+    ) -> Option<EndpointCheck> {
+        match ref_result {
+            Ok((ref_status, ref_body)) => {
+                let all_diffs = compare_shapes(&json_shape(rust_body), &json_shape(&ref_body), "");
+                let unexpected_diffs = filter_known_diffs(&all_diffs);
+                Some(EndpointCheck {
+                    name,
+                    all_diffs,
+                    unexpected_diffs,
+                    rust_status,
+                    ref_status,
+                })
+            }
+            Err(_) => None,
+        }
+    }
     let signup_body = serde_json::json!({
         "name": "Dual Comprehensive",
         "email": email,
@@ -615,32 +612,30 @@ async fn dual_server_comprehensive_comparison() {
     // GET /get-session
     {
         let (rs, rb) = send_request(&auth, get_with_auth("/get-session", &rust_token)).await;
-        if let Ok((ns, nb)) = ref_client.get("/get-session").await {
-            let all_diffs = compare_shapes(&json_shape(&rb), &json_shape(&nb), "");
-            let unexpected_diffs = filter_known_diffs(&all_diffs);
-            results.push(EndpointCheck {
-                name: "GET /get-session",
-                all_diffs,
-                unexpected_diffs,
-                rust_status: rs,
-                ref_status: ns,
-            });
+        if let Some(check) = compare_endpoint(
+            "GET /get-session",
+            rs,
+            &rb,
+            ref_client.get("/get-session").await,
+        )
+        .await
+        {
+            results.push(check);
         }
     }
 
     // GET /list-sessions
     {
         let (rs, rb) = send_request(&auth, get_with_auth("/list-sessions", &rust_token)).await;
-        if let Ok((ns, nb)) = ref_client.get("/list-sessions").await {
-            let all_diffs = compare_shapes(&json_shape(&rb), &json_shape(&nb), "");
-            let unexpected_diffs = filter_known_diffs(&all_diffs);
-            results.push(EndpointCheck {
-                name: "GET /list-sessions",
-                all_diffs,
-                unexpected_diffs,
-                rust_status: rs,
-                ref_status: ns,
-            });
+        if let Some(check) = compare_endpoint(
+            "GET /list-sessions",
+            rs,
+            &rb,
+            ref_client.get("/list-sessions").await,
+        )
+        .await
+        {
+            results.push(check);
         }
     }
 
@@ -656,32 +651,24 @@ async fn dual_server_comprehensive_comparison() {
             post_json_with_auth("/change-password", chg_body.clone(), &rust_token),
         )
         .await;
-        if let Ok((ns, nb)) = ref_client.post("/change-password", &chg_body).await {
-            let all_diffs = compare_shapes(&json_shape(&rb), &json_shape(&nb), "");
-            let unexpected_diffs = filter_known_diffs(&all_diffs);
-            results.push(EndpointCheck {
-                name: "POST /change-password",
-                all_diffs,
-                unexpected_diffs,
-                rust_status: rs,
-                ref_status: ns,
-            });
+        if let Some(check) = compare_endpoint(
+            "POST /change-password",
+            rs,
+            &rb,
+            ref_client.post("/change-password", &chg_body).await,
+        )
+        .await
+        {
+            results.push(check);
         }
     }
 
     // GET /ok
     {
         let (rs, rb) = send_request(&auth, get_request("/ok")).await;
-        if let Ok((ns, nb)) = ref_client.get("/ok").await {
-            let all_diffs = compare_shapes(&json_shape(&rb), &json_shape(&nb), "");
-            let unexpected_diffs = filter_known_diffs(&all_diffs);
-            results.push(EndpointCheck {
-                name: "GET /ok",
-                all_diffs,
-                unexpected_diffs,
-                rust_status: rs,
-                ref_status: ns,
-            });
+        if let Some(check) = compare_endpoint("GET /ok", rs, &rb, ref_client.get("/ok").await).await
+        {
+            results.push(check);
         }
     }
 
