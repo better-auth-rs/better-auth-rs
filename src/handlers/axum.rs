@@ -31,49 +31,38 @@ pub trait AxumIntegration<DB: DatabaseAdapter> {
 #[cfg(feature = "axum")]
 impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
     fn axum_router(self) -> Router<Arc<BetterAuth<DB>>> {
-        let base_path = self.config().base_path.clone();
-        let disabled_paths = &self.config().disabled_paths;
+        let disabled_paths = self.config().disabled_paths.clone();
 
         let mut router = Router::new();
 
-        // Helper closure to build a full path respecting base_path.
-        let make_path = |suffix: &str| -> String {
-            if base_path.is_empty() || base_path == "/" {
-                suffix.to_string()
-            } else {
-                format!("{}{}", base_path, suffix)
-            }
-        };
-
         // Add status endpoints
         if !disabled_paths.contains(&"/ok".to_string()) {
-            router = router.route(&make_path("/ok"), get(ok_check));
+            router = router.route("/ok", get(ok_check));
         }
         if !disabled_paths.contains(&"/error".to_string()) {
-            router = router.route(&make_path("/error"), get(error_check));
+            router = router.route("/error", get(error_check));
         }
 
         // Add default health check route
         if !disabled_paths.contains(&"/health".to_string()) {
-            router = router.route(&make_path("/health"), get(health_check));
+            router = router.route("/health", get(health_check));
         }
 
         // Add OpenAPI spec endpoint
         if !disabled_paths.contains(&"/reference/openapi.json".to_string()) {
             router = router.route(
-                &make_path("/reference/openapi.json"),
+                "/reference/openapi.json",
                 get(create_plugin_handler::<DB>()),
             );
         }
 
         // Add core user management routes
         if !disabled_paths.contains(&"/update-user".to_string()) {
-            router = router.route(&make_path("/update-user"), post(create_plugin_handler::<DB>()));
+            router = router.route("/update-user", post(create_plugin_handler::<DB>()));
         }
         if !disabled_paths.contains(&"/delete-user".to_string()) {
-            router = router.route(&make_path("/delete-user"), post(create_plugin_handler::<DB>()));
-            router =
-                router.route(&make_path("/delete-user"), delete(create_plugin_handler::<DB>()));
+            router = router.route("/delete-user", post(create_plugin_handler::<DB>()));
+            router = router.route("/delete-user", delete(create_plugin_handler::<DB>()));
         }
 
         // Register plugin routes
@@ -84,26 +73,24 @@ impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
                     continue;
                 }
 
-                let full_path = make_path(&route.path);
                 let handler_fn = create_plugin_handler::<DB>();
                 match route.method {
                     HttpMethod::Get => {
-                        router = router.route(&full_path, get(handler_fn.clone()));
+                        router = router.route(&route.path, get(handler_fn.clone()));
                     }
                     HttpMethod::Post => {
-                        router = router.route(&full_path, post(handler_fn.clone()));
+                        router = router.route(&route.path, post(handler_fn.clone()));
                     }
                     HttpMethod::Put => {
-                        router =
-                            router.route(&full_path, axum::routing::put(handler_fn.clone()));
+                        router = router.route(&route.path, axum::routing::put(handler_fn.clone()));
                     }
                     HttpMethod::Delete => {
                         router =
-                            router.route(&full_path, axum::routing::delete(handler_fn.clone()));
+                            router.route(&route.path, axum::routing::delete(handler_fn.clone()));
                     }
                     HttpMethod::Patch => {
                         router =
-                            router.route(&full_path, axum::routing::patch(handler_fn.clone()));
+                            router.route(&route.path, axum::routing::patch(handler_fn.clone()));
                     }
                     _ => {} // Skip unsupported methods
                 }

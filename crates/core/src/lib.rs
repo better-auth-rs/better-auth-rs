@@ -32,8 +32,9 @@ pub use adapters::{
 };
 #[cfg(feature = "sqlx-postgres")]
 pub use adapters::{SqlxAdapter, SqlxEntity};
-pub use config::{Argon2Config, AuthConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig, glob_match};
-pub use logger::{Logger, TracingLogger, default_logger};
+pub use config::{
+    Argon2Config, AuthConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig, glob_match,
+};
 pub use email::{ConsoleEmailProvider, EmailProvider};
 pub use entity::{
     AuthAccount, AuthAccountMeta, AuthApiKey, AuthApiKeyMeta, AuthInvitation, AuthInvitationMeta,
@@ -45,6 +46,7 @@ pub use error::{
     AuthError, AuthResult, DatabaseError, validate_request_body, validation_error_response,
 };
 pub use hooks::{DatabaseHooks, HookedDatabaseAdapter};
+pub use logger::{Logger, TracingLogger, default_logger};
 pub use middleware::{
     BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig, CsrfMiddleware,
     EndpointRateLimit, Middleware, RateLimitConfig, RateLimitMiddleware,
