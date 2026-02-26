@@ -505,13 +505,7 @@ mod tests {
         path: &str,
         query: HashMap<String, String>,
     ) -> AuthRequest {
-        AuthRequest {
-            method,
-            path: path.to_string(),
-            headers: HashMap::new(),
-            body: None,
-            query,
-        }
+        AuthRequest::from_parts(method, path.to_string(), HashMap::new(), None, query)
     }
 
     // ------------------------------------------------------------------
@@ -1403,17 +1397,15 @@ mod tests {
             .unwrap();
 
         let body = serde_json::json!({ "email": "verified@test.com" });
-        let req = AuthRequest {
-            method: HttpMethod::Post,
-            path: "/send-verification-email".to_string(),
-            headers: {
-                let mut h = HashMap::new();
-                h.insert("content-type".to_string(), "application/json".to_string());
-                h
-            },
-            body: Some(body.to_string().into_bytes()),
-            query: HashMap::new(),
-        };
+        let mut headers = HashMap::new();
+        headers.insert("content-type".to_string(), "application/json".to_string());
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/send-verification-email".to_string(),
+            headers,
+            Some(body.to_string().into_bytes()),
+            HashMap::new(),
+        );
         let err = plugin
             .handle_send_verification_email(&req, &ctx)
             .await
@@ -1427,17 +1419,15 @@ mod tests {
         let ctx = create_test_context();
 
         let body = serde_json::json!({ "email": "nobody@test.com" });
-        let req = AuthRequest {
-            method: HttpMethod::Post,
-            path: "/send-verification-email".to_string(),
-            headers: {
-                let mut h = HashMap::new();
-                h.insert("content-type".to_string(), "application/json".to_string());
-                h
-            },
-            body: Some(body.to_string().into_bytes()),
-            query: HashMap::new(),
-        };
+        let mut headers = HashMap::new();
+        headers.insert("content-type".to_string(), "application/json".to_string());
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/send-verification-email".to_string(),
+            headers,
+            Some(body.to_string().into_bytes()),
+            HashMap::new(),
+        );
         let err = plugin
             .handle_send_verification_email(&req, &ctx)
             .await
