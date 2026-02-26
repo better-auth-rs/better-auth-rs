@@ -67,7 +67,11 @@ async fn test_passkey_option_generation_endpoints() {
     let report = validator.report();
     eprintln!("\n{}\n", report);
 
-    let failures: Vec<_> = validator.results.iter().filter(|r| !r.passed).collect();
+    let failures: Vec<_> = validator
+        .results
+        .iter()
+        .filter(|r| !r.passed && !r.skipped)
+        .collect();
     assert!(
         failures.is_empty(),
         "Passkey option generation spec failures:\n{}",
@@ -206,7 +210,11 @@ async fn test_passkey_management_endpoints() {
     let report = validator.report();
     eprintln!("\n{}\n", report);
 
-    let failures: Vec<_> = validator.results.iter().filter(|r| !r.passed).collect();
+    let failures: Vec<_> = validator
+        .results
+        .iter()
+        .filter(|r| !r.passed && !r.skipped)
+        .collect();
     assert!(
         failures.is_empty(),
         "Passkey management spec failures:\n{}",

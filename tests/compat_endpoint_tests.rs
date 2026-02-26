@@ -76,6 +76,7 @@ async fn test_spec_driven_endpoint_validation() {
                 method: "GET".to_string(),
                 status,
                 passed,
+                skipped: false,
                 diffs: vec![],
                 camel_case_violations: camel_violations,
             });
@@ -86,6 +87,7 @@ async fn test_spec_driven_endpoint_validation() {
                 method: "GET".to_string(),
                 status,
                 passed: true,
+                skipped: false,
                 diffs: vec![],
                 camel_case_violations: vec![],
             });
@@ -96,6 +98,7 @@ async fn test_spec_driven_endpoint_validation() {
             method: "GET".to_string(),
             status,
             passed: false,
+            skipped: false,
             diffs: vec![ShapeDiff {
                 path: "".to_string(),
                 kind: DiffKind::TypeMismatch {
@@ -199,6 +202,7 @@ async fn test_spec_driven_endpoint_validation() {
                 method: "GET".to_string(),
                 status,
                 passed,
+                skipped: false,
                 diffs: vec![],
                 camel_case_violations: camel_violations,
             });
@@ -209,6 +213,7 @@ async fn test_spec_driven_endpoint_validation() {
                 method: "GET".to_string(),
                 status,
                 passed: true,
+                skipped: false,
                 diffs: vec![],
                 camel_case_violations: vec![],
             });
@@ -219,6 +224,7 @@ async fn test_spec_driven_endpoint_validation() {
             method: "GET".to_string(),
             status,
             passed: false,
+            skipped: false,
             diffs: vec![ShapeDiff {
                 path: "".to_string(),
                 kind: DiffKind::TypeMismatch {
@@ -247,7 +253,7 @@ async fn test_spec_driven_endpoint_validation() {
     let unexpected_failures: Vec<_> = validator
         .results
         .iter()
-        .filter(|r| !r.passed && !known_failing.contains(r.endpoint.as_str()))
+        .filter(|r| !r.passed && !r.skipped && !known_failing.contains(r.endpoint.as_str()))
         .collect();
 
     assert!(
