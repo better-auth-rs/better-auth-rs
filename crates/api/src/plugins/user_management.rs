@@ -691,14 +691,14 @@ impl UserManagementPlugin {
         // after_delete hook (non-fatal: user is already deleted, so we log
         // errors instead of failing the request — matching the pattern in
         // password_management's on_password_reset callback).
-        if let Some(ref hook) = self.config.delete_user.after_delete {
-            if let Err(e) = hook.after_delete(&user_info).await {
-                tracing::warn!(
-                    error = %e,
-                    user_id = %user_info.id,
-                    "after_delete hook failed (user already deleted)"
-                );
-            }
+        if let Some(ref hook) = self.config.delete_user.after_delete
+            && let Err(e) = hook.after_delete(&user_info).await
+        {
+            tracing::warn!(
+                error = %e,
+                user_id = %user_info.id,
+                "after_delete hook failed (user already deleted)"
+            );
         }
 
         Ok(())
