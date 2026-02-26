@@ -79,7 +79,7 @@ pub trait AfterDeleteUser: Send + Sync {
 // ---------------------------------------------------------------------------
 
 /// Configuration for the change-email feature.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ChangeEmailConfig {
     /// Whether the change-email endpoints are enabled. Default: `false`.
     pub enabled: bool,
@@ -94,22 +94,15 @@ impl std::fmt::Debug for ChangeEmailConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChangeEmailConfig")
             .field("enabled", &self.enabled)
-            .field("update_without_verification", &self.update_without_verification)
+            .field(
+                "update_without_verification",
+                &self.update_without_verification,
+            )
             .field(
                 "send_change_email_confirmation",
                 &self.send_change_email_confirmation.is_some(),
             )
             .finish()
-    }
-}
-
-impl Default for ChangeEmailConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            update_without_verification: false,
-            send_change_email_confirmation: None,
-        }
     }
 }
 
@@ -265,7 +258,10 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for UserManagementPlugin {
         let mut routes = Vec::new();
         if self.config.change_email.enabled {
             routes.push(AuthRoute::post("/change-email", "change_email"));
-            routes.push(AuthRoute::get("/change-email/verify", "change_email_verify"));
+            routes.push(AuthRoute::get(
+                "/change-email/verify",
+                "change_email_verify",
+            ));
         }
         if self.config.delete_user.enabled {
             routes.push(AuthRoute::post("/delete-user", "delete_user"));
@@ -340,7 +336,11 @@ impl UserManagementPlugin {
         };
 
         // Prevent changing to the same email
-        if user.email().map(|e| e == change_req.new_email).unwrap_or(false) {
+        if user
+            .email()
+            .map(|e| e == change_req.new_email)
+            .unwrap_or(false)
+        {
             return Err(AuthError::bad_request(
                 "New email must be different from the current email",
             ));
@@ -468,12 +468,7 @@ impl UserManagementPlugin {
             .ok_or_else(|| AuthError::not_found("User not found"))?;
 
         // Check if the new email is still available
-        if ctx
-            .database
-            .get_user_by_email(new_email)
-            .await?
-            .is_some()
-        {
+        if ctx.database.get_user_by_email(new_email).await?.is_some() {
             ctx.database.delete_verification(verification.id()).await?;
             return Err(AuthError::bad_request(
                 "Email is already in use by another account",
@@ -818,17 +813,8 @@ mod tests {
         // 3. Verify the token
         let mut query = HashMap::new();
         query.insert("token".to_string(), verification.value.clone());
-        let req = create_auth_request(
-            HttpMethod::Get,
-            "/change-email/verify",
-            None,
-            None,
-            query,
-        );
-        let response = plugin
-            .handle_change_email_verify(&req, &ctx)
-            .await
-            .unwrap();
+        let req = create_auth_request(HttpMethod::Get, "/change-email/verify", None, None, query);
+        let response = plugin.handle_change_email_verify(&req, &ctx).await.unwrap();
         assert_eq!(response.status, 200);
 
         // 4. Confirm the email was updated
@@ -873,17 +859,8 @@ mod tests {
         // Verify
         let mut query = HashMap::new();
         query.insert("token".to_string(), verification.value.clone());
-        let req = create_auth_request(
-            HttpMethod::Get,
-            "/change-email/verify",
-            None,
-            None,
-            query,
-        );
-        plugin
-            .handle_change_email_verify(&req, &ctx)
-            .await
-            .unwrap();
+        let req = create_auth_request(HttpMethod::Get, "/change-email/verify", None, None, query);
+        plugin.handle_change_email_verify(&req, &ctx).await.unwrap();
 
         let updated_user = ctx
             .database
@@ -903,13 +880,7 @@ mod tests {
 
         let mut query = HashMap::new();
         query.insert("token".to_string(), "invalid-token".to_string());
-        let req = create_auth_request(
-            HttpMethod::Get,
-            "/change-email/verify",
-            None,
-            None,
-            query,
-        );
+        let req = create_auth_request(HttpMethod::Get, "/change-email/verify", None, None, query);
 
         let err = plugin
             .handle_change_email_verify(&req, &ctx)
@@ -978,17 +949,8 @@ mod tests {
         // 3. Confirm deletion
         let mut query = HashMap::new();
         query.insert("token".to_string(), verification.value.clone());
-        let req = create_auth_request(
-            HttpMethod::Get,
-            "/delete-user/verify",
-            None,
-            None,
-            query,
-        );
-        let response = plugin
-            .handle_delete_user_verify(&req, &ctx)
-            .await
-            .unwrap();
+        let req = create_auth_request(HttpMethod::Get, "/delete-user/verify", None, None, query);
+        let response = plugin.handle_delete_user_verify(&req, &ctx).await.unwrap();
         assert_eq!(response.status, 200);
 
         // User should now be gone
@@ -1022,13 +984,7 @@ mod tests {
 
         let mut query = HashMap::new();
         query.insert("token".to_string(), "invalid-token".to_string());
-        let req = create_auth_request(
-            HttpMethod::Get,
-            "/delete-user/verify",
-            None,
-            None,
-            query,
-        );
+        let req = create_auth_request(HttpMethod::Get, "/delete-user/verify", None, None, query);
 
         let err = plugin
             .handle_delete_user_verify(&req, &ctx)
@@ -1091,18 +1047,20 @@ mod tests {
     async fn test_plugin_routes_conditional() {
         // All disabled
         let plugin = UserManagementPlugin::new();
-        assert!(plugin.routes().is_empty());
+        assert!(
+            <UserManagementPlugin as AuthPlugin<MemoryDatabaseAdapter>>::routes(&plugin).is_empty()
+        );
 
         // Only change-email enabled
         let plugin = UserManagementPlugin::new().change_email_enabled(true);
-        let routes = plugin.routes();
+        let routes = <UserManagementPlugin as AuthPlugin<MemoryDatabaseAdapter>>::routes(&plugin);
         assert_eq!(routes.len(), 2);
         assert!(routes.iter().any(|r| r.path == "/change-email"));
         assert!(routes.iter().any(|r| r.path == "/change-email/verify"));
 
         // Only delete-user enabled
         let plugin = UserManagementPlugin::new().delete_user_enabled(true);
-        let routes = plugin.routes();
+        let routes = <UserManagementPlugin as AuthPlugin<MemoryDatabaseAdapter>>::routes(&plugin);
         assert_eq!(routes.len(), 2);
         assert!(routes.iter().any(|r| r.path == "/delete-user"));
         assert!(routes.iter().any(|r| r.path == "/delete-user/verify"));
@@ -1111,7 +1069,10 @@ mod tests {
         let plugin = UserManagementPlugin::new()
             .change_email_enabled(true)
             .delete_user_enabled(true);
-        assert_eq!(plugin.routes().len(), 4);
+        assert_eq!(
+            <UserManagementPlugin as AuthPlugin<MemoryDatabaseAdapter>>::routes(&plugin).len(),
+            4
+        );
     }
 
     #[tokio::test]
