@@ -446,6 +446,23 @@ impl UserManagementPlugin {
             ));
         }
 
+        // If update_without_verification is true, update the email immediately
+        // without creating a verification token or sending an email.
+        if self.config.change_email.update_without_verification {
+            let update_user = UpdateUser {
+                email: Some(change_req.new_email.clone()),
+                email_verified: Some(false),
+                ..Default::default()
+            };
+            ctx.database.update_user(user.id(), update_user).await?;
+
+            let response = StatusMessageResponse {
+                status: true,
+                message: "Email updated successfully".to_string(),
+            };
+            return Ok(AuthResponse::json(200, &response)?);
+        }
+
         // Create verification token
         let identifier = format!("change_email:{}:{}", user.id(), change_req.new_email);
         let expires_at = Utc::now() + Duration::hours(24);
@@ -524,14 +541,9 @@ impl UserManagementPlugin {
             ));
         }
 
-        // Determine new email_verified status:
-        // If old email was verified, mark new email as unverified
-        // (unless update_without_verification is set).
-        let new_verified = if user.email_verified() {
-            self.config.change_email.update_without_verification
-        } else {
-            false
-        };
+        // When going through the verification flow, the new email is always
+        // marked as verified (the user proved ownership by clicking the link).
+        let new_verified = true;
 
         let update_user = UpdateUser {
             email: Some(new_email.to_string()),
@@ -822,12 +834,12 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(updated_user.email.as_deref(), Some("new@example.com"));
-        // Old email was verified → new email should be unverified
-        assert!(!updated_user.email_verified);
+        // Verification flow always marks the new email as verified
+        assert!(updated_user.email_verified);
     }
 
     #[tokio::test]
-    async fn test_change_email_verify_keeps_verified_when_configured() {
+    async fn test_change_email_immediate_when_update_without_verification() {
         let plugin = UserManagementPlugin::new()
             .change_email_enabled(true)
             .update_without_verification(true);
@@ -840,7 +852,7 @@ mod tests {
         )
         .await;
 
-        // Initiate change
+        // Initiate change — should update immediately, no verification token
         let body = serde_json::json!({ "newEmail": "new@example.com" });
         let req = test_helpers::create_auth_request(
             HttpMethod::Post,
@@ -849,29 +861,10 @@ mod tests {
             Some(body.to_string().into_bytes()),
             HashMap::new(),
         );
-        plugin.handle_change_email(&req, &ctx).await.unwrap();
+        let response = plugin.handle_change_email(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
 
-        // Find token
-        let identifier = format!("change_email:{}:new@example.com", user.id);
-        let verification = ctx
-            .database
-            .get_verification_by_identifier(&identifier)
-            .await
-            .unwrap()
-            .expect("verification should exist");
-
-        // Verify
-        let mut query = HashMap::new();
-        query.insert("token".to_string(), verification.value.clone());
-        let req = test_helpers::create_auth_request(
-            HttpMethod::Get,
-            "/change-email/verify",
-            None,
-            None,
-            query,
-        );
-        plugin.handle_change_email_verify(&req, &ctx).await.unwrap();
-
+        // Email should be updated immediately
         let updated_user = ctx
             .database
             .get_user_by_id(&user.id)
@@ -879,8 +872,20 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(updated_user.email.as_deref(), Some("new@example.com"));
-        // update_without_verification = true → should remain verified
-        assert!(updated_user.email_verified);
+        // email_verified should be false (no verification was performed)
+        assert!(!updated_user.email_verified);
+
+        // No verification token should have been created
+        let identifier = format!("change_email:{}:new@example.com", user.id);
+        let verification = ctx
+            .database
+            .get_verification_by_identifier(&identifier)
+            .await
+            .unwrap();
+        assert!(
+            verification.is_none(),
+            "no verification token should be created when update_without_verification=true"
+        );
     }
 
     #[tokio::test]
