@@ -312,9 +312,23 @@ impl PasswordManagementPlugin {
             .create_verification(create_verification)
             .await?;
 
-        // Send email with reset link
+        // Build reset URL — only allow redirect_to when it shares the same
+        // origin as the configured base_url to prevent open-redirect /
+        // token-exfiltration attacks.
         let reset_url = if let Some(redirect_to) = &forget_req.redirect_to {
-            format!("{}?token={}", redirect_to, reset_token)
+            if redirect_to.starts_with('/') || redirect_to.starts_with(&ctx.config.base_url) {
+                format!("{}?token={}", redirect_to, reset_token)
+            } else {
+                // Untrusted origin — fall back to server-side base URL.
+                eprintln!(
+                    "[password-management] Ignoring untrusted redirect_to: {}",
+                    redirect_to
+                );
+                format!(
+                    "{}/reset-password?token={}",
+                    ctx.config.base_url, reset_token
+                )
+            }
         } else {
             format!(
                 "{}/reset-password?token={}",
@@ -322,16 +336,16 @@ impl PasswordManagementPlugin {
             )
         };
 
-        if let Some(sender) = &self.config.send_reset_password {
-            let user_value = password_utils::serialize_to_value(&user)?;
-            if let Err(e) = sender.send(&user_value, &reset_url, &reset_token).await {
-                eprintln!(
-                    "[password-management] Custom send_reset_password failed for {}: {}",
-                    forget_req.email, e
-                );
-            }
-        } else if self.config.send_email_notifications {
-            if let Ok(provider) = ctx.email_provider() {
+        if self.config.send_email_notifications {
+            if let Some(sender) = &self.config.send_reset_password {
+                let user_value = password_utils::serialize_to_value(&user)?;
+                if let Err(e) = sender.send(&user_value, &reset_url, &reset_token).await {
+                    eprintln!(
+                        "[password-management] Custom send_reset_password failed for {}: {}",
+                        forget_req.email, e
+                    );
+                }
+            } else if let Ok(provider) = ctx.email_provider() {
                 let subject = "Reset your password";
                 let html = format!(
                     "<p>Click the link below to reset your password:</p>\
@@ -355,7 +369,7 @@ impl PasswordManagementPlugin {
                     forget_req.email
                 );
             }
-        }
+        } // send_email_notifications
 
         let response = StatusResponse { status: true };
         Ok(AuthResponse::json(200, &response)?)
@@ -404,10 +418,26 @@ impl PasswordManagementPlugin {
             ctx.database.delete_user_sessions(user.id()).await?;
         }
 
-        // Call on_password_reset callback if configured
+        // Call on_password_reset callback if configured.
+        // Treated as non-fatal: the password has already been changed and the
+        // reset token deleted, so we log errors instead of failing the request.
         if let Some(callback) = &self.config.on_password_reset {
-            let user_value = password_utils::serialize_to_value(&user)?;
-            callback(user_value).await?;
+            match password_utils::serialize_to_value(&user) {
+                Ok(user_value) => {
+                    if let Err(e) = callback(user_value).await {
+                        eprintln!(
+                            "[password-management] on_password_reset callback failed: {}",
+                            e
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[password-management] Failed to serialize user for on_password_reset callback: {}",
+                        e
+                    );
+                }
+            }
         }
 
         let response = StatusResponse { status: true };
@@ -632,7 +662,7 @@ impl PasswordManagementPlugin {
         // PasswordManagementPlugin does not own a max_length config, so we use
         // usize::MAX (effectively no plugin-level cap). The global
         // PasswordConfig rules (min length, strength) are still enforced.
-        password_utils::validate_password(password, usize::MAX, ctx)
+        password_utils::validate_password(password, ctx.config.password.min_length, usize::MAX, ctx)
     }
 
     async fn hash_password(&self, password: &str) -> AuthResult<String> {

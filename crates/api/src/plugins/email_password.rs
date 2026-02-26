@@ -348,7 +348,12 @@ impl EmailPasswordPlugin {
         password: &str,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<()> {
-        password_utils::validate_password(password, self.config.password_max_length, ctx)
+        password_utils::validate_password(
+            password,
+            self.config.password_min_length,
+            self.config.password_max_length,
+            ctx,
+        )
     }
 
     async fn hash_password(&self, password: &str) -> AuthResult<String> {

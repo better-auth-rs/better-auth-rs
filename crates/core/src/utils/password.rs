@@ -90,17 +90,18 @@ pub async fn verify_password(
 // Password validation
 // ---------------------------------------------------------------------------
 
-/// Validate `password` against both the global `PasswordConfig` rules and the
-/// plugin-level `max_length`.  Performs min-length, max-length, uppercase,
-/// lowercase, digit and special-character checks.
+/// Validate `password` against both the plugin-level length limits and the
+/// global `PasswordConfig` strength rules.  Performs min-length, max-length,
+/// uppercase, lowercase, digit and special-character checks.
 pub fn validate_password<DB: DatabaseAdapter>(
     password: &str,
+    min_length: usize,
     max_length: usize,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<()> {
     let config = &ctx.config.password;
 
-    if password.len() < config.min_length {
+    if password.len() < min_length {
         return Err(AuthError::bad_request(format!(
             "Password must be at least {} characters long",
             config.min_length
