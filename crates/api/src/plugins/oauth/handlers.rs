@@ -310,7 +310,7 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
         };
 
         let cookie_header =
-            crate::plugins::cookie_utils::create_session_cookie(session.token(), ctx);
+            better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
         return Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header));
     }
 
@@ -352,7 +352,7 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
         };
 
         let cookie_header =
-            crate::plugins::cookie_utils::create_session_cookie(session.token(), ctx);
+            better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
         return Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header));
     }
 
@@ -396,7 +396,8 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
         user,
     };
 
-    let cookie_header = crate::plugins::cookie_utils::create_session_cookie(session.token(), ctx);
+    let cookie_header =
+        better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
     Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
 }
 

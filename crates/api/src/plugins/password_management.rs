@@ -408,7 +408,8 @@ impl PasswordManagementPlugin {
 
         // Set session cookie if a new session was created
         if let Some(token) = new_token {
-            let cookie_header = super::cookie_utils::create_session_cookie(&token, ctx);
+            let cookie_header =
+                better_auth_core::utils::cookie_utils::create_session_cookie(&token, ctx);
             Ok(auth_response.with_header("Set-Cookie", cookie_header))
         } else {
             Ok(auth_response)

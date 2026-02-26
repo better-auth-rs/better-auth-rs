@@ -3,21 +3,18 @@
 //! Centralises the `Set-Cookie` header construction so that each plugin does
 //! not have to duplicate the same formatting logic.
 
-use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::config::AuthConfig;
-use better_auth_core::plugin::AuthContext;
+use crate::adapters::DatabaseAdapter;
+use crate::config::AuthConfig;
+use crate::plugin::AuthContext;
 use std::sync::Arc;
 
 /// Build a `Set-Cookie` header value for a session token.
-pub(crate) fn create_session_cookie<DB: DatabaseAdapter>(
-    token: &str,
-    ctx: &AuthContext<DB>,
-) -> String {
+pub fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
     build_session_cookie_from_config(token, &ctx.config)
 }
 
 /// Build a `Set-Cookie` header that clears (expires) the session cookie.
-pub(crate) fn create_clear_session_cookie<DB: DatabaseAdapter>(ctx: &AuthContext<DB>) -> String {
+pub fn create_clear_session_cookie<DB: DatabaseAdapter>(ctx: &AuthContext<DB>) -> String {
     let session_config = &ctx.config.session;
     let attrs = cookie_attributes(session_config);
 
@@ -42,7 +39,7 @@ fn build_session_cookie_from_config(token: &str, config: &Arc<AuthConfig>) -> St
 }
 
 /// Format the common "; Secure; HttpOnly; SameSite=…" suffix.
-fn cookie_attributes(session_config: &better_auth_core::config::SessionConfig) -> String {
+fn cookie_attributes(session_config: &crate::config::SessionConfig) -> String {
     let secure = if session_config.cookie_secure {
         "; Secure"
     } else {

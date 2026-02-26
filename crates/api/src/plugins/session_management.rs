@@ -156,7 +156,8 @@ impl SessionManagementPlugin {
         ctx.database.delete_session(current_session.token()).await?;
 
         let response = SignOutResponse { success: true };
-        let clear_cookie_header = super::cookie_utils::create_clear_session_cookie(ctx);
+        let clear_cookie_header =
+            better_auth_core::utils::cookie_utils::create_clear_session_cookie(ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", clear_cookie_header))
     }

@@ -675,7 +675,8 @@ impl AdminPlugin {
 
         let session = ctx.database.create_session(create_session).await?;
 
-        let cookie_header = super::cookie_utils::create_session_cookie(session.token(), ctx);
+        let cookie_header =
+            better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
         let response = SessionUserResponse {
             session,
             user: target,
@@ -733,7 +734,10 @@ impl AdminPlugin {
 
         let admin_session = ctx.database.create_session(create_session).await?;
 
-        let cookie_header = super::cookie_utils::create_session_cookie(admin_session.token(), ctx);
+        let cookie_header = better_auth_core::utils::cookie_utils::create_session_cookie(
+            admin_session.token(),
+            ctx,
+        );
         let response = SessionUserResponse {
             session: admin_session,
             user: admin_user,

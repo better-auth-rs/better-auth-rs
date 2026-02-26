@@ -162,7 +162,8 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header = super::cookie_utils::create_session_cookie(session.token(), ctx);
+        let cookie_header =
+            better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -225,7 +226,8 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header = super::cookie_utils::create_session_cookie(session.token(), ctx);
+        let cookie_header =
+            better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -288,7 +290,8 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header = super::cookie_utils::create_session_cookie(session.token(), ctx);
+        let cookie_header =
+            better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
