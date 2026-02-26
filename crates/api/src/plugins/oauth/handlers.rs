@@ -50,7 +50,8 @@ async fn create_oauth_session_response<DB: DatabaseAdapter>(
         user,
     };
 
-    let cookie_header = build_session_cookie(session.token(), ctx);
+    let cookie_header =
+        better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
     Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
 }
 
@@ -656,31 +657,4 @@ fn extract_query_param(path: &str, key: &str) -> Option<String> {
         .query_pairs()
         .find(|(k, _)| k == key)
         .map(|(_, v)| v.into_owned())
-}
-
-/// Build a `Set-Cookie` header value using the `cookie` crate.
-fn build_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
-    let session_config = &ctx.config.session;
-
-    let expires = Utc::now() + session_config.expires_in;
-
-    let same_site = match session_config.cookie_same_site {
-        better_auth_core::config::SameSite::Strict => cookie::SameSite::Strict,
-        better_auth_core::config::SameSite::Lax => cookie::SameSite::Lax,
-        better_auth_core::config::SameSite::None => cookie::SameSite::None,
-    };
-
-    let mut builder = cookie::Cookie::build((&session_config.cookie_name, token))
-        .path("/")
-        .same_site(same_site)
-        .expires(cookie::time::OffsetDateTime::from_unix_timestamp(expires.timestamp()).unwrap());
-
-    if session_config.cookie_secure {
-        builder = builder.secure(true);
-    }
-    if session_config.cookie_http_only {
-        builder = builder.http_only(true);
-    }
-
-    builder.build().to_string()
 }
