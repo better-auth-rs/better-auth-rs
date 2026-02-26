@@ -235,8 +235,9 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailVerificationPlugin {
     }
 
     async fn on_user_created(&self, user: &DB::User, ctx: &AuthContext<DB>) -> AuthResult<()> {
-        // Send verification email for new users if configured
-        if self.config.send_email_notifications
+        // Send verification email for new users if configured.
+        // Also fire when a custom sender is set, even if send_email_notifications is false.
+        if (self.config.send_email_notifications || self.config.send_verification_email.is_some())
             && !user.email_verified()
             && let Some(email) = user.email()
             && let Err(e) = self
@@ -354,11 +355,29 @@ impl EmailVerificationPlugin {
             hook(&to_user(&updated_user)).await?;
         }
 
+        // Optionally create a session when auto_sign_in_after_verification is
+        // enabled.  The cookie is attached to **both** the redirect and the
+        // JSON responses below.
+        let session_cookie = if self.config.auto_sign_in_after_verification {
+            let ip_address = req.headers.get("x-forwarded-for").cloned();
+            let user_agent = req.headers.get("user-agent").cloned();
+            let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+            let session = session_manager
+                .create_session(&updated_user, ip_address, user_agent)
+                .await?;
+            Some((Self::create_session_cookie(session.token(), ctx), session))
+        } else {
+            None
+        };
+
         // If callback URL is provided, redirect
         if let Some(callback_url) = callback_url {
             let redirect_url = format!("{}?verified=true", callback_url);
             let mut headers = std::collections::HashMap::new();
             headers.insert("Location".to_string(), redirect_url);
+            if let Some((cookie, _)) = &session_cookie {
+                headers.insert("Set-Cookie".to_string(), cookie.clone());
+            }
             return Ok(AuthResponse {
                 status: 302,
                 headers,
@@ -366,16 +385,8 @@ impl EmailVerificationPlugin {
             });
         }
 
-        // Auto sign-in after verification if configured
-        if self.config.auto_sign_in_after_verification {
-            let ip_address = req.headers.get("x-forwarded-for").cloned();
-            let user_agent = req.headers.get("user-agent").cloned();
-            let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-            let session = session_manager
-                .create_session(&updated_user, ip_address, user_agent)
-                .await?;
-
-            let cookie_header = Self::create_session_cookie(session.token(), ctx);
+        // Return JSON — include session when auto sign-in was performed
+        if let Some((cookie_header, session)) = session_cookie {
             let response = VerifyEmailWithSessionResponse {
                 user: updated_user,
                 session,
