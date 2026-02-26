@@ -14,6 +14,8 @@ use better_auth_core::{AuthRequest, AuthResponse, CreatePasskey, CreateVerificat
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
+use super::StatusResponse;
+
 /// Passkey / WebAuthn authentication plugin.
 ///
 /// Generates WebAuthn-compatible registration and authentication options,
@@ -131,10 +133,6 @@ struct SessionUserResponse<U: Serialize, S: Serialize> {
     user: U,
 }
 
-#[derive(Debug, Serialize)]
-struct StatusResponse {
-    status: bool,
-}
 
 #[derive(Debug, Serialize)]
 struct PasskeyResponse {
@@ -710,66 +708,10 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasskeyPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use better_auth_core::adapters::{
-        MemoryDatabaseAdapter, PasskeyOps, SessionOps, UserOps, VerificationOps,
-    };
-    use better_auth_core::{CreateSession, CreateUser, CreateVerification, Session, User};
+    use crate::plugins::test_helpers;
+    use better_auth_core::adapters::{PasskeyOps, UserOps, VerificationOps};
+    use better_auth_core::{CreateUser, CreateVerification};
     use chrono::{Duration, Utc};
-    use std::collections::HashMap;
-    use std::sync::Arc;
-
-    async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>, User, Session)
-    {
-        let config = Arc::new(better_auth_core::AuthConfig::new(
-            "test-secret-key-at-least-32-chars-long",
-        ));
-        let database = Arc::new(MemoryDatabaseAdapter::new());
-        let ctx = AuthContext::new(config, database.clone());
-
-        let user = database
-            .create_user(
-                CreateUser::new()
-                    .with_email("passkey-test@example.com")
-                    .with_name("Passkey Tester"),
-            )
-            .await
-            .unwrap();
-
-        let session = database
-            .create_session(CreateSession {
-                user_id: user.id.clone(),
-                expires_at: Utc::now() + Duration::hours(1),
-                ip_address: Some("127.0.0.1".to_string()),
-                user_agent: Some("test-agent".to_string()),
-                impersonated_by: None,
-                active_organization_id: None,
-            })
-            .await
-            .unwrap();
-
-        (ctx, user, session)
-    }
-
-    fn create_auth_request(
-        method: HttpMethod,
-        path: &str,
-        token: Option<&str>,
-        body: Option<serde_json::Value>,
-    ) -> AuthRequest {
-        let mut headers = HashMap::new();
-        if let Some(token) = token {
-            headers.insert("authorization".to_string(), format!("Bearer {}", token));
-        }
-        headers.insert("content-type".to_string(), "application/json".to_string());
-
-        AuthRequest {
-            method,
-            path: path.to_string(),
-            headers,
-            body: body.map(|b| serde_json::to_vec(&b).unwrap()),
-            query: HashMap::new(),
-        }
-    }
 
     fn encoded_client_data(challenge: &str, client_type: &str, origin: &str) -> String {
         let client_data = serde_json::json!({
@@ -783,7 +725,10 @@ mod tests {
     #[tokio::test]
     async fn test_verify_registration_requires_insecure_opt_in() {
         let plugin = PasskeyPlugin::new();
-        let (ctx, _user, session) = create_test_context_with_user().await;
+        let (ctx, _user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
         let body = serde_json::json!({
             "response": {
@@ -794,7 +739,7 @@ mod tests {
             }
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/verify-registration",
             Some(&session.token),
@@ -811,7 +756,10 @@ mod tests {
     #[tokio::test]
     async fn test_verify_registration_consumes_exact_challenge_once() {
         let plugin = PasskeyPlugin::new().allow_insecure_unverified_assertion(true);
-        let (ctx, user, session) = create_test_context_with_user().await;
+        let (ctx, user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
         let challenge = "register-challenge";
         let identifier = format!("passkey_reg:{}", user.id);
@@ -834,7 +782,7 @@ mod tests {
                 }
             }
         });
-        let wrong_req = create_auth_request(
+        let wrong_req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/verify-registration",
             Some(&session.token),
@@ -863,7 +811,7 @@ mod tests {
                 }
             }
         });
-        let ok_req = create_auth_request(
+        let ok_req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/verify-registration",
             Some(&session.token),
@@ -890,7 +838,10 @@ mod tests {
     #[tokio::test]
     async fn test_verify_authentication_checks_type_origin_and_prevents_replay() {
         let plugin = PasskeyPlugin::new().allow_insecure_unverified_assertion(true);
-        let (ctx, user, _session) = create_test_context_with_user().await;
+        let (ctx, user, _session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
         let credential_id = "cred-auth-1";
         ctx.database
@@ -927,7 +878,7 @@ mod tests {
                 }
             }
         });
-        let wrong_type_req = create_auth_request(
+        let wrong_type_req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/verify-authentication",
             None,
@@ -947,7 +898,7 @@ mod tests {
                 }
             }
         });
-        let wrong_origin_req = create_auth_request(
+        let wrong_origin_req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/verify-authentication",
             None,
@@ -975,7 +926,7 @@ mod tests {
                 }
             }
         });
-        let ok_req = create_auth_request(
+        let ok_req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/verify-authentication",
             None,
@@ -995,7 +946,7 @@ mod tests {
                 .is_none()
         );
 
-        let replay_req = create_auth_request(
+        let replay_req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/verify-authentication",
             None,
@@ -1019,9 +970,12 @@ mod tests {
     #[tokio::test]
     async fn test_generate_register_options_returns_challenge_and_stores_verification() {
         let plugin = PasskeyPlugin::new();
-        let (ctx, user, session) = create_test_context_with_user().await;
+        let (ctx, user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Get,
             "/passkey/generate-register-options",
             Some(&session.token),
@@ -1056,9 +1010,12 @@ mod tests {
     #[tokio::test]
     async fn test_generate_register_options_unauthenticated() {
         let plugin = PasskeyPlugin::new();
-        let (ctx, _user, _session) = create_test_context_with_user().await;
+        let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Get,
             "/passkey/generate-register-options",
             None,
@@ -1075,10 +1032,13 @@ mod tests {
     #[tokio::test]
     async fn test_generate_authenticate_options_returns_challenge() {
         let plugin = PasskeyPlugin::new();
-        let (ctx, _user, _session) = create_test_context_with_user().await;
+        let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
         // No auth required for this endpoint
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/generate-authenticate-options",
             None,
@@ -1101,7 +1061,10 @@ mod tests {
     #[tokio::test]
     async fn test_generate_authenticate_options_with_auth_includes_credentials() {
         let plugin = PasskeyPlugin::new();
-        let (ctx, user, session) = create_test_context_with_user().await;
+        let (ctx, user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
         // Create a passkey for the user
         ctx.database
@@ -1118,7 +1081,7 @@ mod tests {
             .await
             .unwrap();
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/generate-authenticate-options",
             Some(&session.token),
@@ -1140,10 +1103,13 @@ mod tests {
     #[tokio::test]
     async fn test_list_user_passkeys() {
         let plugin = PasskeyPlugin::new();
-        let (ctx, user, session) = create_test_context_with_user().await;
+        let (ctx, user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
         // No passkeys yet
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Get,
             "/passkey/list-user-passkeys",
             Some(&session.token),
@@ -1180,9 +1146,12 @@ mod tests {
     #[tokio::test]
     async fn test_list_user_passkeys_unauthenticated() {
         let plugin = PasskeyPlugin::new();
-        let (ctx, _user, _session) = create_test_context_with_user().await;
+        let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
-        let req = create_auth_request(HttpMethod::Get, "/passkey/list-user-passkeys", None, None);
+        let req = test_helpers::create_auth_json_request_no_query(HttpMethod::Get, "/passkey/list-user-passkeys", None, None);
         let err = plugin
             .handle_list_user_passkeys(&req, &ctx)
             .await
@@ -1193,7 +1162,10 @@ mod tests {
     #[tokio::test]
     async fn test_delete_passkey_success() {
         let plugin = PasskeyPlugin::new();
-        let (ctx, user, session) = create_test_context_with_user().await;
+        let (ctx, user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
         let passkey = ctx
             .database
@@ -1211,7 +1183,7 @@ mod tests {
             .unwrap();
 
         let body = serde_json::json!({ "id": passkey.id });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/delete-passkey",
             Some(&session.token),
@@ -1229,7 +1201,10 @@ mod tests {
     #[tokio::test]
     async fn test_delete_passkey_non_owner_rejected() {
         let plugin = PasskeyPlugin::new();
-        let (ctx, _user, session) = create_test_context_with_user().await;
+        let (ctx, _user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
         // Create another user's passkey
         let other_user = ctx
@@ -1258,7 +1233,7 @@ mod tests {
             .unwrap();
 
         let body = serde_json::json!({ "id": passkey.id });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/delete-passkey",
             Some(&session.token),
@@ -1276,7 +1251,10 @@ mod tests {
     #[tokio::test]
     async fn test_update_passkey_success() {
         let plugin = PasskeyPlugin::new();
-        let (ctx, user, session) = create_test_context_with_user().await;
+        let (ctx, user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
         let passkey = ctx
             .database
@@ -1294,7 +1272,7 @@ mod tests {
             .unwrap();
 
         let body = serde_json::json!({ "id": passkey.id, "name": "New Name" });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/update-passkey",
             Some(&session.token),
@@ -1320,7 +1298,10 @@ mod tests {
     #[tokio::test]
     async fn test_update_passkey_non_owner_rejected() {
         let plugin = PasskeyPlugin::new();
-        let (ctx, _user, session) = create_test_context_with_user().await;
+        let (ctx, _user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
         let other_user = ctx
             .database
@@ -1348,7 +1329,7 @@ mod tests {
             .unwrap();
 
         let body = serde_json::json!({ "id": passkey.id, "name": "Hijacked" });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/update-passkey",
             Some(&session.token),
@@ -1371,7 +1352,10 @@ mod tests {
     #[tokio::test]
     async fn test_expired_challenge_rejected() {
         let plugin = PasskeyPlugin::new().allow_insecure_unverified_assertion(true);
-        let (ctx, user, session) = create_test_context_with_user().await;
+        let (ctx, user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
         let challenge = "expired-challenge";
         let identifier = format!("passkey_reg:{}", user.id);
@@ -1395,7 +1379,7 @@ mod tests {
                 }
             }
         });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/verify-registration",
             Some(&session.token),
@@ -1412,7 +1396,10 @@ mod tests {
     #[tokio::test]
     async fn test_verify_authentication_requires_insecure_opt_in() {
         let plugin = PasskeyPlugin::new(); // default: insecure=false
-        let (ctx, _user, _session) = create_test_context_with_user().await;
+        let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
         let body = serde_json::json!({
             "response": {
@@ -1423,7 +1410,7 @@ mod tests {
             }
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Post,
             "/passkey/verify-authentication",
             None,
@@ -1439,7 +1426,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_memory_passkey_list_is_sorted_by_created_at_desc() {
-        let (ctx, user, _session) = create_test_context_with_user().await;
+        let (ctx, user, _session) = test_helpers::create_test_context_with_user(
+            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            Duration::hours(1),
+        ).await;
 
         let first = ctx
             .database

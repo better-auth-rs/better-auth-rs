@@ -13,6 +13,8 @@ use better_auth_core::{
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
+use super::StatusResponse;
+
 /// Two-factor authentication plugin providing TOTP, OTP, and backup code flows.
 pub struct TwoFactorPlugin {
     config: TwoFactorConfig,
@@ -119,10 +121,10 @@ struct VerifyBackupCodeResponse<U: Serialize, S: Serialize> {
 }
 
 #[derive(Debug, Serialize)]
-struct StatusResponse {
+struct BackupCodesResponse {
     status: bool,
-    #[serde(rename = "backupCodes", skip_serializing_if = "Option::is_none")]
-    backup_codes: Option<Vec<String>>,
+    #[serde(rename = "backupCodes")]
+    backup_codes: Vec<String>,
 }
 
 impl TwoFactorPlugin {
@@ -312,10 +314,7 @@ impl TwoFactorPlugin {
             )
             .await?;
 
-        let response = StatusResponse {
-            status: true,
-            backup_codes: None,
-        };
+        let response = StatusResponse { status: true };
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -435,10 +434,7 @@ impl TwoFactorPlugin {
                 .await;
         }
 
-        let response = StatusResponse {
-            status: true,
-            backup_codes: None,
-        };
+        let response = StatusResponse { status: true };
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -516,9 +512,9 @@ impl TwoFactorPlugin {
             .update_two_factor_backup_codes(user.id(), &hashed_codes)
             .await?;
 
-        let response = StatusResponse {
+        let response = BackupCodesResponse {
             status: true,
-            backup_codes: Some(backup_codes),
+            backup_codes,
         };
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }

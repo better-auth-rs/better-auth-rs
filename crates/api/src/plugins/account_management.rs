@@ -3,10 +3,12 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
-use better_auth_core::{AuthContext, AuthPlugin, AuthRoute, SessionManager};
+use better_auth_core::entity::{AuthAccount, AuthUser};
+use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
+
+use super::StatusResponse;
 
 /// Account management plugin for listing and unlinking user accounts.
 pub struct AccountManagementPlugin {
@@ -38,10 +40,6 @@ struct AccountResponse {
     scopes: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
-struct StatusResponse {
-    status: bool,
-}
 
 impl AccountManagementPlugin {
     pub fn new() -> Self {
@@ -105,29 +103,12 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for AccountManagementPlugin {
 }
 
 impl AccountManagementPlugin {
-    async fn require_session<DB: DatabaseAdapter>(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<(DB::User, DB::Session)> {
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-
-        if let Some(token) = session_manager.extract_session_token(req)
-            && let Some(session) = session_manager.get_session(&token).await?
-            && let Some(user) = ctx.database.get_user_by_id(session.user_id()).await?
-        {
-            return Ok((user, session));
-        }
-
-        Err(AuthError::Unauthenticated)
-    }
-
     async fn handle_list_accounts<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = self.require_session(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let accounts = ctx.database.get_user_accounts(user.id()).await?;
 
@@ -160,7 +141,7 @@ impl AccountManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = self.require_session(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let unlink_req: UnlinkAccountRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,

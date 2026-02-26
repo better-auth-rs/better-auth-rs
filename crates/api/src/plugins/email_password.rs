@@ -282,9 +282,9 @@ impl EmailPasswordPlugin {
                 .send_verification_on_sign_in(&user, signin_req.callback_url.as_deref(), ctx)
                 .await
         {
-            eprintln!(
-                "[email-password] Failed to send verification email on sign-in: {}",
-                e
+            tracing::warn!(
+                error = %e,
+                "Failed to send verification email on sign-in"
             );
         }
 
@@ -356,9 +356,9 @@ impl EmailPasswordPlugin {
         if let Some(ref ev) = self.email_verification
             && let Err(e) = ev.send_verification_on_sign_in(&user, None, ctx).await
         {
-            eprintln!(
-                "[email-password] Failed to send verification email on sign-in: {}",
-                e
+            tracing::warn!(
+                error = %e,
+                "Failed to send verification email on sign-in"
             );
         }
 

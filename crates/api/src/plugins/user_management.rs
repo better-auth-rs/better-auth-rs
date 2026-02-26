@@ -6,8 +6,8 @@ use uuid::Uuid;
 use validator::Validate;
 
 use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::entity::{AuthSession, AuthUser, AuthVerification};
-use better_auth_core::{AuthContext, AuthPlugin, AuthRoute, SessionManager};
+use better_auth_core::entity::{AuthUser, AuthVerification};
+use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreateVerification, HttpMethod, UpdateUser};
 
@@ -296,30 +296,118 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for UserManagementPlugin {
 }
 
 // ---------------------------------------------------------------------------
+// Shared helpers (DRY: token creation, token verification, email sending)
+// ---------------------------------------------------------------------------
+
+impl UserManagementPlugin {
+    /// Create a verification token, persist it, and return `(token_value, verification_url)`.
+    async fn create_verification_token<DB: DatabaseAdapter>(
+        ctx: &AuthContext<DB>,
+        identifier: &str,
+        token_prefix: &str,
+        expires_at: chrono::DateTime<Utc>,
+        callback_url: Option<&str>,
+        default_path: &str,
+    ) -> AuthResult<(String, String)> {
+        let token_value = format!("{}_{}", token_prefix, Uuid::new_v4());
+
+        let create_verification = CreateVerification {
+            identifier: identifier.to_string(),
+            value: token_value.clone(),
+            expires_at,
+        };
+
+        ctx.database
+            .create_verification(create_verification)
+            .await?;
+
+        let verification_url = if let Some(cb_url) = callback_url {
+            format!("{}?token={}", cb_url, token_value)
+        } else {
+            format!(
+                "{}/{}?token={}",
+                ctx.config.base_url, default_path, token_value
+            )
+        };
+
+        Ok((token_value, verification_url))
+    }
+
+    /// Retrieve and validate a verification token from the request query string.
+    ///
+    /// Returns the parsed identifier parts and the verification record ID.
+    /// The caller specifies `expected_prefix` (e.g. `"change_email"` or `"delete_user"`)
+    /// and `expected_parts` (how many colon-separated segments the identifier should have).
+    async fn consume_verification_token<DB: DatabaseAdapter>(
+        ctx: &AuthContext<DB>,
+        req: &AuthRequest,
+        expected_prefix: &str,
+        expected_parts: usize,
+    ) -> AuthResult<(Vec<String>, String)> {
+        let token = req
+            .query
+            .get("token")
+            .ok_or_else(|| AuthError::bad_request("Verification token is required"))?;
+
+        let verification = ctx
+            .database
+            .get_verification_by_value(token)
+            .await?
+            .ok_or_else(|| AuthError::bad_request("Invalid or expired verification token"))?;
+
+        if verification.expires_at() < Utc::now() {
+            ctx.database.delete_verification(verification.id()).await?;
+            return Err(AuthError::bad_request("Verification token has expired"));
+        }
+
+        let identifier = verification.identifier();
+        let parts: Vec<String> = identifier
+            .splitn(expected_parts, ':')
+            .map(|s| s.to_string())
+            .collect();
+        if parts.len() != expected_parts || parts[0] != expected_prefix {
+            return Err(AuthError::bad_request("Invalid verification token"));
+        }
+
+        let verification_id = verification.id().to_string();
+        Ok((parts, verification_id))
+    }
+
+    /// Send an email using the configured email provider, logging on failure.
+    async fn send_email_or_log<DB: DatabaseAdapter>(
+        ctx: &AuthContext<DB>,
+        to: &str,
+        subject: &str,
+        html: &str,
+        text: &str,
+        action: &str,
+    ) {
+        if let Ok(provider) = ctx.email_provider() {
+            if let Err(e) = provider.send(to, subject, html, text).await {
+                tracing::warn!(
+                    plugin = "user-management",
+                    action = action,
+                    email = to,
+                    error = %e,
+                    "Failed to send email"
+                );
+            }
+        } else {
+            tracing::warn!(
+                plugin = "user-management",
+                action = action,
+                email = to,
+                "No email provider configured, skipping email"
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Route handlers
 // ---------------------------------------------------------------------------
 
 impl UserManagementPlugin {
-    // ── helpers ────────────────────────────────────────────────────────
-
-    /// Require an authenticated session and return `(user, session)`.
-    async fn require_session<DB: DatabaseAdapter>(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<(DB::User, DB::Session)> {
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-
-        if let Some(token) = session_manager.extract_session_token(req)
-            && let Some(session) = session_manager.get_session(&token).await?
-            && let Some(user) = ctx.database.get_user_by_id(session.user_id()).await?
-        {
-            return Ok((user, session));
-        }
-
-        Err(AuthError::Unauthenticated)
-    }
-
     // ── change email ──────────────────────────────────────────────────
 
     /// `POST /change-email`
@@ -328,7 +416,7 @@ impl UserManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = self.require_session(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let change_req: ChangeEmailRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -358,30 +446,18 @@ impl UserManagementPlugin {
             ));
         }
 
-        // Generate verification token
-        let verification_token = format!("ce_{}", Uuid::new_v4());
+        // Create verification token
         let identifier = format!("change_email:{}:{}", user.id(), change_req.new_email);
         let expires_at = Utc::now() + Duration::hours(24);
-
-        let create_verification = CreateVerification {
-            identifier: identifier.clone(),
-            value: verification_token.clone(),
+        let (verification_token, verification_url) = Self::create_verification_token(
+            ctx,
+            &identifier,
+            "ce",
             expires_at,
-        };
-
-        ctx.database
-            .create_verification(create_verification)
-            .await?;
-
-        // Build the verification URL
-        let verification_url = if let Some(callback_url) = &change_req.callback_url {
-            format!("{}?token={}", callback_url, verification_token)
-        } else {
-            format!(
-                "{}/change-email/verify?token={}",
-                ctx.config.base_url, verification_token
-            )
-        };
+            change_req.callback_url.as_deref(),
+            "change-email/verify",
+        )
+        .await?;
 
         // Send confirmation email via custom callback or default provider
         if let Some(ref cb) = self.config.change_email.send_change_email_confirmation {
@@ -393,7 +469,7 @@ impl UserManagementPlugin {
                 &verification_token,
             )
             .await?;
-        } else if let Ok(provider) = ctx.email_provider() {
+        } else {
             let subject = "Confirm your email change";
             let html = format!(
                 "<p>Click the link below to confirm your new email address:</p>\
@@ -402,20 +478,15 @@ impl UserManagementPlugin {
             );
             let text = format!("Confirm your email change: {}", verification_url);
 
-            if let Err(e) = provider
-                .send(&change_req.new_email, subject, &html, &text)
-                .await
-            {
-                eprintln!(
-                    "[user-management] Failed to send change-email confirmation to {}: {}",
-                    change_req.new_email, e
-                );
-            }
-        } else {
-            eprintln!(
-                "[user-management] No email provider or callback configured, skipping change-email confirmation for {}",
-                change_req.new_email
-            );
+            Self::send_email_or_log(
+                ctx,
+                &change_req.new_email,
+                subject,
+                &html,
+                &text,
+                "change-email",
+            )
+            .await;
         }
 
         let response = StatusMessageResponse {
@@ -431,34 +502,12 @@ impl UserManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let token = req
-            .query
-            .get("token")
-            .ok_or_else(|| AuthError::bad_request("Verification token is required"))?;
+        // Parse and validate token: identifier format is change_email:{user_id}:{new_email}
+        let (parts, verification_id) =
+            Self::consume_verification_token(ctx, req, "change_email", 3).await?;
 
-        // Locate and validate the verification token
-        let verification = ctx
-            .database
-            .get_verification_by_value(token)
-            .await?
-            .ok_or_else(|| AuthError::bad_request("Invalid or expired verification token"))?;
-
-        // Check expiry
-        if verification.expires_at() < Utc::now() {
-            // Clean up the expired token
-            ctx.database.delete_verification(verification.id()).await?;
-            return Err(AuthError::bad_request("Verification token has expired"));
-        }
-
-        // Parse the identifier: change_email:{user_id}:{new_email}
-        let identifier = verification.identifier();
-        let parts: Vec<&str> = identifier.splitn(3, ':').collect();
-        if parts.len() != 3 || parts[0] != "change_email" {
-            return Err(AuthError::bad_request("Invalid verification token"));
-        }
-
-        let user_id = parts[1];
-        let new_email = parts[2];
+        let user_id = &parts[1];
+        let new_email = &parts[2];
 
         // Fetch the user
         let user = ctx
@@ -469,7 +518,7 @@ impl UserManagementPlugin {
 
         // Check if the new email is still available
         if ctx.database.get_user_by_email(new_email).await?.is_some() {
-            ctx.database.delete_verification(verification.id()).await?;
+            ctx.database.delete_verification(&verification_id).await?;
             return Err(AuthError::bad_request(
                 "Email is already in use by another account",
             ));
@@ -493,7 +542,7 @@ impl UserManagementPlugin {
         ctx.database.update_user(user.id(), update_user).await?;
 
         // Consume the verification token
-        ctx.database.delete_verification(verification.id()).await?;
+        ctx.database.delete_verification(&verification_id).await?;
 
         let response = StatusMessageResponse {
             status: true,
@@ -510,53 +559,42 @@ impl UserManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = self.require_session(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         if self.config.delete_user.require_verification {
             // Send a verification email; actual deletion happens on GET /delete-user/verify.
-            let delete_token = format!("del_{}", Uuid::new_v4());
             let identifier = format!("delete_user:{}", user.id());
             let expires_at = Utc::now() + self.config.delete_user.delete_token_expires_in;
-
-            let create_verification = CreateVerification {
-                identifier,
-                value: delete_token.clone(),
+            let (_delete_token, verification_url) = Self::create_verification_token(
+                ctx,
+                &identifier,
+                "del",
                 expires_at,
-            };
-
-            ctx.database
-                .create_verification(create_verification)
-                .await?;
+                None,
+                "delete-user/verify",
+            )
+            .await?;
 
             // Send confirmation email
-            let verification_url = format!(
-                "{}/delete-user/verify?token={}",
-                ctx.config.base_url, delete_token
+            let email = user.email().unwrap_or_default();
+            let subject = "Confirm account deletion";
+            let html = format!(
+                "<p>Click the link below to confirm the deletion of your account:</p>\
+                 <p><a href=\"{url}\">Confirm Account Deletion</a></p>\
+                 <p>If you did not request this, please ignore this email.</p>",
+                url = verification_url
             );
+            let text = format!("Confirm account deletion: {}", verification_url);
 
-            if let Ok(provider) = ctx.email_provider() {
-                let email = user.email().unwrap_or_default();
-                let subject = "Confirm account deletion";
-                let html = format!(
-                    "<p>Click the link below to confirm the deletion of your account:</p>\
-                     <p><a href=\"{url}\">Confirm Account Deletion</a></p>\
-                     <p>If you did not request this, please ignore this email.</p>",
-                    url = verification_url
-                );
-                let text = format!("Confirm account deletion: {}", verification_url);
-
-                if let Err(e) = provider.send(email, subject, &html, &text).await {
-                    eprintln!(
-                        "[user-management] Failed to send delete-user confirmation to {}: {}",
-                        email, e
-                    );
-                }
-            } else {
-                eprintln!(
-                    "[user-management] No email provider configured, skipping delete-user confirmation for user {}",
-                    user.id()
-                );
-            }
+            Self::send_email_or_log(
+                ctx,
+                email,
+                subject,
+                &html,
+                &text,
+                "delete-user",
+            )
+            .await;
 
             let response = StatusMessageResponse {
                 status: true,
@@ -582,32 +620,11 @@ impl UserManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let token = req
-            .query
-            .get("token")
-            .ok_or_else(|| AuthError::bad_request("Verification token is required"))?;
+        // Parse and validate token: identifier format is delete_user:{user_id}
+        let (parts, verification_id) =
+            Self::consume_verification_token(ctx, req, "delete_user", 2).await?;
 
-        // Locate and validate the verification token
-        let verification = ctx
-            .database
-            .get_verification_by_value(token)
-            .await?
-            .ok_or_else(|| AuthError::bad_request("Invalid or expired verification token"))?;
-
-        // Check expiry
-        if verification.expires_at() < Utc::now() {
-            ctx.database.delete_verification(verification.id()).await?;
-            return Err(AuthError::bad_request("Verification token has expired"));
-        }
-
-        // Parse the identifier: delete_user:{user_id}
-        let identifier = verification.identifier();
-        let parts: Vec<&str> = identifier.splitn(2, ':').collect();
-        if parts.len() != 2 || parts[0] != "delete_user" {
-            return Err(AuthError::bad_request("Invalid verification token"));
-        }
-
-        let user_id = parts[1];
+        let user_id = &parts[1];
 
         // Fetch the user
         let user = ctx
@@ -617,7 +634,7 @@ impl UserManagementPlugin {
             .ok_or_else(|| AuthError::not_found("User not found"))?;
 
         // Consume the verification token first
-        ctx.database.delete_verification(verification.id()).await?;
+        ctx.database.delete_verification(&verification_id).await?;
 
         // Perform the actual deletion
         self.perform_user_deletion(&user, ctx).await?;
@@ -676,68 +693,29 @@ impl UserManagementPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use better_auth_core::adapters::{MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps};
-    use better_auth_core::config::AuthConfig;
-    use better_auth_core::{CreateSession, CreateUser, Session, User};
-    use chrono::{Duration, Utc};
+    use crate::plugins::test_helpers;
+    use better_auth_core::adapters::{MemoryDatabaseAdapter, UserOps, VerificationOps};
+    use better_auth_core::CreateUser;
+    use chrono::Duration;
     use std::collections::HashMap;
     use std::sync::Arc;
-
-    async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>, User, Session)
-    {
-        let config = Arc::new(AuthConfig::new("test-secret-key-at-least-32-chars-long"));
-        let database = Arc::new(MemoryDatabaseAdapter::new());
-        let ctx = AuthContext::new(config.clone(), database.clone());
-
-        let create_user = CreateUser::new()
-            .with_email("test@example.com")
-            .with_name("Test User")
-            .with_email_verified(true);
-        let user = database.create_user(create_user).await.unwrap();
-
-        let create_session = CreateSession {
-            user_id: user.id.clone(),
-            expires_at: Utc::now() + Duration::hours(24),
-            ip_address: Some("127.0.0.1".to_string()),
-            user_agent: Some("test-agent".to_string()),
-            impersonated_by: None,
-            active_organization_id: None,
-        };
-        let session = database.create_session(create_session).await.unwrap();
-
-        (ctx, user, session)
-    }
-
-    fn create_auth_request(
-        method: HttpMethod,
-        path: &str,
-        token: Option<&str>,
-        body: Option<Vec<u8>>,
-        query: HashMap<String, String>,
-    ) -> AuthRequest {
-        let mut headers = HashMap::new();
-        if let Some(token) = token {
-            headers.insert("authorization".to_string(), format!("Bearer {}", token));
-        }
-
-        AuthRequest {
-            method,
-            path: path.to_string(),
-            headers,
-            body,
-            query,
-        }
-    }
 
     // ── change email tests ────────────────────────────────────────────
 
     #[tokio::test]
     async fn test_change_email_success() {
         let plugin = UserManagementPlugin::new().change_email_enabled(true);
-        let (ctx, _user, session) = create_test_context_with_user().await;
+        let (ctx, _user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User")
+                .with_email_verified(true),
+            Duration::hours(24),
+        )
+        .await;
 
         let body = serde_json::json!({ "newEmail": "new@example.com" });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request(
             HttpMethod::Post,
             "/change-email",
             Some(&session.token),
@@ -752,10 +730,17 @@ mod tests {
     #[tokio::test]
     async fn test_change_email_same_email() {
         let plugin = UserManagementPlugin::new().change_email_enabled(true);
-        let (ctx, _user, session) = create_test_context_with_user().await;
+        let (ctx, _user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User")
+                .with_email_verified(true),
+            Duration::hours(24),
+        )
+        .await;
 
         let body = serde_json::json!({ "newEmail": "test@example.com" });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request(
             HttpMethod::Post,
             "/change-email",
             Some(&session.token),
@@ -770,10 +755,17 @@ mod tests {
     #[tokio::test]
     async fn test_change_email_unauthenticated() {
         let plugin = UserManagementPlugin::new().change_email_enabled(true);
-        let (ctx, _user, _session) = create_test_context_with_user().await;
+        let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User")
+                .with_email_verified(true),
+            Duration::hours(24),
+        )
+        .await;
 
         let body = serde_json::json!({ "newEmail": "new@example.com" });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request(
             HttpMethod::Post,
             "/change-email",
             None,
@@ -788,11 +780,18 @@ mod tests {
     #[tokio::test]
     async fn test_change_email_verify_success() {
         let plugin = UserManagementPlugin::new().change_email_enabled(true);
-        let (ctx, user, session) = create_test_context_with_user().await;
+        let (ctx, user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User")
+                .with_email_verified(true),
+            Duration::hours(24),
+        )
+        .await;
 
         // 1. Initiate the change
         let body = serde_json::json!({ "newEmail": "new@example.com" });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request(
             HttpMethod::Post,
             "/change-email",
             Some(&session.token),
@@ -813,7 +812,7 @@ mod tests {
         // 3. Verify the token
         let mut query = HashMap::new();
         query.insert("token".to_string(), verification.value.clone());
-        let req = create_auth_request(HttpMethod::Get, "/change-email/verify", None, None, query);
+        let req = test_helpers::create_auth_request(HttpMethod::Get, "/change-email/verify", None, None, query);
         let response = plugin.handle_change_email_verify(&req, &ctx).await.unwrap();
         assert_eq!(response.status, 200);
 
@@ -834,11 +833,18 @@ mod tests {
         let plugin = UserManagementPlugin::new()
             .change_email_enabled(true)
             .update_without_verification(true);
-        let (ctx, user, session) = create_test_context_with_user().await;
+        let (ctx, user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User")
+                .with_email_verified(true),
+            Duration::hours(24),
+        )
+        .await;
 
         // Initiate change
         let body = serde_json::json!({ "newEmail": "new@example.com" });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request(
             HttpMethod::Post,
             "/change-email",
             Some(&session.token),
@@ -859,7 +865,7 @@ mod tests {
         // Verify
         let mut query = HashMap::new();
         query.insert("token".to_string(), verification.value.clone());
-        let req = create_auth_request(HttpMethod::Get, "/change-email/verify", None, None, query);
+        let req = test_helpers::create_auth_request(HttpMethod::Get, "/change-email/verify", None, None, query);
         plugin.handle_change_email_verify(&req, &ctx).await.unwrap();
 
         let updated_user = ctx
@@ -876,11 +882,18 @@ mod tests {
     #[tokio::test]
     async fn test_change_email_verify_invalid_token() {
         let plugin = UserManagementPlugin::new().change_email_enabled(true);
-        let (ctx, _user, _session) = create_test_context_with_user().await;
+        let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User")
+                .with_email_verified(true),
+            Duration::hours(24),
+        )
+        .await;
 
         let mut query = HashMap::new();
         query.insert("token".to_string(), "invalid-token".to_string());
-        let req = create_auth_request(HttpMethod::Get, "/change-email/verify", None, None, query);
+        let req = test_helpers::create_auth_request(HttpMethod::Get, "/change-email/verify", None, None, query);
 
         let err = plugin
             .handle_change_email_verify(&req, &ctx)
@@ -896,9 +909,16 @@ mod tests {
         let plugin = UserManagementPlugin::new()
             .delete_user_enabled(true)
             .require_delete_verification(false);
-        let (ctx, user, session) = create_test_context_with_user().await;
+        let (ctx, user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User")
+                .with_email_verified(true),
+            Duration::hours(24),
+        )
+        .await;
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request(
             HttpMethod::Post,
             "/delete-user",
             Some(&session.token),
@@ -919,10 +939,17 @@ mod tests {
         let plugin = UserManagementPlugin::new()
             .delete_user_enabled(true)
             .require_delete_verification(true);
-        let (ctx, user, session) = create_test_context_with_user().await;
+        let (ctx, user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User")
+                .with_email_verified(true),
+            Duration::hours(24),
+        )
+        .await;
 
         // 1. Request deletion — should return pending status
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request(
             HttpMethod::Post,
             "/delete-user",
             Some(&session.token),
@@ -949,7 +976,7 @@ mod tests {
         // 3. Confirm deletion
         let mut query = HashMap::new();
         query.insert("token".to_string(), verification.value.clone());
-        let req = create_auth_request(HttpMethod::Get, "/delete-user/verify", None, None, query);
+        let req = test_helpers::create_auth_request(HttpMethod::Get, "/delete-user/verify", None, None, query);
         let response = plugin.handle_delete_user_verify(&req, &ctx).await.unwrap();
         assert_eq!(response.status, 200);
 
@@ -963,9 +990,16 @@ mod tests {
         let plugin = UserManagementPlugin::new()
             .delete_user_enabled(true)
             .require_delete_verification(false);
-        let (ctx, _user, _session) = create_test_context_with_user().await;
+        let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User")
+                .with_email_verified(true),
+            Duration::hours(24),
+        )
+        .await;
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request(
             HttpMethod::Post,
             "/delete-user",
             None,
@@ -980,11 +1014,18 @@ mod tests {
     #[tokio::test]
     async fn test_delete_user_verify_invalid_token() {
         let plugin = UserManagementPlugin::new().delete_user_enabled(true);
-        let (ctx, _user, _session) = create_test_context_with_user().await;
+        let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User")
+                .with_email_verified(true),
+            Duration::hours(24),
+        )
+        .await;
 
         let mut query = HashMap::new();
         query.insert("token".to_string(), "invalid-token".to_string());
-        let req = create_auth_request(HttpMethod::Get, "/delete-user/verify", None, None, query);
+        let req = test_helpers::create_auth_request(HttpMethod::Get, "/delete-user/verify", None, None, query);
 
         let err = plugin
             .handle_delete_user_verify(&req, &ctx)
@@ -1022,9 +1063,16 @@ mod tests {
             .require_delete_verification(false)
             .before_delete(Arc::new(AbortHook))
             .after_delete(Arc::new(AfterHook(called_clone)));
-        let (ctx, user, session) = create_test_context_with_user().await;
+        let (ctx, user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User")
+                .with_email_verified(true),
+            Duration::hours(24),
+        )
+        .await;
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request(
             HttpMethod::Post,
             "/delete-user",
             Some(&session.token),
@@ -1078,10 +1126,17 @@ mod tests {
     #[tokio::test]
     async fn test_on_request_disabled_routes_passthrough() {
         let plugin = UserManagementPlugin::new(); // both disabled
-        let (ctx, _user, session) = create_test_context_with_user().await;
+        let (ctx, _user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User")
+                .with_email_verified(true),
+            Duration::hours(24),
+        )
+        .await;
 
         let body = serde_json::json!({ "newEmail": "x@y.com" });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request(
             HttpMethod::Post,
             "/change-email",
             Some(&session.token),
