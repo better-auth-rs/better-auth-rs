@@ -5,6 +5,10 @@ description: Complete list of all authentication endpoints.
 
 All routes are relative to the auth mount point (e.g., `/auth` when using `nest("/auth", ...)`).
 
+<Callout type="info">
+For interactive API documentation with request/response schemas, see the [OpenAPI Reference](/docs/reference/openapi/default).
+</Callout>
+
 ## Core Endpoints
 
 | Method | Path | Auth | Description |
@@ -60,9 +64,101 @@ All routes are relative to the auth mount point (e.g., `/auth` when using `nest(
 | GET | `/list-accounts` | Yes | List linked accounts |
 | POST | `/unlink-account` | Yes | Unlink an account provider |
 
+## OAuth / Social Login (OAuthPlugin)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/sign-in/social` | No | Start OAuth sign-in flow |
+| GET | `/callback/{provider}` | No | OAuth provider callback |
+| POST | `/link-social` | Yes | Link a social account to current user |
+| POST | `/get-access-token` | Yes | Get stored OAuth access token |
+| POST | `/refresh-token` | Yes | Refresh OAuth access token |
+
+## Two-Factor Authentication (TwoFactorPlugin)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/two-factor/enable` | Yes | Enable 2FA (requires password) |
+| POST | `/two-factor/disable` | Yes | Disable 2FA (requires password) |
+| POST | `/two-factor/get-totp-uri` | Yes | Get TOTP URI for authenticator app |
+| POST | `/two-factor/verify-totp` | No* | Verify TOTP code during sign-in |
+| POST | `/two-factor/send-otp` | No* | Send OTP via email |
+| POST | `/two-factor/verify-otp` | No* | Verify OTP code |
+| POST | `/two-factor/generate-backup-codes` | Yes | Generate new backup codes |
+| POST | `/two-factor/verify-backup-code` | No* | Verify backup code during sign-in |
+
+*These endpoints use a pending verification token instead of a session token.
+
+## Organization (OrganizationPlugin)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/organization/create` | Yes | Create an organization |
+| POST | `/organization/update` | Yes | Update organization details |
+| POST | `/organization/delete` | Yes | Delete an organization |
+| GET | `/organization/list` | Yes | List user's organizations |
+| GET | `/organization/get-full-organization` | Yes | Get org with members and invitations |
+| POST | `/organization/check-slug` | Yes | Check slug availability |
+| POST | `/organization/set-active` | Yes | Set active organization on session |
+| POST | `/organization/leave` | Yes | Leave an organization |
+| GET | `/organization/get-active-member` | Yes | Get current member in active org |
+| GET | `/organization/list-members` | Yes | List organization members |
+| POST | `/organization/remove-member` | Yes | Remove a member |
+| POST | `/organization/update-member-role` | Yes | Change a member's role |
+| POST | `/organization/invite-member` | Yes | Invite user by email |
+| GET | `/organization/get-invitation` | Yes | Get invitation details |
+| GET | `/organization/list-invitations` | Yes | List org's pending invitations |
+| GET | `/organization/list-user-invitations` | Yes | List user's pending invitations |
+| POST | `/organization/accept-invitation` | Yes | Accept an invitation |
+| POST | `/organization/reject-invitation` | Yes | Reject an invitation |
+| POST | `/organization/cancel-invitation` | Yes | Cancel a pending invitation |
+| POST | `/organization/has-permission` | Yes | Check RBAC permission |
+
+## Admin (AdminPlugin)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/admin/set-role` | Admin | Set user role |
+| POST | `/admin/create-user` | Admin | Create a new user |
+| GET | `/admin/list-users` | Admin | List users with search/filter/sort |
+| POST | `/admin/list-user-sessions` | Admin | List user's sessions |
+| POST | `/admin/ban-user` | Admin | Ban a user |
+| POST | `/admin/unban-user` | Admin | Unban a user |
+| POST | `/admin/impersonate-user` | Admin | Start impersonating a user |
+| POST | `/admin/stop-impersonating` | Admin | Stop impersonation |
+| POST | `/admin/revoke-user-session` | Admin | Revoke a specific session |
+| POST | `/admin/revoke-user-sessions` | Admin | Revoke all user sessions |
+| POST | `/admin/remove-user` | Admin | Permanently delete a user |
+| POST | `/admin/set-user-password` | Admin | Reset a user's password |
+| POST | `/admin/has-permission` | Yes | Check admin permission |
+
+## API Key (ApiKeyPlugin)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api-key/create` | Yes | Create a new API key |
+| GET | `/api-key/get` | Yes | Get API key by ID |
+| POST | `/api-key/update` | Yes | Update an API key |
+| POST | `/api-key/delete` | Yes | Delete an API key |
+| GET | `/api-key/list` | Yes | List user's API keys |
+
+## Passkey / WebAuthn (PasskeyPlugin)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/passkey/generate-register-options` | Yes | Get WebAuthn registration options |
+| POST | `/passkey/verify-registration` | Yes | Verify and store a new passkey |
+| POST | `/passkey/generate-authenticate-options` | No | Get WebAuthn authentication options |
+| POST | `/passkey/verify-authentication` | No | Verify passkey and create session |
+| GET | `/passkey/list-user-passkeys` | Yes | List user's passkeys |
+| POST | `/passkey/delete-passkey` | Yes | Delete a passkey |
+| POST | `/passkey/update-passkey` | Yes | Rename a passkey |
+
 ## Authentication
 
 Authenticated endpoints require a session token sent as:
 
 - **Bearer token**: `Authorization: Bearer session_abc123...`
 - **Cookie**: `Cookie: better-auth.session-token=session_abc123...`
+
+**Admin** endpoints additionally require the user to have the admin role (configurable, default: `"admin"`).

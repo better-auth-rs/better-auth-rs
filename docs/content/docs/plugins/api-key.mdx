@@ -1,0 +1,88 @@
+---
+title: API Key
+description: Create, manage, and validate API keys with rate limiting and usage tracking.
+---
+
+The `ApiKeyPlugin` provides API key management with support for rate limiting, usage quotas, expiration, and permissions.
+
+## Setup
+
+```rust
+use better_auth::plugins::ApiKeyPlugin;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(ApiKeyPlugin::new())
+    .build()
+    .await?;
+```
+
+### Configuration
+
+```rust
+use better_auth::plugins::api_key::ApiKeyConfig;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(
+        ApiKeyPlugin::new()
+            .key_length(32)
+            .prefix("sk_")
+            .default_remaining(1000)
+    )
+    .build()
+    .await?;
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `key_length` | `usize` | `32` | Length of the random key in bytes |
+| `prefix` | `Option<String>` | `None` | Global prefix for all generated keys |
+| `default_remaining` | `Option<i64>` | `None` | Default usage quota for new keys |
+
+## How It Works
+
+### Key Generation
+
+API keys are generated using cryptographically secure random bytes, then Base64-encoded (URL-safe, no padding). The key format is:
+
+```
+{prefix}{base64_random_bytes}
+```
+
+Only the SHA-256 hash of the key is stored in the database. The full key is returned only once during creation and cannot be retrieved later.
+
+### Key Structure
+
+Each API key has:
+
+- **`start`**: First 4 characters of the key (for identification without exposing the full key)
+- **`prefix`**: Optional prefix (e.g., `sk_`, `pk_`)
+- **`enabled`**: Whether the key is active
+- **`remaining`**: Usage quota (decremented on each use, `null` = unlimited)
+- **`expiresAt`**: Optional expiration date
+- **Rate limiting**: Optional per-key rate limits with refill
+
+## API Endpoints
+
+The API Key plugin exposes 5 endpoints. For full request/response details, see the [OpenAPI Reference](/docs/reference/openapi/api-key).
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api-key/create` | POST | Create a new API key (returns key only once) |
+| `/api-key/get` | GET | Get key metadata by ID |
+| `/api-key/list` | GET | List all keys for the authenticated user |
+| `/api-key/update` | POST | Update key settings (name, enabled, rate limits) |
+| `/api-key/delete` | POST | Delete an API key |
+
+<Callout type="warn">
+The full `key` value is returned only during creation. Store it securely — it cannot be retrieved later.
+</Callout>
+
+## Errors
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Missing or invalid required fields |
+| 401 | Not authenticated |
+| 404 | API key not found (or not owned by user) |
