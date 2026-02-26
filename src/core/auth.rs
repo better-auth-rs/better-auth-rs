@@ -206,6 +206,7 @@ impl<DB: DatabaseAdapter> TypedAuthBuilder<DB> {
             Box::new(CsrfMiddleware::new(
                 self.csrf_config.unwrap_or_default(),
                 &config.base_url,
+                config.trusted_origins.clone(),
             )),
             Box::new(CorsMiddleware::new(self.cors_config.unwrap_or_default())),
         ];
@@ -256,14 +257,38 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
             return Ok(response);
         }
 
+        // Strip base_path prefix from the request path for internal routing.
+        // External callers send e.g. "/api/auth/sign-in/email"; internally
+        // handlers match against "/sign-in/email".
+        let base_path = &self.config.base_path;
+        let stripped_path = if !base_path.is_empty() && base_path != "/" {
+            req.path().strip_prefix(base_path).unwrap_or(req.path())
+        } else {
+            req.path()
+        };
+
+        // Check if this path is disabled
+        if self.config.is_path_disabled(stripped_path) {
+            return Err(AuthError::not_found("This endpoint has been disabled"));
+        }
+
+        // Build a request with the stripped path for internal dispatch
+        let internal_req = if stripped_path != req.path() {
+            let mut r = req.clone();
+            r.path = stripped_path.to_string();
+            r
+        } else {
+            req.clone()
+        };
+
         // Handle core endpoints first
-        if let Some(response) = self.handle_core_request(req).await? {
+        if let Some(response) = self.handle_core_request(&internal_req).await? {
             return Ok(response);
         }
 
         // Try each plugin until one handles the request
         for plugin in &self.plugins {
-            if let Some(response) = plugin.on_request(req, &self.context).await? {
+            if let Some(response) = plugin.on_request(&internal_req, &self.context).await? {
                 return Ok(response);
             }
         }

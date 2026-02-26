@@ -37,13 +37,13 @@ pub use better_auth_core::{
     CreateMember, CreateOrganization, CreatePasskey, CreateSession, CreateUser, CreateVerification,
     CsrfConfig, CsrfMiddleware, DatabaseAdapter, DatabaseError, DatabaseHooks, DeleteUserResponse,
     EmailProvider, EndpointRateLimit, HookedDatabaseAdapter, HttpMethod, Invitation, InvitationOps,
-    InvitationStatus, JwtConfig, MemberOps, MemoryAccount, MemoryCacheAdapter,
+    InvitationStatus, JwtConfig, Logger, MemberOps, MemoryAccount, MemoryCacheAdapter,
     MemoryDatabaseAdapter, MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession,
     MemoryUser, MemoryVerification, Middleware, OpenApiBuilder, OpenApiSpec, OrganizationOps,
     Passkey, PasskeyOps, PasswordConfig, RateLimitConfig, RateLimitMiddleware, SameSite, Session,
-    SessionConfig, SessionManager, SessionOps, TwoFactor, UpdateOrganization, UpdatePasskey,
-    UpdateUser, UpdateUserRequest, UpdateUserResponse, User, UserOps, Verification,
-    VerificationOps,
+    SessionConfig, SessionManager, SessionOps, TracingLogger, TwoFactor, UpdateOrganization,
+    UpdatePasskey, UpdateUser, UpdateUserRequest, UpdateUserResponse, User, UserOps, Verification,
+    VerificationOps, default_logger,
 };
 
 // Re-export entity traits

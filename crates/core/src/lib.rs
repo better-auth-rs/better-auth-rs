@@ -9,6 +9,7 @@ pub mod email;
 pub mod entity;
 pub mod error;
 pub mod hooks;
+pub mod logger;
 pub mod middleware;
 pub mod openapi;
 pub mod plugin;
@@ -31,7 +32,8 @@ pub use adapters::{
 };
 #[cfg(feature = "sqlx-postgres")]
 pub use adapters::{SqlxAdapter, SqlxEntity};
-pub use config::{Argon2Config, AuthConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig};
+pub use config::{Argon2Config, AuthConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig, glob_match};
+pub use logger::{Logger, TracingLogger, default_logger};
 pub use email::{ConsoleEmailProvider, EmailProvider};
 pub use entity::{
     AuthAccount, AuthAccountMeta, AuthApiKey, AuthApiKeyMeta, AuthInvitation, AuthInvitationMeta,

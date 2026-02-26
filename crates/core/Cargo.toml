@@ -27,6 +27,9 @@ chrono = { workspace = true }
 # Data structures
 uuid = { workspace = true }
 
+# Logging and tracing
+tracing = { workspace = true }
+
 # Crypto
 argon2 = { workspace = true }
 rand = { workspace = true }
