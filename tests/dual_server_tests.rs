@@ -557,7 +557,7 @@ async fn dual_server_comprehensive_comparison() {
 
     /// Compare a single endpoint between Rust and reference servers,
     /// returning an `EndpointCheck` with shape diff results.
-    async fn compare_endpoint(
+    fn compare_endpoint(
         name: &'static str,
         rust_status: u16,
         rust_body: &Value,
@@ -617,9 +617,7 @@ async fn dual_server_comprehensive_comparison() {
             rs,
             &rb,
             ref_client.get("/get-session").await,
-        )
-        .await
-        {
+        ) {
             results.push(check);
         }
     }
@@ -632,9 +630,7 @@ async fn dual_server_comprehensive_comparison() {
             rs,
             &rb,
             ref_client.get("/list-sessions").await,
-        )
-        .await
-        {
+        ) {
             results.push(check);
         }
     }
@@ -656,9 +652,7 @@ async fn dual_server_comprehensive_comparison() {
             rs,
             &rb,
             ref_client.post("/change-password", &chg_body).await,
-        )
-        .await
-        {
+        ) {
             results.push(check);
         }
     }
@@ -666,8 +660,7 @@ async fn dual_server_comprehensive_comparison() {
     // GET /ok
     {
         let (rs, rb) = send_request(&auth, get_request("/ok")).await;
-        if let Some(check) = compare_endpoint("GET /ok", rs, &rb, ref_client.get("/ok").await).await
-        {
+        if let Some(check) = compare_endpoint("GET /ok", rs, &rb, ref_client.get("/ok").await) {
             results.push(check);
         }
     }

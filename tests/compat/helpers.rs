@@ -26,7 +26,7 @@ static EMAIL_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// Generate a unique email address for testing, avoiding hard-coded collisions.
 pub fn unique_email(prefix: &str) -> String {
     let n = EMAIL_COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!("{prefix}_{n}@test.com")
+    format!("{prefix}_{n}_{}@test.com", std::process::id())
 }
 
 // ---------------------------------------------------------------------------
