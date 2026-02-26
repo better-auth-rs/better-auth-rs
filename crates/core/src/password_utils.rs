@@ -1,8 +1,8 @@
-//! Shared password utilities used by both `EmailPasswordPlugin` and
-//! `PasswordManagementPlugin`.
+//! Shared password utilities for hashing, verification, validation and
+//! session-cookie construction.
 //!
-//! Centralises password hashing, verification, validation and session-cookie
-//! construction so that both plugins share a single implementation (DRY).
+//! Lives in `better-auth-core` so that any crate in the workspace (plugins,
+//! integrations, etc.) can reuse these primitives without duplicating logic.
 
 use std::sync::Arc;
 
@@ -11,9 +11,11 @@ use argon2::{Argon2, PasswordHasher as Argon2PasswordHasher, PasswordVerifier};
 use async_trait::async_trait;
 use serde::Serialize;
 
-use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::config::SameSite;
-use better_auth_core::{AuthContext, AuthError, AuthResult};
+use crate::adapters::DatabaseAdapter;
+use crate::config::SameSite;
+use crate::error::{AuthError, AuthResult};
+use crate::plugin::AuthContext;
+use crate::types::UpdateUser;
 
 // ---------------------------------------------------------------------------
 // PasswordHasher trait
@@ -21,8 +23,8 @@ use better_auth_core::{AuthContext, AuthError, AuthResult};
 
 /// Custom password hasher trait for pluggable password hashing strategies.
 ///
-/// When provided in `EmailPasswordConfig` or `PasswordManagementConfig`, this
-/// overrides the default Argon2-based password hashing.
+/// When provided in plugin configs, this overrides the default Argon2-based
+/// password hashing.
 #[async_trait]
 pub trait PasswordHasher: Send + Sync {
     /// Hash a plaintext password and return the hash string.
@@ -192,8 +194,8 @@ pub fn serialize_to_value(value: &impl Serialize) -> AuthResult<serde_json::Valu
 // ---------------------------------------------------------------------------
 
 /// Build an `UpdateUser` that only changes the `metadata` field.
-pub fn update_user_metadata(metadata: serde_json::Value) -> better_auth_core::UpdateUser {
-    better_auth_core::UpdateUser {
+pub fn update_user_metadata(metadata: serde_json::Value) -> UpdateUser {
+    UpdateUser {
         metadata: Some(metadata),
         ..Default::default()
     }

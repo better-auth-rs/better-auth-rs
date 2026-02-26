@@ -12,7 +12,7 @@ use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreateVerification, HttpMethod};
 use better_auth_core::{AuthSession, AuthUser, AuthVerification, DatabaseAdapter};
 
-use super::password_utils::{self, PasswordHasher};
+use better_auth_core::password_utils::{self, PasswordHasher};
 
 /// Type alias for the async password-reset callback to keep Clippy happy.
 pub type OnPasswordResetCallback =
