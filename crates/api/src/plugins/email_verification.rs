@@ -1,25 +1,87 @@
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
 use uuid::Uuid;
 use validator::Validate;
 
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreateVerification, HttpMethod, UpdateUser};
-use better_auth_core::{AuthUser, AuthVerification, DatabaseAdapter};
+use better_auth_core::{
+    AuthSession, AuthUser, AuthVerification, DatabaseAdapter, SessionManager, User,
+};
+
+/// Trait for custom email sending logic.
+///
+/// When set on [`EmailVerificationConfig::send_verification_email`], this
+/// callback overrides the default `EmailProvider`-based sending.
+#[async_trait]
+pub trait SendVerificationEmail: Send + Sync {
+    async fn send(&self, user: &User, url: &str, token: &str) -> AuthResult<()>;
+}
+
+/// Convert any `AuthUser` implementor into the concrete [`User`] type so that
+/// it can be passed to hooks and callbacks that require a known, sized type.
+fn to_user(u: &impl AuthUser) -> User {
+    User {
+        id: u.id().to_owned(),
+        name: u.name().map(str::to_owned),
+        email: u.email().map(str::to_owned),
+        email_verified: u.email_verified(),
+        image: u.image().map(str::to_owned),
+        created_at: u.created_at(),
+        updated_at: u.updated_at(),
+        username: u.username().map(str::to_owned),
+        display_username: u.display_username().map(str::to_owned),
+        two_factor_enabled: u.two_factor_enabled(),
+        role: u.role().map(str::to_owned),
+        banned: u.banned(),
+        ban_reason: u.ban_reason().map(str::to_owned),
+        ban_expires: u.ban_expires(),
+        metadata: u.metadata().clone(),
+    }
+}
 
 /// Email verification plugin for handling email verification flows
 pub struct EmailVerificationPlugin {
     config: EmailVerificationConfig,
 }
 
-#[derive(Debug, Clone)]
 pub struct EmailVerificationConfig {
-    pub verification_token_expiry_hours: i64,
+    /// How long a verification token stays valid. Default: 1 hour.
+    pub verification_token_expiry: Duration,
+    /// Whether to send email notifications (on sign-up). Default: true.
     pub send_email_notifications: bool,
+    /// Whether email verification is required before sign-in. Default: false.
     pub require_verification_for_signin: bool,
+    /// Whether to auto-verify newly created users. Default: false.
     pub auto_verify_new_users: bool,
+    /// When true, automatically send a verification email on sign-in if the
+    /// user is unverified. Default: false.
+    pub send_on_sign_in: bool,
+    /// When true, create a session after email verification and return the
+    /// session token in the verify-email response. Default: false.
+    pub auto_sign_in_after_verification: bool,
+    /// Optional custom email sender. When set this overrides the default
+    /// `EmailProvider`-based sending.
+    pub send_verification_email: Option<Arc<dyn SendVerificationEmail>>,
+    /// Hook invoked **before** email verification (before updating the user).
+    pub before_email_verification:
+        Option<Arc<dyn Fn(&User) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>>,
+    /// Hook invoked **after** email verification (after the user has been updated).
+    pub after_email_verification:
+        Option<Arc<dyn Fn(&User) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>>,
+}
+
+impl EmailVerificationConfig {
+    /// Backward-compatible helper: return the expiry duration expressed as
+    /// whole hours (truncated).
+    pub fn expiry_hours(&self) -> i64 {
+        self.verification_token_expiry.num_hours()
+    }
 }
 
 // Request structures for email verification endpoints
@@ -43,6 +105,13 @@ struct VerifyEmailResponse<U: Serialize> {
     status: bool,
 }
 
+#[derive(Debug, Serialize)]
+struct VerifyEmailWithSessionResponse<U: Serialize, S: Serialize> {
+    user: U,
+    session: S,
+    status: bool,
+}
+
 impl EmailVerificationPlugin {
     pub fn new() -> Self {
         Self {
@@ -54,8 +123,15 @@ impl EmailVerificationPlugin {
         Self { config }
     }
 
+    /// Set the token expiry as a [`Duration`].
+    pub fn verification_token_expiry(mut self, duration: Duration) -> Self {
+        self.config.verification_token_expiry = duration;
+        self
+    }
+
+    /// Backward-compatible builder: set token expiry in hours.
     pub fn verification_token_expiry_hours(mut self, hours: i64) -> Self {
-        self.config.verification_token_expiry_hours = hours;
+        self.config.verification_token_expiry = Duration::hours(hours);
         self
     }
 
@@ -73,6 +149,40 @@ impl EmailVerificationPlugin {
         self.config.auto_verify_new_users = auto_verify;
         self
     }
+
+    pub fn send_on_sign_in(mut self, send: bool) -> Self {
+        self.config.send_on_sign_in = send;
+        self
+    }
+
+    pub fn auto_sign_in_after_verification(mut self, auto_sign_in: bool) -> Self {
+        self.config.auto_sign_in_after_verification = auto_sign_in;
+        self
+    }
+
+    pub fn custom_send_verification_email(
+        mut self,
+        sender: Arc<dyn SendVerificationEmail>,
+    ) -> Self {
+        self.config.send_verification_email = Some(sender);
+        self
+    }
+
+    pub fn before_email_verification(
+        mut self,
+        hook: Arc<dyn Fn(&User) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>,
+    ) -> Self {
+        self.config.before_email_verification = Some(hook);
+        self
+    }
+
+    pub fn after_email_verification(
+        mut self,
+        hook: Arc<dyn Fn(&User) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>,
+    ) -> Self {
+        self.config.after_email_verification = Some(hook);
+        self
+    }
 }
 
 impl Default for EmailVerificationPlugin {
@@ -84,10 +194,15 @@ impl Default for EmailVerificationPlugin {
 impl Default for EmailVerificationConfig {
     fn default() -> Self {
         Self {
-            verification_token_expiry_hours: 24, // 24 hours default expiry
+            verification_token_expiry: Duration::hours(1),
             send_email_notifications: true,
             require_verification_for_signin: false,
             auto_verify_new_users: false,
+            send_on_sign_in: false,
+            auto_sign_in_after_verification: false,
+            send_verification_email: None,
+            before_email_verification: None,
+            after_email_verification: None,
         }
     }
 }
@@ -127,21 +242,13 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailVerificationPlugin {
             && !user.email_verified()
             && let Some(email) = user.email()
         {
-            // Gracefully skip if no email provider is configured
-            if ctx.email_provider.is_some() {
-                if let Err(e) = self
-                    .send_verification_email_internal(email, None, ctx)
-                    .await
-                {
-                    eprintln!(
-                        "[email-verification] Failed to send verification email to {}: {}",
-                        email, e
-                    );
-                }
-            } else {
+            if let Err(e) = self
+                .send_verification_email_for_user(user, email, None, ctx)
+                .await
+            {
                 eprintln!(
-                    "[email-verification] No email provider configured, skipping verification email for {}",
-                    email
+                    "[email-verification] Failed to send verification email to {}: {}",
+                    email, e
                 );
             }
         }
@@ -175,7 +282,8 @@ impl EmailVerificationPlugin {
         }
 
         // Send verification email
-        self.send_verification_email_internal(
+        self.send_verification_email_for_user(
+            &user,
             &send_req.email,
             send_req.callback_url.as_deref(),
             ctx,
@@ -219,6 +327,11 @@ impl EmailVerificationPlugin {
             return Ok(AuthResponse::json(200, &response)?);
         }
 
+        // Run before_email_verification hook
+        if let Some(ref hook) = self.config.before_email_verification {
+            hook(&to_user(&user)).await?;
+        }
+
         // Update user email verification status
         let update_user = UpdateUser {
             email: None,
@@ -240,6 +353,11 @@ impl EmailVerificationPlugin {
         // Delete the used verification token
         ctx.database.delete_verification(verification.id()).await?;
 
+        // Run after_email_verification hook
+        if let Some(ref hook) = self.config.after_email_verification {
+            hook(&to_user(&updated_user)).await?;
+        }
+
         // If callback URL is provided, redirect
         if let Some(callback_url) = callback_url {
             let redirect_url = format!("{}?verified=true", callback_url);
@@ -252,6 +370,27 @@ impl EmailVerificationPlugin {
             });
         }
 
+        // Auto sign-in after verification if configured
+        if self.config.auto_sign_in_after_verification {
+            let ip_address = req.headers.get("x-forwarded-for").cloned();
+            let user_agent = req.headers.get("user-agent").cloned();
+            let session_manager =
+                SessionManager::new(ctx.config.clone(), ctx.database.clone());
+            let session = session_manager
+                .create_session(&updated_user, ip_address, user_agent)
+                .await?;
+
+            let cookie_header = Self::create_session_cookie(session.token(), ctx);
+            let response = VerifyEmailWithSessionResponse {
+                user: updated_user,
+                session,
+                status: true,
+            };
+            return Ok(
+                AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header)
+            );
+        }
+
         let response = VerifyEmailResponse {
             user: updated_user,
             status: true,
@@ -259,15 +398,21 @@ impl EmailVerificationPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn send_verification_email_internal<DB: DatabaseAdapter>(
+    /// Send a verification email for a specific user.
+    ///
+    /// If [`EmailVerificationConfig::send_verification_email`] is set the
+    /// custom callback is used; otherwise the default `EmailProvider` path is
+    /// taken.
+    async fn send_verification_email_for_user<DB: DatabaseAdapter>(
         &self,
+        user: &DB::User,
         email: &str,
         callback_url: Option<&str>,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<()> {
         // Generate verification token
         let verification_token = format!("verify_{}", Uuid::new_v4());
-        let expires_at = Utc::now() + Duration::hours(self.config.verification_token_expiry_hours);
+        let expires_at = Utc::now() + self.config.verification_token_expiry;
 
         // Create verification token
         let create_verification = CreateVerification {
@@ -280,31 +425,75 @@ impl EmailVerificationPlugin {
             .create_verification(create_verification)
             .await?;
 
-        // Send email via the configured provider
-        if self.config.send_email_notifications {
-            let verification_url = if let Some(callback_url) = callback_url {
-                format!("{}?token={}", callback_url, verification_token)
+        let verification_url = if let Some(callback_url) = callback_url {
+            format!("{}?token={}", callback_url, verification_token)
+        } else {
+            format!(
+                "{}/verify-email?token={}",
+                ctx.config.base_url, verification_token
+            )
+        };
+
+        // Use custom sender if configured, otherwise fall back to EmailProvider
+        if let Some(ref custom_sender) = self.config.send_verification_email {
+            custom_sender
+                .send(&to_user(user), &verification_url, &verification_token)
+                .await?;
+        } else if self.config.send_email_notifications {
+            // Gracefully skip if no email provider is configured
+            if ctx.email_provider.is_some() {
+                let subject = "Verify your email address";
+                let html = format!(
+                    "<p>Click the link below to verify your email address:</p>\
+                     <p><a href=\"{url}\">Verify Email</a></p>",
+                    url = verification_url
+                );
+                let text = format!("Verify your email address: {}", verification_url);
+
+                ctx.email_provider()?
+                    .send(email, subject, &html, &text)
+                    .await?;
             } else {
-                format!(
-                    "{}/verify-email?token={}",
-                    ctx.config.base_url, verification_token
-                )
-            };
+                eprintln!(
+                    "[email-verification] No email provider configured, skipping verification email for {}",
+                    email
+                );
+            }
+        }
 
-            let subject = "Verify your email address";
-            let html = format!(
-                "<p>Click the link below to verify your email address:</p>\
-                 <p><a href=\"{url}\">Verify Email</a></p>",
-                url = verification_url
-            );
-            let text = format!("Verify your email address: {}", verification_url);
+        Ok(())
+    }
 
-            ctx.email_provider()?
-                .send(email, subject, &html, &text)
+    /// Send a verification email on sign-in for an unverified user.
+    ///
+    /// Callers (e.g. the sign-in plugin) should invoke this when
+    /// [`EmailVerificationConfig::send_on_sign_in`] is `true` and the user is
+    /// not yet verified.
+    pub async fn send_verification_on_sign_in<DB: DatabaseAdapter>(
+        &self,
+        user: &DB::User,
+        callback_url: Option<&str>,
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<()> {
+        if !self.config.send_on_sign_in {
+            return Ok(());
+        }
+
+        if user.email_verified() {
+            return Ok(());
+        }
+
+        if let Some(email) = user.email() {
+            self.send_verification_email_for_user(user, email, callback_url, ctx)
                 .await?;
         }
 
         Ok(())
+    }
+
+    /// Check if `send_on_sign_in` is enabled.
+    pub fn should_send_on_sign_in(&self) -> bool {
+        self.config.send_on_sign_in
     }
 
     /// Check if email verification is required for signin
@@ -315,5 +504,33 @@ impl EmailVerificationPlugin {
     /// Check if user is verified or verification is not required
     pub async fn is_user_verified_or_not_required(&self, user: &impl AuthUser) -> bool {
         user.email_verified() || !self.config.require_verification_for_signin
+    }
+
+    /// Build a `Set-Cookie` header value for a session token.
+    fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
+        let session_config = &ctx.config.session;
+        let secure = if session_config.cookie_secure {
+            "; Secure"
+        } else {
+            ""
+        };
+        let http_only = if session_config.cookie_http_only {
+            "; HttpOnly"
+        } else {
+            ""
+        };
+        let same_site = match session_config.cookie_same_site {
+            better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
+            better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
+            better_auth_core::config::SameSite::None => "; SameSite=None",
+        };
+
+        let expires = Utc::now() + session_config.expires_in;
+        let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
+
+        format!(
+            "{}={}; Path=/; Expires={}{}{}{}",
+            session_config.cookie_name, token, expires_str, secure, http_only, same_site
+        )
     }
 }

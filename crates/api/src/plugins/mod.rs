@@ -14,7 +14,9 @@ pub use account_management::AccountManagementPlugin;
 pub use admin::{AdminConfig, AdminPlugin};
 pub use api_key::{ApiKeyConfig, ApiKeyPlugin};
 pub use email_password::EmailPasswordPlugin;
-pub use email_verification::EmailVerificationPlugin;
+pub use email_verification::{
+    EmailVerificationConfig, EmailVerificationPlugin, SendVerificationEmail,
+};
 pub use organization::{OrganizationConfig, OrganizationPlugin};
 pub use passkey::{PasskeyConfig, PasskeyPlugin};
 pub use password_management::PasswordManagementPlugin;
