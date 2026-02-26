@@ -120,7 +120,7 @@ pub enum SameSite {
 // ── Advanced configuration ──────────────────────────────────────────────
 
 /// Advanced configuration options (mirrors TS `advanced` block).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AdvancedConfig {
     /// IP address extraction configuration.
     pub ip_address: IpAddressConfig,
@@ -230,8 +230,8 @@ impl Default for AuthConfig {
 impl Default for SessionConfig {
     fn default() -> Self {
         Self {
-            expires_in: Duration::hours(24 * 7), // 7 days
-            update_age: Some(Duration::hours(24)),  // refresh once per day
+            expires_in: Duration::hours(24 * 7),   // 7 days
+            update_age: Some(Duration::hours(24)), // refresh once per day
             disable_session_refresh: false,
             fresh_age: None,
             cookie_name: "better-auth.session-token".to_string(),
@@ -242,29 +242,10 @@ impl Default for SessionConfig {
     }
 }
 
-impl Default for AdvancedConfig {
-    fn default() -> Self {
-        Self {
-            ip_address: IpAddressConfig::default(),
-            disable_csrf_check: false,
-            disable_origin_check: false,
-            cross_sub_domain_cookies: None,
-            cookies: HashMap::new(),
-            default_cookie_attributes: CookieAttributes::default(),
-            cookie_prefix: None,
-            database: AdvancedDatabaseConfig::default(),
-            trusted_proxy_headers: Vec::new(),
-        }
-    }
-}
-
 impl Default for IpAddressConfig {
     fn default() -> Self {
         Self {
-            headers: vec![
-                "x-forwarded-for".to_string(),
-                "x-real-ip".to_string(),
-            ],
+            headers: vec!["x-forwarded-for".to_string(), "x-real-ip".to_string()],
             disable_ip_tracking: false,
         }
     }

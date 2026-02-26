@@ -85,11 +85,7 @@ pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
         Ok(())
     }
 
-    async fn before_update_account(
-        &self,
-        id: &str,
-        update: &mut UpdateAccount,
-    ) -> AuthResult<()> {
+    async fn before_update_account(&self, id: &str, update: &mut UpdateAccount) -> AuthResult<()> {
         let _ = (id, update);
         Ok(())
     }
@@ -119,10 +115,7 @@ pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
         Ok(())
     }
 
-    async fn after_create_verification(
-        &self,
-        verification: &DB::Verification,
-    ) -> AuthResult<()> {
+    async fn after_create_verification(&self, verification: &DB::Verification) -> AuthResult<()> {
         let _ = verification;
         Ok(())
     }
@@ -777,10 +770,7 @@ mod tests {
 
     #[async_trait]
     impl DatabaseHooks<MemoryDatabaseAdapter> for AccountCountingHook {
-        async fn before_create_account(
-            &self,
-            _account: &mut CreateAccount,
-        ) -> AuthResult<()> {
+        async fn before_create_account(&self, _account: &mut CreateAccount) -> AuthResult<()> {
             self.before_create.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
@@ -912,10 +902,7 @@ mod tests {
 
         #[async_trait]
         impl DatabaseHooks<MemoryDatabaseAdapter> for RejectAccountHook {
-            async fn before_create_account(
-                &self,
-                _account: &mut CreateAccount,
-            ) -> AuthResult<()> {
+            async fn before_create_account(&self, _account: &mut CreateAccount) -> AuthResult<()> {
                 Err(crate::error::AuthError::forbidden("Account hook rejected"))
             }
         }
@@ -968,10 +955,7 @@ mod tests {
 
     #[async_trait]
     impl DatabaseHooks<MemoryDatabaseAdapter> for VerificationCountingHook {
-        async fn before_create_verification(
-            &self,
-            _v: &mut CreateVerification,
-        ) -> AuthResult<()> {
+        async fn before_create_verification(&self, _v: &mut CreateVerification) -> AuthResult<()> {
             self.before_create.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
