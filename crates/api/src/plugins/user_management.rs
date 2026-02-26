@@ -574,6 +574,12 @@ impl UserManagementPlugin {
         let (user, _session) = ctx.require_session(req).await?;
 
         if self.config.delete_user.require_verification {
+            // Verification requires a valid email to send the token to.
+            let email = user.email().filter(|e| !e.is_empty()).ok_or_else(|| {
+                AuthError::bad_request("Cannot send verification email: user has no email address")
+            })?;
+            let email = email.to_string();
+
             // Send a verification email; actual deletion happens on GET /delete-user/verify.
             let identifier = format!("delete_user:{}", user.id());
             let expires_at = Utc::now() + self.config.delete_user.delete_token_expires_in;
@@ -588,7 +594,6 @@ impl UserManagementPlugin {
             .await?;
 
             // Send confirmation email
-            let email = user.email().unwrap_or_default();
             let subject = "Confirm account deletion";
             let html = format!(
                 "<p>Click the link below to confirm the deletion of your account:</p>\
@@ -598,7 +603,7 @@ impl UserManagementPlugin {
             );
             let text = format!("Confirm account deletion: {}", verification_url);
 
-            Self::send_email_or_log(ctx, email, subject, &html, &text, "delete-user").await;
+            Self::send_email_or_log(ctx, &email, subject, &html, &text, "delete-user").await;
 
             let response = StatusMessageResponse {
                 status: true,
