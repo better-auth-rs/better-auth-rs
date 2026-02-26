@@ -23,6 +23,12 @@ pub trait SendVerificationEmail: Send + Sync {
     async fn send(&self, user: &User, url: &str, token: &str) -> AuthResult<()>;
 }
 
+/// Shorthand for the async hook closure type used by
+/// [`EmailVerificationConfig::before_email_verification`] and
+/// [`EmailVerificationConfig::after_email_verification`].
+pub type EmailVerificationHook =
+    Arc<dyn Fn(&User) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>;
+
 /// Convert any `AuthUser` implementor into the concrete [`User`] type so that
 /// it can be passed to hooks and callbacks that require a known, sized type.
 fn to_user(u: &impl AuthUser) -> User {
@@ -69,11 +75,9 @@ pub struct EmailVerificationConfig {
     /// `EmailProvider`-based sending.
     pub send_verification_email: Option<Arc<dyn SendVerificationEmail>>,
     /// Hook invoked **before** email verification (before updating the user).
-    pub before_email_verification:
-        Option<Arc<dyn Fn(&User) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>>,
+    pub before_email_verification: Option<EmailVerificationHook>,
     /// Hook invoked **after** email verification (after the user has been updated).
-    pub after_email_verification:
-        Option<Arc<dyn Fn(&User) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>>,
+    pub after_email_verification: Option<EmailVerificationHook>,
 }
 
 impl EmailVerificationConfig {
@@ -168,18 +172,12 @@ impl EmailVerificationPlugin {
         self
     }
 
-    pub fn before_email_verification(
-        mut self,
-        hook: Arc<dyn Fn(&User) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>,
-    ) -> Self {
+    pub fn before_email_verification(mut self, hook: EmailVerificationHook) -> Self {
         self.config.before_email_verification = Some(hook);
         self
     }
 
-    pub fn after_email_verification(
-        mut self,
-        hook: Arc<dyn Fn(&User) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>,
-    ) -> Self {
+    pub fn after_email_verification(mut self, hook: EmailVerificationHook) -> Self {
         self.config.after_email_verification = Some(hook);
         self
     }
@@ -241,16 +239,14 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailVerificationPlugin {
         if self.config.send_email_notifications
             && !user.email_verified()
             && let Some(email) = user.email()
-        {
-            if let Err(e) = self
+            && let Err(e) = self
                 .send_verification_email_for_user(user, email, None, ctx)
                 .await
-            {
-                eprintln!(
-                    "[email-verification] Failed to send verification email to {}: {}",
-                    email, e
-                );
-            }
+        {
+            eprintln!(
+                "[email-verification] Failed to send verification email to {}: {}",
+                email, e
+            );
         }
         Ok(())
     }
@@ -374,8 +370,7 @@ impl EmailVerificationPlugin {
         if self.config.auto_sign_in_after_verification {
             let ip_address = req.headers.get("x-forwarded-for").cloned();
             let user_agent = req.headers.get("user-agent").cloned();
-            let session_manager =
-                SessionManager::new(ctx.config.clone(), ctx.database.clone());
+            let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
             let session = session_manager
                 .create_session(&updated_user, ip_address, user_agent)
                 .await?;
@@ -386,9 +381,7 @@ impl EmailVerificationPlugin {
                 session,
                 status: true,
             };
-            return Ok(
-                AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header)
-            );
+            return Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header));
         }
 
         let response = VerifyEmailResponse {
