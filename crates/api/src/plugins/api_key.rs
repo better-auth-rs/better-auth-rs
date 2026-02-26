@@ -1114,17 +1114,19 @@ impl ApiKeyPlugin {
 
     async fn handle_delete_all_expired<DB: DatabaseAdapter>(
         &self,
+    async fn handle_delete_all_expired<DB: DatabaseAdapter>(
+        &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        // Require authentication to prevent unauthenticated mass-deletion
-        let (_user, _session) = ctx.require_session(req).await?;
+        let (_user, _session) = Self::get_authenticated_user(req, ctx).await?;
         let count = ctx.database.delete_expired_api_keys().await?;
         Ok(AuthResponse::json(
             200,
             &serde_json::json!({ "deleted": count }),
         )?)
     }
+}
 }
 
 // NOTE: The old `extract_error_info()` function that used fragile string
