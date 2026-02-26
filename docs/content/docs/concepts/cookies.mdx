@@ -22,15 +22,15 @@ By default, Better Auth sets session cookies with the following attributes:
 Configure cookie behavior through `AuthConfig`:
 
 ```rust
-use better_auth::config::{AuthConfig, SameSite};
-use std::time::Duration;
+use better_auth::{AuthConfig, SameSite};
+use chrono::Duration;
 
-let config = AuthConfig::new("your-secret-key-at-least-32-chars")
-    .session_cookie_name("my-app.session")
-    .session_cookie_secure(true)
-    .session_cookie_http_only(true)
-    .session_cookie_same_site(SameSite::Lax)
-    .session_expires_in(Duration::from_secs(7 * 24 * 3600)); // 7 days
+let mut config = AuthConfig::new("your-secret-key-at-least-32-chars");
+config.session.cookie_name = "my-app.session".to_string();
+config.session.cookie_secure = true;
+config.session.cookie_http_only = true;
+config.session.cookie_same_site = SameSite::Lax;
+config.session.expires_in = Duration::hours(24 * 7); // 7 days
 ```
 
 ## Cookie Attributes
@@ -40,7 +40,7 @@ let config = AuthConfig::new("your-secret-key-at-least-32-chars")
 When `true`, the cookie is only sent over HTTPS connections. This prevents session tokens from being transmitted in plaintext.
 
 ```rust
-.session_cookie_secure(true)
+config.session.cookie_secure = true;
 ```
 
 <Callout type="warn">
@@ -52,7 +52,7 @@ Always set `Secure: true` in production. Only disable it for local development o
 When `true`, the cookie cannot be accessed by JavaScript (`document.cookie`). This prevents XSS attacks from stealing session tokens.
 
 ```rust
-.session_cookie_http_only(true)
+config.session.cookie_http_only = true;
 ```
 
 Always keep this enabled unless you have a specific reason to access the session token from JavaScript.
@@ -68,13 +68,13 @@ Controls when the cookie is sent with cross-site requests:
 | `None` | Cookie sent for all requests. Requires `Secure: true`. Use for cross-origin API access. |
 
 ```rust
-use better_auth::config::SameSite;
+use better_auth::SameSite;
 
 // Recommended for most applications
-.session_cookie_same_site(SameSite::Lax)
+config.session.cookie_same_site = SameSite::Lax;
 
 // For cross-origin API access (requires Secure: true)
-.session_cookie_same_site(SameSite::None)
+config.session.cookie_same_site = SameSite::None;
 ```
 
 ### Expiration
@@ -82,10 +82,10 @@ use better_auth::config::SameSite;
 The cookie expiration matches the session expiration time. When a session is created, the `Expires` attribute is set accordingly.
 
 ```rust
-use std::time::Duration;
+use chrono::Duration;
 
 // Session and cookie expire after 7 days
-.session_expires_in(Duration::from_secs(7 * 24 * 3600))
+config.session.expires_in = Duration::hours(24 * 7);
 ```
 
 ## Cookie Format

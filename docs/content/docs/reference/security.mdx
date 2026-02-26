@@ -23,8 +23,7 @@ Configure minimum password requirements:
 
 ```rust
 let config = AuthConfig::new("secret-key-at-least-32-chars")
-    .password_min_length(8)
-    .password_max_length(128);
+    .password_min_length(8);
 ```
 
 ## Session Security
@@ -36,10 +35,12 @@ Session tokens are generated using cryptographically secure random number genera
 ### Cookie Configuration
 
 ```rust
-let config = AuthConfig::new("secret-key")
-    .session_cookie_secure(true)      // HTTPS only
-    .session_cookie_http_only(true)   // Not accessible via JavaScript
-    .session_cookie_same_site(SameSite::Lax); // CSRF protection
+use better_auth::{AuthConfig, SameSite};
+
+let mut config = AuthConfig::new("secret-key");
+config.session.cookie_secure = true;        // HTTPS only
+config.session.cookie_http_only = true;     // Not accessible via JavaScript
+config.session.cookie_same_site = SameSite::Lax; // CSRF protection
 ```
 
 | Setting | Recommended | Description |
@@ -66,7 +67,7 @@ let config = AuthConfig::new("secret-key")
 Better Auth includes built-in CSRF protection that validates the `Origin` or `Referer` header on mutating requests (POST, PUT, DELETE, PATCH).
 
 ```rust
-use better_auth::middleware::CsrfConfig;
+use better_auth::CsrfConfig;
 
 let auth = BetterAuth::new(config)
     .csrf(
@@ -85,7 +86,7 @@ Requests from untrusted origins receive a `403 Forbidden` response.
 Properly configured CORS prevents unauthorized cross-origin access:
 
 ```rust
-use better_auth::middleware::CorsConfig;
+use better_auth::CorsConfig;
 
 let auth = BetterAuth::new(config)
     .cors(
@@ -143,7 +144,7 @@ Email-based OTP codes expire after 5 minutes and are single-use.
 Reject oversized request bodies to prevent denial-of-service:
 
 ```rust
-use better_auth::middleware::BodyLimitConfig;
+use better_auth::BodyLimitConfig;
 
 let auth = BetterAuth::new(config)
     .body_limit(BodyLimitConfig::new().max_bytes(512 * 1024))

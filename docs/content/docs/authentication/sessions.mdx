@@ -174,23 +174,24 @@ Use `OptionalSession` for routes that should work for both authenticated and ano
 Session behavior is configured via `AuthConfig`:
 
 ```rust
+use better_auth::{AuthConfig, SameSite};
 use std::time::Duration;
 
-let config = AuthConfig::new("secret...")
-    .session_expires_in(Duration::from_secs(7 * 24 * 3600)) // 7 days
-    .session_cookie_name("better-auth.session-token")
-    .session_cookie_secure(true)        // HTTPS only
-    .session_cookie_http_only(true)     // Block JavaScript access
-    .session_cookie_same_site(SameSite::Lax); // CSRF protection
+let mut config = AuthConfig::new("secret...");
+config.session.expires_in = Duration::hours(24 * 7);        // 7 days
+config.session.cookie_name = "better-auth.session-token".to_string();
+config.session.cookie_secure = true;                         // HTTPS only
+config.session.cookie_http_only = true;                      // Block JavaScript access
+config.session.cookie_same_site = SameSite::Lax;             // CSRF protection
 ```
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `session_expires_in` | `Duration` | `7 days` | Session lifetime |
-| `session_cookie_name` | `String` | `better-auth.session-token` | Cookie name |
-| `session_cookie_secure` | `bool` | `false` | HTTPS-only cookie |
-| `session_cookie_http_only` | `bool` | `true` | Prevent JavaScript access |
-| `session_cookie_same_site` | `SameSite` | `Lax` | SameSite cookie policy |
+| `session.expires_in` | `Duration` | `7 days` | Session lifetime |
+| `session.cookie_name` | `String` | `better-auth.session-token` | Cookie name |
+| `session.cookie_secure` | `bool` | `true` | HTTPS-only cookie |
+| `session.cookie_http_only` | `bool` | `true` | Prevent JavaScript access |
+| `session.cookie_same_site` | `SameSite` | `Lax` | SameSite cookie policy |
 
 See [Configuration Options](/docs/reference/configuration-options) for all session settings.
 
