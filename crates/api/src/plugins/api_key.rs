@@ -866,6 +866,14 @@ impl ApiKeyPlugin {
 
         let updated = ctx.database.update_api_key(&update_req.id, update).await?;
 
+        // Invalidate cached rate limiter if rate limit settings changed
+        if update_req.rate_limit_time_window.is_some()
+            || update_req.rate_limit_max.is_some()
+            || update_req.rate_limit_enabled.is_some()
+        {
+            self.rate_limiters.lock().unwrap().remove(&update_req.id);
+        }
+
         self.maybe_delete_expired(ctx).await;
 
         Ok(AuthResponse::json(200, &ApiKeyView::from_entity(&updated))?)
@@ -1093,11 +1101,11 @@ impl ApiKeyPlugin {
                 .entry(key_id)
                 .or_insert_with(|| {
                     let max = NonZeroU32::new(max_requests as u32).unwrap_or(NonZeroU32::MIN);
-                    let period = std::time::Duration::from_millis(
-                        time_window_ms as u64 / max_requests as u64,
-                    );
+                    let period_ms = (time_window_ms as u64).checked_div(max_requests as u64).unwrap_or(0);
+                    // Guard against zero-period panic (e.g. time_window_ms < max_requests)
+                    let period = std::time::Duration::from_millis(period_ms.max(1));
                     let quota = Quota::with_period(period)
-                        .expect("valid period")
+                        .expect("period >= 1ms is always valid")
                         .allow_burst(max);
                     std::sync::Arc::new(RateLimiter::direct(quota))
                 })
