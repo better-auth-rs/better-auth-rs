@@ -62,7 +62,7 @@ async fn create_full_auth() -> BetterAuth<MemoryDatabaseAdapter> {
         .plugin(better_auth::plugins::AccountManagementPlugin::new())
         .plugin(better_auth::plugins::OAuthPlugin::new())
         .plugin(better_auth::plugins::TwoFactorPlugin::new())
-        .plugin(better_auth::plugins::ApiKeyPlugin::new())
+        .plugin(better_auth::plugins::ApiKeyPlugin::builder().build())
         .build()
         .await
         .expect("Failed to create test auth instance")

@@ -13,6 +13,8 @@ use better_auth_core::{
     AuthRequest, AuthResponse, CreateTwoFactor, CreateVerification, HttpMethod, UpdateUser,
 };
 
+use super::helpers;
+
 /// Two-factor authentication plugin providing TOTP, OTP, and backup code flows.
 pub struct TwoFactorPlugin {
     config: TwoFactorConfig,
@@ -185,34 +187,7 @@ impl TwoFactorPlugin {
 
     // -- Session / auth helpers --
 
-    async fn get_authenticated_user<DB: DatabaseAdapter>(
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<(DB::User, DB::Session)> {
-        let token = req
-            .headers
-            .get("authorization")
-            .and_then(|v| v.strip_prefix("Bearer "))
-            .ok_or(AuthError::Unauthenticated)?;
-
-        let session = ctx
-            .database
-            .get_session(token)
-            .await?
-            .ok_or(AuthError::Unauthenticated)?;
-
-        if session.expires_at() < chrono::Utc::now() {
-            return Err(AuthError::Unauthenticated);
-        }
-
-        let user = ctx
-            .database
-            .get_user_by_id(session.user_id())
-            .await?
-            .ok_or(AuthError::UserNotFound)?;
-
-        Ok((user, session))
-    }
+    // NOTE: Auth extraction has been DRY'd into `plugins::helpers`.
 
     /// Extract the user_id from a `2fa_xxx` pending verification token.
     async fn get_pending_2fa_user<DB: DatabaseAdapter>(
@@ -274,7 +249,7 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
 
         let enable_req: EnableRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -342,7 +317,7 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
 
         let disable_req: DisableRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -385,7 +360,7 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
 
         let uri_req: GetTotpUriRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -561,7 +536,7 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
 
         let gen_req: GenerateBackupCodesRequest = match better_auth_core::validate_request_body(req)
         {

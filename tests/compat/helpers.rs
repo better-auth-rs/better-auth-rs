@@ -34,7 +34,7 @@ pub async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
         .plugin(PasswordManagementPlugin::new().require_current_password(true))
         .plugin(AccountManagementPlugin::new())
         .plugin(EmailVerificationPlugin::new())
-        .plugin(ApiKeyPlugin::new())
+        .plugin(ApiKeyPlugin::builder().build())
         .plugin(OAuthPlugin::new())
         .plugin(TwoFactorPlugin::new())
         .plugin(OrganizationPlugin::new())

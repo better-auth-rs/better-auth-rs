@@ -1,17 +1,25 @@
 use async_trait::async_trait;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use governor::clock::DefaultClock;
+use governor::state::{InMemoryState, NotKeyed};
+use governor::{Quota, RateLimiter};
+use oso::{Oso, PolarClass};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::sync::Mutex;
+use std::collections::HashMap;
+use std::num::NonZeroU32;
+use std::sync::{Mutex, OnceLock};
 use validator::Validate;
 
 use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::entity::{AuthApiKey, AuthSession, AuthUser};
+use better_auth_core::entity::{AuthApiKey, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute, BeforeRequestAction};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreateApiKey, HttpMethod, UpdateApiKey};
+
+use super::helpers;
 
 // ---------------------------------------------------------------------------
 // Error codes -- mirrors the TypeScript `API_KEY_ERROR_CODES`
@@ -65,6 +73,34 @@ pub enum ApiKeyErrorCode {
 }
 
 impl ApiKeyErrorCode {
+    /// Return the SCREAMING_SNAKE_CASE string for this error code.
+    /// Used by `handle_verify` to produce the structured JSON error response.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::InvalidApiKey => "INVALID_API_KEY",
+            Self::KeyDisabled => "KEY_DISABLED",
+            Self::KeyExpired => "KEY_EXPIRED",
+            Self::UsageExceeded => "USAGE_EXCEEDED",
+            Self::KeyNotFound => "KEY_NOT_FOUND",
+            Self::RateLimited => "RATE_LIMITED",
+            Self::UnauthorizedSession => "UNAUTHORIZED_SESSION",
+            Self::InvalidPrefixLength => "INVALID_PREFIX_LENGTH",
+            Self::InvalidNameLength => "INVALID_NAME_LENGTH",
+            Self::MetadataDisabled => "METADATA_DISABLED",
+            Self::NoValuesToUpdate => "NO_VALUES_TO_UPDATE",
+            Self::KeyDisabledExpiration => "KEY_DISABLED_EXPIRATION",
+            Self::ExpiresInTooSmall => "EXPIRES_IN_IS_TOO_SMALL",
+            Self::ExpiresInTooLarge => "EXPIRES_IN_IS_TOO_LARGE",
+            Self::InvalidRemaining => "INVALID_REMAINING",
+            Self::RefillAmountAndIntervalRequired => "REFILL_AMOUNT_AND_INTERVAL_REQUIRED",
+            Self::NameRequired => "NAME_REQUIRED",
+            Self::InvalidUserIdFromApiKey => "INVALID_USER_ID_FROM_API_KEY",
+            Self::ServerOnlyProperty => "SERVER_ONLY_PROPERTY",
+            Self::FailedToUpdateApiKey => "FAILED_TO_UPDATE_API_KEY",
+            Self::InvalidMetadataType => "INVALID_METADATA_TYPE",
+        }
+    }
+
     pub fn message(self) -> &'static str {
         match self {
             Self::InvalidApiKey => "Invalid API key.",
@@ -102,6 +138,22 @@ fn api_key_error(code: ApiKeyErrorCode) -> AuthError {
     AuthError::bad_request(code.message())
 }
 
+/// Structured error returned by `validate_api_key` so that `handle_verify`
+/// can extract the error code without fragile string matching.
+struct ApiKeyValidationError {
+    code: ApiKeyErrorCode,
+    message: String,
+}
+
+impl ApiKeyValidationError {
+    fn new(code: ApiKeyErrorCode) -> Self {
+        Self {
+            message: code.message().to_string(),
+            code,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
@@ -111,7 +163,13 @@ pub struct ApiKeyPlugin {
     config: ApiKeyConfig,
     /// Throttle for `delete_expired_api_keys` -- stores the last check instant.
     last_expired_check: Mutex<Option<std::time::Instant>>,
+    /// Per-key in-memory rate limiters backed by the `governor` crate.
+    /// Key: API key ID → governor rate limiter.
+    rate_limiters: Mutex<HashMap<String, std::sync::Arc<GovernorLimiter>>>,
 }
+
+/// Type alias for the governor rate limiter we use (not keyed, in-memory, default clock).
+type GovernorLimiter = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
 
 /// Configuration for the API Key plugin, aligned with the TypeScript `ApiKeyOptions`.
 #[derive(Debug, Clone)]
@@ -369,172 +427,86 @@ impl ApiKeyView {
 }
 
 // ---------------------------------------------------------------------------
-// Rate limiting helper (pure function, mirrors TS `isRateLimited`)
+// Rate limiting
 // ---------------------------------------------------------------------------
-
-struct RateLimitResult {
-    success: bool,
-    message: Option<String>,
-    #[allow(dead_code)]
-    try_again_in: Option<i64>,
-    update: Option<RateLimitUpdate>,
-}
-
-struct RateLimitUpdate {
-    last_request: Option<String>,
-    request_count: Option<i64>,
-}
-
-/// Check whether the given API key has exceeded its rate limit.
-///
-/// This is a **pure function** that mirrors the TypeScript `isRateLimited`
-/// helper.  It reads the key's current `request_count` / `last_request`
-/// fields and returns a [`RateLimitResult`] indicating whether the request
-/// should be allowed, along with any database updates that need to be
-/// persisted afterwards.
-///
-/// # Race conditions
-///
-/// Because the read-check-update cycle is **not** atomic, two concurrent
-/// requests may both read the same `request_count`, both pass the limit
-/// check, and both increment the counter — effectively allowing one extra
-/// request through.  This is the same trade-off made by the TypeScript
-/// implementation (no DB-level locking).  For most API-key workloads the
-/// window is small and the impact is negligible.  If strict enforcement is
-/// required, callers should wrap the verify + update in a serialisable
-/// transaction or use an external rate-limiter (e.g. Redis + Lua script).
-fn is_rate_limited(api_key: &impl AuthApiKey, global_enabled: bool) -> RateLimitResult {
-    let now = chrono::Utc::now();
-
-    // Global rate-limit disabled
-    if !global_enabled {
-        return RateLimitResult {
-            success: true,
-            message: None,
-            try_again_in: None,
-            update: Some(RateLimitUpdate {
-                last_request: Some(now.to_rfc3339()),
-                request_count: None,
-            }),
-        };
-    }
-
-    // Per-key rate-limit disabled
-    if !api_key.rate_limit_enabled() {
-        return RateLimitResult {
-            success: true,
-            message: None,
-            try_again_in: None,
-            update: Some(RateLimitUpdate {
-                last_request: Some(now.to_rfc3339()),
-                request_count: None,
-            }),
-        };
-    }
-
-    let rate_limit_time_window = match api_key.rate_limit_time_window() {
-        Some(w) => w,
-        None => {
-            return RateLimitResult {
-                success: true,
-                message: None,
-                try_again_in: None,
-                update: None,
-            };
-        }
-    };
-
-    let rate_limit_max = match api_key.rate_limit_max() {
-        Some(m) => m,
-        None => {
-            return RateLimitResult {
-                success: true,
-                message: None,
-                try_again_in: None,
-                update: None,
-            };
-        }
-    };
-
-    let last_request = api_key.last_request();
-    let request_count = api_key.request_count().unwrap_or(0);
-
-    if last_request.is_none() {
-        // First request ever
-        return RateLimitResult {
-            success: true,
-            message: None,
-            try_again_in: None,
-            update: Some(RateLimitUpdate {
-                last_request: Some(now.to_rfc3339()),
-                request_count: Some(1),
-            }),
-        };
-    }
-
-    let last_request_time = last_request
-        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-        .unwrap_or(now);
-
-    let time_since_last = (now - last_request_time).num_milliseconds();
-
-    if time_since_last > rate_limit_time_window {
-        // Window expired, reset
-        return RateLimitResult {
-            success: true,
-            message: None,
-            try_again_in: None,
-            update: Some(RateLimitUpdate {
-                last_request: Some(now.to_rfc3339()),
-                request_count: Some(1),
-            }),
-        };
-    }
-
-    if request_count >= rate_limit_max {
-        // Over limit
-        return RateLimitResult {
-            success: false,
-            message: Some(ApiKeyErrorCode::RateLimited.message().to_string()),
-            try_again_in: Some(rate_limit_time_window - time_since_last),
-            update: None,
-        };
-    }
-
-    // Allowed
-    RateLimitResult {
-        success: true,
-        message: None,
-        try_again_in: None,
-        update: Some(RateLimitUpdate {
-            last_request: Some(now.to_rfc3339()),
-            request_count: Some(request_count + 1),
-        }),
-    }
-}
+// The legacy hand-written sliding-window rate limiter (and its associated
+// structs) has been removed.
+//
+// Rate limiting is now implemented by the `governor` crate via
+// `ApiKeyPlugin::check_rate_limit_governor()`.
 
 // ---------------------------------------------------------------------------
 // Permissions verification helper (RBAC)
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, PolarClass)]
+struct PermissionRequirement {
+    #[polar(attribute)]
+    role: String,
+    #[polar(attribute)]
+    action: String,
+}
+
+#[derive(Clone, PolarClass)]
+struct KeyPermissions {
+    permissions: HashMap<String, Vec<String>>,
+}
+
+fn permissions_oso() -> &'static Mutex<Oso> {
+    static OSO: OnceLock<Mutex<Oso>> = OnceLock::new();
+    OSO.get_or_init(|| {
+        let mut oso = Oso::new();
+
+        let key_permissions_class = KeyPermissions::get_polar_class_builder()
+            .add_method(
+                "allows",
+                |kp: &KeyPermissions, role: String, action: String| {
+                    kp.permissions
+                        .get(&role)
+                        .is_some_and(|actions| actions.iter().any(|a| a == &action))
+                },
+            )
+            .build();
+
+        oso.register_class(key_permissions_class)
+            .expect("register KeyPermissions class");
+        oso.register_class(PermissionRequirement::get_polar_class())
+            .expect("register PermissionRequirement class");
+
+        oso.load_str(
+            r#"
+            allow(key: KeyPermissions, "has_permission", req: PermissionRequirement) if
+                key.allows(req.role, req.action);
+            "#,
+        )
+        .expect("load Oso policy for API-key permissions");
+
+        Mutex::new(oso)
+    })
+}
+
 /// Check whether `key_permissions` (JSON object mapping role->actions) covers
 /// all of the `required_permissions`.
+///
+/// This is implemented with the `oso` policy engine (explicitly non-casbin).
+/// Behavior matches the TypeScript plugin: required actions must be a subset
+/// of the API key's actions for each role.
 fn check_permissions(key_permissions_json: &str, required: &serde_json::Value) -> bool {
-    let key_perms: serde_json::Value = match serde_json::from_str(key_permissions_json) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-
     let required_map = match required.as_object() {
         Some(m) => m,
         None => return false,
     };
 
-    let key_map = match key_perms.as_object() {
-        Some(m) => m,
-        None => return false,
+    let key_map: HashMap<String, Vec<String>> = match serde_json::from_str(key_permissions_json) {
+        Ok(v) => v,
+        Err(_) => return false,
     };
+
+    let key = KeyPermissions {
+        permissions: key_map,
+    };
+
+    let oso = permissions_oso().lock().unwrap();
 
     for (role, actions) in required_map {
         let required_actions = match actions.as_array() {
@@ -542,14 +514,20 @@ fn check_permissions(key_permissions_json: &str, required: &serde_json::Value) -
             None => continue,
         };
 
-        let key_actions = match key_map.get(role).and_then(|v| v.as_array()) {
-            Some(a) => a,
-            None => return false, // role not present on key
-        };
-
         for action in required_actions {
-            if !key_actions.contains(action) {
-                return false;
+            let action = match action.as_str() {
+                Some(s) => s.to_string(),
+                None => return false,
+            };
+
+            let req = PermissionRequirement {
+                role: role.to_string(),
+                action,
+            };
+
+            match oso.is_allowed(key.clone(), "has_permission", req) {
+                Ok(true) => {}
+                _ => return false,
             }
         }
     }
@@ -561,12 +539,59 @@ fn check_permissions(key_permissions_json: &str, required: &serde_json::Value) -
 // Plugin implementation
 // ---------------------------------------------------------------------------
 
+/// Builder for [`ApiKeyPlugin`] powered by the `bon` crate.
+///
+/// Usage:
+/// ```ignore
+/// let plugin = ApiKeyPlugin::builder()
+///     .key_length(48)
+///     .prefix("ba_".to_string())
+///     .enable_metadata(true)
+///     .rate_limit(RateLimitDefaults { enabled: true, time_window: 60_000, max_requests: 5 })
+///     .build();
+/// ```
+#[bon::bon]
 impl ApiKeyPlugin {
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
+    #[builder]
+    pub fn new(
+        #[builder(default = 32)] key_length: usize,
+        prefix: Option<String>,
+        default_remaining: Option<i64>,
+        #[builder(default = "x-api-key".to_string())] api_key_header: String,
+        #[builder(default = false)] disable_key_hashing: bool,
+        #[builder(default = 6)] starting_characters_length: usize,
+        #[builder(default = true)] store_starting_characters: bool,
+        #[builder(default = 32)] max_prefix_length: usize,
+        #[builder(default = 1)] min_prefix_length: usize,
+        #[builder(default = 32)] max_name_length: usize,
+        #[builder(default = 1)] min_name_length: usize,
+        #[builder(default = false)] require_name: bool,
+        #[builder(default = false)] enable_metadata: bool,
+        #[builder(default)] key_expiration: KeyExpirationConfig,
+        #[builder(default)] rate_limit: RateLimitDefaults,
+        #[builder(default = false)] enable_session_for_api_keys: bool,
+    ) -> Self {
         Self {
-            config: ApiKeyConfig::default(),
+            config: ApiKeyConfig {
+                key_length,
+                prefix,
+                default_remaining,
+                api_key_header,
+                disable_key_hashing,
+                starting_characters_length,
+                store_starting_characters,
+                max_prefix_length,
+                min_prefix_length,
+                max_name_length,
+                min_name_length,
+                require_name,
+                enable_metadata,
+                key_expiration,
+                rate_limit,
+                enable_session_for_api_keys,
+            },
             last_expired_check: Mutex::new(None),
+            rate_limiters: Mutex::new(HashMap::new()),
         }
     }
 
@@ -574,89 +599,8 @@ impl ApiKeyPlugin {
         Self {
             config,
             last_expired_check: Mutex::new(None),
+            rate_limiters: Mutex::new(HashMap::new()),
         }
-    }
-
-    // -- builder methods --
-
-    pub fn key_length(mut self, length: usize) -> Self {
-        self.config.key_length = length;
-        self
-    }
-
-    pub fn prefix(mut self, prefix: impl Into<String>) -> Self {
-        self.config.prefix = Some(prefix.into());
-        self
-    }
-
-    pub fn default_remaining(mut self, remaining: i64) -> Self {
-        self.config.default_remaining = Some(remaining);
-        self
-    }
-
-    pub fn api_key_header(mut self, header: impl Into<String>) -> Self {
-        self.config.api_key_header = header.into();
-        self
-    }
-
-    pub fn disable_key_hashing(mut self, disable: bool) -> Self {
-        self.config.disable_key_hashing = disable;
-        self
-    }
-
-    pub fn starting_characters_length(mut self, len: usize) -> Self {
-        self.config.starting_characters_length = len;
-        self
-    }
-
-    pub fn store_starting_characters(mut self, store: bool) -> Self {
-        self.config.store_starting_characters = store;
-        self
-    }
-
-    pub fn max_prefix_length(mut self, max: usize) -> Self {
-        self.config.max_prefix_length = max;
-        self
-    }
-
-    pub fn min_prefix_length(mut self, min: usize) -> Self {
-        self.config.min_prefix_length = min;
-        self
-    }
-
-    pub fn max_name_length(mut self, max: usize) -> Self {
-        self.config.max_name_length = max;
-        self
-    }
-
-    pub fn min_name_length(mut self, min: usize) -> Self {
-        self.config.min_name_length = min;
-        self
-    }
-
-    pub fn require_name(mut self, require: bool) -> Self {
-        self.config.require_name = require;
-        self
-    }
-
-    pub fn enable_metadata(mut self, enable: bool) -> Self {
-        self.config.enable_metadata = enable;
-        self
-    }
-
-    pub fn key_expiration(mut self, config: KeyExpirationConfig) -> Self {
-        self.config.key_expiration = config;
-        self
-    }
-
-    pub fn rate_limit(mut self, config: RateLimitDefaults) -> Self {
-        self.config.rate_limit = config;
-        self
-    }
-
-    pub fn enable_session_for_api_keys(mut self, enable: bool) -> Self {
-        self.config.enable_session_for_api_keys = enable;
-        self
     }
 
     // -- internal helpers --
@@ -688,35 +632,6 @@ impl ApiKeyPlugin {
         hasher.update(key.as_bytes());
         let digest = hasher.finalize();
         URL_SAFE_NO_PAD.encode(digest)
-    }
-
-    async fn get_authenticated_user<DB: DatabaseAdapter>(
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<(DB::User, DB::Session)> {
-        let token = req
-            .headers
-            .get("authorization")
-            .and_then(|v| v.strip_prefix("Bearer "))
-            .ok_or(AuthError::Unauthenticated)?;
-
-        let session = ctx
-            .database
-            .get_session(token)
-            .await?
-            .ok_or(AuthError::Unauthenticated)?;
-
-        if session.expires_at() < chrono::Utc::now() {
-            return Err(AuthError::Unauthenticated);
-        }
-
-        let user = ctx
-            .database
-            .get_user_by_id(session.user_id())
-            .await?
-            .ok_or(AuthError::UserNotFound)?;
-
-        Ok((user, session))
     }
 
     /// Throttled cleanup -- at most once per 10 seconds.
@@ -812,7 +727,7 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
 
         let create_req: CreateKeyRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -829,16 +744,7 @@ impl ApiKeyPlugin {
 
         let (full_key, hash, start) = self.generate_key(create_req.prefix.as_deref());
 
-        let expires_at = if let Some(ms) = effective_expires_in {
-            let duration = chrono::Duration::try_milliseconds(ms)
-                .ok_or_else(|| AuthError::bad_request("expiresIn is out of range"))?;
-            let dt = chrono::Utc::now()
-                .checked_add_signed(duration)
-                .ok_or_else(|| AuthError::bad_request("expiresIn is out of range"))?;
-            Some(dt.to_rfc3339())
-        } else {
-            None
-        };
+        let expires_at = helpers::expires_in_to_at(effective_expires_in)?;
 
         let remaining = create_req.remaining.or(self.config.default_remaining);
 
@@ -888,22 +794,14 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
 
         let id = req
             .query
             .get("id")
             .ok_or_else(|| AuthError::bad_request("Query parameter 'id' is required"))?;
 
-        let api_key = ctx
-            .database
-            .get_api_key_by_id(id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("API key not found"))?;
-
-        if api_key.user_id() != user.id() {
-            return Err(AuthError::not_found("API key not found"));
-        }
+        let api_key = helpers::get_owned_api_key(ctx, id, user.id()).await?;
 
         self.maybe_delete_expired(ctx).await;
 
@@ -915,7 +813,7 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
 
         let keys = ctx.database.list_api_keys_by_user(user.id()).await?;
 
@@ -931,7 +829,7 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
 
         let update_req: UpdateKeyRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -943,30 +841,13 @@ impl ApiKeyPlugin {
         self.validate_metadata(&update_req.metadata)?;
         Self::validate_refill(update_req.refill_interval, update_req.refill_amount)?;
 
-        // Ownership check
-        let existing = ctx
-            .database
-            .get_api_key_by_id(&update_req.id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("API key not found"))?;
-
-        if existing.user_id() != user.id() {
-            return Err(AuthError::not_found("API key not found"));
-        }
+        // Ownership check via shared helper
+        let _existing = helpers::get_owned_api_key(ctx, &update_req.id, user.id()).await?;
 
         // Build expires_at if expiresIn is provided
         let expires_at = if let Some(ms) = update_req.expires_in {
             let effective_ms = self.validate_expires_in(Some(ms))?;
-            if let Some(ms_val) = effective_ms {
-                let duration = chrono::Duration::try_milliseconds(ms_val)
-                    .ok_or_else(|| AuthError::bad_request("expiresIn is out of range"))?;
-                let dt = chrono::Utc::now()
-                    .checked_add_signed(duration)
-                    .ok_or_else(|| AuthError::bad_request("expiresIn is out of range"))?;
-                Some(Some(dt.to_rfc3339()))
-            } else {
-                None
-            }
+            helpers::expires_in_to_at(effective_ms)?.map(Some)
         } else {
             None
         };
@@ -1004,23 +885,15 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
 
         let delete_req: DeleteKeyRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
-        // Ownership check
-        let existing = ctx
-            .database
-            .get_api_key_by_id(&delete_req.id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("API key not found"))?;
-
-        if existing.user_id() != user.id() {
-            return Err(AuthError::not_found("API key not found"));
-        }
+        // Ownership check via shared helper
+        let _existing = helpers::get_owned_api_key(ctx, &delete_req.id, user.id()).await?;
 
         ctx.database.delete_api_key(&delete_req.id).await?;
 
@@ -1056,9 +929,10 @@ impl ApiKeyPlugin {
                     key: Some(view),
                 },
             )?),
-            Err(err) => {
-                // Return structured error instead of propagating
-                let (code_str, message) = extract_error_info(&err);
+            Err(validation_err) => {
+                // Structured error code -- no fragile string matching needed
+                let code_str = validation_err.code.as_str().to_string();
+                let message = validation_err.message;
                 Ok(AuthResponse::json(
                     200,
                     &VerifyKeyResponse {
@@ -1078,13 +952,15 @@ impl ApiKeyPlugin {
     ///
     /// Validation chain: exists -> disabled -> expired -> permissions ->
     /// remaining/refill -> rate limit.
-    /// Returns the (updated) API key view on success.
+    ///
+    /// Returns `Ok(ApiKeyView)` on success, or `Err(ApiKeyValidationError)` with
+    /// a structured error code (no fragile string matching needed).
     async fn validate_api_key<DB: DatabaseAdapter>(
         &self,
         ctx: &AuthContext<DB>,
         raw_key: &str,
         required_permissions: Option<&serde_json::Value>,
-    ) -> AuthResult<ApiKeyView> {
+    ) -> Result<ApiKeyView, ApiKeyValidationError> {
         // Hash the key (or use as-is if hashing is disabled)
         let hashed = if self.config.disable_key_hashing {
             raw_key.to_string()
@@ -1096,12 +972,13 @@ impl ApiKeyPlugin {
         let api_key = ctx
             .database
             .get_api_key_by_hash(&hashed)
-            .await?
-            .ok_or_else(|| api_key_error(ApiKeyErrorCode::InvalidApiKey))?;
+            .await
+            .map_err(|_| ApiKeyValidationError::new(ApiKeyErrorCode::InvalidApiKey))?
+            .ok_or_else(|| ApiKeyValidationError::new(ApiKeyErrorCode::InvalidApiKey))?;
 
         // 1. Disabled?
         if !api_key.enabled() {
-            return Err(api_key_error(ApiKeyErrorCode::KeyDisabled));
+            return Err(ApiKeyValidationError::new(ApiKeyErrorCode::KeyDisabled));
         }
 
         // 2. Expired?
@@ -1111,17 +988,17 @@ impl ApiKeyPlugin {
         {
             // Delete expired key
             let _ = ctx.database.delete_api_key(api_key.id()).await;
-            return Err(api_key_error(ApiKeyErrorCode::KeyExpired));
+            return Err(ApiKeyValidationError::new(ApiKeyErrorCode::KeyExpired));
         }
 
         // 3. Permissions check
         if let Some(required) = required_permissions {
             let key_perms_str = api_key.permissions().unwrap_or("");
             if key_perms_str.is_empty() {
-                return Err(api_key_error(ApiKeyErrorCode::KeyNotFound));
+                return Err(ApiKeyValidationError::new(ApiKeyErrorCode::KeyNotFound));
             }
             if !check_permissions(key_perms_str, required) {
-                return Err(api_key_error(ApiKeyErrorCode::KeyNotFound));
+                return Err(ApiKeyValidationError::new(ApiKeyErrorCode::KeyNotFound));
             }
         }
 
@@ -1135,7 +1012,7 @@ impl ApiKeyPlugin {
         {
             // Usage exhausted, no refill configured -- delete key
             let _ = ctx.database.delete_api_key(api_key.id()).await;
-            return Err(api_key_error(ApiKeyErrorCode::UsageExceeded));
+            return Err(ApiKeyValidationError::new(ApiKeyErrorCode::UsageExceeded));
         }
 
         if let Some(remaining) = api_key.remaining() {
@@ -1160,21 +1037,14 @@ impl ApiKeyPlugin {
             }
 
             if current_remaining <= 0 {
-                return Err(api_key_error(ApiKeyErrorCode::UsageExceeded));
+                return Err(ApiKeyValidationError::new(ApiKeyErrorCode::UsageExceeded));
             }
 
             new_remaining = Some(current_remaining - 1);
         }
 
-        // 5. Rate limiting
-        let rl = is_rate_limited(&api_key, self.config.rate_limit.enabled);
-        if !rl.success {
-            return Err(AuthError::bad_request(
-                rl.message
-                    .as_deref()
-                    .unwrap_or(ApiKeyErrorCode::RateLimited.message()),
-            ));
-        }
+        // 5. Rate limiting via `governor` crate
+        self.check_rate_limit_governor(&api_key)?;
 
         // 6. Build update
         let mut update = UpdateApiKey {
@@ -1184,25 +1054,67 @@ impl ApiKeyPlugin {
         if new_last_refill_at != api_key.last_refill_at().map(|s| s.to_string()) {
             update.last_refill_at = Some(new_last_refill_at);
         }
-        if let Some(rl_update) = rl.update {
-            if let Some(lr) = rl_update.last_request {
-                update.last_request = Some(Some(lr));
-            }
-            if let Some(rc) = rl_update.request_count {
-                update.request_count = Some(rc);
-            }
-        }
 
         let updated = ctx
             .database
             .update_api_key(api_key.id(), update)
             .await
-            .map_err(|_| api_key_error(ApiKeyErrorCode::FailedToUpdateApiKey))?;
+            .map_err(|_| ApiKeyValidationError::new(ApiKeyErrorCode::FailedToUpdateApiKey))?;
 
         // Throttled cleanup
         self.maybe_delete_expired(ctx).await;
 
         Ok(ApiKeyView::from_entity(&updated))
+    }
+
+    /// Check rate limiting for an API key using the `governor` crate.
+    ///
+    /// Creates or retrieves a per-key in-memory rate limiter backed by GCRA
+    /// (Generic Cell Rate Algorithm), which is thread-safe and lock-free on
+    /// the hot path.
+    fn check_rate_limit_governor(
+        &self,
+        api_key: &impl AuthApiKey,
+    ) -> Result<(), ApiKeyValidationError> {
+        // Determine if rate limiting is enabled for this key
+        let key_enabled = api_key.rate_limit_enabled();
+        if !key_enabled && !self.config.rate_limit.enabled {
+            return Ok(());
+        }
+
+        let time_window_ms = api_key
+            .rate_limit_time_window()
+            .unwrap_or(self.config.rate_limit.time_window);
+        let max_requests = api_key
+            .rate_limit_max()
+            .unwrap_or(self.config.rate_limit.max_requests);
+
+        if time_window_ms <= 0 || max_requests <= 0 {
+            return Ok(());
+        }
+
+        let key_id = api_key.id().to_string();
+
+        // Get or create the rate limiter for this key
+        let limiter = {
+            let mut limiters = self.rate_limiters.lock().unwrap();
+            limiters
+                .entry(key_id)
+                .or_insert_with(|| {
+                    let max = NonZeroU32::new(max_requests as u32).unwrap_or(NonZeroU32::MIN);
+                    let period = std::time::Duration::from_millis(time_window_ms as u64);
+                    let quota = Quota::with_period(period)
+                        .expect("valid period")
+                        .allow_burst(max);
+                    std::sync::Arc::new(RateLimiter::direct(quota))
+                })
+                .clone()
+        };
+
+        match limiter.check() {
+            Ok(()) => Ok(()),
+            Err(_not_until) => Err(ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited)),
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -1215,7 +1127,7 @@ impl ApiKeyPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         // Require authentication to prevent unauthenticated mass-deletion
-        let (_user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (_user, _session) = helpers::get_authenticated_user(req, ctx).await?;
         let count = ctx.database.delete_expired_api_keys().await?;
         Ok(AuthResponse::json(
             200,
@@ -1224,27 +1136,9 @@ impl ApiKeyPlugin {
     }
 }
 
-/// Extract a human-readable error code + message from an `AuthError`.
-fn extract_error_info(err: &AuthError) -> (String, String) {
-    let msg = err.to_string();
-    // Try to map known messages back to error codes
-    let code = if msg.contains("Invalid API key") {
-        "INVALID_API_KEY"
-    } else if msg.contains("disabled") {
-        "KEY_DISABLED"
-    } else if msg.contains("expired") {
-        "KEY_EXPIRED"
-    } else if msg.contains("usage limit") {
-        "USAGE_EXCEEDED"
-    } else if msg.contains("not found") {
-        "KEY_NOT_FOUND"
-    } else if msg.contains("Rate limit") {
-        "RATE_LIMITED"
-    } else {
-        "INVALID_API_KEY"
-    };
-    (code.to_string(), msg)
-}
+// NOTE: The old `extract_error_info()` function that used fragile string
+// matching has been removed.  `handle_verify` now uses the structured
+// `ApiKeyValidationError` directly to get the error code and message.
 
 // ---------------------------------------------------------------------------
 // AuthPlugin trait implementation
@@ -1287,7 +1181,10 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for ApiKeyPlugin {
         };
 
         // Validate the key (reuses the full verify logic)
-        let view = self.validate_api_key(ctx, &raw_key, None).await?;
+        let view = self
+            .validate_api_key(ctx, &raw_key, None)
+            .await
+            .map_err(|e| AuthError::bad_request(e.message))?;
 
         // Look up the user
         let user = ctx
@@ -1486,7 +1383,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_and_get_do_not_expose_hash() {
-        let plugin = ApiKeyPlugin::new().prefix("ba_");
+        let plugin = ApiKeyPlugin::builder().prefix("ba_".to_string()).build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let create_req = create_auth_request(
@@ -1525,7 +1422,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_rejects_invalid_expires_in() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let req = create_auth_request(
@@ -1542,7 +1439,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_update_delete_return_404_for_non_owner() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user1, session1) = create_test_context_with_user().await;
         let (_user2, session2) = create_user_with_session(&ctx, "other@example.com").await;
         let key_id = create_key_and_get_id(&plugin, &ctx, &session1.token, "owner-key").await;
@@ -1582,7 +1479,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_returns_only_user_keys() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, user1, session1) = create_test_context_with_user().await;
         let (_user2, session2) = create_user_with_session(&ctx, "other@example.com").await;
 
@@ -1609,7 +1506,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_owner_can_delete_key() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
         let key_id = create_key_and_get_id(&plugin, &ctx, &session.token, "to-delete").await;
 
@@ -1633,7 +1530,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_valid_key() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let (_id, raw_key) = create_key_and_get_raw(
@@ -1660,7 +1557,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_invalid_key() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, _session) = create_test_context_with_user().await;
 
         let verify_req = create_auth_request(
@@ -1679,7 +1576,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_disabled_key() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let (id, raw_key) = create_key_and_get_raw(
@@ -1712,7 +1609,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_expired_key() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let (id, raw_key) = create_key_and_get_raw(
@@ -1750,7 +1647,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_remaining_consumption() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let (_id, raw_key) = create_key_and_get_raw(
@@ -1799,11 +1696,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_rate_limiting() {
-        let plugin = ApiKeyPlugin::new().rate_limit(RateLimitDefaults {
-            enabled: true,
-            time_window: 60_000,
-            max_requests: 2,
-        });
+        let plugin = ApiKeyPlugin::builder()
+            .rate_limit(RateLimitDefaults {
+                enabled: true,
+                time_window: 60_000,
+                max_requests: 2,
+            })
+            .build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let (_id, raw_key) = create_key_and_get_raw(
@@ -1854,7 +1753,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_all_expired() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         // Create two keys
@@ -1908,7 +1807,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_permissions() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let (_id, raw_key) = create_key_and_get_raw(
@@ -1953,9 +1852,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_config_validation_prefix_length() {
-        let plugin = ApiKeyPlugin::new()
+        let plugin = ApiKeyPlugin::builder()
             .min_prefix_length(2)
-            .max_prefix_length(5);
+            .max_prefix_length(5)
+            .build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         // Too short prefix
@@ -1983,7 +1883,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_config_require_name() {
-        let plugin = ApiKeyPlugin::new().require_name(true);
+        let plugin = ApiKeyPlugin::builder().require_name(true).build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         // No name provided -> should fail
@@ -2000,7 +1900,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_config_metadata_disabled() {
-        let plugin = ApiKeyPlugin::new(); // enable_metadata defaults to false
+        let plugin = ApiKeyPlugin::builder().build(); // enable_metadata defaults to false
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let req = create_auth_request(
@@ -2016,7 +1916,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_config_metadata_enabled() {
-        let plugin = ApiKeyPlugin::new().enable_metadata(true);
+        let plugin = ApiKeyPlugin::builder().enable_metadata(true).build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let req = create_auth_request(
@@ -2034,7 +1934,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_with_expires_in() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
         let key_id = create_key_and_get_id(&plugin, &ctx, &session.token, "update-exp").await;
 
@@ -2056,7 +1956,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_on_request_dispatches_verify() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let (_id, raw_key) = create_key_and_get_raw(
@@ -2082,7 +1982,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_on_request_dispatches_delete_all_expired() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let req = create_auth_request(
@@ -2101,7 +2001,7 @@ mod tests {
     #[tokio::test]
     async fn test_refill_logic() {
         // Ensure refillInterval + refillAmount require each other
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let req = create_auth_request(
@@ -2125,7 +2025,9 @@ mod tests {
     // 1. Virtual session: before_request injects session without DB writes
     #[tokio::test]
     async fn test_virtual_session_creates_no_db_session() {
-        let plugin = ApiKeyPlugin::new().enable_session_for_api_keys(true);
+        let plugin = ApiKeyPlugin::builder()
+            .enable_session_for_api_keys(true)
+            .build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         // Create an API key
@@ -2187,7 +2089,9 @@ mod tests {
     // 2. Virtual session on /get-session: synthetic response
     #[tokio::test]
     async fn test_virtual_session_on_get_session() {
-        let plugin = ApiKeyPlugin::new().enable_session_for_api_keys(true);
+        let plugin = ApiKeyPlugin::builder()
+            .enable_session_for_api_keys(true)
+            .build();
         let (ctx, user, session) = create_test_context_with_user().await;
 
         let (_id, raw_key) = create_key_and_get_raw(
@@ -2231,11 +2135,13 @@ mod tests {
     // 3. Rate limiting: create key with rateLimitMax=2, 3rd call fails
     #[tokio::test]
     async fn test_rate_limiting_third_call_fails() {
-        let plugin = ApiKeyPlugin::new().rate_limit(RateLimitDefaults {
-            enabled: true,
-            time_window: 60_000,
-            max_requests: 2,
-        });
+        let plugin = ApiKeyPlugin::builder()
+            .rate_limit(RateLimitDefaults {
+                enabled: true,
+                time_window: 60_000,
+                max_requests: 2,
+            })
+            .build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let (_id, raw_key) = create_key_and_get_raw(
@@ -2287,7 +2193,7 @@ mod tests {
     // 4. Remaining consumption: remaining=2, no refill, 3rd fails
     #[tokio::test]
     async fn test_remaining_consumption_no_refill() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let (_id, raw_key) = create_key_and_get_raw(
@@ -2338,7 +2244,7 @@ mod tests {
     //    decrement to 9.
     #[tokio::test]
     async fn test_refill_resets_remaining_after_interval() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         // Use a very short refill interval for testing (100 ms)
@@ -2390,7 +2296,7 @@ mod tests {
     //    {"admin": ["write"]} should fail
     #[tokio::test]
     async fn test_permissions_mismatch_fails() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let (_id, raw_key) = create_key_and_get_raw(
@@ -2438,11 +2344,13 @@ mod tests {
     //    correct; true concurrency race conditions are documented above).
     #[tokio::test]
     async fn test_concurrent_rate_limiting() {
-        let plugin = ApiKeyPlugin::new().rate_limit(RateLimitDefaults {
-            enabled: true,
-            time_window: 60_000,
-            max_requests: 2,
-        });
+        let plugin = ApiKeyPlugin::builder()
+            .rate_limit(RateLimitDefaults {
+                enabled: true,
+                time_window: 60_000,
+                max_requests: 2,
+            })
+            .build();
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let (_id, raw_key) = create_key_and_get_raw(
@@ -2495,7 +2403,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_expired_api_keys_memory_adapter() {
         let (ctx, _user, session) = create_test_context_with_user().await;
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
 
         // Create two keys
         let (id1, _) = create_key_and_get_raw(
@@ -2538,7 +2446,7 @@ mod tests {
     // 9. Delete expired with auth: unauthenticated call should fail
     #[tokio::test]
     async fn test_delete_expired_without_auth_returns_error() {
-        let plugin = ApiKeyPlugin::new();
+        let plugin = ApiKeyPlugin::builder().build();
         let (ctx, _user, _session) = create_test_context_with_user().await;
 
         // Call without auth token
@@ -2559,7 +2467,7 @@ mod tests {
     // 10. before_request returns None when enableSessionForAPIKeys is false
     #[tokio::test]
     async fn test_before_request_disabled_returns_none() {
-        let plugin = ApiKeyPlugin::new(); // enable_session_for_api_keys defaults to false
+        let plugin = ApiKeyPlugin::builder().build(); // enable_session_for_api_keys defaults to false
         let (ctx, _user, session) = create_test_context_with_user().await;
 
         let (_id, raw_key) = create_key_and_get_raw(

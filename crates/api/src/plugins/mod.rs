@@ -3,6 +3,7 @@ pub mod admin;
 pub mod api_key;
 pub mod email_password;
 pub mod email_verification;
+pub mod helpers;
 pub mod oauth;
 pub mod organization;
 pub mod passkey;

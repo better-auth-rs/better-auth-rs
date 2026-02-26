@@ -30,7 +30,7 @@ async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
         .plugin(PasswordManagementPlugin::new().require_current_password(true))
         .plugin(AccountManagementPlugin::new())
         .plugin(EmailVerificationPlugin::new())
-        .plugin(ApiKeyPlugin::new())
+        .plugin(ApiKeyPlugin::builder().build())
         .build()
         .await
         .expect("Failed to create test auth instance")
@@ -811,7 +811,11 @@ async fn test_enable_session_for_api_keys_injects_session() {
         .database(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
-        .plugin(ApiKeyPlugin::new().enable_session_for_api_keys(true))
+        .plugin(
+            ApiKeyPlugin::builder()
+                .enable_session_for_api_keys(true)
+                .build(),
+        )
         .build()
         .await
         .expect("Failed to create auth with session-for-api-keys");
@@ -990,7 +994,11 @@ async fn create_auth_with_api_key_session() -> BetterAuth<MemoryDatabaseAdapter>
         .database(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
-        .plugin(ApiKeyPlugin::new().enable_session_for_api_keys(true))
+        .plugin(
+            ApiKeyPlugin::builder()
+                .enable_session_for_api_keys(true)
+                .build(),
+        )
         .build()
         .await
         .expect("Failed to create auth with session-for-api-keys")
