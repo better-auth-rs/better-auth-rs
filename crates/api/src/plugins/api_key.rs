@@ -1093,7 +1093,9 @@ impl ApiKeyPlugin {
                 .entry(key_id)
                 .or_insert_with(|| {
                     let max = NonZeroU32::new(max_requests as u32).unwrap_or(NonZeroU32::MIN);
-                    let period = std::time::Duration::from_millis(time_window_ms as u64);
+                    let period = std::time::Duration::from_millis(
+                        time_window_ms as u64 / max_requests as u64,
+                    );
                     let quota = Quota::with_period(period)
                         .expect("valid period")
                         .allow_burst(max);
