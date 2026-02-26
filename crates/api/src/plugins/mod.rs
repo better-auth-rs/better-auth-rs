@@ -17,6 +17,8 @@ pub use email_password::{EmailPasswordConfig, EmailPasswordPlugin, PasswordHashe
 pub use email_verification::EmailVerificationPlugin;
 pub use organization::{OrganizationConfig, OrganizationPlugin};
 pub use passkey::{PasskeyConfig, PasskeyPlugin};
-pub use password_management::{PasswordManagementConfig, PasswordManagementPlugin, SendResetPassword};
+pub use password_management::{
+    PasswordManagementConfig, PasswordManagementPlugin, SendResetPassword,
+};
 pub use session_management::SessionManagementPlugin;
 pub use two_factor::{TwoFactorConfig, TwoFactorPlugin};

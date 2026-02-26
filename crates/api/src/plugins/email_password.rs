@@ -46,11 +46,17 @@ impl std::fmt::Debug for EmailPasswordConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EmailPasswordConfig")
             .field("enable_signup", &self.enable_signup)
-            .field("require_email_verification", &self.require_email_verification)
+            .field(
+                "require_email_verification",
+                &self.require_email_verification,
+            )
             .field("password_min_length", &self.password_min_length)
             .field("password_max_length", &self.password_max_length)
             .field("auto_sign_in", &self.auto_sign_in)
-            .field("password_hasher", &self.password_hasher.as_ref().map(|_| "custom"))
+            .field(
+                "password_hasher",
+                &self.password_hasher.as_ref().map(|_| "custom"),
+            )
             .finish()
     }
 }
@@ -215,10 +221,7 @@ impl EmailPasswordPlugin {
 
             Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
         } else {
-            let response = SignUpResponse {
-                token: None,
-                user,
-            };
+            let response = SignUpResponse { token: None, user };
 
             Ok(AuthResponse::json(200, &response)?)
         }
@@ -248,7 +251,8 @@ impl EmailPasswordPlugin {
             .and_then(|v| v.as_str())
             .ok_or(AuthError::InvalidCredentials)?;
 
-        self.verify_password(&signin_req.password, stored_hash).await?;
+        self.verify_password(&signin_req.password, stored_hash)
+            .await?;
 
         // Check if 2FA is enabled
         if user.two_factor_enabled() {
@@ -311,7 +315,8 @@ impl EmailPasswordPlugin {
             .and_then(|v| v.as_str())
             .ok_or(AuthError::InvalidCredentials)?;
 
-        self.verify_password(&signin_req.password, stored_hash).await?;
+        self.verify_password(&signin_req.password, stored_hash)
+            .await?;
 
         // Check if 2FA is enabled
         if user.two_factor_enabled() {
@@ -417,16 +422,13 @@ impl EmailPasswordPlugin {
 
     async fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
         if let Some(hasher) = &self.config.password_hasher {
-            return hasher
-                .verify(hash, password)
-                .await
-                .and_then(|valid| {
-                    if valid {
-                        Ok(())
-                    } else {
-                        Err(AuthError::InvalidCredentials)
-                    }
-                });
+            return hasher.verify(hash, password).await.and_then(|valid| {
+                if valid {
+                    Ok(())
+                } else {
+                    Err(AuthError::InvalidCredentials)
+                }
+            });
         }
         let parsed_hash = PasswordHash::new(hash)
             .map_err(|e| AuthError::PasswordHash(format!("Invalid password hash: {}", e)))?;
