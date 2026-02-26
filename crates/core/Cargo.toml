@@ -27,8 +27,8 @@ chrono = { workspace = true }
 # Data structures
 uuid = { workspace = true }
 
-# Logging and tracing
-tracing = { workspace = true }
+# Pattern matching
+glob-match = "0.2.1"
 
 # Crypto
 argon2 = { workspace = true }

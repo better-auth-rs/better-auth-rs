@@ -18,7 +18,7 @@ use better_auth_core::SessionManager;
 use better_auth_core::entity::AuthSession as AuthSessionTrait;
 use better_auth_core::{
     AuthError, AuthRequest, AuthResponse, DatabaseAdapter, ErrorMessageResponse,
-    HealthCheckResponse, HttpMethod, OkResponse,
+    HealthCheckResponse, HttpMethod, OkResponse, core_paths,
 };
 
 /// Integration trait for Axum web framework
@@ -31,38 +31,43 @@ pub trait AxumIntegration<DB: DatabaseAdapter> {
 #[cfg(feature = "axum")]
 impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
     fn axum_router(self) -> Router<Arc<BetterAuth<DB>>> {
+        // NOTE: disabled_paths is checked here at route-registration time so
+        // that disabled routes are never mounted in Axum at all.  The core
+        // handler (`handle_request_inner`) performs the same check at
+        // request-dispatch time for non-Axum integrations (direct
+        // `handle_request` callers).  The duplication is intentional.
         let disabled_paths = self.config().disabled_paths.clone();
 
         let mut router = Router::new();
 
         // Add status endpoints
-        if !disabled_paths.contains(&"/ok".to_string()) {
-            router = router.route("/ok", get(ok_check));
+        if !disabled_paths.contains(&core_paths::OK.to_string()) {
+            router = router.route(core_paths::OK, get(ok_check));
         }
-        if !disabled_paths.contains(&"/error".to_string()) {
-            router = router.route("/error", get(error_check));
+        if !disabled_paths.contains(&core_paths::ERROR.to_string()) {
+            router = router.route(core_paths::ERROR, get(error_check));
         }
 
         // Add default health check route
-        if !disabled_paths.contains(&"/health".to_string()) {
-            router = router.route("/health", get(health_check));
+        if !disabled_paths.contains(&core_paths::HEALTH.to_string()) {
+            router = router.route(core_paths::HEALTH, get(health_check));
         }
 
         // Add OpenAPI spec endpoint
-        if !disabled_paths.contains(&"/reference/openapi.json".to_string()) {
-            router = router.route(
-                "/reference/openapi.json",
-                get(create_plugin_handler::<DB>()),
-            );
+        if !disabled_paths.contains(&core_paths::OPENAPI_SPEC.to_string()) {
+            router = router.route(core_paths::OPENAPI_SPEC, get(create_plugin_handler::<DB>()));
         }
 
         // Add core user management routes
-        if !disabled_paths.contains(&"/update-user".to_string()) {
-            router = router.route("/update-user", post(create_plugin_handler::<DB>()));
+        if !disabled_paths.contains(&core_paths::UPDATE_USER.to_string()) {
+            router = router.route(core_paths::UPDATE_USER, post(create_plugin_handler::<DB>()));
         }
-        if !disabled_paths.contains(&"/delete-user".to_string()) {
-            router = router.route("/delete-user", post(create_plugin_handler::<DB>()));
-            router = router.route("/delete-user", delete(create_plugin_handler::<DB>()));
+        if !disabled_paths.contains(&core_paths::DELETE_USER.to_string()) {
+            router = router.route(core_paths::DELETE_USER, post(create_plugin_handler::<DB>()));
+            router = router.route(
+                core_paths::DELETE_USER,
+                delete(create_plugin_handler::<DB>()),
+            );
         }
 
         // Register plugin routes

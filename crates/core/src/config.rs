@@ -1,8 +1,23 @@
 use crate::email::EmailProvider;
 use crate::error::AuthError;
-use crate::logger::{Logger, TracingLogger};
 use chrono::Duration;
 use std::sync::Arc;
+
+/// Well-known core route paths.
+///
+/// These constants are the single source of truth for route paths used by both
+/// the core request dispatcher (`handle_core_request`) and framework-specific
+/// routers (e.g. Axum) so that path strings are never duplicated.
+pub mod core_paths {
+    pub const OK: &str = "/ok";
+    pub const ERROR: &str = "/error";
+    pub const HEALTH: &str = "/health";
+    pub const OPENAPI_SPEC: &str = "/reference/openapi.json";
+    pub const UPDATE_USER: &str = "/update-user";
+    pub const DELETE_USER: &str = "/delete-user";
+    pub const CHANGE_EMAIL: &str = "/change-email";
+    pub const DELETE_USER_CALLBACK: &str = "/delete-user/callback";
+}
 
 /// Main configuration for BetterAuth
 #[derive(Clone)]
@@ -39,13 +54,6 @@ pub struct AuthConfig {
     /// Any request whose path matches an entry in this list will receive
     /// a 404 response, even if a handler is registered for it.
     pub disabled_paths: Vec<String>,
-
-    /// Logger implementation for auth-related logging.
-    ///
-    /// Defaults to a [`TracingLogger`](crate::logger::TracingLogger) that
-    /// delegates to the `tracing` crate. Set to a custom implementation
-    /// to integrate with your own logging infrastructure.
-    pub logger: Arc<dyn Logger>,
 
     /// Session configuration
     pub session: SessionConfig,
@@ -140,7 +148,6 @@ impl Default for AuthConfig {
             base_path: "/api/auth".to_string(),
             trusted_origins: Vec::new(),
             disabled_paths: Vec::new(),
-            logger: Arc::new(TracingLogger),
             session: SessionConfig::default(),
             jwt: JwtConfig::default(),
             password: PasswordConfig::default(),
@@ -246,12 +253,6 @@ impl AuthConfig {
         self
     }
 
-    /// Set a custom logger implementation.
-    pub fn logger(mut self, logger: Arc<dyn Logger>) -> Self {
-        self.logger = logger;
-        self
-    }
-
     /// Set the session expiration duration.
     pub fn session_expires_in(mut self, duration: Duration) -> Self {
         self.session.expires_in = duration;
@@ -270,14 +271,27 @@ impl AuthConfig {
         self
     }
 
-    /// Check whether a given origin matches any of the `trusted_origins`.
+    /// Check whether a given origin is trusted.
     ///
-    /// Supports simple glob patterns where `*` matches any sequence of
-    /// characters within a single domain label.
+    /// An origin is trusted if it matches:
+    /// 1. The origin extracted from [`base_url`](Self::base_url), or
+    /// 2. Any pattern in [`trusted_origins`](Self::trusted_origins) (after
+    ///    extracting the origin portion from the pattern).
+    ///
+    /// Glob patterns are supported — `*` matches any characters except `/`,
+    /// `**` matches any characters including `/`.
     pub fn is_origin_trusted(&self, origin: &str) -> bool {
-        self.trusted_origins
-            .iter()
-            .any(|pattern| glob_match(pattern, origin))
+        // Check base_url origin
+        if let Some(base_origin) = extract_origin(&self.base_url) {
+            if origin == base_origin {
+                return true;
+            }
+        }
+        // Check trusted_origins patterns
+        self.trusted_origins.iter().any(|pattern| {
+            let pattern_origin = extract_origin(pattern).unwrap_or_default();
+            glob_match::glob_match(&pattern_origin, origin)
+        })
     }
 
     /// Check whether a given path is disabled.
@@ -300,43 +314,16 @@ impl AuthConfig {
     }
 }
 
-/// Simple glob-pattern matching for origin strings.
+/// Extract the origin (scheme + host + port) from a URL string.
 ///
-/// This function is public so that other modules (e.g. CSRF middleware)
-/// can reuse the same matching logic.
+/// For example, `"https://example.com/path"` → `"https://example.com"`.
 ///
-/// Supports `*` as a wildcard that matches any sequence of non-`/` characters.
-/// For example, `"https://*.example.com"` matches `"https://app.example.com"`
-/// but not `"https://a.b.example.com"`.
-pub fn glob_match(pattern: &str, value: &str) -> bool {
-    if !pattern.contains('*') {
-        return pattern == value;
-    }
-
-    let parts: Vec<&str> = pattern.split('*').collect();
-    if parts.is_empty() {
-        return true;
-    }
-
-    // The value must start with the first part and end with the last part
-    let first = parts[0];
-    let last = parts[parts.len() - 1];
-
-    if !value.starts_with(first) || !value.ends_with(last) {
-        return false;
-    }
-
-    // Walk through the value, matching each part in order
-    let mut pos = 0;
-    for part in &parts {
-        if part.is_empty() {
-            continue;
-        }
-        match value[pos..].find(part) {
-            Some(idx) => pos += idx + part.len(),
-            None => return false,
-        }
-    }
-
-    true
+/// This is used by [`AuthConfig::is_origin_trusted`] and the CSRF middleware
+/// so that origin comparison is centralised in one place.
+pub fn extract_origin(url: &str) -> Option<String> {
+    let scheme_end = url.find("://")?;
+    let rest = &url[scheme_end + 3..];
+    let host_end = rest.find('/').unwrap_or(rest.len());
+    let origin = format!("{}{}", &url[..scheme_end + 3], &rest[..host_end]);
+    Some(origin)
 }

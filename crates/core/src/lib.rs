@@ -9,7 +9,6 @@ pub mod email;
 pub mod entity;
 pub mod error;
 pub mod hooks;
-pub mod logger;
 pub mod middleware;
 pub mod openapi;
 pub mod plugin;
@@ -33,7 +32,8 @@ pub use adapters::{
 #[cfg(feature = "sqlx-postgres")]
 pub use adapters::{SqlxAdapter, SqlxEntity};
 pub use config::{
-    Argon2Config, AuthConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig, glob_match,
+    Argon2Config, AuthConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig, core_paths,
+    extract_origin,
 };
 pub use email::{ConsoleEmailProvider, EmailProvider};
 pub use entity::{
@@ -46,7 +46,6 @@ pub use error::{
     AuthError, AuthResult, DatabaseError, validate_request_body, validation_error_response,
 };
 pub use hooks::{DatabaseHooks, HookedDatabaseAdapter};
-pub use logger::{Logger, TracingLogger, default_logger};
 pub use middleware::{
     BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig, CsrfMiddleware,
     EndpointRateLimit, Middleware, RateLimitConfig, RateLimitMiddleware,

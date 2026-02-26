@@ -6,7 +6,7 @@ use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
     DatabaseAdapter, DatabaseHooks, DeleteUserResponse, EmailProvider, HttpMethod, OkResponse,
     OpenApiBuilder, OpenApiSpec, SessionManager, StatusMessageResponse, StatusResponse, UpdateUser,
-    UpdateUserRequest,
+    UpdateUserRequest, core_paths,
     entity::{AuthAccount, AuthSession, AuthUser, AuthVerification},
     middleware::{
         self, BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig,
@@ -205,8 +205,7 @@ impl<DB: DatabaseAdapter> TypedAuthBuilder<DB> {
             )),
             Box::new(CsrfMiddleware::new(
                 self.csrf_config.unwrap_or_default(),
-                &config.base_url,
-                config.trusted_origins.clone(),
+                config.clone(),
             )),
             Box::new(CorsMiddleware::new(self.cors_config.unwrap_or_default())),
         ];
@@ -357,22 +356,26 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// Handle core authentication requests.
     async fn handle_core_request(&self, req: &AuthRequest) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
-            (HttpMethod::Get, "/ok") => {
+            (HttpMethod::Get, core_paths::OK) => {
                 Ok(Some(AuthResponse::json(200, &OkResponse { ok: true })?))
             }
-            (HttpMethod::Get, "/error") => {
+            (HttpMethod::Get, core_paths::ERROR) => {
                 Ok(Some(AuthResponse::json(200, &OkResponse { ok: false })?))
             }
-            (HttpMethod::Get, "/reference/openapi.json") => {
+            (HttpMethod::Get, core_paths::OPENAPI_SPEC) => {
                 let spec = self.openapi_spec();
                 Ok(Some(AuthResponse::json(200, &spec)?))
             }
-            (HttpMethod::Post, "/update-user") => Ok(Some(self.handle_update_user(req).await?)),
-            (HttpMethod::Post | HttpMethod::Delete, "/delete-user") => {
+            (HttpMethod::Post, core_paths::UPDATE_USER) => {
+                Ok(Some(self.handle_update_user(req).await?))
+            }
+            (HttpMethod::Post | HttpMethod::Delete, core_paths::DELETE_USER) => {
                 Ok(Some(self.handle_delete_user(req).await?))
             }
-            (HttpMethod::Post, "/change-email") => Ok(Some(self.handle_change_email(req).await?)),
-            (HttpMethod::Get, "/delete-user/callback") => {
+            (HttpMethod::Post, core_paths::CHANGE_EMAIL) => {
+                Ok(Some(self.handle_change_email(req).await?))
+            }
+            (HttpMethod::Get, core_paths::DELETE_USER_CALLBACK) => {
                 Ok(Some(self.handle_delete_user_callback(req).await?))
             }
             _ => Ok(None),

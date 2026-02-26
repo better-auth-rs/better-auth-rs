@@ -1,8 +1,9 @@
 use super::Middleware;
-use crate::config::glob_match;
+use crate::config::{AuthConfig, extract_origin};
 use crate::error::AuthResult;
 use crate::types::{AuthRequest, AuthResponse, HttpMethod};
 use async_trait::async_trait;
+use std::sync::Arc;
 
 /// Configuration for CSRF protection middleware.
 #[derive(Debug, Clone)]
@@ -34,28 +35,22 @@ impl CsrfConfig {
 /// (POST, PUT, DELETE, PATCH) against the configured trusted origins
 /// and the service's own base URL.
 ///
-/// Trusted origins are sourced from the top-level
-/// [`AuthConfig::trusted_origins`](crate::config::AuthConfig::trusted_origins)
-/// and support glob-pattern matching (e.g. `"https://*.example.com"`).
+/// Origin checking is delegated to [`AuthConfig::is_origin_trusted`] so
+/// that all origin-validation logic lives in a single place.
 pub struct CsrfMiddleware {
     config: CsrfConfig,
-    /// Base URL of the service (extracted from AuthConfig at construction).
-    base_origin: String,
-    /// Trusted origins from the top-level AuthConfig.
-    trusted_origins: Vec<String>,
+    /// Shared auth configuration used for origin trust checks.
+    auth_config: Arc<AuthConfig>,
 }
 
 impl CsrfMiddleware {
     /// Create a new CSRF middleware.
     ///
-    /// `trusted_origins` should come from
-    /// [`AuthConfig::trusted_origins`](crate::config::AuthConfig::trusted_origins).
-    pub fn new(config: CsrfConfig, base_url: &str, trusted_origins: Vec<String>) -> Self {
-        let base_origin = extract_origin(base_url).unwrap_or_default();
+    /// Origin trust decisions are delegated to `auth_config`.
+    pub fn new(config: CsrfConfig, auth_config: Arc<AuthConfig>) -> Self {
         Self {
             config,
-            base_origin,
-            trusted_origins,
+            auth_config,
         }
     }
 
@@ -64,16 +59,6 @@ impl CsrfMiddleware {
             method,
             HttpMethod::Post | HttpMethod::Put | HttpMethod::Delete | HttpMethod::Patch
         )
-    }
-
-    fn is_origin_trusted(&self, origin: &str) -> bool {
-        if origin == self.base_origin {
-            return true;
-        }
-        self.trusted_origins.iter().any(|trusted| {
-            let trusted_origin = extract_origin(trusted).unwrap_or_default();
-            glob_match(&trusted_origin, origin)
-        })
     }
 }
 
@@ -101,7 +86,7 @@ impl Middleware for CsrfMiddleware {
             .or_else(|| req.headers.get("referer").and_then(|r| extract_origin(r)));
 
         match request_origin {
-            Some(origin) if self.is_origin_trusted(&origin) => Ok(None),
+            Some(origin) if self.auth_config.is_origin_trusted(&origin) => Ok(None),
             Some(_origin) => Ok(Some(AuthResponse::json(
                 403,
                 &crate::types::CodeMessageResponse {
@@ -117,19 +102,10 @@ impl Middleware for CsrfMiddleware {
     }
 }
 
-/// Extract the origin (scheme + host + port) from a URL string.
-fn extract_origin(url: &str) -> Option<String> {
-    // Simple parser: find "://" then take up to the next "/"
-    let scheme_end = url.find("://")?;
-    let rest = &url[scheme_end + 3..];
-    let host_end = rest.find('/').unwrap_or(rest.len());
-    let origin = format!("{}{}", &url[..scheme_end + 3], &rest[..host_end]);
-    Some(origin)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::extract_origin;
     use std::collections::HashMap;
 
     fn make_post(origin: Option<&str>) -> AuthRequest {
@@ -147,16 +123,24 @@ mod tests {
         }
     }
 
+    fn test_auth_config(trusted_origins: Vec<String>) -> Arc<AuthConfig> {
+        Arc::new(
+            AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
+                .base_url("http://localhost:3000")
+                .trusted_origins(trusted_origins),
+        )
+    }
+
     #[tokio::test]
     async fn test_csrf_allows_same_origin() {
-        let mw = CsrfMiddleware::new(CsrfConfig::new(), "http://localhost:3000", vec![]);
+        let mw = CsrfMiddleware::new(CsrfConfig::new(), test_auth_config(vec![]));
         let req = make_post(Some("http://localhost:3000"));
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
     #[tokio::test]
     async fn test_csrf_blocks_cross_origin() {
-        let mw = CsrfMiddleware::new(CsrfConfig::new(), "http://localhost:3000", vec![]);
+        let mw = CsrfMiddleware::new(CsrfConfig::new(), test_auth_config(vec![]));
         let req = make_post(Some("http://evil.com"));
         let resp = mw.before_request(&req).await.unwrap();
         assert!(resp.is_some());
@@ -167,8 +151,7 @@ mod tests {
     async fn test_csrf_allows_trusted_origin() {
         let mw = CsrfMiddleware::new(
             CsrfConfig::new(),
-            "http://localhost:3000",
-            vec!["https://myapp.com".to_string()],
+            test_auth_config(vec!["https://myapp.com".to_string()]),
         );
         let req = make_post(Some("https://myapp.com"));
         assert!(mw.before_request(&req).await.unwrap().is_none());
@@ -178,8 +161,7 @@ mod tests {
     async fn test_csrf_allows_glob_trusted_origin() {
         let mw = CsrfMiddleware::new(
             CsrfConfig::new(),
-            "http://localhost:3000",
-            vec!["https://*.example.com".to_string()],
+            test_auth_config(vec!["https://*.example.com".to_string()]),
         );
         let req = make_post(Some("https://app.example.com"));
         assert!(mw.before_request(&req).await.unwrap().is_none());
@@ -187,7 +169,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_csrf_skips_get_requests() {
-        let mw = CsrfMiddleware::new(CsrfConfig::new(), "http://localhost:3000", vec![]);
+        let mw = CsrfMiddleware::new(CsrfConfig::new(), test_auth_config(vec![]));
         let req = AuthRequest {
             method: HttpMethod::Get,
             path: "/get-session".to_string(),
@@ -204,7 +186,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_csrf_allows_no_origin_header() {
-        let mw = CsrfMiddleware::new(CsrfConfig::new(), "http://localhost:3000", vec![]);
+        let mw = CsrfMiddleware::new(CsrfConfig::new(), test_auth_config(vec![]));
         let req = make_post(None);
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
@@ -212,8 +194,21 @@ mod tests {
     #[tokio::test]
     async fn test_csrf_disabled() {
         let config = CsrfConfig::new().enabled(false);
-        let mw = CsrfMiddleware::new(config, "http://localhost:3000", vec![]);
+        let mw = CsrfMiddleware::new(config, test_auth_config(vec![]));
         let req = make_post(Some("http://evil.com"));
         assert!(mw.before_request(&req).await.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_extract_origin() {
+        assert_eq!(
+            extract_origin("https://example.com/path"),
+            Some("https://example.com".to_string())
+        );
+        assert_eq!(
+            extract_origin("http://localhost:3000"),
+            Some("http://localhost:3000".to_string())
+        );
+        assert_eq!(extract_origin("not-a-url"), None);
     }
 }
