@@ -7,6 +7,8 @@ Better Auth uses a plugin system to compose authentication features. Each plugin
 
 ## Built-in Plugins
 
+### Core Plugins
+
 | Plugin | Description |
 |--------|-------------|
 | `EmailPasswordPlugin` | Email/password and username sign-up/sign-in |
@@ -14,6 +16,17 @@ Better Auth uses a plugin system to compose authentication features. Each plugin
 | `PasswordManagementPlugin` | Password reset and change flows |
 | `EmailVerificationPlugin` | Email verification via tokens |
 | `AccountManagementPlugin` | List and unlink linked accounts |
+
+### Extended Plugins
+
+| Plugin | Description | Docs |
+|--------|-------------|------|
+| `OAuthPlugin` | Social sign-in via Google, GitHub, Discord, and custom OAuth providers | [OAuth Plugin](/docs/plugins/oauth) |
+| `TwoFactorPlugin` | Two-factor authentication with TOTP, OTP, and backup codes | [2FA Plugin](/docs/plugins/two-factor) |
+| `OrganizationPlugin` | Multi-tenancy with organizations, members, invitations, and RBAC | [Organization Plugin](/docs/plugins/organization) |
+| `AdminPlugin` | User management, banning, impersonation, and role management | [Admin Plugin](/docs/plugins/admin) |
+| `ApiKeyPlugin` | API key creation, validation, rate limiting, and usage tracking | [API Key Plugin](/docs/plugins/api-key) |
+| `PasskeyPlugin` | WebAuthn / FIDO2 passwordless authentication | [Passkey Plugin](/docs/plugins/passkey) |
 
 ## Registering Plugins
 

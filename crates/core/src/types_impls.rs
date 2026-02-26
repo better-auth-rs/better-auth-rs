@@ -10,6 +10,31 @@ use crate::entity::{
 use super::types::{Account, ApiKey, Passkey, Session, TwoFactor, User, Verification};
 use super::types_org::{Invitation, InvitationStatus, Member, Organization};
 
+/// Blanket conversion from any [`AuthUser`] implementor to the concrete [`User`] type.
+///
+/// This avoids hand-written `to_user()` helpers scattered across plugins.
+impl<T: AuthUser> From<&T> for User {
+    fn from(u: &T) -> Self {
+        Self {
+            id: u.id().to_owned(),
+            name: u.name().map(str::to_owned),
+            email: u.email().map(str::to_owned),
+            email_verified: u.email_verified(),
+            image: u.image().map(str::to_owned),
+            created_at: u.created_at(),
+            updated_at: u.updated_at(),
+            username: u.username().map(str::to_owned),
+            display_username: u.display_username().map(str::to_owned),
+            two_factor_enabled: u.two_factor_enabled(),
+            role: u.role().map(str::to_owned),
+            banned: u.banned(),
+            ban_reason: u.ban_reason().map(str::to_owned),
+            ban_expires: u.ban_expires(),
+            metadata: u.metadata().clone(),
+        }
+    }
+}
+
 impl AuthUser for User {
     fn id(&self) -> &str {
         &self.id

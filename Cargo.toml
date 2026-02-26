@@ -50,6 +50,9 @@ thiserror = "2.0"
 # Time handling
 chrono = { version = "0.4", features = ["serde"] }
 
+# Cookie handling
+cookie = "0.18"
+
 # Data structures
 uuid = { version = "1.18", features = ["v4", "v7", "serde"] }
 
@@ -62,6 +65,9 @@ rand = "0.8"
 base64 = "0.22"
 jsonwebtoken = "9"
 sha2 = "0.10"
+aes-gcm = "0.10"
+hkdf = "0.12"
+hmac = "0.12"
 totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 
 # HTTP client
@@ -134,6 +140,9 @@ serde_yaml = "0.9"
 tower-http = { version = "0.6", features = ["cors"] }
 tracing-subscriber = { workspace = true }
 oas3 = { version = "0.20.1", features = ["yaml-spec"] }
+insta = { version = "1.46.3", features = ["yaml"] }
+proptest = "1.10.0"
+reqwest = { workspace = true }
 
 [[example]]
 name = "axum_server"

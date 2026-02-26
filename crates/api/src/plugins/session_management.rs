@@ -5,6 +5,8 @@ use validator::Validate;
 use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute, SessionManager};
+
+use better_auth_core::utils::cookie_utils::create_clear_session_cookie;
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
@@ -141,7 +143,7 @@ impl SessionManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, session) = self.require_session(req, ctx).await?;
+        let (user, session) = ctx.require_session(req).await?;
         let response = GetSessionResponse { session, user };
         Ok(AuthResponse::json(200, &response)?)
     }
@@ -151,38 +153,14 @@ impl SessionManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (_user, current_session) = self.require_session(req, ctx).await?;
+        let (_user, current_session) = ctx.require_session(req).await?;
 
         ctx.database.delete_session(current_session.token()).await?;
 
         let response = SignOutResponse { success: true };
-        let clear_cookie_header = self.create_clear_session_cookie(ctx);
+        let clear_cookie_header = create_clear_session_cookie(ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", clear_cookie_header))
-    }
-
-    fn create_clear_session_cookie<DB: DatabaseAdapter>(&self, ctx: &AuthContext<DB>) -> String {
-        let session_config = &ctx.config.session;
-        let secure = if session_config.cookie_secure {
-            "; Secure"
-        } else {
-            ""
-        };
-        let http_only = if session_config.cookie_http_only {
-            "; HttpOnly"
-        } else {
-            ""
-        };
-        let same_site = match session_config.cookie_same_site {
-            better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
-            better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
-            better_auth_core::config::SameSite::None => "; SameSite=None",
-        };
-
-        format!(
-            "{}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT{}{}{}",
-            session_config.cookie_name, secure, http_only, same_site
-        )
     }
 
     async fn handle_list_sessions<DB: DatabaseAdapter>(
@@ -190,7 +168,7 @@ impl SessionManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _) = self.require_session(req, ctx).await?;
+        let (user, _) = ctx.require_session(req).await?;
         let sessions = self.get_user_sessions(user.id(), ctx).await?;
         Ok(AuthResponse::json(200, &sessions)?)
     }
@@ -200,7 +178,7 @@ impl SessionManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _) = self.require_session(req, ctx).await?;
+        let (user, _) = ctx.require_session(req).await?;
 
         let revoke_req: RevokeSessionRequest = req
             .body_as_json()
@@ -227,7 +205,7 @@ impl SessionManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _) = self.require_session(req, ctx).await?;
+        let (user, _) = ctx.require_session(req).await?;
         ctx.database.delete_user_sessions(user.id()).await?;
 
         let response = StatusResponse { status: true };
@@ -239,7 +217,7 @@ impl SessionManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, current_session) = self.require_session(req, ctx).await?;
+        let (user, current_session) = ctx.require_session(req).await?;
 
         let all_sessions = self.get_user_sessions(user.id(), ctx).await?;
         for session in all_sessions {
@@ -250,35 +228,6 @@ impl SessionManagementPlugin {
 
         let response = StatusResponse { status: true };
         Ok(AuthResponse::json(200, &response)?)
-    }
-
-    /// Extract and validate the current user + session from the request.
-    /// Returns `Err(AuthError::Unauthenticated)` if no valid session.
-    async fn require_session<DB: DatabaseAdapter>(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<(DB::User, DB::Session)> {
-        self.get_current_user_and_session(req, ctx)
-            .await?
-            .ok_or(AuthError::Unauthenticated)
-    }
-
-    async fn get_current_user_and_session<DB: DatabaseAdapter>(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<Option<(DB::User, DB::Session)>> {
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-
-        if let Some(token) = session_manager.extract_session_token(req)
-            && let Some(session) = session_manager.get_session(&token).await?
-            && let Some(user) = ctx.database.get_user_by_id(session.user_id()).await?
-        {
-            return Ok(Some((user, session)));
-        }
-
-        Ok(None)
     }
 
     async fn get_user_sessions<DB: DatabaseAdapter>(

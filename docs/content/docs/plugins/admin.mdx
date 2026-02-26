@@ -1,0 +1,96 @@
+---
+title: Admin
+description: User management, banning, impersonation, and role management for administrators.
+---
+
+The `AdminPlugin` provides administrative endpoints for user management. All endpoints require an authenticated session with the admin role.
+
+## Setup
+
+```rust
+use better_auth::plugins::AdminPlugin;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(AdminPlugin::new())
+    .build()
+    .await?;
+```
+
+### Configuration
+
+```rust
+use better_auth::plugins::admin::AdminConfig;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(
+        AdminPlugin::new()
+            .admin_role("admin")
+            .default_user_role("user")
+            .allow_ban_admin(false)
+            .default_page_limit(100)
+            .max_page_limit(500)
+    )
+    .build()
+    .await?;
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `admin_role` | `String` | `"admin"` | Role required to access admin endpoints |
+| `default_user_role` | `String` | `"user"` | Default role for newly created users |
+| `allow_ban_admin` | `bool` | `false` | Whether admins can ban other admins |
+| `default_page_limit` | `usize` | `100` | Default users per page in list |
+| `max_page_limit` | `usize` | `500` | Maximum users per page |
+
+## API Endpoints
+
+The Admin plugin exposes 13 endpoints. All require admin role authentication. For full request/response details, see the [OpenAPI Reference](/docs/reference/openapi/admin).
+
+### User Management
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/admin/create-user` | POST | Create a new user |
+| `/admin/list-users` | GET | List users with pagination, search, and filtering |
+| `/admin/set-role` | POST | Set a user's role |
+| `/admin/set-user-password` | POST | Reset a user's password |
+| `/admin/remove-user` | POST | Permanently delete a user |
+
+### Ban Management
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/admin/ban-user` | POST | Ban a user (optional reason and duration) |
+| `/admin/unban-user` | POST | Unban a user |
+
+### Impersonation
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/admin/impersonate-user` | POST | Create a session as another user |
+| `/admin/stop-impersonating` | POST | End impersonation, return to admin session |
+
+### Session Management
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/admin/list-user-sessions` | POST | List all sessions for a user |
+| `/admin/revoke-user-session` | POST | Revoke a single session |
+| `/admin/revoke-user-sessions` | POST | Revoke all sessions for a user |
+
+### Permissions
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/admin/has-permission` | POST | Check if current user has a permission |
+
+## Errors
+
+| Status | Condition |
+|--------|-----------|
+| 401 | Not authenticated |
+| 403 | User does not have the admin role |
+| 404 | Target user not found |
+| 409 | Email already exists (create user) |
