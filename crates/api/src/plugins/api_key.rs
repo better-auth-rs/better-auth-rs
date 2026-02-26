@@ -1129,8 +1129,7 @@ impl ApiKeyPlugin {
                 if let Some(last_str) = last_time_str
                     && let Ok(last_dt) = chrono::DateTime::parse_from_rfc3339(last_str)
                 {
-                    let elapsed_ms =
-                        (now - last_dt.with_timezone(&chrono::Utc)).num_milliseconds();
+                    let elapsed_ms = (now - last_dt.with_timezone(&chrono::Utc)).num_milliseconds();
                     if elapsed_ms > interval {
                         current_remaining = amount;
                         new_last_refill_at = Some(now.to_rfc3339());
