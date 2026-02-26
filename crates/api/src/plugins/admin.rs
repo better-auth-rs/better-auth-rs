@@ -1,5 +1,3 @@
-use argon2::password_hash::{SaltString, rand_core::OsRng};
-use argon2::{Argon2, PasswordHasher};
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -12,6 +10,8 @@ use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
     AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, HttpMethod, UpdateUser,
 };
+
+use better_auth_core::utils::cookie_utils::create_session_cookie;
 
 // ---------------------------------------------------------------------------
 // Plugin & config
@@ -301,22 +301,7 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<(DB::User, DB::Session)> {
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-
-        let token = session_manager
-            .extract_session_token(req)
-            .ok_or(AuthError::Unauthenticated)?;
-
-        let session = session_manager
-            .get_session(&token)
-            .await?
-            .ok_or(AuthError::Unauthenticated)?;
-
-        let user = ctx
-            .database
-            .get_user_by_id(session.user_id())
-            .await?
-            .ok_or(AuthError::UserNotFound)?;
+        let (user, session) = ctx.require_session(req).await?;
 
         // Check admin role
         let user_role = user.role().unwrap_or("user");
@@ -327,17 +312,6 @@ impl AdminPlugin {
         }
 
         Ok((user, session))
-    }
-
-    fn hash_password(password: &str) -> AuthResult<String> {
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-
-        let password_hash = argon2
-            .hash_password(password.as_bytes(), &salt)
-            .map_err(|e| AuthError::PasswordHash(format!("Failed to hash password: {}", e)))?;
-
-        Ok(password_hash.to_string())
     }
 
     // -- Handlers -----------------------------------------------------------
@@ -364,17 +338,7 @@ impl AdminPlugin {
 
         let update = UpdateUser {
             role: Some(body.role),
-            email: None,
-            name: None,
-            image: None,
-            email_verified: None,
-            username: None,
-            display_username: None,
-            banned: None,
-            ban_reason: None,
-            ban_expires: None,
-            two_factor_enabled: None,
-            metadata: None,
+            ..Default::default()
         };
 
         let updated_user = ctx.database.update_user(&body.user_id, update).await?;
@@ -410,7 +374,7 @@ impl AdminPlugin {
         }
 
         // Hash the password
-        let password_hash = Self::hash_password(&body.password)?;
+        let password_hash = better_auth_core::hash_password(None, &body.password).await?;
 
         let role = body
             .role
@@ -573,15 +537,7 @@ impl AdminPlugin {
             banned: Some(true),
             ban_reason: body.ban_reason,
             ban_expires,
-            email: None,
-            name: None,
-            image: None,
-            email_verified: None,
-            username: None,
-            display_username: None,
-            role: None,
-            two_factor_enabled: None,
-            metadata: None,
+            ..Default::default()
         };
 
         let updated_user = ctx.database.update_user(&body.user_id, update).await?;
@@ -619,15 +575,7 @@ impl AdminPlugin {
             banned: Some(false),
             ban_reason: None,
             ban_expires: None,
-            email: None,
-            name: None,
-            image: None,
-            email_verified: None,
-            username: None,
-            display_username: None,
-            role: None,
-            two_factor_enabled: None,
-            metadata: None,
+            ..Default::default()
         };
 
         // The adapter's apply_update clears ban_reason and ban_expires
@@ -675,8 +623,7 @@ impl AdminPlugin {
 
         let session = ctx.database.create_session(create_session).await?;
 
-        let cookie_header =
-            better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), ctx);
         let response = SessionUserResponse {
             session,
             user: target,
@@ -734,10 +681,7 @@ impl AdminPlugin {
 
         let admin_session = ctx.database.create_session(create_session).await?;
 
-        let cookie_header = better_auth_core::utils::cookie_utils::create_session_cookie(
-            admin_session.token(),
-            ctx,
-        );
+        let cookie_header = create_session_cookie(admin_session.token(), ctx);
         let response = SessionUserResponse {
             session: admin_session,
             user: admin_user,
@@ -870,7 +814,7 @@ impl AdminPlugin {
             .await?
             .ok_or_else(|| AuthError::not_found("User not found"))?;
 
-        let password_hash = Self::hash_password(&body.new_password)?;
+        let password_hash = better_auth_core::hash_password(None, &body.new_password).await?;
 
         // Update password in user metadata
         let mut metadata = user.metadata().clone();
@@ -887,17 +831,7 @@ impl AdminPlugin {
 
         let update = UpdateUser {
             metadata: Some(metadata),
-            email: None,
-            name: None,
-            image: None,
-            email_verified: None,
-            username: None,
-            display_username: None,
-            role: None,
-            banned: None,
-            ban_reason: None,
-            ban_expires: None,
-            two_factor_enabled: None,
+            ..Default::default()
         };
         ctx.database.update_user(&body.user_id, update).await?;
 
@@ -947,22 +881,7 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-
-        let token = session_manager
-            .extract_session_token(req)
-            .ok_or(AuthError::Unauthenticated)?;
-
-        let session = session_manager
-            .get_session(&token)
-            .await?
-            .ok_or(AuthError::Unauthenticated)?;
-
-        let user = ctx
-            .database
-            .get_user_by_id(session.user_id())
-            .await?
-            .ok_or(AuthError::UserNotFound)?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let body: HasPermissionRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,

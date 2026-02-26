@@ -1,58 +1,68 @@
-//! Shared cookie helpers used across plugins.
+//! Shared cookie utilities for building `Set-Cookie` headers.
 //!
-//! Centralises the `Set-Cookie` header construction so that each plugin does
-//! not have to duplicate the same formatting logic.
+//! This module centralises the session cookie construction that was previously
+//! duplicated across every plugin (`email_password`, `passkey`, `two_factor`,
+//! `admin`, `password_management`, `session_management`, `email_verification`).
 
 use crate::adapters::DatabaseAdapter;
-use crate::config::AuthConfig;
 use crate::plugin::AuthContext;
-use std::sync::Arc;
+use cookie::{Cookie, SameSite as CookieSameSite};
 
-/// Build a `Set-Cookie` header value for a session token.
+/// Build a `Set-Cookie` header value for a session token using the `cookie`
+/// crate for correct formatting and escaping.
 pub fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
-    build_session_cookie_from_config(token, &ctx.config)
+    let session_config = &ctx.config.session;
+
+    let expires_offset = cookie::time::OffsetDateTime::now_utc()
+        + cookie::time::Duration::seconds(session_config.expires_in.num_seconds());
+
+    let same_site = map_same_site(&session_config.cookie_same_site);
+
+    let mut cookie = Cookie::build((&*session_config.cookie_name, token))
+        .path("/")
+        .expires(expires_offset)
+        .secure(session_config.cookie_secure)
+        .http_only(session_config.cookie_http_only)
+        .same_site(same_site);
+
+    // SameSite=None requires the Secure attribute per the spec
+    if matches!(
+        session_config.cookie_same_site,
+        crate::config::SameSite::None
+    ) {
+        cookie = cookie.secure(true);
+    }
+
+    cookie.build().to_string()
 }
 
-/// Build a `Set-Cookie` header that clears (expires) the session cookie.
+/// Build a `Set-Cookie` header value that clears the session cookie.
 pub fn create_clear_session_cookie<DB: DatabaseAdapter>(ctx: &AuthContext<DB>) -> String {
     let session_config = &ctx.config.session;
-    let attrs = cookie_attributes(session_config);
 
-    format!(
-        "{}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT{}",
-        session_config.cookie_name, attrs
-    )
+    let same_site = map_same_site(&session_config.cookie_same_site);
+
+    let mut cookie = Cookie::build((&*session_config.cookie_name, ""))
+        .path("/")
+        .expires(cookie::time::OffsetDateTime::UNIX_EPOCH)
+        .secure(session_config.cookie_secure)
+        .http_only(session_config.cookie_http_only)
+        .same_site(same_site);
+
+    if matches!(
+        session_config.cookie_same_site,
+        crate::config::SameSite::None
+    ) {
+        cookie = cookie.secure(true);
+    }
+
+    cookie.build().to_string()
 }
 
-/// Internal: shared cookie builder logic operating on an `AuthConfig`.
-fn build_session_cookie_from_config(token: &str, config: &Arc<AuthConfig>) -> String {
-    let session_config = &config.session;
-    let attrs = cookie_attributes(session_config);
-
-    let expires = chrono::Utc::now() + session_config.expires_in;
-    let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
-
-    format!(
-        "{}={}; Path=/; Expires={}{}",
-        session_config.cookie_name, token, expires_str, attrs
-    )
-}
-
-/// Format the common "; Secure; HttpOnly; SameSite=…" suffix.
-fn cookie_attributes(session_config: &crate::config::SessionConfig) -> String {
-    let secure = if session_config.cookie_secure {
-        "; Secure"
-    } else {
-        ""
-    };
-    let http_only = if session_config.cookie_http_only {
-        "; HttpOnly"
-    } else {
-        ""
-    };
-
-    format!(
-        "{}{}; SameSite={}",
-        secure, http_only, session_config.cookie_same_site
-    )
+fn map_same_site(s: &crate::config::SameSite) -> CookieSameSite {
+    match s {
+        crate::config::SameSite::Strict => CookieSameSite::Strict,
+        crate::config::SameSite::Lax => CookieSameSite::Lax,
+        crate::config::SameSite::None => CookieSameSite::None,
+    }
 }

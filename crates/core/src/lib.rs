@@ -64,4 +64,4 @@ pub use types::{
     UpdateAccount, UpdateApiKey, UpdateOrganization, UpdatePasskey, UpdateUser, UpdateUserRequest,
     UpdateUserResponse, User, ValidationErrorResponse, Verification,
 };
-pub use utils::password::PasswordHasher;
+pub use utils::password::{PasswordHasher, hash_password, verify_password};

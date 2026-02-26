@@ -9,11 +9,15 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod};
 
+use super::email_verification::EmailVerificationPlugin;
+use better_auth_core::utils::cookie_utils::create_session_cookie;
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
-
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
     config: EmailPasswordConfig,
+    /// Optional reference to the email-verification plugin so that
+    /// `send_on_sign_in` can be triggered during the sign-in flow.
+    email_verification: Option<Arc<EmailVerificationPlugin>>,
 }
 
 #[derive(Clone)]
@@ -108,11 +112,22 @@ impl EmailPasswordPlugin {
     pub fn new() -> Self {
         Self {
             config: EmailPasswordConfig::default(),
+            email_verification: None,
         }
     }
 
     pub fn with_config(config: EmailPasswordConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            email_verification: None,
+        }
+    }
+
+    /// Attach an [`EmailVerificationPlugin`] so that `send_on_sign_in` is
+    /// automatically called when a user signs in with an unverified email.
+    pub fn with_email_verification(mut self, plugin: Arc<EmailVerificationPlugin>) -> Self {
+        self.email_verification = Some(plugin);
+        self
     }
 
     pub fn enable_signup(mut self, enable: bool) -> Self {
@@ -205,8 +220,7 @@ impl EmailPasswordPlugin {
             };
 
             // Create session cookie
-            let cookie_header =
-                better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
+            let cookie_header = create_session_cookie(session.token(), ctx);
 
             Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
         } else {
@@ -262,6 +276,18 @@ impl EmailPasswordPlugin {
             )?);
         }
 
+        // Send verification email on sign-in if configured
+        if let Some(ref ev) = self.email_verification
+            && let Err(e) = ev
+                .send_verification_on_sign_in(&user, signin_req.callback_url.as_deref(), ctx)
+                .await
+        {
+            eprintln!(
+                "[email-password] Failed to send verification email on sign-in: {}",
+                e
+            );
+        }
+
         // Create session
         let session_manager =
             better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
@@ -275,8 +301,7 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header =
-            better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -327,6 +352,16 @@ impl EmailPasswordPlugin {
             )?);
         }
 
+        // Send verification email on sign-in if configured
+        if let Some(ref ev) = self.email_verification
+            && let Err(e) = ev.send_verification_on_sign_in(&user, None, ctx).await
+        {
+            eprintln!(
+                "[email-password] Failed to send verification email on sign-in: {}",
+                e
+            );
+        }
+
         // Create session
         let session_manager =
             better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
@@ -340,8 +375,7 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header =
-            better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }

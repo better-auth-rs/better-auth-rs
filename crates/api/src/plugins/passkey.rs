@@ -12,6 +12,8 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreatePasskey, CreateVerification, HttpMethod};
 
+use better_auth_core::utils::cookie_utils::create_session_cookie;
+
 /// Passkey / WebAuthn authentication plugin.
 ///
 /// Generates WebAuthn-compatible registration and authentication options,
@@ -251,35 +253,6 @@ impl PasskeyPlugin {
         Ok(challenge.to_string())
     }
 
-    async fn get_authenticated_user<DB: DatabaseAdapter>(
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<(DB::User, DB::Session)> {
-        let token = req
-            .headers
-            .get("authorization")
-            .and_then(|v| v.strip_prefix("Bearer "))
-            .ok_or(AuthError::Unauthenticated)?;
-
-        let session = ctx
-            .database
-            .get_session(token)
-            .await?
-            .ok_or(AuthError::Unauthenticated)?;
-
-        if session.expires_at() < chrono::Utc::now() {
-            return Err(AuthError::Unauthenticated);
-        }
-
-        let user = ctx
-            .database
-            .get_user_by_id(session.user_id())
-            .await?
-            .ok_or(AuthError::UserNotFound)?;
-
-        Ok((user, session))
-    }
-
     // -- Handlers --
 
     /// GET /passkey/generate-register-options
@@ -288,7 +261,7 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let challenge = Self::generate_challenge();
 
@@ -372,7 +345,7 @@ impl PasskeyPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         self.ensure_insecure_verification_enabled()?;
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let body: VerifyRegistrationRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -474,7 +447,7 @@ impl PasskeyPlugin {
 
         // If user is authenticated, build allowCredentials from their passkeys
         let allow_credentials: Vec<serde_json::Value> =
-            if let Ok((user, _session)) = Self::get_authenticated_user(req, ctx).await {
+            if let Ok((user, _session)) = ctx.require_session(req).await {
                 let passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
                 passkeys
                     .iter()
@@ -581,8 +554,7 @@ impl PasskeyPlugin {
             .create_session(&user, ip_address, user_agent)
             .await?;
 
-        let cookie_header =
-            better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), ctx);
         let response = SessionUserResponse { session, user };
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -593,7 +565,7 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
         let views: Vec<PasskeyView> = passkeys.iter().map(PasskeyView::from_entity).collect();
@@ -607,7 +579,7 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let body: DeletePasskeyRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -637,7 +609,7 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let body: UpdatePasskeyRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
