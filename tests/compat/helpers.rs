@@ -277,7 +277,8 @@ impl TestHarness {
     }
 
     // -------------------------------------------------------------------
-    // Request builders (instance methods add `origin` header for CSRF)
+    // Request builders (instance methods delegate to helpers that include
+    // `origin` header for CSRF by default)
     // -------------------------------------------------------------------
 
     /// Build a GET request (with `origin` header).
