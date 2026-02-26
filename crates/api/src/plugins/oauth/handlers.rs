@@ -323,33 +323,37 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
         .get_account(provider_name, &user_info.id)
         .await?
     {
-            let account_cfg = &ctx.config.account;
-            let encrypt = account_cfg.encrypt_oauth_tokens;
-            let secret = &ctx.config.secret;
+        let account_cfg = &ctx.config.account;
+        let encrypt = account_cfg.encrypt_oauth_tokens;
+        let secret = &ctx.config.secret;
 
-            // Update tokens on the existing account (respects update_account_on_sign_in)
-            if account_cfg.update_account_on_sign_in {
-                ctx.database
-                    .update_account(
-                        existing_account.id(),
-                        UpdateAccount {
-                            access_token: maybe_encrypt(Some(access_token.to_string()), encrypt, secret)?,
-                            refresh_token: maybe_encrypt(refresh_token.clone(), encrypt, secret)?,
-                            id_token: maybe_encrypt(id_token.clone(), encrypt, secret)?,
-                            access_token_expires_at,
-                            scope: scopes,
-                            ..Default::default()
-                        },
-                    )
-                    .await?;
-            }
+        // Update tokens on the existing account (respects update_account_on_sign_in)
+        if account_cfg.update_account_on_sign_in {
+            ctx.database
+                .update_account(
+                    existing_account.id(),
+                    UpdateAccount {
+                        access_token: maybe_encrypt(
+                            Some(access_token.to_string()),
+                            encrypt,
+                            secret,
+                        )?,
+                        refresh_token: maybe_encrypt(refresh_token.clone(), encrypt, secret)?,
+                        id_token: maybe_encrypt(id_token.clone(), encrypt, secret)?,
+                        access_token_expires_at,
+                        scope: scopes,
+                        ..Default::default()
+                    },
+                )
+                .await?;
+        }
 
-            // Get the associated user
-            let user = ctx
-                .database
-                .get_user_by_id(existing_account.user_id())
-                .await?
-                .ok_or(AuthError::UserNotFound)?;
+        // Get the associated user
+        let user = ctx
+            .database
+            .get_user_by_id(existing_account.user_id())
+            .await?
+            .ok_or(AuthError::UserNotFound)?;
 
         // Create session
         let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());

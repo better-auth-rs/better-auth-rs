@@ -64,7 +64,11 @@ pub fn decrypt_token(encrypted: &str, secret: &str) -> Result<String, AuthError>
 
 /// Conditionally encrypt a token value. Returns the original value when
 /// encryption is disabled, or the encrypted value when enabled.
-pub fn maybe_encrypt(value: Option<String>, encrypt: bool, secret: &str) -> Result<Option<String>, AuthError> {
+pub fn maybe_encrypt(
+    value: Option<String>,
+    encrypt: bool,
+    secret: &str,
+) -> Result<Option<String>, AuthError> {
     match (value, encrypt) {
         (Some(v), true) => Ok(Some(encrypt_token(&v, secret)?)),
         (v, _) => Ok(v),
@@ -73,7 +77,11 @@ pub fn maybe_encrypt(value: Option<String>, encrypt: bool, secret: &str) -> Resu
 
 /// Conditionally decrypt a token value. Returns the original value when
 /// encryption is disabled, or the decrypted value when enabled.
-pub fn maybe_decrypt(value: Option<&str>, encrypt: bool, secret: &str) -> Result<Option<String>, AuthError> {
+pub fn maybe_decrypt(
+    value: Option<&str>,
+    encrypt: bool,
+    secret: &str,
+) -> Result<Option<String>, AuthError> {
     match (value, encrypt) {
         (Some(v), true) => Ok(Some(decrypt_token(v, secret)?)),
         (Some(v), false) => Ok(Some(v.to_string())),
