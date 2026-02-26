@@ -1,66 +1,33 @@
+mod common;
+
+use better_auth::BetterAuth;
 use better_auth::adapters::{
     AccountOps, MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps,
 };
-use better_auth::plugins::{
-    AccountManagementPlugin, ApiKeyPlugin, EmailPasswordPlugin, PasswordManagementPlugin,
-    SessionManagementPlugin,
-};
-use better_auth::{AuthConfig, BetterAuth};
 use std::sync::Arc;
 
 /// Helper to create test BetterAuth instance with memory database
 async fn create_test_auth_memory() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
-    let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
-        .base_url("http://localhost:3000")
-        .password_min_length(6);
-
-    Arc::new(
-        BetterAuth::<MemoryDatabaseAdapter>::new(config)
-            .database(MemoryDatabaseAdapter::new())
-            .plugin(EmailPasswordPlugin::new().enable_signup(true))
-            .plugin(SessionManagementPlugin::new())
-            .plugin(PasswordManagementPlugin::new())
-            .plugin(AccountManagementPlugin::new())
-            .plugin(ApiKeyPlugin::new())
-            .build()
-            .await
-            .expect("Failed to create test auth instance"),
-    )
+    common::TestHarness::minimal().await.into_arc()
 }
 
 /// Helper to create user and get session token
 async fn create_test_user_and_session(
     auth: Arc<BetterAuth<MemoryDatabaseAdapter>>,
 ) -> (String, String) {
-    use better_auth::types::AuthRequest;
-    use std::collections::HashMap;
+    let req = common::post_json(
+        "/sign-up/email",
+        serde_json::json!({
+            "email": "integration@test.com",
+            "password": "password123",
+            "name": "Integration Test User"
+        }),
+    );
+    let (status, json) = common::send_request(&auth, req).await;
+    assert_eq!(status, 200);
 
-    let signup_data = serde_json::json!({
-        "email": "integration@test.com",
-        "password": "password123",
-        "name": "Integration Test User"
-    });
-
-    let mut headers = HashMap::new();
-    headers.insert("content-type".to_string(), "application/json".to_string());
-
-    let signup_request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/sign-up/email".to_string(),
-        headers,
-        body: Some(signup_data.to_string().into_bytes()),
-        query: HashMap::new(),
-    };
-
-    let response = auth.handle_request(signup_request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-
-    let user_id = response_data["user"]["id"].as_str().unwrap().to_string();
-    let session_token = response_data["token"].as_str().unwrap().to_string();
-
+    let user_id = json["user"]["id"].as_str().unwrap().to_string();
+    let session_token = json["token"].as_str().unwrap().to_string();
     (user_id, session_token)
 }
 
@@ -70,28 +37,9 @@ async fn test_get_session_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
-    use std::collections::HashMap;
-
-    let mut headers = HashMap::new();
-    headers.insert(
-        "authorization".to_string(),
-        format!("Bearer {}", session_token),
-    );
-
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/get-session".to_string(),
-        headers,
-        body: None,
-        query: HashMap::new(),
-    };
-
-    let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    let (status, response_data) =
+        common::send_request(&auth, common::get_with_auth("/get-session", &session_token)).await;
+    assert_eq!(status, 200);
 
     assert!(response_data["session"]["token"].is_string());
     assert!(response_data["user"]["id"].is_string());
@@ -104,48 +52,15 @@ async fn test_sign_out_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
-    use std::collections::HashMap;
-
-    let mut headers = HashMap::new();
-    headers.insert(
-        "authorization".to_string(),
-        format!("Bearer {}", session_token),
-    );
-
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/sign-out".to_string(),
-        headers,
-        body: Some(b"{}".to_vec()),
-        query: HashMap::new(),
-    };
-
-    let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-
+    let (status, response_data) =
+        common::send_request(&auth, common::post_with_auth("/sign-out", &session_token)).await;
+    assert_eq!(status, 200);
     assert_eq!(response_data["success"], true);
 
     // Verify session is no longer valid
-    let mut headers2 = HashMap::new();
-    headers2.insert(
-        "authorization".to_string(),
-        format!("Bearer {}", session_token),
-    );
-
-    let get_session_request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/get-session".to_string(),
-        headers: headers2,
-        body: None,
-        query: HashMap::new(),
-    };
-
-    let response2 = auth.handle_request(get_session_request).await.unwrap();
-    assert_eq!(response2.status, 401); // Session should be invalidated
+    let (status2, _) =
+        common::send_request(&auth, common::get_with_auth("/get-session", &session_token)).await;
+    assert_eq!(status2, 401); // Session should be invalidated
 }
 
 /// Integration test for list-sessions endpoint
@@ -154,29 +69,14 @@ async fn test_list_sessions_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
-    use std::collections::HashMap;
+    let (status, response_data) = common::send_request(
+        &auth,
+        common::get_with_auth("/list-sessions", &session_token),
+    )
+    .await;
+    assert_eq!(status, 200);
 
-    let mut headers = HashMap::new();
-    headers.insert(
-        "authorization".to_string(),
-        format!("Bearer {}", session_token),
-    );
-
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/list-sessions".to_string(),
-        headers,
-        body: None,
-        query: HashMap::new(),
-    };
-
-    let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let sessions: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
-
+    let sessions = response_data.as_array().expect("expected array response");
     assert_eq!(sessions.len(), 1);
     assert!(sessions[0]["token"].is_string());
 }
@@ -242,29 +142,12 @@ async fn test_revoke_sessions_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
-    use std::collections::HashMap;
-
-    let mut headers = HashMap::new();
-    headers.insert(
-        "authorization".to_string(),
-        format!("Bearer {}", session_token),
-    );
-
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/revoke-sessions".to_string(),
-        headers,
-        body: Some(b"{}".to_vec()),
-        query: HashMap::new(),
-    };
-
-    let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-
+    let (status, response_data) = common::send_request(
+        &auth,
+        common::post_with_auth("/revoke-sessions", &session_token),
+    )
+    .await;
+    assert_eq!(status, 200);
     assert_eq!(response_data["status"], true);
 }
 
@@ -273,20 +156,9 @@ async fn test_revoke_sessions_integration() {
 async fn test_unauthorized_session_access() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
-    use std::collections::HashMap;
-
     // Try to access get-session without token
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/get-session".to_string(),
-        headers: HashMap::new(),
-        body: None,
-        query: HashMap::new(),
-    };
-
-    let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 401);
+    let (status, _) = common::send_request(&auth, common::get_request("/get-session")).await;
+    assert_eq!(status, 401);
 }
 
 /// Integration test for forget-password endpoint
@@ -295,31 +167,18 @@ async fn test_forget_password_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, _session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
-    use std::collections::HashMap;
-
-    let mut headers = HashMap::new();
-    headers.insert("content-type".to_string(), "application/json".to_string());
-
-    let forget_data = serde_json::json!({
-        "email": "integration@test.com",
-        "redirectTo": "http://localhost:3000/reset"
-    });
-
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/forget-password".to_string(),
-        headers,
-        body: Some(forget_data.to_string().into_bytes()),
-        query: HashMap::new(),
-    };
-
-    let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-
+    let (status, response_data) = common::send_request(
+        &auth,
+        common::post_json(
+            "/forget-password",
+            serde_json::json!({
+                "email": "integration@test.com",
+                "redirectTo": "http://localhost:3000/reset"
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, 200);
     assert_eq!(response_data["status"], true);
 }
 
@@ -380,35 +239,20 @@ async fn test_change_password_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
-    use std::collections::HashMap;
-
-    let mut headers = HashMap::new();
-    headers.insert("content-type".to_string(), "application/json".to_string());
-    headers.insert(
-        "authorization".to_string(),
-        format!("Bearer {}", session_token),
-    );
-
-    let change_data = serde_json::json!({
-        "currentPassword": "password123",
-        "newPassword": "NewPassword123!",
-        "revokeOtherSessions": "false"
-    });
-
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/change-password".to_string(),
-        headers,
-        body: Some(change_data.to_string().into_bytes()),
-        query: HashMap::new(),
-    };
-
-    let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    let (status, response_data) = common::send_request(
+        &auth,
+        common::post_json_with_auth(
+            "/change-password",
+            serde_json::json!({
+                "currentPassword": "password123",
+                "newPassword": "NewPassword123!",
+                "revokeOtherSessions": "false"
+            }),
+            &session_token,
+        ),
+    )
+    .await;
+    assert_eq!(status, 200);
 
     assert!(response_data["user"]["id"].is_string());
     assert!(response_data["token"].is_null()); // No new token when not revoking sessions
@@ -420,35 +264,20 @@ async fn test_change_password_with_revocation_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
-    use std::collections::HashMap;
-
-    let mut headers = HashMap::new();
-    headers.insert("content-type".to_string(), "application/json".to_string());
-    headers.insert(
-        "authorization".to_string(),
-        format!("Bearer {}", session_token),
-    );
-
-    let change_data = serde_json::json!({
-        "currentPassword": "password123",
-        "newPassword": "NewPassword123!",
-        "revokeOtherSessions": "true"
-    });
-
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Post,
-        path: "/change-password".to_string(),
-        headers,
-        body: Some(change_data.to_string().into_bytes()),
-        query: HashMap::new(),
-    };
-
-    let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    let (status, response_data) = common::send_request(
+        &auth,
+        common::post_json_with_auth(
+            "/change-password",
+            serde_json::json!({
+                "currentPassword": "password123",
+                "newPassword": "NewPassword123!",
+                "revokeOtherSessions": "true"
+            }),
+            &session_token,
+        ),
+    )
+    .await;
+    assert_eq!(status, 200);
 
     assert!(response_data["user"]["id"].is_string());
     assert!(response_data["token"].is_string()); // New token when revoking sessions
@@ -502,22 +331,8 @@ async fn test_reset_password_token_integration() {
 async fn test_ok_endpoint() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
-    use std::collections::HashMap;
-
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/ok".to_string(),
-        headers: HashMap::new(),
-        body: None,
-        query: HashMap::new(),
-    };
-
-    let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    let (status, response_data) = common::send_request(&auth, common::get_request("/ok")).await;
+    assert_eq!(status, 200);
     assert_eq!(response_data["ok"], true);
 }
 
@@ -526,22 +341,8 @@ async fn test_ok_endpoint() {
 async fn test_error_endpoint() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
-    use std::collections::HashMap;
-
-    let request = AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/error".to_string(),
-        headers: HashMap::new(),
-        body: None,
-        query: HashMap::new(),
-    };
-
-    let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    let (status, response_data) = common::send_request(&auth, common::get_request("/error")).await;
+    assert_eq!(status, 200);
     assert_eq!(response_data["ok"], false);
 }
 

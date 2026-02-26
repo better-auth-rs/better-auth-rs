@@ -45,7 +45,31 @@ pub fn load_openapi_spec() -> oas3::spec::Spec {
 
     // Normalise non-standard "type: date" -> "type: string" (+ format kept in
     // our FieldExpectation as "date" via a post-processing step).
-    let yaml_str = yaml_str.replace("type: date", "type: string");
+    //
+    // We use a line-by-line approach instead of a blanket `replace()` to avoid
+    // corrupting values like "type: date-time" or "type: daterange".
+    let yaml_str: String = yaml_str
+        .lines()
+        .map(|line| {
+            let trimmed = line.trim_start();
+            if let Some(rest) = trimmed.strip_prefix("type: date") {
+                // Only replace when "date" is the complete value (end-of-line,
+                // followed by whitespace, or followed by a YAML comment).
+                if rest.is_empty()
+                    || rest.starts_with(' ')
+                    || rest.starts_with('#')
+                    || rest.starts_with('\t')
+                {
+                    line.replacen("type: date", "type: string", 1)
+                } else {
+                    line.to_string()
+                }
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
 
     oas3::from_yaml(yaml_str).expect("better-auth.yaml must be valid OpenAPI 3.1")
 }
