@@ -4,21 +4,57 @@ use chrono::Duration;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// Well-known core route paths.
+///
+/// These constants are the single source of truth for route paths used by both
+/// the core request dispatcher (`handle_core_request`) and framework-specific
+/// routers (e.g. Axum) so that path strings are never duplicated.
+pub mod core_paths {
+    pub const OK: &str = "/ok";
+    pub const ERROR: &str = "/error";
+    pub const HEALTH: &str = "/health";
+    pub const OPENAPI_SPEC: &str = "/reference/openapi.json";
+    pub const UPDATE_USER: &str = "/update-user";
+    pub const DELETE_USER: &str = "/delete-user";
+    pub const CHANGE_EMAIL: &str = "/change-email";
+    pub const DELETE_USER_CALLBACK: &str = "/delete-user/callback";
+}
+
 /// Main configuration for BetterAuth
 #[derive(Clone)]
 pub struct AuthConfig {
     /// Secret key for signing tokens and sessions
     pub secret: String,
 
-    /// Base URL for the authentication service
+    /// Application name, used for cookie prefixes, email templates, etc.
+    ///
+    /// Defaults to `"Better Auth"`.
+    pub app_name: String,
+
+    /// Base URL for the authentication service (e.g. `"http://localhost:3000"`).
     pub base_url: String,
 
-    /// Base path prefix for all auth routes (default: "/api/auth")
+    /// Base path where the auth routes are mounted.
+    ///
+    /// All routes handled by BetterAuth will be prefixed with this path.
+    /// For example, with the default `"/api/auth"`, the sign-in route becomes
+    /// `"/api/auth/sign-in/email"`.
+    ///
+    /// Defaults to `"/api/auth"`.
     pub base_path: String,
 
-    /// Human-readable application name (used in emails, UI, etc.)
-    pub app_name: Option<String>,
+    /// Origins that are trusted for CSRF and other cross-origin checks.
+    ///
+    /// Supports glob patterns (e.g. `"https://*.example.com"`).
+    /// These are shared across all middleware that needs origin validation
+    /// (CSRF, CORS, etc.).
+    pub trusted_origins: Vec<String>,
 
+    /// Paths that should be disabled (skipped) by the router.
+    ///
+    /// Any request whose path matches an entry in this list will receive
+    /// a 404 response, even if a handler is registered for it.
+    pub disabled_paths: Vec<String>,
     /// Session configuration
     pub session: SessionConfig,
 
@@ -225,9 +261,11 @@ impl Default for AuthConfig {
     fn default() -> Self {
         Self {
             secret: String::new(),
+            app_name: "Better Auth".to_string(),
             base_url: "http://localhost:3000".to_string(),
             base_path: "/api/auth".to_string(),
-            app_name: None,
+            trusted_origins: Vec::new(),
+            disabled_paths: Vec::new(),
             session: SessionConfig::default(),
             jwt: JwtConfig::default(),
             password: PasswordConfig::default(),
@@ -312,21 +350,49 @@ impl AuthConfig {
         }
     }
 
+    /// Set the application name.
+    pub fn app_name(mut self, name: impl Into<String>) -> Self {
+        self.app_name = name.into();
+        self
+    }
+
+    /// Set the base URL (e.g. `"https://myapp.com"`).
     pub fn base_url(mut self, url: impl Into<String>) -> Self {
         self.base_url = url.into();
         self
     }
 
+    /// Set the base path where auth routes are mounted.
     pub fn base_path(mut self, path: impl Into<String>) -> Self {
         self.base_path = path.into();
         self
     }
 
-    pub fn app_name(mut self, name: impl Into<String>) -> Self {
-        self.app_name = Some(name.into());
+    /// Add a trusted origin. Supports glob patterns (e.g. `"https://*.example.com"`).
+    pub fn trusted_origin(mut self, origin: impl Into<String>) -> Self {
+        self.trusted_origins.push(origin.into());
         self
     }
 
+    /// Set all trusted origins at once.
+    pub fn trusted_origins(mut self, origins: Vec<String>) -> Self {
+        self.trusted_origins = origins;
+        self
+    }
+
+    /// Add a path to the disabled paths list.
+    pub fn disabled_path(mut self, path: impl Into<String>) -> Self {
+        self.disabled_paths.push(path.into());
+        self
+    }
+
+    /// Set all disabled paths at once.
+    pub fn disabled_paths(mut self, paths: Vec<String>) -> Self {
+        self.disabled_paths = paths;
+        self
+    }
+
+    /// Set the session expiration duration.
     pub fn session_expires_in(mut self, duration: Duration) -> Self {
         self.session.expires_in = duration;
         self
@@ -347,11 +413,13 @@ impl AuthConfig {
         self
     }
 
+    /// Set the JWT expiration duration.
     pub fn jwt_expires_in(mut self, duration: Duration) -> Self {
         self.jwt.expires_in = duration;
         self
     }
 
+    /// Set the minimum password length.
     pub fn password_min_length(mut self, length: usize) -> Self {
         self.password.min_length = length;
         self
@@ -379,6 +447,33 @@ impl AuthConfig {
         self
     }
 
+    /// Check whether a given origin is trusted.
+    ///
+    /// An origin is trusted if it matches:
+    /// 1. The origin extracted from [`base_url`](Self::base_url), or
+    /// 2. Any pattern in [`trusted_origins`](Self::trusted_origins) (after
+    ///    extracting the origin portion from the pattern).
+    ///
+    /// Glob patterns are supported — `*` matches any characters except `/`,
+    /// `**` matches any characters including `/`.
+    pub fn is_origin_trusted(&self, origin: &str) -> bool {
+        // Check base_url origin
+        if let Some(base_origin) = extract_origin(&self.base_url)
+            && origin == base_origin
+        {
+            return true;
+        }
+        // Check trusted_origins patterns
+        self.trusted_origins.iter().any(|pattern| {
+            let pattern_origin = extract_origin(pattern).unwrap_or_default();
+            glob_match::glob_match(&pattern_origin, origin)
+        })
+    }
+
+    /// Check whether a given path is disabled.
+    pub fn is_path_disabled(&self, path: &str) -> bool {
+        self.disabled_paths.iter().any(|disabled| disabled == path)
+    }
     pub fn validate(&self) -> Result<(), AuthError> {
         if self.secret.is_empty() {
             return Err(AuthError::config("Secret key cannot be empty"));
@@ -392,4 +487,18 @@ impl AuthConfig {
 
         Ok(())
     }
+}
+
+/// Extract the origin (scheme + host + port) from a URL string.
+///
+/// For example, `"https://example.com/path"` → `"https://example.com"`.
+///
+/// This is used by [`AuthConfig::is_origin_trusted`] and the CSRF middleware
+/// so that origin comparison is centralised in one place.
+pub fn extract_origin(url: &str) -> Option<String> {
+    let scheme_end = url.find("://")?;
+    let rest = &url[scheme_end + 3..];
+    let host_end = rest.find('/').unwrap_or(rest.len());
+    let origin = format!("{}{}", &url[..scheme_end + 3], &rest[..host_end]);
+    Some(origin)
 }

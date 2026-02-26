@@ -30,6 +30,8 @@ uuid = { workspace = true }
 # Cookie parsing
 cookie = { workspace = true }
 
+# Pattern matching
+glob-match = "0.2.1"
 # Crypto
 argon2 = { workspace = true }
 rand = { workspace = true }

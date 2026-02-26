@@ -43,7 +43,7 @@ pub use better_auth_core::{
     Passkey, PasskeyOps, PasswordConfig, RateLimitConfig, RateLimitMiddleware, SameSite, Session,
     SessionConfig, SessionManager, SessionOps, TwoFactor, UpdateOrganization, UpdatePasskey,
     UpdateUser, UpdateUserRequest, UpdateUserResponse, User, UserOps, Verification,
-    VerificationOps,
+    VerificationOps, core_paths,
 };
 
 // Re-export entity traits

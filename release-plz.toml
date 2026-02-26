@@ -83,6 +83,11 @@ git_tag_name = "v{{ version }}"
 git_tag_enable = true
 git_release_enable = true
 git_release_name = "Better Auth Rust v{{ version }}"
+git_release_body = """
+[![better-auth compatibility](https://img.shields.io/badge/better--auth-v1.4.19-blue?logo=typescript&logoColor=white)](https://www.npmjs.com/package/better-auth/v/1.4.19)
+
+{{ changelog }}
+"""
 
 [[package]]
 name = "better-auth-core"
