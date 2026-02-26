@@ -52,14 +52,27 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
                 return Ok(None);
             }
 
-            // Update session if configured to do so
-            if self.config.session.update_age {
-                let new_expires_at = Utc::now() + self.config.session.expires_in;
-                let _ = self
-                    .database
-                    .update_session_expiry(token, new_expires_at)
-                    .await;
-            }
+                // Update session if configured to do so
+                if !self.config.session.disable_session_refresh {
+                    let should_refresh = match self.config.session.update_age {
+                        Some(age) => {
+                            // Only refresh if the session was last updated more than
+                            // `update_age` ago.
+                            let updated = session.updated_at();
+                            Utc::now() - updated >= age
+                        }
+                        // No update_age set → refresh on every access.
+                        None => true,
+                    };
+
+                    if should_refresh {
+                        let new_expires_at = Utc::now() + self.config.session.expires_in;
+                        let _ = self
+                            .database
+                            .update_session_expiry(token, new_expires_at)
+                            .await;
+                    }
+                }
         }
 
         Ok(session)

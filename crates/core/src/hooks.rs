@@ -72,6 +72,70 @@ pub trait DatabaseHooks<DB: DatabaseAdapter>: Send + Sync {
         let _ = token;
         Ok(())
     }
+
+    // ── Account hooks ──────────────────────────────────────────────────
+
+    async fn before_create_account(&self, account: &mut CreateAccount) -> AuthResult<()> {
+        let _ = account;
+        Ok(())
+    }
+
+    async fn after_create_account(&self, account: &DB::Account) -> AuthResult<()> {
+        let _ = account;
+        Ok(())
+    }
+
+    async fn before_update_account(
+        &self,
+        id: &str,
+        update: &mut UpdateAccount,
+    ) -> AuthResult<()> {
+        let _ = (id, update);
+        Ok(())
+    }
+
+    async fn after_update_account(&self, account: &DB::Account) -> AuthResult<()> {
+        let _ = account;
+        Ok(())
+    }
+
+    async fn before_delete_account(&self, id: &str) -> AuthResult<()> {
+        let _ = id;
+        Ok(())
+    }
+
+    async fn after_delete_account(&self, id: &str) -> AuthResult<()> {
+        let _ = id;
+        Ok(())
+    }
+
+    // ── Verification hooks ─────────────────────────────────────────────
+
+    async fn before_create_verification(
+        &self,
+        verification: &mut CreateVerification,
+    ) -> AuthResult<()> {
+        let _ = verification;
+        Ok(())
+    }
+
+    async fn after_create_verification(
+        &self,
+        verification: &DB::Verification,
+    ) -> AuthResult<()> {
+        let _ = verification;
+        Ok(())
+    }
+
+    async fn before_delete_verification(&self, id: &str) -> AuthResult<()> {
+        let _ = id;
+        Ok(())
+    }
+
+    async fn after_delete_verification(&self, id: &str) -> AuthResult<()> {
+        let _ = id;
+        Ok(())
+    }
 }
 
 /// A database adapter wrapper that calls hooks around the inner adapter's operations.
@@ -217,8 +281,15 @@ impl<DB: DatabaseAdapter> SessionOps for HookedDatabaseAdapter<DB> {
 impl<DB: DatabaseAdapter> AccountOps for HookedDatabaseAdapter<DB> {
     type Account = DB::Account;
 
-    async fn create_account(&self, account: CreateAccount) -> AuthResult<Self::Account> {
-        self.inner.create_account(account).await
+    async fn create_account(&self, mut account: CreateAccount) -> AuthResult<Self::Account> {
+        for hook in &self.hooks {
+            hook.before_create_account(&mut account).await?;
+        }
+        let result = self.inner.create_account(account).await?;
+        for hook in &self.hooks {
+            hook.after_create_account(&result).await?;
+        }
+        Ok(result)
     }
 
     async fn get_account(
@@ -233,12 +304,30 @@ impl<DB: DatabaseAdapter> AccountOps for HookedDatabaseAdapter<DB> {
         self.inner.get_user_accounts(user_id).await
     }
 
-    async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<Self::Account> {
-        self.inner.update_account(id, update).await
+    async fn update_account(
+        &self,
+        id: &str,
+        mut update: UpdateAccount,
+    ) -> AuthResult<Self::Account> {
+        for hook in &self.hooks {
+            hook.before_update_account(id, &mut update).await?;
+        }
+        let result = self.inner.update_account(id, update).await?;
+        for hook in &self.hooks {
+            hook.after_update_account(&result).await?;
+        }
+        Ok(result)
     }
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
-        self.inner.delete_account(id).await
+        for hook in &self.hooks {
+            hook.before_delete_account(id).await?;
+        }
+        self.inner.delete_account(id).await?;
+        for hook in &self.hooks {
+            hook.after_delete_account(id).await?;
+        }
+        Ok(())
     }
 }
 
@@ -248,9 +337,16 @@ impl<DB: DatabaseAdapter> VerificationOps for HookedDatabaseAdapter<DB> {
 
     async fn create_verification(
         &self,
-        verification: CreateVerification,
+        mut verification: CreateVerification,
     ) -> AuthResult<Self::Verification> {
-        self.inner.create_verification(verification).await
+        for hook in &self.hooks {
+            hook.before_create_verification(&mut verification).await?;
+        }
+        let result = self.inner.create_verification(verification).await?;
+        for hook in &self.hooks {
+            hook.after_create_verification(&result).await?;
+        }
+        Ok(result)
     }
 
     async fn get_verification(
@@ -284,7 +380,14 @@ impl<DB: DatabaseAdapter> VerificationOps for HookedDatabaseAdapter<DB> {
     }
 
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
-        self.inner.delete_verification(id).await
+        for hook in &self.hooks {
+            hook.before_delete_verification(id).await?;
+        }
+        self.inner.delete_verification(id).await?;
+        for hook in &self.hooks {
+            hook.after_delete_verification(id).await?;
+        }
+        Ok(())
     }
 
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
@@ -479,7 +582,10 @@ impl<DB: DatabaseAdapter> ApiKeyOps for HookedDatabaseAdapter<DB> {
 mod tests {
     use super::*;
     use crate::adapters::MemoryDatabaseAdapter;
-    use crate::types::{CreateUser, UpdateUser, User};
+    use crate::types::{
+        Account, CreateAccount, CreateUser, CreateVerification, UpdateAccount, UpdateUser, User,
+        Verification,
+    };
     use std::sync::atomic::{AtomicU32, Ordering};
 
     struct CountingHook {
@@ -643,5 +749,309 @@ mod tests {
 
         let result = db.get_user_by_email("nonexistent@test.com").await.unwrap();
         assert!(result.is_none());
+    }
+
+    // ── Account hook tests ──────────────────────────────────────────────
+
+    struct AccountCountingHook {
+        before_create: AtomicU32,
+        after_create: AtomicU32,
+        before_update: AtomicU32,
+        after_update: AtomicU32,
+        before_delete: AtomicU32,
+        after_delete: AtomicU32,
+    }
+
+    impl AccountCountingHook {
+        fn new() -> Self {
+            Self {
+                before_create: AtomicU32::new(0),
+                after_create: AtomicU32::new(0),
+                before_update: AtomicU32::new(0),
+                after_update: AtomicU32::new(0),
+                before_delete: AtomicU32::new(0),
+                after_delete: AtomicU32::new(0),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl DatabaseHooks<MemoryDatabaseAdapter> for AccountCountingHook {
+        async fn before_create_account(
+            &self,
+            _account: &mut CreateAccount,
+        ) -> AuthResult<()> {
+            self.before_create.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn after_create_account(&self, _account: &Account) -> AuthResult<()> {
+            self.after_create.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn before_update_account(
+            &self,
+            _id: &str,
+            _update: &mut UpdateAccount,
+        ) -> AuthResult<()> {
+            self.before_update.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn after_update_account(&self, _account: &Account) -> AuthResult<()> {
+            self.after_update.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn before_delete_account(&self, _id: &str) -> AuthResult<()> {
+            self.before_delete.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn after_delete_account(&self, _id: &str) -> AuthResult<()> {
+            self.after_delete.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_account_hooks_create() {
+        let hook = Arc::new(AccountCountingHook::new());
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(hook.clone());
+
+        // First create a user (accounts need a user_id)
+        let user = db
+            .create_user(CreateUser::new().with_email("test@example.com"))
+            .await
+            .unwrap();
+
+        let account = CreateAccount {
+            user_id: user.id.clone(),
+            account_id: "provider_123".to_string(),
+            provider_id: "google".to_string(),
+            access_token: Some("tok".to_string()),
+            refresh_token: None,
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: None,
+            password: None,
+        };
+        db.create_account(account).await.unwrap();
+
+        assert_eq!(hook.before_create.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.after_create.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_account_hooks_update() {
+        let hook = Arc::new(AccountCountingHook::new());
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(hook.clone());
+
+        let user = db
+            .create_user(CreateUser::new().with_email("test@example.com"))
+            .await
+            .unwrap();
+
+        let account = CreateAccount {
+            user_id: user.id.clone(),
+            account_id: "provider_123".to_string(),
+            provider_id: "google".to_string(),
+            access_token: Some("tok".to_string()),
+            refresh_token: None,
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: None,
+            password: None,
+        };
+        let created = db.create_account(account).await.unwrap();
+
+        let update = UpdateAccount {
+            access_token: Some("new_tok".to_string()),
+            ..Default::default()
+        };
+        db.update_account(&created.id, update).await.unwrap();
+
+        assert_eq!(hook.before_update.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.after_update.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_account_hooks_delete() {
+        let hook = Arc::new(AccountCountingHook::new());
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(hook.clone());
+
+        let user = db
+            .create_user(CreateUser::new().with_email("test@example.com"))
+            .await
+            .unwrap();
+
+        let account = CreateAccount {
+            user_id: user.id.clone(),
+            account_id: "provider_123".to_string(),
+            provider_id: "google".to_string(),
+            access_token: None,
+            refresh_token: None,
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: None,
+            password: None,
+        };
+        let created = db.create_account(account).await.unwrap();
+
+        db.delete_account(&created.id).await.unwrap();
+
+        assert_eq!(hook.before_delete.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.after_delete.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_account_before_hook_can_reject() {
+        struct RejectAccountHook;
+
+        #[async_trait]
+        impl DatabaseHooks<MemoryDatabaseAdapter> for RejectAccountHook {
+            async fn before_create_account(
+                &self,
+                _account: &mut CreateAccount,
+            ) -> AuthResult<()> {
+                Err(crate::error::AuthError::forbidden("Account hook rejected"))
+            }
+        }
+
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(Arc::new(RejectAccountHook));
+
+        let user = db
+            .create_user(CreateUser::new().with_email("test@example.com"))
+            .await
+            .unwrap();
+
+        let account = CreateAccount {
+            user_id: user.id.clone(),
+            account_id: "p1".to_string(),
+            provider_id: "google".to_string(),
+            access_token: None,
+            refresh_token: None,
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: None,
+            password: None,
+        };
+        let result = db.create_account(account).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().status_code(), 403);
+    }
+
+    // ── Verification hook tests ─────────────────────────────────────────
+
+    struct VerificationCountingHook {
+        before_create: AtomicU32,
+        after_create: AtomicU32,
+        before_delete: AtomicU32,
+        after_delete: AtomicU32,
+    }
+
+    impl VerificationCountingHook {
+        fn new() -> Self {
+            Self {
+                before_create: AtomicU32::new(0),
+                after_create: AtomicU32::new(0),
+                before_delete: AtomicU32::new(0),
+                after_delete: AtomicU32::new(0),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl DatabaseHooks<MemoryDatabaseAdapter> for VerificationCountingHook {
+        async fn before_create_verification(
+            &self,
+            _v: &mut CreateVerification,
+        ) -> AuthResult<()> {
+            self.before_create.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn after_create_verification(&self, _v: &Verification) -> AuthResult<()> {
+            self.after_create.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn before_delete_verification(&self, _id: &str) -> AuthResult<()> {
+            self.before_delete.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn after_delete_verification(&self, _id: &str) -> AuthResult<()> {
+            self.after_delete.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_verification_hooks_create() {
+        let hook = Arc::new(VerificationCountingHook::new());
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(hook.clone());
+
+        let verification = CreateVerification {
+            identifier: "email_verification:test@example.com".to_string(),
+            value: "token_abc".to_string(),
+            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+        };
+        db.create_verification(verification).await.unwrap();
+
+        assert_eq!(hook.before_create.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.after_create.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_verification_hooks_delete() {
+        let hook = Arc::new(VerificationCountingHook::new());
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(hook.clone());
+
+        let verification = CreateVerification {
+            identifier: "email_verification:test@example.com".to_string(),
+            value: "token_abc".to_string(),
+            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+        };
+        let created = db.create_verification(verification).await.unwrap();
+
+        db.delete_verification(&created.id).await.unwrap();
+
+        assert_eq!(hook.before_delete.load(Ordering::SeqCst), 1);
+        assert_eq!(hook.after_delete.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_verification_before_hook_can_reject() {
+        struct RejectVerificationHook;
+
+        #[async_trait]
+        impl DatabaseHooks<MemoryDatabaseAdapter> for RejectVerificationHook {
+            async fn before_create_verification(
+                &self,
+                _v: &mut CreateVerification,
+            ) -> AuthResult<()> {
+                Err(crate::error::AuthError::forbidden(
+                    "Verification hook rejected",
+                ))
+            }
+        }
+
+        let db = HookedDatabaseAdapter::new(Arc::new(MemoryDatabaseAdapter::new()))
+            .with_hook(Arc::new(RejectVerificationHook));
+
+        let verification = CreateVerification {
+            identifier: "test".to_string(),
+            value: "val".to_string(),
+            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+        };
+        let result = db.create_verification(verification).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().status_code(), 403);
     }
 }

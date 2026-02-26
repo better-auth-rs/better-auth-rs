@@ -31,7 +31,11 @@ pub use adapters::{
 };
 #[cfg(feature = "sqlx-postgres")]
 pub use adapters::{SqlxAdapter, SqlxEntity};
-pub use config::{Argon2Config, AuthConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig};
+pub use config::{
+    AdvancedConfig, AdvancedDatabaseConfig, Argon2Config, AuthConfig, CookieAttributes,
+    CookieOverride, CrossSubDomainConfig, IpAddressConfig, JwtConfig, PasswordConfig, SameSite,
+    SessionConfig,
+};
 pub use email::{ConsoleEmailProvider, EmailProvider};
 pub use entity::{
     AuthAccount, AuthAccountMeta, AuthApiKey, AuthApiKeyMeta, AuthInvitation, AuthInvitationMeta,
