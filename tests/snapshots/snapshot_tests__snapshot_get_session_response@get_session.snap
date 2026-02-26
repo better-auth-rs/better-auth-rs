@@ -1,0 +1,30 @@
+---
+source: tests/snapshot_tests.rs
+expression: redact(&body)
+---
+session:
+  activeOrganizationId: ~
+  createdAt: "[timestamp]"
+  expiresAt: "[timestamp]"
+  id: "[uuid]"
+  impersonatedBy: ~
+  ipAddress: ~
+  token: "[session_token]"
+  updatedAt: "[timestamp]"
+  userAgent: ~
+  userId: "[uuid]"
+user:
+  banExpires: ~
+  banReason: ~
+  banned: false
+  createdAt: "[timestamp]"
+  displayUsername: ~
+  email: session_snap@example.com
+  emailVerified: false
+  id: "[uuid]"
+  image: ~
+  name: Session Snap
+  role: ~
+  twoFactorEnabled: false
+  updatedAt: "[timestamp]"
+  username: ~

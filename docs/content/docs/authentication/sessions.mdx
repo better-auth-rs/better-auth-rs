@@ -174,10 +174,68 @@ Use `OptionalSession` for routes that should work for both authenticated and ano
 Session behavior is configured via `AuthConfig`:
 
 ```rust
+use better_auth::{AuthConfig, SameSite};
 use std::time::Duration;
 
-let config = AuthConfig::new("secret...")
-    .session_expires_in(Duration::from_secs(7 * 24 * 3600)); // 7 days
+let mut config = AuthConfig::new("secret...");
+config.session.expires_in = Duration::hours(24 * 7);        // 7 days
+config.session.cookie_name = "better-auth.session-token".to_string();
+config.session.cookie_secure = true;                         // HTTPS only
+config.session.cookie_http_only = true;                      // Block JavaScript access
+config.session.cookie_same_site = SameSite::Lax;             // CSRF protection
 ```
 
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `session.expires_in` | `Duration` | `7 days` | Session lifetime |
+| `session.cookie_name` | `String` | `better-auth.session-token` | Cookie name |
+| `session.cookie_secure` | `bool` | `true` | HTTPS-only cookie |
+| `session.cookie_http_only` | `bool` | `true` | Prevent JavaScript access |
+| `session.cookie_same_site` | `SameSite` | `Lax` | SameSite cookie policy |
+
 See [Configuration Options](/docs/reference/configuration-options) for all session settings.
+
+## Session Lifecycle
+
+1. **Creation**: A session is created on successful sign-up, sign-in, or 2FA verification
+2. **Storage**: The session token and metadata are stored in the database
+3. **Transmission**: The token is returned in the response body and set as a cookie
+4. **Validation**: On each authenticated request, the token is verified against the database
+5. **Expiration**: Sessions automatically expire after the configured duration
+6. **Revocation**: Sessions can be explicitly revoked via the API
+
+## Session Fields
+
+| Field | Description |
+|-------|-------------|
+| `id` | Unique session identifier |
+| `token` | Session token (sent as cookie or Bearer token) |
+| `userId` | ID of the authenticated user |
+| `expiresAt` | Session expiration timestamp |
+| `createdAt` | When the session was created |
+| `updatedAt` | Last update timestamp |
+| `ipAddress` | Client IP address (if available) |
+| `userAgent` | Client User-Agent string (if available) |
+| `impersonatedBy` | Admin user ID if this is an impersonated session |
+| `activeOrganizationId` | Active organization ID (if using Organization plugin) |
+
+## Two-Factor Authentication
+
+When 2FA is enabled for a user, the sign-in flow changes:
+
+1. User provides email/password — credentials are verified but no session is created
+2. A pending verification token is returned instead
+3. User must complete 2FA verification (TOTP, OTP, or backup code)
+4. Only after successful 2FA verification is a full session created
+
+See [Two-Factor Authentication](/docs/plugins/two-factor) for details.
+
+## Session Security
+
+- **Token entropy**: Tokens are generated using `OsRng` with sufficient entropy
+- **Cookie security**: Configure `Secure`, `HttpOnly`, and `SameSite` attributes appropriately
+- **IP tracking**: Client IP and User-Agent are stored for audit purposes
+- **Multiple sessions**: Users can have multiple active sessions across devices
+- **Selective revocation**: Revoke individual sessions, all sessions, or all except current
+
+See [Cookies](/docs/concepts/cookies) and [Security](/docs/reference/security) for more details.

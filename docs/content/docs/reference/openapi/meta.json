@@ -1,0 +1,12 @@
+{
+  "title": "OpenAPI Reference",
+  "pages": [
+    "default",
+    "admin",
+    "organization",
+    "two-factor",
+    "passkey",
+    "api-key",
+    "username"
+  ]
+}

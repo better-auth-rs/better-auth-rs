@@ -1,0 +1,103 @@
+---
+title: Two-Factor Authentication
+description: TOTP, OTP, and backup codes for two-factor authentication.
+---
+
+The `TwoFactorPlugin` adds two-factor authentication (2FA) to your application. It supports TOTP (authenticator apps), OTP (email-based one-time passwords), and backup codes for recovery.
+
+## Setup
+
+```rust
+use better_auth::plugins::TwoFactorPlugin;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(TwoFactorPlugin::new())
+    .build()
+    .await?;
+```
+
+### Configuration
+
+```rust
+use better_auth::plugins::two_factor::TwoFactorConfig;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(
+        TwoFactorPlugin::new().with_config(TwoFactorConfig {
+            issuer: "My App".to_string(),
+            backup_code_count: 10,
+            backup_code_length: 8,
+            totp_period: 30,
+            totp_digits: 6,
+        })
+    )
+    .build()
+    .await?;
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `issuer` | `String` | `"BetterAuth"` | Issuer name shown in authenticator apps |
+| `backup_code_count` | `usize` | `10` | Number of backup codes to generate |
+| `backup_code_length` | `usize` | `8` | Length of each backup code |
+| `totp_period` | `u64` | `30` | TOTP time step in seconds |
+| `totp_digits` | `usize` | `6` | Number of digits in TOTP code |
+
+## How It Works
+
+### Enrollment Flow
+
+1. User calls `/two-factor/enable` with their password
+2. A TOTP secret is generated and stored
+3. Backup codes are generated (hashed with Argon2 before storage)
+4. User scans the TOTP URI in their authenticator app
+
+### Sign-In Flow with 2FA
+
+1. User signs in with email/password as normal
+2. If 2FA is enabled, instead of creating a session, a pending verification is created
+3. User must verify with one of:
+   - **TOTP**: Code from authenticator app
+   - **OTP**: Code sent via email
+   - **Backup code**: One-time recovery code
+4. After successful verification, a session is created
+
+## API Endpoints
+
+The 2FA plugin exposes the following endpoints. For full request/response details, see the [OpenAPI Reference](/docs/reference/openapi/two-factor).
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/two-factor/enable` | POST | Enable 2FA (returns TOTP URI and backup codes) |
+| `/two-factor/disable` | POST | Disable 2FA (requires password) |
+| `/two-factor/get-totp-uri` | POST | Retrieve TOTP URI for enrolled user |
+| `/two-factor/verify-totp` | POST | Verify TOTP code during sign-in |
+| `/two-factor/send-otp` | POST | Send OTP via email |
+| `/two-factor/verify-otp` | POST | Verify email OTP |
+| `/two-factor/generate-backup-codes` | POST | Generate new backup codes |
+| `/two-factor/verify-backup-code` | POST | Verify a backup code during sign-in |
+
+<Callout type="warn">
+Backup codes are shown only once during enrollment or regeneration. Store them securely — they cannot be retrieved later.
+</Callout>
+
+## Security Details
+
+- **TOTP secrets** are stored as raw bytes in the database
+- **Backup codes** are hashed with Argon2 before storage — the plaintext is only returned once during generation
+- **OTP codes** are stored as verification records and expire after 5 minutes
+- **Password verification** is required to enable/disable 2FA and to regenerate backup codes
+- **Used backup codes** are immediately removed from the stored set
+
+## Errors
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Invalid TOTP code |
+| 400 | Invalid or expired backup code |
+| 400 | No backup codes available |
+| 401 | Invalid password |
+| 401 | Unauthenticated (missing or invalid session) |
+| 404 | Two-factor authentication not enabled |

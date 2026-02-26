@@ -137,6 +137,9 @@ serde_yaml = "0.9"
 tower-http = { version = "0.6", features = ["cors"] }
 tracing-subscriber = { workspace = true }
 oas3 = { version = "0.20.1", features = ["yaml-spec"] }
+insta = { version = "1.46.3", features = ["yaml"] }
+proptest = "1.10.0"
+reqwest = { workspace = true }
 
 [[example]]
 name = "axum_server"
