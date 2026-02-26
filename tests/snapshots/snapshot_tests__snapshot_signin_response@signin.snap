@@ -1,0 +1,22 @@
+---
+source: tests/snapshot_tests.rs
+expression: redact(&body)
+---
+redirect: false
+token: "[session_token]"
+url: ~
+user:
+  banExpires: ~
+  banReason: ~
+  banned: false
+  createdAt: "[timestamp]"
+  displayUsername: ~
+  email: signin_snap@example.com
+  emailVerified: false
+  id: "[uuid]"
+  image: ~
+  name: Signin Snap
+  role: ~
+  twoFactorEnabled: false
+  updatedAt: "[timestamp]"
+  username: ~
