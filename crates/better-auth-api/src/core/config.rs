@@ -42,7 +42,7 @@ pub struct SessionConfig {
     /// - `None` disables session refresh entirely (equivalent to TS `disableSessionRefresh: true`)
     /// - `Some(duration)` refreshes the session only when it was last updated more than `duration` ago
     ///
-    /// Default: `Some(Duration::days(1))` (86 400 seconds, same as the TS default `updateAge`).
+    /// Default: `Some(Duration::days(1))` (86,400 seconds, same as the TS default `updateAge`).
     pub update_age: Option<Duration>,
 
     /// How long a session is considered "fresh" after creation.
@@ -308,4 +308,4 @@ impl AuthConfig {
         
         Ok(())
     }
-}  
+} 
