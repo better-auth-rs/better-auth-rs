@@ -12,7 +12,7 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreatePasskey, CreateVerification, HttpMethod};
 
-use crate::cookie_utils::create_session_cookie;
+use better_auth_core::utils::cookie_utils::create_session_cookie;
 
 /// Passkey / WebAuthn authentication plugin.
 ///

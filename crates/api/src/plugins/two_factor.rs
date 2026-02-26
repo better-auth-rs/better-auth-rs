@@ -11,7 +11,7 @@ use better_auth_core::{
     AuthRequest, AuthResponse, CreateTwoFactor, CreateVerification, HttpMethod, UpdateUser,
 };
 
-use crate::cookie_utils::create_session_cookie;
+use better_auth_core::utils::cookie_utils::create_session_cookie;
 
 /// Two-factor authentication plugin providing TOTP, OTP, and backup code flows.
 pub struct TwoFactorPlugin {

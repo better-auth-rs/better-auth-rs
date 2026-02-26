@@ -2,7 +2,6 @@
 //!
 //! Plugin implementations for the Better Auth authentication framework.
 
-pub mod cookie_utils;
 pub mod plugins;
 
 pub use plugins::account_management::AccountManagementPlugin;

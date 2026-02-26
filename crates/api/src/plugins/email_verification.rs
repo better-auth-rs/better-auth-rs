@@ -14,7 +14,7 @@ use better_auth_core::{
     AuthSession, AuthUser, AuthVerification, DatabaseAdapter, SessionManager, User,
 };
 
-use crate::cookie_utils::create_session_cookie;
+use better_auth_core::utils::cookie_utils::create_session_cookie;
 
 /// Trait for custom email sending logic.
 ///

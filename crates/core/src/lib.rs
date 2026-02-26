@@ -11,7 +11,6 @@ pub mod error;
 pub mod hooks;
 pub mod middleware;
 pub mod openapi;
-pub mod password;
 pub mod plugin;
 pub mod session;
 pub mod types;
@@ -54,7 +53,6 @@ pub use middleware::{
     EndpointRateLimit, Middleware, RateLimitConfig, RateLimitMiddleware,
 };
 pub use openapi::{OpenApiBuilder, OpenApiInfo, OpenApiOperation, OpenApiResponse, OpenApiSpec};
-pub use password::{hash_password, verify_password};
 pub use plugin::{AuthContext, AuthPlugin, AuthRoute};
 pub use session::SessionManager;
 pub use types::{
@@ -66,3 +64,4 @@ pub use types::{
     UpdateAccount, UpdateApiKey, UpdateOrganization, UpdatePasskey, UpdateUser, UpdateUserRequest,
     UpdateUserResponse, User, ValidationErrorResponse, Verification,
 };
+pub use utils::password::{hash_password, verify_password};

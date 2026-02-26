@@ -11,7 +11,7 @@ use better_auth_core::{
     AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, HttpMethod, UpdateUser,
 };
 
-use crate::cookie_utils::create_session_cookie;
+use better_auth_core::utils::cookie_utils::create_session_cookie;
 
 // ---------------------------------------------------------------------------
 // Plugin & config

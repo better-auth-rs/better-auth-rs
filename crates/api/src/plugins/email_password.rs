@@ -11,7 +11,7 @@ use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod};
 
 use super::email_verification::EmailVerificationPlugin;
-use crate::cookie_utils::create_session_cookie;
+use better_auth_core::utils::cookie_utils::create_session_cookie;
 
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {

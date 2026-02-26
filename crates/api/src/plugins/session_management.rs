@@ -6,7 +6,7 @@ use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute, SessionManager};
 
-use crate::cookie_utils::create_clear_session_cookie;
+use better_auth_core::utils::cookie_utils::create_clear_session_cookie;
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
