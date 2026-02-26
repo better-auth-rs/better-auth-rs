@@ -9,10 +9,10 @@ use validator::Validate;
 
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, CreateVerification, HttpMethod, UpdateUser};
+use better_auth_core::{AuthRequest, AuthResponse, CreateVerification, HttpMethod};
 use better_auth_core::{AuthSession, AuthUser, AuthVerification, DatabaseAdapter};
 
-use super::email_password::PasswordHasher;
+use super::password_utils::{self, PasswordHasher};
 
 /// Type alias for the async password-reset callback to keep Clippy happy.
 pub type OnPasswordResetCallback =
@@ -323,8 +323,7 @@ impl PasswordManagementPlugin {
         };
 
         if let Some(sender) = &self.config.send_reset_password {
-            let user_value = serde_json::to_value(&user)
-                .map_err(|e| AuthError::internal(format!("Failed to serialize user: {}", e)))?;
+            let user_value = password_utils::serialize_to_value(&user)?;
             if let Err(e) = sender.send(&user_value, &reset_url, &reset_token).await {
                 eprintln!(
                     "[password-management] Custom send_reset_password failed for {}: {}",
@@ -393,22 +392,9 @@ impl PasswordManagementPlugin {
         let mut metadata = user.metadata().clone();
         metadata["password_hash"] = serde_json::Value::String(password_hash);
 
-        let update_user = UpdateUser {
-            email: None,
-            name: None,
-            image: None,
-            email_verified: None,
-            username: None,
-            display_username: None,
-            role: None,
-            banned: None,
-            ban_reason: None,
-            ban_expires: None,
-            two_factor_enabled: None,
-            metadata: Some(metadata),
-        };
-
-        ctx.database.update_user(user.id(), update_user).await?;
+        ctx.database
+            .update_user(user.id(), password_utils::update_user_metadata(metadata))
+            .await?;
 
         // Delete the used verification token
         ctx.database.delete_verification(verification.id()).await?;
@@ -420,8 +406,7 @@ impl PasswordManagementPlugin {
 
         // Call on_password_reset callback if configured
         if let Some(callback) = &self.config.on_password_reset {
-            let user_value = serde_json::to_value(&user)
-                .map_err(|e| AuthError::internal(format!("Failed to serialize user: {}", e)))?;
+            let user_value = password_utils::serialize_to_value(&user)?;
             callback(user_value).await?;
         }
 
@@ -468,22 +453,10 @@ impl PasswordManagementPlugin {
         let mut metadata = user.metadata().clone();
         metadata["password_hash"] = serde_json::Value::String(password_hash);
 
-        let update_user = UpdateUser {
-            email: None,
-            name: None,
-            image: None,
-            email_verified: None,
-            username: None,
-            display_username: None,
-            role: None,
-            banned: None,
-            ban_reason: None,
-            ban_expires: None,
-            two_factor_enabled: None,
-            metadata: Some(metadata),
-        };
-
-        let updated_user = ctx.database.update_user(user.id(), update_user).await?;
+        let updated_user = ctx
+            .database
+            .update_user(user.id(), password_utils::update_user_metadata(metadata))
+            .await?;
 
         // Handle session revocation
         let new_token = if change_req.revoke_other_sessions == Some(true) {
@@ -554,22 +527,9 @@ impl PasswordManagementPlugin {
         let mut metadata = user.metadata().clone();
         metadata["password_hash"] = serde_json::Value::String(password_hash);
 
-        let update_user = UpdateUser {
-            email: None,
-            name: None,
-            image: None,
-            email_verified: None,
-            username: None,
-            display_username: None,
-            role: None,
-            banned: None,
-            ban_reason: None,
-            ban_expires: None,
-            two_factor_enabled: None,
-            metadata: Some(metadata),
-        };
-
-        ctx.database.update_user(user.id(), update_user).await?;
+        ctx.database
+            .update_user(user.id(), password_utils::update_user_metadata(metadata))
+            .await?;
 
         let response = StatusResponse { status: true };
         Ok(AuthResponse::json(200, &response)?)
@@ -669,61 +629,14 @@ impl PasswordManagementPlugin {
         password: &str,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<()> {
-        let config = &ctx.config.password;
-
-        if password.len() < config.min_length {
-            return Err(AuthError::bad_request(format!(
-                "Password must be at least {} characters long",
-                config.min_length
-            )));
-        }
-
-        if config.require_uppercase && !password.chars().any(|c| c.is_uppercase()) {
-            return Err(AuthError::bad_request(
-                "Password must contain at least one uppercase letter",
-            ));
-        }
-
-        if config.require_lowercase && !password.chars().any(|c| c.is_lowercase()) {
-            return Err(AuthError::bad_request(
-                "Password must contain at least one lowercase letter",
-            ));
-        }
-
-        if config.require_numbers && !password.chars().any(|c| c.is_ascii_digit()) {
-            return Err(AuthError::bad_request(
-                "Password must contain at least one number",
-            ));
-        }
-
-        if config.require_special
-            && !password
-                .chars()
-                .any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c))
-        {
-            return Err(AuthError::bad_request(
-                "Password must contain at least one special character",
-            ));
-        }
-
-        Ok(())
+        // PasswordManagementPlugin does not own a max_length config, so we use
+        // usize::MAX (effectively no plugin-level cap). The global
+        // PasswordConfig rules (min length, strength) are still enforced.
+        password_utils::validate_password(password, usize::MAX, ctx)
     }
 
     async fn hash_password(&self, password: &str) -> AuthResult<String> {
-        if let Some(hasher) = &self.config.password_hasher {
-            return hasher.hash(password).await;
-        }
-        use argon2::password_hash::{SaltString, rand_core::OsRng};
-        use argon2::{Argon2, PasswordHasher as Argon2PasswordHasher};
-
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-
-        let password_hash = argon2
-            .hash_password(password.as_bytes(), &salt)
-            .map_err(|e| AuthError::PasswordHash(format!("Failed to hash password: {}", e)))?;
-
-        Ok(password_hash.to_string())
+        password_utils::hash_password(self.config.password_hasher.as_ref(), password).await
     }
 
     fn create_session_cookie<DB: DatabaseAdapter>(
@@ -731,54 +644,11 @@ impl PasswordManagementPlugin {
         token: &str,
         ctx: &AuthContext<DB>,
     ) -> String {
-        let session_config = &ctx.config.session;
-        let secure = if session_config.cookie_secure {
-            "; Secure"
-        } else {
-            ""
-        };
-        let http_only = if session_config.cookie_http_only {
-            "; HttpOnly"
-        } else {
-            ""
-        };
-        let same_site = match session_config.cookie_same_site {
-            better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
-            better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
-            better_auth_core::config::SameSite::None => "; SameSite=None",
-        };
-
-        let expires = chrono::Utc::now() + session_config.expires_in;
-        let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
-
-        format!(
-            "{}={}; Path=/; Expires={}{}{}{}",
-            session_config.cookie_name, token, expires_str, secure, http_only, same_site
-        )
+        password_utils::create_session_cookie(token, ctx)
     }
 
     async fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
-        if let Some(hasher) = &self.config.password_hasher {
-            return hasher.verify(hash, password).await.and_then(|valid| {
-                if valid {
-                    Ok(())
-                } else {
-                    Err(AuthError::InvalidCredentials)
-                }
-            });
-        }
-        use argon2::password_hash::PasswordHash;
-        use argon2::{Argon2, PasswordVerifier};
-
-        let parsed_hash = PasswordHash::new(hash)
-            .map_err(|e| AuthError::PasswordHash(format!("Invalid password hash: {}", e)))?;
-
-        let argon2 = Argon2::default();
-        argon2
-            .verify_password(password.as_bytes(), &parsed_hash)
-            .map_err(|_| AuthError::InvalidCredentials)?;
-
-        Ok(())
+        password_utils::verify_password(self.config.password_hasher.as_ref(), password, hash).await
     }
 }
 
@@ -856,6 +726,22 @@ mod tests {
         }
     }
 
+    /// Helper: create a reset-password verification token for the given user
+    /// email and store it in the database. Returns the token string.
+    async fn create_reset_token(ctx: &AuthContext<MemoryDatabaseAdapter>, email: &str) -> String {
+        let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
+        let create_verification = CreateVerification {
+            identifier: email.to_string(),
+            value: reset_token.clone(),
+            expires_at: Utc::now() + Duration::hours(24),
+        };
+        ctx.database
+            .create_verification(create_verification)
+            .await
+            .unwrap();
+        reset_token
+    }
+
     #[tokio::test]
     async fn test_forget_password_success() {
         let plugin = PasswordManagementPlugin::new();
@@ -911,17 +797,7 @@ mod tests {
         let plugin = PasswordManagementPlugin::new();
         let (ctx, user, _session) = create_test_context_with_user().await;
 
-        // Create verification token
-        let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
-        let create_verification = CreateVerification {
-            identifier: user.email.clone().unwrap(),
-            value: reset_token.clone(),
-            expires_at: Utc::now() + Duration::hours(24),
-        };
-        ctx.database
-            .create_verification(create_verification)
-            .await
-            .unwrap();
+        let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
 
         let body = serde_json::json!({
             "newPassword": "NewPassword123!",
@@ -997,17 +873,7 @@ mod tests {
         let plugin = PasswordManagementPlugin::new();
         let (ctx, user, _session) = create_test_context_with_user().await;
 
-        // Create verification token
-        let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
-        let create_verification = CreateVerification {
-            identifier: user.email.clone().unwrap(),
-            value: reset_token.clone(),
-            expires_at: Utc::now() + Duration::hours(24),
-        };
-        ctx.database
-            .create_verification(create_verification)
-            .await
-            .unwrap();
+        let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
 
         let body = serde_json::json!({
             "newPassword": "weak",
@@ -1241,17 +1107,7 @@ mod tests {
         let plugin = PasswordManagementPlugin::new();
         let (ctx, user, _session) = create_test_context_with_user().await;
 
-        // Create verification token
-        let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
-        let create_verification = CreateVerification {
-            identifier: user.email.clone().unwrap(),
-            value: reset_token.clone(),
-            expires_at: Utc::now() + Duration::hours(24),
-        };
-        ctx.database
-            .create_verification(create_verification)
-            .await
-            .unwrap();
+        let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
 
         let req = create_auth_request(HttpMethod::Get, "/reset-password/token", None, None);
 
@@ -1271,17 +1127,7 @@ mod tests {
         let plugin = PasswordManagementPlugin::new();
         let (ctx, user, _session) = create_test_context_with_user().await;
 
-        // Create verification token
-        let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
-        let create_verification = CreateVerification {
-            identifier: user.email.clone().unwrap(),
-            value: reset_token.clone(),
-            expires_at: Utc::now() + Duration::hours(24),
-        };
-        ctx.database
-            .create_verification(create_verification)
-            .await
-            .unwrap();
+        let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
 
         let mut query = HashMap::new();
         query.insert(
@@ -1534,17 +1380,7 @@ mod tests {
         let plugin = PasswordManagementPlugin::new().on_password_reset(callback);
         let (ctx, user, _session) = create_test_context_with_user().await;
 
-        // Create verification token
-        let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
-        let create_verification = CreateVerification {
-            identifier: user.email.clone().unwrap(),
-            value: reset_token.clone(),
-            expires_at: Utc::now() + Duration::hours(24),
-        };
-        ctx.database
-            .create_verification(create_verification)
-            .await
-            .unwrap();
+        let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
 
         let body = serde_json::json!({
             "newPassword": "NewPassword123!",
@@ -1572,17 +1408,7 @@ mod tests {
         let plugin = PasswordManagementPlugin::new().revoke_sessions_on_password_reset(false);
         let (ctx, user, session) = create_test_context_with_user().await;
 
-        // Create verification token
-        let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
-        let create_verification = CreateVerification {
-            identifier: user.email.clone().unwrap(),
-            value: reset_token.clone(),
-            expires_at: Utc::now() + Duration::hours(24),
-        };
-        ctx.database
-            .create_verification(create_verification)
-            .await
-            .unwrap();
+        let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
 
         let body = serde_json::json!({
             "newPassword": "NewPassword123!",
@@ -1616,17 +1442,7 @@ mod tests {
         let plugin = PasswordManagementPlugin::new();
         let (ctx, user, _session) = create_test_context_with_user().await;
 
-        // Create verification token
-        let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
-        let create_verification = CreateVerification {
-            identifier: user.email.clone().unwrap(),
-            value: reset_token.clone(),
-            expires_at: Utc::now() + Duration::hours(24),
-        };
-        ctx.database
-            .create_verification(create_verification)
-            .await
-            .unwrap();
+        let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
 
         let body = serde_json::json!({
             "newPassword": "NewPassword123!",

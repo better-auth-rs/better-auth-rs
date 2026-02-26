@@ -1,5 +1,3 @@
-use argon2::password_hash::{SaltString, rand_core::OsRng};
-use argon2::{Argon2, PasswordHash, PasswordHasher as Argon2PasswordHasher, PasswordVerifier};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -11,17 +9,7 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod};
 
-/// Custom password hasher trait for pluggable password hashing strategies.
-///
-/// When provided in `EmailPasswordConfig` or `PasswordManagementConfig`, this
-/// overrides the default Argon2-based password hashing.
-#[async_trait]
-pub trait PasswordHasher: Send + Sync {
-    /// Hash a plaintext password and return the hash string.
-    async fn hash(&self, password: &str) -> AuthResult<String>;
-    /// Verify a password against a hash string. Returns `true` if the password matches.
-    async fn verify(&self, hash: &str, password: &str) -> AuthResult<bool>;
-}
+use super::password_utils::{self, PasswordHasher};
 
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
@@ -360,33 +348,11 @@ impl EmailPasswordPlugin {
         password: &str,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<()> {
-        if password.len() < ctx.config.password.min_length {
-            return Err(AuthError::bad_request(format!(
-                "Password must be at least {} characters long",
-                ctx.config.password.min_length
-            )));
-        }
-        if password.len() > self.config.password_max_length {
-            return Err(AuthError::bad_request(format!(
-                "Password must be at most {} characters long",
-                self.config.password_max_length
-            )));
-        }
-        Ok(())
+        password_utils::validate_password(password, self.config.password_max_length, ctx)
     }
 
     async fn hash_password(&self, password: &str) -> AuthResult<String> {
-        if let Some(hasher) = &self.config.password_hasher {
-            return hasher.hash(password).await;
-        }
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-
-        let password_hash = argon2
-            .hash_password(password.as_bytes(), &salt)
-            .map_err(|e| AuthError::PasswordHash(format!("Failed to hash password: {}", e)))?;
-
-        Ok(password_hash.to_string())
+        password_utils::hash_password(self.config.password_hasher.as_ref(), password).await
     }
 
     fn create_session_cookie<DB: DatabaseAdapter>(
@@ -394,51 +360,11 @@ impl EmailPasswordPlugin {
         token: &str,
         ctx: &AuthContext<DB>,
     ) -> String {
-        let session_config = &ctx.config.session;
-        let secure = if session_config.cookie_secure {
-            "; Secure"
-        } else {
-            ""
-        };
-        let http_only = if session_config.cookie_http_only {
-            "; HttpOnly"
-        } else {
-            ""
-        };
-        let same_site = match session_config.cookie_same_site {
-            better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
-            better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
-            better_auth_core::config::SameSite::None => "; SameSite=None",
-        };
-
-        let expires = chrono::Utc::now() + session_config.expires_in;
-        let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
-
-        format!(
-            "{}={}; Path=/; Expires={}{}{}{}",
-            session_config.cookie_name, token, expires_str, secure, http_only, same_site
-        )
+        password_utils::create_session_cookie(token, ctx)
     }
 
     async fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
-        if let Some(hasher) = &self.config.password_hasher {
-            return hasher.verify(hash, password).await.and_then(|valid| {
-                if valid {
-                    Ok(())
-                } else {
-                    Err(AuthError::InvalidCredentials)
-                }
-            });
-        }
-        let parsed_hash = PasswordHash::new(hash)
-            .map_err(|e| AuthError::PasswordHash(format!("Invalid password hash: {}", e)))?;
-
-        let argon2 = Argon2::default();
-        argon2
-            .verify_password(password.as_bytes(), &parsed_hash)
-            .map_err(|_| AuthError::InvalidCredentials)?;
-
-        Ok(())
+        password_utils::verify_password(self.config.password_hasher.as_ref(), password, hash).await
     }
 }
 
