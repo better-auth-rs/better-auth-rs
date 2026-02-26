@@ -29,14 +29,18 @@ uuid = { workspace = true }
 argon2 = { workspace = true }
 sha2 = { workspace = true }
 aes-gcm = { workspace = true }
+hkdf = { workspace = true }
+hmac = { workspace = true }
 rand = { workspace = true }
 base64 = { workspace = true }
 totp-rs = { workspace = true }
+cookie = { workspace = true }
 
 # HTTP client
 reqwest = { workspace = true }
 
-# URL encoding
+# URL
+url = { workspace = true }
 urlencoding = "2"
 
 [dev-dependencies]

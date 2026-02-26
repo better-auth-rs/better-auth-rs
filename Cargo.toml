@@ -63,6 +63,9 @@ base64 = "0.22"
 jsonwebtoken = "9"
 sha2 = "0.10"
 aes-gcm = "0.10"
+hkdf = "0.12"
+hmac = "0.12"
+cookie = "0.18"
 totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 
 # HTTP client

@@ -10,13 +10,123 @@ use better_auth_core::{
     CreateVerification, DatabaseAdapter, SessionManager, UpdateAccount, UpdateUser,
 };
 
-use super::encryption::{maybe_decrypt, maybe_encrypt};
+use super::encryption::{encrypt_token_set, maybe_decrypt};
 
 use super::providers::OAuthConfig;
 use super::types::{
     AccessTokenResponse, GetAccessTokenRequest, LinkSocialRequest, OAuthCallbackResponse,
     RefreshTokenRequest, RefreshTokenResponse, SocialSignInRequest, SocialSignInResponse,
 };
+
+// ---------------------------------------------------------------------------
+// Shared helpers (DRY)
+// ---------------------------------------------------------------------------
+
+/// Authenticate the current request and return the validated session.
+async fn require_session<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+) -> Result<DB::Session, AuthError> {
+    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let token = session_manager
+        .extract_session_token(req)
+        .ok_or(AuthError::Unauthenticated)?;
+    session_manager
+        .get_session(&token)
+        .await?
+        .ok_or(AuthError::Unauthenticated)
+}
+
+/// Create session + cookie + JSON response for the OAuth callback flow.
+async fn create_oauth_session_response<DB: DatabaseAdapter>(
+    user: DB::User,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<AuthResponse> {
+    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let session = session_manager.create_session(&user, None, None).await?;
+
+    let response = OAuthCallbackResponse {
+        token: session.token().to_string(),
+        user,
+    };
+
+    let cookie_header = build_session_cookie(session.token(), ctx);
+    Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+}
+
+/// Find the account for a specific provider among a user's linked accounts.
+fn find_account_for_provider<'a, A: AuthAccount>(
+    accounts: &'a [A],
+    provider_id: &str,
+) -> Result<&'a A, AuthError> {
+    accounts
+        .iter()
+        .find(|a| a.provider_id() == provider_id)
+        .ok_or_else(|| {
+            AuthError::not_found(format!(
+                "No linked account found for provider: {}",
+                provider_id
+            ))
+        })
+}
+
+/// Shared logic for `handle_social_sign_in` and `handle_link_social`.
+///
+/// Both flows build a verification payload, store it, construct the
+/// authorization URL, and return a redirect response. The only difference
+/// is `link_user_id` (None for sign-in, Some for linking).
+async fn initiate_oauth_flow<DB: DatabaseAdapter>(
+    config: &OAuthConfig,
+    ctx: &AuthContext<DB>,
+    provider_name: &str,
+    callback_url: &str,
+    scopes: Option<&[String]>,
+    link_user_id: Option<&str>,
+) -> AuthResult<AuthResponse> {
+    let provider = config
+        .providers
+        .get(provider_name)
+        .ok_or_else(|| AuthError::bad_request(format!("Unknown provider: {}", provider_name)))?;
+
+    let (code_verifier, code_challenge) = generate_pkce();
+    let state = uuid::Uuid::new_v4().to_string();
+
+    let effective_scopes: Vec<String> = scopes
+        .map(|s| s.to_vec())
+        .unwrap_or_else(|| provider.scopes.clone());
+
+    let payload = serde_json::json!({
+        "provider": provider_name,
+        "callback_url": callback_url,
+        "code_verifier": code_verifier,
+        "link_user_id": link_user_id,
+        "scopes": effective_scopes.join(" "),
+    });
+
+    ctx.database
+        .create_verification(CreateVerification {
+            identifier: format!("oauth:{}", state),
+            value: payload.to_string(),
+            expires_at: Utc::now() + Duration::minutes(10),
+        })
+        .await?;
+
+    let url = build_authorization_url(
+        config,
+        provider_name,
+        callback_url,
+        scopes,
+        &state,
+        &code_challenge,
+    )?;
+
+    let response = SocialSignInResponse {
+        url,
+        redirect: true,
+    };
+
+    AuthResponse::json(200, &response).map_err(AuthError::from)
+}
 
 fn generate_pkce() -> (String, String) {
     let verifier: String = thread_rng()
@@ -37,7 +147,6 @@ fn build_authorization_url(
     scopes: Option<&[String]>,
     state: &str,
     code_challenge: &str,
-    link_user_id: Option<&str>,
 ) -> AuthResult<String> {
     let provider = config
         .providers
@@ -48,8 +157,6 @@ fn build_authorization_url(
         .map(|s| s.iter().map(|s| s.as_str()).collect())
         .unwrap_or_else(|| provider.scopes.iter().map(|s| s.as_str()).collect());
     let scope_str = effective_scopes.join(" ");
-
-    let _ = link_user_id;
 
     let url = format!(
         "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&state={}&code_challenge={}&code_challenge_method=S256",
@@ -76,62 +183,20 @@ pub async fn handle_social_sign_in<DB: DatabaseAdapter>(
 
     let provider_name = &signin_req.provider;
 
-    // Verify provider exists
-    if !config.providers.contains_key(provider_name) {
-        return Err(AuthError::bad_request(format!(
-            "Unknown provider: {}",
-            provider_name
-        )));
-    }
-
     let callback_url = signin_req
         .callback_url
         .clone()
         .unwrap_or_else(|| format!("{}/callback/{}", ctx.config.base_url, provider_name));
 
-    let (code_verifier, code_challenge) = generate_pkce();
-    let state = uuid::Uuid::new_v4().to_string();
-
-    let scopes = signin_req.scopes.as_deref();
-
-    let provider = config.providers.get(provider_name).unwrap();
-    let effective_scopes: Vec<String> = scopes
-        .map(|s| s.to_vec())
-        .unwrap_or_else(|| provider.scopes.clone());
-
-    // Store state via verification
-    let payload = serde_json::json!({
-        "provider": provider_name,
-        "callback_url": callback_url,
-        "code_verifier": code_verifier,
-        "link_user_id": null,
-        "scopes": effective_scopes.join(" "),
-    });
-
-    ctx.database
-        .create_verification(CreateVerification {
-            identifier: format!("oauth:{}", state),
-            value: payload.to_string(),
-            expires_at: Utc::now() + Duration::minutes(10),
-        })
-        .await?;
-
-    let url = build_authorization_url(
+    initiate_oauth_flow(
         config,
+        ctx,
         provider_name,
         &callback_url,
         signin_req.scopes.as_deref(),
-        &state,
-        &code_challenge,
         None,
-    )?;
-
-    let response = SocialSignInResponse {
-        url,
-        redirect: true,
-    };
-
-    AuthResponse::json(200, &response).map_err(AuthError::from)
+    )
+    .await
 }
 
 pub async fn handle_callback<DB: DatabaseAdapter>(
@@ -287,16 +352,16 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
         }
 
         // Create account link (encrypt tokens if configured)
-        let encrypt = ctx.config.account.encrypt_oauth_tokens;
-        let secret = &ctx.config.secret;
+        let tokens =
+            encrypt_token_set(ctx, Some(access_token.to_string()), refresh_token, id_token)?;
         ctx.database
             .create_account(CreateAccount {
                 user_id: link_user_id,
                 account_id: user_info.id,
                 provider_id: provider_name.to_string(),
-                access_token: maybe_encrypt(Some(access_token.to_string()), encrypt, secret)?,
-                refresh_token: maybe_encrypt(refresh_token, encrypt, secret)?,
-                id_token: maybe_encrypt(id_token, encrypt, secret)?,
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token,
+                id_token: tokens.id_token,
                 access_token_expires_at,
                 refresh_token_expires_at: None,
                 scope: scopes,
@@ -304,17 +369,7 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
             })
             .await?;
 
-        // Create session
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager.create_session(&user, None, None).await?;
-
-        let response = OAuthCallbackResponse {
-            token: session.token().to_string(),
-            user,
-        };
-
-        let cookie_header = create_session_cookie(session.token(), ctx);
-        return Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header));
+        return create_oauth_session_response(user, ctx).await;
     }
 
     // Check if an account already exists for this provider + account_id
@@ -323,23 +378,21 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
         .get_account(provider_name, &user_info.id)
         .await?
     {
-        let account_cfg = &ctx.config.account;
-        let encrypt = account_cfg.encrypt_oauth_tokens;
-        let secret = &ctx.config.secret;
-
         // Update tokens on the existing account (respects update_account_on_sign_in)
-        if account_cfg.update_account_on_sign_in {
+        if ctx.config.account.update_account_on_sign_in {
+            let tokens = encrypt_token_set(
+                ctx,
+                Some(access_token.to_string()),
+                refresh_token.clone(),
+                id_token.clone(),
+            )?;
             ctx.database
                 .update_account(
                     existing_account.id(),
                     UpdateAccount {
-                        access_token: maybe_encrypt(
-                            Some(access_token.to_string()),
-                            encrypt,
-                            secret,
-                        )?,
-                        refresh_token: maybe_encrypt(refresh_token.clone(), encrypt, secret)?,
-                        id_token: maybe_encrypt(id_token.clone(), encrypt, secret)?,
+                        access_token: tokens.access_token,
+                        refresh_token: tokens.refresh_token,
+                        id_token: tokens.id_token,
                         access_token_expires_at,
                         scope: scopes,
                         ..Default::default()
@@ -355,23 +408,10 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
             .await?
             .ok_or(AuthError::UserNotFound)?;
 
-        // Create session
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager.create_session(&user, None, None).await?;
-
-        let response = OAuthCallbackResponse {
-            token: session.token().to_string(),
-            user,
-        };
-
-        let cookie_header = create_session_cookie(session.token(), ctx);
-        return Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header));
+        return create_oauth_session_response(user, ctx).await;
     }
 
-    let account_cfg = &ctx.config.account;
-    let linking_cfg = &account_cfg.account_linking;
-    let encrypt = account_cfg.encrypt_oauth_tokens;
-    let secret = &ctx.config.secret;
+    let linking_cfg = &ctx.config.account.account_linking;
 
     // Check if a user with this email already exists
     let user = if let Some(existing_user) = ctx.database.get_user_by_email(&user_info.email).await?
@@ -424,14 +464,15 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
     };
 
     // Create account (encrypt tokens if configured)
+    let tokens = encrypt_token_set(ctx, Some(access_token.to_string()), refresh_token, id_token)?;
     ctx.database
         .create_account(CreateAccount {
             user_id: user.id().to_string(),
             account_id: user_info.id,
             provider_id: provider_name.to_string(),
-            access_token: maybe_encrypt(Some(access_token.to_string()), encrypt, secret)?,
-            refresh_token: maybe_encrypt(refresh_token, encrypt, secret)?,
-            id_token: maybe_encrypt(id_token, encrypt, secret)?,
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+            id_token: tokens.id_token,
             access_token_expires_at,
             refresh_token_expires_at: None,
             scope: scopes,
@@ -439,17 +480,7 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
         })
         .await?;
 
-    // Create session
-    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    let session = session_manager.create_session(&user, None, None).await?;
-
-    let response = OAuthCallbackResponse {
-        token: session.token().to_string(),
-        user,
-    };
-
-    let cookie_header = create_session_cookie(session.token(), ctx);
-    Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+    create_oauth_session_response(user, ctx).await
 }
 
 pub async fn handle_link_social<DB: DatabaseAdapter>(
@@ -457,15 +488,7 @@ pub async fn handle_link_social<DB: DatabaseAdapter>(
     req: &AuthRequest,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<AuthResponse> {
-    // Require authenticated session
-    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    let token = session_manager
-        .extract_session_token(req)
-        .ok_or(AuthError::Unauthenticated)?;
-    let session = session_manager
-        .get_session(&token)
-        .await?
-        .ok_or(AuthError::Unauthenticated)?;
+    let session = require_session(req, ctx).await?;
 
     let link_req: LinkSocialRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
@@ -474,60 +497,20 @@ pub async fn handle_link_social<DB: DatabaseAdapter>(
 
     let provider_name = &link_req.provider;
 
-    if !config.providers.contains_key(provider_name) {
-        return Err(AuthError::bad_request(format!(
-            "Unknown provider: {}",
-            provider_name
-        )));
-    }
-
     let callback_url = link_req
         .callback_url
         .clone()
         .unwrap_or_else(|| format!("{}/callback/{}", ctx.config.base_url, provider_name));
 
-    let (code_verifier, code_challenge) = generate_pkce();
-    let state = uuid::Uuid::new_v4().to_string();
-
-    let provider = config.providers.get(provider_name).unwrap();
-    let effective_scopes: Vec<String> = link_req
-        .scopes
-        .clone()
-        .unwrap_or_else(|| provider.scopes.clone());
-
-    // Store state with the user ID to link
-    let payload = serde_json::json!({
-        "provider": provider_name,
-        "callback_url": callback_url,
-        "code_verifier": code_verifier,
-        "link_user_id": session.user_id(),
-        "scopes": effective_scopes.join(" "),
-    });
-
-    ctx.database
-        .create_verification(CreateVerification {
-            identifier: format!("oauth:{}", state),
-            value: payload.to_string(),
-            expires_at: Utc::now() + Duration::minutes(10),
-        })
-        .await?;
-
-    let url = build_authorization_url(
+    initiate_oauth_flow(
         config,
+        ctx,
         provider_name,
         &callback_url,
         link_req.scopes.as_deref(),
-        &state,
-        &code_challenge,
         Some(session.user_id()),
-    )?;
-
-    let response = SocialSignInResponse {
-        url,
-        redirect: true,
-    };
-
-    AuthResponse::json(200, &response).map_err(AuthError::from)
+    )
+    .await
 }
 
 pub async fn handle_get_access_token<DB: DatabaseAdapter>(
@@ -537,33 +520,15 @@ pub async fn handle_get_access_token<DB: DatabaseAdapter>(
 ) -> AuthResult<AuthResponse> {
     let _ = config;
 
-    // Require authenticated session
-    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    let token = session_manager
-        .extract_session_token(req)
-        .ok_or(AuthError::Unauthenticated)?;
-    let session = session_manager
-        .get_session(&token)
-        .await?
-        .ok_or(AuthError::Unauthenticated)?;
+    let session = require_session(req, ctx).await?;
 
     let get_req: GetAccessTokenRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
 
-    // Find the account for this provider
     let accounts = ctx.database.get_user_accounts(session.user_id()).await?;
-
-    let account = accounts
-        .iter()
-        .find(|a| a.provider_id() == get_req.provider_id)
-        .ok_or_else(|| {
-            AuthError::not_found(format!(
-                "No linked account found for provider: {}",
-                get_req.provider_id
-            ))
-        })?;
+    let account = find_account_for_provider(&accounts, &get_req.provider_id)?;
 
     // Decrypt tokens transparently if encryption is enabled
     let encrypt = ctx.config.account.encrypt_oauth_tokens;
@@ -583,15 +548,7 @@ pub async fn handle_refresh_token<DB: DatabaseAdapter>(
     req: &AuthRequest,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<AuthResponse> {
-    // Require authenticated session
-    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    let token = session_manager
-        .extract_session_token(req)
-        .ok_or(AuthError::Unauthenticated)?;
-    let session = session_manager
-        .get_session(&token)
-        .await?
-        .ok_or(AuthError::Unauthenticated)?;
+    let session = require_session(req, ctx).await?;
 
     let refresh_req: RefreshTokenRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
@@ -605,32 +562,15 @@ pub async fn handle_refresh_token<DB: DatabaseAdapter>(
         .get(provider_name)
         .ok_or_else(|| AuthError::bad_request(format!("Unknown provider: {}", provider_name)))?;
 
-    // Find the account for this provider
     let accounts = ctx.database.get_user_accounts(session.user_id()).await?;
+    let account = find_account_for_provider(&accounts, provider_name)?;
 
-    let account = accounts
-        .iter()
-        .find(|a| a.provider_id() == provider_name.as_str())
-        .ok_or_else(|| {
-            AuthError::not_found(format!(
-                "No linked account found for provider: {}",
-                provider_name
-            ))
-        })?;
-
-    // Decrypt refresh token if encryption is enabled
+    // Decrypt refresh token transparently via maybe_decrypt
     let encrypt = ctx.config.account.encrypt_oauth_tokens;
     let secret = &ctx.config.secret;
 
-    let raw_refresh_token = account
-        .refresh_token()
+    let current_refresh_token = maybe_decrypt(account.refresh_token(), encrypt, secret)?
         .ok_or_else(|| AuthError::bad_request("No refresh token available for this provider"))?;
-
-    let current_refresh_token = if encrypt {
-        super::encryption::decrypt_token(raw_refresh_token, secret)?
-    } else {
-        raw_refresh_token.to_string()
-    };
 
     // Exchange refresh token for new access token
     let client = reqwest::Client::new();
@@ -674,12 +614,18 @@ pub async fn handle_refresh_token<DB: DatabaseAdapter>(
     let access_token_expires_at = expires_in.map(|secs| Utc::now() + Duration::seconds(secs));
 
     // Update the account with new tokens (encrypt if configured)
+    let tokens = encrypt_token_set(
+        ctx,
+        Some(new_access_token.to_string()),
+        new_refresh_token.clone(),
+        None,
+    )?;
     ctx.database
         .update_account(
             account.id(),
             UpdateAccount {
-                access_token: maybe_encrypt(Some(new_access_token.to_string()), encrypt, secret)?,
-                refresh_token: maybe_encrypt(new_refresh_token.clone(), encrypt, secret)?,
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token,
                 access_token_expires_at,
                 scope: new_scope.clone(),
                 ..Default::default()
@@ -697,42 +643,44 @@ pub async fn handle_refresh_token<DB: DatabaseAdapter>(
     AuthResponse::json(200, &response).map_err(AuthError::from)
 }
 
+/// Extract a query parameter from a path string using the `url` crate.
 fn extract_query_param(path: &str, key: &str) -> Option<String> {
-    let query_string = path.split('?').nth(1)?;
-    for pair in query_string.split('&') {
-        let mut parts = pair.splitn(2, '=');
-        if let (Some(k), Some(v)) = (parts.next(), parts.next())
-            && k == key
-        {
-            return Some(urlencoding::decode(v).unwrap_or_default().into_owned());
-        }
-    }
-    None
+    // url::Url requires a base; use a dummy scheme+host so relative paths parse.
+    let full = if path.starts_with("http") {
+        path.to_string()
+    } else {
+        format!("http://x{}", path)
+    };
+    let parsed = url::Url::parse(&full).ok()?;
+    parsed
+        .query_pairs()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.into_owned())
 }
 
-fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
+/// Build a `Set-Cookie` header value using the `cookie` crate.
+fn build_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
     let session_config = &ctx.config.session;
-    let secure = if session_config.cookie_secure {
-        "; Secure"
-    } else {
-        ""
-    };
-    let http_only = if session_config.cookie_http_only {
-        "; HttpOnly"
-    } else {
-        ""
-    };
-    let same_site = match session_config.cookie_same_site {
-        better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
-        better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
-        better_auth_core::config::SameSite::None => "; SameSite=None",
-    };
 
     let expires = Utc::now() + session_config.expires_in;
-    let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
 
-    format!(
-        "{}={}; Path=/; Expires={}{}{}{}",
-        session_config.cookie_name, token, expires_str, secure, http_only, same_site
-    )
+    let same_site = match session_config.cookie_same_site {
+        better_auth_core::config::SameSite::Strict => cookie::SameSite::Strict,
+        better_auth_core::config::SameSite::Lax => cookie::SameSite::Lax,
+        better_auth_core::config::SameSite::None => cookie::SameSite::None,
+    };
+
+    let mut builder = cookie::Cookie::build((&session_config.cookie_name, token))
+        .path("/")
+        .same_site(same_site)
+        .expires(cookie::time::OffsetDateTime::from_unix_timestamp(expires.timestamp()).unwrap());
+
+    if session_config.cookie_secure {
+        builder = builder.secure(true);
+    }
+    if session_config.cookie_http_only {
+        builder = builder.http_only(true);
+    }
+
+    builder.build().to_string()
 }

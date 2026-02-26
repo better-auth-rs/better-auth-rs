@@ -7,14 +7,26 @@
 use aes_gcm::aead::{Aead, KeyInit, OsRng};
 use aes_gcm::{AeadCore, Aes256Gcm, Key, Nonce};
 use base64::Engine;
-use sha2::{Digest, Sha256};
+use hkdf::Hkdf;
+use sha2::Sha256;
 
 use better_auth_core::AuthError;
 
-/// Derive a 256-bit key from the auth secret using SHA-256.
+/// Domain separator used for HKDF key derivation.
+const HKDF_INFO: &[u8] = b"better-auth-oauth-token-encryption";
+
+/// Derive a 256-bit key from the auth secret using HKDF-SHA256.
+///
+/// Uses an empty salt (extraction still strengthens the key) and a
+/// domain-specific info string to ensure the derived key is isolated
+/// to OAuth token encryption.
 fn derive_key(secret: &str) -> Key<Aes256Gcm> {
-    let hash = Sha256::digest(secret.as_bytes());
-    *Key::<Aes256Gcm>::from_slice(&hash)
+    let hk = Hkdf::<Sha256>::new(None, secret.as_bytes());
+    let mut okm = [0u8; 32];
+    // info is static so expand will never fail
+    hk.expand(HKDF_INFO, &mut okm)
+        .expect("32 bytes is a valid length for HKDF-SHA256");
+    *Key::<Aes256Gcm>::from_slice(&okm)
 }
 
 /// Encrypt a plaintext string using AES-256-GCM.
@@ -87,6 +99,30 @@ pub fn maybe_decrypt(
         (Some(v), false) => Ok(Some(v.to_string())),
         (None, _) => Ok(None),
     }
+}
+
+/// A set of OAuth tokens (access, refresh, id) after conditional encryption.
+pub struct EncryptedTokenSet {
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>,
+    pub id_token: Option<String>,
+}
+
+/// Read `encrypt_oauth_tokens` and `secret` from the auth context and
+/// conditionally encrypt a full set of OAuth tokens in one call.
+pub fn encrypt_token_set<DB: better_auth_core::DatabaseAdapter>(
+    ctx: &better_auth_core::AuthContext<DB>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    id_token: Option<String>,
+) -> Result<EncryptedTokenSet, AuthError> {
+    let encrypt = ctx.config.account.encrypt_oauth_tokens;
+    let secret = &ctx.config.secret;
+    Ok(EncryptedTokenSet {
+        access_token: maybe_encrypt(access_token, encrypt, secret)?,
+        refresh_token: maybe_encrypt(refresh_token, encrypt, secret)?,
+        id_token: maybe_encrypt(id_token, encrypt, secret)?,
+    })
 }
 
 #[cfg(test)]
