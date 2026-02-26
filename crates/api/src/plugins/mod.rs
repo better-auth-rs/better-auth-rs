@@ -13,10 +13,13 @@ pub mod two_factor;
 pub use account_management::AccountManagementPlugin;
 pub use admin::{AdminConfig, AdminPlugin};
 pub use api_key::{ApiKeyConfig, ApiKeyPlugin};
-pub use email_password::EmailPasswordPlugin;
+pub use better_auth_core::PasswordHasher;
+pub use email_password::{EmailPasswordConfig, EmailPasswordPlugin};
 pub use email_verification::EmailVerificationPlugin;
 pub use organization::{OrganizationConfig, OrganizationPlugin};
 pub use passkey::{PasskeyConfig, PasskeyPlugin};
-pub use password_management::PasswordManagementPlugin;
+pub use password_management::{
+    PasswordManagementConfig, PasswordManagementPlugin, SendResetPassword,
+};
 pub use session_management::SessionManagementPlugin;
 pub use two_factor::{TwoFactorConfig, TwoFactorPlugin};
