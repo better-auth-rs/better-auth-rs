@@ -33,13 +33,21 @@ Controls session token behavior and cookie settings.
 | Field | Type | Default |
 |-------|------|---------|
 | `expires_in` | `Duration` | 7 days |
-| `update_age` | `bool` | `true` |
+| `update_age` | `Option<Duration>` | `Some(1 day)` |
+| `fresh_age` | `Duration` | 1 day |
 | `cookie_name` | `String` | `"better-auth.session-token"` |
 | `cookie_secure` | `bool` | `true` |
 | `cookie_http_only` | `bool` | `true` |
 | `cookie_same_site` | `SameSite` | `Lax` |
+| `cookie_cache` | `Option<CookieCacheConfig>` | `None` |
 
 `SameSite` variants: `Strict`, `Lax`, `None`.
+
+`update_age`: `None` disables session refresh entirely. `Some(duration)` refreshes the session only when last updated more than `duration` ago.
+
+`fresh_age`: Used by `SessionManager::is_session_fresh()` to check if a session was created recently enough for sensitive operations.
+
+`cookie_cache`: When set, session data is cached in a signed/encrypted cookie to avoid DB lookups. See `CookieCacheConfig` and `CookieCacheStrategy` (`Compact`, `Jwt`, `Jwe`).
 
 ## JwtConfig
 

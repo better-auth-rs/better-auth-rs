@@ -46,19 +46,24 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
 
         // Check if session exists and is not expired
         if let Some(ref session) = session {
-            if session.expires_at() < Utc::now() || !session.active() {
+            let now = Utc::now();
+
+            if session.expires_at() < now || !session.active() {
                 // Session expired or inactive - delete it
                 self.database.delete_session(token).await?;
                 return Ok(None);
             }
 
-            // Update session if configured to do so
-            if self.config.session.update_age {
-                let new_expires_at = Utc::now() + self.config.session.expires_in;
-                let _ = self
-                    .database
-                    .update_session_expiry(token, new_expires_at)
-                    .await;
+            // Refresh the session expiry if configured and enough time has elapsed
+            if let Some(update_age) = self.config.session.update_age {
+                let elapsed_since_update = now - session.updated_at();
+                if elapsed_since_update >= update_age {
+                    let new_expires_at = now + self.config.session.expires_in;
+                    let _ = self
+                        .database
+                        .update_session_expiry(token, new_expires_at)
+                        .await;
+                }
             }
         }
 
@@ -137,6 +142,15 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
     pub async fn cleanup_expired_sessions(&self) -> AuthResult<usize> {
         let count = self.database.delete_expired_sessions().await?;
         Ok(count)
+    }
+
+    /// Check whether a session is "fresh" (created recently enough for
+    /// sensitive operations like password change or account deletion).
+    ///
+    /// Returns `true` when `session.created_at() + fresh_age > now`.
+    pub fn is_session_fresh(&self, session: &impl AuthSession) -> bool {
+        let fresh_until = session.created_at() + self.config.session.fresh_age;
+        fresh_until > Utc::now()
     }
 
     /// Validate session token format

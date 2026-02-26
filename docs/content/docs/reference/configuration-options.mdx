@@ -18,11 +18,21 @@ description: Complete reference for all configuration fields and defaults.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `expires_in` | `Duration` | 7 days | Session token lifetime |
-| `update_age` | `bool` | `true` | Update session expiry on access |
+| `update_age` | `Option<Duration>` | `Some(1 day)` | Refresh session expiry when last update exceeds this duration. `None` disables refresh entirely |
+| `fresh_age` | `Duration` | 1 day | Window after creation in which a session is considered "fresh" for sensitive operations |
 | `cookie_name` | `String` | `"better-auth.session-token"` | Session cookie name |
 | `cookie_secure` | `bool` | `true` | Secure cookie flag |
 | `cookie_http_only` | `bool` | `true` | HttpOnly cookie flag |
 | `cookie_same_site` | `SameSite` | `Lax` | SameSite cookie policy |
+| `cookie_cache` | `Option<CookieCacheConfig>` | `None` | Optional cookie-based session cache to skip DB lookups |
+
+## CookieCacheConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | `bool` | `false` | Whether the cookie cache is active |
+| `max_age` | `Duration` | 5 minutes | Max age before a fresh DB lookup is required |
+| `strategy` | `CookieCacheStrategy` | `Compact` | Signing/encryption strategy (`Compact`, `Jwt`, or `Jwe`) |
 
 ## JwtConfig
 
