@@ -40,7 +40,6 @@ struct AccountResponse {
     scopes: Vec<String>,
 }
 
-
 impl AccountManagementPlugin {
     pub fn new() -> Self {
         Self {

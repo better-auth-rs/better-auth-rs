@@ -37,7 +37,9 @@ pub(crate) mod test_helpers {
         create_test_context_with_config(create_test_config())
     }
 
-    pub fn create_test_context_with_config(config: AuthConfig) -> AuthContext<MemoryDatabaseAdapter> {
+    pub fn create_test_context_with_config(
+        config: AuthConfig,
+    ) -> AuthContext<MemoryDatabaseAdapter> {
         let config = Arc::new(config);
         let database = Arc::new(MemoryDatabaseAdapter::new());
         AuthContext::new(config, database)

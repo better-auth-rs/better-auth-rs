@@ -19,7 +19,6 @@ use better_auth_core::utils::cookie_utils::create_session_cookie;
 
 use super::StatusResponse;
 
-
 /// Trait for custom email sending logic.
 ///
 /// When set on [`EmailVerificationConfig::send_verification_email`], this
@@ -770,7 +769,13 @@ mod tests {
     async fn test_on_request_unknown_route_returns_none() {
         let plugin = EmailVerificationPlugin::new();
         let ctx = test_helpers::create_test_context();
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/unknown", None, None, HashMap::new());
+        let req = test_helpers::create_auth_request(
+            HttpMethod::Get,
+            "/unknown",
+            None,
+            None,
+            HashMap::new(),
+        );
         let result = plugin.on_request(&req, &ctx).await.unwrap();
         assert!(result.is_none());
     }
@@ -977,7 +982,8 @@ mod tests {
         // Call verify-email
         let mut query = HashMap::new();
         query.insert("token".to_string(), token_value.clone());
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+        let req =
+            test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
         let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
 
         assert_eq!(response.status, 200);
@@ -1056,7 +1062,8 @@ mod tests {
 
         let mut query = HashMap::new();
         query.insert("token".to_string(), token_value);
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+        let req =
+            test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
         let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
         assert_eq!(response.status, 200);
 
@@ -1094,7 +1101,8 @@ mod tests {
 
         let mut query = HashMap::new();
         query.insert("token".to_string(), token_value.clone());
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+        let req =
+            test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
         let err = plugin.handle_verify_email(&req, &ctx).await.unwrap_err();
         assert_eq!(err.status_code(), 403);
 
@@ -1139,7 +1147,8 @@ mod tests {
 
         let mut query = HashMap::new();
         query.insert("token".to_string(), token_value);
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+        let req =
+            test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
         let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
 
         assert_eq!(response.status, 200);
@@ -1181,7 +1190,8 @@ mod tests {
 
         let mut query = HashMap::new();
         query.insert("token".to_string(), token_value);
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+        let req =
+            test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
         let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
 
         assert_eq!(response.status, 200);
@@ -1228,7 +1238,8 @@ mod tests {
             "callbackURL".to_string(),
             "https://myapp.com/verified".to_string(),
         );
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+        let req =
+            test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
         let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
 
         assert_eq!(response.status, 302);
@@ -1271,7 +1282,8 @@ mod tests {
             "callbackURL".to_string(),
             "https://myapp.com/verified".to_string(),
         );
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+        let req =
+            test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
         let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
 
         assert_eq!(response.status, 302);
@@ -1289,7 +1301,8 @@ mod tests {
 
         let mut query = HashMap::new();
         query.insert("token".to_string(), "bogus-token".to_string());
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+        let req =
+            test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
         let err = plugin.handle_verify_email(&req, &ctx).await.unwrap_err();
         assert_eq!(err.status_code(), 400);
     }
@@ -1299,7 +1312,13 @@ mod tests {
         let plugin = EmailVerificationPlugin::new();
         let ctx = test_helpers::create_test_context();
 
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, HashMap::new());
+        let req = test_helpers::create_auth_request(
+            HttpMethod::Get,
+            "/verify-email",
+            None,
+            None,
+            HashMap::new(),
+        );
         let err = plugin.handle_verify_email(&req, &ctx).await.unwrap_err();
         assert_eq!(err.status_code(), 400);
     }
@@ -1346,7 +1365,8 @@ mod tests {
 
         let mut query = HashMap::new();
         query.insert("token".to_string(), token_value);
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+        let req =
+            test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
         let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
         assert_eq!(response.status, 200);
         let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();

@@ -586,15 +586,7 @@ impl UserManagementPlugin {
             );
             let text = format!("Confirm account deletion: {}", verification_url);
 
-            Self::send_email_or_log(
-                ctx,
-                email,
-                subject,
-                &html,
-                &text,
-                "delete-user",
-            )
-            .await;
+            Self::send_email_or_log(ctx, email, subject, &html, &text, "delete-user").await;
 
             let response = StatusMessageResponse {
                 status: true,
@@ -694,8 +686,8 @@ impl UserManagementPlugin {
 mod tests {
     use super::*;
     use crate::plugins::test_helpers;
-    use better_auth_core::adapters::{MemoryDatabaseAdapter, UserOps, VerificationOps};
     use better_auth_core::CreateUser;
+    use better_auth_core::adapters::{MemoryDatabaseAdapter, UserOps, VerificationOps};
     use chrono::Duration;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -812,7 +804,13 @@ mod tests {
         // 3. Verify the token
         let mut query = HashMap::new();
         query.insert("token".to_string(), verification.value.clone());
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/change-email/verify", None, None, query);
+        let req = test_helpers::create_auth_request(
+            HttpMethod::Get,
+            "/change-email/verify",
+            None,
+            None,
+            query,
+        );
         let response = plugin.handle_change_email_verify(&req, &ctx).await.unwrap();
         assert_eq!(response.status, 200);
 
@@ -865,7 +863,13 @@ mod tests {
         // Verify
         let mut query = HashMap::new();
         query.insert("token".to_string(), verification.value.clone());
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/change-email/verify", None, None, query);
+        let req = test_helpers::create_auth_request(
+            HttpMethod::Get,
+            "/change-email/verify",
+            None,
+            None,
+            query,
+        );
         plugin.handle_change_email_verify(&req, &ctx).await.unwrap();
 
         let updated_user = ctx
@@ -893,7 +897,13 @@ mod tests {
 
         let mut query = HashMap::new();
         query.insert("token".to_string(), "invalid-token".to_string());
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/change-email/verify", None, None, query);
+        let req = test_helpers::create_auth_request(
+            HttpMethod::Get,
+            "/change-email/verify",
+            None,
+            None,
+            query,
+        );
 
         let err = plugin
             .handle_change_email_verify(&req, &ctx)
@@ -976,7 +986,13 @@ mod tests {
         // 3. Confirm deletion
         let mut query = HashMap::new();
         query.insert("token".to_string(), verification.value.clone());
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/delete-user/verify", None, None, query);
+        let req = test_helpers::create_auth_request(
+            HttpMethod::Get,
+            "/delete-user/verify",
+            None,
+            None,
+            query,
+        );
         let response = plugin.handle_delete_user_verify(&req, &ctx).await.unwrap();
         assert_eq!(response.status, 200);
 
@@ -1025,7 +1041,13 @@ mod tests {
 
         let mut query = HashMap::new();
         query.insert("token".to_string(), "invalid-token".to_string());
-        let req = test_helpers::create_auth_request(HttpMethod::Get, "/delete-user/verify", None, None, query);
+        let req = test_helpers::create_auth_request(
+            HttpMethod::Get,
+            "/delete-user/verify",
+            None,
+            None,
+            query,
+        );
 
         let err = plugin
             .handle_delete_user_verify(&req, &ctx)

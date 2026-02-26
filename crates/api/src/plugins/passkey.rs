@@ -133,7 +133,6 @@ struct SessionUserResponse<U: Serialize, S: Serialize> {
     user: U,
 }
 
-
 #[derive(Debug, Serialize)]
 struct PasskeyResponse {
     passkey: PasskeyView,
@@ -726,9 +725,12 @@ mod tests {
     async fn test_verify_registration_requires_insecure_opt_in() {
         let plugin = PasskeyPlugin::new();
         let (ctx, _user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         let body = serde_json::json!({
             "response": {
@@ -757,9 +759,12 @@ mod tests {
     async fn test_verify_registration_consumes_exact_challenge_once() {
         let plugin = PasskeyPlugin::new().allow_insecure_unverified_assertion(true);
         let (ctx, user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         let challenge = "register-challenge";
         let identifier = format!("passkey_reg:{}", user.id);
@@ -839,9 +844,12 @@ mod tests {
     async fn test_verify_authentication_checks_type_origin_and_prevents_replay() {
         let plugin = PasskeyPlugin::new().allow_insecure_unverified_assertion(true);
         let (ctx, user, _session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         let credential_id = "cred-auth-1";
         ctx.database
@@ -971,9 +979,12 @@ mod tests {
     async fn test_generate_register_options_returns_challenge_and_stores_verification() {
         let plugin = PasskeyPlugin::new();
         let (ctx, user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Get,
@@ -1011,9 +1022,12 @@ mod tests {
     async fn test_generate_register_options_unauthenticated() {
         let plugin = PasskeyPlugin::new();
         let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         let req = test_helpers::create_auth_json_request_no_query(
             HttpMethod::Get,
@@ -1033,9 +1047,12 @@ mod tests {
     async fn test_generate_authenticate_options_returns_challenge() {
         let plugin = PasskeyPlugin::new();
         let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         // No auth required for this endpoint
         let req = test_helpers::create_auth_json_request_no_query(
@@ -1062,9 +1079,12 @@ mod tests {
     async fn test_generate_authenticate_options_with_auth_includes_credentials() {
         let plugin = PasskeyPlugin::new();
         let (ctx, user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         // Create a passkey for the user
         ctx.database
@@ -1104,9 +1124,12 @@ mod tests {
     async fn test_list_user_passkeys() {
         let plugin = PasskeyPlugin::new();
         let (ctx, user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         // No passkeys yet
         let req = test_helpers::create_auth_json_request_no_query(
@@ -1147,11 +1170,19 @@ mod tests {
     async fn test_list_user_passkeys_unauthenticated() {
         let plugin = PasskeyPlugin::new();
         let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
-        let req = test_helpers::create_auth_json_request_no_query(HttpMethod::Get, "/passkey/list-user-passkeys", None, None);
+        let req = test_helpers::create_auth_json_request_no_query(
+            HttpMethod::Get,
+            "/passkey/list-user-passkeys",
+            None,
+            None,
+        );
         let err = plugin
             .handle_list_user_passkeys(&req, &ctx)
             .await
@@ -1163,9 +1194,12 @@ mod tests {
     async fn test_delete_passkey_success() {
         let plugin = PasskeyPlugin::new();
         let (ctx, user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         let passkey = ctx
             .database
@@ -1202,9 +1236,12 @@ mod tests {
     async fn test_delete_passkey_non_owner_rejected() {
         let plugin = PasskeyPlugin::new();
         let (ctx, _user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         // Create another user's passkey
         let other_user = ctx
@@ -1252,9 +1289,12 @@ mod tests {
     async fn test_update_passkey_success() {
         let plugin = PasskeyPlugin::new();
         let (ctx, user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         let passkey = ctx
             .database
@@ -1299,9 +1339,12 @@ mod tests {
     async fn test_update_passkey_non_owner_rejected() {
         let plugin = PasskeyPlugin::new();
         let (ctx, _user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         let other_user = ctx
             .database
@@ -1353,9 +1396,12 @@ mod tests {
     async fn test_expired_challenge_rejected() {
         let plugin = PasskeyPlugin::new().allow_insecure_unverified_assertion(true);
         let (ctx, user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         let challenge = "expired-challenge";
         let identifier = format!("passkey_reg:{}", user.id);
@@ -1397,9 +1443,12 @@ mod tests {
     async fn test_verify_authentication_requires_insecure_opt_in() {
         let plugin = PasskeyPlugin::new(); // default: insecure=false
         let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         let body = serde_json::json!({
             "response": {
@@ -1427,9 +1476,12 @@ mod tests {
     #[tokio::test]
     async fn test_memory_passkey_list_is_sorted_by_created_at_desc() {
         let (ctx, user, _session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("passkey-test@example.com").with_name("Passkey Tester"),
+            CreateUser::new()
+                .with_email("passkey-test@example.com")
+                .with_name("Passkey Tester"),
             Duration::hours(1),
-        ).await;
+        )
+        .await;
 
         let first = ctx
             .database

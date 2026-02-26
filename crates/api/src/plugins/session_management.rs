@@ -43,7 +43,6 @@ struct GetSessionResponse<S: Serialize, U: Serialize> {
     user: U,
 }
 
-
 impl SessionManagementPlugin {
     pub fn new() -> Self {
         Self {
@@ -249,12 +248,19 @@ mod tests {
     async fn test_get_session_success() {
         let plugin = SessionManagementPlugin::new();
         let (ctx, _user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("test@example.com").with_name("Test User"),
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
             Duration::hours(24),
         )
         .await;
 
-        let req = test_helpers::create_auth_request_no_query(HttpMethod::Get, "/get-session", Some(&session.token), None);
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Get,
+            "/get-session",
+            Some(&session.token),
+            None,
+        );
         let response = plugin.handle_get_session(&req, &ctx).await.unwrap();
 
         assert_eq!(response.status, 200);
@@ -277,12 +283,15 @@ mod tests {
     async fn test_get_session_unauthorized() {
         let plugin = SessionManagementPlugin::new();
         let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("test@example.com").with_name("Test User"),
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
             Duration::hours(24),
         )
         .await;
 
-        let req = test_helpers::create_auth_request_no_query(HttpMethod::Get, "/get-session", None, None);
+        let req =
+            test_helpers::create_auth_request_no_query(HttpMethod::Get, "/get-session", None, None);
         let err = plugin.handle_get_session(&req, &ctx).await.unwrap_err();
         assert_eq!(err.status_code(), 401);
     }
@@ -291,7 +300,9 @@ mod tests {
     async fn test_sign_out_success() {
         let plugin = SessionManagementPlugin::new();
         let (ctx, _user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("test@example.com").with_name("Test User"),
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
             Duration::hours(24),
         )
         .await;
@@ -318,7 +329,9 @@ mod tests {
     async fn test_list_sessions_success() {
         let plugin = SessionManagementPlugin::new();
         let (ctx, user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("test@example.com").with_name("Test User"),
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
             Duration::hours(24),
         )
         .await;
@@ -352,7 +365,9 @@ mod tests {
     async fn test_revoke_session_success() {
         let plugin = SessionManagementPlugin::new();
         let (ctx, user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("test@example.com").with_name("Test User"),
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
             Duration::hours(24),
         )
         .await;
@@ -389,7 +404,9 @@ mod tests {
     async fn test_revoke_session_forbidden_different_user() {
         let plugin = SessionManagementPlugin::new();
         let (ctx, _user1, session1) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("test@example.com").with_name("Test User"),
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
             Duration::hours(24),
         )
         .await;
@@ -425,7 +442,9 @@ mod tests {
     async fn test_revoke_sessions_success() {
         let plugin = SessionManagementPlugin::new();
         let (ctx, user, session1) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("test@example.com").with_name("Test User"),
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
             Duration::hours(24),
         )
         .await;
@@ -491,13 +510,20 @@ mod tests {
     async fn test_plugin_on_request_routing() {
         let plugin = SessionManagementPlugin::new();
         let (ctx, _user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("test@example.com").with_name("Test User"),
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
             Duration::hours(24),
         )
         .await;
 
         // Test valid route
-        let req = test_helpers::create_auth_request_no_query(HttpMethod::Get, "/get-session", Some(&session.token), None);
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Get,
+            "/get-session",
+            Some(&session.token),
+            None,
+        );
         let response = plugin.on_request(&req, &ctx).await.unwrap();
         assert!(response.is_some());
         assert_eq!(response.unwrap().status, 200);
@@ -525,7 +551,9 @@ mod tests {
         assert!(!plugin.config.require_authentication);
 
         let (ctx, _user, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("test@example.com").with_name("Test User"),
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
             Duration::hours(24),
         )
         .await;

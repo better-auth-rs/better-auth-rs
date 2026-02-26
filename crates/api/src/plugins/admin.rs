@@ -200,7 +200,6 @@ struct SuccessResponse {
     success: bool,
 }
 
-
 #[derive(Debug, Serialize)]
 struct PermissionResponse {
     success: bool,

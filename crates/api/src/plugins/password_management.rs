@@ -711,7 +711,8 @@ mod tests {
             .with_name("Test User")
             .with_metadata(metadata);
         let user = test_helpers::create_user(&ctx, create_user).await;
-        let session = test_helpers::create_session(&ctx, user.id.clone(), Duration::hours(24)).await;
+        let session =
+            test_helpers::create_session(&ctx, user.id.clone(), Duration::hours(24)).await;
 
         (ctx, user, session)
     }
@@ -1099,7 +1100,12 @@ mod tests {
 
         let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
 
-        let req = test_helpers::create_auth_request_no_query(HttpMethod::Get, "/reset-password/token", None, None);
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Get,
+            "/reset-password/token",
+            None,
+            None,
+        );
 
         let response = plugin
             .handle_reset_password_token(&reset_token, &req, &ctx)
@@ -1159,7 +1165,12 @@ mod tests {
         let plugin = PasswordManagementPlugin::new();
         let (ctx, _user, _session) = create_test_context_with_user().await;
 
-        let req = test_helpers::create_auth_request_no_query(HttpMethod::Get, "/reset-password/token", None, None);
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Get,
+            "/reset-password/token",
+            None,
+            None,
+        );
 
         let err = plugin
             .handle_reset_password_token("invalid_token", &req, &ctx)
@@ -1281,7 +1292,12 @@ mod tests {
         assert_eq!(response.unwrap().status, 200);
 
         // Test invalid route
-        let req = test_helpers::create_auth_request_no_query(HttpMethod::Get, "/invalid-route", None, None);
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Get,
+            "/invalid-route",
+            None,
+            None,
+        );
         let response = plugin.on_request(&req, &ctx).await.unwrap();
         assert!(response.is_none());
     }
