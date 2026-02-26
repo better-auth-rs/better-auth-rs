@@ -70,8 +70,10 @@ impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
             );
         }
         if !disabled_paths.contains(&core_paths::CHANGE_EMAIL.to_string()) {
-            router =
-                router.route(core_paths::CHANGE_EMAIL, post(create_plugin_handler::<DB>()));
+            router = router.route(
+                core_paths::CHANGE_EMAIL,
+                post(create_plugin_handler::<DB>()),
+            );
         }
         if !disabled_paths.contains(&core_paths::DELETE_USER_CALLBACK.to_string()) {
             router = router.route(
