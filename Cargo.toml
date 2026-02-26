@@ -62,6 +62,10 @@ rand = "0.8"
 base64 = "0.22"
 jsonwebtoken = "9"
 sha2 = "0.10"
+aes-gcm = "0.10"
+hkdf = "0.12"
+hmac = "0.12"
+cookie = "0.18"
 totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 
 # HTTP client
@@ -71,9 +75,6 @@ reqwest = { version = "0.12", features = ["json"] }
 axum = "0.8"
 tower = "0.5"
 url = "2"
-
-# Cookie
-cookie = "0.18"
 
 # Cache
 redis = "0.27"

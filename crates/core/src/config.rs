@@ -64,11 +64,40 @@ pub struct AuthConfig {
     /// Password configuration
     pub password: PasswordConfig,
 
+    /// Account configuration (linking, token encryption, etc.)
+    pub account: AccountConfig,
+
     /// Email provider for sending emails (verification, password reset, etc.)
     pub email_provider: Option<Arc<dyn EmailProvider>>,
 
     /// Advanced configuration options
     pub advanced: AdvancedConfig,
+}
+
+/// Account-level configuration: linking, token encryption, sign-in behavior.
+#[derive(Debug, Clone)]
+pub struct AccountConfig {
+    /// Update OAuth tokens on every sign-in (default: true)
+    pub update_account_on_sign_in: bool,
+    /// Account linking settings
+    pub account_linking: AccountLinkingConfig,
+    /// Encrypt OAuth tokens at rest (default: false)
+    pub encrypt_oauth_tokens: bool,
+}
+
+/// Settings that control how OAuth accounts are linked to existing users.
+#[derive(Debug, Clone)]
+pub struct AccountLinkingConfig {
+    /// Enable account linking (default: true)
+    pub enabled: bool,
+    /// Trusted providers that can auto-link (default: empty = all trusted)
+    pub trusted_providers: Vec<String>,
+    /// Allow linking accounts with different emails (default: false) - SECURITY WARNING
+    pub allow_different_emails: bool,
+    /// Allow unlinking all accounts (default: false)
+    pub allow_unlinking_all: bool,
+    /// Update user info when a new account is linked (default: false)
+    pub update_user_info_on_link: bool,
 }
 
 /// Session-specific configuration
@@ -151,6 +180,28 @@ pub enum SameSite {
     Strict,
     Lax,
     None,
+}
+
+impl Default for AccountConfig {
+    fn default() -> Self {
+        Self {
+            update_account_on_sign_in: true,
+            account_linking: AccountLinkingConfig::default(),
+            encrypt_oauth_tokens: false,
+        }
+    }
+}
+
+impl Default for AccountLinkingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            trusted_providers: Vec::new(),
+            allow_different_emails: false,
+            allow_unlinking_all: false,
+            update_user_info_on_link: false,
+        }
+    }
 }
 
 impl std::fmt::Display for SameSite {
@@ -256,7 +307,6 @@ pub struct AdvancedDatabaseConfig {
     /// rather than UUIDs.
     pub use_number_id: bool,
 }
-
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
@@ -269,6 +319,7 @@ impl Default for AuthConfig {
             session: SessionConfig::default(),
             jwt: JwtConfig::default(),
             password: PasswordConfig::default(),
+            account: AccountConfig::default(),
             email_provider: None,
             advanced: AdvancedConfig::default(),
         }
@@ -359,6 +410,11 @@ impl AuthConfig {
     /// Set the base URL (e.g. `"https://myapp.com"`).
     pub fn base_url(mut self, url: impl Into<String>) -> Self {
         self.base_url = url.into();
+        self
+    }
+
+    pub fn account(mut self, account: AccountConfig) -> Self {
+        self.account = account;
         self
     }
 
