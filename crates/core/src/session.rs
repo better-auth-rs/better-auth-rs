@@ -54,9 +54,16 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
                 return Ok(None);
             }
 
-            // Refresh the session expiry if configured and enough time has elapsed
+            // Refresh the session expiry if configured and enough time has elapsed.
+            //
+            // Prefer `updated_at` as the throttle source, but also derive a fallback
+            // refresh timestamp from `expires_at - expires_in`. This keeps refresh
+            // throttling effective even if a custom adapter updates `expires_at`
+            // without advancing `updated_at`.
             if let Some(update_age) = self.config.session.update_age {
-                let elapsed_since_update = now - session.updated_at();
+                let refreshed_at_from_expiry = session.expires_at() - self.config.session.expires_in;
+                let last_refresh_at = session.updated_at().max(refreshed_at_from_expiry);
+                let elapsed_since_update = now - last_refresh_at;
                 if elapsed_since_update >= update_age {
                     let new_expires_at = now + self.config.session.expires_in;
                     let _ = self
