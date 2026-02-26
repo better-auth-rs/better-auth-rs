@@ -46,255 +46,45 @@ let auth = BetterAuth::new(config)
 
 ## API Endpoints
 
-### Create User
+The Admin plugin exposes 13 endpoints. All require admin role authentication. For full request/response details, see the [OpenAPI Reference](/docs/reference/openapi/admin).
 
-Create a new user with email and password (admin only).
+### User Management
 
-```http
-POST /admin/create-user
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/admin/create-user` | POST | Create a new user |
+| `/admin/list-users` | GET | List users with pagination, search, and filtering |
+| `/admin/set-role` | POST | Set a user's role |
+| `/admin/set-user-password` | POST | Reset a user's password |
+| `/admin/remove-user` | POST | Permanently delete a user |
 
-```json
-{
-  "email": "newuser@example.com",
-  "password": "secure_password",
-  "name": "New User",
-  "role": "user",
-  "data": { "department": "engineering" }
-}
-```
+### Ban Management
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `email` | Yes | User's email address |
-| `password` | Yes | Must meet minimum password length |
-| `name` | Yes | Display name |
-| `role` | No | User role (defaults to `default_user_role`) |
-| `data` | No | Arbitrary JSON metadata |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/admin/ban-user` | POST | Ban a user (optional reason and duration) |
+| `/admin/unban-user` | POST | Unban a user |
 
-### List Users
+### Impersonation
 
-```http
-GET /admin/list-users?limit=50&offset=0
-Authorization: Bearer <admin_token>
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/admin/impersonate-user` | POST | Create a session as another user |
+| `/admin/stop-impersonating` | POST | End impersonation, return to admin session |
 
-| Query Parameter | Description |
-|-----------------|-------------|
-| `limit` | Results per page (max: `max_page_limit`) |
-| `offset` | Pagination offset |
-| `searchField` | Field to search (e.g., `email`, `name`) |
-| `searchValue` | Search value |
-| `searchOperator` | Search operator |
-| `sortBy` | Sort field |
-| `sortDirection` | `asc` or `desc` |
-| `filterField` | Filter field |
-| `filterValue` | Filter value |
-| `filterOperator` | Filter operator |
+### Session Management
 
-#### Response
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/admin/list-user-sessions` | POST | List all sessions for a user |
+| `/admin/revoke-user-session` | POST | Revoke a single session |
+| `/admin/revoke-user-sessions` | POST | Revoke all sessions for a user |
 
-```json
-{
-  "users": [ ... ],
-  "total": 150,
-  "limit": 50,
-  "offset": 0
-}
-```
+### Permissions
 
-### Set User Role
-
-```http
-POST /admin/set-role
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-```
-
-```json
-{
-  "userId": "user_uuid",
-  "role": "admin"
-}
-```
-
-### Ban User
-
-```http
-POST /admin/ban-user
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-```
-
-```json
-{
-  "userId": "user_uuid",
-  "banReason": "Violation of terms of service",
-  "banExpiresIn": 86400
-}
-```
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `userId` | Yes | User to ban |
-| `banReason` | No | Reason for the ban |
-| `banExpiresIn` | No | Ban duration in seconds (permanent if omitted) |
-
-### Unban User
-
-```http
-POST /admin/unban-user
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-```
-
-```json
-{
-  "userId": "user_uuid"
-}
-```
-
-### Impersonate User
-
-Create a session as another user for debugging purposes. The impersonation is tracked via the `impersonatedBy` field on the session.
-
-```http
-POST /admin/impersonate-user
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-```
-
-```json
-{
-  "userId": "user_uuid"
-}
-```
-
-#### Response
-
-```json
-{
-  "session": {
-    "id": "session_uuid",
-    "token": "session_abc123...",
-    "userId": "user_uuid",
-    "impersonatedBy": "admin_user_uuid"
-  },
-  "user": { ... }
-}
-```
-
-### Stop Impersonating
-
-End impersonation and return to the admin session.
-
-```http
-POST /admin/stop-impersonating
-Authorization: Bearer <impersonated_token>
-```
-
-Returns a new session for the original admin user.
-
-### List User Sessions
-
-```http
-POST /admin/list-user-sessions
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-```
-
-```json
-{
-  "userId": "user_uuid"
-}
-```
-
-### Revoke User Session
-
-```http
-POST /admin/revoke-user-session
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-```
-
-```json
-{
-  "sessionToken": "session_to_revoke..."
-}
-```
-
-### Revoke All User Sessions
-
-```http
-POST /admin/revoke-user-sessions
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-```
-
-```json
-{
-  "userId": "user_uuid"
-}
-```
-
-### Remove User
-
-Permanently delete a user and all associated data.
-
-```http
-POST /admin/remove-user
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-```
-
-```json
-{
-  "userId": "user_uuid"
-}
-```
-
-### Set User Password
-
-Reset a user's password without knowing the current one.
-
-```http
-POST /admin/set-user-password
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-```
-
-```json
-{
-  "userId": "user_uuid",
-  "newPassword": "new_secure_password"
-}
-```
-
-### Check Permission
-
-Check if the current user has a specific permission.
-
-```http
-POST /admin/has-permission
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "permission": { "role": "admin" }
-}
-```
-
-#### Response
-
-```json
-{
-  "success": true
-}
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/admin/has-permission` | POST | Check if current user has a permission |
 
 ## Errors
 

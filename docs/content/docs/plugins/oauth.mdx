@@ -77,145 +77,17 @@ The `map_user_info` function transforms the provider's raw JSON user info respon
 
 ## API Endpoints
 
-### Sign In with Social Provider
+The OAuth plugin exposes the following endpoints. For full request/response details, see the [OpenAPI Reference](/docs/reference/openapi/default).
 
-```http
-POST /sign-in/social
-Content-Type: application/json
-```
-
-#### Request
-
-```json
-{
-  "provider": "google",
-  "callbackURL": "https://myapp.com/auth/callback/google",
-  "scopes": ["openid", "email", "profile"]
-}
-```
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `provider` | Yes | Provider name (must match a registered provider) |
-| `callbackURL` | No | Override the default callback URL |
-| `scopes` | No | Override the default scopes for this request |
-
-#### Response
-
-```json
-{
-  "url": "https://accounts.google.com/o/oauth2/v2/auth?client_id=...&redirect_uri=...&response_type=code&scope=...&state=...&code_challenge=...&code_challenge_method=S256",
-  "redirect": true
-}
-```
-
-Redirect the user to `url` to begin the OAuth flow.
-
-### OAuth Callback
-
-```http
-GET /callback/{provider}?code={code}&state={state}
-```
-
-This endpoint is called by the OAuth provider after the user authorizes. It:
-
-1. Validates the `state` parameter against the stored verification
-2. Exchanges the authorization `code` for tokens using PKCE
-3. Fetches user info from the provider
-4. Creates or links the user account
-5. Creates a session and sets the session cookie
-
-#### Response
-
-```json
-{
-  "token": "session_abc123...",
-  "user": {
-    "id": "uuid",
-    "email": "alice@example.com",
-    "name": "Alice",
-    "emailVerified": true
-  }
-}
-```
-
-### Link Social Account
-
-Link an additional social provider to an existing authenticated user.
-
-```http
-POST /link-social
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-#### Request
-
-```json
-{
-  "provider": "github",
-  "callbackURL": "https://myapp.com/auth/callback/github"
-}
-```
-
-Returns the same redirect response as `/sign-in/social`. After the OAuth flow completes, the provider account is linked to the authenticated user.
-
-### Get Access Token
-
-Retrieve the stored OAuth access token for a linked provider.
-
-```http
-POST /get-access-token
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-#### Request
-
-```json
-{
-  "providerId": "google"
-}
-```
-
-#### Response
-
-```json
-{
-  "accessToken": "ya29.a0AfH6SM...",
-  "accessTokenExpiresAt": "2024-01-01T01:00:00Z",
-  "scope": "openid email profile"
-}
-```
-
-### Refresh Token
-
-Refresh the OAuth access token using the stored refresh token.
-
-```http
-POST /refresh-token
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-#### Request
-
-```json
-{
-  "providerId": "google"
-}
-```
-
-#### Response
-
-```json
-{
-  "accessToken": "ya29.new_token...",
-  "accessTokenExpiresAt": "2024-01-01T02:00:00Z",
-  "refreshToken": "1//0abc...",
-  "scope": "openid email profile"
-}
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/sign-in/social` | POST | Initiate OAuth sign-in flow |
+| `/callback/{provider}` | GET | OAuth callback handler |
+| `/link-social` | POST | Link a social account to an existing user |
+| `/get-access-token` | POST | Retrieve stored OAuth access token |
+| `/refresh-token` | POST | Refresh the OAuth access token |
+| `/list-accounts` | GET | List all linked accounts |
+| `/unlink-account` | POST | Unlink a social account |
 
 ## How It Works
 

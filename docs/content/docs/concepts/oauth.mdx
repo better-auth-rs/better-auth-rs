@@ -9,36 +9,7 @@ Better Auth implements the OAuth 2.0 Authorization Code flow with PKCE for secur
 
 The authorization code flow with PKCE works as follows:
 
-```
-┌──────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
-│Client│     │Your Server│     │Better Auth│     │  OAuth   │
-│      │     │  (Axum)  │     │           │     │ Provider │
-└──┬───┘     └────┬─────┘     └─────┬─────┘     └────┬─────┘
-   │   POST /sign-in/social         │                 │
-   │─────────────────────────────────>                 │
-   │              │                  │                 │
-   │   { url, redirect: true }      │                 │
-   │<─────────────────────────────────                 │
-   │              │                  │                 │
-   │   Redirect to provider auth URL │                 │
-   │──────────────────────────────────────────────────>│
-   │              │                  │                 │
-   │   User authorizes, redirected to callback         │
-   │<──────────────────────────────────────────────────│
-   │              │                  │                 │
-   │   GET /callback/{provider}?code=...&state=...     │
-   │─────────────────────────────────>                 │
-   │              │                  │  Token exchange  │
-   │              │                  │────────────────>│
-   │              │                  │  Access token    │
-   │              │                  │<────────────────│
-   │              │                  │  User info       │
-   │              │                  │────────────────>│
-   │              │                  │  User data       │
-   │              │                  │<────────────────│
-   │   { token, user }              │                 │
-   │<─────────────────────────────────                 │
-```
+<Mermaid chart="sequenceDiagram\n    participant C as Client\n    participant BA as Better Auth\n    participant OP as OAuth Provider\n    C->>BA: POST /sign-in/social\n    BA-->>C: { url, redirect: true }\n    C->>OP: Redirect to provider auth URL\n    OP-->>C: User authorizes, redirect to callback\n    C->>BA: GET /callback/{provider}?code=...&state=...\n    BA->>OP: Token exchange (code + PKCE verifier)\n    OP-->>BA: Access token + Refresh token\n    BA->>OP: Fetch user info\n    OP-->>BA: User data\n    BA-->>C: { token, user }" />
 
 ## Key Concepts
 

@@ -65,124 +65,19 @@ Each API key has:
 
 ## API Endpoints
 
-### Create API Key
+The API Key plugin exposes 5 endpoints. For full request/response details, see the [OpenAPI Reference](/docs/reference/openapi/api-key).
 
-```http
-POST /api-key/create
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "name": "Production API Key",
-  "prefix": "sk_prod_",
-  "expiresIn": 2592000000,
-  "remaining": 10000,
-  "rateLimitEnabled": true,
-  "rateLimitTimeWindow": 60000,
-  "rateLimitMax": 100,
-  "refillInterval": 86400000,
-  "refillAmount": 1000,
-  "permissions": { "read": true, "write": true },
-  "metadata": { "environment": "production" }
-}
-```
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | No | Human-readable key name |
-| `prefix` | No | Override the global prefix for this key |
-| `expiresIn` | No | Expiration in milliseconds from now |
-| `remaining` | No | Usage quota (uses `default_remaining` if not set) |
-| `rateLimitEnabled` | No | Enable per-key rate limiting |
-| `rateLimitTimeWindow` | No | Rate limit window in milliseconds |
-| `rateLimitMax` | No | Max requests per window |
-| `refillInterval` | No | Quota refill interval in milliseconds |
-| `refillAmount` | No | Amount to refill per interval |
-| `permissions` | No | Arbitrary JSON permissions object |
-| `metadata` | No | Arbitrary JSON metadata |
-
-#### Response
-
-```json
-{
-  "key": "sk_prod_dGhpcyBpcyBhIHRlc3Qga2V5...",
-  "id": "apikey_uuid",
-  "name": "Production API Key",
-  "start": "dGhp",
-  "prefix": "sk_prod_",
-  "userId": "user_uuid",
-  "enabled": true,
-  "rateLimitEnabled": true,
-  "rateLimitTimeWindow": 60000,
-  "rateLimitMax": 100,
-  "remaining": 10000,
-  "expiresAt": "2024-02-01T00:00:00Z",
-  "createdAt": "2024-01-01T00:00:00Z",
-  "updatedAt": "2024-01-01T00:00:00Z"
-}
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api-key/create` | POST | Create a new API key (returns key only once) |
+| `/api-key/get` | GET | Get key metadata by ID |
+| `/api-key/list` | GET | List all keys for the authenticated user |
+| `/api-key/update` | POST | Update key settings (name, enabled, rate limits) |
+| `/api-key/delete` | POST | Delete an API key |
 
 <Callout type="warn">
-The `key` field is returned only during creation. Store it securely — it cannot be retrieved later.
+The full `key` value is returned only during creation. Store it securely — it cannot be retrieved later.
 </Callout>
-
-### Get API Key
-
-```http
-GET /api-key/get?id={key_id}
-Authorization: Bearer <token>
-```
-
-Returns the key metadata (without the full key value). Only the key owner can access it.
-
-### List API Keys
-
-```http
-GET /api-key/list
-Authorization: Bearer <token>
-```
-
-Returns all API keys belonging to the authenticated user.
-
-### Update API Key
-
-```http
-POST /api-key/update
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "id": "apikey_uuid",
-  "name": "Updated Name",
-  "enabled": false,
-  "remaining": 5000,
-  "rateLimitEnabled": true,
-  "rateLimitTimeWindow": 30000,
-  "rateLimitMax": 50
-}
-```
-
-All fields except `id` are optional. Only the key owner can update it.
-
-### Delete API Key
-
-```http
-POST /api-key/delete
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "id": "apikey_uuid"
-}
-```
-
-Only the key owner can delete it.
 
 ## Errors
 

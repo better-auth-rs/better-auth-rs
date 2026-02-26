@@ -92,338 +92,47 @@ let auth = BetterAuth::new(auth_config)
 
 ## API Endpoints
 
+The Organization plugin exposes 18 endpoints. For full request/response details, see the [OpenAPI Reference](/docs/reference/openapi/organization).
+
 ### Organization CRUD
 
-#### Create Organization
-
-```http
-POST /organization/create
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "name": "Acme Inc",
-  "slug": "acme-inc",
-  "logo": "https://example.com/logo.png",
-  "metadata": { "plan": "pro" }
-}
-```
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Organization name |
-| `slug` | Yes | URL-friendly unique identifier (1-100 chars) |
-| `logo` | No | Organization logo URL |
-| `metadata` | No | Arbitrary JSON metadata |
-
-The creator is automatically added as a member with the configured `creator_role` (default: `"owner"`).
-
-#### Update Organization
-
-```http
-POST /organization/update
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "organizationId": "org_uuid",
-  "name": "Acme Corp",
-  "slug": "acme-corp",
-  "logo": "https://example.com/new-logo.png"
-}
-```
-
-Requires `organization:update` permission.
-
-#### Delete Organization
-
-```http
-POST /organization/delete
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "organizationId": "org_uuid"
-}
-```
-
-Requires `organization:delete` permission. Can be disabled via `disable_organization_deletion`.
-
-#### List Organizations
-
-```http
-GET /organization/list
-Authorization: Bearer <token>
-```
-
-Returns all organizations the authenticated user is a member of.
-
-#### Get Full Organization
-
-```http
-GET /organization/get-full-organization?organizationId={id}
-Authorization: Bearer <token>
-```
-
-Returns the organization with all members and invitations. You can also use `organizationSlug` as an alternative query parameter.
-
-#### Check Slug Availability
-
-```http
-POST /organization/check-slug
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "slug": "acme-inc"
-}
-```
-
-Response: `{ "status": true }` if available.
-
-#### Set Active Organization
-
-```http
-POST /organization/set-active
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "organizationId": "org_uuid"
-}
-```
-
-Sets the active organization on the user's session. You can also use `organizationSlug`.
-
-#### Leave Organization
-
-```http
-POST /organization/leave
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "organizationId": "org_uuid"
-}
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/organization/create` | POST | Create a new organization |
+| `/organization/update` | POST | Update organization details |
+| `/organization/delete` | POST | Delete an organization |
+| `/organization/list` | GET | List user's organizations |
+| `/organization/get-full-organization` | GET | Get organization with members and invitations |
+| `/organization/check-slug` | POST | Check slug availability |
+| `/organization/set-active` | POST | Set active organization on session |
+| `/organization/leave` | POST | Leave an organization |
 
 ### Member Management
 
-#### Get Active Member
-
-```http
-GET /organization/get-active-member
-Authorization: Bearer <token>
-```
-
-Returns the member record for the authenticated user in their active organization.
-
-#### List Members
-
-```http
-GET /organization/list-members?organizationId={id}
-Authorization: Bearer <token>
-```
-
-| Query Parameter | Description |
-|-----------------|-------------|
-| `organizationId` | Organization ID |
-| `organizationSlug` | Alternative: organization slug |
-| `limit` | Max results to return |
-| `offset` | Pagination offset |
-
-Response:
-
-```json
-{
-  "members": [
-    {
-      "id": "member_uuid",
-      "organizationId": "org_uuid",
-      "userId": "user_uuid",
-      "role": "owner",
-      "createdAt": "2024-01-01T00:00:00Z",
-      "user": {
-        "id": "user_uuid",
-        "name": "Alice",
-        "email": "alice@example.com",
-        "image": null
-      }
-    }
-  ],
-  "total": 1
-}
-```
-
-#### Remove Member
-
-```http
-POST /organization/remove-member
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "memberId": "member_uuid",
-  "organizationId": "org_uuid"
-}
-```
-
-You can use either `memberId` or `email` to identify the member. Requires `member:delete` permission.
-
-#### Update Member Role
-
-```http
-POST /organization/update-member-role
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "memberId": "member_uuid",
-  "role": "admin",
-  "organizationId": "org_uuid"
-}
-```
-
-Requires `member:update` permission.
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/organization/get-active-member` | GET | Get current member record |
+| `/organization/list-members` | GET | List organization members (with pagination) |
+| `/organization/remove-member` | POST | Remove a member (requires `member:delete`) |
+| `/organization/update-member-role` | POST | Update member role (requires `member:update`) |
 
 ### Invitations
 
-#### Invite Member
-
-```http
-POST /organization/invite-member
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "email": "bob@example.com",
-  "role": "member",
-  "organizationId": "org_uuid"
-}
-```
-
-Requires `invitation:create` permission. Invitations expire based on `invitation_expires_in` config.
-
-#### Get Invitation
-
-```http
-GET /organization/get-invitation?id={invitation_id}
-Authorization: Bearer <token>
-```
-
-Returns the invitation with organization name, slug, and inviter email.
-
-#### List Invitations
-
-```http
-GET /organization/list-invitations?organizationId={id}
-Authorization: Bearer <token>
-```
-
-Lists all pending invitations for the organization.
-
-#### List User Invitations
-
-```http
-GET /organization/list-user-invitations
-Authorization: Bearer <token>
-```
-
-Lists all pending invitations for the authenticated user.
-
-#### Accept Invitation
-
-```http
-POST /organization/accept-invitation
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "invitationId": "invitation_uuid"
-}
-```
-
-Adds the user as a member with the role specified in the invitation.
-
-#### Reject Invitation
-
-```http
-POST /organization/reject-invitation
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "invitationId": "invitation_uuid"
-}
-```
-
-#### Cancel Invitation
-
-```http
-POST /organization/cancel-invitation
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "invitationId": "invitation_uuid"
-}
-```
-
-Requires `invitation:cancel` permission.
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/organization/invite-member` | POST | Invite a user by email |
+| `/organization/get-invitation` | GET | Get invitation details |
+| `/organization/list-invitations` | GET | List organization invitations |
+| `/organization/list-user-invitations` | GET | List invitations for current user |
+| `/organization/accept-invitation` | POST | Accept an invitation |
+| `/organization/reject-invitation` | POST | Reject an invitation |
+| `/organization/cancel-invitation` | POST | Cancel an invitation (requires `invitation:cancel`) |
 
 ### Permission Check
 
-#### Has Permission
-
-```http
-POST /organization/has-permission
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "permissions": {
-    "member": ["create", "delete"],
-    "organization": ["update"]
-  },
-  "organizationId": "org_uuid"
-}
-```
-
-Response:
-
-```json
-{
-  "success": true
-}
-```
-
-Returns `{ "success": false, "error": "..." }` if the user lacks the required permissions.
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/organization/has-permission` | POST | Check if user has specific permissions |
 
 ## Errors
 
