@@ -1,6 +1,9 @@
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -9,16 +12,57 @@ use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreateVerification, HttpMethod, UpdateUser};
 use better_auth_core::{AuthSession, AuthUser, AuthVerification, DatabaseAdapter};
 
+use super::email_password::PasswordHasher;
+
+/// Trait for sending password reset emails.
+///
+/// When set in `PasswordManagementConfig`, this overrides the default
+/// `EmailProvider`-based reset email sending. The user is provided as a
+/// serialized `serde_json::Value` since `AuthUser` is not object-safe.
+#[async_trait]
+pub trait SendResetPassword: Send + Sync {
+    /// Send a password reset notification.
+    ///
+    /// * `user` - The user as a serialized JSON value (from `serde_json::to_value`)
+    /// * `url` - The full reset URL including the token
+    /// * `token` - The raw reset token
+    async fn send(&self, user: &serde_json::Value, url: &str, token: &str) -> AuthResult<()>;
+}
+
 /// Password management plugin for password reset and change functionality
 pub struct PasswordManagementPlugin {
     config: PasswordManagementConfig,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PasswordManagementConfig {
     pub reset_token_expiry_hours: i64,
     pub require_current_password: bool,
     pub send_email_notifications: bool,
+    /// When true, all existing sessions are revoked on password reset (default: true).
+    pub revoke_sessions_on_password_reset: bool,
+    /// Custom password reset email sender. When set, overrides the default `EmailProvider`.
+    pub send_reset_password: Option<Arc<dyn SendResetPassword>>,
+    /// Callback invoked after a password is successfully reset.
+    /// The user is provided as a serialized `serde_json::Value`.
+    pub on_password_reset:
+        Option<Arc<dyn Fn(serde_json::Value) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>>,
+    /// Custom password hasher. When `None`, the default Argon2 hasher is used.
+    pub password_hasher: Option<Arc<dyn PasswordHasher>>,
+}
+
+impl std::fmt::Debug for PasswordManagementConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PasswordManagementConfig")
+            .field("reset_token_expiry_hours", &self.reset_token_expiry_hours)
+            .field("require_current_password", &self.require_current_password)
+            .field("send_email_notifications", &self.send_email_notifications)
+            .field("revoke_sessions_on_password_reset", &self.revoke_sessions_on_password_reset)
+            .field("send_reset_password", &self.send_reset_password.as_ref().map(|_| "custom"))
+            .field("on_password_reset", &self.on_password_reset.as_ref().map(|_| "custom"))
+            .field("password_hasher", &self.password_hasher.as_ref().map(|_| "custom"))
+            .finish()
+    }
 }
 
 // Request structures for password endpoints
@@ -129,6 +173,33 @@ impl PasswordManagementPlugin {
         self.config.send_email_notifications = send;
         self
     }
+
+    pub fn revoke_sessions_on_password_reset(mut self, revoke: bool) -> Self {
+        self.config.revoke_sessions_on_password_reset = revoke;
+        self
+    }
+
+    pub fn send_reset_password(mut self, sender: Arc<dyn SendResetPassword>) -> Self {
+        self.config.send_reset_password = Some(sender);
+        self
+    }
+
+    pub fn on_password_reset(
+        mut self,
+        callback: Arc<
+            dyn Fn(serde_json::Value) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>>
+                + Send
+                + Sync,
+        >,
+    ) -> Self {
+        self.config.on_password_reset = Some(callback);
+        self
+    }
+
+    pub fn password_hasher(mut self, hasher: Arc<dyn PasswordHasher>) -> Self {
+        self.config.password_hasher = Some(hasher);
+        self
+    }
 }
 
 impl Default for PasswordManagementPlugin {
@@ -143,6 +214,10 @@ impl Default for PasswordManagementConfig {
             reset_token_expiry_hours: 24, // 24 hours default expiry
             require_current_password: true,
             send_email_notifications: true,
+            revoke_sessions_on_password_reset: true,
+            send_reset_password: None,
+            on_password_reset: None,
+            password_hasher: None,
         }
     }
 }
@@ -230,16 +305,25 @@ impl PasswordManagementPlugin {
             .await?;
 
         // Send email with reset link
-        if self.config.send_email_notifications {
-            let reset_url = if let Some(redirect_to) = &forget_req.redirect_to {
-                format!("{}?token={}", redirect_to, reset_token)
-            } else {
-                format!(
-                    "{}/reset-password?token={}",
-                    ctx.config.base_url, reset_token
-                )
-            };
+        let reset_url = if let Some(redirect_to) = &forget_req.redirect_to {
+            format!("{}?token={}", redirect_to, reset_token)
+        } else {
+            format!(
+                "{}/reset-password?token={}",
+                ctx.config.base_url, reset_token
+            )
+        };
 
+        if let Some(sender) = &self.config.send_reset_password {
+            let user_value = serde_json::to_value(&user)
+                .map_err(|e| AuthError::internal(format!("Failed to serialize user: {}", e)))?;
+            if let Err(e) = sender.send(&user_value, &reset_url, &reset_token).await {
+                eprintln!(
+                    "[password-management] Custom send_reset_password failed for {}: {}",
+                    forget_req.email, e
+                );
+            }
+        } else if self.config.send_email_notifications {
             if let Ok(provider) = ctx.email_provider() {
                 let subject = "Reset your password";
                 let html = format!(
@@ -295,7 +379,7 @@ impl PasswordManagementPlugin {
             .ok_or_else(|| AuthError::bad_request("Invalid or expired reset token"))?;
 
         // Hash new password
-        let password_hash = self.hash_password(&reset_req.new_password)?;
+        let password_hash = self.hash_password(&reset_req.new_password).await?;
 
         // Update user password
         let mut metadata = user.metadata().clone();
@@ -321,8 +405,17 @@ impl PasswordManagementPlugin {
         // Delete the used verification token
         ctx.database.delete_verification(verification.id()).await?;
 
-        // Revoke all existing sessions for security
-        ctx.database.delete_user_sessions(user.id()).await?;
+        // Revoke all existing sessions for security (when configured)
+        if self.config.revoke_sessions_on_password_reset {
+            ctx.database.delete_user_sessions(user.id()).await?;
+        }
+
+        // Call on_password_reset callback if configured
+        if let Some(callback) = &self.config.on_password_reset {
+            let user_value = serde_json::to_value(&user)
+                .map_err(|e| AuthError::internal(format!("Failed to serialize user: {}", e)))?;
+            callback(user_value).await?;
+        }
 
         let response = StatusResponse { status: true };
         Ok(AuthResponse::json(200, &response)?)
@@ -353,6 +446,7 @@ impl PasswordManagementPlugin {
                 .ok_or_else(|| AuthError::bad_request("No password set for this user"))?;
 
             self.verify_password(&change_req.current_password, stored_hash)
+                .await
                 .map_err(|_| AuthError::InvalidCredentials)?;
         }
 
@@ -360,7 +454,7 @@ impl PasswordManagementPlugin {
         self.validate_password(&change_req.new_password, ctx)?;
 
         // Hash new password
-        let password_hash = self.hash_password(&change_req.new_password)?;
+        let password_hash = self.hash_password(&change_req.new_password).await?;
 
         // Update user password
         let mut metadata = user.metadata().clone();
@@ -447,7 +541,7 @@ impl PasswordManagementPlugin {
         self.validate_password(&set_req.new_password, ctx)?;
 
         // Hash and store the new password
-        let password_hash = self.hash_password(&set_req.new_password)?;
+        let password_hash = self.hash_password(&set_req.new_password).await?;
 
         let mut metadata = user.metadata().clone();
         metadata["password_hash"] = serde_json::Value::String(password_hash);
@@ -607,9 +701,12 @@ impl PasswordManagementPlugin {
         Ok(())
     }
 
-    fn hash_password(&self, password: &str) -> AuthResult<String> {
+    async fn hash_password(&self, password: &str) -> AuthResult<String> {
+        if let Some(hasher) = &self.config.password_hasher {
+            return hasher.hash(password).await;
+        }
         use argon2::password_hash::{SaltString, rand_core::OsRng};
-        use argon2::{Argon2, PasswordHasher};
+        use argon2::{Argon2, PasswordHasher as Argon2PasswordHasher};
 
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
@@ -652,7 +749,19 @@ impl PasswordManagementPlugin {
         )
     }
 
-    fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
+    async fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
+        if let Some(hasher) = &self.config.password_hasher {
+            return hasher
+                .verify(hash, password)
+                .await
+                .and_then(|valid| {
+                    if valid {
+                        Ok(())
+                    } else {
+                        Err(AuthError::InvalidCredentials)
+                    }
+                });
+        }
         use argon2::password_hash::PasswordHash;
         use argon2::{Argon2, PasswordVerifier};
 
@@ -696,7 +805,7 @@ mod tests {
 
         // Create test user with hashed password
         let plugin = PasswordManagementPlugin::new();
-        let password_hash = plugin.hash_password("Password123!").unwrap();
+        let password_hash = plugin.hash_password("Password123!").await.unwrap();
 
         let metadata = serde_json::json!({
             "password_hash": password_hash,
@@ -844,6 +953,7 @@ mod tests {
         assert!(
             plugin
                 .verify_password("NewPassword123!", stored_hash)
+                .await
                 .is_ok()
         );
 
@@ -947,6 +1057,7 @@ mod tests {
         assert!(
             plugin
                 .verify_password("NewPassword123!", stored_hash)
+                .await
                 .is_ok()
         );
     }
@@ -1254,13 +1365,13 @@ mod tests {
         let plugin = PasswordManagementPlugin::new();
 
         let password = "TestPassword123!";
-        let hash = plugin.hash_password(password).unwrap();
+        let hash = plugin.hash_password(password).await.unwrap();
 
         // Should verify correctly
-        assert!(plugin.verify_password(password, &hash).is_ok());
+        assert!(plugin.verify_password(password, &hash).await.is_ok());
 
         // Should fail with wrong password
-        assert!(plugin.verify_password("WrongPassword123!", &hash).is_err());
+        assert!(plugin.verify_password("WrongPassword123!", &hash).await.is_err());
     }
 
     #[tokio::test]
@@ -1335,6 +1446,7 @@ mod tests {
             reset_token_expiry_hours: 48,
             require_current_password: false,
             send_email_notifications: false,
+            ..Default::default()
         };
 
         let plugin = PasswordManagementPlugin::with_config(config);

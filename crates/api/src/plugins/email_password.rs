@@ -1,7 +1,8 @@
 use argon2::password_hash::{SaltString, rand_core::OsRng};
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use argon2::{Argon2, PasswordHash, PasswordHasher as Argon2PasswordHasher, PasswordVerifier};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use validator::Validate;
 
 use better_auth_core::adapters::DatabaseAdapter;
@@ -10,16 +11,48 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod};
 
+/// Custom password hasher trait for pluggable password hashing strategies.
+///
+/// When provided in `EmailPasswordConfig` or `PasswordManagementConfig`, this
+/// overrides the default Argon2-based password hashing.
+#[async_trait]
+pub trait PasswordHasher: Send + Sync {
+    /// Hash a plaintext password and return the hash string.
+    async fn hash(&self, password: &str) -> AuthResult<String>;
+    /// Verify a password against a hash string. Returns `true` if the password matches.
+    async fn verify(&self, hash: &str, password: &str) -> AuthResult<bool>;
+}
+
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
     config: EmailPasswordConfig,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct EmailPasswordConfig {
     pub enable_signup: bool,
     pub require_email_verification: bool,
     pub password_min_length: usize,
+    /// Maximum password length (default: 128).
+    pub password_max_length: usize,
+    /// Whether to automatically sign in the user after sign-up (default: true).
+    /// When false, sign-up returns the user but doesn't create a session.
+    pub auto_sign_in: bool,
+    /// Custom password hasher. When `None`, the default Argon2 hasher is used.
+    pub password_hasher: Option<Arc<dyn PasswordHasher>>,
+}
+
+impl std::fmt::Debug for EmailPasswordConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EmailPasswordConfig")
+            .field("enable_signup", &self.enable_signup)
+            .field("require_email_verification", &self.require_email_verification)
+            .field("password_min_length", &self.password_min_length)
+            .field("password_max_length", &self.password_max_length)
+            .field("auto_sign_in", &self.auto_sign_in)
+            .field("password_hasher", &self.password_hasher.as_ref().map(|_| "custom"))
+            .finish()
+    }
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -103,6 +136,21 @@ impl EmailPasswordPlugin {
         self
     }
 
+    pub fn password_max_length(mut self, length: usize) -> Self {
+        self.config.password_max_length = length;
+        self
+    }
+
+    pub fn auto_sign_in(mut self, auto: bool) -> Self {
+        self.config.auto_sign_in = auto;
+        self
+    }
+
+    pub fn password_hasher(mut self, hasher: Arc<dyn PasswordHasher>) -> Self {
+        self.config.password_hasher = Some(hasher);
+        self
+    }
+
     async fn handle_sign_up<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
@@ -131,7 +179,7 @@ impl EmailPasswordPlugin {
         }
 
         // Hash password
-        let password_hash = self.hash_password(&signup_req.password)?;
+        let password_hash = self.hash_password(&signup_req.password).await?;
 
         // Create user with password hash in metadata
         let metadata = serde_json::json!({
@@ -151,20 +199,29 @@ impl EmailPasswordPlugin {
 
         let user = ctx.database.create_user(create_user).await?;
 
-        // Create session
-        let session_manager =
-            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager.create_session(&user, None, None).await?;
+        if self.config.auto_sign_in {
+            // Create session
+            let session_manager =
+                better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+            let session = session_manager.create_session(&user, None, None).await?;
 
-        let response = SignUpResponse {
-            token: Some(session.token().to_string()),
-            user,
-        };
+            let response = SignUpResponse {
+                token: Some(session.token().to_string()),
+                user,
+            };
 
-        // Create session cookie
-        let cookie_header = self.create_session_cookie(session.token(), ctx);
+            // Create session cookie
+            let cookie_header = self.create_session_cookie(session.token(), ctx);
 
-        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+            Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+        } else {
+            let response = SignUpResponse {
+                token: None,
+                user,
+            };
+
+            Ok(AuthResponse::json(200, &response)?)
+        }
     }
 
     async fn handle_sign_in<DB: DatabaseAdapter>(
@@ -191,7 +248,7 @@ impl EmailPasswordPlugin {
             .and_then(|v| v.as_str())
             .ok_or(AuthError::InvalidCredentials)?;
 
-        self.verify_password(&signin_req.password, stored_hash)?;
+        self.verify_password(&signin_req.password, stored_hash).await?;
 
         // Check if 2FA is enabled
         if user.two_factor_enabled() {
@@ -254,7 +311,7 @@ impl EmailPasswordPlugin {
             .and_then(|v| v.as_str())
             .ok_or(AuthError::InvalidCredentials)?;
 
-        self.verify_password(&signin_req.password, stored_hash)?;
+        self.verify_password(&signin_req.password, stored_hash).await?;
 
         // Check if 2FA is enabled
         if user.two_factor_enabled() {
@@ -304,10 +361,19 @@ impl EmailPasswordPlugin {
                 ctx.config.password.min_length
             )));
         }
+        if password.len() > self.config.password_max_length {
+            return Err(AuthError::bad_request(format!(
+                "Password must be at most {} characters long",
+                self.config.password_max_length
+            )));
+        }
         Ok(())
     }
 
-    fn hash_password(&self, password: &str) -> AuthResult<String> {
+    async fn hash_password(&self, password: &str) -> AuthResult<String> {
+        if let Some(hasher) = &self.config.password_hasher {
+            return hasher.hash(password).await;
+        }
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
 
@@ -349,7 +415,19 @@ impl EmailPasswordPlugin {
         )
     }
 
-    fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
+    async fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
+        if let Some(hasher) = &self.config.password_hasher {
+            return hasher
+                .verify(hash, password)
+                .await
+                .and_then(|valid| {
+                    if valid {
+                        Ok(())
+                    } else {
+                        Err(AuthError::InvalidCredentials)
+                    }
+                });
+        }
         let parsed_hash = PasswordHash::new(hash)
             .map_err(|e| AuthError::PasswordHash(format!("Invalid password hash: {}", e)))?;
 
@@ -368,6 +446,9 @@ impl Default for EmailPasswordConfig {
             enable_signup: true,
             require_email_verification: false,
             password_min_length: 8,
+            password_max_length: 128,
+            auto_sign_in: true,
+            password_hasher: None,
         }
     }
 }
