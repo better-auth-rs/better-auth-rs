@@ -104,7 +104,7 @@ If your frontend and backend are on different origins, you need to:
 2. Configure CORS to allow credentials:
 
 ```rust
-use better_auth::middleware::CorsConfig;
+use better_auth::CorsConfig;
 
 let auth = BetterAuth::new(config)
     .cors(
