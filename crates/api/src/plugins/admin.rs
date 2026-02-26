@@ -374,7 +374,7 @@ impl AdminPlugin {
         }
 
         // Hash the password
-        let password_hash = better_auth_core::hash_password(&body.password)?;
+        let password_hash = better_auth_core::hash_password(None, &body.password).await?;
 
         let role = body
             .role
@@ -814,7 +814,7 @@ impl AdminPlugin {
             .await?
             .ok_or_else(|| AuthError::not_found("User not found"))?;
 
-        let password_hash = better_auth_core::hash_password(&body.new_password)?;
+        let password_hash = better_auth_core::hash_password(None, &body.new_password).await?;
 
         // Update password in user metadata
         let mut metadata = user.metadata().clone();

@@ -157,10 +157,10 @@ impl TwoFactorPlugin {
             .collect()
     }
 
-    fn hash_backup_codes(codes: &[String]) -> AuthResult<String> {
+    async fn hash_backup_codes(codes: &[String]) -> AuthResult<String> {
         let mut hashed = Vec::with_capacity(codes.len());
         for code in codes {
-            hashed.push(better_auth_core::hash_password(code)?);
+            hashed.push(better_auth_core::hash_password(None, code).await?);
         }
         serde_json::to_string(&hashed).map_err(|e| AuthError::internal(e.to_string()))
     }
@@ -216,14 +216,14 @@ impl TwoFactorPlugin {
         Ok((user, verification.id().to_string()))
     }
 
-    fn verify_user_password<U: AuthUser>(user: &U, password: &str) -> AuthResult<()> {
+    async fn verify_user_password<U: AuthUser>(user: &U, password: &str) -> AuthResult<()> {
         let stored_hash = user
             .metadata()
             .get("password_hash")
             .and_then(|v| v.as_str())
             .ok_or(AuthError::InvalidCredentials)?;
 
-        better_auth_core::verify_password(password, stored_hash)
+        better_auth_core::verify_password(None, password, stored_hash).await
     }
 
     // -- Handlers --
@@ -240,7 +240,7 @@ impl TwoFactorPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        Self::verify_user_password(&user, &enable_req.password)?;
+        Self::verify_user_password(&user, &enable_req.password).await?;
 
         // Generate TOTP secret
         let secret = Secret::generate_secret();
@@ -257,7 +257,7 @@ impl TwoFactorPlugin {
 
         // Generate and hash backup codes
         let backup_codes = self.generate_backup_codes();
-        let hashed_codes = Self::hash_backup_codes(&backup_codes)?;
+        let hashed_codes = Self::hash_backup_codes(&backup_codes).await?;
 
         // Store 2FA record
         ctx.database
@@ -298,7 +298,7 @@ impl TwoFactorPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        Self::verify_user_password(&user, &disable_req.password)?;
+        Self::verify_user_password(&user, &disable_req.password).await?;
 
         ctx.database.delete_two_factor(user.id()).await?;
 
@@ -331,7 +331,7 @@ impl TwoFactorPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        Self::verify_user_password(&user, &uri_req.password)?;
+        Self::verify_user_password(&user, &uri_req.password).await?;
 
         let two_factor = ctx
             .database
@@ -506,11 +506,11 @@ impl TwoFactorPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        Self::verify_user_password(&user, &gen_req.password)?;
+        Self::verify_user_password(&user, &gen_req.password).await?;
 
         // Generate new codes
         let backup_codes = self.generate_backup_codes();
-        let hashed_codes = Self::hash_backup_codes(&backup_codes)?;
+        let hashed_codes = Self::hash_backup_codes(&backup_codes).await?;
 
         ctx.database
             .update_two_factor_backup_codes(user.id(), &hashed_codes)
@@ -553,7 +553,10 @@ impl TwoFactorPlugin {
         let mut matched_index: Option<usize> = None;
 
         for (i, hash_str) in hashed_codes.iter().enumerate() {
-            if better_auth_core::verify_password(&verify_req.code, hash_str).is_ok() {
+            if better_auth_core::verify_password(None, &verify_req.code, hash_str)
+                .await
+                .is_ok()
+            {
                 matched_index = Some(i);
                 break;
             }
