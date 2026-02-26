@@ -169,6 +169,8 @@ impl AccountManagementPlugin {
 
         let accounts = ctx.database.get_user_accounts(user.id()).await?;
 
+        let allow_unlinking_all = ctx.config.account.account_linking.allow_unlinking_all;
+
         // Check if user has a password (credential provider)
         let has_password = user
             .metadata()
@@ -182,8 +184,8 @@ impl AccountManagementPlugin {
             .filter(|acc| acc.provider_id() != unlink_req.provider_id)
             .count();
 
-        // Prevent unlinking the last credential
-        if !has_password && remaining_accounts == 0 {
+        // Prevent unlinking the last credential (unless allow_unlinking_all is true)
+        if !allow_unlinking_all && !has_password && remaining_accounts == 0 {
             return Err(AuthError::bad_request(
                 "Cannot unlink the last account. You must have at least one authentication method.",
             ));
