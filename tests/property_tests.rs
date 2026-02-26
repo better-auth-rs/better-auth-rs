@@ -56,7 +56,7 @@ proptest! {
         rt.block_on(async {
             let auth = create_test_auth().await;
             // Use a unique email per test case to avoid duplicate-email errors
-            let email = format!("proplen_{}@example.com", rand_suffix());
+            let email = unique_email("proplen");
             let (status, body) = send_request(
                 &auth,
                 post_json(
@@ -196,15 +196,4 @@ proptest! {
             secret.len()
         );
     }
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// Generate a short random suffix for unique emails in property tests.
-fn rand_suffix() -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    format!("{}", COUNTER.fetch_add(1, Ordering::Relaxed))
 }
