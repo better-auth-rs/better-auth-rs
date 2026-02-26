@@ -13,7 +13,7 @@ By default, Better Auth sets session cookies with the following attributes:
 |-----------|---------|-------------|
 | **Name** | `better-auth.session-token` | Cookie name |
 | **Path** | `/` | Available on all paths |
-| **Secure** | `false` | Set to `true` in production (HTTPS only) |
+| **Secure** | `true` | HTTPS only by default (disable for local HTTP development) |
 | **HttpOnly** | `true` | Not accessible via JavaScript |
 | **SameSite** | `Lax` | CSRF protection with top-level navigation support |
 
