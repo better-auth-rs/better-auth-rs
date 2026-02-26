@@ -15,6 +15,7 @@
 
 import { createServer } from "node:http";
 import { betterAuth } from "better-auth";
+import { getMigrations } from "better-auth/db";
 import Database from "better-sqlite3";
 
 // ---------------------------------------------------------------------------
@@ -31,64 +32,15 @@ function getPort() {
 const PORT = getPort();
 
 // ---------------------------------------------------------------------------
-// Auth instance (in-memory SQLite)
+// Database — pass a better-sqlite3 instance so both getMigrations() and
+// betterAuth() share the same in-memory database.
 // ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-// Database setup
-// ---------------------------------------------------------------------------
-
-// better-auth v1.4.x requires a better-sqlite3 Database *instance* — passing
-// `{ url: ":memory:", type: "sqlite" }` causes "Failed to initialize database
-// adapter".  We also pre-create the tables that better-auth expects, since an
-// in-memory database starts empty and better-auth does not auto-migrate.
 const db = new Database(":memory:");
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS user (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    emailVerified INTEGER NOT NULL DEFAULT 0,
-    image TEXT,
-    createdAt TEXT NOT NULL,
-    updatedAt TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS session (
-    id TEXT PRIMARY KEY,
-    expiresAt TEXT NOT NULL,
-    token TEXT NOT NULL UNIQUE,
-    createdAt TEXT NOT NULL,
-    updatedAt TEXT NOT NULL,
-    ipAddress TEXT,
-    userAgent TEXT,
-    userId TEXT NOT NULL REFERENCES user(id)
-  );
-  CREATE TABLE IF NOT EXISTS account (
-    id TEXT PRIMARY KEY,
-    accountId TEXT NOT NULL,
-    providerId TEXT NOT NULL,
-    userId TEXT NOT NULL REFERENCES user(id),
-    accessToken TEXT,
-    refreshToken TEXT,
-    idToken TEXT,
-    accessTokenExpiresAt TEXT,
-    refreshTokenExpiresAt TEXT,
-    scope TEXT,
-    password TEXT,
-    createdAt TEXT NOT NULL,
-    updatedAt TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS verification (
-    id TEXT PRIMARY KEY,
-    identifier TEXT NOT NULL,
-    value TEXT NOT NULL,
-    expiresAt TEXT NOT NULL,
-    createdAt TEXT,
-    updatedAt TEXT
-  );
-`);
-
-const auth = betterAuth({
+// ---------------------------------------------------------------------------
+// Auth configuration
+// ---------------------------------------------------------------------------
+const authOptions = {
   baseURL: `http://localhost:${PORT}`,
   basePath: "/api/auth",
   // Test-only key — not a real secret (constructed to avoid secret scanners)
@@ -102,7 +54,17 @@ const auth = betterAuth({
   rateLimit: {
     enabled: false,
   },
-});
+};
+
+// ---------------------------------------------------------------------------
+// Run better-auth's built-in migrations to create tables automatically.
+// This replaces manually maintained CREATE TABLE statements and stays in
+// sync with whatever schema better-auth v1.4.19 expects.
+// ---------------------------------------------------------------------------
+const { runMigrations } = await getMigrations(authOptions);
+await runMigrations();
+
+const auth = betterAuth(authOptions);
 
 // ---------------------------------------------------------------------------
 // HTTP server

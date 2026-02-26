@@ -3,6 +3,7 @@
     "api-routes",
     "openapi",
     "configuration-options",
+    "security",
     "errors"
   ]
 }
