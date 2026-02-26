@@ -12,7 +12,7 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreatePasskey, CreateVerification, HttpMethod};
 
-use super::helpers;
+use better_auth_core::utils::cookie_utils::create_session_cookie;
 
 /// Passkey / WebAuthn authentication plugin.
 ///
@@ -253,8 +253,6 @@ impl PasskeyPlugin {
         Ok(challenge.to_string())
     }
 
-    // NOTE: Auth extraction has been DRY'd into `plugins::helpers`.
-
     // -- Handlers --
 
     /// GET /passkey/generate-register-options
@@ -263,7 +261,7 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let challenge = Self::generate_challenge();
 
@@ -347,7 +345,7 @@ impl PasskeyPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         self.ensure_insecure_verification_enabled()?;
-        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let body: VerifyRegistrationRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -449,7 +447,7 @@ impl PasskeyPlugin {
 
         // If user is authenticated, build allowCredentials from their passkeys
         let allow_credentials: Vec<serde_json::Value> =
-            if let Ok((user, _session)) = helpers::get_authenticated_user(req, ctx).await {
+            if let Ok((user, _session)) = ctx.require_session(req).await {
                 let passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
                 passkeys
                     .iter()
@@ -556,8 +554,7 @@ impl PasskeyPlugin {
             .create_session(&user, ip_address, user_agent)
             .await?;
 
-        let cookie_header =
-            better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), ctx);
         let response = SessionUserResponse { session, user };
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -568,7 +565,7 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
         let views: Vec<PasskeyView> = passkeys.iter().map(PasskeyView::from_entity).collect();
@@ -582,7 +579,7 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let body: DeletePasskeyRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -612,7 +609,7 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let body: UpdatePasskeyRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -765,13 +762,13 @@ mod tests {
         }
         headers.insert("content-type".to_string(), "application/json".to_string());
 
-        AuthRequest::from_parts(
+        AuthRequest {
             method,
-            path.to_string(),
+            path: path.to_string(),
             headers,
-            body.map(|b| serde_json::to_vec(&b).unwrap()),
-            HashMap::new(),
-        )
+            body: body.map(|b| serde_json::to_vec(&b).unwrap()),
+            query: HashMap::new(),
+        }
     }
 
     fn encoded_client_data(challenge: &str, client_type: &str, origin: &str) -> String {

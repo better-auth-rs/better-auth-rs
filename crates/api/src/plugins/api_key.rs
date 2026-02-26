@@ -718,7 +718,7 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let create_req: CreateKeyRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -785,7 +785,7 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let id = req
             .query
@@ -804,7 +804,7 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let keys = ctx.database.list_api_keys_by_user(user.id()).await?;
 
@@ -820,7 +820,7 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let update_req: UpdateKeyRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -876,7 +876,7 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = helpers::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let delete_req: DeleteKeyRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -1118,7 +1118,7 @@ impl ApiKeyPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         // Require authentication to prevent unauthenticated mass-deletion
-        let (_user, _session) = helpers::get_authenticated_user(req, ctx).await?;
+        let (_user, _session) = ctx.require_session(req).await?;
         let count = ctx.database.delete_expired_api_keys().await?;
         Ok(AuthResponse::json(
             200,
