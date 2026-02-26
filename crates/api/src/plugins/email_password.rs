@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use argon2::password_hash::{SaltString, rand_core::OsRng};
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -13,6 +11,7 @@ use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod};
 
 use super::email_verification::EmailVerificationPlugin;
+use crate::cookie_utils::create_session_cookie;
 
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
@@ -149,7 +148,7 @@ impl EmailPasswordPlugin {
         }
 
         // Hash password
-        let password_hash = self.hash_password(&signup_req.password)?;
+        let password_hash = better_auth_core::hash_password(&signup_req.password)?;
 
         // Create user with password hash in metadata
         let metadata = serde_json::json!({
@@ -180,7 +179,7 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header = self.create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -209,7 +208,7 @@ impl EmailPasswordPlugin {
             .and_then(|v| v.as_str())
             .ok_or(AuthError::InvalidCredentials)?;
 
-        self.verify_password(&signin_req.password, stored_hash)?;
+        better_auth_core::verify_password(&signin_req.password, stored_hash)?;
 
         // Check if 2FA is enabled
         if user.two_factor_enabled() {
@@ -255,7 +254,7 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header = self.create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -284,7 +283,7 @@ impl EmailPasswordPlugin {
             .and_then(|v| v.as_str())
             .ok_or(AuthError::InvalidCredentials)?;
 
-        self.verify_password(&signin_req.password, stored_hash)?;
+        better_auth_core::verify_password(&signin_req.password, stored_hash)?;
 
         // Check if 2FA is enabled
         if user.two_factor_enabled() {
@@ -328,7 +327,7 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header = self.create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), ctx);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -344,60 +343,6 @@ impl EmailPasswordPlugin {
                 ctx.config.password.min_length
             )));
         }
-        Ok(())
-    }
-
-    fn hash_password(&self, password: &str) -> AuthResult<String> {
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-
-        let password_hash = argon2
-            .hash_password(password.as_bytes(), &salt)
-            .map_err(|e| AuthError::PasswordHash(format!("Failed to hash password: {}", e)))?;
-
-        Ok(password_hash.to_string())
-    }
-
-    fn create_session_cookie<DB: DatabaseAdapter>(
-        &self,
-        token: &str,
-        ctx: &AuthContext<DB>,
-    ) -> String {
-        let session_config = &ctx.config.session;
-        let secure = if session_config.cookie_secure {
-            "; Secure"
-        } else {
-            ""
-        };
-        let http_only = if session_config.cookie_http_only {
-            "; HttpOnly"
-        } else {
-            ""
-        };
-        let same_site = match session_config.cookie_same_site {
-            better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
-            better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
-            better_auth_core::config::SameSite::None => "; SameSite=None",
-        };
-
-        let expires = chrono::Utc::now() + session_config.expires_in;
-        let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
-
-        format!(
-            "{}={}; Path=/; Expires={}{}{}{}",
-            session_config.cookie_name, token, expires_str, secure, http_only, same_site
-        )
-    }
-
-    fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
-        let parsed_hash = PasswordHash::new(hash)
-            .map_err(|e| AuthError::PasswordHash(format!("Invalid password hash: {}", e)))?;
-
-        let argon2 = Argon2::default();
-        argon2
-            .verify_password(password.as_bytes(), &parsed_hash)
-            .map_err(|_| AuthError::InvalidCredentials)?;
-
         Ok(())
     }
 }

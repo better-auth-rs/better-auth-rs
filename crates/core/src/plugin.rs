@@ -5,6 +5,7 @@ use std::sync::Arc;
 use crate::adapters::DatabaseAdapter;
 use crate::config::AuthConfig;
 use crate::email::EmailProvider;
+use crate::entity::AuthSession;
 use crate::error::{AuthError, AuthResult};
 use crate::types::{AuthRequest, AuthResponse, HttpMethod};
 
@@ -137,5 +138,24 @@ impl<DB: DatabaseAdapter> AuthContext<DB> {
         self.email_provider
             .as_deref()
             .ok_or_else(|| AuthError::config("No email provider configured"))
+    }
+
+    /// Extract a session token from the request, validate the session, and
+    /// return the authenticated `(User, Session)` pair.
+    ///
+    /// This centralises the pattern previously duplicated across many plugins
+    /// (`get_authenticated_user`, `require_session`, etc.).
+    pub async fn require_session(&self, req: &AuthRequest) -> AuthResult<(DB::User, DB::Session)> {
+        let session_manager =
+            crate::session::SessionManager::new(self.config.clone(), self.database.clone());
+
+        if let Some(token) = session_manager.extract_session_token(req)
+            && let Some(session) = session_manager.get_session(&token).await?
+            && let Some(user) = self.database.get_user_by_id(session.user_id()).await?
+        {
+            return Ok((user, session));
+        }
+
+        Err(AuthError::Unauthenticated)
     }
 }

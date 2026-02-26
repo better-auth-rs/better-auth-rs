@@ -9,6 +9,8 @@ use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreateVerification, HttpMethod, UpdateUser};
 use better_auth_core::{AuthSession, AuthUser, AuthVerification, DatabaseAdapter};
 
+use crate::cookie_utils::create_session_cookie;
+
 /// Password management plugin for password reset and change functionality
 pub struct PasswordManagementPlugin {
     config: PasswordManagementConfig,
@@ -295,25 +297,15 @@ impl PasswordManagementPlugin {
             .ok_or_else(|| AuthError::bad_request("Invalid or expired reset token"))?;
 
         // Hash new password
-        let password_hash = self.hash_password(&reset_req.new_password)?;
+        let password_hash = better_auth_core::hash_password(&reset_req.new_password)?;
 
         // Update user password
         let mut metadata = user.metadata().clone();
         metadata["password_hash"] = serde_json::Value::String(password_hash);
 
         let update_user = UpdateUser {
-            email: None,
-            name: None,
-            image: None,
-            email_verified: None,
-            username: None,
-            display_username: None,
-            role: None,
-            banned: None,
-            ban_reason: None,
-            ban_expires: None,
-            two_factor_enabled: None,
             metadata: Some(metadata),
+            ..Default::default()
         };
 
         ctx.database.update_user(user.id(), update_user).await?;
@@ -352,7 +344,7 @@ impl PasswordManagementPlugin {
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| AuthError::bad_request("No password set for this user"))?;
 
-            self.verify_password(&change_req.current_password, stored_hash)
+            better_auth_core::verify_password(&change_req.current_password, stored_hash)
                 .map_err(|_| AuthError::InvalidCredentials)?;
         }
 
@@ -360,25 +352,15 @@ impl PasswordManagementPlugin {
         self.validate_password(&change_req.new_password, ctx)?;
 
         // Hash new password
-        let password_hash = self.hash_password(&change_req.new_password)?;
+        let password_hash = better_auth_core::hash_password(&change_req.new_password)?;
 
         // Update user password
         let mut metadata = user.metadata().clone();
         metadata["password_hash"] = serde_json::Value::String(password_hash);
 
         let update_user = UpdateUser {
-            email: None,
-            name: None,
-            image: None,
-            email_verified: None,
-            username: None,
-            display_username: None,
-            role: None,
-            banned: None,
-            ban_reason: None,
-            ban_expires: None,
-            two_factor_enabled: None,
             metadata: Some(metadata),
+            ..Default::default()
         };
 
         let updated_user = ctx.database.update_user(user.id(), update_user).await?;
@@ -408,7 +390,7 @@ impl PasswordManagementPlugin {
 
         // Set session cookie if a new session was created
         if let Some(token) = new_token {
-            let cookie_header = self.create_session_cookie(&token, ctx);
+            let cookie_header = create_session_cookie(&token, ctx);
             Ok(auth_response.with_header("Set-Cookie", cookie_header))
         } else {
             Ok(auth_response)
@@ -447,24 +429,14 @@ impl PasswordManagementPlugin {
         self.validate_password(&set_req.new_password, ctx)?;
 
         // Hash and store the new password
-        let password_hash = self.hash_password(&set_req.new_password)?;
+        let password_hash = better_auth_core::hash_password(&set_req.new_password)?;
 
         let mut metadata = user.metadata().clone();
         metadata["password_hash"] = serde_json::Value::String(password_hash);
 
         let update_user = UpdateUser {
-            email: None,
-            name: None,
-            image: None,
-            email_verified: None,
-            username: None,
-            display_username: None,
-            role: None,
-            banned: None,
-            ban_reason: None,
-            ban_expires: None,
-            two_factor_enabled: None,
             metadata: Some(metadata),
+            ..Default::default()
         };
 
         ctx.database.update_user(user.id(), update_user).await?;
@@ -550,13 +522,8 @@ impl PasswordManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<Option<DB::User>> {
-        let session_manager =
-            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-
-        if let Some(token) = session_manager.extract_session_token(req)
-            && let Some(session) = session_manager.get_session(&token).await?
-        {
-            return ctx.database.get_user_by_id(session.user_id()).await;
+        if let Ok((user, _session)) = ctx.require_session(req).await {
+            return Ok(Some(user));
         }
 
         Ok(None)
@@ -606,66 +573,6 @@ impl PasswordManagementPlugin {
 
         Ok(())
     }
-
-    fn hash_password(&self, password: &str) -> AuthResult<String> {
-        use argon2::password_hash::{SaltString, rand_core::OsRng};
-        use argon2::{Argon2, PasswordHasher};
-
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-
-        let password_hash = argon2
-            .hash_password(password.as_bytes(), &salt)
-            .map_err(|e| AuthError::PasswordHash(format!("Failed to hash password: {}", e)))?;
-
-        Ok(password_hash.to_string())
-    }
-
-    fn create_session_cookie<DB: DatabaseAdapter>(
-        &self,
-        token: &str,
-        ctx: &AuthContext<DB>,
-    ) -> String {
-        let session_config = &ctx.config.session;
-        let secure = if session_config.cookie_secure {
-            "; Secure"
-        } else {
-            ""
-        };
-        let http_only = if session_config.cookie_http_only {
-            "; HttpOnly"
-        } else {
-            ""
-        };
-        let same_site = match session_config.cookie_same_site {
-            better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
-            better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
-            better_auth_core::config::SameSite::None => "; SameSite=None",
-        };
-
-        let expires = chrono::Utc::now() + session_config.expires_in;
-        let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
-
-        format!(
-            "{}={}; Path=/; Expires={}{}{}{}",
-            session_config.cookie_name, token, expires_str, secure, http_only, same_site
-        )
-    }
-
-    fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
-        use argon2::password_hash::PasswordHash;
-        use argon2::{Argon2, PasswordVerifier};
-
-        let parsed_hash = PasswordHash::new(hash)
-            .map_err(|e| AuthError::PasswordHash(format!("Invalid password hash: {}", e)))?;
-
-        let argon2 = Argon2::default();
-        argon2
-            .verify_password(password.as_bytes(), &parsed_hash)
-            .map_err(|_| AuthError::InvalidCredentials)?;
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -695,8 +602,7 @@ mod tests {
         let ctx = AuthContext::new(config.clone(), database.clone());
 
         // Create test user with hashed password
-        let plugin = PasswordManagementPlugin::new();
-        let password_hash = plugin.hash_password("Password123!").unwrap();
+        let password_hash = better_auth_core::hash_password("Password123!").unwrap();
 
         let metadata = serde_json::json!({
             "password_hash": password_hash,
@@ -841,11 +747,7 @@ mod tests {
             .unwrap()
             .as_str()
             .unwrap();
-        assert!(
-            plugin
-                .verify_password("NewPassword123!", stored_hash)
-                .is_ok()
-        );
+        assert!(better_auth_core::verify_password("NewPassword123!", stored_hash).is_ok());
 
         // Verify token was deleted
         let verification_check = ctx
@@ -944,11 +846,7 @@ mod tests {
             .unwrap()
             .as_str()
             .unwrap();
-        assert!(
-            plugin
-                .verify_password("NewPassword123!", stored_hash)
-                .is_ok()
-        );
+        assert!(better_auth_core::verify_password("NewPassword123!", stored_hash).is_ok());
     }
 
     #[tokio::test]
@@ -1254,13 +1152,13 @@ mod tests {
         let plugin = PasswordManagementPlugin::new();
 
         let password = "TestPassword123!";
-        let hash = plugin.hash_password(password).unwrap();
+        let hash = better_auth_core::hash_password(password).unwrap();
 
         // Should verify correctly
-        assert!(plugin.verify_password(password, &hash).is_ok());
+        assert!(better_auth_core::verify_password(password, &hash).is_ok());
 
         // Should fail with wrong password
-        assert!(plugin.verify_password("WrongPassword123!", &hash).is_err());
+        assert!(better_auth_core::verify_password("WrongPassword123!", &hash).is_err());
     }
 
     #[tokio::test]

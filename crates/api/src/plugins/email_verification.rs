@@ -14,6 +14,8 @@ use better_auth_core::{
     AuthSession, AuthUser, AuthVerification, DatabaseAdapter, SessionManager, User,
 };
 
+use crate::cookie_utils::create_session_cookie;
+
 /// Trait for custom email sending logic.
 ///
 /// When set on [`EmailVerificationConfig::send_verification_email`], this
@@ -28,28 +30,6 @@ pub trait SendVerificationEmail: Send + Sync {
 /// [`EmailVerificationConfig::after_email_verification`].
 pub type EmailVerificationHook =
     Arc<dyn Fn(&User) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>;
-
-/// Convert any `AuthUser` implementor into the concrete [`User`] type so that
-/// it can be passed to hooks and callbacks that require a known, sized type.
-fn to_user(u: &impl AuthUser) -> User {
-    User {
-        id: u.id().to_owned(),
-        name: u.name().map(str::to_owned),
-        email: u.email().map(str::to_owned),
-        email_verified: u.email_verified(),
-        image: u.image().map(str::to_owned),
-        created_at: u.created_at(),
-        updated_at: u.updated_at(),
-        username: u.username().map(str::to_owned),
-        display_username: u.display_username().map(str::to_owned),
-        two_factor_enabled: u.two_factor_enabled(),
-        role: u.role().map(str::to_owned),
-        banned: u.banned(),
-        ban_reason: u.ban_reason().map(str::to_owned),
-        ban_expires: u.ban_expires(),
-        metadata: u.metadata().clone(),
-    }
-}
 
 /// Email verification plugin for handling email verification flows
 pub struct EmailVerificationPlugin {
@@ -326,23 +306,14 @@ impl EmailVerificationPlugin {
 
         // Run before_email_verification hook
         if let Some(ref hook) = self.config.before_email_verification {
-            hook(&to_user(&user)).await?;
+            let hook_user = User::from(&user);
+            hook(&hook_user).await?;
         }
 
         // Update user email verification status
         let update_user = UpdateUser {
-            email: None,
-            name: None,
-            image: None,
             email_verified: Some(true),
-            username: None,
-            display_username: None,
-            role: None,
-            banned: None,
-            ban_reason: None,
-            ban_expires: None,
-            two_factor_enabled: None,
-            metadata: None,
+            ..Default::default()
         };
 
         let updated_user = ctx.database.update_user(user.id(), update_user).await?;
@@ -352,7 +323,8 @@ impl EmailVerificationPlugin {
 
         // Run after_email_verification hook
         if let Some(ref hook) = self.config.after_email_verification {
-            hook(&to_user(&updated_user)).await?;
+            let hook_user = User::from(&updated_user);
+            hook(&hook_user).await?;
         }
 
         // Optionally create a session when auto_sign_in_after_verification is
@@ -365,7 +337,7 @@ impl EmailVerificationPlugin {
             let session = session_manager
                 .create_session(&updated_user, ip_address, user_agent)
                 .await?;
-            Some((Self::create_session_cookie(session.token(), ctx), session))
+            Some((create_session_cookie(session.token(), ctx), session))
         } else {
             None
         };
@@ -440,8 +412,9 @@ impl EmailVerificationPlugin {
 
         // Use custom sender if configured, otherwise fall back to EmailProvider
         if let Some(ref custom_sender) = self.config.send_verification_email {
+            let user = User::from(user);
             custom_sender
-                .send(&to_user(user), &verification_url, &verification_token)
+                .send(&user, &verification_url, &verification_token)
                 .await?;
         } else if self.config.send_email_notifications {
             // Gracefully skip if no email provider is configured
@@ -508,40 +481,6 @@ impl EmailVerificationPlugin {
     /// Check if user is verified or verification is not required
     pub async fn is_user_verified_or_not_required(&self, user: &impl AuthUser) -> bool {
         user.email_verified() || !self.config.require_verification_for_signin
-    }
-
-    /// Build a `Set-Cookie` header value for a session token using the
-    /// [`cookie`] crate for proper encoding and formatting.
-    fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
-        use cookie::{Cookie, SameSite as CookieSameSite};
-
-        let session_config = &ctx.config.session;
-
-        let expires_offset = cookie::time::OffsetDateTime::now_utc()
-            + cookie::time::Duration::seconds(session_config.expires_in.num_seconds());
-
-        let same_site = match session_config.cookie_same_site {
-            better_auth_core::config::SameSite::Strict => CookieSameSite::Strict,
-            better_auth_core::config::SameSite::Lax => CookieSameSite::Lax,
-            better_auth_core::config::SameSite::None => CookieSameSite::None,
-        };
-
-        let mut cookie = Cookie::build((&*session_config.cookie_name, token))
-            .path("/")
-            .expires(expires_offset)
-            .secure(session_config.cookie_secure)
-            .http_only(session_config.cookie_http_only)
-            .same_site(same_site);
-
-        // SameSite=None requires the Secure attribute per the spec
-        if matches!(
-            session_config.cookie_same_site,
-            better_auth_core::config::SameSite::None
-        ) {
-            cookie = cookie.secure(true);
-        }
-
-        cookie.build().to_string()
     }
 }
 
@@ -800,7 +739,7 @@ mod tests {
             ban_expires: None,
             metadata: serde_json::Value::Null,
         };
-        let converted = to_user(&user);
+        let converted = User::from(&user);
         assert_eq!(converted.id, "test-id");
         assert_eq!(converted.name.as_deref(), Some("Test User"));
         assert_eq!(converted.email.as_deref(), Some("test@example.com"));
@@ -1513,7 +1452,7 @@ mod tests {
     #[test]
     fn test_create_session_cookie_format() {
         let ctx = create_test_context();
-        let cookie_str = EmailVerificationPlugin::create_session_cookie("my-token-123", &ctx);
+        let cookie_str = create_session_cookie("my-token-123", &ctx);
         // Should contain the cookie name and value
         assert!(cookie_str.contains("better-auth.session-token=my-token-123"));
         // Should contain Path
@@ -1528,7 +1467,7 @@ mod tests {
     fn test_create_session_cookie_special_characters_in_token() {
         let ctx = create_test_context();
         let token = "token+with/special=chars&more";
-        let cookie_str = EmailVerificationPlugin::create_session_cookie(token, &ctx);
+        let cookie_str = create_session_cookie(token, &ctx);
         // The cookie crate should handle encoding properly
         assert!(cookie_str.contains("better-auth.session-token="));
     }

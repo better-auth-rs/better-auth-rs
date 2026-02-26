@@ -1,5 +1,3 @@
-use argon2::password_hash::{SaltString, rand_core::OsRng};
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use totp_rs::{Algorithm, Secret, TOTP};
@@ -12,6 +10,8 @@ use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
     AuthRequest, AuthResponse, CreateTwoFactor, CreateVerification, HttpMethod, UpdateUser,
 };
+
+use crate::cookie_utils::create_session_cookie;
 
 /// Two-factor authentication plugin providing TOTP, OTP, and backup code flows.
 pub struct TwoFactorPlugin {
@@ -158,14 +158,9 @@ impl TwoFactorPlugin {
     }
 
     fn hash_backup_codes(codes: &[String]) -> AuthResult<String> {
-        let argon2 = Argon2::default();
         let mut hashed = Vec::with_capacity(codes.len());
         for code in codes {
-            let salt = SaltString::generate(&mut OsRng);
-            let hash = argon2
-                .hash_password(code.as_bytes(), &salt)
-                .map_err(|e| AuthError::internal(format!("Failed to hash backup code: {}", e)))?;
-            hashed.push(hash.to_string());
+            hashed.push(better_auth_core::hash_password(code)?);
         }
         serde_json::to_string(&hashed).map_err(|e| AuthError::internal(e.to_string()))
     }
@@ -184,35 +179,6 @@ impl TwoFactorPlugin {
     }
 
     // -- Session / auth helpers --
-
-    async fn get_authenticated_user<DB: DatabaseAdapter>(
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<(DB::User, DB::Session)> {
-        let token = req
-            .headers
-            .get("authorization")
-            .and_then(|v| v.strip_prefix("Bearer "))
-            .ok_or(AuthError::Unauthenticated)?;
-
-        let session = ctx
-            .database
-            .get_session(token)
-            .await?
-            .ok_or(AuthError::Unauthenticated)?;
-
-        if session.expires_at() < chrono::Utc::now() {
-            return Err(AuthError::Unauthenticated);
-        }
-
-        let user = ctx
-            .database
-            .get_user_by_id(session.user_id())
-            .await?
-            .ok_or(AuthError::UserNotFound)?;
-
-        Ok((user, session))
-    }
 
     /// Extract the user_id from a `2fa_xxx` pending verification token.
     async fn get_pending_2fa_user<DB: DatabaseAdapter>(
@@ -257,41 +223,7 @@ impl TwoFactorPlugin {
             .and_then(|v| v.as_str())
             .ok_or(AuthError::InvalidCredentials)?;
 
-        let parsed_hash = PasswordHash::new(stored_hash)
-            .map_err(|e| AuthError::internal(format!("Invalid password hash: {}", e)))?;
-
-        Argon2::default()
-            .verify_password(password.as_bytes(), &parsed_hash)
-            .map_err(|_| AuthError::InvalidCredentials)?;
-
-        Ok(())
-    }
-
-    fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
-        let session_config = &ctx.config.session;
-        let secure = if session_config.cookie_secure {
-            "; Secure"
-        } else {
-            ""
-        };
-        let http_only = if session_config.cookie_http_only {
-            "; HttpOnly"
-        } else {
-            ""
-        };
-        let same_site = match session_config.cookie_same_site {
-            better_auth_core::config::SameSite::Strict => "; SameSite=Strict",
-            better_auth_core::config::SameSite::Lax => "; SameSite=Lax",
-            better_auth_core::config::SameSite::None => "; SameSite=None",
-        };
-
-        let expires = chrono::Utc::now() + session_config.expires_in;
-        let expires_str = expires.format("%a, %d %b %Y %H:%M:%S GMT");
-
-        format!(
-            "{}={}; Path=/; Expires={}{}{}{}",
-            session_config.cookie_name, token, expires_str, secure, http_only, same_site
-        )
+        better_auth_core::verify_password(password, stored_hash)
     }
 
     // -- Handlers --
@@ -301,7 +233,7 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let enable_req: EnableRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -341,18 +273,8 @@ impl TwoFactorPlugin {
             .update_user(
                 user.id(),
                 UpdateUser {
-                    email: None,
-                    name: None,
-                    image: None,
-                    email_verified: None,
-                    username: None,
-                    display_username: None,
-                    role: None,
-                    banned: None,
-                    ban_reason: None,
-                    ban_expires: None,
                     two_factor_enabled: Some(true),
-                    metadata: None,
+                    ..Default::default()
                 },
             )
             .await?;
@@ -369,7 +291,7 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let disable_req: DisableRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -384,18 +306,8 @@ impl TwoFactorPlugin {
             .update_user(
                 user.id(),
                 UpdateUser {
-                    email: None,
-                    name: None,
-                    image: None,
-                    email_verified: None,
-                    username: None,
-                    display_username: None,
-                    role: None,
-                    banned: None,
-                    ban_reason: None,
-                    ban_expires: None,
                     two_factor_enabled: Some(false),
-                    metadata: None,
+                    ..Default::default()
                 },
             )
             .await?;
@@ -412,7 +324,7 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let uri_req: GetTotpUriRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -482,7 +394,7 @@ impl TwoFactorPlugin {
         // Delete the pending verification
         ctx.database.delete_verification(&verification_id).await?;
 
-        let cookie_header = Self::create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), ctx);
         let response = VerifyTotpResponse {
             status: true,
             token: session.token().to_string(),
@@ -571,7 +483,7 @@ impl TwoFactorPlugin {
             .delete_verification(&pending_verification_id)
             .await?;
 
-        let cookie_header = Self::create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), ctx);
         let response = VerifyTotpResponse {
             status: true,
             token: session.token().to_string(),
@@ -586,7 +498,7 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = Self::get_authenticated_user(req, ctx).await?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let gen_req: GenerateBackupCodesRequest = match better_auth_core::validate_request_body(req)
         {
@@ -638,15 +550,10 @@ impl TwoFactorPlugin {
             .map_err(|e| AuthError::internal(format!("Failed to parse backup codes: {}", e)))?;
 
         // Try to match the provided code against each hashed code
-        let argon2 = Argon2::default();
         let mut matched_index: Option<usize> = None;
 
         for (i, hash_str) in hashed_codes.iter().enumerate() {
-            if let Ok(parsed_hash) = PasswordHash::new(hash_str)
-                && argon2
-                    .verify_password(verify_req.code.as_bytes(), &parsed_hash)
-                    .is_ok()
-            {
+            if better_auth_core::verify_password(&verify_req.code, hash_str).is_ok() {
                 matched_index = Some(i);
                 break;
             }
@@ -675,7 +582,7 @@ impl TwoFactorPlugin {
             .delete_verification(&pending_verification_id)
             .await?;
 
-        let cookie_header = Self::create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), ctx);
         let response = VerifyBackupCodeResponse { user, session };
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
