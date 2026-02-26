@@ -1,0 +1,320 @@
+---
+title: Two-Factor Authentication
+description: TOTP, OTP, and backup codes for two-factor authentication.
+---
+
+The `TwoFactorPlugin` adds two-factor authentication (2FA) to your application. It supports TOTP (authenticator apps), OTP (email-based one-time passwords), and backup codes for recovery.
+
+## Setup
+
+```rust
+use better_auth::plugins::TwoFactorPlugin;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(TwoFactorPlugin::new())
+    .build()
+    .await?;
+```
+
+### Configuration
+
+```rust
+use better_auth::plugins::two_factor::TwoFactorConfig;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(
+        TwoFactorPlugin::new().with_config(TwoFactorConfig {
+            issuer: "My App".to_string(),
+            backup_code_count: 10,
+            backup_code_length: 10,
+            totp_period: 30,
+            totp_digits: 6,
+        })
+    )
+    .build()
+    .await?;
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `issuer` | `String` | `"BetterAuth"` | Issuer name shown in authenticator apps |
+| `backup_code_count` | `usize` | `10` | Number of backup codes to generate |
+| `backup_code_length` | `usize` | `10` | Length of each backup code |
+| `totp_period` | `u64` | `30` | TOTP time step in seconds |
+| `totp_digits` | `usize` | `6` | Number of digits in TOTP code |
+
+## How It Works
+
+### Enrollment Flow
+
+1. User calls `/two-factor/enable` with their password
+2. A TOTP secret is generated and stored
+3. Backup codes are generated (hashed with Argon2 before storage)
+4. User scans the TOTP URI in their authenticator app
+
+### Sign-In Flow with 2FA
+
+1. User signs in with email/password as normal
+2. If 2FA is enabled, instead of creating a session, a pending verification is created
+3. User must verify with one of:
+   - **TOTP**: Code from authenticator app
+   - **OTP**: Code sent via email
+   - **Backup code**: One-time recovery code
+4. After successful verification, a session is created
+
+## API Endpoints
+
+### Enable 2FA
+
+```http
+POST /two-factor/enable
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+#### Request
+
+```json
+{
+  "password": "user_password"
+}
+```
+
+#### Response
+
+```json
+{
+  "status": true,
+  "totpURI": "otpauth://totp/BetterAuth:alice@example.com?secret=BASE32SECRET&issuer=BetterAuth&period=30&digits=6",
+  "backupCodes": [
+    "a1b2c3d4e5",
+    "f6g7h8i9j0",
+    "..."
+  ]
+}
+```
+
+The `totpURI` can be encoded as a QR code for the user to scan with their authenticator app.
+
+<Callout type="warn">
+The backup codes are shown only once during enrollment. Store them securely — they cannot be retrieved later.
+</Callout>
+
+### Disable 2FA
+
+```http
+POST /two-factor/disable
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+#### Request
+
+```json
+{
+  "password": "user_password"
+}
+```
+
+#### Response
+
+```json
+{
+  "status": true
+}
+```
+
+### Get TOTP URI
+
+Retrieve the TOTP URI for an already-enrolled user (requires password verification).
+
+```http
+POST /two-factor/get-totp-uri
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+#### Request
+
+```json
+{
+  "password": "user_password"
+}
+```
+
+#### Response
+
+```json
+{
+  "totpURI": "otpauth://totp/BetterAuth:alice@example.com?secret=BASE32SECRET&issuer=BetterAuth&period=30&digits=6"
+}
+```
+
+### Verify TOTP
+
+Verify a TOTP code during sign-in when 2FA is required.
+
+```http
+POST /two-factor/verify-totp
+Content-Type: application/json
+```
+
+#### Request
+
+```json
+{
+  "code": "123456",
+  "token": "pending_verification_token"
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `code` | Yes | 6-digit TOTP code from authenticator app |
+| `token` | Yes | The pending verification token from the sign-in response |
+
+#### Response
+
+```json
+{
+  "status": true,
+  "token": "session_abc123...",
+  "user": {
+    "id": "uuid",
+    "email": "alice@example.com",
+    "name": "Alice"
+  }
+}
+```
+
+### Send OTP
+
+Send a one-time password via email.
+
+```http
+POST /two-factor/send-otp
+Content-Type: application/json
+```
+
+#### Request
+
+```json
+{
+  "token": "pending_verification_token"
+}
+```
+
+The OTP is sent to the user's registered email address. OTP codes expire after **5 minutes**.
+
+#### Response
+
+```json
+{
+  "status": true
+}
+```
+
+### Verify OTP
+
+```http
+POST /two-factor/verify-otp
+Content-Type: application/json
+```
+
+#### Request
+
+```json
+{
+  "code": "123456",
+  "token": "pending_verification_token"
+}
+```
+
+#### Response
+
+```json
+{
+  "status": true,
+  "token": "session_abc123...",
+  "user": { ... }
+}
+```
+
+### Generate Backup Codes
+
+Generate a new set of backup codes (replaces any existing codes).
+
+```http
+POST /two-factor/generate-backup-codes
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+#### Request
+
+```json
+{
+  "password": "user_password"
+}
+```
+
+#### Response
+
+```json
+{
+  "status": true,
+  "backupCodes": [
+    "a1b2c3d4e5",
+    "f6g7h8i9j0",
+    "..."
+  ]
+}
+```
+
+### Verify Backup Code
+
+Use a backup code to complete 2FA during sign-in. Each backup code can only be used once.
+
+```http
+POST /two-factor/verify-backup-code
+Content-Type: application/json
+```
+
+#### Request
+
+```json
+{
+  "code": "a1b2c3d4e5",
+  "token": "pending_verification_token"
+}
+```
+
+#### Response
+
+```json
+{
+  "user": { ... },
+  "session": { ... }
+}
+```
+
+## Security Details
+
+- **TOTP secrets** are stored as raw bytes in the database
+- **Backup codes** are hashed with Argon2 before storage — the plaintext is only returned once during generation
+- **OTP codes** are stored as verification records and expire after 5 minutes
+- **Password verification** is required to enable/disable 2FA and to regenerate backup codes
+- **Used backup codes** are immediately removed from the stored set
+
+## Errors
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Invalid TOTP code |
+| 400 | Invalid or expired backup code |
+| 400 | No backup codes available |
+| 401 | Invalid password |
+| 401 | Unauthenticated (missing or invalid session) |
+| 404 | Two-factor authentication not enabled |

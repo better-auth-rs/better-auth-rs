@@ -1,0 +1,435 @@
+---
+title: Organization
+description: Multi-tenancy with organizations, members, invitations, and RBAC.
+---
+
+The `OrganizationPlugin` provides multi-tenancy support with organizations, membership management, invitation workflows, and role-based access control (RBAC).
+
+## Setup
+
+```rust
+use better_auth::plugins::OrganizationPlugin;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(OrganizationPlugin::new())
+    .build()
+    .await?;
+```
+
+### Configuration
+
+```rust
+use better_auth::plugins::organization::OrganizationConfig;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(
+        OrganizationPlugin::new()
+            .allow_user_to_create_organization(true)
+            .organization_limit(5)
+            .membership_limit(50)
+            .creator_role("owner")
+            .invitation_expires_in(172800) // 48 hours
+            .invitation_limit(100)
+    )
+    .build()
+    .await?;
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `allow_user_to_create_organization` | `bool` | `true` | Allow users to create organizations |
+| `organization_limit` | `Option<usize>` | `None` | Max organizations per user |
+| `membership_limit` | `Option<usize>` | `Some(100)` | Max members per organization |
+| `creator_role` | `String` | `"owner"` | Role assigned to organization creator |
+| `invitation_expires_in` | `u64` | `172800` (48h) | Invitation expiration in seconds |
+| `invitation_limit` | `Option<usize>` | `Some(100)` | Max pending invitations per org |
+| `disable_organization_deletion` | `bool` | `false` | Prevent organization deletion |
+
+## RBAC (Role-Based Access Control)
+
+### Default Roles
+
+| Role | Organization | Member | Invitation |
+|------|-------------|--------|------------|
+| **owner** | update, delete | create, update, delete | create, cancel |
+| **admin** | update | create, update, delete | create, cancel |
+| **member** | — | — | — |
+
+### Custom Roles
+
+Extend the default roles with custom permissions:
+
+```rust
+use better_auth::plugins::organization::config::{OrganizationConfig, RolePermissions};
+use std::collections::HashMap;
+
+let mut roles = HashMap::new();
+roles.insert("editor".to_string(), RolePermissions {
+    organization: vec!["read".to_string()],
+    member: vec!["read".to_string()],
+    invitation: vec![],
+});
+
+let config = OrganizationConfig {
+    roles,
+    ..Default::default()
+};
+
+let auth = BetterAuth::new(auth_config)
+    .database(database)
+    .plugin(OrganizationPlugin::with_config(config))
+    .build()
+    .await?;
+```
+
+### Resources and Actions
+
+**Resources**: `organization`, `member`, `invitation`
+
+**Actions**: `create`, `read`, `update`, `delete`, `cancel`
+
+## API Endpoints
+
+### Organization CRUD
+
+#### Create Organization
+
+```http
+POST /organization/create
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "name": "Acme Inc",
+  "slug": "acme-inc",
+  "logo": "https://example.com/logo.png",
+  "metadata": { "plan": "pro" }
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Organization name |
+| `slug` | Yes | URL-friendly unique identifier (1-100 chars) |
+| `logo` | No | Organization logo URL |
+| `metadata` | No | Arbitrary JSON metadata |
+
+The creator is automatically added as a member with the configured `creator_role` (default: `"owner"`).
+
+#### Update Organization
+
+```http
+POST /organization/update
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "organizationId": "org_uuid",
+  "name": "Acme Corp",
+  "slug": "acme-corp",
+  "logo": "https://example.com/new-logo.png"
+}
+```
+
+Requires `organization:update` permission.
+
+#### Delete Organization
+
+```http
+POST /organization/delete
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "organizationId": "org_uuid"
+}
+```
+
+Requires `organization:delete` permission. Can be disabled via `disable_organization_deletion`.
+
+#### List Organizations
+
+```http
+GET /organization/list
+Authorization: Bearer <token>
+```
+
+Returns all organizations the authenticated user is a member of.
+
+#### Get Full Organization
+
+```http
+GET /organization/get-full-organization?organizationId={id}
+Authorization: Bearer <token>
+```
+
+Returns the organization with all members and invitations. You can also use `organizationSlug` as an alternative query parameter.
+
+#### Check Slug Availability
+
+```http
+POST /organization/check-slug
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "slug": "acme-inc"
+}
+```
+
+Response: `{ "status": true }` if available.
+
+#### Set Active Organization
+
+```http
+POST /organization/set-active
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "organizationId": "org_uuid"
+}
+```
+
+Sets the active organization on the user's session. You can also use `organizationSlug`.
+
+#### Leave Organization
+
+```http
+POST /organization/leave
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "organizationId": "org_uuid"
+}
+```
+
+### Member Management
+
+#### Get Active Member
+
+```http
+GET /organization/get-active-member
+Authorization: Bearer <token>
+```
+
+Returns the member record for the authenticated user in their active organization.
+
+#### List Members
+
+```http
+GET /organization/list-members?organizationId={id}
+Authorization: Bearer <token>
+```
+
+| Query Parameter | Description |
+|-----------------|-------------|
+| `organizationId` | Organization ID |
+| `organizationSlug` | Alternative: organization slug |
+| `limit` | Max results to return |
+| `offset` | Pagination offset |
+
+Response:
+
+```json
+{
+  "members": [
+    {
+      "id": "member_uuid",
+      "organizationId": "org_uuid",
+      "userId": "user_uuid",
+      "role": "owner",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "user": {
+        "id": "user_uuid",
+        "name": "Alice",
+        "email": "alice@example.com",
+        "image": null
+      }
+    }
+  ],
+  "total": 1
+}
+```
+
+#### Remove Member
+
+```http
+POST /organization/remove-member
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "memberId": "member_uuid",
+  "organizationId": "org_uuid"
+}
+```
+
+You can use either `memberId` or `email` to identify the member. Requires `member:delete` permission.
+
+#### Update Member Role
+
+```http
+POST /organization/update-member-role
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "memberId": "member_uuid",
+  "role": "admin",
+  "organizationId": "org_uuid"
+}
+```
+
+Requires `member:update` permission.
+
+### Invitations
+
+#### Invite Member
+
+```http
+POST /organization/invite-member
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "bob@example.com",
+  "role": "member",
+  "organizationId": "org_uuid"
+}
+```
+
+Requires `invitation:create` permission. Invitations expire based on `invitation_expires_in` config.
+
+#### Get Invitation
+
+```http
+GET /organization/get-invitation?id={invitation_id}
+Authorization: Bearer <token>
+```
+
+Returns the invitation with organization name, slug, and inviter email.
+
+#### List Invitations
+
+```http
+GET /organization/list-invitations?organizationId={id}
+Authorization: Bearer <token>
+```
+
+Lists all pending invitations for the organization.
+
+#### List User Invitations
+
+```http
+GET /organization/list-user-invitations
+Authorization: Bearer <token>
+```
+
+Lists all pending invitations for the authenticated user.
+
+#### Accept Invitation
+
+```http
+POST /organization/accept-invitation
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "invitationId": "invitation_uuid"
+}
+```
+
+Adds the user as a member with the role specified in the invitation.
+
+#### Reject Invitation
+
+```http
+POST /organization/reject-invitation
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "invitationId": "invitation_uuid"
+}
+```
+
+#### Cancel Invitation
+
+```http
+POST /organization/cancel-invitation
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "invitationId": "invitation_uuid"
+}
+```
+
+Requires `invitation:cancel` permission.
+
+### Permission Check
+
+#### Has Permission
+
+```http
+POST /organization/has-permission
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "permissions": {
+    "member": ["create", "delete"],
+    "organization": ["update"]
+  },
+  "organizationId": "org_uuid"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true
+}
+```
+
+Returns `{ "success": false, "error": "..." }` if the user lacks the required permissions.
+
+## Errors
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Invalid slug format or missing required fields |
+| 403 | Insufficient permissions for the operation |
+| 404 | Organization, member, or invitation not found |
+| 409 | Slug already taken or user already a member |

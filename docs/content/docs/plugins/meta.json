@@ -1,0 +1,10 @@
+{
+  "pages": [
+    "oauth",
+    "two-factor",
+    "organization",
+    "admin",
+    "api-key",
+    "passkey"
+  ]
+}

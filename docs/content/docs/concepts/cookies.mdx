@@ -1,0 +1,141 @@
+---
+title: Cookies
+description: Session cookie configuration and behavior.
+---
+
+Better Auth uses HTTP cookies to persist session tokens in the browser. This page explains how cookies are configured and the security implications of each setting.
+
+## Default Cookie Settings
+
+By default, Better Auth sets session cookies with the following attributes:
+
+| Attribute | Default | Description |
+|-----------|---------|-------------|
+| **Name** | `better-auth.session-token` | Cookie name |
+| **Path** | `/` | Available on all paths |
+| **Secure** | `false` | Set to `true` in production (HTTPS only) |
+| **HttpOnly** | `true` | Not accessible via JavaScript |
+| **SameSite** | `Lax` | CSRF protection with top-level navigation support |
+
+## Configuration
+
+Configure cookie behavior through `AuthConfig`:
+
+```rust
+use better_auth::config::{AuthConfig, SameSite};
+use std::time::Duration;
+
+let config = AuthConfig::new("your-secret-key-at-least-32-chars")
+    .session_cookie_name("my-app.session")
+    .session_cookie_secure(true)
+    .session_cookie_http_only(true)
+    .session_cookie_same_site(SameSite::Lax)
+    .session_expires_in(Duration::from_secs(7 * 24 * 3600)); // 7 days
+```
+
+## Cookie Attributes
+
+### Secure
+
+When `true`, the cookie is only sent over HTTPS connections. This prevents session tokens from being transmitted in plaintext.
+
+```rust
+.session_cookie_secure(true)
+```
+
+<Callout type="warn">
+Always set `Secure: true` in production. Only disable it for local development over HTTP.
+</Callout>
+
+### HttpOnly
+
+When `true`, the cookie cannot be accessed by JavaScript (`document.cookie`). This prevents XSS attacks from stealing session tokens.
+
+```rust
+.session_cookie_http_only(true)
+```
+
+Always keep this enabled unless you have a specific reason to access the session token from JavaScript.
+
+### SameSite
+
+Controls when the cookie is sent with cross-site requests:
+
+| Value | Behavior |
+|-------|----------|
+| `Strict` | Cookie only sent for same-site requests. Most secure but may break OAuth redirects. |
+| `Lax` | Cookie sent for same-site requests and top-level navigations (GET only). Recommended default. |
+| `None` | Cookie sent for all requests. Requires `Secure: true`. Use for cross-origin API access. |
+
+```rust
+use better_auth::config::SameSite;
+
+// Recommended for most applications
+.session_cookie_same_site(SameSite::Lax)
+
+// For cross-origin API access (requires Secure: true)
+.session_cookie_same_site(SameSite::None)
+```
+
+### Expiration
+
+The cookie expiration matches the session expiration time. When a session is created, the `Expires` attribute is set accordingly.
+
+```rust
+use std::time::Duration;
+
+// Session and cookie expire after 7 days
+.session_expires_in(Duration::from_secs(7 * 24 * 3600))
+```
+
+## Cookie Format
+
+The session cookie is set via the `Set-Cookie` HTTP header:
+
+```
+Set-Cookie: better-auth.session-token=session_abc123...; Path=/; Expires=Thu, 08 Jan 2025 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax
+```
+
+## Cross-Origin Usage
+
+If your frontend and backend are on different origins, you need to:
+
+1. Set `SameSite::None` and `Secure: true` on the cookie
+2. Configure CORS to allow credentials:
+
+```rust
+use better_auth::middleware::CorsConfig;
+
+let auth = BetterAuth::new(config)
+    .cors(
+        CorsConfig::new()
+            .allowed_origin("https://frontend.example.com")
+            .allow_credentials(true)
+    )
+    .build()
+    .await?;
+```
+
+3. Include credentials in frontend requests:
+
+```javascript
+fetch('https://api.example.com/auth/get-session', {
+  credentials: 'include' // Send cookies cross-origin
+});
+```
+
+## Alternative: Bearer Token
+
+If you prefer not to use cookies (e.g., for mobile apps or API clients), you can use the `Authorization` header instead:
+
+```http
+Authorization: Bearer session_abc123...
+```
+
+Both methods are supported simultaneously. The session token is extracted from the cookie or the Authorization header, whichever is present.
+
+## See Also
+
+- [Sessions](/docs/authentication/sessions) — Session lifecycle and endpoints
+- [Security](/docs/reference/security) — Security best practices
+- [Middleware](/docs/concepts/middleware) — CORS configuration

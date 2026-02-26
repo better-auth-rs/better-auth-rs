@@ -1,0 +1,293 @@
+---
+title: Passkey
+description: WebAuthn / FIDO2 passwordless authentication with passkeys.
+---
+
+The `PasskeyPlugin` enables passwordless authentication using the WebAuthn standard. Users can register passkeys (biometric, security keys, etc.) and use them to sign in without a password.
+
+## Setup
+
+```rust
+use better_auth::plugins::PasskeyPlugin;
+
+let auth = BetterAuth::new(config)
+    .database(database)
+    .plugin(
+        PasskeyPlugin::new()
+            .rp_id("example.com")
+            .rp_name("My Application")
+            .origin("https://example.com")
+    )
+    .build()
+    .await?;
+```
+
+### Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `rp_id` | `String` | `"localhost"` | Relying Party ID (your domain) |
+| `rp_name` | `String` | `"Better Auth"` | Relying Party display name |
+| `origin` | `String` | `"http://localhost:3000"` | Expected origin for WebAuthn responses |
+| `challenge_ttl_secs` | `i64` | `300` (5 min) | Challenge expiration in seconds |
+| `allow_insecure_unverified_assertion` | `bool` | `false` | Allow simplified verification (dev only) |
+
+<Callout type="warn">
+The current implementation uses simplified WebAuthn verification. For production, keep `allow_insecure_unverified_assertion` disabled and integrate a full FIDO2 library like `webauthn-rs` for complete attestation and assertion verification.
+</Callout>
+
+## How It Works
+
+### Registration Flow
+
+1. Client calls `GET /passkey/generate-register-options` to get WebAuthn creation options
+2. Client uses the browser's `navigator.credentials.create()` API with the options
+3. Client sends the credential response to `POST /passkey/verify-registration`
+4. Server validates the challenge round-trip and stores the passkey
+
+### Authentication Flow
+
+1. Client calls `POST /passkey/generate-authenticate-options` to get assertion options
+2. Client uses the browser's `navigator.credentials.get()` API with the options
+3. Client sends the assertion response to `POST /passkey/verify-authentication`
+4. Server validates the challenge, looks up the passkey, and creates a session
+
+## API Endpoints
+
+### Generate Registration Options
+
+Get WebAuthn creation options for registering a new passkey. Requires an authenticated session.
+
+```http
+GET /passkey/generate-register-options
+Authorization: Bearer <token>
+```
+
+| Query Parameter | Description |
+|-----------------|-------------|
+| `authenticatorAttachment` | `platform` (default) or `cross-platform` |
+
+#### Response
+
+```json
+{
+  "challenge": "random_base64url_challenge",
+  "rp": {
+    "name": "My Application",
+    "id": "example.com"
+  },
+  "user": {
+    "id": "base64url_user_id",
+    "name": "alice@example.com",
+    "displayName": "Alice"
+  },
+  "pubKeyCredParams": [
+    { "type": "public-key", "alg": -7 },
+    { "type": "public-key", "alg": -257 }
+  ],
+  "timeout": 60000,
+  "excludeCredentials": [],
+  "authenticatorSelection": {
+    "authenticatorAttachment": "platform",
+    "requireResidentKey": false,
+    "userVerification": "preferred"
+  },
+  "attestation": "none"
+}
+```
+
+### Verify Registration
+
+```http
+POST /passkey/verify-registration
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "response": {
+    "id": "credential_id_base64url",
+    "rawId": "credential_id_base64url",
+    "type": "public-key",
+    "authenticatorAttachment": "platform",
+    "response": {
+      "clientDataJSON": "base64url_encoded...",
+      "attestationObject": "base64url_encoded..."
+    },
+    "clientExtensionResults": {}
+  },
+  "name": "My MacBook"
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `response` | Yes | The WebAuthn credential response from `navigator.credentials.create()` |
+| `name` | No | Human-readable name for the passkey (auto-generated if omitted) |
+
+Returns the created passkey metadata.
+
+### Generate Authentication Options
+
+Get WebAuthn assertion options for signing in. Does not require authentication.
+
+```http
+POST /passkey/generate-authenticate-options
+```
+
+If the user is authenticated, `allowCredentials` will include their registered passkeys. For unauthenticated requests, `allowCredentials` is empty (discoverable credential flow).
+
+#### Response
+
+```json
+{
+  "challenge": "random_base64url_challenge",
+  "timeout": 60000,
+  "rpId": "example.com",
+  "allowCredentials": [
+    {
+      "type": "public-key",
+      "id": "credential_id_base64url",
+      "transports": ["internal"]
+    }
+  ],
+  "userVerification": "preferred"
+}
+```
+
+### Verify Authentication
+
+```http
+POST /passkey/verify-authentication
+Content-Type: application/json
+```
+
+```json
+{
+  "response": {
+    "id": "credential_id_base64url",
+    "rawId": "credential_id_base64url",
+    "type": "public-key",
+    "response": {
+      "clientDataJSON": "base64url_encoded...",
+      "authenticatorData": "base64url_encoded...",
+      "signature": "base64url_encoded..."
+    }
+  }
+}
+```
+
+#### Response
+
+```json
+{
+  "session": {
+    "id": "session_uuid",
+    "token": "session_abc123..."
+  },
+  "user": {
+    "id": "user_uuid",
+    "email": "alice@example.com"
+  }
+}
+```
+
+### List Passkeys
+
+```http
+GET /passkey/list-user-passkeys
+Authorization: Bearer <token>
+```
+
+Returns all passkeys for the authenticated user.
+
+### Delete Passkey
+
+```http
+POST /passkey/delete-passkey
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "id": "passkey_uuid"
+}
+```
+
+Only the passkey owner can delete it. Returns `{ "status": true }`.
+
+### Update Passkey
+
+```http
+POST /passkey/update-passkey
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "id": "passkey_uuid",
+  "name": "Work Laptop"
+}
+```
+
+## Client-Side Integration
+
+### Registration Example
+
+```javascript
+// 1. Get registration options from the server
+const optionsRes = await fetch('/auth/passkey/generate-register-options', {
+  headers: { 'Authorization': `Bearer ${sessionToken}` }
+});
+const options = await optionsRes.json();
+
+// 2. Create credential using the browser API
+const credential = await navigator.credentials.create({ publicKey: options });
+
+// 3. Send the response back to the server
+const verifyRes = await fetch('/auth/passkey/verify-registration', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${sessionToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    response: credential,
+    name: 'My Device'
+  })
+});
+```
+
+### Authentication Example
+
+```javascript
+// 1. Get authentication options
+const optionsRes = await fetch('/auth/passkey/generate-authenticate-options', {
+  method: 'POST'
+});
+const options = await optionsRes.json();
+
+// 2. Get assertion using the browser API
+const assertion = await navigator.credentials.get({ publicKey: options });
+
+// 3. Verify with the server
+const verifyRes = await fetch('/auth/passkey/verify-authentication', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ response: assertion })
+});
+const { session, user } = await verifyRes.json();
+```
+
+## Errors
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Invalid or missing WebAuthn response data |
+| 400 | Invalid or expired challenge |
+| 401 | Not authenticated (for registration/list/delete) |
+| 404 | Passkey not found |
+| 501 | Full WebAuthn verification not enabled |

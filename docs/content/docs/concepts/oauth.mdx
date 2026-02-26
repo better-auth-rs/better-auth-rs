@@ -1,0 +1,116 @@
+---
+title: OAuth
+description: Understanding the OAuth 2.0 authorization flow in Better Auth.
+---
+
+Better Auth implements the OAuth 2.0 Authorization Code flow with PKCE for secure social sign-in. This page explains the concepts behind the OAuth integration.
+
+## OAuth 2.0 Flow
+
+The authorization code flow with PKCE works as follows:
+
+```
+┌──────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
+│Client│     │Your Server│     │Better Auth│     │  OAuth   │
+│      │     │  (Axum)  │     │           │     │ Provider │
+└──┬───┘     └────┬─────┘     └─────┬─────┘     └────┬─────┘
+   │   POST /sign-in/social         │                 │
+   │─────────────────────────────────>                 │
+   │              │                  │                 │
+   │   { url, redirect: true }      │                 │
+   │<─────────────────────────────────                 │
+   │              │                  │                 │
+   │   Redirect to provider auth URL │                 │
+   │──────────────────────────────────────────────────>│
+   │              │                  │                 │
+   │   User authorizes, redirected to callback         │
+   │<──────────────────────────────────────────────────│
+   │              │                  │                 │
+   │   GET /callback/{provider}?code=...&state=...     │
+   │─────────────────────────────────>                 │
+   │              │                  │  Token exchange  │
+   │              │                  │────────────────>│
+   │              │                  │  Access token    │
+   │              │                  │<────────────────│
+   │              │                  │  User info       │
+   │              │                  │────────────────>│
+   │              │                  │  User data       │
+   │              │                  │<────────────────│
+   │   { token, user }              │                 │
+   │<─────────────────────────────────                 │
+```
+
+## Key Concepts
+
+### Authorization Code
+
+The authorization code is a short-lived, single-use code returned by the OAuth provider after user authorization. Better Auth exchanges this code for access and refresh tokens.
+
+### PKCE (Proof Key for Code Exchange)
+
+Better Auth uses PKCE for all OAuth flows, which protects against authorization code interception attacks:
+
+1. **Code Verifier**: A cryptographically random string generated for each authorization request
+2. **Code Challenge**: The SHA-256 hash of the verifier, sent in the authorization URL
+3. **Verification**: During token exchange, the original verifier is sent to prove the request comes from the same client
+
+This is especially important for mobile and SPA applications where the client secret cannot be kept confidential.
+
+### State Parameter
+
+A random UUID is generated for each OAuth request and stored as a verification record. This prevents CSRF attacks by ensuring the callback matches a legitimate authorization request.
+
+### Providers
+
+An OAuth provider configuration includes:
+
+| Field | Description |
+|-------|-------------|
+| `client_id` | Your application's ID from the provider |
+| `client_secret` | Your application's secret from the provider |
+| `auth_url` | The provider's authorization endpoint |
+| `token_url` | The provider's token exchange endpoint |
+| `user_info_url` | The provider's user info API endpoint |
+| `scopes` | Default scopes to request |
+| `map_user_info` | Function to transform provider-specific JSON into `OAuthUserInfo` |
+
+### Tokens
+
+After a successful OAuth flow, Better Auth stores:
+
+| Token | Description |
+|-------|-------------|
+| `access_token` | Used to call the provider's APIs on behalf of the user |
+| `refresh_token` | Used to obtain a new access token when it expires |
+| `id_token` | OpenID Connect identity token (if the provider supports it) |
+
+These tokens are stored in the `account` table and can be retrieved via the `/get-access-token` endpoint.
+
+## Account Linking
+
+Better Auth handles several scenarios during the OAuth callback:
+
+### New User
+If no user exists with the email from the provider, a new user and account are created.
+
+### Existing Email
+If a user with the same email already exists (from a different provider or email/password), the new provider is automatically linked to the existing user.
+
+### Existing Provider Account
+If the user has previously signed in with this provider, the stored tokens are updated and a new session is created.
+
+### Explicit Linking
+Authenticated users can explicitly link additional providers via the `/link-social` endpoint. This starts a new OAuth flow that, on completion, creates an account record linking the provider to the existing user.
+
+## Security Considerations
+
+- **PKCE is mandatory**: All OAuth flows use PKCE with S256 code challenge method
+- **State validation**: Every callback validates the state parameter against stored verification records
+- **Short-lived state**: OAuth state verification records expire after 10 minutes
+- **Token storage**: Access and refresh tokens are stored server-side in the database, never exposed to the client
+- **Automatic cleanup**: Verification records are deleted after successful use
+
+## See Also
+
+- [OAuth Plugin](/docs/plugins/oauth) — Setup and API reference
+- [Users & Accounts](/docs/concepts/users-accounts) — How user and account records relate

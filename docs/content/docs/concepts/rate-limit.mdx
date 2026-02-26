@@ -1,0 +1,113 @@
+---
+title: Rate Limiting
+description: Protect your authentication endpoints from abuse with rate limiting.
+---
+
+Better Auth includes a built-in rate limiter that restricts the number of requests a client can make within a time window. This protects authentication endpoints from brute-force attacks and abuse.
+
+## Setup
+
+```rust
+use better_auth::middleware::RateLimitConfig;
+use std::time::Duration;
+
+let auth = BetterAuth::new(config)
+    .rate_limit(
+        RateLimitConfig::new()
+            .default_limit(Duration::from_secs(60), 100)
+            .endpoint("/sign-in/email", Duration::from_secs(60), 10)
+            .endpoint("/sign-up/email", Duration::from_secs(60), 5)
+            .endpoint("/forget-password", Duration::from_secs(300), 3)
+    )
+    .build()
+    .await?;
+```
+
+## Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `window` | `Duration` | `60s` | Default time window |
+| `max_requests` | `u32` | `100` | Default max requests per window |
+| `per_endpoint` | `HashMap` | `{}` | Per-endpoint overrides |
+| `enabled` | `bool` | `true` | Enable/disable rate limiting |
+
+## Per-Endpoint Limits
+
+Different endpoints have different risk profiles. Set stricter limits on sensitive endpoints:
+
+```rust
+RateLimitConfig::new()
+    // General API: 100 req/min
+    .default_limit(Duration::from_secs(60), 100)
+    // Sign-in: 10 req/min (brute-force protection)
+    .endpoint("/sign-in/email", Duration::from_secs(60), 10)
+    .endpoint("/sign-in/username", Duration::from_secs(60), 10)
+    // Sign-up: 5 req/min (spam protection)
+    .endpoint("/sign-up/email", Duration::from_secs(60), 5)
+    // Password reset: 3 req/5min (abuse protection)
+    .endpoint("/forget-password", Duration::from_secs(300), 3)
+    // 2FA verification: 5 req/min
+    .endpoint("/two-factor/verify-totp", Duration::from_secs(60), 5)
+    .endpoint("/two-factor/verify-otp", Duration::from_secs(60), 5)
+    .endpoint("/two-factor/verify-backup-code", Duration::from_secs(60), 5)
+```
+
+## Client Identification
+
+The rate limiter identifies clients using the following headers, in order of priority:
+
+1. `X-Forwarded-For` — The first IP in the forwarded chain
+2. `X-Real-IP` — Set by reverse proxies
+3. Default bucket — Fallback when no IP header is present
+
+<Callout type="info">
+Make sure your reverse proxy (Nginx, Caddy, etc.) correctly sets the `X-Forwarded-For` or `X-Real-IP` headers. Without these, all clients may share the same rate limit bucket.
+</Callout>
+
+## Response
+
+When a client exceeds the rate limit, a `429 Too Many Requests` response is returned:
+
+```json
+{
+  "code": "RATE_LIMIT_EXCEEDED",
+  "message": "Too many requests",
+  "retryAfter": 45
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `code` | Error code: `RATE_LIMIT_EXCEEDED` |
+| `message` | Human-readable message |
+| `retryAfter` | Seconds until the client can retry |
+
+## Recommended Limits
+
+| Endpoint Category | Window | Max Requests | Rationale |
+|-------------------|--------|-------------|-----------|
+| Sign-in | 60s | 10 | Brute-force protection |
+| Sign-up | 60s | 5 | Spam prevention |
+| Password reset | 300s | 3 | Email abuse prevention |
+| 2FA verification | 60s | 5 | Code guessing prevention |
+| OAuth sign-in | 60s | 20 | Higher limit for redirects |
+| General API | 60s | 100 | Default protection |
+| Admin endpoints | 60s | 50 | Moderate protection |
+
+## Disabling Rate Limiting
+
+For development or testing, you can disable rate limiting entirely:
+
+```rust
+RateLimitConfig::new().enabled(false)
+```
+
+<Callout type="warn">
+Never disable rate limiting in production. Authentication endpoints are prime targets for brute-force and credential stuffing attacks.
+</Callout>
+
+## See Also
+
+- [Middleware](/docs/concepts/middleware) — All built-in middleware including rate limiting
+- [Security](/docs/reference/security) — Security best practices

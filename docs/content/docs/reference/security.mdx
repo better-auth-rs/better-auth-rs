@@ -1,0 +1,189 @@
+---
+title: Security
+description: Security features, best practices, and threat mitigations in Better Auth.
+---
+
+Better Auth is designed with security as a core principle. This page documents the security mechanisms built into the framework and best practices for production deployments.
+
+## Password Security
+
+### Hashing Algorithm
+
+Better Auth uses **Argon2id** for password hashing, which is the current recommendation from OWASP and the winner of the Password Hashing Competition. Argon2 is resistant to:
+
+- GPU-based attacks
+- Side-channel attacks
+- Time-memory trade-off attacks
+
+Passwords are hashed with a unique random salt per user.
+
+### Password Policies
+
+Configure minimum password requirements:
+
+```rust
+let config = AuthConfig::new("secret-key-at-least-32-chars")
+    .password_min_length(8)
+    .password_max_length(128);
+```
+
+## Session Security
+
+### Token Generation
+
+Session tokens are generated using cryptographically secure random number generators (`OsRng`). Tokens are sufficiently long to prevent brute-force guessing.
+
+### Cookie Configuration
+
+```rust
+let config = AuthConfig::new("secret-key")
+    .session_cookie_secure(true)      // HTTPS only
+    .session_cookie_http_only(true)   // Not accessible via JavaScript
+    .session_cookie_same_site(SameSite::Lax); // CSRF protection
+```
+
+| Setting | Recommended | Description |
+|---------|-------------|-------------|
+| `cookie_secure` | `true` | Only send over HTTPS |
+| `cookie_http_only` | `true` | Block JavaScript access (prevents XSS token theft) |
+| `cookie_same_site` | `Lax` | Prevents CSRF while allowing top-level navigations |
+
+See [Cookies](/docs/concepts/cookies) for more details.
+
+### Session Expiration
+
+Sessions have a configurable expiration time. Expired sessions are automatically rejected.
+
+```rust
+use std::time::Duration;
+
+let config = AuthConfig::new("secret-key")
+    .session_expires_in(Duration::from_secs(7 * 24 * 3600)); // 7 days
+```
+
+## CSRF Protection
+
+Better Auth includes built-in CSRF protection that validates the `Origin` or `Referer` header on mutating requests (POST, PUT, DELETE, PATCH).
+
+```rust
+use better_auth::middleware::CsrfConfig;
+
+let auth = BetterAuth::new(config)
+    .csrf(
+        CsrfConfig::new()
+            .trusted_origin("https://myapp.com")
+            .enabled(true)
+    )
+    .build()
+    .await?;
+```
+
+Requests from untrusted origins receive a `403 Forbidden` response.
+
+## CORS
+
+Properly configured CORS prevents unauthorized cross-origin access:
+
+```rust
+use better_auth::middleware::CorsConfig;
+
+let auth = BetterAuth::new(config)
+    .cors(
+        CorsConfig::new()
+            .allowed_origin("https://myapp.com")
+            .allow_credentials(true)
+    )
+    .build()
+    .await?;
+```
+
+## Rate Limiting
+
+Rate limiting protects against brute-force attacks. See [Rate Limiting](/docs/concepts/rate-limit) for detailed configuration.
+
+Recommended limits for authentication endpoints:
+
+| Endpoint | Limit | Window |
+|----------|-------|--------|
+| `/sign-in/email` | 10 | 60s |
+| `/sign-up/email` | 5 | 60s |
+| `/forget-password` | 3 | 300s |
+| `/two-factor/verify-*` | 5 | 60s |
+
+## OAuth Security
+
+### PKCE
+
+All OAuth flows use PKCE (Proof Key for Code Exchange) with S256 challenge method. This prevents authorization code interception attacks.
+
+### State Parameter
+
+OAuth state is validated on every callback to prevent CSRF attacks. State tokens expire after 10 minutes.
+
+### Token Storage
+
+OAuth access tokens and refresh tokens are stored server-side in the database. They are never exposed directly to the client.
+
+## Two-Factor Authentication
+
+### TOTP
+
+TOTP secrets are stored securely in the database. Codes are time-based with a configurable period (default: 30 seconds).
+
+### Backup Codes
+
+Backup codes are hashed with Argon2 before storage. Only the plaintext codes are returned once during generation.
+
+### OTP
+
+Email-based OTP codes expire after 5 minutes and are single-use.
+
+## Body Size Limits
+
+Reject oversized request bodies to prevent denial-of-service:
+
+```rust
+use better_auth::middleware::BodyLimitConfig;
+
+let auth = BetterAuth::new(config)
+    .body_limit(BodyLimitConfig::new().max_bytes(512 * 1024))
+    .build()
+    .await?;
+```
+
+## Secret Key
+
+The secret key is used for signing and verification. It must be:
+
+- At least 32 characters long
+- Kept secret and never committed to version control
+- Loaded from environment variables in production
+
+```rust
+let secret = std::env::var("AUTH_SECRET").expect("AUTH_SECRET must be set");
+let config = AuthConfig::new(&secret);
+```
+
+## Production Checklist
+
+- [ ] Set `cookie_secure: true` (requires HTTPS)
+- [ ] Set `cookie_http_only: true`
+- [ ] Set `cookie_same_site: Lax` or `Strict`
+- [ ] Enable CSRF protection with trusted origins
+- [ ] Configure rate limiting on all authentication endpoints
+- [ ] Use a strong, random secret key (32+ characters)
+- [ ] Load secrets from environment variables, not code
+- [ ] Set appropriate session expiration times
+- [ ] Configure CORS with specific allowed origins
+- [ ] Enable body size limits
+- [ ] Use HTTPS in production
+- [ ] Set up proper `X-Forwarded-For` headers in your reverse proxy
+- [ ] Enable email verification for sign-ups
+- [ ] Consider enabling 2FA for admin users
+
+## See Also
+
+- [Cookies](/docs/concepts/cookies) — Cookie configuration details
+- [Rate Limiting](/docs/concepts/rate-limit) — Rate limiting configuration
+- [Middleware](/docs/concepts/middleware) — CSRF, CORS, and body limits
+- [Configuration Options](/docs/reference/configuration-options) — All configuration options
