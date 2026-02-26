@@ -9,6 +9,7 @@ pub mod passkey;
 pub mod password_management;
 pub mod session_management;
 pub mod two_factor;
+pub mod user_management;
 
 pub use account_management::AccountManagementPlugin;
 pub use admin::{AdminConfig, AdminPlugin};
@@ -20,3 +21,6 @@ pub use passkey::{PasskeyConfig, PasskeyPlugin};
 pub use password_management::PasswordManagementPlugin;
 pub use session_management::SessionManagementPlugin;
 pub use two_factor::{TwoFactorConfig, TwoFactorPlugin};
+pub use user_management::{
+    ChangeEmailConfig, DeleteUserConfig, UserManagementConfig, UserManagementPlugin,
+};
