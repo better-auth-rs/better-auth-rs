@@ -1464,4 +1464,189 @@ mod tests {
         assert!(!plugin.config.require_current_password);
         assert!(!plugin.config.send_email_notifications);
     }
+
+    #[tokio::test]
+    async fn test_send_reset_password_custom_sender() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        /// A test sender that records whether it was called.
+        struct TestSender {
+            called: Arc<AtomicBool>,
+        }
+
+        #[async_trait]
+        impl SendResetPassword for TestSender {
+            async fn send(
+                &self,
+                _user: &serde_json::Value,
+                _url: &str,
+                _token: &str,
+            ) -> AuthResult<()> {
+                self.called.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+
+        let called = Arc::new(AtomicBool::new(false));
+        let sender: Arc<dyn SendResetPassword> = Arc::new(TestSender {
+            called: called.clone(),
+        });
+
+        let plugin = PasswordManagementPlugin::new().send_reset_password(sender);
+        let (ctx, _user, _session) = create_test_context_with_user().await;
+
+        let body = serde_json::json!({
+            "email": "test@example.com",
+            "redirectTo": "http://localhost:3000/reset"
+        });
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/forget-password",
+            None,
+            Some(body.to_string().into_bytes()),
+        );
+
+        let response = plugin.handle_forget_password(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        // The custom sender should have been called
+        assert!(
+            called.load(Ordering::SeqCst),
+            "Custom send_reset_password should be invoked"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_on_password_reset_callback() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let callback_called = Arc::new(AtomicBool::new(false));
+        let called_clone = callback_called.clone();
+
+        let callback: Arc<OnPasswordResetCallback> = Arc::new(move |_user_value| {
+            let called = called_clone.clone();
+            Box::pin(async move {
+                called.store(true, Ordering::SeqCst);
+                Ok(())
+            })
+        });
+
+        let plugin = PasswordManagementPlugin::new().on_password_reset(callback);
+        let (ctx, user, _session) = create_test_context_with_user().await;
+
+        // Create verification token
+        let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
+        let create_verification = CreateVerification {
+            identifier: user.email.clone().unwrap(),
+            value: reset_token.clone(),
+            expires_at: Utc::now() + Duration::hours(24),
+        };
+        ctx.database
+            .create_verification(create_verification)
+            .await
+            .unwrap();
+
+        let body = serde_json::json!({
+            "newPassword": "NewPassword123!",
+            "token": reset_token
+        });
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/reset-password",
+            None,
+            Some(body.to_string().into_bytes()),
+        );
+
+        let response = plugin.handle_reset_password(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        // The on_password_reset callback should have been called
+        assert!(
+            callback_called.load(Ordering::SeqCst),
+            "on_password_reset callback should be invoked after password reset"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_revoke_sessions_on_password_reset_false() {
+        let plugin = PasswordManagementPlugin::new().revoke_sessions_on_password_reset(false);
+        let (ctx, user, session) = create_test_context_with_user().await;
+
+        // Create verification token
+        let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
+        let create_verification = CreateVerification {
+            identifier: user.email.clone().unwrap(),
+            value: reset_token.clone(),
+            expires_at: Utc::now() + Duration::hours(24),
+        };
+        ctx.database
+            .create_verification(create_verification)
+            .await
+            .unwrap();
+
+        let body = serde_json::json!({
+            "newPassword": "NewPassword123!",
+            "token": reset_token
+        });
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/reset-password",
+            None,
+            Some(body.to_string().into_bytes()),
+        );
+
+        let response = plugin.handle_reset_password(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        // Session should still exist since revoke_sessions_on_password_reset=false
+        let sessions = ctx.database.get_user_sessions(&user.id).await.unwrap();
+        assert!(
+            !sessions.is_empty(),
+            "Sessions should remain when revoke_sessions_on_password_reset=false"
+        );
+        assert!(
+            sessions.iter().any(|s| s.token == session.token),
+            "The original session should still exist"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_revoke_sessions_on_password_reset_true() {
+        // Default is true
+        let plugin = PasswordManagementPlugin::new();
+        let (ctx, user, _session) = create_test_context_with_user().await;
+
+        // Create verification token
+        let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
+        let create_verification = CreateVerification {
+            identifier: user.email.clone().unwrap(),
+            value: reset_token.clone(),
+            expires_at: Utc::now() + Duration::hours(24),
+        };
+        ctx.database
+            .create_verification(create_verification)
+            .await
+            .unwrap();
+
+        let body = serde_json::json!({
+            "newPassword": "NewPassword123!",
+            "token": reset_token
+        });
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/reset-password",
+            None,
+            Some(body.to_string().into_bytes()),
+        );
+
+        let response = plugin.handle_reset_password(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        // Sessions should be revoked since revoke_sessions_on_password_reset=true (default)
+        let sessions = ctx.database.get_user_sessions(&user.id).await.unwrap();
+        assert!(
+            sessions.is_empty(),
+            "Sessions should be revoked when revoke_sessions_on_password_reset=true"
+        );
+    }
 }

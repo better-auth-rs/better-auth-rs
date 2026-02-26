@@ -501,3 +501,173 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailPasswordPlugin {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use better_auth_core::AuthContext;
+    use better_auth_core::adapters::{MemoryDatabaseAdapter, UserOps};
+    use better_auth_core::config::AuthConfig;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    fn create_test_context() -> AuthContext<MemoryDatabaseAdapter> {
+        let config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
+        let config = Arc::new(config);
+        let database = Arc::new(MemoryDatabaseAdapter::new());
+        AuthContext::new(config, database)
+    }
+
+    fn create_signup_request(email: &str, password: &str) -> AuthRequest {
+        let body = serde_json::json!({
+            "name": "Test User",
+            "email": email,
+            "password": password,
+        });
+        AuthRequest {
+            method: HttpMethod::Post,
+            path: "/sign-up/email".to_string(),
+            headers: HashMap::new(),
+            body: Some(body.to_string().into_bytes()),
+            query: HashMap::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_auto_sign_in_false_returns_no_session() {
+        let plugin = EmailPasswordPlugin::new().auto_sign_in(false);
+        let ctx = create_test_context();
+
+        let req = create_signup_request("auto@example.com", "Password123!");
+        let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        // Response should NOT have a Set-Cookie header
+        let has_cookie = response
+            .headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("Set-Cookie"));
+        assert!(!has_cookie, "auto_sign_in=false should not set a cookie");
+
+        // Response body token should be null
+        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert!(
+            body["token"].is_null(),
+            "auto_sign_in=false should return null token"
+        );
+        // But the user should still be created
+        assert!(body["user"]["id"].is_string());
+    }
+
+    #[tokio::test]
+    async fn test_auto_sign_in_true_returns_session() {
+        let plugin = EmailPasswordPlugin::new(); // default auto_sign_in=true
+        let ctx = create_test_context();
+
+        let req = create_signup_request("autotrue@example.com", "Password123!");
+        let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        // Response SHOULD have a Set-Cookie header
+        let has_cookie = response
+            .headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("Set-Cookie"));
+        assert!(has_cookie, "auto_sign_in=true should set a cookie");
+
+        // Response body token should be a string
+        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert!(
+            body["token"].is_string(),
+            "auto_sign_in=true should return a session token"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_password_max_length_rejection() {
+        let plugin = EmailPasswordPlugin::new().password_max_length(128);
+        let ctx = create_test_context();
+
+        // Password of exactly 129 chars should be rejected
+        let long_password = format!("A1!{}", "a".repeat(126)); // 129 chars total
+        let req = create_signup_request("long@example.com", &long_password);
+        let err = plugin.handle_sign_up(&req, &ctx).await.unwrap_err();
+        assert_eq!(err.status_code(), 400);
+
+        // Password of exactly 128 chars should be accepted
+        let ok_password = format!("A1!{}", "a".repeat(125)); // 128 chars total
+        let req = create_signup_request("ok@example.com", &ok_password);
+        let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+    }
+
+    #[tokio::test]
+    async fn test_custom_password_hasher() {
+        /// A simple test hasher that prefixes the password with "hashed:"
+        struct TestHasher;
+
+        #[async_trait]
+        impl PasswordHasher for TestHasher {
+            async fn hash(&self, password: &str) -> AuthResult<String> {
+                Ok(format!("hashed:{}", password))
+            }
+            async fn verify(&self, hash: &str, password: &str) -> AuthResult<bool> {
+                Ok(hash == format!("hashed:{}", password))
+            }
+        }
+
+        let hasher: Arc<dyn PasswordHasher> = Arc::new(TestHasher);
+        let plugin = EmailPasswordPlugin::new().password_hasher(hasher);
+        let ctx = create_test_context();
+
+        // Sign up with custom hasher
+        let req = create_signup_request("hasher@example.com", "Password123!");
+        let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        // Verify the stored hash uses our custom hasher
+        let user = ctx
+            .database
+            .get_user_by_email("hasher@example.com")
+            .await
+            .unwrap()
+            .unwrap();
+        let stored_hash = user
+            .metadata
+            .get("password_hash")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert_eq!(stored_hash, "hashed:Password123!");
+
+        // Sign in should work with the custom hasher
+        let signin_body = serde_json::json!({
+            "email": "hasher@example.com",
+            "password": "Password123!",
+        });
+        let signin_req = AuthRequest {
+            method: HttpMethod::Post,
+            path: "/sign-in/email".to_string(),
+            headers: HashMap::new(),
+            body: Some(signin_body.to_string().into_bytes()),
+            query: HashMap::new(),
+        };
+        let response = plugin.handle_sign_in(&signin_req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        // Sign in with wrong password should fail
+        let bad_body = serde_json::json!({
+            "email": "hasher@example.com",
+            "password": "WrongPassword!",
+        });
+        let bad_req = AuthRequest {
+            method: HttpMethod::Post,
+            path: "/sign-in/email".to_string(),
+            headers: HashMap::new(),
+            body: Some(bad_body.to_string().into_bytes()),
+            query: HashMap::new(),
+        };
+        let err = plugin.handle_sign_in(&bad_req, &ctx).await.unwrap_err();
+        assert_eq!(err.to_string(), AuthError::InvalidCredentials.to_string());
+    }
+}
