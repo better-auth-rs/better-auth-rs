@@ -4,13 +4,12 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use governor::clock::DefaultClock;
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{Quota, RateLimiter};
-use oso::{Oso, PolarClass};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::num::NonZeroU32;
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 use validator::Validate;
 
 use better_auth_core::adapters::DatabaseAdapter;
@@ -438,59 +437,20 @@ impl ApiKeyView {
 // ---------------------------------------------------------------------------
 // Permissions verification helper (RBAC)
 // ---------------------------------------------------------------------------
-
-#[derive(Clone, PolarClass)]
-struct PermissionRequirement {
-    #[polar(attribute)]
-    role: String,
-    #[polar(attribute)]
-    action: String,
-}
-
-#[derive(Clone, PolarClass)]
-struct KeyPermissions {
-    permissions: HashMap<String, Vec<String>>,
-}
-
-fn permissions_oso() -> &'static Mutex<Oso> {
-    static OSO: OnceLock<Mutex<Oso>> = OnceLock::new();
-    OSO.get_or_init(|| {
-        let mut oso = Oso::new();
-
-        let key_permissions_class = KeyPermissions::get_polar_class_builder()
-            .add_method(
-                "allows",
-                |kp: &KeyPermissions, role: String, action: String| {
-                    kp.permissions
-                        .get(&role)
-                        .is_some_and(|actions| actions.iter().any(|a| a == &action))
-                },
-            )
-            .build();
-
-        oso.register_class(key_permissions_class)
-            .expect("register KeyPermissions class");
-        oso.register_class(PermissionRequirement::get_polar_class())
-            .expect("register PermissionRequirement class");
-
-        oso.load_str(
-            r#"
-            allow(key: KeyPermissions, "has_permission", req: PermissionRequirement) if
-                key.allows(req.role, req.action);
-            "#,
-        )
-        .expect("load Oso policy for API-key permissions");
-
-        Mutex::new(oso)
-    })
-}
+// Custom implementation matching the TypeScript `role().authorize()` pattern
+// from `packages/better-auth/src/plugins/access/access.ts`.
+//
+// The TS logic: for each requested resource (role), check that every requested
+// action exists in the key's allowed actions for that resource. This is a
+// simple subset check with no external dependencies.
+// ---------------------------------------------------------------------------
 
 /// Check whether `key_permissions` (JSON object mapping role->actions) covers
 /// all of the `required_permissions`.
 ///
-/// This is implemented with the `oso` policy engine (explicitly non-casbin).
-/// Behavior matches the TypeScript plugin: required actions must be a subset
-/// of the API key's actions for each role.
+/// Mirrors the TypeScript `role(apiKeyPermissions).authorize(permissions)`
+/// implementation. Required actions must be a subset of the API key's actions
+/// for each resource/role.
 fn check_permissions(key_permissions_json: &str, required: &serde_json::Value) -> bool {
     let required_map = match required.as_object() {
         Some(m) => m,
@@ -502,33 +462,64 @@ fn check_permissions(key_permissions_json: &str, required: &serde_json::Value) -
         Err(_) => return false,
     };
 
-    let key = KeyPermissions {
-        permissions: key_map,
-    };
-
-    let oso = permissions_oso().lock().unwrap();
-
-    for (role, actions) in required_map {
-        let required_actions = match actions.as_array() {
+    for (resource, requested_actions) in required_map {
+        // Look up the allowed actions for this resource
+        let allowed_actions = match key_map.get(resource) {
             Some(a) => a,
-            None => continue,
+            // Resource not found in key permissions → fail (matches TS behavior)
+            None => return false,
         };
 
-        for action in required_actions {
-            let action = match action.as_str() {
-                Some(s) => s.to_string(),
+        // The request value can be:
+        // 1. An array of action strings → all must be allowed (AND)
+        // 2. An object { actions: [...], connector: "OR"|"AND" }
+        if let Some(actions_array) = requested_actions.as_array() {
+            // Simple array → every requested action must exist in allowed actions
+            for action_val in actions_array {
+                let action = match action_val.as_str() {
+                    Some(s) => s,
+                    None => return false,
+                };
+                if !allowed_actions.iter().any(|a| a == action) {
+                    return false;
+                }
+            }
+        } else if let Some(obj) = requested_actions.as_object() {
+            // Object form: { actions: [...], connector: "OR" | "AND" }
+            let actions = match obj.get("actions").and_then(|v| v.as_array()) {
+                Some(a) => a,
                 None => return false,
             };
+            let connector = obj
+                .get("connector")
+                .and_then(|v| v.as_str())
+                .unwrap_or("AND");
 
-            let req = PermissionRequirement {
-                role: role.to_string(),
-                action,
-            };
-
-            match oso.is_allowed(key.clone(), "has_permission", req) {
-                Ok(true) => {}
-                _ => return false,
+            if connector == "OR" {
+                // At least one requested action must be allowed
+                let any_allowed = actions.iter().any(|action_val| {
+                    action_val
+                        .as_str()
+                        .is_some_and(|action| allowed_actions.iter().any(|a| a == action))
+                });
+                if !any_allowed {
+                    return false;
+                }
+            } else {
+                // AND (default): every requested action must be allowed
+                for action_val in actions {
+                    let action = match action_val.as_str() {
+                        Some(s) => s,
+                        None => return false,
+                    };
+                    if !allowed_actions.iter().any(|a| a == action) {
+                        return false;
+                    }
+                }
             }
+        } else {
+            // Invalid format
+            return false;
         }
     }
 
