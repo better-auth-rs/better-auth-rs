@@ -36,9 +36,20 @@ pub struct AuthConfig {
 pub struct SessionConfig {
     /// Session expiration duration
     pub expires_in: Duration,
-    
-    /// Update session on activity
-    pub update_age: bool,
+
+    /// How often to refresh the session expiry (as a Duration).
+    ///
+    /// When set, session expiry is only updated if the session is older than
+    /// this duration since the last update. When `None`, every request
+    /// refreshes the session (equivalent to the old `update_age: true`).
+    pub update_age: Option<Duration>,
+
+    /// If `true`, sessions are never automatically refreshed on access.
+    pub disable_session_refresh: bool,
+
+    /// Session freshness window. A session younger than this is considered
+    /// "fresh" (useful for step-up auth or sensitive operations).
+    pub fresh_age: Option<Duration>,
     
     /// Cookie name for session token
     pub cookie_name: String,
@@ -121,7 +132,9 @@ impl Default for SessionConfig {
     fn default() -> Self {
         Self {
             expires_in: Duration::hours(24 * 7), // 7 days
-            update_age: true,
+            update_age: Some(Duration::hours(24)), // refresh once per day
+            disable_session_refresh: false,
+            fresh_age: None,
             cookie_name: "better-auth.session-token".to_string(),
             cookie_secure: true,
             cookie_http_only: true,
@@ -217,4 +230,4 @@ impl AuthConfig {
         
         Ok(())
     }
-} 
+}  

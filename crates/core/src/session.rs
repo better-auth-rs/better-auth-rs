@@ -53,12 +53,25 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
             }
 
             // Update session if configured to do so
-            if self.config.session.update_age {
-                let new_expires_at = Utc::now() + self.config.session.expires_in;
-                let _ = self
-                    .database
-                    .update_session_expiry(token, new_expires_at)
-                    .await;
+            if !self.config.session.disable_session_refresh {
+                let should_refresh = match self.config.session.update_age {
+                    Some(age) => {
+                        // Only refresh if the session was last updated more than
+                        // `update_age` ago.
+                        let updated = session.updated_at();
+                        Utc::now() - updated >= age
+                    }
+                    // No update_age set → refresh on every access.
+                    None => true,
+                };
+
+                if should_refresh {
+                    let new_expires_at = Utc::now() + self.config.session.expires_in;
+                    let _ = self
+                        .database
+                        .update_session_expiry(token, new_expires_at)
+                        .await;
+                }
             }
         }
 
@@ -156,15 +169,12 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
             return Some(token.to_string());
         }
 
-        // Fall back to cookie
+        // Fall back to cookie (using the `cookie` crate for correct parsing)
         if let Some(cookie_header) = req.headers.get("cookie") {
             let cookie_name = &self.config.session.cookie_name;
-            for part in cookie_header.split(';') {
-                let part = part.trim();
-                if let Some(value) = part.strip_prefix(&format!("{}=", cookie_name))
-                    && !value.is_empty()
-                {
-                    return Some(value.to_string());
+            for c in cookie::Cookie::split_parse(cookie_header).flatten() {
+                if c.name() == cookie_name && !c.value().is_empty() {
+                    return Some(c.value().to_string());
                 }
             }
         }
