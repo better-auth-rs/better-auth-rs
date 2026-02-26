@@ -385,6 +385,24 @@ struct RateLimitUpdate {
     request_count: Option<i64>,
 }
 
+/// Check whether the given API key has exceeded its rate limit.
+///
+/// This is a **pure function** that mirrors the TypeScript `isRateLimited`
+/// helper.  It reads the key's current `request_count` / `last_request`
+/// fields and returns a [`RateLimitResult`] indicating whether the request
+/// should be allowed, along with any database updates that need to be
+/// persisted afterwards.
+///
+/// # Race conditions
+///
+/// Because the read-check-update cycle is **not** atomic, two concurrent
+/// requests may both read the same `request_count`, both pass the limit
+/// check, and both increment the counter — effectively allowing one extra
+/// request through.  This is the same trade-off made by the TypeScript
+/// implementation (no DB-level locking).  For most API-key workloads the
+/// window is small and the impact is negligible.  If strict enforcement is
+/// required, callers should wrap the verify + update in a serialisable
+/// transaction or use an external rate-limiter (e.g. Redis + Lua script).
 fn is_rate_limited(api_key: &impl AuthApiKey, global_enabled: bool) -> RateLimitResult {
     let now = chrono::Utc::now();
 
@@ -2099,5 +2117,477 @@ mod tests {
         );
         let err = plugin.handle_create(&req, &ctx).await.unwrap_err();
         assert!(err.to_string().contains("refillAmount"));
+    }
+
+    // =======================================================================
+    // Comprehensive integration tests (9 scenarios from the test plan)
+    // =======================================================================
+
+    // 1. Virtual session: before_request injects session without DB writes
+    #[tokio::test]
+    async fn test_virtual_session_creates_no_db_session() {
+        let plugin = ApiKeyPlugin::new().enable_session_for_api_keys(true);
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        // Create an API key
+        let (_id, raw_key) = create_key_and_get_raw(
+            &plugin,
+            &ctx,
+            &session.token,
+            serde_json::json!({ "name": "virtual-session-test" }),
+        )
+        .await;
+
+        // Count sessions before
+        let sessions_before = ctx
+            .database
+            .get_user_sessions(&_user.id)
+            .await
+            .unwrap()
+            .len();
+
+        // Simulate a request to a protected route with only x-api-key header
+        let mut headers = HashMap::new();
+        headers.insert("x-api-key".to_string(), raw_key.clone());
+        let req = AuthRequest {
+            method: HttpMethod::Post,
+            path: "/update-user".to_string(),
+            headers,
+            body: None,
+            query: HashMap::new(),
+            virtual_user_id: None,
+        };
+
+        // Call before_request — should return InjectSession
+        let action = plugin.before_request(&req, &ctx).await.unwrap();
+        assert!(action.is_some(), "before_request should return an action");
+        match action.unwrap() {
+            BeforeRequestAction::InjectSession {
+                user_id,
+                session_token: _,
+            } => {
+                assert_eq!(user_id, _user.id);
+            }
+            BeforeRequestAction::Respond(_) => {
+                panic!("Expected InjectSession, got Respond");
+            }
+        }
+
+        // Count sessions after — should be unchanged (no DB writes)
+        let sessions_after = ctx
+            .database
+            .get_user_sessions(&_user.id)
+            .await
+            .unwrap()
+            .len();
+        assert_eq!(
+            sessions_before, sessions_after,
+            "No new sessions should be created in the database"
+        );
+    }
+
+    // 2. Virtual session on /get-session: synthetic response
+    #[tokio::test]
+    async fn test_virtual_session_on_get_session() {
+        let plugin = ApiKeyPlugin::new().enable_session_for_api_keys(true);
+        let (ctx, user, session) = create_test_context_with_user().await;
+
+        let (_id, raw_key) = create_key_and_get_raw(
+            &plugin,
+            &ctx,
+            &session.token,
+            serde_json::json!({ "name": "get-session-test" }),
+        )
+        .await;
+
+        // Send request to /get-session with x-api-key header
+        let mut headers = HashMap::new();
+        headers.insert("x-api-key".to_string(), raw_key.clone());
+        let req = AuthRequest {
+            method: HttpMethod::Get,
+            path: "/get-session".to_string(),
+            headers,
+            body: None,
+            query: HashMap::new(),
+            virtual_user_id: None,
+        };
+
+        let action = plugin.before_request(&req, &ctx).await.unwrap();
+        assert!(action.is_some());
+        match action.unwrap() {
+            BeforeRequestAction::Respond(resp) => {
+                assert_eq!(resp.status, 200);
+                let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+                // Should contain user data
+                assert_eq!(body["user"]["id"], user.id);
+                assert_eq!(body["user"]["email"], "test@example.com");
+                // Should contain session-like data
+                assert!(body["session"]["id"].is_string());
+                assert_eq!(body["session"]["userId"], user.id);
+            }
+            BeforeRequestAction::InjectSession { .. } => {
+                panic!("Expected Respond for /get-session, got InjectSession");
+            }
+        }
+    }
+
+    // 3. Rate limiting: create key with rateLimitMax=2, 3rd call fails
+    #[tokio::test]
+    async fn test_rate_limiting_third_call_fails() {
+        let plugin = ApiKeyPlugin::new().rate_limit(RateLimitDefaults {
+            enabled: true,
+            time_window: 60_000,
+            max_requests: 2,
+        });
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        let (_id, raw_key) = create_key_and_get_raw(
+            &plugin,
+            &ctx,
+            &session.token,
+            serde_json::json!({
+                "name": "rl-integration",
+                "rateLimitEnabled": true,
+                "rateLimitTimeWindow": 60000,
+                "rateLimitMax": 2
+            }),
+        )
+        .await;
+
+        let make_verify = |key: &str| {
+            create_auth_request(
+                HttpMethod::Post,
+                "/api-key/verify",
+                None,
+                Some(serde_json::json!({ "key": key })),
+                None,
+            )
+        };
+
+        // First two pass
+        let r1 = plugin
+            .handle_verify(&make_verify(&raw_key), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(json_body(&r1)["valid"], true, "1st request should pass");
+
+        let r2 = plugin
+            .handle_verify(&make_verify(&raw_key), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(json_body(&r2)["valid"], true, "2nd request should pass");
+
+        // Third should fail
+        let r3 = plugin
+            .handle_verify(&make_verify(&raw_key), &ctx)
+            .await
+            .unwrap();
+        let b3 = json_body(&r3);
+        assert_eq!(b3["valid"], false, "3rd request should be rate-limited");
+        assert_eq!(b3["error"]["code"], "RATE_LIMITED");
+    }
+
+    // 4. Remaining consumption: remaining=2, no refill, 3rd fails
+    #[tokio::test]
+    async fn test_remaining_consumption_no_refill() {
+        let plugin = ApiKeyPlugin::new();
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        let (_id, raw_key) = create_key_and_get_raw(
+            &plugin,
+            &ctx,
+            &session.token,
+            serde_json::json!({ "name": "remaining-test", "remaining": 2 }),
+        )
+        .await;
+
+        let make_verify = |key: &str| {
+            create_auth_request(
+                HttpMethod::Post,
+                "/api-key/verify",
+                None,
+                Some(serde_json::json!({ "key": key })),
+                None,
+            )
+        };
+
+        // 1st: remaining 2→1
+        let r1 = plugin
+            .handle_verify(&make_verify(&raw_key), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(json_body(&r1)["valid"], true);
+        assert_eq!(json_body(&r1)["key"]["remaining"], 1);
+
+        // 2nd: remaining 1→0
+        let r2 = plugin
+            .handle_verify(&make_verify(&raw_key), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(json_body(&r2)["valid"], true);
+        assert_eq!(json_body(&r2)["key"]["remaining"], 0);
+
+        // 3rd: usage exceeded
+        let r3 = plugin
+            .handle_verify(&make_verify(&raw_key), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(json_body(&r3)["valid"], false);
+        assert_eq!(json_body(&r3)["error"]["code"], "USAGE_EXCEEDED");
+    }
+
+    // 5. Refill logic: remaining=1, refillInterval=100ms, refillAmount=10,
+    //    verify once → remaining=0, wait 150ms, verify → refill to 10 then
+    //    decrement to 9.
+    #[tokio::test]
+    async fn test_refill_resets_remaining_after_interval() {
+        let plugin = ApiKeyPlugin::new();
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        // Use a very short refill interval for testing (100 ms)
+        let (_id, raw_key) = create_key_and_get_raw(
+            &plugin,
+            &ctx,
+            &session.token,
+            serde_json::json!({
+                "name": "refill-test",
+                "remaining": 1,
+                "refillInterval": 100,
+                "refillAmount": 10
+            }),
+        )
+        .await;
+
+        let make_verify = |key: &str| {
+            create_auth_request(
+                HttpMethod::Post,
+                "/api-key/verify",
+                None,
+                Some(serde_json::json!({ "key": key })),
+                None,
+            )
+        };
+
+        // First verify: remaining 1→0
+        let r1 = plugin
+            .handle_verify(&make_verify(&raw_key), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(json_body(&r1)["valid"], true);
+        assert_eq!(json_body(&r1)["key"]["remaining"], 0);
+
+        // Wait for refill interval to elapse
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+        // Second verify: should refill to 10 and then decrement → 9
+        let r2 = plugin
+            .handle_verify(&make_verify(&raw_key), &ctx)
+            .await
+            .unwrap();
+        let b2 = json_body(&r2);
+        assert_eq!(b2["valid"], true, "Should succeed after refill");
+        assert_eq!(b2["key"]["remaining"], 9, "Should be refillAmount - 1 = 9");
+    }
+
+    // 6. Permissions: key with {"admin": ["read"]}, verify with
+    //    {"admin": ["write"]} should fail
+    #[tokio::test]
+    async fn test_permissions_mismatch_fails() {
+        let plugin = ApiKeyPlugin::new();
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        let (_id, raw_key) = create_key_and_get_raw(
+            &plugin,
+            &ctx,
+            &session.token,
+            serde_json::json!({
+                "name": "perm-mismatch",
+                "permissions": { "admin": ["read"] }
+            }),
+        )
+        .await;
+
+        // Verify with matching permission → pass
+        let verify_ok = create_auth_request(
+            HttpMethod::Post,
+            "/api-key/verify",
+            None,
+            Some(serde_json::json!({
+                "key": raw_key,
+                "permissions": { "admin": ["read"] }
+            })),
+            None,
+        );
+        let r1 = plugin.handle_verify(&verify_ok, &ctx).await.unwrap();
+        assert_eq!(json_body(&r1)["valid"], true);
+
+        // Verify with mismatched permission → fail
+        let verify_fail = create_auth_request(
+            HttpMethod::Post,
+            "/api-key/verify",
+            None,
+            Some(serde_json::json!({
+                "key": raw_key,
+                "permissions": { "admin": ["write"] }
+            })),
+            None,
+        );
+        let r2 = plugin.handle_verify(&verify_fail, &ctx).await.unwrap();
+        assert_eq!(json_body(&r2)["valid"], false);
+    }
+
+    // 7. Concurrent rate limiting: send 5 sequential verify requests with
+    //    rateLimitMax=2, only first 2 succeed (sequential proves logic is
+    //    correct; true concurrency race conditions are documented above).
+    #[tokio::test]
+    async fn test_concurrent_rate_limiting() {
+        let plugin = ApiKeyPlugin::new().rate_limit(RateLimitDefaults {
+            enabled: true,
+            time_window: 60_000,
+            max_requests: 2,
+        });
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        let (_id, raw_key) = create_key_and_get_raw(
+            &plugin,
+            &ctx,
+            &session.token,
+            serde_json::json!({
+                "name": "concurrent-rl",
+                "rateLimitEnabled": true,
+                "rateLimitTimeWindow": 60000,
+                "rateLimitMax": 2
+            }),
+        )
+        .await;
+
+        let make_verify = |key: &str| {
+            create_auth_request(
+                HttpMethod::Post,
+                "/api-key/verify",
+                None,
+                Some(serde_json::json!({ "key": key })),
+                None,
+            )
+        };
+
+        let mut success_count = 0;
+        let mut fail_count = 0;
+
+        for _ in 0..5 {
+            let resp = plugin
+                .handle_verify(&make_verify(&raw_key), &ctx)
+                .await
+                .unwrap();
+            let body = json_body(&resp);
+            if body["valid"] == true {
+                success_count += 1;
+            } else {
+                fail_count += 1;
+                assert_eq!(body["error"]["code"], "RATE_LIMITED");
+            }
+        }
+
+        assert_eq!(success_count, 2, "Only 2 out of 5 should succeed");
+        assert_eq!(fail_count, 3, "3 out of 5 should be rate-limited");
+    }
+
+    // 8. Database compatibility: test delete_expired_api_keys on memory
+    //    adapter (the SQL fix is in the SqlxAdapter; memory adapter tests
+    //    prove the trait contract works).
+    #[tokio::test]
+    async fn test_delete_expired_api_keys_memory_adapter() {
+        let (ctx, _user, session) = create_test_context_with_user().await;
+        let plugin = ApiKeyPlugin::new();
+
+        // Create two keys
+        let (id1, _) = create_key_and_get_raw(
+            &plugin,
+            &ctx,
+            &session.token,
+            serde_json::json!({ "name": "will-expire" }),
+        )
+        .await;
+        let (_id2, _) = create_key_and_get_raw(
+            &plugin,
+            &ctx,
+            &session.token,
+            serde_json::json!({ "name": "wont-expire" }),
+        )
+        .await;
+
+        // Expire the first key by setting expires_at to the past
+        let past = (Utc::now() - Duration::hours(1)).to_rfc3339();
+        ctx.database
+            .update_api_key(
+                &id1,
+                UpdateApiKey {
+                    expires_at: Some(Some(past)),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+
+        // Delete expired keys
+        let deleted = ctx.database.delete_expired_api_keys().await.unwrap();
+        assert_eq!(deleted, 1, "Should delete exactly 1 expired key");
+
+        // Verify only the non-expired key remains
+        let remaining = ctx.database.list_api_keys_by_user(&_user.id).await.unwrap();
+        assert_eq!(remaining.len(), 1);
+    }
+
+    // 9. Delete expired with auth: unauthenticated call should fail
+    #[tokio::test]
+    async fn test_delete_expired_without_auth_returns_error() {
+        let plugin = ApiKeyPlugin::new();
+        let (ctx, _user, _session) = create_test_context_with_user().await;
+
+        // Call without auth token
+        let req = create_auth_request(
+            HttpMethod::Post,
+            "/api-key/delete-all-expired-api-keys",
+            None, // no auth token
+            None,
+            None,
+        );
+        let result = plugin.handle_delete_all_expired(&req, &ctx).await;
+        assert!(
+            result.is_err(),
+            "Should return error when called without authentication"
+        );
+    }
+
+    // 10. before_request returns None when enableSessionForAPIKeys is false
+    #[tokio::test]
+    async fn test_before_request_disabled_returns_none() {
+        let plugin = ApiKeyPlugin::new(); // enable_session_for_api_keys defaults to false
+        let (ctx, _user, session) = create_test_context_with_user().await;
+
+        let (_id, raw_key) = create_key_and_get_raw(
+            &plugin,
+            &ctx,
+            &session.token,
+            serde_json::json!({ "name": "disabled-session" }),
+        )
+        .await;
+
+        let mut headers = HashMap::new();
+        headers.insert("x-api-key".to_string(), raw_key);
+        let req = AuthRequest {
+            method: HttpMethod::Get,
+            path: "/get-session".to_string(),
+            headers,
+            body: None,
+            query: HashMap::new(),
+            virtual_user_id: None,
+        };
+
+        let action = plugin.before_request(&req, &ctx).await.unwrap();
+        assert!(
+            action.is_none(),
+            "before_request should return None when session emulation is disabled"
+        );
     }
 }

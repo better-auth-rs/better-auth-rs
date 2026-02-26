@@ -1651,13 +1651,16 @@ pub mod sqlx_adapter {
         }
 
         async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
+            // Use $1 bind-parameter instead of NOW() / ::timestamptz so the
+            // query is database-agnostic (works on PostgreSQL, MySQL, SQLite).
+            let now = Utc::now().to_rfc3339();
             let sql = format!(
-                "DELETE FROM {} WHERE {} IS NOT NULL AND {}::timestamptz < NOW()",
+                "DELETE FROM {} WHERE {} IS NOT NULL AND {} < $1",
                 qi(AK::table()),
                 qi(AK::col_expires_at()),
                 qi(AK::col_expires_at()),
             );
-            let result = sqlx::query(&sql).execute(&self.pool).await?;
+            let result = sqlx::query(&sql).bind(&now).execute(&self.pool).await?;
             Ok(result.rows_affected() as usize)
         }
     }

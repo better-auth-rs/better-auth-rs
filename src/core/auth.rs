@@ -272,7 +272,7 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
                         // creating a real database session.  This mirrors the
                         // TypeScript `ctx.context.session` virtual-session
                         // approach — no DB writes on every API-key request.
-                        req.virtual_user_id = Some(user_id);
+                        req.set_virtual_user_id(user_id);
                     }
                 }
             }
@@ -513,7 +513,7 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// `ctx.context.session` virtual-session behaviour.
     async fn extract_current_user(&self, req: &AuthRequest) -> AuthResult<DB::User> {
         // Fast path: virtual session injected by before_request hook
-        if let Some(uid) = &req.virtual_user_id {
+        if let Some(uid) = req.virtual_user_id() {
             return self
                 .database
                 .get_user_by_id(uid)
