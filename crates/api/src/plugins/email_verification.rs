@@ -192,7 +192,7 @@ impl Default for EmailVerificationPlugin {
 impl Default for EmailVerificationConfig {
     fn default() -> Self {
         Self {
-            verification_token_expiry: Duration::hours(1),
+            verification_token_expiry: Duration::hours(24),
             send_email_notifications: true,
             require_verification_for_signin: false,
             auto_verify_new_users: false,
@@ -582,7 +582,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = EmailVerificationConfig::default();
-        assert_eq!(config.verification_token_expiry, Duration::hours(1));
+        assert_eq!(config.verification_token_expiry, Duration::hours(24));
         assert!(config.send_email_notifications);
         assert!(!config.require_verification_for_signin);
         assert!(!config.auto_verify_new_users);
