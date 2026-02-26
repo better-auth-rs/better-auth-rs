@@ -261,7 +261,7 @@ impl AuthConfig {
 
     /// Set the "fresh session" window used by sensitive-operation guards.
     pub fn session_fresh_age(mut self, duration: Duration) -> Self {
-        self.session.fresh_age = duration;
+        self.session.fresh_age = Some(duration);
         self
     }
 
@@ -306,4 +306,4 @@ impl AuthConfig {
         
         Ok(())
     }
-}  
+}    
