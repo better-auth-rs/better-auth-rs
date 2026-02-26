@@ -94,6 +94,7 @@ mod tests {
             headers: HashMap::new(),
             body: Some(vec![0u8; body_size]),
             query: HashMap::new(),
+            virtual_user_id: None,
         }
     }
 
@@ -129,6 +130,7 @@ mod tests {
             headers: HashMap::new(),
             body: None,
             query: HashMap::new(),
+            virtual_user_id: None,
         };
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }

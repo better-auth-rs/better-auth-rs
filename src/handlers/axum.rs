@@ -180,6 +180,7 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
         headers,
         body: body_bytes,
         query,
+        virtual_user_id: None,
     })
 }
 

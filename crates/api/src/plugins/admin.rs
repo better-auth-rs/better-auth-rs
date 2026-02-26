@@ -1107,6 +1107,7 @@ mod tests {
             headers,
             body: body.map(|b| serde_json::to_vec(&b).unwrap()),
             query: HashMap::new(),
+            virtual_user_id: None,
         }
     }
 
@@ -1126,6 +1127,7 @@ mod tests {
             headers,
             body: body.map(|b| serde_json::to_vec(&b).unwrap()),
             query,
+            virtual_user_id: None,
         }
     }
 

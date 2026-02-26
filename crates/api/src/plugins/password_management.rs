@@ -739,6 +739,7 @@ mod tests {
             headers,
             body,
             query: HashMap::new(),
+            virtual_user_id: None,
         }
     }
 
@@ -1179,6 +1180,7 @@ mod tests {
             headers: HashMap::new(),
             body: None,
             query,
+            virtual_user_id: None,
         };
 
         let response = plugin

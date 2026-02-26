@@ -183,6 +183,11 @@ pub struct AuthRequest {
     pub headers: HashMap<String, String>,
     pub body: Option<Vec<u8>>,
     pub query: HashMap<String, String>,
+    /// When set by a `BeforeRequestAction::InjectSession`, downstream handlers
+    /// treat the request as authenticated for this user **without** a real
+    /// database session.  This mirrors the TypeScript `ctx.context.session`
+    /// virtual-session approach.
+    pub virtual_user_id: Option<String>,
 }
 
 /// Authentication response wrapper
@@ -429,6 +434,7 @@ impl AuthRequest {
             headers: HashMap::new(),
             body: None,
             query: HashMap::new(),
+            virtual_user_id: None,
         }
     }
 

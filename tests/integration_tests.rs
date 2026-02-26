@@ -125,6 +125,7 @@ async fn test_revoke_session_integration() {
         headers,
         body: Some(revoke_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -222,6 +223,7 @@ async fn test_reset_password_integration() {
         headers,
         body: Some(reset_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -315,6 +317,7 @@ async fn test_reset_password_token_integration() {
         headers: HashMap::new(),
         body: None,
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -367,6 +370,7 @@ async fn test_get_session_post_integration() {
         headers,
         body: Some(b"{}".to_vec()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -401,6 +405,7 @@ async fn test_delete_user_post_method() {
         headers,
         body: Some(b"{}".to_vec()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -457,6 +462,7 @@ async fn test_set_password_success() {
         headers,
         body: Some(set_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -493,6 +499,7 @@ async fn test_set_password_already_has_password() {
         headers,
         body: Some(set_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -520,6 +527,7 @@ async fn test_set_password_unauthenticated() {
         headers,
         body: Some(set_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -564,6 +572,7 @@ async fn test_revoke_other_sessions_integration() {
         headers,
         body: Some(b"{}".to_vec()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -600,6 +609,7 @@ async fn test_cookie_based_auth() {
         headers,
         body: None,
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -636,6 +646,7 @@ async fn test_bearer_takes_precedence_over_cookie() {
         headers,
         body: None,
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -665,6 +676,7 @@ async fn test_unauthorized_password_operations() {
         headers,
         body: Some(change_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -694,6 +706,7 @@ async fn test_change_email_success() {
         headers,
         body: Some(body.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -737,6 +750,7 @@ async fn test_change_email_duplicate() {
         headers,
         body: Some(body.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -762,6 +776,7 @@ async fn test_change_email_unauthenticated() {
         headers,
         body: Some(body.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -799,6 +814,7 @@ async fn test_delete_user_callback_success() {
         headers: HashMap::new(),
         body: None,
         query,
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -830,6 +846,7 @@ async fn test_delete_user_callback_invalid_token() {
         headers: HashMap::new(),
         body: None,
         query,
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -857,6 +874,7 @@ async fn test_list_accounts_empty() {
         headers,
         body: None,
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -906,6 +924,7 @@ async fn test_list_accounts_with_account() {
         headers,
         body: None,
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -970,6 +989,7 @@ async fn test_unlink_account_success() {
         headers,
         body: Some(unlink_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1045,6 +1065,7 @@ async fn test_unlink_last_account_fails() {
         headers,
         body: Some(unlink_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1065,6 +1086,7 @@ async fn test_list_accounts_unauthenticated() {
         headers: HashMap::new(),
         body: None,
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1560,6 +1582,7 @@ async fn test_sign_up_with_username_and_sign_in() {
         headers: headers.clone(),
         body: Some(signup_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1582,6 +1605,7 @@ async fn test_sign_up_with_username_and_sign_in() {
         headers,
         body: Some(signin_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1619,6 +1643,7 @@ async fn test_sign_in_username_wrong_password() {
         headers: headers.clone(),
         body: Some(signup_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     auth.handle_request(request).await.unwrap();
@@ -1635,6 +1660,7 @@ async fn test_sign_in_username_wrong_password() {
         headers,
         body: Some(signin_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1663,6 +1689,7 @@ async fn test_sign_in_username_nonexistent() {
         headers,
         body: Some(signin_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1699,6 +1726,7 @@ async fn create_api_key(
         headers,
         body: Some(body.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1759,6 +1787,7 @@ async fn test_api_key_create_with_options() {
         headers,
         body: Some(body.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1796,6 +1825,7 @@ async fn test_api_key_get() {
         headers,
         body: None,
         query,
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1833,6 +1863,7 @@ async fn test_api_key_list() {
         headers,
         body: None,
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1871,6 +1902,7 @@ async fn test_api_key_update() {
         headers,
         body: Some(update_body.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1906,6 +1938,7 @@ async fn test_api_key_delete() {
         headers,
         body: Some(delete_body.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1925,6 +1958,7 @@ async fn test_api_key_delete() {
         headers: headers2,
         body: None,
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let list_response = auth.handle_request(list_request).await.unwrap();
@@ -1951,6 +1985,7 @@ async fn test_api_key_create_unauthenticated() {
         headers,
         body: Some(body.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1971,6 +2006,7 @@ async fn test_api_key_list_unauthenticated() {
         headers: HashMap::new(),
         body: None,
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -2002,6 +2038,7 @@ async fn test_api_key_get_other_users_key() {
         headers,
         body: Some(signup_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let signup_resp = auth.handle_request(signup_request).await.unwrap();
@@ -2021,6 +2058,7 @@ async fn test_api_key_get_other_users_key() {
         headers: headers2,
         body: None,
         query,
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(get_request).await.unwrap();
@@ -2052,6 +2090,7 @@ async fn test_api_key_delete_other_users_key() {
         headers,
         body: Some(signup_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let signup_resp = auth.handle_request(signup_request).await.unwrap();
@@ -2071,6 +2110,7 @@ async fn test_api_key_delete_other_users_key() {
         headers: headers2,
         body: Some(delete_body.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(delete_request).await.unwrap();
@@ -2102,6 +2142,7 @@ async fn test_api_key_update_other_users_key() {
         headers,
         body: Some(signup_data.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let signup_resp = auth.handle_request(signup_request).await.unwrap();
@@ -2124,6 +2165,7 @@ async fn test_api_key_update_other_users_key() {
         headers: headers2,
         body: Some(update_body.to_string().into_bytes()),
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(update_request).await.unwrap();
@@ -2147,6 +2189,7 @@ async fn test_api_key_list_empty() {
         headers,
         body: None,
         query: HashMap::new(),
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -2172,7 +2215,8 @@ async fn test_api_key_get_missing_id() {
         path: "/api-key/get".to_string(),
         headers,
         body: None,
-        query: HashMap::new(), // no 'id' param
+        query: HashMap::new(), // no 'id' param,
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();
@@ -2199,6 +2243,7 @@ async fn test_api_key_get_nonexistent() {
         headers,
         body: None,
         query,
+        virtual_user_id: None,
     };
 
     let response = auth.handle_request(request).await.unwrap();

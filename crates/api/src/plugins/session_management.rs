@@ -341,6 +341,7 @@ mod tests {
             headers,
             body,
             query: HashMap::new(),
+            virtual_user_id: None,
         }
     }
 

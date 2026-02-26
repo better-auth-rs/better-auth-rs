@@ -1414,6 +1414,7 @@ mod tests {
             headers,
             body: body.map(|b| serde_json::to_vec(&b).unwrap()),
             query: query.unwrap_or_default(),
+            virtual_user_id: None,
         }
     }
 

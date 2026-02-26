@@ -265,26 +265,14 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
                     }
                     BeforeRequestAction::InjectSession {
                         user_id,
-                        session_token,
+                        session_token: _,
                     } => {
-                        // Create a real session in the database so downstream
-                        // handlers (extract_current_user, etc.) can look it up.
-                        let user = self
-                            .database
-                            .get_user_by_id(&user_id)
-                            .await?
-                            .ok_or(AuthError::UserNotFound)?;
-                        let session = self
-                            .session_manager
-                            .create_session(&user, None, None)
-                            .await?;
-                        // Inject the real session token as a Bearer header so
-                        // extract_session_token picks it up.
-                        req.headers.insert(
-                            "authorization".to_string(),
-                            format!("Bearer {}", session.token()),
-                        );
-                        let _ = session_token; // original key, not needed further
+                        // Set the virtual user id on the request so that
+                        // `extract_current_user` can resolve the user without
+                        // creating a real database session.  This mirrors the
+                        // TypeScript `ctx.context.session` virtual-session
+                        // approach — no DB writes on every API-key request.
+                        req.virtual_user_id = Some(user_id);
                     }
                 }
             }
@@ -518,7 +506,21 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     }
 
     /// Extract current user from request (validates session).
+    ///
+    /// If a virtual session was injected by a `before_request` hook (e.g.
+    /// API-key session emulation), the user is resolved directly by ID
+    /// **without** a database session lookup — matching the TypeScript
+    /// `ctx.context.session` virtual-session behaviour.
     async fn extract_current_user(&self, req: &AuthRequest) -> AuthResult<DB::User> {
+        // Fast path: virtual session injected by before_request hook
+        if let Some(uid) = &req.virtual_user_id {
+            return self
+                .database
+                .get_user_by_id(uid)
+                .await?
+                .ok_or(AuthError::UserNotFound);
+        }
+
         let token = self
             .session_manager
             .extract_session_token(req)
