@@ -7,6 +7,28 @@
 //! When the response shape changes, `cargo insta review` presents a diff and
 //! lets maintainers accept or reject it — replacing dozens of manual
 //! `assert!(json["field"].is_string())` lines.
+//!
+//! ## Comparison with TypeScript better-auth (v1.4.19)
+//!
+//! Snapshots were validated against the TypeScript reference implementation.
+//! The Rust responses are a **superset** of the TS responses: every field
+//! returned by TS is present in Rust with the same camelCase name and
+//! compatible type.  The following *additional* fields appear because
+//! `create_test_auth()` registers plugins (admin, organization, two-factor):
+//!
+//! - **User object**: `banned`, `banReason`, `banExpires`, `role`,
+//!   `twoFactorEnabled`, `username`, `displayUsername` (all nullable/default)
+//! - **Session object**: `activeOrganizationId`, `impersonatedBy` (nullable)
+//! - **Signin response**: extra `url: ~` field (redirect URL, always null)
+//!
+//! ### Known implementation gaps vs TypeScript better-auth
+//!
+//! | Area | TypeScript | Rust | Tracking |
+//! |------|-----------|------|----------|
+//! | Error responses | `{code, message}` | `{message}` only | Missing `code` field |
+//! | `/list-accounts` | Returns account objects with `scopes` | Returns `[]` | Not yet implemented |
+//! | `/forget-password` | Empty 200 body | `{status: true}` | Acceptable deviation |
+//! | `/delete-user` | Disabled by default | `{message, success}` | TS requires opt-in |
 
 mod compat;
 
@@ -30,7 +52,7 @@ fn redact(value: &Value) -> Value {
                 return Value::String("[uuid]".to_string());
             }
             // Session tokens: session_<base64>
-            if s.starts_with("session_") && s.len() > 20 {
+            if s.starts_with("session_") && s.len() > 20 && !s.contains('@') {
                 return Value::String("[session_token]".to_string());
             }
             // ISO-8601 timestamps (e.g. 2024-01-01T00:00:00Z or with fractional seconds)

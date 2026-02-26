@@ -19,7 +19,7 @@ user:
   banned: false
   createdAt: "[timestamp]"
   displayUsername: ~
-  email: "[session_token]"
+  email: session_snap@example.com
   emailVerified: false
   id: "[uuid]"
   image: ~
