@@ -61,7 +61,8 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
             // throttling effective even if a custom adapter updates `expires_at`
             // without advancing `updated_at`.
             if let Some(update_age) = self.config.session.update_age {
-                let refreshed_at_from_expiry = session.expires_at() - self.config.session.expires_in;
+                let refreshed_at_from_expiry =
+                    session.expires_at() - self.config.session.expires_in;
                 let last_refresh_at = session.updated_at().max(refreshed_at_from_expiry);
                 let elapsed_since_update = now - last_refresh_at;
                 if elapsed_since_update >= update_age {
