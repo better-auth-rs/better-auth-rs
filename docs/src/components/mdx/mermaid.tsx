@@ -8,12 +8,18 @@ export function Mermaid({ chart }: { chart: string }) {
   const [svg, setSvg] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const currentChartRef = useRef<string>(null);
+  const currentThemeRef = useRef<string | undefined>(undefined);
   const { resolvedTheme } = useTheme();
 
   useEffect(() => {
-    if (currentChartRef.current === chart || !containerRef.current) return;
+    if (
+      currentChartRef.current === chart &&
+      currentThemeRef.current === resolvedTheme
+    ) return;
+    if (!containerRef.current) return;
     const container = containerRef.current;
     currentChartRef.current = chart;
+    currentThemeRef.current = resolvedTheme;
 
     async function renderChart() {
       const { default: mermaid } = await import('mermaid');

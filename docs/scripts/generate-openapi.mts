@@ -15,4 +15,7 @@ async function main() {
   console.log('OpenAPI files generated successfully!');
 }
 
-main().catch(console.error);
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
