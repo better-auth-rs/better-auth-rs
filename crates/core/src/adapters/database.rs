@@ -1608,6 +1608,22 @@ pub mod sqlx_adapter {
                 query.push(format!(", {} = ", qi(AK::col_metadata())));
                 query.push_bind(metadata);
             }
+            if let Some(expires_at) = &update.expires_at {
+                query.push(format!(", {} = ", qi(AK::col_expires_at())));
+                query.push_bind(expires_at.as_deref().map(|s| s.to_string()));
+            }
+            if let Some(last_request) = &update.last_request {
+                query.push(format!(", {} = ", qi(AK::col_last_request())));
+                query.push_bind(last_request.as_deref().map(|s| s.to_string()));
+            }
+            if let Some(request_count) = update.request_count {
+                query.push(format!(", {} = ", qi(AK::col_request_count())));
+                query.push_bind(request_count);
+            }
+            if let Some(last_refill_at) = &update.last_refill_at {
+                query.push(format!(", {} = ", qi(AK::col_last_refill_at())));
+                query.push_bind(last_refill_at.as_deref().map(|s| s.to_string()));
+            }
 
             query.push(format!(" WHERE {} = ", qi(AK::col_id())));
             query.push_bind(id);
@@ -1632,6 +1648,21 @@ pub mod sqlx_adapter {
             );
             sqlx::query(&sql).bind(id).execute(&self.pool).await?;
             Ok(())
+        }
+
+        async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
+            // Use a bind-parameter with an RFC 3339 timestamp instead of
+            // NOW() / ::timestamptz so the comparison is straightforward.
+            // (This adapter is PostgreSQL-only; $1 placeholders are correct.)
+            let now = Utc::now().to_rfc3339();
+            let sql = format!(
+                "DELETE FROM {} WHERE {} IS NOT NULL AND {} < $1",
+                qi(AK::table()),
+                qi(AK::col_expires_at()),
+                qi(AK::col_expires_at()),
+            );
+            let result = sqlx::query(&sql).bind(&now).execute(&self.pool).await?;
+            Ok(result.rows_affected() as usize)
         }
     }
 

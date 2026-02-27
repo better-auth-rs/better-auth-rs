@@ -53,7 +53,7 @@ pub use middleware::{
     EndpointRateLimit, Middleware, RateLimitConfig, RateLimitMiddleware,
 };
 pub use openapi::{OpenApiBuilder, OpenApiInfo, OpenApiOperation, OpenApiResponse, OpenApiSpec};
-pub use plugin::{AuthContext, AuthPlugin, AuthRoute};
+pub use plugin::{AuthContext, AuthPlugin, AuthRoute, BeforeRequestAction};
 pub use session::SessionManager;
 pub use types::{
     Account, ApiKey, AuthRequest, AuthResponse, CodeMessageResponse, CreateAccount, CreateApiKey,

@@ -47,6 +47,9 @@ reqwest = { workspace = true }
 # URL
 url = { workspace = true }
 urlencoding = "2"
+bon = "3.3"
+governor = "0.10.4"
+nonzero_ext = "0.3.0"
 
 [dev-dependencies]
 tokio = { workspace = true }

@@ -603,6 +603,10 @@ impl<DB: DatabaseAdapter> ApiKeyOps for HookedDatabaseAdapter<DB> {
     async fn delete_api_key(&self, id: &str) -> AuthResult<()> {
         self.inner.delete_api_key(id).await
     }
+
+    async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
+        self.inner.delete_expired_api_keys().await
+    }
 }
 
 #[cfg(test)]

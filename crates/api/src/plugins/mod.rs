@@ -3,6 +3,7 @@ pub mod admin;
 pub mod api_key;
 pub mod email_password;
 pub mod email_verification;
+pub mod helpers;
 pub mod oauth;
 pub mod organization;
 pub mod passkey;
@@ -99,13 +100,7 @@ pub(crate) mod test_helpers {
             headers.insert("authorization".to_string(), format!("Bearer {}", token));
         }
 
-        AuthRequest {
-            method,
-            path: path.to_string(),
-            headers,
-            body,
-            query,
-        }
+        AuthRequest::from_parts(method, path.to_string(), headers, body, query)
     }
 
     pub fn create_auth_request_no_query(

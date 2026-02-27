@@ -374,6 +374,18 @@ impl MemoryApiKey for ApiKey {
         if let Some(metadata) = &update.metadata {
             self.metadata = Some(metadata.clone());
         }
+        if let Some(expires_at) = &update.expires_at {
+            self.expires_at = expires_at.clone();
+        }
+        if let Some(last_request) = &update.last_request {
+            self.last_request = last_request.clone();
+        }
+        if let Some(request_count) = update.request_count {
+            self.request_count = Some(request_count);
+        }
+        if let Some(last_refill_at) = &update.last_refill_at {
+            self.last_refill_at = last_refill_at.clone();
+        }
         self.updated_at = Utc::now().to_rfc3339();
     }
 }

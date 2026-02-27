@@ -166,13 +166,13 @@ async fn get_me(State(state): State<AppState>, req: Request) -> Response {
     // Validate session through better-auth
     let mut headers = std::collections::HashMap::new();
     headers.insert("authorization".to_string(), format!("Bearer {token}"));
-    let session_req = better_auth::types::AuthRequest {
-        method: better_auth::types::HttpMethod::Get,
-        path: "/get-session".to_string(),
+    let session_req = better_auth::types::AuthRequest::from_parts(
+        better_auth::types::HttpMethod::Get,
+        "/get-session".to_string(),
         headers,
-        body: None,
-        query: std::collections::HashMap::new(),
-    };
+        None,
+        std::collections::HashMap::new(),
+    );
 
     let session_resp = match state.auth.handle_request(session_req).await {
         Ok(resp) if resp.status == 200 => resp,

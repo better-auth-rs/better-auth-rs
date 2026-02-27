@@ -183,6 +183,26 @@ pub struct AuthRequest {
     pub headers: HashMap<String, String>,
     pub body: Option<Vec<u8>>,
     pub query: HashMap<String, String>,
+    /// Virtual user ID injected by a `BeforeRequestAction::InjectSession`.
+    ///
+    /// When set, downstream handlers treat the request as authenticated for
+    /// this user **without** a real database session.  This mirrors the
+    /// TypeScript `ctx.context.session` virtual-session approach.
+    ///
+    /// # Security
+    ///
+    /// This field **must only** be set by the internal request pipeline
+    /// (via [`set_virtual_user_id`](AuthRequest::set_virtual_user_id)) after
+    /// a plugin's `before_request` hook returns
+    /// `BeforeRequestAction::InjectSession`.  Application code constructing
+    /// an `AuthRequest` should always leave this as `None`; setting it to
+    /// `Some(…)` externally bypasses normal authentication.
+    ///
+    /// **`pub(crate)`** — external crates must use [`AuthRequest::from_parts`]
+    /// or [`AuthRequest::new`] (which initialise this to `None`) and then
+    /// [`set_virtual_user_id`](AuthRequest::set_virtual_user_id) only from
+    /// the trusted request pipeline.
+    pub(crate) virtual_user_id: Option<String>,
 }
 
 /// Authentication response wrapper
@@ -344,6 +364,15 @@ pub struct UpdateApiKey {
     pub refill_amount: Option<i64>,
     pub permissions: Option<String>,
     pub metadata: Option<String>,
+    /// Update the expiration time. `Some(Some("..."))` sets a new value,
+    /// `Some(None)` clears it, `None` leaves it unchanged.
+    pub expires_at: Option<Option<String>>,
+    /// Last request timestamp (updated during verify).
+    pub last_request: Option<Option<String>>,
+    /// Request count within the current rate-limit window.
+    pub request_count: Option<i64>,
+    /// Last refill timestamp (updated during verify).
+    pub last_refill_at: Option<Option<String>>,
 }
 
 /// Verification token creation data
@@ -420,6 +449,27 @@ impl AuthRequest {
             headers: HashMap::new(),
             body: None,
             query: HashMap::new(),
+            virtual_user_id: None,
+        }
+    }
+
+    /// Construct a request from all public parts.
+    ///
+    /// Prefer [`AuthRequest::new`] when you only need method + path.
+    pub fn from_parts(
+        method: HttpMethod,
+        path: String,
+        headers: HashMap<String, String>,
+        body: Option<Vec<u8>>,
+        query: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            method,
+            path,
+            headers,
+            body,
+            query,
+            virtual_user_id: None,
         }
     }
 
@@ -433,6 +483,23 @@ impl AuthRequest {
 
     pub fn header(&self, name: &str) -> Option<&String> {
         self.headers.get(name)
+    }
+
+    /// Returns the virtual user ID injected by a `before_request` hook, if any.
+    pub fn virtual_user_id(&self) -> Option<&str> {
+        self.virtual_user_id.as_deref()
+    }
+
+    /// Set the virtual user ID on this request.
+    ///
+    /// # Safety contract
+    ///
+    /// This **must only** be called from the internal request pipeline
+    /// (i.e. `handle_request_inner`) after a plugin's `before_request` hook
+    /// returns `BeforeRequestAction::InjectSession`.  Calling it from
+    /// application code would bypass normal authentication.
+    pub fn set_virtual_user_id(&mut self, user_id: String) {
+        self.virtual_user_id = Some(user_id);
     }
 
     pub fn body_as_json<T: for<'de> Deserialize<'de>>(&self) -> Result<T, serde_json::Error> {

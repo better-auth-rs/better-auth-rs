@@ -5,7 +5,7 @@
 //! (`better-auth.yaml`). Tests are written against `handle_request()` directly
 //! (no HTTP server needed).
 
-use crate::adapters::{MemoryDatabaseAdapter, VerificationOps};
+use crate::adapters::{MemoryDatabaseAdapter, SessionOps, VerificationOps};
 use crate::plugins::{
     AccountManagementPlugin, ApiKeyPlugin, EmailPasswordPlugin, EmailVerificationPlugin,
     PasswordManagementPlugin, SessionManagementPlugin,
@@ -30,7 +30,7 @@ async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
         .plugin(PasswordManagementPlugin::new().require_current_password(true))
         .plugin(AccountManagementPlugin::new())
         .plugin(EmailVerificationPlugin::new())
-        .plugin(ApiKeyPlugin::new())
+        .plugin(ApiKeyPlugin::builder().build())
         .build()
         .await
         .expect("Failed to create test auth instance")
@@ -801,6 +801,158 @@ async fn test_unlink_account_response_shape() {
     }
 }
 
+/// Verify that `enableSessionForAPIKeys` actually injects a session when a
+/// request carries an `x-api-key` header. This is the integration test that
+/// proves the `before_request` hook is wired into the request pipeline.
+#[tokio::test]
+async fn test_enable_session_for_api_keys_injects_session() {
+    // Build an auth instance with enableSessionForAPIKeys turned on
+    let auth = AuthBuilder::new(test_config())
+        .database(MemoryDatabaseAdapter::new())
+        .plugin(EmailPasswordPlugin::new().enable_signup(true))
+        .plugin(SessionManagementPlugin::new())
+        .plugin(
+            ApiKeyPlugin::builder()
+                .enable_session_for_api_keys(true)
+                .build(),
+        )
+        .build()
+        .await
+        .expect("Failed to create auth with session-for-api-keys");
+
+    // 1. Sign up a user and get a session token
+    let (token, _) = signup_user(
+        &auth,
+        "apikey_session@example.com",
+        "password123",
+        "AK Session",
+    )
+    .await;
+
+    // 2. Create an API key for this user
+    let create_req = post_json_with_auth(
+        "/api-key/create",
+        serde_json::json!({"name": "session-emulation-key"}),
+        &token,
+    );
+    let create_resp = auth.handle_request(create_req).await.unwrap();
+    assert_eq!(create_resp.status, 200);
+    let create_json: serde_json::Value = serde_json::from_slice(&create_resp.body).unwrap();
+    let raw_key = create_json["key"]
+        .as_str()
+        .expect("create response must contain raw key")
+        .to_string();
+
+    // 3. Call a protected endpoint (/update-user) using ONLY the x-api-key header
+    //    (no Bearer token). If before_request is wired correctly, the API key plugin
+    //    will inject a real session and the request will succeed.
+    let mut req = AuthRequest::new(HttpMethod::Post, "/update-user");
+    req.body = Some(
+        serde_json::json!({"name": "Updated Via API Key"})
+            .to_string()
+            .into_bytes(),
+    );
+    req.headers
+        .insert("content-type".to_string(), "application/json".to_string());
+    req.headers
+        .insert("origin".to_string(), "http://localhost:3000".to_string());
+    req.headers.insert("x-api-key".to_string(), raw_key.clone());
+    // Deliberately NO authorization header
+
+    let resp = auth
+        .handle_request(req)
+        .await
+        .expect("update-user via api-key failed");
+
+    assert_eq!(
+        resp.status, 200,
+        "update-user via API key should succeed (session injected by before_request hook)"
+    );
+
+    let json: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    assert_eq!(
+        json["status"], true,
+        "update-user should return status: true"
+    );
+
+    // 4. Also verify /get-session with the API key returns a virtual session
+    //    (the before_request hook intercepts this path and returns a Respond action)
+    let mut get_session_req = AuthRequest::new(HttpMethod::Get, "/get-session");
+    get_session_req
+        .headers
+        .insert("origin".to_string(), "http://localhost:3000".to_string());
+    get_session_req
+        .headers
+        .insert("x-api-key".to_string(), raw_key);
+
+    let get_session_resp = auth
+        .handle_request(get_session_req)
+        .await
+        .expect("get-session via api-key failed");
+
+    assert_eq!(get_session_resp.status, 200);
+    let gs_json: serde_json::Value = serde_json::from_slice(&get_session_resp.body).unwrap();
+    assert!(
+        gs_json["user"].is_object(),
+        "get-session via API key must return user object"
+    );
+    assert_eq!(
+        gs_json["user"]["email"], "apikey_session@example.com",
+        "get-session must return the correct user"
+    );
+}
+
+/// Verify that without `enableSessionForAPIKeys`, the x-api-key header is ignored
+/// and protected endpoints return unauthenticated.
+#[tokio::test]
+async fn test_api_key_without_session_emulation_does_not_inject() {
+    // Default ApiKeyPlugin has enable_session_for_api_keys = false
+    let auth = create_test_auth().await;
+
+    let (token, _) = signup_user(
+        &auth,
+        "apikey_nosess@example.com",
+        "password123",
+        "AK NoSess",
+    )
+    .await;
+
+    // Create an API key
+    let create_req = post_json_with_auth(
+        "/api-key/create",
+        serde_json::json!({"name": "no-session-key"}),
+        &token,
+    );
+    let create_resp = auth.handle_request(create_req).await.unwrap();
+    let create_json: serde_json::Value = serde_json::from_slice(&create_resp.body).unwrap();
+    let raw_key = create_json["key"].as_str().unwrap();
+
+    // Try to call a protected endpoint with only x-api-key (no Bearer)
+    let mut req = AuthRequest::new(HttpMethod::Post, "/update-user");
+    req.body = Some(
+        serde_json::json!({"name": "Should Fail"})
+            .to_string()
+            .into_bytes(),
+    );
+    req.headers
+        .insert("content-type".to_string(), "application/json".to_string());
+    req.headers
+        .insert("origin".to_string(), "http://localhost:3000".to_string());
+    req.headers
+        .insert("x-api-key".to_string(), raw_key.to_string());
+
+    let resp = auth
+        .handle_request(req)
+        .await
+        .expect("request should not panic");
+
+    // Should fail because session emulation is disabled
+    assert_eq!(
+        resp.status, 401,
+        "without enableSessionForAPIKeys, api key should NOT inject a session"
+    );
+}
+
 /// Spec: POST /revoke-session => { status: bool }
 #[tokio::test]
 async fn test_revoke_session_response_shape() {
@@ -828,5 +980,526 @@ async fn test_revoke_session_response_shape() {
         json["status"].is_boolean(),
         "status must be a boolean, got: {:?}",
         json
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Fullstack e2e tests for API Key — virtual session, rate limiting, remaining,
+// refill, permissions, concurrent rate limiting, delete expired, auth checks
+// ---------------------------------------------------------------------------
+
+/// Helper: create an auth instance with session-for-api-keys enabled.
+async fn create_auth_with_api_key_session() -> BetterAuth<MemoryDatabaseAdapter> {
+    AuthBuilder::new(test_config())
+        .database(MemoryDatabaseAdapter::new())
+        .plugin(EmailPasswordPlugin::new().enable_signup(true))
+        .plugin(SessionManagementPlugin::new())
+        .plugin(
+            ApiKeyPlugin::builder()
+                .enable_session_for_api_keys(true)
+                .build(),
+        )
+        .build()
+        .await
+        .expect("Failed to create auth with session-for-api-keys")
+}
+
+/// Helper: sign up + create an API key with custom body, return (token, raw_key, user_id).
+async fn setup_user_with_api_key(
+    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    email: &str,
+    key_body: serde_json::Value,
+) -> (String, String, String) {
+    let (token, signup_json) = signup_user(auth, email, "password123", "E2E User").await;
+    let user_id = signup_json["user"]["id"]
+        .as_str()
+        .expect("user id")
+        .to_string();
+
+    let create_req = post_json_with_auth("/api-key/create", key_body, &token);
+    let create_resp = auth.handle_request(create_req).await.unwrap();
+    assert_eq!(create_resp.status, 200, "api-key/create should succeed");
+    let create_json: serde_json::Value = serde_json::from_slice(&create_resp.body).unwrap();
+    let raw_key = create_json["key"].as_str().expect("raw key").to_string();
+
+    (token, raw_key, user_id)
+}
+
+/// Helper: build a request with only x-api-key header (no Bearer token).
+fn api_key_request(method: HttpMethod, path: &str, raw_key: &str) -> AuthRequest {
+    let mut req = AuthRequest::new(method, path);
+    req.headers
+        .insert("x-api-key".to_string(), raw_key.to_string());
+    req.headers
+        .insert("origin".to_string(), "http://localhost:3000".to_string());
+    req
+}
+
+/// E2E 1: Virtual session creates NO database session.
+///
+/// After authenticating via API key, the session count for the user must
+/// remain unchanged — no real session row is created.
+#[tokio::test]
+async fn e2e_virtual_session_creates_no_db_session() {
+    let auth = create_auth_with_api_key_session().await;
+    let (_token, raw_key, user_id) = setup_user_with_api_key(
+        &auth,
+        "e2e_nosess@example.com",
+        serde_json::json!({"name": "no-session-key"}),
+    )
+    .await;
+
+    // Count sessions before the API-key request
+    let sessions_before = auth
+        .database()
+        .get_user_sessions(&user_id)
+        .await
+        .unwrap()
+        .len();
+
+    // Send a protected request using only x-api-key
+    let mut req = api_key_request(HttpMethod::Post, "/update-user", &raw_key);
+    req.body = Some(
+        serde_json::json!({"name": "Updated"})
+            .to_string()
+            .into_bytes(),
+    );
+    req.headers
+        .insert("content-type".to_string(), "application/json".to_string());
+
+    let resp = auth
+        .handle_request(req)
+        .await
+        .expect("request should not panic");
+    assert_eq!(resp.status, 200, "update-user via API key should succeed");
+
+    // Count sessions after — must be identical
+    let sessions_after = auth
+        .database()
+        .get_user_sessions(&user_id)
+        .await
+        .unwrap()
+        .len();
+    assert_eq!(
+        sessions_before, sessions_after,
+        "No new database sessions should be created by API-key auth"
+    );
+}
+
+/// E2E 2: Virtual session on /get-session returns synthetic response.
+///
+/// The before_request hook intercepts /get-session and returns a synthetic
+/// response containing user and session-like data without a DB session.
+#[tokio::test]
+async fn e2e_virtual_session_get_session_returns_synthetic() {
+    let auth = create_auth_with_api_key_session().await;
+    let (_token, raw_key, user_id) = setup_user_with_api_key(
+        &auth,
+        "e2e_getsess@example.com",
+        serde_json::json!({"name": "get-session-key"}),
+    )
+    .await;
+
+    let req = api_key_request(HttpMethod::Get, "/get-session", &raw_key);
+    let resp = auth.handle_request(req).await.expect("get-session failed");
+    assert_eq!(resp.status, 200);
+
+    let json: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    assert!(json["user"].is_object(), "must contain user object");
+    assert_eq!(json["user"]["id"], user_id, "user id must match");
+    assert_eq!(
+        json["user"]["email"], "e2e_getsess@example.com",
+        "user email must match"
+    );
+    assert!(json["session"].is_object(), "must contain session object");
+    assert!(
+        json["session"]["id"].is_string(),
+        "session.id must be present"
+    );
+    assert_eq!(
+        json["session"]["userId"], user_id,
+        "session.userId must match"
+    );
+}
+
+/// E2E 3: Rate limiting — 3rd request fails with RATE_LIMITED.
+///
+/// Create an API key with rateLimitEnabled + rateLimitMax=2 and a 60-second
+/// window. The first two verify calls return `valid: true`; the third
+/// returns `valid: false` with error code `RATE_LIMITED`.
+///
+/// Note: `handle_verify` always returns HTTP 200 with a structured
+/// `{valid, error, key}` response — rate-limit failures are conveyed
+/// inside the body, not via HTTP status.
+#[tokio::test]
+async fn e2e_rate_limiting_third_request_fails() {
+    let auth = create_test_auth().await;
+    let (_token, raw_key, _user_id) = setup_user_with_api_key(
+        &auth,
+        "e2e_ratelimit@example.com",
+        serde_json::json!({
+            "name": "rate-limited-key",
+            "rateLimitEnabled": true,
+            "rateLimitMax": 2,
+            "rateLimitTimeWindow": 60000
+        }),
+    )
+    .await;
+
+    let resp1 = auth
+        .handle_request(post_json(
+            "/api-key/verify",
+            serde_json::json!({"key": raw_key}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp1.status, 200);
+    let j1: serde_json::Value = serde_json::from_slice(&resp1.body).unwrap();
+    assert_eq!(j1["valid"], true, "1st verify should be valid");
+
+    let resp2 = auth
+        .handle_request(post_json(
+            "/api-key/verify",
+            serde_json::json!({"key": raw_key}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp2.status, 200);
+    let j2: serde_json::Value = serde_json::from_slice(&resp2.body).unwrap();
+    assert_eq!(j2["valid"], true, "2nd verify should be valid");
+
+    let resp3 = auth
+        .handle_request(post_json(
+            "/api-key/verify",
+            serde_json::json!({"key": raw_key}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp3.status, 200);
+    let j3: serde_json::Value = serde_json::from_slice(&resp3.body).unwrap();
+    assert_eq!(
+        j3["valid"], false,
+        "3rd verify should be invalid (rate-limited)"
+    );
+    assert_eq!(
+        j3["error"]["code"], "RATE_LIMITED",
+        "error code must be RATE_LIMITED"
+    );
+}
+
+/// E2E 4: Remaining consumption — 3rd request returns `valid: false`
+/// with USAGE_EXCEEDED.
+///
+/// Create an API key with remaining=2 and no refill configuration.
+/// After two verifications, the key is exhausted.
+///
+/// Note: `handle_verify` always returns HTTP 200; the failure is in the
+/// response body `{valid: false, error: {code: "USAGE_EXCEEDED"}}`.
+#[tokio::test]
+async fn e2e_remaining_consumption_third_fails() {
+    let auth = create_test_auth().await;
+    let (_token, raw_key, _user_id) = setup_user_with_api_key(
+        &auth,
+        "e2e_remaining@example.com",
+        serde_json::json!({
+            "name": "remaining-key",
+            "remaining": 2
+        }),
+    )
+    .await;
+
+    let resp1 = auth
+        .handle_request(post_json(
+            "/api-key/verify",
+            serde_json::json!({"key": raw_key}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp1.status, 200);
+    let j1: serde_json::Value = serde_json::from_slice(&resp1.body).unwrap();
+    assert_eq!(j1["valid"], true, "1st verify should be valid");
+
+    let resp2 = auth
+        .handle_request(post_json(
+            "/api-key/verify",
+            serde_json::json!({"key": raw_key}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp2.status, 200);
+    let j2: serde_json::Value = serde_json::from_slice(&resp2.body).unwrap();
+    assert_eq!(j2["valid"], true, "2nd verify should be valid");
+
+    let resp3 = auth
+        .handle_request(post_json(
+            "/api-key/verify",
+            serde_json::json!({"key": raw_key}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp3.status, 200);
+    let j3: serde_json::Value = serde_json::from_slice(&resp3.body).unwrap();
+    assert_eq!(
+        j3["valid"], false,
+        "3rd verify should be invalid (usage exceeded)"
+    );
+    assert_eq!(
+        j3["error"]["code"], "USAGE_EXCEEDED",
+        "error code must be USAGE_EXCEEDED"
+    );
+}
+
+/// E2E 5: Refill logic — remaining resets to refillAmount after interval.
+///
+/// Create a key with remaining=1, refillInterval=1000ms, refillAmount=5.
+/// Verify once (consuming the only use), then immediately verify again
+/// (should fail with USAGE_EXCEEDED), wait >1s, verify again — the key
+/// should have been refilled and the verify should succeed.
+#[tokio::test]
+async fn e2e_refill_resets_after_interval() {
+    let auth = create_test_auth().await;
+    let (_token, raw_key, _user_id) = setup_user_with_api_key(
+        &auth,
+        "e2e_refill@example.com",
+        serde_json::json!({
+            "name": "refill-key",
+            "remaining": 1,
+            "refillInterval": 1000,
+            "refillAmount": 5
+        }),
+    )
+    .await;
+
+    // First verify — consumes the only remaining use
+    let resp1 = auth
+        .handle_request(post_json(
+            "/api-key/verify",
+            serde_json::json!({"key": raw_key}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp1.status, 200);
+    let j1: serde_json::Value = serde_json::from_slice(&resp1.body).unwrap();
+    assert_eq!(j1["valid"], true, "1st verify should be valid");
+
+    // Second verify immediately — should fail (remaining exhausted)
+    let resp2 = auth
+        .handle_request(post_json(
+            "/api-key/verify",
+            serde_json::json!({"key": raw_key}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp2.status, 200);
+    let j2: serde_json::Value = serde_json::from_slice(&resp2.body).unwrap();
+    assert_eq!(
+        j2["valid"], false,
+        "2nd verify should be invalid (remaining exhausted)"
+    );
+
+    // Wait for refill interval to elapse
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+
+    // Third verify after refill — should succeed
+    let resp3 = auth
+        .handle_request(post_json(
+            "/api-key/verify",
+            serde_json::json!({"key": raw_key}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp3.status, 200);
+    let j3: serde_json::Value = serde_json::from_slice(&resp3.body).unwrap();
+    assert_eq!(j3["valid"], true, "3rd verify after refill should be valid");
+}
+
+/// E2E 6: Permissions — verify with wrong permissions fails.
+///
+/// Create a key with permissions {"admin": ["read"]}, then attempt to
+/// verify with required permissions {"admin": ["write"]}.
+///
+/// Note: permission failures are returned as `{valid: false, error:
+/// {code: "KEY_NOT_FOUND"}}` at HTTP 200 (matching the TS implementation
+/// which does not reveal that the key exists but lacks permissions).
+#[tokio::test]
+async fn e2e_permissions_validation() {
+    let auth = create_test_auth().await;
+    let (_token, raw_key, _user_id) = setup_user_with_api_key(
+        &auth,
+        "e2e_perms@example.com",
+        serde_json::json!({
+            "name": "perm-key",
+            "permissions": {"admin": ["read"]}
+        }),
+    )
+    .await;
+
+    // Verify with matching permissions — should succeed
+    let req_ok = post_json(
+        "/api-key/verify",
+        serde_json::json!({
+            "key": raw_key,
+            "permissions": {"admin": ["read"]}
+        }),
+    );
+    let resp_ok = auth.handle_request(req_ok).await.unwrap();
+    assert_eq!(resp_ok.status, 200);
+    let j_ok: serde_json::Value = serde_json::from_slice(&resp_ok.body).unwrap();
+    assert_eq!(
+        j_ok["valid"], true,
+        "verify with correct permissions should be valid"
+    );
+
+    // Verify with wrong permissions — should return valid=false
+    let req_fail = post_json(
+        "/api-key/verify",
+        serde_json::json!({
+            "key": raw_key,
+            "permissions": {"admin": ["write"]}
+        }),
+    );
+    let resp_fail = auth.handle_request(req_fail).await.unwrap();
+    assert_eq!(resp_fail.status, 200);
+    let j_fail: serde_json::Value = serde_json::from_slice(&resp_fail.body).unwrap();
+    assert_eq!(
+        j_fail["valid"], false,
+        "verify with wrong permissions should be invalid"
+    );
+    assert_eq!(
+        j_fail["error"]["code"], "KEY_NOT_FOUND",
+        "permission failure returns KEY_NOT_FOUND (matching TS behaviour)"
+    );
+}
+
+/// E2E 7: Concurrent rate limiting — sequential requests respect the limit.
+///
+/// With rateLimitEnabled + rateLimitMax=2, send 5 sequential verify
+/// requests. Exactly 2 should return `valid: true` and 3 should return
+/// `valid: false` with error code RATE_LIMITED.
+#[tokio::test]
+async fn e2e_concurrent_rate_limiting_sequential() {
+    let auth = create_test_auth().await;
+    let (_token, raw_key, _user_id) = setup_user_with_api_key(
+        &auth,
+        "e2e_concurrent_rl@example.com",
+        serde_json::json!({
+            "name": "concurrent-rl-key",
+            "rateLimitEnabled": true,
+            "rateLimitMax": 2,
+            "rateLimitTimeWindow": 60000
+        }),
+    )
+    .await;
+
+    let mut successes = 0u32;
+    let mut rate_limited = 0u32;
+
+    for _ in 0..5 {
+        let req = post_json("/api-key/verify", serde_json::json!({"key": raw_key}));
+        let resp = auth.handle_request(req).await.unwrap();
+        assert_eq!(resp.status, 200);
+        let j: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+        if j["valid"] == true {
+            successes += 1;
+        } else {
+            rate_limited += 1;
+        }
+    }
+
+    assert_eq!(successes, 2, "exactly 2 requests should succeed");
+    assert_eq!(rate_limited, 3, "exactly 3 requests should be rate-limited");
+}
+
+/// E2E 8: delete_expired_api_keys works via the fullstack endpoint.
+///
+/// Create an API key with a very short expiry, wait for it to expire,
+/// then call the delete-all-expired endpoint and verify the key is gone.
+#[tokio::test]
+async fn e2e_delete_expired_api_keys() {
+    let auth = create_test_auth().await;
+    let (token, _raw_key, _user_id) = setup_user_with_api_key(
+        &auth,
+        "e2e_expire@example.com",
+        serde_json::json!({
+            "name": "expire-key",
+            "expiresIn": 1
+        }),
+    )
+    .await;
+
+    // Wait for the key to expire (expiresIn=1 second)
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+
+    // Call the delete-all-expired endpoint (requires auth)
+    let req = post_json_with_auth(
+        "/api-key/delete-all-expired-api-keys",
+        serde_json::json!({}),
+        &token,
+    );
+    let resp = auth.handle_request(req).await.unwrap();
+    assert_eq!(
+        resp.status, 200,
+        "delete-all-expired should succeed with auth"
+    );
+
+    let json: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    assert!(
+        json["deleted"].is_number(),
+        "response should contain 'deleted' count, got: {:?}",
+        json
+    );
+    let deleted = json["deleted"].as_u64().unwrap();
+    assert!(deleted >= 1, "at least 1 expired key should be deleted");
+
+    // Verify the key is actually gone — list should be empty
+    let list_req = get_with_auth("/api-key/list", &token);
+    let list_resp = auth.handle_request(list_req).await.unwrap();
+    assert_eq!(list_resp.status, 200);
+    let keys: Vec<serde_json::Value> = serde_json::from_slice(&list_resp.body).unwrap();
+    assert_eq!(keys.len(), 0, "expired key should have been deleted");
+}
+
+/// E2E 9: delete-all-expired without auth returns 401.
+#[tokio::test]
+async fn e2e_delete_expired_unauthenticated_returns_401() {
+    let auth = create_test_auth().await;
+
+    let req = post_json(
+        "/api-key/delete-all-expired-api-keys",
+        serde_json::json!({}),
+    );
+    let resp = auth.handle_request(req).await.unwrap();
+    assert_eq!(
+        resp.status, 401,
+        "delete-all-expired without auth should return 401"
+    );
+}
+
+/// E2E 10: virtual_user_id cannot be set by external callers (type-system enforced).
+///
+/// This is a compile-time guarantee: `virtual_user_id` is `pub(crate)` on
+/// `AuthRequest`, so external crates cannot construct `AuthRequest { ...,
+/// virtual_user_id: Some("forged") }`. We verify at runtime that requests
+/// built via the public API always have `virtual_user_id() == None`.
+#[tokio::test]
+async fn e2e_virtual_user_id_not_settable_externally() {
+    // AuthRequest::new always initialises virtual_user_id to None
+    let req = AuthRequest::new(HttpMethod::Get, "/test");
+    assert!(
+        req.virtual_user_id().is_none(),
+        "AuthRequest::new must initialise virtual_user_id to None"
+    );
+
+    // AuthRequest::from_parts always initialises virtual_user_id to None
+    let req2 = AuthRequest::from_parts(
+        HttpMethod::Post,
+        "/test".to_string(),
+        std::collections::HashMap::new(),
+        None,
+        std::collections::HashMap::new(),
+    );
+    assert!(
+        req2.virtual_user_id().is_none(),
+        "AuthRequest::from_parts must initialise virtual_user_id to None"
     );
 }

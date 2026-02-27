@@ -120,6 +120,7 @@ mod tests {
             headers,
             body: None,
             query: HashMap::new(),
+            virtual_user_id: None,
         }
     }
 
@@ -180,6 +181,7 @@ mod tests {
             },
             body: None,
             query: HashMap::new(),
+            virtual_user_id: None,
         };
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }

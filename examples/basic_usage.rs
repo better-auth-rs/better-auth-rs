@@ -281,13 +281,13 @@ async fn send(
         headers.insert("authorization".to_string(), format!("Bearer {}", token));
     }
 
-    let request = AuthRequest {
+    let request = AuthRequest::from_parts(
         method,
-        path: path.to_string(),
+        path.to_string(),
         headers,
-        body: body.map(|b| b.to_string().into_bytes()),
-        query: HashMap::new(),
-    };
+        body.map(|b| b.to_string().into_bytes()),
+        HashMap::new(),
+    );
 
     auth.handle_request(request).await.unwrap()
 }

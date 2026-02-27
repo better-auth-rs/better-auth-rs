@@ -484,13 +484,13 @@ mod tests {
             "email": email,
             "password": password,
         });
-        AuthRequest {
-            method: HttpMethod::Post,
-            path: "/sign-up/email".to_string(),
-            headers: HashMap::new(),
-            body: Some(body.to_string().into_bytes()),
-            query: HashMap::new(),
-        }
+        AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/sign-up/email".to_string(),
+            HashMap::new(),
+            Some(body.to_string().into_bytes()),
+            HashMap::new(),
+        )
     }
 
     #[tokio::test]
@@ -605,13 +605,13 @@ mod tests {
             "email": "hasher@example.com",
             "password": "Password123!",
         });
-        let signin_req = AuthRequest {
-            method: HttpMethod::Post,
-            path: "/sign-in/email".to_string(),
-            headers: HashMap::new(),
-            body: Some(signin_body.to_string().into_bytes()),
-            query: HashMap::new(),
-        };
+        let signin_req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/sign-in/email".to_string(),
+            HashMap::new(),
+            Some(signin_body.to_string().into_bytes()),
+            HashMap::new(),
+        );
         let response = plugin.handle_sign_in(&signin_req, &ctx).await.unwrap();
         assert_eq!(response.status, 200);
 
@@ -620,13 +620,13 @@ mod tests {
             "email": "hasher@example.com",
             "password": "WrongPassword!",
         });
-        let bad_req = AuthRequest {
-            method: HttpMethod::Post,
-            path: "/sign-in/email".to_string(),
-            headers: HashMap::new(),
-            body: Some(bad_body.to_string().into_bytes()),
-            query: HashMap::new(),
-        };
+        let bad_req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/sign-in/email".to_string(),
+            HashMap::new(),
+            Some(bad_body.to_string().into_bytes()),
+            HashMap::new(),
+        );
         let err = plugin.handle_sign_in(&bad_req, &ctx).await.unwrap_err();
         assert_eq!(err.to_string(), AuthError::InvalidCredentials.to_string());
     }

@@ -4,9 +4,9 @@ use serde::Deserialize;
 
 use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-    DatabaseAdapter, DatabaseHooks, DeleteUserResponse, EmailProvider, HttpMethod, OkResponse,
-    OpenApiBuilder, OpenApiSpec, SessionManager, StatusMessageResponse, StatusResponse, UpdateUser,
-    UpdateUserRequest, core_paths,
+    BeforeRequestAction, DatabaseAdapter, DatabaseHooks, DeleteUserResponse, EmailProvider,
+    HttpMethod, OkResponse, OpenApiBuilder, OpenApiSpec, SessionManager, StatusMessageResponse,
+    StatusResponse, UpdateUser, UpdateUserRequest, core_paths,
     entity::{AuthAccount, AuthSession, AuthUser, AuthVerification},
     middleware::{
         self, BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig,
@@ -235,8 +235,8 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// Errors from plugins and core handlers are automatically converted
     /// into standardized JSON responses via [`AuthError::into_response`],
     /// producing `{ "message": "..." }` with the appropriate HTTP status code.
-    pub async fn handle_request(&self, req: AuthRequest) -> AuthResult<AuthResponse> {
-        match self.handle_request_inner(&req).await {
+    pub async fn handle_request(&self, mut req: AuthRequest) -> AuthResult<AuthResponse> {
+        match self.handle_request_inner(&mut req).await {
             Ok(response) => {
                 // Run after-request middleware chain
                 middleware::run_after(&self.middlewares, &req, response).await
@@ -250,13 +250,15 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     }
 
     /// Inner request handler that may return errors.
-    async fn handle_request_inner(&self, req: &AuthRequest) -> AuthResult<AuthResponse> {
+    async fn handle_request_inner(&self, req: &mut AuthRequest) -> AuthResult<AuthResponse> {
         // Run before-request middleware chain
         if let Some(response) = middleware::run_before(&self.middlewares, req).await? {
             return Ok(response);
         }
 
         // Strip base_path prefix from the request path for internal routing.
+        // This happens BEFORE plugin hooks so that `before_request` sees the
+        // same normalised path that `on_request` / core handlers use.
         // External callers send e.g. "/api/auth/sign-in/email"; internally
         // handlers match against "/sign-in/email".
         let base_path = &self.config.base_path;
@@ -266,19 +268,42 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
             req.path()
         };
 
-        // Check if this path is disabled
-        if self.config.is_path_disabled(stripped_path) {
-            return Err(AuthError::not_found("This endpoint has been disabled"));
-        }
-
-        // Build a request with the stripped path for internal dispatch
-        let internal_req = if stripped_path != req.path() {
+        // Build a request with the stripped path for all subsequent dispatch
+        let mut internal_req = if stripped_path != req.path() {
             let mut r = req.clone();
             r.path = stripped_path.to_string();
             r
         } else {
             req.clone()
         };
+
+        // Run plugin before_request hooks (e.g. API-key → session emulation)
+        // Plugins now see the normalised (base_path-stripped) path.
+        for plugin in &self.plugins {
+            if let Some(action) = plugin.before_request(&internal_req, &self.context).await? {
+                match action {
+                    BeforeRequestAction::Respond(response) => {
+                        return Ok(response);
+                    }
+                    BeforeRequestAction::InjectSession {
+                        user_id,
+                        session_token: _,
+                    } => {
+                        // Set the virtual user id on the request so that
+                        // `extract_current_user` can resolve the user without
+                        // creating a real database session.  This mirrors the
+                        // TypeScript `ctx.context.session` virtual-session
+                        // approach — no DB writes on every API-key request.
+                        internal_req.set_virtual_user_id(user_id);
+                    }
+                }
+            }
+        }
+
+        // Check if this path is disabled
+        if self.config.is_path_disabled(internal_req.path()) {
+            return Err(AuthError::not_found("This endpoint has been disabled"));
+        }
 
         // Handle core endpoints first
         if let Some(response) = self.handle_core_request(&internal_req).await? {
@@ -512,7 +537,21 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     }
 
     /// Extract current user from request (validates session).
+    ///
+    /// If a virtual session was injected by a `before_request` hook (e.g.
+    /// API-key session emulation), the user is resolved directly by ID
+    /// **without** a database session lookup — matching the TypeScript
+    /// `ctx.context.session` virtual-session behaviour.
     async fn extract_current_user(&self, req: &AuthRequest) -> AuthResult<DB::User> {
+        // Fast path: virtual session injected by before_request hook
+        if let Some(uid) = req.virtual_user_id() {
+            return self
+                .database
+                .get_user_by_id(uid)
+                .await?
+                .ok_or(AuthError::UserNotFound);
+        }
+
         let token = self
             .session_manager
             .extract_session_token(req)

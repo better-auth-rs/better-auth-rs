@@ -210,13 +210,9 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
         Err(_) => None,
     };
 
-    Ok(AuthRequest {
-        method,
-        path,
-        headers,
-        body: body_bytes,
-        query,
-    })
+    Ok(AuthRequest::from_parts(
+        method, path, headers, body_bytes, query,
+    ))
 }
 
 #[cfg(feature = "axum")]
