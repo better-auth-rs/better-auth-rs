@@ -902,6 +902,76 @@ async fn test_enable_session_for_api_keys_injects_session() {
     );
 }
 
+/// disabled_paths must be enforced before plugin before_request short-circuits.
+#[tokio::test]
+async fn test_disabled_path_blocks_api_key_get_session_short_circuit() {
+    let auth = AuthBuilder::new(test_config().disabled_path("/get-session"))
+        .database(MemoryDatabaseAdapter::new())
+        .plugin(EmailPasswordPlugin::new().enable_signup(true))
+        .plugin(SessionManagementPlugin::new())
+        .plugin(
+            ApiKeyPlugin::builder()
+                .enable_session_for_api_keys(true)
+                .build(),
+        )
+        .build()
+        .await
+        .expect("Failed to create auth with disabled get-session");
+
+    let (token, _) = signup_user(&auth, "disabled_get_session@example.com", "password123", "DG")
+        .await;
+
+    let create_req = post_json_with_auth(
+        "/api-key/create",
+        serde_json::json!({"name": "disabled-get-session-key"}),
+        &token,
+    );
+    let create_resp = auth.handle_request(create_req).await.unwrap();
+    assert_eq!(create_resp.status, 200);
+    let create_json: serde_json::Value = serde_json::from_slice(&create_resp.body).unwrap();
+    let raw_key = create_json["key"]
+        .as_str()
+        .expect("create response must contain raw key");
+
+    let mut get_session_req = AuthRequest::new(HttpMethod::Get, "/get-session");
+    get_session_req
+        .headers
+        .insert("origin".to_string(), "http://localhost:3000".to_string());
+    get_session_req
+        .headers
+        .insert("x-api-key".to_string(), raw_key.to_string());
+
+    let resp = auth.handle_request(get_session_req).await.unwrap();
+    assert_eq!(resp.status, 404, "disabled path must return 404");
+}
+
+/// Caller-supplied virtual_user_id must be ignored by handle_request entry.
+#[tokio::test]
+async fn test_handle_request_ignores_caller_supplied_virtual_user_id() {
+    let auth = create_test_auth().await;
+    let (_token, signup_json) = signup_user(
+        &auth,
+        "forged_virtual_user@example.com",
+        "password123",
+        "FVU",
+    )
+    .await;
+
+    let user_id = signup_json["user"]["id"]
+        .as_str()
+        .expect("signup response must contain user id")
+        .to_string();
+
+    let mut req = post_json("/update-user", serde_json::json!({ "name": "should-fail" }));
+    req.set_virtual_user_id(user_id);
+
+    let resp = auth.handle_request(req).await.unwrap();
+    assert_eq!(
+        resp.status, 401,
+        "request without real session token must remain unauthorized"
+    );
+}
+
 /// Verify that without `enableSessionForAPIKeys`, the x-api-key header is ignored
 /// and protected endpoints return unauthenticated.
 #[tokio::test]
