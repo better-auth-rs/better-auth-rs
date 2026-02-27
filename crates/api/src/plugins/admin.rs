@@ -13,6 +13,8 @@ use better_auth_core::{
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
+use super::StatusResponse;
+
 // ---------------------------------------------------------------------------
 // Plugin & config
 // ---------------------------------------------------------------------------
@@ -196,11 +198,6 @@ struct ListSessionsResponse<S: Serialize> {
 #[derive(Debug, Serialize)]
 struct SuccessResponse {
     success: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct StatusResponse {
-    status: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -919,6 +916,7 @@ impl AdminPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::test_helpers;
     use better_auth_core::adapters::{AccountOps, MemoryDatabaseAdapter, SessionOps, UserOps};
     use better_auth_core::entity::AuthAccount;
     use better_auth_core::{CreateSession, Session, User};
@@ -933,57 +931,31 @@ mod tests {
         User,
         Session,
     ) {
-        let config = Arc::new(better_auth_core::AuthConfig::new(
-            "test-secret-key-at-least-32-chars-long",
-        ));
-        let database = Arc::new(MemoryDatabaseAdapter::new());
-        let ctx = AuthContext::new(config, database.clone());
+        let ctx = test_helpers::create_test_context();
 
         // Create admin user
-        let admin = database
-            .create_user(
-                CreateUser::new()
-                    .with_email("admin@example.com")
-                    .with_name("Admin")
-                    .with_role("admin"),
-            )
-            .await
-            .unwrap();
-
-        let admin_session = database
-            .create_session(CreateSession {
-                user_id: admin.id.clone(),
-                expires_at: Utc::now() + Duration::hours(24),
-                ip_address: None,
-                user_agent: None,
-                impersonated_by: None,
-                active_organization_id: None,
-            })
-            .await
-            .unwrap();
+        let admin = test_helpers::create_user(
+            &ctx,
+            CreateUser::new()
+                .with_email("admin@example.com")
+                .with_name("Admin")
+                .with_role("admin"),
+        )
+        .await;
+        let admin_session =
+            test_helpers::create_session(&ctx, admin.id.clone(), Duration::hours(24)).await;
 
         // Create regular user
-        let user = database
-            .create_user(
-                CreateUser::new()
-                    .with_email("user@example.com")
-                    .with_name("Regular User")
-                    .with_role("user"),
-            )
-            .await
-            .unwrap();
-
-        let user_session = database
-            .create_session(CreateSession {
-                user_id: user.id.clone(),
-                expires_at: Utc::now() + Duration::hours(24),
-                ip_address: None,
-                user_agent: None,
-                impersonated_by: None,
-                active_organization_id: None,
-            })
-            .await
-            .unwrap();
+        let user = test_helpers::create_user(
+            &ctx,
+            CreateUser::new()
+                .with_email("user@example.com")
+                .with_name("Regular User")
+                .with_role("user"),
+        )
+        .await;
+        let user_session =
+            test_helpers::create_session(&ctx, user.id.clone(), Duration::hours(24)).await;
 
         (ctx, admin, admin_session, user, user_session)
     }
@@ -994,16 +966,7 @@ mod tests {
         token: &str,
         body: Option<serde_json::Value>,
     ) -> AuthRequest {
-        let mut headers = HashMap::new();
-        headers.insert("authorization".to_string(), format!("Bearer {}", token));
-
-        AuthRequest {
-            method,
-            path: path.to_string(),
-            headers,
-            body: body.map(|b| serde_json::to_vec(&b).unwrap()),
-            query: HashMap::new(),
-        }
+        test_helpers::create_auth_json_request_no_query(method, path, Some(token), body)
     }
 
     fn make_request_with_query(
@@ -1013,16 +976,7 @@ mod tests {
         body: Option<serde_json::Value>,
         query: HashMap<String, String>,
     ) -> AuthRequest {
-        let mut headers = HashMap::new();
-        headers.insert("authorization".to_string(), format!("Bearer {}", token));
-
-        AuthRequest {
-            method,
-            path: path.to_string(),
-            headers,
-            body: body.map(|b| serde_json::to_vec(&b).unwrap()),
-            query,
-        }
+        test_helpers::create_auth_json_request(method, path, Some(token), body, query)
     }
 
     fn json_body(resp: &AuthResponse) -> serde_json::Value {

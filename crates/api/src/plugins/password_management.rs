@@ -14,6 +14,8 @@ use better_auth_core::{AuthSession, AuthUser, AuthVerification, DatabaseAdapter}
 
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
 
+use super::StatusResponse;
+
 /// Type alias for the async password-reset callback to keep Clippy happy.
 pub type OnPasswordResetCallback =
     dyn Fn(serde_json::Value) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync;
@@ -147,11 +149,6 @@ where
 }
 
 // Response structures
-#[derive(Debug, Serialize, Deserialize)]
-struct StatusResponse {
-    status: bool,
-}
-
 #[derive(Debug, Serialize)]
 struct ChangePasswordResponse<U: Serialize> {
     token: Option<String>,
@@ -320,9 +317,9 @@ impl PasswordManagementPlugin {
                 format!("{}?token={}", redirect_to, reset_token)
             } else {
                 // Untrusted origin — fall back to server-side base URL.
-                eprintln!(
-                    "[password-management] Ignoring untrusted redirect_to: {}",
-                    redirect_to
+                tracing::warn!(
+                    redirect_to = %redirect_to,
+                    "Ignoring untrusted redirect_to"
                 );
                 format!(
                     "{}/reset-password?token={}",
@@ -340,9 +337,10 @@ impl PasswordManagementPlugin {
             if let Some(sender) = &self.config.send_reset_password {
                 let user_value = password_utils::serialize_to_value(&user)?;
                 if let Err(e) = sender.send(&user_value, &reset_url, &reset_token).await {
-                    eprintln!(
-                        "[password-management] Custom send_reset_password failed for {}: {}",
-                        forget_req.email, e
+                    tracing::warn!(
+                        email = %forget_req.email,
+                        error = %e,
+                        "Custom send_reset_password callback failed"
                     );
                 }
             } else if let Ok(provider) = ctx.email_provider() {
@@ -358,15 +356,16 @@ impl PasswordManagementPlugin {
                     .send(&forget_req.email, subject, &html, &text)
                     .await
                 {
-                    eprintln!(
-                        "[password-management] Failed to send reset email to {}: {}",
-                        forget_req.email, e
+                    tracing::warn!(
+                        email = %forget_req.email,
+                        error = %e,
+                        "Failed to send password reset email"
                     );
                 }
             } else {
-                eprintln!(
-                    "[password-management] No email provider configured, skipping password reset email for {}",
-                    forget_req.email
+                tracing::warn!(
+                    email = %forget_req.email,
+                    "No email provider configured, skipping password reset email"
                 );
             }
         } // send_email_notifications
@@ -425,16 +424,16 @@ impl PasswordManagementPlugin {
             match password_utils::serialize_to_value(&user) {
                 Ok(user_value) => {
                     if let Err(e) = callback(user_value).await {
-                        eprintln!(
-                            "[password-management] on_password_reset callback failed: {}",
-                            e
+                        tracing::warn!(
+                            error = %e,
+                            "on_password_reset callback failed"
                         );
                     }
                 }
                 Err(e) => {
-                    eprintln!(
-                        "[password-management] Failed to serialize user for on_password_reset callback: {}",
-                        e
+                    tracing::warn!(
+                        error = %e,
+                        "Failed to serialize user for on_password_reset callback"
                     );
                 }
             }
@@ -678,12 +677,12 @@ impl PasswordManagementPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::test_helpers;
     use better_auth_core::adapters::{MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps};
     use better_auth_core::config::{Argon2Config, AuthConfig, PasswordConfig};
-    use better_auth_core::{CreateSession, CreateUser, CreateVerification, Session, User};
-    use chrono::{Duration, Utc};
+    use better_auth_core::{CreateUser, CreateVerification, Session, User};
+    use chrono::Duration;
     use std::collections::HashMap;
-    use std::sync::Arc;
 
     async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>, User, Session)
     {
@@ -697,9 +696,7 @@ mod tests {
             argon2_config: Argon2Config::default(),
         };
 
-        let config = Arc::new(config);
-        let database = Arc::new(MemoryDatabaseAdapter::new());
-        let ctx = AuthContext::new(config.clone(), database.clone());
+        let ctx = test_helpers::create_test_context_with_config(config);
 
         // Create test user with hashed password
         let plugin = PasswordManagementPlugin::new();
@@ -713,40 +710,11 @@ mod tests {
             .with_email("test@example.com")
             .with_name("Test User")
             .with_metadata(metadata);
-        let user = database.create_user(create_user).await.unwrap();
-
-        // Create test session
-        let create_session = CreateSession {
-            user_id: user.id.clone(),
-            expires_at: Utc::now() + Duration::hours(24),
-            ip_address: Some("127.0.0.1".to_string()),
-            user_agent: Some("test-agent".to_string()),
-            impersonated_by: None,
-            active_organization_id: None,
-        };
-        let session = database.create_session(create_session).await.unwrap();
+        let user = test_helpers::create_user(&ctx, create_user).await;
+        let session =
+            test_helpers::create_session(&ctx, user.id.clone(), Duration::hours(24)).await;
 
         (ctx, user, session)
-    }
-
-    fn create_auth_request(
-        method: HttpMethod,
-        path: &str,
-        token: Option<&str>,
-        body: Option<Vec<u8>>,
-    ) -> AuthRequest {
-        let mut headers = HashMap::new();
-        if let Some(token) = token {
-            headers.insert("authorization".to_string(), format!("Bearer {}", token));
-        }
-
-        AuthRequest {
-            method,
-            path: path.to_string(),
-            headers,
-            body,
-            query: HashMap::new(),
-        }
     }
 
     /// Helper: create a reset-password verification token for the given user
@@ -775,7 +743,7 @@ mod tests {
             "redirectTo": "http://localhost:3000/reset"
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/forget-password",
             None,
@@ -799,7 +767,7 @@ mod tests {
             "email": "unknown@example.com"
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/forget-password",
             None,
@@ -827,7 +795,7 @@ mod tests {
             "token": reset_token
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/reset-password",
             None,
@@ -880,7 +848,7 @@ mod tests {
             "token": "invalid_token"
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/reset-password",
             None,
@@ -903,7 +871,7 @@ mod tests {
             "token": reset_token
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/reset-password",
             None,
@@ -925,7 +893,7 @@ mod tests {
             "revokeOtherSessions": "false"
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/change-password",
             Some(&session.token),
@@ -967,7 +935,7 @@ mod tests {
             "revokeOtherSessions": "true"
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/change-password",
             Some(&session.token),
@@ -993,7 +961,7 @@ mod tests {
             "revokeOtherSessions": true
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/change-password",
             Some(&session.token),
@@ -1035,7 +1003,7 @@ mod tests {
             "newPassword": "NewPassword123!"
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/change-password",
             Some(&session.token),
@@ -1065,7 +1033,7 @@ mod tests {
             "revokeOtherSessions": true
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/change-password",
             Some(&session.token),
@@ -1093,7 +1061,7 @@ mod tests {
             "newPassword": "NewPassword123!"
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/change-password",
             Some(&session.token),
@@ -1114,7 +1082,7 @@ mod tests {
             "newPassword": "NewPassword123!"
         });
 
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/change-password",
             None,
@@ -1132,7 +1100,12 @@ mod tests {
 
         let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
 
-        let req = create_auth_request(HttpMethod::Get, "/reset-password/token", None, None);
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Get,
+            "/reset-password/token",
+            None,
+            None,
+        );
 
         let response = plugin
             .handle_reset_password_token(&reset_token, &req, &ctx)
@@ -1192,7 +1165,12 @@ mod tests {
         let plugin = PasswordManagementPlugin::new();
         let (ctx, _user, _session) = create_test_context_with_user().await;
 
-        let req = create_auth_request(HttpMethod::Get, "/reset-password/token", None, None);
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Get,
+            "/reset-password/token",
+            None,
+            None,
+        );
 
         let err = plugin
             .handle_reset_password_token("invalid_token", &req, &ctx)
@@ -1288,7 +1266,7 @@ mod tests {
 
         // Test forget password
         let body = serde_json::json!({"email": "test@example.com"});
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/forget-password",
             None,
@@ -1303,7 +1281,7 @@ mod tests {
             "currentPassword": "Password123!",
             "newPassword": "NewPassword123!"
         });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/change-password",
             Some(&session.token),
@@ -1314,7 +1292,12 @@ mod tests {
         assert_eq!(response.unwrap().status, 200);
 
         // Test invalid route
-        let req = create_auth_request(HttpMethod::Get, "/invalid-route", None, None);
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Get,
+            "/invalid-route",
+            None,
+            None,
+        );
         let response = plugin.on_request(&req, &ctx).await.unwrap();
         assert!(response.is_none());
     }
@@ -1368,7 +1351,7 @@ mod tests {
             "email": "test@example.com",
             "redirectTo": "http://localhost:3000/reset"
         });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/forget-password",
             None,
@@ -1409,7 +1392,7 @@ mod tests {
             "newPassword": "NewPassword123!",
             "token": reset_token
         });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/reset-password",
             None,
@@ -1437,7 +1420,7 @@ mod tests {
             "newPassword": "NewPassword123!",
             "token": reset_token
         });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/reset-password",
             None,
@@ -1471,7 +1454,7 @@ mod tests {
             "newPassword": "NewPassword123!",
             "token": reset_token
         });
-        let req = create_auth_request(
+        let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/reset-password",
             None,
