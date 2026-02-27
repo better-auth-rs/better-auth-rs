@@ -918,8 +918,13 @@ async fn test_disabled_path_blocks_api_key_get_session_short_circuit() {
         .await
         .expect("Failed to create auth with disabled get-session");
 
-    let (token, _) = signup_user(&auth, "disabled_get_session@example.com", "password123", "DG")
-        .await;
+    let (token, _) = signup_user(
+        &auth,
+        "disabled_get_session@example.com",
+        "password123",
+        "DG",
+    )
+    .await;
 
     let create_req = post_json_with_auth(
         "/api-key/create",

@@ -238,13 +238,8 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     pub async fn handle_request(&self, req: AuthRequest) -> AuthResult<AuthResponse> {
         // Ignore any caller-supplied virtual session value; only internal
         // before_request hooks may inject this during dispatch.
-        let mut req = AuthRequest::from_parts(
-            req.method,
-            req.path,
-            req.headers,
-            req.body,
-            req.query,
-        );
+        let mut req =
+            AuthRequest::from_parts(req.method, req.path, req.headers, req.body, req.query);
 
         match self.handle_request_inner(&mut req).await {
             Ok(response) => {
