@@ -235,7 +235,17 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// Errors from plugins and core handlers are automatically converted
     /// into standardized JSON responses via [`AuthError::into_response`],
     /// producing `{ "message": "..." }` with the appropriate HTTP status code.
-    pub async fn handle_request(&self, mut req: AuthRequest) -> AuthResult<AuthResponse> {
+    pub async fn handle_request(&self, req: AuthRequest) -> AuthResult<AuthResponse> {
+        // Ignore any caller-supplied virtual session value; only internal
+        // before_request hooks may inject this during dispatch.
+        let mut req = AuthRequest::from_parts(
+            req.method,
+            req.path,
+            req.headers,
+            req.body,
+            req.query,
+        );
+
         match self.handle_request_inner(&mut req).await {
             Ok(response) => {
                 // Run after-request middleware chain
@@ -277,6 +287,11 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
             req.clone()
         };
 
+        // Check if this path is disabled
+        if self.config.is_path_disabled(internal_req.path()) {
+            return Err(AuthError::not_found("This endpoint has been disabled"));
+        }
+
         // Run plugin before_request hooks (e.g. API-key → session emulation)
         // Plugins now see the normalised (base_path-stripped) path.
         for plugin in &self.plugins {
@@ -298,11 +313,6 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
                     }
                 }
             }
-        }
-
-        // Check if this path is disabled
-        if self.config.is_path_disabled(internal_req.path()) {
-            return Err(AuthError::not_found("This endpoint has been disabled"));
         }
 
         // Handle core endpoints first
