@@ -876,7 +876,10 @@ impl ApiKeyPlugin {
             || update_req.rate_limit_max.is_some()
             || update_req.rate_limit_enabled.is_some()
         {
-            self.rate_limiters.lock().unwrap().remove(&update_req.id);
+            self.rate_limiters
+                .lock()
+                .expect("rate_limiters mutex poisoned")
+                .remove(&update_req.id);
         }
 
         self.maybe_delete_expired(ctx).await;
@@ -902,7 +905,10 @@ impl ApiKeyPlugin {
         ctx.database.delete_api_key(&delete_req.id).await?;
 
         // Evict cached rate limiter for the deleted key
-        self.rate_limiters.lock().unwrap().remove(&delete_req.id);
+        self.rate_limiters
+            .lock()
+            .expect("rate_limiters mutex poisoned")
+            .remove(&delete_req.id);
 
         Ok(AuthResponse::json(
             200,
@@ -995,7 +1001,10 @@ impl ApiKeyPlugin {
         {
             // Delete expired key and evict its cached rate limiter
             let _ = ctx.database.delete_api_key(api_key.id()).await;
-            self.rate_limiters.lock().unwrap().remove(api_key.id());
+            self.rate_limiters
+                .lock()
+                .expect("rate_limiters mutex poisoned")
+                .remove(api_key.id());
             return Err(ApiKeyValidationError::new(ApiKeyErrorCode::KeyExpired));
         }
 
@@ -1020,7 +1029,10 @@ impl ApiKeyPlugin {
         {
             // Usage exhausted, no refill configured -- delete key and evict cache
             let _ = ctx.database.delete_api_key(api_key.id()).await;
-            self.rate_limiters.lock().unwrap().remove(api_key.id());
+            self.rate_limiters
+                .lock()
+                .expect("rate_limiters mutex poisoned")
+                .remove(api_key.id());
             return Err(ApiKeyValidationError::new(ApiKeyErrorCode::UsageExceeded));
         }
 
@@ -1089,6 +1101,13 @@ impl ApiKeyPlugin {
         // Per-key `rate_limit_enabled` takes precedence: if the key
         // explicitly disables rate limiting, skip even when the global
         // default is enabled.
+        // A key is considered to have "explicit" rate-limit configuration
+        // when either `rate_limit_time_window` or `rate_limit_max` is set.
+        // This distinguishes an intentional `enabled=false` (key owner chose
+        // to disable) from the default `false` (no opinion, defer to global).
+        //
+        // Partial configs are valid: if only `time_window` is set, the
+        // missing `max` falls back to the global default (and vice-versa).
         let key_has_explicit_setting =
             api_key.rate_limit_time_window().is_some() || api_key.rate_limit_max().is_some();
         let key_enabled = api_key.rate_limit_enabled();
@@ -1119,7 +1138,10 @@ impl ApiKeyPlugin {
 
         // Get or create the rate limiter for this key
         let limiter = {
-            let mut limiters = self.rate_limiters.lock().unwrap();
+            let mut limiters = self
+                .rate_limiters
+                .lock()
+                .expect("rate_limiters mutex poisoned");
             limiters
                 .entry(key_id)
                 .or_insert_with(|| {
@@ -1157,10 +1179,19 @@ impl ApiKeyPlugin {
         let count = ctx.database.delete_expired_api_keys().await?;
 
         // Best-effort eviction: clear all cached limiters when bulk-deleting.
-        // We don't know which specific keys were deleted, so clearing the
-        // entire cache is the safest approach.
+        // The `delete_expired_api_keys` adapter method returns only a count,
+        // not the set of deleted IDs, so we cannot do targeted eviction.
+        // Clearing the entire cache means active keys temporarily lose their
+        // rate-limit window state and will have a fresh limiter created on
+        // their next request.  This is acceptable because:
+        //   1. Bulk-expire is an infrequent admin operation.
+        //   2. Recreating a limiter is O(1) and only slightly more
+        //      permissive during the reset window.
         if count > 0 {
-            self.rate_limiters.lock().unwrap().clear();
+            self.rate_limiters
+                .lock()
+                .expect("rate_limiters mutex poisoned")
+                .clear();
         }
 
         Ok(AuthResponse::json(
