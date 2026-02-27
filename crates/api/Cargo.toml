@@ -38,6 +38,9 @@ rand = { workspace = true }
 base64 = { workspace = true }
 totp-rs = { workspace = true }
 
+# Logging
+tracing = { workspace = true }
+
 # HTTP client
 reqwest = { workspace = true }
 

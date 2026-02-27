@@ -295,6 +295,7 @@ dependencies = [
  "sha2",
  "tokio",
  "totp-rs",
+ "tracing",
  "url",
  "urlencoding",
  "uuid",
