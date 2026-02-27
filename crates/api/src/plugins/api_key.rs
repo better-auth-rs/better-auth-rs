@@ -655,8 +655,13 @@ impl ApiKeyPlugin {
         Ok(())
     }
 
-    fn validate_name(&self, name: Option<&str>) -> AuthResult<()> {
-        if self.config.require_name && name.is_none() {
+    /// Validate the `name` field.
+    ///
+    /// When `is_create` is true, `require_name` is enforced (name must be
+    /// present).  On updates `require_name` is **not** enforced — the
+    /// caller may be updating unrelated fields without resending the name.
+    fn validate_name(&self, name: Option<&str>, is_create: bool) -> AuthResult<()> {
+        if is_create && self.config.require_name && name.is_none() {
             return Err(api_key_error(ApiKeyErrorCode::NameRequired));
         }
         if let Some(n) = name {
@@ -727,7 +732,7 @@ impl ApiKeyPlugin {
 
         // Validations
         self.validate_prefix(create_req.prefix.as_deref())?;
-        self.validate_name(create_req.name.as_deref())?;
+        self.validate_name(create_req.name.as_deref(), true)?;
         self.validate_metadata(&create_req.metadata)?;
         Self::validate_refill(create_req.refill_interval, create_req.refill_amount)?;
 
@@ -828,7 +833,7 @@ impl ApiKeyPlugin {
         };
 
         // Validations
-        self.validate_name(update_req.name.as_deref())?;
+        self.validate_name(update_req.name.as_deref(), false)?;
         self.validate_metadata(&update_req.metadata)?;
         Self::validate_refill(update_req.refill_interval, update_req.refill_amount)?;
 
@@ -895,6 +900,9 @@ impl ApiKeyPlugin {
         let _existing = helpers::get_owned_api_key(ctx, &delete_req.id, user.id()).await?;
 
         ctx.database.delete_api_key(&delete_req.id).await?;
+
+        // Evict cached rate limiter for the deleted key
+        self.rate_limiters.lock().unwrap().remove(&delete_req.id);
 
         Ok(AuthResponse::json(
             200,
@@ -985,8 +993,9 @@ impl ApiKeyPlugin {
             && let Ok(expires_at) = chrono::DateTime::parse_from_rfc3339(expires_at_str)
             && chrono::Utc::now() > expires_at
         {
-            // Delete expired key
+            // Delete expired key and evict its cached rate limiter
             let _ = ctx.database.delete_api_key(api_key.id()).await;
+            self.rate_limiters.lock().unwrap().remove(api_key.id());
             return Err(ApiKeyValidationError::new(ApiKeyErrorCode::KeyExpired));
         }
 
@@ -1009,8 +1018,9 @@ impl ApiKeyPlugin {
         if let Some(0) = api_key.remaining()
             && api_key.refill_amount().is_none()
         {
-            // Usage exhausted, no refill configured -- delete key
+            // Usage exhausted, no refill configured -- delete key and evict cache
             let _ = ctx.database.delete_api_key(api_key.id()).await;
+            self.rate_limiters.lock().unwrap().remove(api_key.id());
             return Err(ApiKeyValidationError::new(ApiKeyErrorCode::UsageExceeded));
         }
 
@@ -1075,10 +1085,23 @@ impl ApiKeyPlugin {
         &self,
         api_key: &impl AuthApiKey,
     ) -> Result<(), ApiKeyValidationError> {
-        // Determine if rate limiting is enabled for this key
+        // Determine if rate limiting is enabled for this key.
+        // Per-key `rate_limit_enabled` takes precedence: if the key
+        // explicitly disables rate limiting, skip even when the global
+        // default is enabled.
+        let key_has_explicit_setting =
+            api_key.rate_limit_time_window().is_some() || api_key.rate_limit_max().is_some();
         let key_enabled = api_key.rate_limit_enabled();
-        if !key_enabled && !self.config.rate_limit.enabled {
-            return Ok(());
+
+        if !key_enabled {
+            // Key explicitly disabled rate limiting — skip.
+            if key_has_explicit_setting {
+                return Ok(());
+            }
+            // Key has no explicit setting and global is also off — skip.
+            if !self.config.rate_limit.enabled {
+                return Ok(());
+            }
         }
 
         let time_window_ms = api_key
@@ -1132,6 +1155,14 @@ impl ApiKeyPlugin {
         // Require authentication to prevent unauthenticated mass-deletion
         let (_user, _session) = ctx.require_session(req).await?;
         let count = ctx.database.delete_expired_api_keys().await?;
+
+        // Best-effort eviction: clear all cached limiters when bulk-deleting.
+        // We don't know which specific keys were deleted, so clearing the
+        // entire cache is the safest approach.
+        if count > 0 {
+            self.rate_limiters.lock().unwrap().clear();
+        }
+
         Ok(AuthResponse::json(
             200,
             &serde_json::json!({ "deleted": count }),
@@ -1182,6 +1213,13 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for ApiKeyPlugin {
             Some(k) if !k.is_empty() => k.clone(),
             _ => return Ok(None),
         };
+
+        // Skip session emulation for API-key management routes to avoid
+        // double-validating the key (before_request + handle_verify both
+        // call validate_api_key, consuming usage/rate-limit budget twice).
+        if req.path().starts_with("/api-key/") {
+            return Ok(None);
+        }
 
         // Validate the key (reuses the full verify logic)
         let view = self

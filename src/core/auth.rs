@@ -256,9 +256,31 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
             return Ok(response);
         }
 
+        // Strip base_path prefix from the request path for internal routing.
+        // This happens BEFORE plugin hooks so that `before_request` sees the
+        // same normalised path that `on_request` / core handlers use.
+        // External callers send e.g. "/api/auth/sign-in/email"; internally
+        // handlers match against "/sign-in/email".
+        let base_path = &self.config.base_path;
+        let stripped_path = if !base_path.is_empty() && base_path != "/" {
+            req.path().strip_prefix(base_path).unwrap_or(req.path())
+        } else {
+            req.path()
+        };
+
+        // Build a request with the stripped path for all subsequent dispatch
+        let mut internal_req = if stripped_path != req.path() {
+            let mut r = req.clone();
+            r.path = stripped_path.to_string();
+            r
+        } else {
+            req.clone()
+        };
+
         // Run plugin before_request hooks (e.g. API-key → session emulation)
+        // Plugins now see the normalised (base_path-stripped) path.
         for plugin in &self.plugins {
-            if let Some(action) = plugin.before_request(req, &self.context).await? {
+            if let Some(action) = plugin.before_request(&internal_req, &self.context).await? {
                 match action {
                     BeforeRequestAction::Respond(response) => {
                         return Ok(response);
@@ -272,35 +294,17 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
                         // creating a real database session.  This mirrors the
                         // TypeScript `ctx.context.session` virtual-session
                         // approach — no DB writes on every API-key request.
-                        req.set_virtual_user_id(user_id);
+                        internal_req.set_virtual_user_id(user_id);
                     }
                 }
             }
         }
 
-        // Strip base_path prefix from the request path for internal routing.
-        // External callers send e.g. "/api/auth/sign-in/email"; internally
-        // handlers match against "/sign-in/email".
-        let base_path = &self.config.base_path;
-        let stripped_path = if !base_path.is_empty() && base_path != "/" {
-            req.path().strip_prefix(base_path).unwrap_or(req.path())
-        } else {
-            req.path()
-        };
-
         // Check if this path is disabled
-        if self.config.is_path_disabled(stripped_path) {
+        if self.config.is_path_disabled(internal_req.path()) {
             return Err(AuthError::not_found("This endpoint has been disabled"));
         }
 
-        // Build a request with the stripped path for internal dispatch
-        let internal_req = if stripped_path != req.path() {
-            let mut r = req.clone();
-            r.path = stripped_path.to_string();
-            r
-        } else {
-            req.clone()
-        };
         // Handle core endpoints first
         if let Some(response) = self.handle_core_request(&internal_req).await? {
             return Ok(response);
