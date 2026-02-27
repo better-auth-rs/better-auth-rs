@@ -23,7 +23,7 @@ The most comprehensive authentication framework for Rust. Inspired by [Better Au
 
 ```toml
 [dependencies]
-better-auth = "0.7"
+better-auth = "0.8"
 ```
 
 ```rust
