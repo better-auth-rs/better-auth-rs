@@ -3,6 +3,62 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [0.8.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.7.0...v0.8.0) - 2026-02-27
+
+### Bug Fixes
+
+- mermaid theme re-render and openapi script error handling ([#40](https://github.com/better-auth-rs/better-auth-rs/pull/40))
+
+- enforce disabled paths before hooks and sanitize virtual session input ([#43](https://github.com/better-auth-rs/better-auth-rs/pull/43))
+
+
+### CI
+
+- auto-delete release-plz branches on PR close
+
+
+### Documentation
+
+- add better-auth v1.4.19 compatibility badge to README and release notes ([#31](https://github.com/better-auth-rs/better-auth-rs/pull/31))
+
+- add Phase 1-2 documentation with Mermaid diagrams and OpenAPI integration ([#28](https://github.com/better-auth-rs/better-auth-rs/pull/28))
+
+
+### Features
+
+- enhance EmailPassword and PasswordManagement plugins ([#35](https://github.com/better-auth-rs/better-auth-rs/pull/35))
+
+- add core config options (app_name, base_path, trusted_origins, disabled_paths) ([#33](https://github.com/better-auth-rs/better-auth-rs/pull/33))
+
+- database hooks for account/verification + advanced config ([#37](https://github.com/better-auth-rs/better-auth-rs/pull/37))
+
+- add Account and OAuth advanced options ([#32](https://github.com/better-auth-rs/better-auth-rs/pull/32))
+
+- enhance config + refactor: consolidate utils into core/src/utils ([#30](https://github.com/better-auth-rs/better-auth-rs/pull/30))
+
+- add UserManagementPlugin + refactor DRY violations across plugins ([#34](https://github.com/better-auth-rs/better-auth-rs/pull/34))
+
+- implement full API Key plugin with verify, rate limiting, and session emulation ([#38](https://github.com/better-auth-rs/better-auth-rs/pull/38))
+
+- add cookie_cache config, is_session_fresh(), and adapter updated_at fix ([#29](https://github.com/better-auth-rs/better-auth-rs/pull/29))
+
+
+### Refactoring
+
+- use better-auth built-in migrations instead of manual table creation ([#41](https://github.com/better-auth-rs/better-auth-rs/pull/41))
+
+- eliminate DRY violations across test files ([#42](https://github.com/better-auth-rs/better-auth-rs/pull/42))
+
+
+### Style
+
+- cargo fmt
+
+
+### Tests
+
+- Improve test framework: unified harness, CI coverage, schema validation fixes ([#25](https://github.com/better-auth-rs/better-auth-rs/pull/25))
+
 ## [0.7.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.6.2...v0.7.0) - 2026-02-25
 
 ### Bug Fixes
