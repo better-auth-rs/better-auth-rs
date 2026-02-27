@@ -4,6 +4,8 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+  pull_request:
+    types: [closed]
 
 permissions:
   contents: write
@@ -13,8 +15,24 @@ env:
   CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
 
 jobs:
+  delete-old-branches:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'release-plz-')
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_PLZ_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLZ_APP_PRIVATE_KEY }}
+
+      - name: Delete release-plz branch
+        run: gh api --method DELETE repos/${{ github.repository }}/git/refs/heads/${{ github.head_ref }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
   release-pr:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/create-github-app-token@v2
         id: app-token
@@ -40,6 +58,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: release-pr
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/create-github-app-token@v2
         id: app-token
