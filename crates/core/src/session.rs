@@ -46,7 +46,9 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
 
         // Check if session exists and is not expired
         if let Some(ref session) = session {
-            if session.expires_at() < Utc::now() || !session.active() {
+            let now = Utc::now();
+
+            if session.expires_at() < now || !session.active() {
                 // Session expired or inactive - delete it
                 self.database.delete_session(token).await?;
                 return Ok(None);
@@ -150,6 +152,19 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
     pub async fn cleanup_expired_sessions(&self) -> AuthResult<usize> {
         let count = self.database.delete_expired_sessions().await?;
         Ok(count)
+    }
+
+    /// Check whether a session is "fresh" (created recently enough for
+    /// sensitive operations like password change or account deletion).
+    ///
+    /// Returns `true` when `fresh_age` is set and
+    /// `session.created_at() + fresh_age > now`.
+    /// If `fresh_age` is `None`, the session is never considered fresh.
+    pub fn is_session_fresh(&self, session: &impl AuthSession) -> bool {
+        match self.config.session.fresh_age {
+            Some(fresh_age) => session.created_at() + fresh_age > Utc::now(),
+            None => false,
+        }
     }
 
     /// Validate session token format

@@ -50,14 +50,19 @@ pub struct SessionConfig {
     /// Session freshness window. A session younger than this is considered
     /// "fresh" (useful for step-up auth or sensitive operations).
     pub fresh_age: Option<Duration>,
-    
     /// Cookie name for session token
     pub cookie_name: String,
-    
+
     /// Cookie settings
     pub cookie_secure: bool,
     pub cookie_http_only: bool,
     pub cookie_same_site: SameSite,
+
+    /// Optional cookie-based session cache to avoid DB lookups.
+    ///
+    /// When enabled, session data is cached in a signed/encrypted cookie.
+    /// `SessionManager` checks the cookie cache before hitting the database.
+    pub cookie_cache: Option<CookieCacheConfig>,
 }
 
 /// JWT configuration
@@ -113,6 +118,45 @@ pub enum SameSite {
     None,
 }
 
+/// Configuration for cookie-based session caching.
+///
+/// When enabled, session data is stored in a signed or encrypted cookie so that
+/// subsequent requests can skip the database lookup.
+#[derive(Debug, Clone)]
+pub struct CookieCacheConfig {
+    /// Whether the cookie cache is active.
+    pub enabled: bool,
+
+    /// Maximum age of the cached cookie before a fresh DB lookup is required.
+    ///
+    /// Default: 5 minutes.
+    pub max_age: Duration,
+
+    /// Strategy used to protect the cached cookie value.
+    pub strategy: CookieCacheStrategy,
+}
+
+/// Strategy for signing / encrypting the cookie cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CookieCacheStrategy {
+    /// Base64url-encoded payload + HMAC-SHA256 signature.
+    Compact,
+    /// Standard JWT with HMAC signing.
+    Jwt,
+    /// JWE with AES-256-GCM encryption.
+    Jwe,
+}
+
+impl Default for CookieCacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_age: Duration::minutes(5),
+            strategy: CookieCacheStrategy::Compact,
+        }
+    }
+}
+
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
@@ -139,6 +183,7 @@ impl Default for SessionConfig {
             cookie_secure: true,
             cookie_http_only: true,
             cookie_same_site: SameSite::Lax,
+            cookie_cache: None,
         }
     }
 }
@@ -194,7 +239,38 @@ impl AuthConfig {
         self.session.expires_in = duration;
         self
     }
-    
+
+    /// Set the session refresh policy.
+    ///
+    /// - `Some(duration)` – refresh the session when it was last updated more than `duration` ago.
+    /// - `None` – disable session refresh entirely.
+    pub fn session_update_age(mut self, update_age: Option<Duration>) -> Self {
+        self.session.update_age = update_age;
+        self
+    }
+
+    /// Backward-compatible helper: `true` ≡ `Some(1 day)`, `false` ≡ `None`.
+    pub fn session_refresh_enabled(mut self, enabled: bool) -> Self {
+        self.session.update_age = if enabled {
+            Some(Duration::days(1))
+        } else {
+            None
+        };
+        self
+    }
+
+    /// Set the "fresh session" window used by sensitive-operation guards.
+    pub fn session_fresh_age(mut self, duration: Duration) -> Self {
+        self.session.fresh_age = Some(duration);
+        self
+    }
+
+    /// Set the cookie cache configuration for sessions.
+    pub fn session_cookie_cache(mut self, config: CookieCacheConfig) -> Self {
+        self.session.cookie_cache = Some(config);
+        self
+    }
+
     pub fn jwt_expires_in(mut self, duration: Duration) -> Self {
         self.jwt.expires_in = duration;
         self
@@ -230,4 +306,4 @@ impl AuthConfig {
         
         Ok(())
     }
-}  
+}    

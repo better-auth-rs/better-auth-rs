@@ -597,14 +597,16 @@ pub mod sqlx_adapter {
             expires_at: DateTime<Utc>,
         ) -> AuthResult<()> {
             let sql = format!(
-                "UPDATE {} SET {} = $1 WHERE {} = $2 AND {} = true",
+                "UPDATE {} SET {} = $1, {} = $2 WHERE {} = $3 AND {} = true",
                 qi(S::table()),
                 qi(S::col_expires_at()),
+                qi(S::col_updated_at()),
                 qi(S::col_token()),
                 qi(S::col_active())
             );
             sqlx::query(&sql)
                 .bind(expires_at)
+                .bind(Utc::now())
                 .bind(token)
                 .execute(&self.pool)
                 .await?;

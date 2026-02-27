@@ -337,6 +337,7 @@ where
         let mut sessions = self.sessions.lock().unwrap();
         if let Some(session) = sessions.get_mut(token) {
             session.set_expires_at(expires_at);
+            session.set_updated_at(Utc::now());
         }
         Ok(())
     }

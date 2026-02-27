@@ -127,6 +127,12 @@ pub struct SessionConfig {
     pub cookie_secure: bool,
     pub cookie_http_only: bool,
     pub cookie_same_site: SameSite,
+
+    /// Optional cookie-based session cache to avoid DB lookups.
+    ///
+    /// When enabled, session data is cached in a signed/encrypted cookie.
+    /// `SessionManager` checks the cookie cache before hitting the database.
+    pub cookie_cache: Option<CookieCacheConfig>,
 }
 
 /// JWT configuration
@@ -180,6 +186,45 @@ pub enum SameSite {
     Strict,
     Lax,
     None,
+}
+
+/// Configuration for cookie-based session caching.
+///
+/// When enabled, session data is stored in a signed or encrypted cookie so that
+/// subsequent requests can skip the database lookup.
+#[derive(Debug, Clone)]
+pub struct CookieCacheConfig {
+    /// Whether the cookie cache is active.
+    pub enabled: bool,
+
+    /// Maximum age of the cached cookie before a fresh DB lookup is required.
+    ///
+    /// Default: 5 minutes.
+    pub max_age: Duration,
+
+    /// Strategy used to protect the cached cookie value.
+    pub strategy: CookieCacheStrategy,
+}
+
+/// Strategy for signing / encrypting the cookie cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CookieCacheStrategy {
+    /// Base64url-encoded payload + HMAC-SHA256 signature.
+    Compact,
+    /// Standard JWT with HMAC signing.
+    Jwt,
+    /// JWE with AES-256-GCM encryption.
+    Jwe,
+}
+
+impl Default for CookieCacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_age: Duration::minutes(5),
+            strategy: CookieCacheStrategy::Compact,
+        }
+    }
 }
 
 impl Default for AccountConfig {
@@ -337,6 +382,7 @@ impl Default for SessionConfig {
             cookie_secure: true,
             cookie_http_only: true,
             cookie_same_site: SameSite::Lax,
+            cookie_cache: None,
         }
     }
 }
@@ -466,6 +512,12 @@ impl AuthConfig {
 
     pub fn session_fresh_age(mut self, duration: Duration) -> Self {
         self.session.fresh_age = Some(duration);
+        self
+    }
+
+    /// Set the cookie cache configuration for sessions.
+    pub fn session_cookie_cache(mut self, config: CookieCacheConfig) -> Self {
+        self.session.cookie_cache = Some(config);
         self
     }
 

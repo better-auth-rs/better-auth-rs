@@ -33,17 +33,17 @@ pub use better_auth_core as types_mod;
 pub use better_auth_core::{
     Account, AccountOps, Argon2Config, AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest,
     AuthResponse, AuthResult, AuthRoute, BodyLimitConfig, BodyLimitMiddleware, CacheAdapter,
-    ConsoleEmailProvider, CorsConfig, CorsMiddleware, CreateAccount, CreateInvitation,
-    CreateMember, CreateOrganization, CreatePasskey, CreateSession, CreateUser, CreateVerification,
-    CsrfConfig, CsrfMiddleware, DatabaseAdapter, DatabaseError, DatabaseHooks, DeleteUserResponse,
-    EmailProvider, EndpointRateLimit, HookedDatabaseAdapter, HttpMethod, Invitation, InvitationOps,
-    InvitationStatus, JwtConfig, MemberOps, MemoryAccount, MemoryCacheAdapter,
-    MemoryDatabaseAdapter, MemoryInvitation, MemoryMember, MemoryOrganization, MemorySession,
-    MemoryUser, MemoryVerification, Middleware, OpenApiBuilder, OpenApiSpec, OrganizationOps,
-    Passkey, PasskeyOps, PasswordConfig, RateLimitConfig, RateLimitMiddleware, SameSite, Session,
-    SessionConfig, SessionManager, SessionOps, TwoFactor, UpdateOrganization, UpdatePasskey,
-    UpdateUser, UpdateUserRequest, UpdateUserResponse, User, UserOps, Verification,
-    VerificationOps, core_paths,
+    ConsoleEmailProvider, CookieCacheConfig, CookieCacheStrategy, CorsConfig, CorsMiddleware,
+    CreateAccount, CreateInvitation, CreateMember, CreateOrganization, CreatePasskey,
+    CreateSession, CreateUser, CreateVerification, CsrfConfig, CsrfMiddleware, DatabaseAdapter,
+    DatabaseError, DatabaseHooks, DeleteUserResponse, EmailProvider, EndpointRateLimit,
+    HookedDatabaseAdapter, HttpMethod, Invitation, InvitationOps, InvitationStatus, JwtConfig,
+    MemberOps, MemoryAccount, MemoryCacheAdapter, MemoryDatabaseAdapter, MemoryInvitation,
+    MemoryMember, MemoryOrganization, MemorySession, MemoryUser, MemoryVerification, Middleware,
+    OpenApiBuilder, OpenApiSpec, OrganizationOps, Passkey, PasskeyOps, PasswordConfig,
+    RateLimitConfig, RateLimitMiddleware, SameSite, Session, SessionConfig, SessionManager,
+    SessionOps, TwoFactor, UpdateOrganization, UpdatePasskey, UpdateUser, UpdateUserRequest,
+    UpdateUserResponse, User, UserOps, Verification, VerificationOps, core_paths,
 };
 
 // Re-export entity traits
