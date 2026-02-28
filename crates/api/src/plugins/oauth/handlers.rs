@@ -71,63 +71,6 @@ fn find_account_for_provider<'a, A: AuthAccount>(
         })
 }
 
-/// Shared logic for `handle_social_sign_in` and `handle_link_social`.
-///
-/// Both flows build a verification payload, store it, construct the
-/// authorization URL, and return a redirect response. The only difference
-/// is `link_user_id` (None for sign-in, Some for linking).
-async fn initiate_oauth_flow<DB: DatabaseAdapter>(
-    config: &OAuthConfig,
-    ctx: &AuthContext<DB>,
-    provider_name: &str,
-    callback_url: &str,
-    scopes: Option<&[String]>,
-    link_user_id: Option<&str>,
-) -> AuthResult<AuthResponse> {
-    let provider = config
-        .providers
-        .get(provider_name)
-        .ok_or_else(|| AuthError::bad_request(format!("Unknown provider: {}", provider_name)))?;
-
-    let (code_verifier, code_challenge) = generate_pkce();
-    let state = uuid::Uuid::new_v4().to_string();
-
-    let effective_scopes: Vec<String> = scopes
-        .map(|s| s.to_vec())
-        .unwrap_or_else(|| provider.scopes.clone());
-
-    let payload = serde_json::json!({
-        "provider": provider_name,
-        "callback_url": callback_url,
-        "code_verifier": code_verifier,
-        "link_user_id": link_user_id,
-        "scopes": effective_scopes.join(" "),
-    });
-
-    ctx.database
-        .create_verification(CreateVerification {
-            identifier: format!("oauth:{}", state),
-            value: payload.to_string(),
-            expires_at: Utc::now() + Duration::minutes(10),
-        })
-        .await?;
-
-    let url = build_authorization_url(
-        config,
-        provider_name,
-        callback_url,
-        scopes,
-        &state,
-        &code_challenge,
-    )?;
-
-    let response = SocialSignInResponse {
-        url,
-        redirect: true,
-    };
-
-    AuthResponse::json(200, &response).map_err(AuthError::from)
-}
 
 fn generate_pkce() -> (String, String) {
     let verifier: String = thread_rng()
@@ -172,32 +115,235 @@ fn build_authorization_url(
     Ok(url)
 }
 
+// ---------------------------------------------------------------------------
+// Core functions
+// ---------------------------------------------------------------------------
+
+pub(crate) async fn social_sign_in_core<DB: DatabaseAdapter>(
+    body: &SocialSignInRequest,
+    config: &OAuthConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<SocialSignInResponse> {
+    let provider_name = &body.provider;
+
+    let callback_url = body
+        .callback_url
+        .clone()
+        .unwrap_or_else(|| format!("{}/callback/{}", ctx.config.base_url, provider_name));
+
+    initiate_oauth_flow_core(
+        config,
+        ctx,
+        provider_name,
+        &callback_url,
+        body.scopes.as_deref(),
+        None,
+    )
+    .await
+}
+
+pub(crate) async fn link_social_core<DB: DatabaseAdapter>(
+    body: &LinkSocialRequest,
+    session: &DB::Session,
+    config: &OAuthConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<SocialSignInResponse> {
+    let provider_name = &body.provider;
+
+    let callback_url = body
+        .callback_url
+        .clone()
+        .unwrap_or_else(|| format!("{}/callback/{}", ctx.config.base_url, provider_name));
+
+    initiate_oauth_flow_core(
+        config,
+        ctx,
+        provider_name,
+        &callback_url,
+        body.scopes.as_deref(),
+        Some(session.user_id()),
+    )
+    .await
+}
+
+pub(crate) async fn get_access_token_core<DB: DatabaseAdapter>(
+    body: &GetAccessTokenRequest,
+    session: &DB::Session,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<AccessTokenResponse> {
+    let accounts = ctx.database.get_user_accounts(session.user_id()).await?;
+    let account = find_account_for_provider(&accounts, &body.provider_id)?;
+
+    let encrypt = ctx.config.account.encrypt_oauth_tokens;
+    let secret = &ctx.config.secret;
+
+    Ok(AccessTokenResponse {
+        access_token: maybe_decrypt(account.access_token(), encrypt, secret)?,
+        access_token_expires_at: account.access_token_expires_at().map(|dt| dt.to_rfc3339()),
+        scope: account.scope().map(String::from),
+    })
+}
+
+pub(crate) async fn refresh_token_core<DB: DatabaseAdapter>(
+    body: &RefreshTokenRequest,
+    session: &DB::Session,
+    config: &OAuthConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<RefreshTokenResponse> {
+    let provider_name = &body.provider_id;
+
+    let provider = config
+        .providers
+        .get(provider_name)
+        .ok_or_else(|| AuthError::bad_request(format!("Unknown provider: {}", provider_name)))?;
+
+    let accounts = ctx.database.get_user_accounts(session.user_id()).await?;
+    let account = find_account_for_provider(&accounts, provider_name)?;
+
+    let encrypt = ctx.config.account.encrypt_oauth_tokens;
+    let secret = &ctx.config.secret;
+
+    let current_refresh_token = maybe_decrypt(account.refresh_token(), encrypt, secret)?
+        .ok_or_else(|| AuthError::bad_request("No refresh token available for this provider"))?;
+
+    let client = reqwest::Client::new();
+    let token_resp = client
+        .post(&provider.token_url)
+        .header("Accept", "application/json")
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", &current_refresh_token),
+            ("client_id", &provider.client_id),
+            ("client_secret", &provider.client_secret),
+        ])
+        .send()
+        .await
+        .map_err(|e| AuthError::internal(format!("Token refresh failed: {}", e)))?;
+
+    if !token_resp.status().is_success() {
+        let error_body = token_resp
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(AuthError::internal(format!(
+            "Token refresh returned error: {}",
+            error_body
+        )));
+    }
+
+    let token_data: serde_json::Value = token_resp
+        .json()
+        .await
+        .map_err(|e| AuthError::internal(format!("Failed to parse refresh response: {}", e)))?;
+
+    let new_access_token = token_data["access_token"]
+        .as_str()
+        .ok_or_else(|| AuthError::internal("Missing access_token in refresh response"))?;
+
+    let new_refresh_token = token_data["refresh_token"].as_str().map(String::from);
+    let expires_in = token_data["expires_in"].as_i64();
+    let new_scope = token_data["scope"].as_str().map(String::from);
+
+    let access_token_expires_at = expires_in.map(|secs| Utc::now() + Duration::seconds(secs));
+
+    let tokens = encrypt_token_set(
+        ctx,
+        Some(new_access_token.to_string()),
+        new_refresh_token.clone(),
+        None,
+    )?;
+    ctx.database
+        .update_account(
+            account.id(),
+            UpdateAccount {
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token,
+                access_token_expires_at,
+                scope: new_scope.clone(),
+                ..Default::default()
+            },
+        )
+        .await?;
+
+    Ok(RefreshTokenResponse {
+        access_token: Some(new_access_token.to_string()),
+        access_token_expires_at: access_token_expires_at.map(|dt| dt.to_rfc3339()),
+        refresh_token: new_refresh_token,
+        scope: new_scope,
+    })
+}
+
+/// Shared logic for social sign-in and link-social flows.
+///
+/// Both flows build a verification payload, store it, construct the
+/// authorization URL, and return a redirect response. The only difference
+/// is `link_user_id` (None for sign-in, Some for linking).
+async fn initiate_oauth_flow_core<DB: DatabaseAdapter>(
+    config: &OAuthConfig,
+    ctx: &AuthContext<DB>,
+    provider_name: &str,
+    callback_url: &str,
+    scopes: Option<&[String]>,
+    link_user_id: Option<&str>,
+) -> AuthResult<SocialSignInResponse> {
+    let provider = config
+        .providers
+        .get(provider_name)
+        .ok_or_else(|| AuthError::bad_request(format!("Unknown provider: {}", provider_name)))?;
+
+    let (code_verifier, code_challenge) = generate_pkce();
+    let state = uuid::Uuid::new_v4().to_string();
+
+    let effective_scopes: Vec<String> = scopes
+        .map(|s| s.to_vec())
+        .unwrap_or_else(|| provider.scopes.clone());
+
+    let payload = serde_json::json!({
+        "provider": provider_name,
+        "callback_url": callback_url,
+        "code_verifier": code_verifier,
+        "link_user_id": link_user_id,
+        "scopes": effective_scopes.join(" "),
+    });
+
+    ctx.database
+        .create_verification(CreateVerification {
+            identifier: format!("oauth:{}", state),
+            value: payload.to_string(),
+            expires_at: Utc::now() + Duration::minutes(10),
+        })
+        .await?;
+
+    let url = build_authorization_url(
+        config,
+        provider_name,
+        callback_url,
+        scopes,
+        &state,
+        &code_challenge,
+    )?;
+
+    Ok(SocialSignInResponse {
+        url,
+        redirect: true,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Old handlers (rewritten to call core)
+// ---------------------------------------------------------------------------
+
 pub async fn handle_social_sign_in<DB: DatabaseAdapter>(
     config: &OAuthConfig,
     req: &AuthRequest,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<AuthResponse> {
-    let signin_req: SocialSignInRequest = match better_auth_core::validate_request_body(req) {
+    let body: SocialSignInRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-
-    let provider_name = &signin_req.provider;
-
-    let callback_url = signin_req
-        .callback_url
-        .clone()
-        .unwrap_or_else(|| format!("{}/callback/{}", ctx.config.base_url, provider_name));
-
-    initiate_oauth_flow(
-        config,
-        ctx,
-        provider_name,
-        &callback_url,
-        signin_req.scopes.as_deref(),
-        None,
-    )
-    .await
+    let response = social_sign_in_core(&body, config, ctx).await?;
+    AuthResponse::json(200, &response).map_err(AuthError::from)
 }
 
 pub async fn handle_callback<DB: DatabaseAdapter>(
@@ -490,28 +636,12 @@ pub async fn handle_link_social<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<AuthResponse> {
     let session = require_session(req, ctx).await?;
-
-    let link_req: LinkSocialRequest = match better_auth_core::validate_request_body(req) {
+    let body: LinkSocialRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-
-    let provider_name = &link_req.provider;
-
-    let callback_url = link_req
-        .callback_url
-        .clone()
-        .unwrap_or_else(|| format!("{}/callback/{}", ctx.config.base_url, provider_name));
-
-    initiate_oauth_flow(
-        config,
-        ctx,
-        provider_name,
-        &callback_url,
-        link_req.scopes.as_deref(),
-        Some(session.user_id()),
-    )
-    .await
+    let response = link_social_core(&body, &session, config, ctx).await?;
+    AuthResponse::json(200, &response).map_err(AuthError::from)
 }
 
 pub async fn handle_get_access_token<DB: DatabaseAdapter>(
@@ -520,27 +650,12 @@ pub async fn handle_get_access_token<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<AuthResponse> {
     let _ = config;
-
     let session = require_session(req, ctx).await?;
-
-    let get_req: GetAccessTokenRequest = match better_auth_core::validate_request_body(req) {
+    let body: GetAccessTokenRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-
-    let accounts = ctx.database.get_user_accounts(session.user_id()).await?;
-    let account = find_account_for_provider(&accounts, &get_req.provider_id)?;
-
-    // Decrypt tokens transparently if encryption is enabled
-    let encrypt = ctx.config.account.encrypt_oauth_tokens;
-    let secret = &ctx.config.secret;
-
-    let response = AccessTokenResponse {
-        access_token: maybe_decrypt(account.access_token(), encrypt, secret)?,
-        access_token_expires_at: account.access_token_expires_at().map(|dt| dt.to_rfc3339()),
-        scope: account.scope().map(String::from),
-    };
-
+    let response = get_access_token_core(&body, &session, ctx).await?;
     AuthResponse::json(200, &response).map_err(AuthError::from)
 }
 
@@ -550,97 +665,11 @@ pub async fn handle_refresh_token<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<AuthResponse> {
     let session = require_session(req, ctx).await?;
-
-    let refresh_req: RefreshTokenRequest = match better_auth_core::validate_request_body(req) {
+    let body: RefreshTokenRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-
-    let provider_name = &refresh_req.provider_id;
-
-    let provider = config
-        .providers
-        .get(provider_name)
-        .ok_or_else(|| AuthError::bad_request(format!("Unknown provider: {}", provider_name)))?;
-
-    let accounts = ctx.database.get_user_accounts(session.user_id()).await?;
-    let account = find_account_for_provider(&accounts, provider_name)?;
-
-    // Decrypt refresh token transparently via maybe_decrypt
-    let encrypt = ctx.config.account.encrypt_oauth_tokens;
-    let secret = &ctx.config.secret;
-
-    let current_refresh_token = maybe_decrypt(account.refresh_token(), encrypt, secret)?
-        .ok_or_else(|| AuthError::bad_request("No refresh token available for this provider"))?;
-
-    // Exchange refresh token for new access token
-    let client = reqwest::Client::new();
-    let token_resp = client
-        .post(&provider.token_url)
-        .header("Accept", "application/json")
-        .form(&[
-            ("grant_type", "refresh_token"),
-            ("refresh_token", &current_refresh_token),
-            ("client_id", &provider.client_id),
-            ("client_secret", &provider.client_secret),
-        ])
-        .send()
-        .await
-        .map_err(|e| AuthError::internal(format!("Token refresh failed: {}", e)))?;
-
-    if !token_resp.status().is_success() {
-        let error_body = token_resp
-            .text()
-            .await
-            .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(AuthError::internal(format!(
-            "Token refresh returned error: {}",
-            error_body
-        )));
-    }
-
-    let token_data: serde_json::Value = token_resp
-        .json()
-        .await
-        .map_err(|e| AuthError::internal(format!("Failed to parse refresh response: {}", e)))?;
-
-    let new_access_token = token_data["access_token"]
-        .as_str()
-        .ok_or_else(|| AuthError::internal("Missing access_token in refresh response"))?;
-
-    let new_refresh_token = token_data["refresh_token"].as_str().map(String::from);
-    let expires_in = token_data["expires_in"].as_i64();
-    let new_scope = token_data["scope"].as_str().map(String::from);
-
-    let access_token_expires_at = expires_in.map(|secs| Utc::now() + Duration::seconds(secs));
-
-    // Update the account with new tokens (encrypt if configured)
-    let tokens = encrypt_token_set(
-        ctx,
-        Some(new_access_token.to_string()),
-        new_refresh_token.clone(),
-        None,
-    )?;
-    ctx.database
-        .update_account(
-            account.id(),
-            UpdateAccount {
-                access_token: tokens.access_token,
-                refresh_token: tokens.refresh_token,
-                access_token_expires_at,
-                scope: new_scope.clone(),
-                ..Default::default()
-            },
-        )
-        .await?;
-
-    let response = RefreshTokenResponse {
-        access_token: Some(new_access_token.to_string()),
-        access_token_expires_at: access_token_expires_at.map(|dt| dt.to_rfc3339()),
-        refresh_token: new_refresh_token,
-        scope: new_scope,
-    };
-
+    let response = refresh_token_core(&body, &session, config, ctx).await?;
     AuthResponse::json(200, &response).map_err(AuthError::from)
 }
 
