@@ -5,10 +5,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
-
-use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, CreateVerification, HttpMethod};
+use better_auth_core::{AuthContext, AuthError, AuthResult};
+use better_auth_core::{AuthRequest, AuthResponse, CreateVerification};
 use better_auth_core::{AuthUser, DatabaseAdapter, User};
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
@@ -165,52 +163,31 @@ impl Default for EmailVerificationConfig {
     }
 }
 
-#[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailVerificationPlugin {
-    fn name(&self) -> &'static str {
-        "email-verification"
+better_auth_core::impl_auth_plugin! {
+    EmailVerificationPlugin, "email-verification";
+    routes {
+        post "/send-verification-email" => handle_send_verification_email, "send_verification_email";
+        get "/verify-email" => handle_verify_email, "verify_email";
     }
-
-    fn routes(&self) -> Vec<AuthRoute> {
-        vec![
-            AuthRoute::post("/send-verification-email", "send_verification_email"),
-            AuthRoute::get("/verify-email", "verify_email"),
-        ]
-    }
-
-    async fn on_request(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<Option<AuthResponse>> {
-        match (req.method(), req.path()) {
-            (HttpMethod::Post, "/send-verification-email") => {
-                Ok(Some(self.handle_send_verification_email(req, ctx).await?))
+    extra {
+        async fn on_user_created(&self, user: &DB::User, ctx: &AuthContext<DB>) -> AuthResult<()> {
+            // Send verification email for new users if configured.
+            // Also fire when a custom sender is set, even if send_email_notifications is false.
+            if (self.config.send_email_notifications || self.config.send_verification_email.is_some())
+                && !user.email_verified()
+                && let Some(email) = user.email()
+                && let Err(e) = self
+                    .send_verification_email_for_user(user, email, None, ctx)
+                    .await
+            {
+                tracing::warn!(
+                    email = %email,
+                    error = %e,
+                    "Failed to send verification email"
+                );
             }
-            (HttpMethod::Get, "/verify-email") => {
-                Ok(Some(self.handle_verify_email(req, ctx).await?))
-            }
-            _ => Ok(None),
+            Ok(())
         }
-    }
-
-    async fn on_user_created(&self, user: &DB::User, ctx: &AuthContext<DB>) -> AuthResult<()> {
-        // Send verification email for new users if configured.
-        // Also fire when a custom sender is set, even if send_email_notifications is false.
-        if (self.config.send_email_notifications || self.config.send_verification_email.is_some())
-            && !user.email_verified()
-            && let Some(email) = user.email()
-            && let Err(e) = self
-                .send_verification_email_for_user(user, email, None, ctx)
-                .await
-        {
-            tracing::warn!(
-                email = %email,
-                error = %e,
-                "Failed to send verification email"
-            );
-        }
-        Ok(())
     }
 }
 

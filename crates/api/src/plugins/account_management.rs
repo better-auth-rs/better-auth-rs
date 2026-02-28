@@ -1,12 +1,10 @@
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthAccount, AuthUser};
-use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
-use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
+use better_auth_core::{AuthContext, AuthError, AuthResult};
+use better_auth_core::{AuthRequest, AuthResponse};
 
 use super::StatusResponse;
 
@@ -71,33 +69,11 @@ impl Default for AccountManagementConfig {
     }
 }
 
-#[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for AccountManagementPlugin {
-    fn name(&self) -> &'static str {
-        "account-management"
-    }
-
-    fn routes(&self) -> Vec<AuthRoute> {
-        vec![
-            AuthRoute::get("/list-accounts", "list_accounts"),
-            AuthRoute::post("/unlink-account", "unlink_account"),
-        ]
-    }
-
-    async fn on_request(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<Option<AuthResponse>> {
-        match (req.method(), req.path()) {
-            (HttpMethod::Get, "/list-accounts") => {
-                Ok(Some(self.handle_list_accounts(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/unlink-account") => {
-                Ok(Some(self.handle_unlink_account(req, ctx).await?))
-            }
-            _ => Ok(None),
-        }
+better_auth_core::impl_auth_plugin! {
+    AccountManagementPlugin, "account-management";
+    routes {
+        get "/list-accounts" => handle_list_accounts, "list_accounts";
+        post "/unlink-account" => handle_unlink_account, "unlink_account";
     }
 }
 

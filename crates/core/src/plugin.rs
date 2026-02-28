@@ -100,11 +100,12 @@ pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
 /// by generating both from a single route table.
 ///
 /// # Exceptions (must keep manual impl)
-/// - `OAuthPlugin` — uses dynamic path matching for `/callback/{provider}`
-/// - `SessionManagementPlugin` — uses match guards and OR patterns
+/// - `OAuthPlugin` — dynamic path matching for `/callback/{provider}`
+/// - `SessionManagementPlugin` — match guards and OR patterns
 /// - `EmailPasswordPlugin` — conditional routes based on config
 /// - `UserManagementPlugin` — conditional routes based on config
 /// - `PasswordManagementPlugin` — dynamic path matching for `/reset-password/{token}`
+/// - `OrganizationPlugin` — handlers accept extra `&self.config` argument
 #[macro_export]
 macro_rules! impl_auth_plugin {
     (@pat get) => { $crate::HttpMethod::Get };

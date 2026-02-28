@@ -1,15 +1,11 @@
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use totp_rs::{Algorithm, Secret, TOTP};
 use validator::Validate;
 
 use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthSession, AuthTwoFactor, AuthUser, AuthVerification};
-use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
-use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{
-    AuthRequest, AuthResponse, CreateTwoFactor, CreateVerification, HttpMethod, UpdateUser,
-};
+use better_auth_core::{AuthContext, AuthError, AuthResult};
+use better_auth_core::{AuthRequest, AuthResponse, CreateTwoFactor, CreateVerification, UpdateUser};
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
@@ -657,57 +653,17 @@ impl Default for TwoFactorPlugin {
     }
 }
 
-#[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for TwoFactorPlugin {
-    fn name(&self) -> &'static str {
-        "two-factor"
-    }
-
-    fn routes(&self) -> Vec<AuthRoute> {
-        vec![
-            AuthRoute::post("/two-factor/enable", "enable_two_factor"),
-            AuthRoute::post("/two-factor/disable", "disable_two_factor"),
-            AuthRoute::post("/two-factor/get-totp-uri", "get_totp_uri"),
-            AuthRoute::post("/two-factor/verify-totp", "verify_totp"),
-            AuthRoute::post("/two-factor/send-otp", "send_otp"),
-            AuthRoute::post("/two-factor/verify-otp", "verify_otp"),
-            AuthRoute::post("/two-factor/generate-backup-codes", "generate_backup_codes"),
-            AuthRoute::post("/two-factor/verify-backup-code", "verify_backup_code"),
-        ]
-    }
-
-    async fn on_request(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<Option<AuthResponse>> {
-        match (req.method(), req.path()) {
-            (HttpMethod::Post, "/two-factor/enable") => {
-                Ok(Some(self.handle_enable(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/two-factor/disable") => {
-                Ok(Some(self.handle_disable(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/two-factor/get-totp-uri") => {
-                Ok(Some(self.handle_get_totp_uri(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/two-factor/verify-totp") => {
-                Ok(Some(self.handle_verify_totp(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/two-factor/send-otp") => {
-                Ok(Some(self.handle_send_otp(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/two-factor/verify-otp") => {
-                Ok(Some(self.handle_verify_otp(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/two-factor/generate-backup-codes") => {
-                Ok(Some(self.handle_generate_backup_codes(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/two-factor/verify-backup-code") => {
-                Ok(Some(self.handle_verify_backup_code(req, ctx).await?))
-            }
-            _ => Ok(None),
-        }
+better_auth_core::impl_auth_plugin! {
+    TwoFactorPlugin, "two-factor";
+    routes {
+        post "/two-factor/enable" => handle_enable, "enable_two_factor";
+        post "/two-factor/disable" => handle_disable, "disable_two_factor";
+        post "/two-factor/get-totp-uri" => handle_get_totp_uri, "get_totp_uri";
+        post "/two-factor/verify-totp" => handle_verify_totp, "verify_totp";
+        post "/two-factor/send-otp" => handle_send_otp, "send_otp";
+        post "/two-factor/verify-otp" => handle_verify_otp, "verify_otp";
+        post "/two-factor/generate-backup-codes" => handle_generate_backup_codes, "generate_backup_codes";
+        post "/two-factor/verify-backup-code" => handle_verify_backup_code, "verify_backup_code";
     }
 }
 
