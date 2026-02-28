@@ -392,9 +392,10 @@ pub async fn handle_accept_invitation<DB: DatabaseAdapter>(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: AcceptInvitationRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let body: AcceptInvitationRequest = match better_auth_core::validate_request_body(req) {
+        Ok(v) => v,
+        Err(resp) => return Ok(resp),
+    };
     let response = accept_invitation_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -405,9 +406,10 @@ pub async fn handle_reject_invitation<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
-    let body: RejectInvitationRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let body: RejectInvitationRequest = match better_auth_core::validate_request_body(req) {
+        Ok(v) => v,
+        Err(resp) => return Ok(resp),
+    };
     let response = reject_invitation_core(&body, &user, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -419,9 +421,10 @@ pub async fn handle_cancel_invitation<DB: DatabaseAdapter>(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
-    let body: CancelInvitationRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let body: CancelInvitationRequest = match better_auth_core::validate_request_body(req) {
+        Ok(v) => v,
+        Err(resp) => return Ok(resp),
+    };
     let response = cancel_invitation_core(&body, &user, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }

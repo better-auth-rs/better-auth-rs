@@ -130,9 +130,10 @@ pub async fn handle_has_permission<DB: DatabaseAdapter>(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: HasPermissionRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let body: HasPermissionRequest = match better_auth_core::validate_request_body(req) {
+        Ok(v) => v,
+        Err(resp) => return Ok(resp),
+    };
     let response = has_permission_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }

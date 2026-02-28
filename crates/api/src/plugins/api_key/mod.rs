@@ -553,9 +553,10 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let verify_req: VerifyKeyRequest = req
-            .body_as_json()
-            .map_err(|_| AuthError::bad_request("Invalid JSON body"))?;
+        let verify_req: VerifyKeyRequest = match better_auth_core::validate_request_body(req) {
+            Ok(v) => v,
+            Err(resp) => return Ok(resp),
+        };
         let response = verify_key_core(&verify_req, self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }

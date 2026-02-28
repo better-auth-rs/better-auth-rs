@@ -236,9 +236,10 @@ impl SessionManagementPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
 
-        let revoke_req: RevokeSessionRequest = req
-            .body_as_json()
-            .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
+        let revoke_req: RevokeSessionRequest = match better_auth_core::validate_request_body(req) {
+            Ok(v) => v,
+            Err(resp) => return Ok(resp),
+        };
 
         let response = revoke_session_core(&user, &revoke_req.token, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)

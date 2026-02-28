@@ -321,9 +321,10 @@ pub async fn handle_update_organization<DB: DatabaseAdapter>(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: UpdateOrganizationRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let body: UpdateOrganizationRequest = match better_auth_core::validate_request_body(req) {
+        Ok(v) => v,
+        Err(resp) => return Ok(resp),
+    };
     let updated = update_organization_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &updated)?)
 }
@@ -335,9 +336,10 @@ pub async fn handle_delete_organization<DB: DatabaseAdapter>(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
-    let body: DeleteOrganizationRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let body: DeleteOrganizationRequest = match better_auth_core::validate_request_body(req) {
+        Ok(v) => v,
+        Err(resp) => return Ok(resp),
+    };
     let response = delete_organization_core(&body, &user, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -369,9 +371,10 @@ pub async fn handle_check_slug<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<AuthResponse> {
     let _session = require_session(req, ctx).await?;
-    let body: CheckSlugRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let body: CheckSlugRequest = match better_auth_core::validate_request_body(req) {
+        Ok(v) => v,
+        Err(resp) => return Ok(resp),
+    };
     let response = check_slug_core(&body, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -382,9 +385,10 @@ pub async fn handle_set_active_organization<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: SetActiveOrganizationRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let body: SetActiveOrganizationRequest = match better_auth_core::validate_request_body(req) {
+        Ok(v) => v,
+        Err(resp) => return Ok(resp),
+    };
     let updated_session = set_active_organization_core(&body, &user, &session, ctx).await?;
     Ok(AuthResponse::json(200, &updated_session)?)
 }
@@ -395,9 +399,10 @@ pub async fn handle_leave_organization<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: LeaveOrganizationRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let body: LeaveOrganizationRequest = match better_auth_core::validate_request_body(req) {
+        Ok(v) => v,
+        Err(resp) => return Ok(resp),
+    };
     let response = leave_organization_core(&body, &user, &session, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }

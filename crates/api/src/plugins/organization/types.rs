@@ -23,18 +23,18 @@ pub struct UpdateOrganizationRequest {
     pub organization_id: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct DeleteOrganizationRequest {
     #[serde(rename = "organizationId")]
     pub organization_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct CheckSlugRequest {
     pub slug: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct SetActiveOrganizationRequest {
     #[serde(rename = "organizationId")]
     pub organization_id: Option<String>,
@@ -42,7 +42,7 @@ pub struct SetActiveOrganizationRequest {
     pub organization_slug: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct LeaveOrganizationRequest {
     #[serde(rename = "organizationId")]
     pub organization_id: String,
@@ -66,7 +66,7 @@ pub struct InviteMemberRequest {
     pub organization_id: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct RemoveMemberRequest {
     #[serde(rename = "memberId")]
     pub member_id: Option<String>,
@@ -75,7 +75,7 @@ pub struct RemoveMemberRequest {
     pub organization_id: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct UpdateMemberRoleRequest {
     #[serde(rename = "memberId")]
     pub member_id: String,
@@ -94,19 +94,19 @@ pub struct ListMembersQuery {
     pub offset: Option<usize>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct AcceptInvitationRequest {
     #[serde(rename = "invitationId")]
     pub invitation_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct RejectInvitationRequest {
     #[serde(rename = "invitationId")]
     pub invitation_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct CancelInvitationRequest {
     #[serde(rename = "invitationId")]
     pub invitation_id: String,
@@ -123,7 +123,7 @@ pub struct ListInvitationsQuery {
     pub organization_id: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct HasPermissionRequest {
     pub permissions: HashMap<String, Vec<String>>,
     #[serde(rename = "organizationId")]

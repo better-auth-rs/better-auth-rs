@@ -270,9 +270,10 @@ pub async fn handle_remove_member<DB: DatabaseAdapter>(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: RemoveMemberRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let body: RemoveMemberRequest = match better_auth_core::validate_request_body(req) {
+        Ok(v) => v,
+        Err(resp) => return Ok(resp),
+    };
     let response = remove_member_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -284,9 +285,10 @@ pub async fn handle_update_member_role<DB: DatabaseAdapter>(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: UpdateMemberRoleRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let body: UpdateMemberRoleRequest = match better_auth_core::validate_request_body(req) {
+        Ok(v) => v,
+        Err(resp) => return Ok(resp),
+    };
     let response = update_member_role_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
