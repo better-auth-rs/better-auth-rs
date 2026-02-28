@@ -60,27 +60,27 @@ impl Default for PasskeyConfig {
 
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-struct VerifyRegistrationRequest {
+pub(crate) struct VerifyRegistrationRequest {
     response: serde_json::Value,
     name: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-struct VerifyAuthenticationRequest {
+pub(crate) struct VerifyAuthenticationRequest {
     response: serde_json::Value,
 }
 
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-struct DeletePasskeyRequest {
+pub(crate) struct DeletePasskeyRequest {
     #[validate(length(min = 1))]
     id: String,
 }
 
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-struct UpdatePasskeyRequest {
+pub(crate) struct UpdatePasskeyRequest {
     #[validate(length(min = 1))]
     id: String,
     #[validate(length(min = 1))]
@@ -90,7 +90,7 @@ struct UpdatePasskeyRequest {
 // -- Response helpers --
 
 #[derive(Debug, Serialize)]
-struct PasskeyView {
+pub(crate) struct PasskeyView {
     id: String,
     name: String,
     #[serde(rename = "credentialID")]
@@ -128,14 +128,431 @@ impl PasskeyView {
 }
 
 #[derive(Debug, Serialize)]
-struct SessionUserResponse<U: Serialize, S: Serialize> {
+pub(crate) struct SessionUserResponse<U: Serialize, S: Serialize> {
     session: S,
     user: U,
 }
 
 #[derive(Debug, Serialize)]
-struct PasskeyResponse {
+pub(crate) struct PasskeyResponse {
     passkey: PasskeyView,
+}
+
+// -- Helpers --
+
+fn generate_challenge() -> String {
+    let mut bytes = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    URL_SAFE_NO_PAD.encode(bytes)
+}
+
+fn ensure_insecure_verification_enabled(config: &PasskeyConfig) -> AuthResult<()> {
+    if config.allow_insecure_unverified_assertion {
+        Ok(())
+    } else {
+        Err(AuthError::not_implemented(
+            "Passkey verification requires full WebAuthn signature validation. \
+            Set `allow_insecure_unverified_assertion = true` only for local development.",
+        ))
+    }
+}
+
+fn decode_client_data_json(response: &serde_json::Value) -> AuthResult<serde_json::Value> {
+    let encoded = response
+        .get("response")
+        .and_then(|r| r.get("clientDataJSON"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::bad_request("Missing clientDataJSON in response"))?;
+
+    let decode_and_parse = |bytes: Vec<u8>| -> Option<serde_json::Value> {
+        serde_json::from_slice::<serde_json::Value>(&bytes).ok()
+    };
+
+    if let Ok(bytes) = URL_SAFE_NO_PAD.decode(encoded)
+        && let Some(client_data) = decode_and_parse(bytes)
+    {
+        return Ok(client_data);
+    }
+
+    if let Ok(bytes) = STANDARD.decode(encoded)
+        && let Some(client_data) = decode_and_parse(bytes)
+    {
+        return Ok(client_data);
+    }
+
+    Err(AuthError::bad_request("Invalid clientDataJSON encoding"))
+}
+
+fn validate_client_data(
+    config: &PasskeyConfig,
+    client_data: &serde_json::Value,
+    expected_type: &str,
+) -> AuthResult<String> {
+    let client_type = client_data
+        .get("type")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::bad_request("Missing clientDataJSON.type"))?;
+
+    if client_type != expected_type {
+        return Err(AuthError::bad_request(format!(
+            "Invalid clientDataJSON.type, expected {}",
+            expected_type
+        )));
+    }
+
+    let origin = client_data
+        .get("origin")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::bad_request("Missing clientDataJSON.origin"))?;
+
+    if origin != config.origin {
+        return Err(AuthError::bad_request("Invalid clientDataJSON.origin"));
+    }
+
+    let challenge = client_data
+        .get("challenge")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::bad_request("Missing clientDataJSON.challenge"))?;
+
+    Ok(challenge.to_string())
+}
+
+// -- Core functions --
+
+pub(crate) async fn generate_register_options_core<DB: DatabaseAdapter>(
+    user: &DB::User,
+    authenticator_attachment: &str,
+    config: &PasskeyConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<serde_json::Value> {
+    let challenge = generate_challenge();
+
+    // Store challenge as a verification token
+    let identifier = format!("passkey_reg:{}", user.id());
+    let expires_at =
+        chrono::Utc::now() + chrono::Duration::seconds(config.challenge_ttl_secs);
+    ctx.database
+        .create_verification(CreateVerification {
+            identifier: identifier.clone(),
+            value: challenge.clone(),
+            expires_at,
+        })
+        .await?;
+
+    // Build excludeCredentials from existing passkeys
+    let existing_passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
+    let exclude_credentials: Vec<serde_json::Value> = existing_passkeys
+        .iter()
+        .map(|pk| {
+            let mut cred = serde_json::json!({
+                "type": "public-key",
+                "id": pk.credential_id(),
+            });
+            if let Some(transports) = pk.transports()
+                && let Ok(t) = serde_json::from_str::<Vec<String>>(transports)
+            {
+                cred["transports"] = serde_json::json!(t);
+            }
+            cred
+        })
+        .collect();
+
+    let user_id_b64 = URL_SAFE_NO_PAD.encode(user.id().as_bytes());
+    let display_name = user
+        .name()
+        .unwrap_or_else(|| user.email().unwrap_or("user"));
+    let user_name = user
+        .email()
+        .unwrap_or_else(|| user.name().unwrap_or("user"));
+
+    let options = serde_json::json!({
+        "challenge": challenge,
+        "rp": {
+            "name": config.rp_name,
+            "id": config.rp_id,
+        },
+        "user": {
+            "id": user_id_b64,
+            "name": user_name,
+            "displayName": display_name,
+        },
+        "pubKeyCredParams": [
+            { "type": "public-key", "alg": -7 },
+            { "type": "public-key", "alg": -257 },
+        ],
+        "timeout": 60000,
+        "excludeCredentials": exclude_credentials,
+        "authenticatorSelection": {
+            "authenticatorAttachment": authenticator_attachment,
+            "requireResidentKey": false,
+            "userVerification": "preferred",
+        },
+        "attestation": "none",
+    });
+
+    Ok(options)
+}
+
+pub(crate) async fn verify_registration_core<DB: DatabaseAdapter>(
+    body: &VerifyRegistrationRequest,
+    user: &DB::User,
+    config: &PasskeyConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<PasskeyView> {
+    ensure_insecure_verification_enabled(config)?;
+
+    let client_data = decode_client_data_json(&body.response)?;
+    let challenge = validate_client_data(config, &client_data, "webauthn.create")?;
+
+    // Atomically consume the challenge (single-use)
+    let identifier = format!("passkey_reg:{}", user.id());
+    ctx.database
+        .consume_verification(&identifier, &challenge)
+        .await?
+        .ok_or_else(|| {
+            AuthError::bad_request(
+                "Invalid or expired registration challenge. Please generate registration options again.",
+            )
+        })?;
+
+    // Extract credential data from the client response
+    let resp = &body.response;
+    let credential_id = resp
+        .get("id")
+        .or_else(|| resp.get("rawId"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::bad_request("Missing credential id in response"))?;
+
+    // Extract public key from attestation response
+    let public_key = resp
+        .get("response")
+        .and_then(|r| r.get("attestationObject"))
+        .and_then(|v| v.as_str())
+        .or_else(|| {
+            resp.get("response")
+                .and_then(|r| r.get("clientDataJSON"))
+                .and_then(|v| v.as_str())
+        })
+        .unwrap_or("")
+        .to_string();
+
+    // Extract device type and backup info
+    let authenticator_attachment = resp
+        .get("authenticatorAttachment")
+        .and_then(|v| v.as_str())
+        .unwrap_or("platform");
+
+    let device_type = if authenticator_attachment == "cross-platform" {
+        "multiDevice"
+    } else {
+        "singleDevice"
+    }
+    .to_string();
+
+    let backed_up = resp
+        .get("clientExtensionResults")
+        .and_then(|v| v.get("credProps"))
+        .and_then(|v| v.get("rk"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    // Extract transports if available
+    let transports = resp
+        .get("response")
+        .and_then(|r| r.get("transports"))
+        .map(|v| v.to_string());
+
+    let passkey_name = body
+        .name
+        .clone()
+        .unwrap_or_else(|| format!("Passkey {}", chrono::Utc::now().format("%Y-%m-%d")));
+
+    // Create the passkey
+    let passkey = ctx
+        .database
+        .create_passkey(CreatePasskey {
+            user_id: user.id().to_string(),
+            name: passkey_name,
+            credential_id: credential_id.to_string(),
+            public_key,
+            counter: 0,
+            device_type,
+            backed_up,
+            transports,
+        })
+        .await?;
+
+    Ok(PasskeyView::from_entity(&passkey))
+}
+
+pub(crate) async fn generate_authenticate_options_core<DB: DatabaseAdapter>(
+    user: Option<&DB::User>,
+    config: &PasskeyConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<serde_json::Value> {
+    let challenge = generate_challenge();
+
+    // If user is provided, build allowCredentials from their passkeys
+    let allow_credentials: Vec<serde_json::Value> = if let Some(user) = user {
+        let passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
+        passkeys
+            .iter()
+            .map(|pk| {
+                let mut cred = serde_json::json!({
+                    "type": "public-key",
+                    "id": pk.credential_id(),
+                });
+                if let Some(transports) = pk.transports()
+                    && let Ok(t) = serde_json::from_str::<Vec<String>>(transports)
+                {
+                    cred["transports"] = serde_json::json!(t);
+                }
+                cred
+            })
+            .collect()
+    } else {
+        vec![]
+    };
+
+    // Store challenge
+    let identifier = format!("passkey_auth:{}", challenge);
+    let expires_at =
+        chrono::Utc::now() + chrono::Duration::seconds(config.challenge_ttl_secs);
+    ctx.database
+        .create_verification(CreateVerification {
+            identifier,
+            value: challenge.clone(),
+            expires_at,
+        })
+        .await?;
+
+    let options = serde_json::json!({
+        "challenge": challenge,
+        "timeout": 60000,
+        "rpId": config.rp_id,
+        "allowCredentials": allow_credentials,
+        "userVerification": "preferred",
+    });
+
+    Ok(options)
+}
+
+pub(crate) async fn verify_authentication_core<DB: DatabaseAdapter>(
+    body: &VerifyAuthenticationRequest,
+    ip_address: Option<String>,
+    user_agent: Option<String>,
+    config: &PasskeyConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<(SessionUserResponse<DB::User, DB::Session>, String)> {
+    ensure_insecure_verification_enabled(config)?;
+
+    let resp = &body.response;
+
+    // Extract credential_id from the response
+    let credential_id = resp
+        .get("id")
+        .or_else(|| resp.get("rawId"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::bad_request("Missing credential id in response"))?;
+
+    let client_data = decode_client_data_json(resp)?;
+    let challenge = validate_client_data(config, &client_data, "webauthn.get")?;
+
+    // Atomically consume challenge so it cannot be replayed.
+    let identifier = format!("passkey_auth:{}", challenge);
+    ctx.database
+        .consume_verification(&identifier, &challenge)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("Invalid or expired authentication challenge"))?;
+
+    // Look up the passkey by credential_id
+    let passkey = ctx
+        .database
+        .get_passkey_by_credential_id(credential_id)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("Passkey not found for credential"))?;
+
+    // Look up the user
+    let user = ctx
+        .database
+        .get_user_by_id(passkey.user_id())
+        .await?
+        .ok_or(AuthError::UserNotFound)?;
+
+    // Update the passkey counter
+    let new_counter = passkey
+        .counter()
+        .checked_add(1)
+        .ok_or_else(|| AuthError::internal("Passkey counter overflow"))?;
+    ctx.database
+        .update_passkey_counter(passkey.id(), new_counter)
+        .await?;
+
+    // Create a session
+    let session_manager =
+        better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let session = session_manager
+        .create_session(&user, ip_address, user_agent)
+        .await?;
+
+    let token = session.token().to_string();
+    let response = SessionUserResponse { session, user };
+    Ok((response, token))
+}
+
+pub(crate) async fn list_user_passkeys_core<DB: DatabaseAdapter>(
+    user: &DB::User,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<Vec<PasskeyView>> {
+    let passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
+    Ok(passkeys.iter().map(PasskeyView::from_entity).collect())
+}
+
+pub(crate) async fn delete_passkey_core<DB: DatabaseAdapter>(
+    body: &DeletePasskeyRequest,
+    user: &DB::User,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    // Verify ownership
+    let passkey = ctx
+        .database
+        .get_passkey_by_id(&body.id)
+        .await?
+        .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
+
+    if passkey.user_id() != user.id() {
+        return Err(AuthError::not_found("Passkey not found"));
+    }
+
+    ctx.database.delete_passkey(&body.id).await?;
+
+    Ok(StatusResponse { status: true })
+}
+
+pub(crate) async fn update_passkey_core<DB: DatabaseAdapter>(
+    body: &UpdatePasskeyRequest,
+    user: &DB::User,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<PasskeyResponse> {
+    // Verify ownership
+    let passkey = ctx
+        .database
+        .get_passkey_by_id(&body.id)
+        .await?
+        .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
+
+    if passkey.user_id() != user.id() {
+        return Err(AuthError::not_found("Passkey not found"));
+    }
+
+    let updated = ctx
+        .database
+        .update_passkey_name(&body.id, &body.name)
+        .await?;
+
+    Ok(PasskeyResponse {
+        passkey: PasskeyView::from_entity(&updated),
+    })
 }
 
 // -- Plugin --
@@ -171,86 +588,7 @@ impl PasskeyPlugin {
         self
     }
 
-    // -- Helpers --
-
-    fn generate_challenge() -> String {
-        let mut bytes = [0u8; 32];
-        rand::rngs::OsRng.fill_bytes(&mut bytes);
-        URL_SAFE_NO_PAD.encode(bytes)
-    }
-
-    fn ensure_insecure_verification_enabled(&self) -> AuthResult<()> {
-        if self.config.allow_insecure_unverified_assertion {
-            Ok(())
-        } else {
-            Err(AuthError::not_implemented(
-                "Passkey verification requires full WebAuthn signature validation. \
-                Set `allow_insecure_unverified_assertion = true` only for local development.",
-            ))
-        }
-    }
-
-    fn decode_client_data_json(response: &serde_json::Value) -> AuthResult<serde_json::Value> {
-        let encoded = response
-            .get("response")
-            .and_then(|r| r.get("clientDataJSON"))
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AuthError::bad_request("Missing clientDataJSON in response"))?;
-
-        let decode_and_parse = |bytes: Vec<u8>| -> Option<serde_json::Value> {
-            serde_json::from_slice::<serde_json::Value>(&bytes).ok()
-        };
-
-        if let Ok(bytes) = URL_SAFE_NO_PAD.decode(encoded)
-            && let Some(client_data) = decode_and_parse(bytes)
-        {
-            return Ok(client_data);
-        }
-
-        if let Ok(bytes) = STANDARD.decode(encoded)
-            && let Some(client_data) = decode_and_parse(bytes)
-        {
-            return Ok(client_data);
-        }
-
-        Err(AuthError::bad_request("Invalid clientDataJSON encoding"))
-    }
-
-    fn validate_client_data(
-        &self,
-        client_data: &serde_json::Value,
-        expected_type: &str,
-    ) -> AuthResult<String> {
-        let client_type = client_data
-            .get("type")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AuthError::bad_request("Missing clientDataJSON.type"))?;
-
-        if client_type != expected_type {
-            return Err(AuthError::bad_request(format!(
-                "Invalid clientDataJSON.type, expected {}",
-                expected_type
-            )));
-        }
-
-        let origin = client_data
-            .get("origin")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AuthError::bad_request("Missing clientDataJSON.origin"))?;
-
-        if origin != self.config.origin {
-            return Err(AuthError::bad_request("Invalid clientDataJSON.origin"));
-        }
-
-        let challenge = client_data
-            .get("challenge")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AuthError::bad_request("Missing clientDataJSON.challenge"))?;
-
-        Ok(challenge.to_string())
-    }
-
-    // -- Handlers --
+    // -- Handlers (old, delegate to core) --
 
     /// GET /passkey/generate-register-options
     async fn handle_generate_register_options<DB: DatabaseAdapter>(
@@ -260,77 +598,19 @@ impl PasskeyPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
 
-        let challenge = Self::generate_challenge();
-
-        // Store challenge as a verification token
-        let identifier = format!("passkey_reg:{}", user.id());
-        let expires_at =
-            chrono::Utc::now() + chrono::Duration::seconds(self.config.challenge_ttl_secs);
-        ctx.database
-            .create_verification(CreateVerification {
-                identifier: identifier.clone(),
-                value: challenge.clone(),
-                expires_at,
-            })
-            .await?;
-
-        // Build excludeCredentials from existing passkeys
-        let existing_passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
-        let exclude_credentials: Vec<serde_json::Value> = existing_passkeys
-            .iter()
-            .map(|pk| {
-                let mut cred = serde_json::json!({
-                    "type": "public-key",
-                    "id": pk.credential_id(),
-                });
-                if let Some(transports) = pk.transports()
-                    && let Ok(t) = serde_json::from_str::<Vec<String>>(transports)
-                {
-                    cred["transports"] = serde_json::json!(t);
-                }
-                cred
-            })
-            .collect();
-
-        // Read optional authenticatorAttachment from query params
         let authenticator_attachment = req
             .query
             .get("authenticatorAttachment")
             .cloned()
             .unwrap_or_else(|| "platform".to_string());
 
-        let user_id_b64 = URL_SAFE_NO_PAD.encode(user.id().as_bytes());
-        let display_name = user
-            .name()
-            .unwrap_or_else(|| user.email().unwrap_or("user"));
-        let user_name = user
-            .email()
-            .unwrap_or_else(|| user.name().unwrap_or("user"));
-
-        let options = serde_json::json!({
-            "challenge": challenge,
-            "rp": {
-                "name": self.config.rp_name,
-                "id": self.config.rp_id,
-            },
-            "user": {
-                "id": user_id_b64,
-                "name": user_name,
-                "displayName": display_name,
-            },
-            "pubKeyCredParams": [
-                { "type": "public-key", "alg": -7 },
-                { "type": "public-key", "alg": -257 },
-            ],
-            "timeout": 60000,
-            "excludeCredentials": exclude_credentials,
-            "authenticatorSelection": {
-                "authenticatorAttachment": authenticator_attachment,
-                "requireResidentKey": false,
-                "userVerification": "preferred",
-            },
-            "attestation": "none",
-        });
+        let options = generate_register_options_core(
+            &user,
+            &authenticator_attachment,
+            &self.config,
+            ctx,
+        )
+        .await?;
 
         AuthResponse::json(200, &options).map_err(AuthError::from)
     }
@@ -341,7 +621,6 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        self.ensure_insecure_verification_enabled()?;
         let (user, _session) = ctx.require_session(req).await?;
 
         let body: VerifyRegistrationRequest = match better_auth_core::validate_request_body(req) {
@@ -349,88 +628,7 @@ impl PasskeyPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        let client_data = Self::decode_client_data_json(&body.response)?;
-        let challenge = self.validate_client_data(&client_data, "webauthn.create")?;
-
-        // Atomically consume the challenge (single-use)
-        let identifier = format!("passkey_reg:{}", user.id());
-        ctx.database
-            .consume_verification(&identifier, &challenge)
-            .await?
-            .ok_or_else(|| {
-                AuthError::bad_request(
-                    "Invalid or expired registration challenge. Please generate registration options again.",
-                )
-            })?;
-
-        // Extract credential data from the client response
-        let resp = &body.response;
-        let credential_id = resp
-            .get("id")
-            .or_else(|| resp.get("rawId"))
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AuthError::bad_request("Missing credential id in response"))?;
-
-        // Extract public key from attestation response
-        // In a simplified approach, we store the clientDataJSON as the public key representation
-        let public_key = resp
-            .get("response")
-            .and_then(|r| r.get("attestationObject"))
-            .and_then(|v| v.as_str())
-            .or_else(|| {
-                resp.get("response")
-                    .and_then(|r| r.get("clientDataJSON"))
-                    .and_then(|v| v.as_str())
-            })
-            .unwrap_or("")
-            .to_string();
-
-        // Extract device type and backup info from authenticator data or client extensions
-        let authenticator_attachment = resp
-            .get("authenticatorAttachment")
-            .and_then(|v| v.as_str())
-            .unwrap_or("platform");
-
-        let device_type = if authenticator_attachment == "cross-platform" {
-            "multiDevice"
-        } else {
-            "singleDevice"
-        }
-        .to_string();
-
-        let backed_up = resp
-            .get("clientExtensionResults")
-            .and_then(|v| v.get("credProps"))
-            .and_then(|v| v.get("rk"))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-
-        // Extract transports if available
-        let transports = resp
-            .get("response")
-            .and_then(|r| r.get("transports"))
-            .map(|v| v.to_string());
-
-        let passkey_name = body
-            .name
-            .unwrap_or_else(|| format!("Passkey {}", chrono::Utc::now().format("%Y-%m-%d")));
-
-        // Create the passkey
-        let passkey = ctx
-            .database
-            .create_passkey(CreatePasskey {
-                user_id: user.id().to_string(),
-                name: passkey_name,
-                credential_id: credential_id.to_string(),
-                public_key,
-                counter: 0,
-                device_type,
-                backed_up,
-                transports,
-            })
-            .await?;
-
-        let view = PasskeyView::from_entity(&passkey);
+        let view = verify_registration_core(&body, &user, &self.config, ctx).await?;
         AuthResponse::json(200, &view).map_err(AuthError::from)
     }
 
@@ -440,51 +638,10 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let challenge = Self::generate_challenge();
+        let user = ctx.require_session(req).await.ok().map(|(u, _)| u);
 
-        // If user is authenticated, build allowCredentials from their passkeys
-        let allow_credentials: Vec<serde_json::Value> =
-            if let Ok((user, _session)) = ctx.require_session(req).await {
-                let passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
-                passkeys
-                    .iter()
-                    .map(|pk| {
-                        let mut cred = serde_json::json!({
-                            "type": "public-key",
-                            "id": pk.credential_id(),
-                        });
-                        if let Some(transports) = pk.transports()
-                            && let Ok(t) = serde_json::from_str::<Vec<String>>(transports)
-                        {
-                            cred["transports"] = serde_json::json!(t);
-                        }
-                        cred
-                    })
-                    .collect()
-            } else {
-                vec![]
-            };
-
-        // Store challenge with the challenge itself as part of the identifier
-        let identifier = format!("passkey_auth:{}", challenge);
-        let expires_at =
-            chrono::Utc::now() + chrono::Duration::seconds(self.config.challenge_ttl_secs);
-        ctx.database
-            .create_verification(CreateVerification {
-                identifier,
-                value: challenge.clone(),
-                expires_at,
-            })
-            .await?;
-
-        let options = serde_json::json!({
-            "challenge": challenge,
-            "timeout": 60000,
-            "rpId": self.config.rp_id,
-            "allowCredentials": allow_credentials,
-            "userVerification": "preferred",
-        });
-
+        let options =
+            generate_authenticate_options_core(user.as_ref(), &self.config, ctx).await?;
         AuthResponse::json(200, &options).map_err(AuthError::from)
     }
 
@@ -494,65 +651,19 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        self.ensure_insecure_verification_enabled()?;
-        let body: VerifyAuthenticationRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body: VerifyAuthenticationRequest =
+            match better_auth_core::validate_request_body(req) {
+                Ok(v) => v,
+                Err(resp) => return Ok(resp),
+            };
 
-        let resp = &body.response;
-
-        // Extract credential_id from the response
-        let credential_id = resp
-            .get("id")
-            .or_else(|| resp.get("rawId"))
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AuthError::bad_request("Missing credential id in response"))?;
-
-        let client_data = Self::decode_client_data_json(resp)?;
-        let challenge = self.validate_client_data(&client_data, "webauthn.get")?;
-
-        // Atomically consume challenge so it cannot be replayed.
-        let identifier = format!("passkey_auth:{}", challenge);
-        ctx.database
-            .consume_verification(&identifier, &challenge)
-            .await?
-            .ok_or_else(|| AuthError::bad_request("Invalid or expired authentication challenge"))?;
-
-        // Look up the passkey by credential_id
-        let passkey = ctx
-            .database
-            .get_passkey_by_credential_id(credential_id)
-            .await?
-            .ok_or_else(|| AuthError::bad_request("Passkey not found for credential"))?;
-
-        // Look up the user
-        let user = ctx
-            .database
-            .get_user_by_id(passkey.user_id())
-            .await?
-            .ok_or(AuthError::UserNotFound)?;
-
-        // Update the passkey counter
-        let new_counter = passkey
-            .counter()
-            .checked_add(1)
-            .ok_or_else(|| AuthError::internal("Passkey counter overflow"))?;
-        ctx.database
-            .update_passkey_counter(passkey.id(), new_counter)
-            .await?;
-
-        // Create a session
         let ip_address = req.headers.get("x-forwarded-for").cloned();
         let user_agent = req.headers.get("user-agent").cloned();
-        let session_manager =
-            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager
-            .create_session(&user, ip_address, user_agent)
-            .await?;
 
-        let cookie_header = create_session_cookie(session.token(), &ctx.config);
-        let response = SessionUserResponse { session, user };
+        let (response, token) =
+            verify_authentication_core(&body, ip_address, user_agent, &self.config, ctx)
+                .await?;
+        let cookie_header = create_session_cookie(&token, &ctx.config);
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
@@ -564,9 +675,7 @@ impl PasskeyPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
 
-        let passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
-        let views: Vec<PasskeyView> = passkeys.iter().map(PasskeyView::from_entity).collect();
-
+        let views = list_user_passkeys_core(&user, ctx).await?;
         AuthResponse::json(200, &views).map_err(AuthError::from)
     }
 
@@ -583,20 +692,7 @@ impl PasskeyPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        // Verify ownership
-        let passkey = ctx
-            .database
-            .get_passkey_by_id(&body.id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
-
-        if passkey.user_id() != user.id() {
-            return Err(AuthError::not_found("Passkey not found"));
-        }
-
-        ctx.database.delete_passkey(&body.id).await?;
-
-        let response = StatusResponse { status: true };
+        let response = delete_passkey_core(&body, &user, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -613,25 +709,7 @@ impl PasskeyPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        // Verify ownership
-        let passkey = ctx
-            .database
-            .get_passkey_by_id(&body.id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
-
-        if passkey.user_id() != user.id() {
-            return Err(AuthError::not_found("Passkey not found"));
-        }
-
-        let updated = ctx
-            .database
-            .update_passkey_name(&body.id, &body.name)
-            .await?;
-
-        let response = PasskeyResponse {
-            passkey: PasskeyView::from_entity(&updated),
-        };
+        let response = update_passkey_core(&body, &user, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 }
@@ -707,10 +785,13 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasskeyPlugin {
 #[cfg(feature = "axum")]
 mod axum_impl {
     use super::*;
+    use std::collections::HashMap;
     use std::sync::Arc;
 
-    use axum::extract::{Extension, State};
-    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+    use axum::Json;
+    use axum::extract::{Extension, Query, State};
+    use axum::http::header;
+    use better_auth_core::{AuthState, CurrentSession, OptionalSession, ValidatedJson};
 
     #[derive(Clone)]
     struct PluginState {
@@ -720,101 +801,101 @@ mod axum_impl {
     async fn handle_generate_register_options<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        Query(query): Query<HashMap<String, String>>,
+    ) -> Result<Json<serde_json::Value>, AuthError> {
         let ctx = state.to_context();
-        let plugin = PasskeyPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_generate_register_options(&req, &ctx).await?,
-        ))
+        let authenticator_attachment = query
+            .get("authenticatorAttachment")
+            .cloned()
+            .unwrap_or_else(|| "platform".to_string());
+        let options = generate_register_options_core(
+            &user,
+            &authenticator_attachment,
+            &ps.config,
+            &ctx,
+        )
+        .await?;
+        Ok(Json(options))
     }
 
     async fn handle_verify_registration<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<VerifyRegistrationRequest>,
+    ) -> Result<Json<PasskeyView>, AuthError> {
         let ctx = state.to_context();
-        let plugin = PasskeyPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_verify_registration(&req, &ctx).await?,
-        ))
+        let view = verify_registration_core(&body, &user, &ps.config, &ctx).await?;
+        Ok(Json(view))
     }
 
     async fn handle_generate_authenticate_options<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        OptionalSession(session): OptionalSession<DB>,
+    ) -> Result<Json<serde_json::Value>, AuthError> {
         let ctx = state.to_context();
-        let plugin = PasskeyPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin
-                .handle_generate_authenticate_options(&req, &ctx)
-                .await?,
-        ))
+        let user = session.as_ref().map(|s| &s.user);
+        let options =
+            generate_authenticate_options_core(user, &ps.config, &ctx).await?;
+        Ok(Json(options))
     }
 
     async fn handle_verify_authentication<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        headers: axum::http::HeaderMap,
+        ValidatedJson(body): ValidatedJson<VerifyAuthenticationRequest>,
+    ) -> Result<
+        (
+            [(header::HeaderName, String); 1],
+            Json<SessionUserResponse<DB::User, DB::Session>>,
+        ),
+        AuthError,
+    > {
         let ctx = state.to_context();
-        let plugin = PasskeyPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_verify_authentication(&req, &ctx).await?,
-        ))
+        let ip_address = headers
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+        let user_agent = headers
+            .get("user-agent")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+        let (response, token) =
+            verify_authentication_core(&body, ip_address, user_agent, &ps.config, &ctx).await?;
+        let cookie = state.session_cookie(&token);
+        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
     async fn handle_list_user_passkeys<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+    ) -> Result<Json<Vec<PasskeyView>>, AuthError> {
         let ctx = state.to_context();
-        let plugin = PasskeyPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_list_user_passkeys(&req, &ctx).await?,
-        ))
+        let views = list_user_passkeys_core(&user, &ctx).await?;
+        Ok(Json(views))
     }
 
     async fn handle_delete_passkey<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<DeletePasskeyRequest>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = PasskeyPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_delete_passkey(&req, &ctx).await?,
-        ))
+        let response = delete_passkey_core(&body, &user, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_update_passkey<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<UpdatePasskeyRequest>,
+    ) -> Result<Json<PasskeyResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = PasskeyPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_update_passkey(&req, &ctx).await?,
-        ))
+        let response = update_passkey_core(&body, &user, &ctx).await?;
+        Ok(Json(response))
     }
 
     impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for PasskeyPlugin {
