@@ -269,13 +269,12 @@ impl EmailVerificationPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let body: SendVerificationEmailRequest =
-            match better_auth_core::validate_request_body(req) {
-                Ok(v) => v,
-                Err(resp) => return Ok(resp),
-            };
-        let response =
-            send_verification_email_core(&body, &self.config, ctx).await?;
+        let body: SendVerificationEmailRequest = match better_auth_core::validate_request_body(req)
+        {
+            Ok(v) => v,
+            Err(resp) => return Ok(resp),
+        };
+        let response = send_verification_email_core(&body, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -298,9 +297,7 @@ impl EmailVerificationPlugin {
         let user_agent = req.headers.get("user-agent").cloned();
 
         match verify_email_core(&query, &self.config, ip_address, user_agent, ctx).await? {
-            VerifyEmailResult::AlreadyVerified(data) => {
-                Ok(AuthResponse::json(200, &data)?)
-            }
+            VerifyEmailResult::AlreadyVerified(data) => Ok(AuthResponse::json(200, &data)?),
             VerifyEmailResult::Redirect { url, session_token } => {
                 let mut headers = std::collections::HashMap::new();
                 headers.insert("Location".to_string(), url);
@@ -314,13 +311,13 @@ impl EmailVerificationPlugin {
                     body: Vec::new(),
                 })
             }
-            VerifyEmailResult::Json(data) => {
-                Ok(AuthResponse::json(200, &data)?)
-            }
-            VerifyEmailResult::JsonWithSession { response, session_token } => {
+            VerifyEmailResult::Json(data) => Ok(AuthResponse::json(200, &data)?),
+            VerifyEmailResult::JsonWithSession {
+                response,
+                session_token,
+            } => {
                 let cookie = create_session_cookie(&session_token, &ctx.config);
-                Ok(AuthResponse::json(200, &response)?
-                    .with_header("Set-Cookie", cookie))
+                Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie))
             }
         }
     }
@@ -641,8 +638,7 @@ mod axum_impl {
         ValidatedJson(body): ValidatedJson<SendVerificationEmailRequest>,
     ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
-        let response =
-            send_verification_email_core(&body, &ps.config, &ctx).await?;
+        let response = send_verification_email_core(&body, &ps.config, &ctx).await?;
         Ok(Json(response))
     }
 
@@ -655,9 +651,7 @@ mod axum_impl {
         // Note: axum Query extractor doesn't give us headers; pass None for
         // ip/user-agent (these are only used for session creation metadata).
         match verify_email_core(&query, &ps.config, None, None, &ctx).await? {
-            VerifyEmailResult::AlreadyVerified(data) => {
-                Ok(Json(data).into_response())
-            }
+            VerifyEmailResult::AlreadyVerified(data) => Ok(Json(data).into_response()),
             VerifyEmailResult::Redirect { url, session_token } => {
                 if let Some(token) = session_token {
                     let cookie = state.session_cookie(&token);
@@ -670,16 +664,13 @@ mod axum_impl {
                     Ok(axum::response::Redirect::to(&url).into_response())
                 }
             }
-            VerifyEmailResult::Json(data) => {
-                Ok(Json(data).into_response())
-            }
-            VerifyEmailResult::JsonWithSession { response, session_token } => {
+            VerifyEmailResult::Json(data) => Ok(Json(data).into_response()),
+            VerifyEmailResult::JsonWithSession {
+                response,
+                session_token,
+            } => {
                 let cookie = state.session_cookie(&session_token);
-                Ok((
-                    [(header::SET_COOKIE, cookie)],
-                    Json(response),
-                )
-                    .into_response())
+                Ok(([(header::SET_COOKIE, cookie)], Json(response)).into_response())
             }
         }
     }

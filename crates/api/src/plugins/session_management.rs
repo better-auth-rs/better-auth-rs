@@ -270,9 +270,9 @@ mod axum_impl {
     use super::*;
     use std::sync::Arc;
 
+    use axum::Json;
     use axum::extract::{Extension, State};
     use axum::http::header;
-    use axum::Json;
     use better_auth_core::{AuthState, CurrentSession, ValidatedJson};
 
     #[derive(Clone)]

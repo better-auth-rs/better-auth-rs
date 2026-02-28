@@ -276,12 +276,7 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
     )?;
 
     // Check if user already exists
-    if ctx
-        .database
-        .get_user_by_email(&body.email)
-        .await?
-        .is_some()
-    {
+    if ctx.database.get_user_by_email(&body.email).await?.is_some() {
         return Err(AuthError::conflict("A user with this email already exists"));
     }
 

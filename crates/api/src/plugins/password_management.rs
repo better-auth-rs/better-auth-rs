@@ -330,8 +330,7 @@ impl PasswordManagementPlugin {
             .await?
             .ok_or(AuthError::Unauthenticated)?;
 
-        let (response, new_token) =
-            change_password_core(&body, &user, &self.config, ctx).await?;
+        let (response, new_token) = change_password_core(&body, &user, &self.config, ctx).await?;
 
         let auth_response = AuthResponse::json(200, &response)?;
 
@@ -799,16 +798,11 @@ mod axum_impl {
         ValidatedJson(body): ValidatedJson<ChangePasswordRequest>,
     ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
-        let (response, new_token) =
-            change_password_core(&body, &user, &ps.config, &ctx).await?;
+        let (response, new_token) = change_password_core(&body, &user, &ps.config, &ctx).await?;
 
         if let Some(ref token) = new_token {
             let cookie = state.session_cookie(token);
-            Ok((
-                [(header::SET_COOKIE, cookie)],
-                Json(response),
-            )
-                .into_response())
+            Ok(([(header::SET_COOKIE, cookie)], Json(response)).into_response())
         } else {
             Ok(Json(response).into_response())
         }

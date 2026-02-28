@@ -197,15 +197,15 @@ mod axum_impl {
     use super::*;
     use std::sync::Arc;
 
-    use axum::extract::{Extension, Query, State};
     use axum::Json;
+    use axum::extract::{Extension, Query, State};
     use better_auth_core::error::AuthError;
     use better_auth_core::extractors::{CurrentSession, ValidatedJson};
 
+    use super::handlers::has_permission_core;
     use super::handlers::invitation::{
-        accept_invitation_core, cancel_invitation_core, get_invitation_core,
-        invite_member_core, list_invitations_core, list_user_invitations_core,
-        reject_invitation_core,
+        accept_invitation_core, cancel_invitation_core, get_invitation_core, invite_member_core,
+        list_invitations_core, list_user_invitations_core, reject_invitation_core,
     };
     use super::handlers::member::{
         get_active_member_core, list_members_core, remove_member_core, update_member_role_core,
@@ -215,7 +215,6 @@ mod axum_impl {
         get_full_organization_core, leave_organization_core, list_organizations_core,
         set_active_organization_core, update_organization_core,
     };
-    use super::handlers::has_permission_core;
     use super::types::*;
 
     #[derive(Clone)]
@@ -453,9 +452,18 @@ mod axum_impl {
 
             axum::Router::new()
                 // Organization CRUD
-                .route("/organization/create", post(handle_create_organization::<DB>))
-                .route("/organization/update", post(handle_update_organization::<DB>))
-                .route("/organization/delete", post(handle_delete_organization::<DB>))
+                .route(
+                    "/organization/create",
+                    post(handle_create_organization::<DB>),
+                )
+                .route(
+                    "/organization/update",
+                    post(handle_update_organization::<DB>),
+                )
+                .route(
+                    "/organization/delete",
+                    post(handle_delete_organization::<DB>),
+                )
                 .route("/organization/list", get(handle_list_organizations::<DB>))
                 .route(
                     "/organization/get-full-organization",

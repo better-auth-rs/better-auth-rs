@@ -1,10 +1,3 @@
-use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::entity::{AuthMember, AuthOrganization, AuthSession, AuthUser};
-use better_auth_core::error::{AuthError, AuthResult};
-use better_auth_core::plugin::AuthContext;
-use better_auth_core::types::{
-    AuthRequest, AuthResponse, CreateMember, CreateOrganization, UpdateOrganization,
-};
 use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::config::OrganizationConfig;
 use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
@@ -13,6 +6,13 @@ use crate::plugins::organization::types::{
     DeleteOrganizationRequest, FullOrganizationResponse, GetFullOrganizationQuery,
     LeaveOrganizationRequest, MemberResponse, SetActiveOrganizationRequest, SuccessResponse,
     UpdateOrganizationRequest,
+};
+use better_auth_core::adapters::DatabaseAdapter;
+use better_auth_core::entity::{AuthMember, AuthOrganization, AuthSession, AuthUser};
+use better_auth_core::error::{AuthError, AuthResult};
+use better_auth_core::plugin::AuthContext;
+use better_auth_core::types::{
+    AuthRequest, AuthResponse, CreateMember, CreateOrganization, UpdateOrganization,
 };
 
 // ---------------------------------------------------------------------------

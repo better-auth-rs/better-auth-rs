@@ -714,7 +714,6 @@ impl ApiKeyPlugin {
         }
     }
 
-
     // -----------------------------------------------------------------------
     // Route handlers (old — delegate to core functions)
     // -----------------------------------------------------------------------
@@ -1362,8 +1361,8 @@ mod axum_impl {
     use std::sync::Arc;
 
     use axum::Json;
-    use axum::extract::{Query, State};
     use axum::extract::Extension;
+    use axum::extract::{Query, State};
     use better_auth_core::{AuthState, CurrentSession, ValidatedJson};
 
     /// Query parameters for GET /api-key/get

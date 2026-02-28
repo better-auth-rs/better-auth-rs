@@ -111,7 +111,9 @@ mod axum_impl {
     use axum::Json;
     use axum::extract::{Extension, Path, State};
     use better_auth_core::error::AuthError;
-    use better_auth_core::extractors::{AuthRequestExt, AxumAuthResponse, CurrentSession, ValidatedJson};
+    use better_auth_core::extractors::{
+        AuthRequestExt, AxumAuthResponse, CurrentSession, ValidatedJson,
+    };
 
     use super::handlers::{
         get_access_token_core, link_social_core, refresh_token_core, social_sign_in_core,

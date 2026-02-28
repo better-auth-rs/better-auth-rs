@@ -285,7 +285,6 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for AdminPlugin {
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // Core functions — framework-agnostic business logic
 // ---------------------------------------------------------------------------
@@ -555,9 +554,7 @@ pub(crate) async fn stop_impersonating_core<DB: DatabaseAdapter>(
 ) -> AuthResult<(SessionUserResponse<DB::Session, DB::User>, String)> {
     let admin_id = session
         .impersonated_by()
-        .ok_or_else(|| {
-            AuthError::bad_request("Current session is not an impersonation session")
-        })?
+        .ok_or_else(|| AuthError::bad_request("Current session is not an impersonation session"))?
         .to_string();
 
     let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
@@ -1056,11 +1053,15 @@ mod axum_impl {
         State(state): State<AuthState<DB>>,
         AdminSession { user, .. }: AdminSession<DB>,
         ValidatedJson(body): ValidatedJson<UserIdRequest>,
-    ) -> Result<([(header::HeaderName, String); 1], Json<SessionUserResponse<DB::Session, DB::User>>), AuthError>
-    {
+    ) -> Result<
+        (
+            [(header::HeaderName, String); 1],
+            Json<SessionUserResponse<DB::Session, DB::User>>,
+        ),
+        AuthError,
+    > {
         let ctx = state.to_context();
-        let (response, token) =
-            impersonate_user_core(&body, user.id(), None, None, &ctx).await?;
+        let (response, token) = impersonate_user_core(&body, user.id(), None, None, &ctx).await?;
         let cookie = state.session_cookie(&token);
         Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
@@ -1068,8 +1069,13 @@ mod axum_impl {
     async fn handle_stop_impersonating<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         CurrentSession { session, .. }: CurrentSession<DB>,
-    ) -> Result<([(header::HeaderName, String); 1], Json<SessionUserResponse<DB::Session, DB::User>>), AuthError>
-    {
+    ) -> Result<
+        (
+            [(header::HeaderName, String); 1],
+            Json<SessionUserResponse<DB::Session, DB::User>>,
+        ),
+        AuthError,
+    > {
         let ctx = state.to_context();
         let token = session.token().to_string();
         let (response, new_token) =

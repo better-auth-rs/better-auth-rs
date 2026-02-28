@@ -485,11 +485,7 @@ pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<StatusMessageResponse> {
     // Prevent changing to the same email
-    if user
-        .email()
-        .map(|e| e == body.new_email)
-        .unwrap_or(false)
-    {
+    if user.email().map(|e| e == body.new_email).unwrap_or(false) {
         return Err(AuthError::bad_request(
             "New email must be different from the current email",
         ));
@@ -525,16 +521,15 @@ pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
     // Create verification token
     let identifier = format!("change_email:{}:{}", user.id(), body.new_email);
     let expires_at = Utc::now() + Duration::hours(24);
-    let (verification_token, verification_url) =
-        UserManagementPlugin::create_verification_token(
-            ctx,
-            &identifier,
-            "ce",
-            expires_at,
-            body.callback_url.as_deref(),
-            "change-email/verify",
-        )
-        .await?;
+    let (verification_token, verification_url) = UserManagementPlugin::create_verification_token(
+        ctx,
+        &identifier,
+        "ce",
+        expires_at,
+        body.callback_url.as_deref(),
+        "change-email/verify",
+    )
+    .await?;
 
     // Send confirmation email via custom callback or default provider
     if let Some(ref cb) = config.change_email.send_change_email_confirmation {
@@ -644,16 +639,15 @@ pub(crate) async fn delete_user_core<DB: DatabaseAdapter>(
 
         let identifier = format!("delete_user:{}", user.id());
         let expires_at = Utc::now() + config.delete_user.delete_token_expires_in;
-        let (_delete_token, verification_url) =
-            UserManagementPlugin::create_verification_token(
-                ctx,
-                &identifier,
-                "del",
-                expires_at,
-                None,
-                "delete-user/verify",
-            )
-            .await?;
+        let (_delete_token, verification_url) = UserManagementPlugin::create_verification_token(
+            ctx,
+            &identifier,
+            "del",
+            expires_at,
+            None,
+            "delete-user/verify",
+        )
+        .await?;
 
         // Send confirmation email
         let subject = "Confirm account deletion";
@@ -777,8 +771,8 @@ mod axum_impl {
     use super::*;
     use std::sync::Arc;
 
-    use axum::extract::{Extension, Query, State};
     use axum::Json;
+    use axum::extract::{Extension, Query, State};
     use better_auth_core::{AuthError, AuthState, CurrentSession, ValidatedJson};
 
     #[derive(Clone)]
@@ -835,8 +829,7 @@ mod axum_impl {
             return Err(AuthError::not_found("Not found"));
         }
         let ctx = state.to_context();
-        let response =
-            delete_user_verify_core(&query.token, &ps.config, &ctx).await?;
+        let response = delete_user_verify_core(&query.token, &ps.config, &ctx).await?;
         Ok(Json(response))
     }
 

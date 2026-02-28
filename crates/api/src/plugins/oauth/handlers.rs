@@ -71,7 +71,6 @@ fn find_account_for_provider<'a, A: AuthAccount>(
         })
 }
 
-
 fn generate_pkce() -> (String, String) {
     let verifier: String = thread_rng()
         .sample_iter(&Alphanumeric)
