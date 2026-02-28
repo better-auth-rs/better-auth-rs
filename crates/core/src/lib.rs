@@ -52,7 +52,7 @@ pub use error::{
 #[cfg(feature = "axum")]
 pub use extractors::{
     AdminRole, AdminSession, AuthRequestExt, AxumAuthResponse, CurrentSession, OptionalSession,
-    Pending2faToken, ValidatedJson,
+    ValidatedJson,
 };
 pub use hooks::{DatabaseHooks, HookedDatabaseAdapter};
 pub use middleware::{

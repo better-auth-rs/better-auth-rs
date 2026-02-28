@@ -202,6 +202,23 @@ impl From<sqlx::Error> for AuthError {
 
 pub type AuthResult<T> = Result<T, AuthError>;
 
+#[cfg(feature = "axum")]
+impl axum::response::IntoResponse for AuthError {
+    fn into_response(self) -> axum::response::Response {
+        let status = axum::http::StatusCode::from_u16(self.status_code())
+            .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+        let message = match self.status_code() {
+            500 => "Internal server error".to_string(),
+            _ => self.to_string(),
+        };
+        (
+            status,
+            axum::Json(crate::types::ErrorMessageResponse { message }),
+        )
+            .into_response()
+    }
+}
+
 /// Convert `validator::ValidationErrors` into a standardized error response body.
 ///
 /// Returns a 422 response with `{ "code": "VALIDATION_ERROR", "message": "...", "errors": {...} }`.

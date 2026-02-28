@@ -279,6 +279,7 @@ dependencies = [
  "aes-gcm",
  "argon2",
  "async-trait",
+ "axum",
  "base64",
  "better-auth-core",
  "bon",
@@ -308,6 +309,7 @@ version = "0.8.0"
 dependencies = [
  "argon2",
  "async-trait",
+ "axum",
  "base64",
  "better-auth-derive",
  "chrono",
@@ -321,6 +323,7 @@ dependencies = [
  "sqlx",
  "thiserror",
  "tokio",
+ "url",
  "uuid",
  "validator",
 ]

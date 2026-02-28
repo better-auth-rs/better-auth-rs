@@ -50,6 +50,11 @@ urlencoding = "2"
 bon = "3.3"
 governor = "0.10.4"
 nonzero_ext = "0.3.0"
+axum = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
+
+[features]
+default = []
+axum = ["dep:axum", "better-auth-core/axum"]

@@ -13,6 +13,15 @@ pub struct SessionManager<DB: DatabaseAdapter> {
     database: Arc<DB>,
 }
 
+impl<DB: DatabaseAdapter> Clone for SessionManager<DB> {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            database: self.database.clone(),
+        }
+    }
+}
+
 impl<DB: DatabaseAdapter> SessionManager<DB> {
     pub fn new(config: Arc<AuthConfig>, database: Arc<DB>) -> Self {
         Self { config, database }
