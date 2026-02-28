@@ -2,7 +2,7 @@ use chrono::{Duration, Utc};
 
 use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
-use better_auth_core::{AuthContext, AuthError, AuthResult, ListUsersParams};
+use better_auth_core::{AuthContext, AuthError, AuthResult, ListUsersParams, PASSWORD_HASH_KEY};
 use better_auth_core::{CreateAccount, CreateSession, UpdateUser};
 
 use crate::plugins::StatusResponse;
@@ -59,14 +59,14 @@ pub(crate) async fn create_user_core<DB: DatabaseAdapter>(
     let metadata_value = body.data.clone().unwrap_or(serde_json::json!({}));
     let metadata = if let serde_json::Value::Object(mut obj) = metadata_value {
         obj.insert(
-            "password_hash".to_string(),
+            PASSWORD_HASH_KEY.to_string(),
             serde_json::json!(password_hash),
         );
         serde_json::Value::Object(obj)
     } else {
         let mut obj = serde_json::Map::new();
         obj.insert(
-            "password_hash".to_string(),
+            PASSWORD_HASH_KEY.to_string(),
             serde_json::json!(password_hash),
         );
         serde_json::Value::Object(obj)
@@ -361,7 +361,7 @@ pub(crate) async fn set_user_password_core<DB: DatabaseAdapter>(
     let mut metadata = user.metadata().clone();
     if let Some(obj) = metadata.as_object_mut() {
         obj.insert(
-            "password_hash".to_string(),
+            PASSWORD_HASH_KEY.to_string(),
             serde_json::json!(password_hash),
         );
     } else {

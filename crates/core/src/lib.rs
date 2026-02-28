@@ -44,7 +44,7 @@ pub use entity::{
     AuthAccount, AuthAccountMeta, AuthApiKey, AuthApiKeyMeta, AuthInvitation, AuthInvitationMeta,
     AuthMember, AuthMemberMeta, AuthOrganization, AuthOrganizationMeta, AuthPasskey,
     AuthPasskeyMeta, AuthSession, AuthSessionMeta, AuthTwoFactor, AuthTwoFactorMeta, AuthUser,
-    AuthUserMeta, AuthVerification, AuthVerificationMeta, MemberUserView,
+    AuthUserMeta, AuthVerification, AuthVerificationMeta, MemberUserView, PASSWORD_HASH_KEY,
 };
 pub use error::{
     AuthError, AuthResult, DatabaseError, validate_request_body, validation_error_response,

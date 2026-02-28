@@ -144,11 +144,7 @@ pub(crate) async fn unlink_account_core<DB: DatabaseAdapter>(
     let allow_unlinking_all = ctx.config.account.account_linking.allow_unlinking_all;
 
     // Check if user has a password (credential provider)
-    let has_password = user
-        .metadata()
-        .get("password_hash")
-        .and_then(|v| v.as_str())
-        .is_some();
+    let has_password = user.password_hash().is_some();
 
     // Count remaining credentials after unlinking
     let remaining_accounts = accounts

@@ -188,9 +188,7 @@ fn build_totp(
 
 async fn verify_user_password<U: AuthUser>(user: &U, password: &str) -> AuthResult<()> {
     let stored_hash = user
-        .metadata()
-        .get("password_hash")
-        .and_then(|v| v.as_str())
+        .password_hash()
         .ok_or(AuthError::InvalidCredentials)?;
 
     better_auth_core::verify_password(None, password, stored_hash).await

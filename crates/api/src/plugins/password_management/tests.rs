@@ -2,7 +2,7 @@ use super::*;
 use crate::plugins::test_helpers;
 use better_auth_core::adapters::{MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps};
 use better_auth_core::config::{Argon2Config, AuthConfig, PasswordConfig};
-use better_auth_core::{CreateUser, CreateVerification, Session, User};
+use better_auth_core::{CreateUser, CreateVerification, PASSWORD_HASH_KEY, Session, User};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 
@@ -23,9 +23,14 @@ async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>,
     let plugin = PasswordManagementPlugin::new();
     let password_hash = plugin.hash_password("Password123!").await.unwrap();
 
-    let metadata = serde_json::json!({
-        "password_hash": password_hash,
-    });
+    let metadata = {
+        let mut m = serde_json::Map::new();
+        m.insert(
+            PASSWORD_HASH_KEY.to_string(),
+            serde_json::Value::String(password_hash),
+        );
+        serde_json::Value::Object(m)
+    };
 
     let create_user = CreateUser::new()
         .with_email("test@example.com")
@@ -138,7 +143,7 @@ async fn test_reset_password_success() {
         .unwrap();
     let stored_hash = updated_user
         .metadata
-        .get("password_hash")
+        .get(PASSWORD_HASH_KEY)
         .unwrap()
         .as_str()
         .unwrap();
@@ -232,7 +237,7 @@ async fn test_change_password_success() {
     let updated_user = ctx.database.get_user_by_id(user_id).await.unwrap().unwrap();
     let stored_hash = updated_user
         .metadata
-        .get("password_hash")
+        .get(PASSWORD_HASH_KEY)
         .unwrap()
         .as_str()
         .unwrap();

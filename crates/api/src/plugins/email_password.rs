@@ -7,7 +7,9 @@ use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod};
+use better_auth_core::{
+    AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod, PASSWORD_HASH_KEY,
+};
 
 use super::email_verification::EmailVerificationPlugin;
 use better_auth_core::utils::cookie_utils::create_session_cookie;
@@ -284,9 +286,14 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
     let password_hash =
         password_utils::hash_password(config.password_hasher.as_ref(), &body.password).await?;
 
-    let metadata = serde_json::json!({
-        "password_hash": password_hash,
-    });
+    let metadata = {
+        let mut m = serde_json::Map::new();
+        m.insert(
+            PASSWORD_HASH_KEY.to_string(),
+            serde_json::Value::String(password_hash),
+        );
+        serde_json::Value::Object(m)
+    };
 
     let mut create_user = CreateUser::new()
         .with_email(&body.email)
@@ -327,9 +334,7 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
 ) -> AuthResult<SignInCoreResult<DB::User>> {
     // Verify password
     let stored_hash = user
-        .metadata()
-        .get("password_hash")
-        .and_then(|v| v.as_str())
+        .password_hash()
         .ok_or(AuthError::InvalidCredentials)?;
 
     password_utils::verify_password(config.password_hasher.as_ref(), password, stored_hash).await?;
@@ -723,7 +728,7 @@ mod tests {
             .unwrap();
         let stored_hash = user
             .metadata
-            .get("password_hash")
+            .get(PASSWORD_HASH_KEY)
             .unwrap()
             .as_str()
             .unwrap();

@@ -1,7 +1,7 @@
 use chrono::{Duration, Utc};
 use uuid::Uuid;
 
-use better_auth_core::{AuthContext, AuthError, AuthResult};
+use better_auth_core::{AuthContext, AuthError, AuthResult, PASSWORD_HASH_KEY};
 use better_auth_core::{AuthSession, AuthUser, AuthVerification, DatabaseAdapter};
 
 use better_auth_core::utils::password::{self as password_utils};
@@ -132,7 +132,7 @@ pub(crate) async fn reset_password_core<DB: DatabaseAdapter>(
 
     // Update user password
     let mut metadata = user.metadata().clone();
-    metadata["password_hash"] = serde_json::Value::String(password_hash);
+    metadata[PASSWORD_HASH_KEY] = serde_json::Value::String(password_hash);
 
     ctx.database
         .update_user(user.id(), password_utils::update_user_metadata(metadata))
@@ -209,9 +209,7 @@ pub(crate) async fn change_password_core<DB: DatabaseAdapter>(
     // Verify current password
     if config.require_current_password {
         let stored_hash = user
-            .metadata()
-            .get("password_hash")
-            .and_then(|v| v.as_str())
+            .password_hash()
             .ok_or_else(|| AuthError::bad_request("No password set for this user"))?;
 
         password_utils::verify_password(
@@ -237,7 +235,7 @@ pub(crate) async fn change_password_core<DB: DatabaseAdapter>(
 
     // Update user password
     let mut metadata = user.metadata().clone();
-    metadata["password_hash"] = serde_json::Value::String(password_hash);
+    metadata[PASSWORD_HASH_KEY] = serde_json::Value::String(password_hash);
 
     let updated_user = ctx
         .database
@@ -274,11 +272,7 @@ pub(crate) async fn set_password_core<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<StatusResponse> {
     // Verify the user does NOT already have a password
-    if user
-        .metadata()
-        .get("password_hash")
-        .and_then(|v| v.as_str())
-        .is_some()
+    if user.password_hash().is_some()
     {
         return Err(AuthError::bad_request(
             "User already has a password. Use /change-password instead.",
@@ -298,7 +292,7 @@ pub(crate) async fn set_password_core<DB: DatabaseAdapter>(
         password_utils::hash_password(config.password_hasher.as_ref(), &body.new_password).await?;
 
     let mut metadata = user.metadata().clone();
-    metadata["password_hash"] = serde_json::Value::String(password_hash);
+    metadata[PASSWORD_HASH_KEY] = serde_json::Value::String(password_hash);
 
     ctx.database
         .update_user(user.id(), password_utils::update_user_metadata(metadata))
