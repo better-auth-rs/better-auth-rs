@@ -28,7 +28,7 @@ struct UnlinkAccountRequest {
 }
 
 #[derive(Debug, Serialize)]
-struct AccountResponse {
+pub(crate) struct AccountResponse {
     id: String,
     #[serde(rename = "accountId")]
     account_id: String,
@@ -101,6 +101,83 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for AccountManagementPlugin {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Core functions — framework-agnostic business logic
+// ---------------------------------------------------------------------------
+
+pub(crate) async fn list_accounts_core<DB: DatabaseAdapter>(
+    user: &DB::User,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<Vec<AccountResponse>> {
+    let accounts = ctx.database.get_user_accounts(user.id()).await?;
+
+    let filtered: Vec<AccountResponse> = accounts
+        .iter()
+        .map(|acc| AccountResponse {
+            id: acc.id().to_string(),
+            account_id: acc.account_id().to_string(),
+            provider: acc.provider_id().to_string(),
+            created_at: acc.created_at().to_rfc3339(),
+            updated_at: acc.updated_at().to_rfc3339(),
+            scopes: acc
+                .scope()
+                .map(|s| {
+                    s.split([' ', ','])
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                        .collect()
+                })
+                .unwrap_or_default(),
+        })
+        .collect();
+
+    Ok(filtered)
+}
+
+pub(crate) async fn unlink_account_core<DB: DatabaseAdapter>(
+    user: &DB::User,
+    provider_id: &str,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    let accounts = ctx.database.get_user_accounts(user.id()).await?;
+
+    let allow_unlinking_all = ctx.config.account.account_linking.allow_unlinking_all;
+
+    // Check if user has a password (credential provider)
+    let has_password = user
+        .metadata()
+        .get("password_hash")
+        .and_then(|v| v.as_str())
+        .is_some();
+
+    // Count remaining credentials after unlinking
+    let remaining_accounts = accounts
+        .iter()
+        .filter(|acc| acc.provider_id() != provider_id)
+        .count();
+
+    // Prevent unlinking the last credential (unless allow_unlinking_all is true)
+    if !allow_unlinking_all && !has_password && remaining_accounts == 0 {
+        return Err(AuthError::bad_request(
+            "Cannot unlink the last account. You must have at least one authentication method.",
+        ));
+    }
+
+    // Find and delete the account
+    let account_to_remove = accounts
+        .iter()
+        .find(|acc| acc.provider_id() == provider_id)
+        .ok_or_else(|| AuthError::not_found("No account found with this provider"))?;
+
+    ctx.database.delete_account(account_to_remove.id()).await?;
+
+    Ok(StatusResponse { status: true })
+}
+
+// ---------------------------------------------------------------------------
+// Old handler methods — delegate to core functions
+// ---------------------------------------------------------------------------
+
 impl AccountManagementPlugin {
     async fn handle_list_accounts<DB: DatabaseAdapter>(
         &self,
@@ -108,30 +185,7 @@ impl AccountManagementPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-
-        let accounts = ctx.database.get_user_accounts(user.id()).await?;
-
-        // Filter sensitive fields (password, tokens)
-        let filtered: Vec<AccountResponse> = accounts
-            .iter()
-            .map(|acc| AccountResponse {
-                id: acc.id().to_string(),
-                account_id: acc.account_id().to_string(),
-                provider: acc.provider_id().to_string(),
-                created_at: acc.created_at().to_rfc3339(),
-                updated_at: acc.updated_at().to_rfc3339(),
-                scopes: acc
-                    .scope()
-                    .map(|s| {
-                        s.split([' ', ','])
-                            .filter(|s| !s.is_empty())
-                            .map(|s| s.to_string())
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-            })
-            .collect();
-
+        let filtered = list_accounts_core(&user, ctx).await?;
         Ok(AuthResponse::json(200, &filtered)?)
     }
 
@@ -147,39 +201,7 @@ impl AccountManagementPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        let accounts = ctx.database.get_user_accounts(user.id()).await?;
-
-        let allow_unlinking_all = ctx.config.account.account_linking.allow_unlinking_all;
-
-        // Check if user has a password (credential provider)
-        let has_password = user
-            .metadata()
-            .get("password_hash")
-            .and_then(|v| v.as_str())
-            .is_some();
-
-        // Count remaining credentials after unlinking
-        let remaining_accounts = accounts
-            .iter()
-            .filter(|acc| acc.provider_id() != unlink_req.provider_id)
-            .count();
-
-        // Prevent unlinking the last credential (unless allow_unlinking_all is true)
-        if !allow_unlinking_all && !has_password && remaining_accounts == 0 {
-            return Err(AuthError::bad_request(
-                "Cannot unlink the last account. You must have at least one authentication method.",
-            ));
-        }
-
-        // Find and delete the account
-        let account_to_remove = accounts
-            .iter()
-            .find(|acc| acc.provider_id() == unlink_req.provider_id)
-            .ok_or_else(|| AuthError::not_found("No account found with this provider"))?;
-
-        ctx.database.delete_account(account_to_remove.id()).await?;
-
-        let response = StatusResponse { status: true };
+        let response = unlink_account_core(&user, &unlink_req.provider_id, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 }
@@ -187,42 +209,28 @@ impl AccountManagementPlugin {
 #[cfg(feature = "axum")]
 mod axum_impl {
     use super::*;
-    use std::sync::Arc;
 
-    use axum::extract::{Extension, State};
-    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
-
-    #[derive(Clone)]
-    struct PluginState {
-        config: AccountManagementConfig,
-    }
+    use axum::Json;
+    use axum::extract::State;
+    use better_auth_core::{AuthState, CurrentSession, ValidatedJson};
 
     async fn handle_list_accounts<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(_plugin): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+    ) -> Result<Json<Vec<AccountResponse>>, AuthError> {
         let ctx = state.to_context();
-        let plugin = AccountManagementPlugin {
-            config: _plugin.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_list_accounts(&req, &ctx).await?,
-        ))
+        let accounts = list_accounts_core(&user, &ctx).await?;
+        Ok(Json(accounts))
     }
 
     async fn handle_unlink_account<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(_plugin): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<UnlinkAccountRequest>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = AccountManagementPlugin {
-            config: _plugin.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_unlink_account(&req, &ctx).await?,
-        ))
+        let response = unlink_account_core(&user, &body.provider_id, &ctx).await?;
+        Ok(Json(response))
     }
 
     impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for AccountManagementPlugin {
@@ -233,13 +241,9 @@ mod axum_impl {
         fn router(&self) -> axum::Router<AuthState<DB>> {
             use axum::routing::{get, post};
 
-            let plugin_state = Arc::new(PluginState {
-                config: self.config.clone(),
-            });
             axum::Router::new()
                 .route("/list-accounts", get(handle_list_accounts::<DB>))
                 .route("/unlink-account", post(handle_unlink_account::<DB>))
-                .layer(Extension(plugin_state))
         }
     }
 }

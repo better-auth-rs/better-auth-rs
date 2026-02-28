@@ -33,7 +33,7 @@ struct RevokeSessionRequest {
 
 // Response structures
 #[derive(Debug, Serialize, Deserialize)]
-struct SignOutResponse {
+pub(crate) struct SignOutResponse {
     success: bool,
 }
 
@@ -133,7 +133,70 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for SessionManagementPlugin {
     }
 }
 
-// Implementation methods outside the trait
+// ---------------------------------------------------------------------------
+// Core functions — framework-agnostic business logic
+// ---------------------------------------------------------------------------
+
+pub(crate) async fn sign_out_core<DB: DatabaseAdapter>(
+    session: &DB::Session,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<SignOutResponse> {
+    ctx.database.delete_session(session.token()).await?;
+    Ok(SignOutResponse { success: true })
+}
+
+pub(crate) async fn list_sessions_core<DB: DatabaseAdapter>(
+    user_id: &str,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<Vec<DB::Session>> {
+    ctx.database.get_user_sessions(user_id).await
+}
+
+pub(crate) async fn revoke_session_core<DB: DatabaseAdapter>(
+    user: &DB::User,
+    token: &str,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    // Verify the session belongs to the current user before revoking
+    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    if let Some(session_to_revoke) = session_manager.get_session(token).await?
+        && session_to_revoke.user_id() != user.id()
+    {
+        return Err(AuthError::forbidden(
+            "Cannot revoke session that belongs to another user",
+        ));
+    }
+
+    ctx.database.delete_session(token).await?;
+    Ok(StatusResponse { status: true })
+}
+
+pub(crate) async fn revoke_sessions_core<DB: DatabaseAdapter>(
+    user_id: &str,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    ctx.database.delete_user_sessions(user_id).await?;
+    Ok(StatusResponse { status: true })
+}
+
+pub(crate) async fn revoke_other_sessions_core<DB: DatabaseAdapter>(
+    user_id: &str,
+    current_session: &DB::Session,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    let all_sessions: Vec<DB::Session> = ctx.database.get_user_sessions(user_id).await?;
+    for session in all_sessions {
+        if session.token() != current_session.token() {
+            ctx.database.delete_session(session.token()).await?;
+        }
+    }
+    Ok(StatusResponse { status: true })
+}
+
+// ---------------------------------------------------------------------------
+// Old handler methods — delegate to core functions
+// ---------------------------------------------------------------------------
+
 impl SessionManagementPlugin {
     async fn handle_get_session<DB: DatabaseAdapter>(
         &self,
@@ -150,14 +213,10 @@ impl SessionManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (_user, current_session) = ctx.require_session(req).await?;
-
-        ctx.database.delete_session(current_session.token()).await?;
-
-        let response = SignOutResponse { success: true };
-        let clear_cookie_header = create_clear_session_cookie(&ctx.config);
-
-        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", clear_cookie_header))
+        let (_user, session) = ctx.require_session(req).await?;
+        let response = sign_out_core(&session, ctx).await?;
+        let clear_cookie = create_clear_session_cookie(&ctx.config);
+        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", clear_cookie))
     }
 
     async fn handle_list_sessions<DB: DatabaseAdapter>(
@@ -166,7 +225,7 @@ impl SessionManagementPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
-        let sessions = self.get_user_sessions(user.id(), ctx).await?;
+        let sessions = list_sessions_core(user.id(), ctx).await?;
         Ok(AuthResponse::json(200, &sessions)?)
     }
 
@@ -181,19 +240,7 @@ impl SessionManagementPlugin {
             .body_as_json()
             .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
 
-        // Verify the session belongs to the current user before revoking
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        if let Some(session_to_revoke) = session_manager.get_session(&revoke_req.token).await?
-            && session_to_revoke.user_id() != user.id()
-        {
-            return Err(AuthError::forbidden(
-                "Cannot revoke session that belongs to another user",
-            ));
-        }
-
-        ctx.database.delete_session(&revoke_req.token).await?;
-
-        let response = StatusResponse { status: true };
+        let response = revoke_session_core(&user, &revoke_req.token, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -203,9 +250,7 @@ impl SessionManagementPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
-        ctx.database.delete_user_sessions(user.id()).await?;
-
-        let response = StatusResponse { status: true };
+        let response = revoke_sessions_core(user.id(), ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -215,24 +260,8 @@ impl SessionManagementPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, current_session) = ctx.require_session(req).await?;
-
-        let all_sessions = self.get_user_sessions(user.id(), ctx).await?;
-        for session in all_sessions {
-            if session.token() != current_session.token() {
-                ctx.database.delete_session(session.token()).await?;
-            }
-        }
-
-        let response = StatusResponse { status: true };
+        let response = revoke_other_sessions_core(user.id(), &current_session, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
-    }
-
-    async fn get_user_sessions<DB: DatabaseAdapter>(
-        &self,
-        user_id: &str,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<Vec<DB::Session>> {
-        ctx.database.get_user_sessions(user_id).await
     }
 }
 
@@ -242,105 +271,83 @@ mod axum_impl {
     use std::sync::Arc;
 
     use axum::extract::{Extension, State};
-    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+    use axum::http::header;
+    use axum::Json;
+    use better_auth_core::{AuthState, CurrentSession, ValidatedJson};
 
     #[derive(Clone)]
     struct PluginState {
         config: SessionManagementConfig,
     }
 
+    // get_session is trivially simple: just construct the response directly.
     async fn handle_get_session<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(_plugin): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
-        let ctx = state.to_context();
-        let plugin = SessionManagementPlugin {
-            config: _plugin.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_get_session(&req, &ctx).await?,
-        ))
+        CurrentSession { user, session }: CurrentSession<DB>,
+    ) -> Result<Json<GetSessionResponse<DB::Session, DB::User>>, AuthError> {
+        Ok(Json(GetSessionResponse { session, user }))
     }
 
     async fn handle_sign_out<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(_plugin): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { session, .. }: CurrentSession<DB>,
+    ) -> Result<([(header::HeaderName, String); 1], Json<SignOutResponse>), AuthError> {
         let ctx = state.to_context();
-        let plugin = SessionManagementPlugin {
-            config: _plugin.config.clone(),
-        };
-        Ok(AxumAuthResponse(plugin.handle_sign_out(&req, &ctx).await?))
+        let response = sign_out_core(&session, &ctx).await?;
+        let cookie = state.clear_session_cookie();
+        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
     async fn handle_list_sessions<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+    ) -> Result<Json<Vec<DB::Session>>, AuthError> {
         if !ps.config.enable_session_listing {
-            return Err(better_auth_core::AuthError::not_found("Not found"));
+            return Err(AuthError::not_found("Not found"));
         }
         let ctx = state.to_context();
-        let plugin = SessionManagementPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_list_sessions(&req, &ctx).await?,
-        ))
+        let sessions = list_sessions_core(user.id(), &ctx).await?;
+        Ok(Json(sessions))
     }
 
     async fn handle_revoke_session<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<RevokeSessionRequest>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
         if !ps.config.enable_session_revocation {
-            return Err(better_auth_core::AuthError::not_found("Not found"));
+            return Err(AuthError::not_found("Not found"));
         }
         let ctx = state.to_context();
-        let plugin = SessionManagementPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_revoke_session(&req, &ctx).await?,
-        ))
+        let response = revoke_session_core(&user, &body.token, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_revoke_sessions<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
         if !ps.config.enable_session_revocation {
-            return Err(better_auth_core::AuthError::not_found("Not found"));
+            return Err(AuthError::not_found("Not found"));
         }
         let ctx = state.to_context();
-        let plugin = SessionManagementPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_revoke_sessions(&req, &ctx).await?,
-        ))
+        let response = revoke_sessions_core(user.id(), &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_revoke_other_sessions<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, session }: CurrentSession<DB>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
         if !ps.config.enable_session_revocation {
-            return Err(better_auth_core::AuthError::not_found("Not found"));
+            return Err(AuthError::not_found("Not found"));
         }
         let ctx = state.to_context();
-        let plugin = SessionManagementPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_revoke_other_sessions(&req, &ctx).await?,
-        ))
+        let response = revoke_other_sessions_core(user.id(), &session, &ctx).await?;
+        Ok(Json(response))
     }
 
     impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for SessionManagementPlugin {
