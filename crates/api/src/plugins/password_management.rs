@@ -84,42 +84,49 @@ impl std::fmt::Debug for PasswordManagementConfig {
 
 // Request structures for password endpoints
 #[derive(Debug, Deserialize, Validate)]
-struct ForgetPasswordRequest {
+pub(crate) struct ForgetPasswordRequest {
     #[validate(email(message = "Invalid email address"))]
-    email: String,
+    pub(crate) email: String,
     #[serde(rename = "redirectTo")]
-    redirect_to: Option<String>,
+    pub(crate) redirect_to: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
-struct ResetPasswordRequest {
+pub(crate) struct ResetPasswordRequest {
     #[serde(rename = "newPassword")]
     #[validate(length(min = 1, message = "New password is required"))]
-    new_password: String,
-    token: Option<String>,
+    pub(crate) new_password: String,
+    pub(crate) token: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
-struct SetPasswordRequest {
+pub(crate) struct SetPasswordRequest {
     #[serde(rename = "newPassword")]
     #[validate(length(min = 1, message = "New password is required"))]
-    new_password: String,
+    pub(crate) new_password: String,
 }
 
 #[derive(Debug, Deserialize, Validate)]
-struct ChangePasswordRequest {
+pub(crate) struct ChangePasswordRequest {
     #[serde(rename = "newPassword")]
     #[validate(length(min = 1, message = "New password is required"))]
-    new_password: String,
+    pub(crate) new_password: String,
     #[serde(rename = "currentPassword")]
     #[validate(length(min = 1, message = "Current password is required"))]
-    current_password: String,
+    pub(crate) current_password: String,
     #[serde(
         default,
         rename = "revokeOtherSessions",
         deserialize_with = "deserialize_bool_or_string"
     )]
-    revoke_other_sessions: Option<bool>,
+    pub(crate) revoke_other_sessions: Option<bool>,
+}
+
+/// Query parameters for `GET /reset-password/{token}`.
+#[derive(Debug, Deserialize)]
+pub(crate) struct ResetPasswordTokenQuery {
+    #[serde(rename = "callbackURL")]
+    pub(crate) callback_url: Option<String>,
 }
 
 /// Deserialize a value that can be either a boolean or a string ("true"/"false") into Option<bool>.
@@ -150,14 +157,21 @@ where
 
 // Response structures
 #[derive(Debug, Serialize)]
-struct ChangePasswordResponse<U: Serialize> {
-    token: Option<String>,
-    user: U,
+pub(crate) struct ChangePasswordResponse<U: Serialize> {
+    pub(crate) token: Option<String>,
+    pub(crate) user: U,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct ResetPasswordTokenResponse {
-    token: String,
+pub(crate) struct ResetPasswordTokenResponse {
+    pub(crate) token: String,
+}
+
+/// Result of the reset-password-token core function.
+/// Either redirect to a URL or return JSON.
+pub(crate) enum ResetPasswordTokenResult {
+    Redirect(String),
+    Json(ResetPasswordTokenResponse),
 }
 
 impl PasswordManagementPlugin {
@@ -279,98 +293,11 @@ impl PasswordManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let forget_req: ForgetPasswordRequest = match better_auth_core::validate_request_body(req) {
+        let body: ForgetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        // Check if user exists
-        let user = match ctx.database.get_user_by_email(&forget_req.email).await? {
-            Some(user) => user,
-            None => {
-                // Don't reveal whether email exists or not for security
-                let response = StatusResponse { status: true };
-                return Ok(AuthResponse::json(200, &response)?);
-            }
-        };
-
-        // Generate password reset token
-        let reset_token = format!("reset_{}", Uuid::new_v4());
-        let expires_at = Utc::now() + Duration::hours(self.config.reset_token_expiry_hours);
-
-        // Create verification token
-        let create_verification = CreateVerification {
-            identifier: user.email().unwrap_or_default().to_string(),
-            value: reset_token.clone(),
-            expires_at,
-        };
-
-        ctx.database
-            .create_verification(create_verification)
-            .await?;
-
-        // Build reset URL — only allow redirect_to when it shares the same
-        // origin as the configured base_url to prevent open-redirect /
-        // token-exfiltration attacks.
-        let reset_url = if let Some(redirect_to) = &forget_req.redirect_to {
-            if redirect_to.starts_with('/') || redirect_to.starts_with(&ctx.config.base_url) {
-                format!("{}?token={}", redirect_to, reset_token)
-            } else {
-                // Untrusted origin — fall back to server-side base URL.
-                tracing::warn!(
-                    redirect_to = %redirect_to,
-                    "Ignoring untrusted redirect_to"
-                );
-                format!(
-                    "{}/reset-password?token={}",
-                    ctx.config.base_url, reset_token
-                )
-            }
-        } else {
-            format!(
-                "{}/reset-password?token={}",
-                ctx.config.base_url, reset_token
-            )
-        };
-
-        if self.config.send_email_notifications {
-            if let Some(sender) = &self.config.send_reset_password {
-                let user_value = password_utils::serialize_to_value(&user)?;
-                if let Err(e) = sender.send(&user_value, &reset_url, &reset_token).await {
-                    tracing::warn!(
-                        email = %forget_req.email,
-                        error = %e,
-                        "Custom send_reset_password callback failed"
-                    );
-                }
-            } else if let Ok(provider) = ctx.email_provider() {
-                let subject = "Reset your password";
-                let html = format!(
-                    "<p>Click the link below to reset your password:</p>\
-                     <p><a href=\"{url}\">Reset Password</a></p>",
-                    url = reset_url
-                );
-                let text = format!("Reset your password: {}", reset_url);
-
-                if let Err(e) = provider
-                    .send(&forget_req.email, subject, &html, &text)
-                    .await
-                {
-                    tracing::warn!(
-                        email = %forget_req.email,
-                        error = %e,
-                        "Failed to send password reset email"
-                    );
-                }
-            } else {
-                tracing::warn!(
-                    email = %forget_req.email,
-                    "No email provider configured, skipping password reset email"
-                );
-            }
-        } // send_email_notifications
-
-        let response = StatusResponse { status: true };
+        let response = forget_password_core(&body, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -379,67 +306,11 @@ impl PasswordManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let reset_req: ResetPasswordRequest = match better_auth_core::validate_request_body(req) {
+        let body: ResetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        // Validate password
-        self.validate_password(&reset_req.new_password, ctx)?;
-
-        // Find user by reset token
-        let token = reset_req.token.as_deref().unwrap_or("");
-        if token.is_empty() {
-            return Err(AuthError::bad_request("Reset token is required"));
-        }
-
-        let (user, verification) = self
-            .find_user_by_reset_token(token, ctx)
-            .await?
-            .ok_or_else(|| AuthError::bad_request("Invalid or expired reset token"))?;
-
-        // Hash new password
-        let password_hash = self.hash_password(&reset_req.new_password).await?;
-
-        // Update user password
-        let mut metadata = user.metadata().clone();
-        metadata["password_hash"] = serde_json::Value::String(password_hash);
-
-        ctx.database
-            .update_user(user.id(), password_utils::update_user_metadata(metadata))
-            .await?;
-
-        // Delete the used verification token
-        ctx.database.delete_verification(verification.id()).await?;
-
-        // Revoke all existing sessions for security (when configured)
-        if self.config.revoke_sessions_on_password_reset {
-            ctx.database.delete_user_sessions(user.id()).await?;
-        }
-
-        // Call on_password_reset callback if configured.
-        // Treated as non-fatal: the password has already been changed and the
-        // reset token deleted, so we log errors instead of failing the request.
-        if let Some(callback) = &self.config.on_password_reset {
-            match password_utils::serialize_to_value(&user) {
-                Ok(user_value) => {
-                    if let Err(e) = callback(user_value).await {
-                        tracing::warn!(
-                            error = %e,
-                            "on_password_reset callback failed"
-                        );
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        error = %e,
-                        "Failed to serialize user for on_password_reset callback"
-                    );
-                }
-            }
-        }
-
-        let response = StatusResponse { status: true };
+        let response = reset_password_core(&body, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -448,7 +319,7 @@ impl PasswordManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let change_req: ChangePasswordRequest = match better_auth_core::validate_request_body(req) {
+        let body: ChangePasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
@@ -459,54 +330,8 @@ impl PasswordManagementPlugin {
             .await?
             .ok_or(AuthError::Unauthenticated)?;
 
-        // Verify current password
-        if self.config.require_current_password {
-            let stored_hash = user
-                .metadata()
-                .get("password_hash")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| AuthError::bad_request("No password set for this user"))?;
-
-            self.verify_password(&change_req.current_password, stored_hash)
-                .await
-                .map_err(|_| AuthError::InvalidCredentials)?;
-        }
-
-        // Validate new password
-        self.validate_password(&change_req.new_password, ctx)?;
-
-        // Hash new password
-        let password_hash = self.hash_password(&change_req.new_password).await?;
-
-        // Update user password
-        let mut metadata = user.metadata().clone();
-        metadata["password_hash"] = serde_json::Value::String(password_hash);
-
-        let updated_user = ctx
-            .database
-            .update_user(user.id(), password_utils::update_user_metadata(metadata))
-            .await?;
-
-        // Handle session revocation
-        let new_token = if change_req.revoke_other_sessions == Some(true) {
-            // Revoke all sessions except current one
-            ctx.database.delete_user_sessions(user.id()).await?;
-
-            // Create new session
-            let session_manager =
-                better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-            let session = session_manager
-                .create_session(&updated_user, None, None)
-                .await?;
-            Some(session.token().to_string())
-        } else {
-            None
-        };
-
-        let response = ChangePasswordResponse {
-            token: new_token.clone(),
-            user: updated_user,
-        };
+        let (response, new_token) =
+            change_password_core(&body, &user, &self.config, ctx).await?;
 
         let auth_response = AuthResponse::json(200, &response)?;
 
@@ -525,7 +350,7 @@ impl PasswordManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let set_req: SetPasswordRequest = match better_auth_core::validate_request_body(req) {
+        let body: SetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
@@ -536,105 +361,31 @@ impl PasswordManagementPlugin {
             .await?
             .ok_or(AuthError::Unauthenticated)?;
 
-        // Verify the user does NOT already have a password
-        if user
-            .metadata()
-            .get("password_hash")
-            .and_then(|v| v.as_str())
-            .is_some()
-        {
-            return Err(AuthError::bad_request(
-                "User already has a password. Use /change-password instead.",
-            ));
-        }
-
-        // Validate new password
-        self.validate_password(&set_req.new_password, ctx)?;
-
-        // Hash and store the new password
-        let password_hash = self.hash_password(&set_req.new_password).await?;
-
-        let mut metadata = user.metadata().clone();
-        metadata["password_hash"] = serde_json::Value::String(password_hash);
-
-        ctx.database
-            .update_user(user.id(), password_utils::update_user_metadata(metadata))
-            .await?;
-
-        let response = StatusResponse { status: true };
+        let response = set_password_core(&body, &user, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
     async fn handle_reset_password_token<DB: DatabaseAdapter>(
         &self,
         token: &str,
-        _req: &AuthRequest,
+        req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        // Check if token is valid and get callback URL from query parameters
-        let callback_url = _req.query.get("callbackURL").cloned();
-
-        // Validate the reset token exists and is not expired
-        let (_user, _verification) = match self.find_user_by_reset_token(token, ctx).await? {
-            Some((user, verification)) => (user, verification),
-            None => {
-                // Redirect to callback URL with error if provided
-                if let Some(callback_url) = callback_url {
-                    let redirect_url = format!("{}?error=INVALID_TOKEN", callback_url);
-                    let mut headers = std::collections::HashMap::new();
-                    headers.insert("Location".to_string(), redirect_url);
-                    return Ok(AuthResponse {
-                        status: 302,
-                        headers,
-                        body: Vec::new(),
-                    });
-                }
-
-                return Err(AuthError::bad_request("Invalid or expired reset token"));
+        let query = ResetPasswordTokenQuery {
+            callback_url: req.query.get("callbackURL").cloned(),
+        };
+        match reset_password_token_core(token, &query, ctx).await? {
+            ResetPasswordTokenResult::Redirect(url) => {
+                let mut headers = std::collections::HashMap::new();
+                headers.insert("Location".to_string(), url);
+                Ok(AuthResponse {
+                    status: 302,
+                    headers,
+                    body: Vec::new(),
+                })
             }
-        };
-
-        // If callback URL is provided, redirect with valid token
-        if let Some(callback_url) = callback_url {
-            let redirect_url = format!("{}?token={}", callback_url, token);
-            let mut headers = std::collections::HashMap::new();
-            headers.insert("Location".to_string(), redirect_url);
-            return Ok(AuthResponse {
-                status: 302,
-                headers,
-                body: Vec::new(),
-            });
+            ResetPasswordTokenResult::Json(data) => Ok(AuthResponse::json(200, &data)?),
         }
-
-        // Otherwise return the token directly
-        let response = ResetPasswordTokenResponse {
-            token: token.to_string(),
-        };
-        Ok(AuthResponse::json(200, &response)?)
-    }
-
-    async fn find_user_by_reset_token<DB: DatabaseAdapter>(
-        &self,
-        token: &str,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<Option<(DB::User, DB::Verification)>> {
-        // Find verification token by value
-        let verification = match ctx.database.get_verification_by_value(token).await? {
-            Some(verification) => verification,
-            None => return Ok(None),
-        };
-
-        // Get user by email (stored in identifier field)
-        let user = match ctx
-            .database
-            .get_user_by_email(verification.identifier())
-            .await?
-        {
-            Some(user) => user,
-            None => return Ok(None),
-        };
-
-        Ok(Some((user, verification)))
     }
 
     async fn get_current_user<DB: DatabaseAdapter>(
@@ -659,9 +410,6 @@ impl PasswordManagementPlugin {
         password: &str,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<()> {
-        // PasswordManagementPlugin does not own a max_length config, so we use
-        // usize::MAX (effectively no plugin-level cap). The global
-        // PasswordConfig rules (min length, strength) are still enforced.
         password_utils::validate_password(password, ctx.config.password.min_length, usize::MAX, ctx)
     }
 
@@ -674,74 +422,407 @@ impl PasswordManagementPlugin {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Core functions (framework-agnostic business logic)
+// ---------------------------------------------------------------------------
+
+pub(crate) async fn forget_password_core<DB: DatabaseAdapter>(
+    body: &ForgetPasswordRequest,
+    config: &PasswordManagementConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    // Check if user exists
+    let user = match ctx.database.get_user_by_email(&body.email).await? {
+        Some(user) => user,
+        None => {
+            // Don't reveal whether email exists or not for security
+            return Ok(StatusResponse { status: true });
+        }
+    };
+
+    // Generate password reset token
+    let reset_token = format!("reset_{}", Uuid::new_v4());
+    let expires_at = Utc::now() + Duration::hours(config.reset_token_expiry_hours);
+
+    // Create verification token
+    let create_verification = CreateVerification {
+        identifier: user.email().unwrap_or_default().to_string(),
+        value: reset_token.clone(),
+        expires_at,
+    };
+
+    ctx.database
+        .create_verification(create_verification)
+        .await?;
+
+    // Build reset URL — only allow redirect_to when it shares the same
+    // origin as the configured base_url to prevent open-redirect /
+    // token-exfiltration attacks.
+    let reset_url = if let Some(redirect_to) = &body.redirect_to {
+        if redirect_to.starts_with('/') || redirect_to.starts_with(&ctx.config.base_url) {
+            format!("{}?token={}", redirect_to, reset_token)
+        } else {
+            // Untrusted origin — fall back to server-side base URL.
+            tracing::warn!(
+                redirect_to = %redirect_to,
+                "Ignoring untrusted redirect_to"
+            );
+            format!(
+                "{}/reset-password?token={}",
+                ctx.config.base_url, reset_token
+            )
+        }
+    } else {
+        format!(
+            "{}/reset-password?token={}",
+            ctx.config.base_url, reset_token
+        )
+    };
+
+    if config.send_email_notifications {
+        if let Some(sender) = &config.send_reset_password {
+            let user_value = password_utils::serialize_to_value(&user)?;
+            if let Err(e) = sender.send(&user_value, &reset_url, &reset_token).await {
+                tracing::warn!(
+                    email = %body.email,
+                    error = %e,
+                    "Custom send_reset_password callback failed"
+                );
+            }
+        } else if let Ok(provider) = ctx.email_provider() {
+            let subject = "Reset your password";
+            let html = format!(
+                "<p>Click the link below to reset your password:</p>\
+                 <p><a href=\"{url}\">Reset Password</a></p>",
+                url = reset_url
+            );
+            let text = format!("Reset your password: {}", reset_url);
+
+            if let Err(e) = provider.send(&body.email, subject, &html, &text).await {
+                tracing::warn!(
+                    email = %body.email,
+                    error = %e,
+                    "Failed to send password reset email"
+                );
+            }
+        } else {
+            tracing::warn!(
+                email = %body.email,
+                "No email provider configured, skipping password reset email"
+            );
+        }
+    }
+
+    Ok(StatusResponse { status: true })
+}
+
+pub(crate) async fn reset_password_core<DB: DatabaseAdapter>(
+    body: &ResetPasswordRequest,
+    config: &PasswordManagementConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    // Validate password
+    password_utils::validate_password(
+        &body.new_password,
+        ctx.config.password.min_length,
+        usize::MAX,
+        ctx,
+    )?;
+
+    // Find user by reset token
+    let token = body.token.as_deref().unwrap_or("");
+    if token.is_empty() {
+        return Err(AuthError::bad_request("Reset token is required"));
+    }
+
+    let (user, verification) = find_user_by_reset_token(token, ctx)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("Invalid or expired reset token"))?;
+
+    // Hash new password
+    let password_hash =
+        password_utils::hash_password(config.password_hasher.as_ref(), &body.new_password).await?;
+
+    // Update user password
+    let mut metadata = user.metadata().clone();
+    metadata["password_hash"] = serde_json::Value::String(password_hash);
+
+    ctx.database
+        .update_user(user.id(), password_utils::update_user_metadata(metadata))
+        .await?;
+
+    // Delete the used verification token
+    ctx.database.delete_verification(verification.id()).await?;
+
+    // Revoke all existing sessions for security (when configured)
+    if config.revoke_sessions_on_password_reset {
+        ctx.database.delete_user_sessions(user.id()).await?;
+    }
+
+    // Call on_password_reset callback if configured.
+    if let Some(callback) = &config.on_password_reset {
+        match password_utils::serialize_to_value(&user) {
+            Ok(user_value) => {
+                if let Err(e) = callback(user_value).await {
+                    tracing::warn!(
+                        error = %e,
+                        "on_password_reset callback failed"
+                    );
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    "Failed to serialize user for on_password_reset callback"
+                );
+            }
+        }
+    }
+
+    Ok(StatusResponse { status: true })
+}
+
+pub(crate) async fn reset_password_token_core<DB: DatabaseAdapter>(
+    token: &str,
+    query: &ResetPasswordTokenQuery,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<ResetPasswordTokenResult> {
+    // Validate the reset token exists and is not expired
+    match find_user_by_reset_token(token, ctx).await? {
+        Some((_user, _verification)) => {}
+        None => {
+            // Redirect to callback URL with error if provided
+            if let Some(callback_url) = &query.callback_url {
+                let redirect_url = format!("{}?error=INVALID_TOKEN", callback_url);
+                return Ok(ResetPasswordTokenResult::Redirect(redirect_url));
+            }
+            return Err(AuthError::bad_request("Invalid or expired reset token"));
+        }
+    };
+
+    // If callback URL is provided, redirect with valid token
+    if let Some(callback_url) = &query.callback_url {
+        let redirect_url = format!("{}?token={}", callback_url, token);
+        return Ok(ResetPasswordTokenResult::Redirect(redirect_url));
+    }
+
+    // Otherwise return the token directly
+    Ok(ResetPasswordTokenResult::Json(ResetPasswordTokenResponse {
+        token: token.to_string(),
+    }))
+}
+
+/// Change the user's password. Returns the response and an optional new session token.
+pub(crate) async fn change_password_core<DB: DatabaseAdapter>(
+    body: &ChangePasswordRequest,
+    user: &DB::User,
+    config: &PasswordManagementConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<(ChangePasswordResponse<DB::User>, Option<String>)> {
+    // Verify current password
+    if config.require_current_password {
+        let stored_hash = user
+            .metadata()
+            .get("password_hash")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AuthError::bad_request("No password set for this user"))?;
+
+        password_utils::verify_password(
+            config.password_hasher.as_ref(),
+            &body.current_password,
+            stored_hash,
+        )
+        .await
+        .map_err(|_| AuthError::InvalidCredentials)?;
+    }
+
+    // Validate new password
+    password_utils::validate_password(
+        &body.new_password,
+        ctx.config.password.min_length,
+        usize::MAX,
+        ctx,
+    )?;
+
+    // Hash new password
+    let password_hash =
+        password_utils::hash_password(config.password_hasher.as_ref(), &body.new_password).await?;
+
+    // Update user password
+    let mut metadata = user.metadata().clone();
+    metadata["password_hash"] = serde_json::Value::String(password_hash);
+
+    let updated_user = ctx
+        .database
+        .update_user(user.id(), password_utils::update_user_metadata(metadata))
+        .await?;
+
+    // Handle session revocation
+    let new_token = if body.revoke_other_sessions == Some(true) {
+        // Revoke all sessions except current one
+        ctx.database.delete_user_sessions(user.id()).await?;
+
+        // Create new session
+        let session_manager =
+            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+        let session = session_manager
+            .create_session(&updated_user, None, None)
+            .await?;
+        Some(session.token().to_string())
+    } else {
+        None
+    };
+
+    let response = ChangePasswordResponse {
+        token: new_token.clone(),
+        user: updated_user,
+    };
+
+    Ok((response, new_token))
+}
+
+pub(crate) async fn set_password_core<DB: DatabaseAdapter>(
+    body: &SetPasswordRequest,
+    user: &DB::User,
+    config: &PasswordManagementConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    // Verify the user does NOT already have a password
+    if user
+        .metadata()
+        .get("password_hash")
+        .and_then(|v| v.as_str())
+        .is_some()
+    {
+        return Err(AuthError::bad_request(
+            "User already has a password. Use /change-password instead.",
+        ));
+    }
+
+    // Validate new password
+    password_utils::validate_password(
+        &body.new_password,
+        ctx.config.password.min_length,
+        usize::MAX,
+        ctx,
+    )?;
+
+    // Hash and store the new password
+    let password_hash =
+        password_utils::hash_password(config.password_hasher.as_ref(), &body.new_password).await?;
+
+    let mut metadata = user.metadata().clone();
+    metadata["password_hash"] = serde_json::Value::String(password_hash);
+
+    ctx.database
+        .update_user(user.id(), password_utils::update_user_metadata(metadata))
+        .await?;
+
+    Ok(StatusResponse { status: true })
+}
+
+/// Shared helper: find a user by reset token value.
+async fn find_user_by_reset_token<DB: DatabaseAdapter>(
+    token: &str,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<Option<(DB::User, DB::Verification)>> {
+    let verification = match ctx.database.get_verification_by_value(token).await? {
+        Some(verification) => verification,
+        None => return Ok(None),
+    };
+
+    let user = match ctx
+        .database
+        .get_user_by_email(verification.identifier())
+        .await?
+    {
+        Some(user) => user,
+        None => return Ok(None),
+    };
+
+    Ok(Some((user, verification)))
+}
+
 #[cfg(feature = "axum")]
 mod axum_impl {
     use super::*;
     use std::sync::Arc;
 
-    use axum::extract::{Extension, Path, State};
-    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+    use axum::extract::{Extension, Path, Query, State};
+    use axum::response::IntoResponse;
+    use axum::{Json, http::header};
+    use better_auth_core::{AuthState, CurrentSession, ValidatedJson};
 
-    // PasswordManagementConfig is Clone (all non-clone fields are behind Arc).
-    // However the plugin struct itself is simple, so we wrap it in Arc.
-    type SharedPlugin = Arc<PasswordManagementPlugin>;
+    #[derive(Clone)]
+    struct PluginState {
+        config: PasswordManagementConfig,
+    }
 
     async fn handle_forget_password<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<SharedPlugin>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        Extension(ps): Extension<Arc<PluginState>>,
+        ValidatedJson(body): ValidatedJson<ForgetPasswordRequest>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
-        Ok(AxumAuthResponse(
-            plugin.handle_forget_password(&req, &ctx).await?,
-        ))
+        let response = forget_password_core(&body, &ps.config, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_reset_password<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<SharedPlugin>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        Extension(ps): Extension<Arc<PluginState>>,
+        ValidatedJson(body): ValidatedJson<ResetPasswordRequest>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
-        Ok(AxumAuthResponse(
-            plugin.handle_reset_password(&req, &ctx).await?,
-        ))
+        let response = reset_password_core(&body, &ps.config, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_reset_password_token<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<SharedPlugin>,
         Path(token): Path<String>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        Query(query): Query<ResetPasswordTokenQuery>,
+    ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
-        Ok(AxumAuthResponse(
-            plugin
-                .handle_reset_password_token(&token, &req, &ctx)
-                .await?,
-        ))
+        match reset_password_token_core(&token, &query, &ctx).await? {
+            ResetPasswordTokenResult::Redirect(url) => {
+                Ok(axum::response::Redirect::to(&url).into_response())
+            }
+            ResetPasswordTokenResult::Json(data) => Ok(Json(data).into_response()),
+        }
     }
 
     async fn handle_change_password<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<SharedPlugin>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        Extension(ps): Extension<Arc<PluginState>>,
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<ChangePasswordRequest>,
+    ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
-        Ok(AxumAuthResponse(
-            plugin.handle_change_password(&req, &ctx).await?,
-        ))
+        let (response, new_token) =
+            change_password_core(&body, &user, &ps.config, &ctx).await?;
+
+        if let Some(ref token) = new_token {
+            let cookie = state.session_cookie(token);
+            Ok((
+                [(header::SET_COOKIE, cookie)],
+                Json(response),
+            )
+                .into_response())
+        } else {
+            Ok(Json(response).into_response())
+        }
     }
 
     async fn handle_set_password<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<SharedPlugin>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        Extension(ps): Extension<Arc<PluginState>>,
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<SetPasswordRequest>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
-        Ok(AxumAuthResponse(
-            plugin.handle_set_password(&req, &ctx).await?,
-        ))
+        let response = set_password_core(&body, &user, &ps.config, &ctx).await?;
+        Ok(Json(response))
     }
 
     impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for PasswordManagementPlugin {
@@ -752,7 +833,7 @@ mod axum_impl {
         fn router(&self) -> axum::Router<AuthState<DB>> {
             use axum::routing::{get, post};
 
-            let shared: SharedPlugin = Arc::new(PasswordManagementPlugin {
+            let plugin_state = Arc::new(PluginState {
                 config: self.config.clone(),
             });
 
@@ -765,7 +846,7 @@ mod axum_impl {
                 )
                 .route("/change-password", post(handle_change_password::<DB>))
                 .route("/set-password", post(handle_set_password::<DB>))
-                .layer(Extension(shared))
+                .layer(Extension(plugin_state))
         }
     }
 }
