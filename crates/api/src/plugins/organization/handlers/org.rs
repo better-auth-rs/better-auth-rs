@@ -5,7 +5,6 @@ use better_auth_core::plugin::AuthContext;
 use better_auth_core::types::{
     AuthRequest, AuthResponse, CreateMember, CreateOrganization, UpdateOrganization,
 };
-
 use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::config::OrganizationConfig;
 use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
@@ -16,24 +15,20 @@ use crate::plugins::organization::types::{
     UpdateOrganizationRequest,
 };
 
-/// Handle create organization request
-pub async fn handle_create_organization<DB: DatabaseAdapter>(
-    req: &AuthRequest,
-    ctx: &AuthContext<DB>,
-    config: &OrganizationConfig,
-) -> AuthResult<AuthResponse> {
-    let (user, _session) = require_session(req, ctx).await?;
-    let body: CreateOrganizationRequest = match better_auth_core::validate_request_body(req) {
-        Ok(v) => v,
-        Err(resp) => return Ok(resp),
-    };
+// ---------------------------------------------------------------------------
+// Core functions
+// ---------------------------------------------------------------------------
 
-    // Check if user can create organizations
+pub(crate) async fn create_organization_core<DB: DatabaseAdapter>(
+    body: &CreateOrganizationRequest,
+    user: &DB::User,
+    config: &OrganizationConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<CreateOrganizationResponse<DB::Organization, MemberResponse>> {
     if !config.allow_user_to_create_organization {
         return Err(AuthError::forbidden("Organization creation is not allowed"));
     }
 
-    // Check organization limit
     if let Some(limit) = config.organization_limit {
         let user_orgs = ctx.database.list_user_organizations(user.id()).await?;
         if user_orgs.len() >= limit {
@@ -44,7 +39,6 @@ pub async fn handle_create_organization<DB: DatabaseAdapter>(
         }
     }
 
-    // Check if slug is available
     if ctx
         .database
         .get_organization_by_slug(&body.slug)
@@ -54,18 +48,16 @@ pub async fn handle_create_organization<DB: DatabaseAdapter>(
         return Err(AuthError::bad_request("Slug is already taken"));
     }
 
-    // Create organization
     let org_data = CreateOrganization {
         id: None,
-        name: body.name,
-        slug: body.slug,
-        logo: body.logo,
-        metadata: body.metadata,
+        name: body.name.clone(),
+        slug: body.slug.clone(),
+        logo: body.logo.clone(),
+        metadata: body.metadata.clone(),
     };
 
     let organization = ctx.database.create_organization(org_data).await?;
 
-    // Add creator as first member with creator role
     let member_data = CreateMember {
         organization_id: organization.id().to_string(),
         user_id: user.id().to_string(),
@@ -73,33 +65,24 @@ pub async fn handle_create_organization<DB: DatabaseAdapter>(
     };
 
     let member = ctx.database.create_member(member_data).await?;
+    let member_response = MemberResponse::from_member_and_user(&member, user);
 
-    // Create MemberResponse for response
-    let member_response = MemberResponse::from_member_and_user(&member, &user);
-
-    let response = CreateOrganizationResponse {
+    Ok(CreateOrganizationResponse {
         organization,
         members: vec![member_response],
-    };
-
-    Ok(AuthResponse::json(200, &response)?)
+    })
 }
 
-/// Handle update organization request
-pub async fn handle_update_organization<DB: DatabaseAdapter>(
-    req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn update_organization_core<DB: DatabaseAdapter>(
+    body: &UpdateOrganizationRequest,
+    user: &DB::User,
+    session: &DB::Session,
     config: &OrganizationConfig,
-) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
-    let body: UpdateOrganizationRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
-
+    ctx: &AuthContext<DB>,
+) -> AuthResult<DB::Organization> {
     let org_id =
-        resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx).await?;
+        resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
-    // Check permission
     let member = ctx
         .database
         .get_member(&org_id, user.id())
@@ -117,7 +100,6 @@ pub async fn handle_update_organization<DB: DatabaseAdapter>(
         ));
     }
 
-    // Check if new slug is available (if changing)
     if let Some(ref new_slug) = body.slug
         && let Some(existing) = ctx.database.get_organization_by_slug(new_slug).await?
         && existing.id() != org_id
@@ -125,12 +107,11 @@ pub async fn handle_update_organization<DB: DatabaseAdapter>(
         return Err(AuthError::bad_request("Slug is already taken"));
     }
 
-    // Update organization
     let update_data = UpdateOrganization {
-        name: body.name,
-        slug: body.slug,
-        logo: body.logo,
-        metadata: body.metadata,
+        name: body.name.clone(),
+        slug: body.slug.clone(),
+        logo: body.logo.clone(),
+        metadata: body.metadata.clone(),
     };
 
     let updated = ctx
@@ -138,26 +119,19 @@ pub async fn handle_update_organization<DB: DatabaseAdapter>(
         .update_organization(&org_id, update_data)
         .await?;
 
-    Ok(AuthResponse::json(200, &updated)?)
+    Ok(updated)
 }
 
-/// Handle delete organization request
-pub async fn handle_delete_organization<DB: DatabaseAdapter>(
-    req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn delete_organization_core<DB: DatabaseAdapter>(
+    body: &DeleteOrganizationRequest,
+    user: &DB::User,
     config: &OrganizationConfig,
-) -> AuthResult<AuthResponse> {
-    let (user, _session) = require_session(req, ctx).await?;
-    let body: DeleteOrganizationRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
-
-    // Check if deletion is allowed
+    ctx: &AuthContext<DB>,
+) -> AuthResult<SuccessResponse> {
     if config.disable_organization_deletion {
         return Err(AuthError::forbidden("Organization deletion is disabled"));
     }
 
-    // Check permission
     let member = ctx
         .database
         .get_member(&body.organization_id, user.id())
@@ -175,58 +149,46 @@ pub async fn handle_delete_organization<DB: DatabaseAdapter>(
         ));
     }
 
-    // Delete organization (cascade deletes members and invitations)
     ctx.database
         .delete_organization(&body.organization_id)
         .await?;
 
-    Ok(AuthResponse::json(200, &SuccessResponse { success: true })?)
+    Ok(SuccessResponse { success: true })
 }
 
-/// Handle list organizations request
-pub async fn handle_list_organizations<DB: DatabaseAdapter>(
-    req: &AuthRequest,
+pub(crate) async fn list_organizations_core<DB: DatabaseAdapter>(
+    user: &DB::User,
     ctx: &AuthContext<DB>,
-) -> AuthResult<AuthResponse> {
-    let (user, _session) = require_session(req, ctx).await?;
-
+) -> AuthResult<Vec<DB::Organization>> {
     let organizations = ctx.database.list_user_organizations(user.id()).await?;
-
-    Ok(AuthResponse::json(200, &organizations)?)
+    Ok(organizations)
 }
 
-/// Handle get full organization request
-pub async fn handle_get_full_organization<DB: DatabaseAdapter>(
-    req: &AuthRequest,
+pub(crate) async fn get_full_organization_core<DB: DatabaseAdapter>(
+    query: &GetFullOrganizationQuery,
+    user: &DB::User,
+    session: &DB::Session,
     ctx: &AuthContext<DB>,
-) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
-
-    // Parse query parameters
-    let query = parse_query::<GetFullOrganizationQuery>(&req.query);
-
+) -> AuthResult<FullOrganizationResponse<DB::Organization, DB::Invitation>> {
     let org_id = resolve_organization_id(
         query.organization_id.as_deref(),
         query.organization_slug.as_deref(),
-        &session,
+        session,
         ctx,
     )
     .await?;
 
-    // Check membership
     ctx.database
         .get_member(&org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
-    // Get organization
     let organization = ctx
         .database
         .get_organization_by_id(&org_id)
         .await?
         .ok_or_else(|| AuthError::not_found("Organization not found"))?;
 
-    // Get all members with user info
     let members_raw = ctx.database.list_organization_members(&org_id).await?;
     let mut members = Vec::with_capacity(members_raw.len());
 
@@ -236,56 +198,40 @@ pub async fn handle_get_full_organization<DB: DatabaseAdapter>(
         }
     }
 
-    // Get invitations
     let invitations = ctx.database.list_organization_invitations(&org_id).await?;
 
-    let response = FullOrganizationResponse {
+    Ok(FullOrganizationResponse {
         organization,
         members,
         invitations,
-    };
-
-    Ok(AuthResponse::json(200, &response)?)
+    })
 }
 
-/// Handle check slug request
-pub async fn handle_check_slug<DB: DatabaseAdapter>(
-    req: &AuthRequest,
+pub(crate) async fn check_slug_core<DB: DatabaseAdapter>(
+    body: &CheckSlugRequest,
     ctx: &AuthContext<DB>,
-) -> AuthResult<AuthResponse> {
-    let _session = require_session(req, ctx).await?;
-    let body: CheckSlugRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
-
+) -> AuthResult<CheckSlugResponse> {
     let exists = ctx
         .database
         .get_organization_by_slug(&body.slug)
         .await?
         .is_some();
 
-    let response = CheckSlugResponse { status: !exists };
-
-    Ok(AuthResponse::json(200, &response)?)
+    Ok(CheckSlugResponse { status: !exists })
 }
 
-/// Handle set active organization request
-pub async fn handle_set_active_organization<DB: DatabaseAdapter>(
-    req: &AuthRequest,
+pub(crate) async fn set_active_organization_core<DB: DatabaseAdapter>(
+    body: &SetActiveOrganizationRequest,
+    user: &DB::User,
+    session: &DB::Session,
     ctx: &AuthContext<DB>,
-) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
-    let body: SetActiveOrganizationRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
-
-    // Resolve organization
+) -> AuthResult<DB::Session> {
     let org_id = if body.organization_id.is_some() || body.organization_slug.is_some() {
         Some(
             resolve_organization_id(
                 body.organization_id.as_deref(),
                 body.organization_slug.as_deref(),
-                &session,
+                session,
                 ctx,
             )
             .await?,
@@ -294,7 +240,6 @@ pub async fn handle_set_active_organization<DB: DatabaseAdapter>(
         None
     };
 
-    // If org_id is provided, verify membership
     if let Some(ref oid) = org_id {
         ctx.database
             .get_member(oid, user.id())
@@ -302,33 +247,26 @@ pub async fn handle_set_active_organization<DB: DatabaseAdapter>(
             .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
     }
 
-    // Update session with new active organization
     let updated_session = ctx
         .database
         .update_session_active_organization(session.token(), org_id.as_deref())
         .await?;
 
-    Ok(AuthResponse::json(200, &updated_session)?)
+    Ok(updated_session)
 }
 
-/// Handle leave organization request
-pub async fn handle_leave_organization<DB: DatabaseAdapter>(
-    req: &AuthRequest,
+pub(crate) async fn leave_organization_core<DB: DatabaseAdapter>(
+    body: &LeaveOrganizationRequest,
+    user: &DB::User,
+    session: &DB::Session,
     ctx: &AuthContext<DB>,
-) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
-    let body: LeaveOrganizationRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
-
-    // Check membership
+) -> AuthResult<SuccessResponse> {
     let member = ctx
         .database
         .get_member(&body.organization_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
-    // Check if user is the last owner
     if member.role().contains("owner") {
         let all_members = ctx
             .database
@@ -346,24 +284,128 @@ pub async fn handle_leave_organization<DB: DatabaseAdapter>(
         }
     }
 
-    // Remove member by member_id
     ctx.database.delete_member(member.id()).await?;
 
-    // Clear active organization if it was the one being left
     if session.active_organization_id() == Some(&body.organization_id) {
         ctx.database
             .update_session_active_organization(session.token(), None)
             .await?;
     }
 
-    Ok(AuthResponse::json(200, &SuccessResponse { success: true })?)
+    Ok(SuccessResponse { success: true })
+}
+
+// ---------------------------------------------------------------------------
+// Old handlers (rewritten to call core)
+// ---------------------------------------------------------------------------
+
+/// Handle create organization request
+pub async fn handle_create_organization<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+    config: &OrganizationConfig,
+) -> AuthResult<AuthResponse> {
+    let (user, _session) = require_session(req, ctx).await?;
+    let body: CreateOrganizationRequest = match better_auth_core::validate_request_body(req) {
+        Ok(v) => v,
+        Err(resp) => return Ok(resp),
+    };
+    let response = create_organization_core(&body, &user, config, ctx).await?;
+    Ok(AuthResponse::json(200, &response)?)
+}
+
+/// Handle update organization request
+pub async fn handle_update_organization<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+    config: &OrganizationConfig,
+) -> AuthResult<AuthResponse> {
+    let (user, session) = require_session(req, ctx).await?;
+    let body: UpdateOrganizationRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let updated = update_organization_core(&body, &user, &session, config, ctx).await?;
+    Ok(AuthResponse::json(200, &updated)?)
+}
+
+/// Handle delete organization request
+pub async fn handle_delete_organization<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+    config: &OrganizationConfig,
+) -> AuthResult<AuthResponse> {
+    let (user, _session) = require_session(req, ctx).await?;
+    let body: DeleteOrganizationRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let response = delete_organization_core(&body, &user, config, ctx).await?;
+    Ok(AuthResponse::json(200, &response)?)
+}
+
+/// Handle list organizations request
+pub async fn handle_list_organizations<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<AuthResponse> {
+    let (user, _session) = require_session(req, ctx).await?;
+    let organizations = list_organizations_core(&user, ctx).await?;
+    Ok(AuthResponse::json(200, &organizations)?)
+}
+
+/// Handle get full organization request
+pub async fn handle_get_full_organization<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<AuthResponse> {
+    let (user, session) = require_session(req, ctx).await?;
+    let query = parse_query::<GetFullOrganizationQuery>(&req.query);
+    let response = get_full_organization_core(&query, &user, &session, ctx).await?;
+    Ok(AuthResponse::json(200, &response)?)
+}
+
+/// Handle check slug request
+pub async fn handle_check_slug<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<AuthResponse> {
+    let _session = require_session(req, ctx).await?;
+    let body: CheckSlugRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let response = check_slug_core(&body, ctx).await?;
+    Ok(AuthResponse::json(200, &response)?)
+}
+
+/// Handle set active organization request
+pub async fn handle_set_active_organization<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<AuthResponse> {
+    let (user, session) = require_session(req, ctx).await?;
+    let body: SetActiveOrganizationRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let updated_session = set_active_organization_core(&body, &user, &session, ctx).await?;
+    Ok(AuthResponse::json(200, &updated_session)?)
+}
+
+/// Handle leave organization request
+pub async fn handle_leave_organization<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<AuthResponse> {
+    let (user, session) = require_session(req, ctx).await?;
+    let body: LeaveOrganizationRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let response = leave_organization_core(&body, &user, &session, ctx).await?;
+    Ok(AuthResponse::json(200, &response)?)
 }
 
 /// Helper function to parse query parameters into a struct
 fn parse_query<T: Default + serde::de::DeserializeOwned>(
     query: &std::collections::HashMap<String, String>,
 ) -> T {
-    // Convert HashMap<String, String> to serde_json::Value for deserialization
     let json_value =
         serde_json::to_value(query).unwrap_or(serde_json::Value::Object(Default::default()));
     serde_json::from_value(json_value).unwrap_or_default()

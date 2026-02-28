@@ -41,12 +41,10 @@ pub(crate) async fn resolve_organization_id<DB: DatabaseAdapter>(
     session: &DB::Session,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<String> {
-    // If org_id is provided, use it
     if let Some(id) = org_id {
         return Ok(id.to_string());
     }
 
-    // If org_slug is provided, resolve it
     if let Some(slug) = org_slug {
         if let Some(org) = ctx.database.get_organization_by_slug(slug).await? {
             use better_auth_core::entity::AuthOrganization;
@@ -55,37 +53,32 @@ pub(crate) async fn resolve_organization_id<DB: DatabaseAdapter>(
         return Err(AuthError::not_found("Organization not found"));
     }
 
-    // Fall back to active organization from session
     session
         .active_organization_id()
         .map(|s| s.to_string())
         .ok_or_else(|| AuthError::bad_request("No active organization"))
 }
 
-/// Handle has-permission request
-pub async fn handle_has_permission<DB: DatabaseAdapter>(
-    req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+// ---------------------------------------------------------------------------
+// Core function
+// ---------------------------------------------------------------------------
+
+pub(crate) async fn has_permission_core<DB: DatabaseAdapter>(
+    body: &HasPermissionRequest,
+    user: &DB::User,
+    session: &DB::Session,
     config: &OrganizationConfig,
-) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
-
-    // Manually deserialize since HasPermissionRequest doesn't need validation
-    let body: HasPermissionRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
-
+    ctx: &AuthContext<DB>,
+) -> AuthResult<HasPermissionResponse> {
     let org_id =
-        resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx).await?;
+        resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
-    // Get member to check their role
     let member = ctx
         .database
         .get_member(&org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
-    // Check all requested permissions
     let mut has_all_permissions = true;
 
     for (resource_str, actions) in &body.permissions {
@@ -117,14 +110,30 @@ pub async fn handle_has_permission<DB: DatabaseAdapter>(
         }
     }
 
-    let response = HasPermissionResponse {
+    Ok(HasPermissionResponse {
         success: has_all_permissions,
         error: if has_all_permissions {
             None
         } else {
             Some("Permission denied".to_string())
         },
-    };
+    })
+}
 
+// ---------------------------------------------------------------------------
+// Old handler (rewritten to call core)
+// ---------------------------------------------------------------------------
+
+/// Handle has-permission request
+pub async fn handle_has_permission<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+    config: &OrganizationConfig,
+) -> AuthResult<AuthResponse> {
+    let (user, session) = require_session(req, ctx).await?;
+    let body: HasPermissionRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let response = has_permission_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }

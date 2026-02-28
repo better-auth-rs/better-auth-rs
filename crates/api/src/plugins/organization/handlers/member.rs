@@ -12,13 +12,15 @@ use crate::plugins::organization::types::{
     RemoveMemberRequest, RemovedMemberInfo, RemovedMemberResponse, UpdateMemberRoleRequest,
 };
 
-/// Handle get active member request
-pub async fn handle_get_active_member<DB: DatabaseAdapter>(
-    req: &AuthRequest,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
+// ---------------------------------------------------------------------------
+// Core functions
+// ---------------------------------------------------------------------------
 
+pub(crate) async fn get_active_member_core<DB: DatabaseAdapter>(
+    user: &DB::User,
+    session: &DB::Session,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<MemberResponse> {
     let org_id = session
         .active_organization_id()
         .ok_or_else(|| AuthError::bad_request("No active organization"))?;
@@ -29,46 +31,36 @@ pub async fn handle_get_active_member<DB: DatabaseAdapter>(
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
-    let member_response = MemberResponse::from_member_and_user(&member, &user);
-
-    Ok(AuthResponse::json(200, &member_response)?)
+    Ok(MemberResponse::from_member_and_user(&member, user))
 }
 
-/// Handle list members request
-pub async fn handle_list_members<DB: DatabaseAdapter>(
-    req: &AuthRequest,
+pub(crate) async fn list_members_core<DB: DatabaseAdapter>(
+    query: &ListMembersQuery,
+    user: &DB::User,
+    session: &DB::Session,
     ctx: &AuthContext<DB>,
-) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
-
-    // Parse query parameters
-    let query = parse_query::<ListMembersQuery>(&req.query);
-
+) -> AuthResult<ListMembersResponse> {
     let org_id = resolve_organization_id(
         query.organization_id.as_deref(),
         query.organization_slug.as_deref(),
-        &session,
+        session,
         ctx,
     )
     .await?;
 
-    // Check membership
     ctx.database
         .get_member(&org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
-    // Get all members
     let members_raw = ctx.database.list_organization_members(&org_id).await?;
     let total = members_raw.len();
 
-    // Apply pagination
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(50).min(100);
 
     let members_page: Vec<_> = members_raw.into_iter().skip(offset).take(limit).collect();
 
-    // Enrich with user info
     let mut members = Vec::with_capacity(members_page.len());
     for member in &members_page {
         if let Some(user_info) = ctx.database.get_user_by_id(member.user_id()).await? {
@@ -76,26 +68,19 @@ pub async fn handle_list_members<DB: DatabaseAdapter>(
         }
     }
 
-    let response = ListMembersResponse { members, total };
-
-    Ok(AuthResponse::json(200, &response)?)
+    Ok(ListMembersResponse { members, total })
 }
 
-/// Handle remove member request
-pub async fn handle_remove_member<DB: DatabaseAdapter>(
-    req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn remove_member_core<DB: DatabaseAdapter>(
+    body: &RemoveMemberRequest,
+    user: &DB::User,
+    session: &DB::Session,
     config: &OrganizationConfig,
-) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
-    let body: RemoveMemberRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
-
+    ctx: &AuthContext<DB>,
+) -> AuthResult<RemovedMemberResponse> {
     let org_id =
-        resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx).await?;
+        resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
-    // Get the requester's membership
     let requester_member = ctx
         .database
         .get_member(&org_id, user.id())
@@ -119,13 +104,11 @@ pub async fn handle_remove_member<DB: DatabaseAdapter>(
         target_member_user_id = target.user_id().to_string();
         target_member_role = target.role().to_string();
     } else if let Some(email) = &body.email {
-        // Find user by email first
         let target_user = ctx
             .database
             .get_user_by_email(email)
             .await?
             .ok_or_else(|| AuthError::not_found("User not found"))?;
-        // Get member
         let target = ctx
             .database
             .get_member(&org_id, target_user.id())
@@ -141,29 +124,25 @@ pub async fn handle_remove_member<DB: DatabaseAdapter>(
         ));
     };
 
-    // Verify target is in same organization
     if target_member_org_id != org_id {
         return Err(AuthError::bad_request("Member not in this organization"));
     }
 
-    // Check if user is trying to remove themselves (allowed without permission)
     let is_self_removal = target_member_user_id == user.id();
 
-    if !is_self_removal {
-        // Check permission for removing others
-        if !has_permission_any(
+    if !is_self_removal
+        && !has_permission_any(
             requester_member.role(),
             &Resource::Member,
             &Action::Delete,
             &config.roles,
-        ) {
-            return Err(AuthError::forbidden(
-                "You don't have permission to remove members",
-            ));
-        }
+        )
+    {
+        return Err(AuthError::forbidden(
+            "You don't have permission to remove members",
+        ));
     }
 
-    // Check if removing the last owner
     if target_member_role.contains("owner") {
         let all_members = ctx.database.list_organization_members(&org_id).await?;
         let owner_count = all_members
@@ -178,7 +157,6 @@ pub async fn handle_remove_member<DB: DatabaseAdapter>(
         }
     }
 
-    // Build member response before deleting (spec expects {member: ...})
     let response = RemovedMemberResponse {
         member: RemovedMemberInfo {
             id: target_member_id.clone(),
@@ -188,34 +166,27 @@ pub async fn handle_remove_member<DB: DatabaseAdapter>(
         },
     };
 
-    // Delete member by member_id
     ctx.database.delete_member(&target_member_id).await?;
 
-    Ok(AuthResponse::json(200, &response)?)
+    Ok(response)
 }
 
-/// Handle update member role request
-pub async fn handle_update_member_role<DB: DatabaseAdapter>(
-    req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn update_member_role_core<DB: DatabaseAdapter>(
+    body: &UpdateMemberRoleRequest,
+    user: &DB::User,
+    session: &DB::Session,
     config: &OrganizationConfig,
-) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
-    let body: UpdateMemberRoleRequest = req
-        .body_as_json()
-        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
-
+    ctx: &AuthContext<DB>,
+) -> AuthResult<MemberWrappedResponse> {
     let org_id =
-        resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx).await?;
+        resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
-    // Get requester's membership
     let requester_member = ctx
         .database
         .get_member(&org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
-    // Check permission
     if !has_permission_any(
         requester_member.role(),
         &Resource::Member,
@@ -227,19 +198,16 @@ pub async fn handle_update_member_role<DB: DatabaseAdapter>(
         ));
     }
 
-    // Get target member
     let target_member = ctx
         .database
         .get_member_by_id(&body.member_id)
         .await?
         .ok_or_else(|| AuthError::not_found("Member not found"))?;
 
-    // Verify target is in same organization
     if target_member.organization_id() != org_id {
         return Err(AuthError::bad_request("Member not in this organization"));
     }
 
-    // Prevent demoting the last owner
     if target_member.role().contains("owner") && !body.role.contains("owner") {
         let all_members = ctx.database.list_organization_members(&org_id).await?;
         let owner_count = all_members
@@ -254,22 +222,72 @@ pub async fn handle_update_member_role<DB: DatabaseAdapter>(
         }
     }
 
-    // Update role
     let updated = ctx
         .database
         .update_member_role(&body.member_id, &body.role)
         .await?;
 
-    // Return updated member wrapped in {member: ...} per spec
     let user_info = ctx
         .database
         .get_user_by_id(updated.user_id())
         .await?
         .ok_or_else(|| AuthError::internal("User not found for updated member"))?;
 
-    let response = MemberWrappedResponse {
+    Ok(MemberWrappedResponse {
         member: MemberResponse::from_member_and_user(&updated, &user_info),
-    };
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Old handlers (rewritten to call core)
+// ---------------------------------------------------------------------------
+
+/// Handle get active member request
+pub async fn handle_get_active_member<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<AuthResponse> {
+    let (user, session) = require_session(req, ctx).await?;
+    let response = get_active_member_core(&user, &session, ctx).await?;
+    Ok(AuthResponse::json(200, &response)?)
+}
+
+/// Handle list members request
+pub async fn handle_list_members<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<AuthResponse> {
+    let (user, session) = require_session(req, ctx).await?;
+    let query = parse_query::<ListMembersQuery>(&req.query);
+    let response = list_members_core(&query, &user, &session, ctx).await?;
+    Ok(AuthResponse::json(200, &response)?)
+}
+
+/// Handle remove member request
+pub async fn handle_remove_member<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+    config: &OrganizationConfig,
+) -> AuthResult<AuthResponse> {
+    let (user, session) = require_session(req, ctx).await?;
+    let body: RemoveMemberRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let response = remove_member_core(&body, &user, &session, config, ctx).await?;
+    Ok(AuthResponse::json(200, &response)?)
+}
+
+/// Handle update member role request
+pub async fn handle_update_member_role<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+    config: &OrganizationConfig,
+) -> AuthResult<AuthResponse> {
+    let (user, session) = require_session(req, ctx).await?;
+    let body: UpdateMemberRoleRequest = req
+        .body_as_json()
+        .map_err(|e| AuthError::bad_request(format!("Invalid request body: {}", e)))?;
+    let response = update_member_role_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
 
