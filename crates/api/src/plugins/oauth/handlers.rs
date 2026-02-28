@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser, AuthVerification};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, CreateAccount, CreateUser,
-    CreateVerification, DatabaseAdapter, SessionManager, UpdateAccount, UpdateUser,
+    CreateVerification, DatabaseAdapter, UpdateAccount, UpdateUser,
 };
 
 use super::encryption::{encrypt_token_set, maybe_decrypt};
@@ -27,7 +27,7 @@ async fn require_session<DB: DatabaseAdapter>(
     req: &AuthRequest,
     ctx: &AuthContext<DB>,
 ) -> Result<DB::Session, AuthError> {
-    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let session_manager = ctx.session_manager();
     let token = session_manager
         .extract_session_token(req)
         .ok_or(AuthError::Unauthenticated)?;
@@ -42,8 +42,7 @@ async fn create_oauth_session_tuple<DB: DatabaseAdapter>(
     user: DB::User,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<(OAuthCallbackResponse<DB::User>, String)> {
-    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    let session = session_manager.create_session(&user, None, None).await?;
+    let session = ctx.session_manager().create_session(&user, None, None).await?;
     let token = session.token().to_string();
 
     let response = OAuthCallbackResponse {

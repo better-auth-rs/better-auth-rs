@@ -250,9 +250,8 @@ pub(crate) async fn change_password_core<DB: DatabaseAdapter>(
         ctx.database.delete_user_sessions(user.id()).await?;
 
         // Create new session
-        let session_manager =
-            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager
+        let session = ctx
+            .session_manager()
             .create_session(&updated_user, None, None)
             .await?;
         Some(session.token().to_string())

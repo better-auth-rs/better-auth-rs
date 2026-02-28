@@ -167,14 +167,18 @@ impl<DB: DatabaseAdapter> AuthContext<DB> {
             .ok_or_else(|| AuthError::config("No email provider configured"))
     }
 
+    /// Create a `SessionManager` from this context's config and database.
+    pub fn session_manager(&self) -> crate::session::SessionManager<DB> {
+        crate::session::SessionManager::new(self.config.clone(), self.database.clone())
+    }
+
     /// Extract a session token from the request, validate the session, and
     /// return the authenticated `(User, Session)` pair.
     ///
     /// This centralises the pattern previously duplicated across many plugins
     /// (`get_authenticated_user`, `require_session`, etc.).
     pub async fn require_session(&self, req: &AuthRequest) -> AuthResult<(DB::User, DB::Session)> {
-        let session_manager =
-            crate::session::SessionManager::new(self.config.clone(), self.database.clone());
+        let session_manager = self.session_manager();
 
         if let Some(token) = session_manager.extract_session_token(req)
             && let Some(session) = session_manager.get_session(&token).await?

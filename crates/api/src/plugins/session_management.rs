@@ -4,7 +4,7 @@ use validator::Validate;
 
 use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthSession, AuthUser};
-use better_auth_core::{AuthContext, AuthPlugin, AuthRoute, SessionManager};
+use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 
 use better_auth_core::utils::cookie_utils::create_clear_session_cookie;
 use better_auth_core::{AuthError, AuthResult};
@@ -158,7 +158,7 @@ pub(crate) async fn revoke_session_core<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<StatusResponse> {
     // Verify the session belongs to the current user before revoking
-    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let session_manager = ctx.session_manager();
     if let Some(session_to_revoke) = session_manager.get_session(token).await?
         && session_to_revoke.user_id() != user.id()
     {

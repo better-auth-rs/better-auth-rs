@@ -10,7 +10,6 @@ use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthMember, AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
-use better_auth_core::session::SessionManager;
 use better_auth_core::types::{AuthRequest, AuthResponse};
 
 use super::config::OrganizationConfig;
@@ -22,7 +21,7 @@ pub(crate) async fn require_session<DB: DatabaseAdapter>(
     req: &AuthRequest,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<(DB::User, DB::Session)> {
-    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let session_manager = ctx.session_manager();
 
     if let Some(token) = session_manager.extract_session_token(req)
         && let Some(session) = session_manager.get_session(&token).await?

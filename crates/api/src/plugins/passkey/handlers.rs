@@ -371,9 +371,8 @@ pub(crate) async fn verify_authentication_core<DB: DatabaseAdapter>(
         .await?;
 
     // Create a session
-    let session_manager =
-        better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    let session = session_manager
+    let session = ctx
+        .session_manager()
         .create_session(&user, ip_address, user_agent)
         .await?;
 

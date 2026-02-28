@@ -390,9 +390,7 @@ async fn verify_totp_core<DB: DatabaseAdapter>(
     }
 
     // Code valid — create session
-    let session_manager =
-        better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    let session = session_manager.create_session(user, None, None).await?;
+    let session = ctx.session_manager().create_session(user, None, None).await?;
 
     // Delete the pending verification
     ctx.database.delete_verification(verification_id).await?;
@@ -461,9 +459,7 @@ async fn verify_otp_core<DB: DatabaseAdapter>(
     }
 
     // Valid — create session
-    let session_manager =
-        better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    let session = session_manager.create_session(user, None, None).await?;
+    let session = ctx.session_manager().create_session(user, None, None).await?;
 
     // Clean up verifications
     ctx.database
@@ -527,9 +523,7 @@ async fn verify_backup_code_core<DB: DatabaseAdapter>(
         .await?;
 
     // Create session
-    let session_manager =
-        better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    let session = session_manager.create_session(user, None, None).await?;
+    let session = ctx.session_manager().create_session(user, None, None).await?;
 
     // Clean up pending verification
     ctx.database.delete_verification(verification_id).await?;

@@ -302,9 +302,7 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
     let user = ctx.database.create_user(create_user).await?;
 
     if config.auto_sign_in {
-        let session_manager =
-            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager.create_session(&user, None, None).await?;
+        let session = ctx.session_manager().create_session(&user, None, None).await?;
         let token = session.token().to_string();
 
         let response = SignUpResponse {
@@ -367,9 +365,7 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
     }
 
     // Create session
-    let session_manager =
-        better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    let session = session_manager.create_session(&user, None, None).await?;
+    let session = ctx.session_manager().create_session(&user, None, None).await?;
     let token = session.token().to_string();
 
     let response = SignInResponse {

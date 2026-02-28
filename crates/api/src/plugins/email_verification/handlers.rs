@@ -4,7 +4,7 @@ use uuid::Uuid;
 use better_auth_core::User;
 use better_auth_core::{AuthContext, AuthResult};
 use better_auth_core::{AuthError, CreateVerification, UpdateUser};
-use better_auth_core::{AuthSession, AuthUser, AuthVerification, DatabaseAdapter, SessionManager};
+use better_auth_core::{AuthSession, AuthUser, AuthVerification, DatabaseAdapter};
 
 use super::types::*;
 use super::{EmailVerificationConfig, StatusResponse};
@@ -133,8 +133,8 @@ pub(super) async fn verify_email_core<DB: DatabaseAdapter>(
 
     // Optionally create a session when auto_sign_in_after_verification is enabled.
     let session_info = if config.auto_sign_in_after_verification {
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager
+        let session = ctx
+            .session_manager()
             .create_session(&updated_user, ip_address, user_agent)
             .await?;
         let token = session.token().to_string();

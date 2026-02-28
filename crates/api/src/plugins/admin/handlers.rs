@@ -2,7 +2,7 @@ use chrono::{Duration, Utc};
 
 use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
-use better_auth_core::{AuthContext, AuthError, AuthResult, ListUsersParams, SessionManager};
+use better_auth_core::{AuthContext, AuthError, AuthResult, ListUsersParams};
 use better_auth_core::{CreateAccount, CreateSession, UpdateUser};
 
 use crate::plugins::StatusResponse;
@@ -142,7 +142,7 @@ pub(crate) async fn list_user_sessions_core<DB: DatabaseAdapter>(
         .await?
         .ok_or_else(|| AuthError::not_found("User not found"))?;
 
-    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let session_manager = ctx.session_manager();
     let sessions = session_manager.list_user_sessions(&body.user_id).await?;
     Ok(ListSessionsResponse { sessions })
 }
@@ -181,8 +181,7 @@ pub(crate) async fn ban_user_core<DB: DatabaseAdapter>(
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
 
-    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    session_manager
+    ctx.session_manager()
         .revoke_all_user_sessions(&body.user_id)
         .await?;
 
@@ -259,8 +258,7 @@ pub(crate) async fn stop_impersonating_core<DB: DatabaseAdapter>(
         .ok_or_else(|| AuthError::bad_request("Current session is not an impersonation session"))?
         .to_string();
 
-    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    session_manager.delete_session(session_token).await?;
+    ctx.session_manager().delete_session(session_token).await?;
 
     let admin_user = ctx
         .database
@@ -292,8 +290,9 @@ pub(crate) async fn revoke_user_session_core<DB: DatabaseAdapter>(
     body: &RevokeSessionRequest,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<SuccessResponse> {
-    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    session_manager.delete_session(&body.session_token).await?;
+    ctx.session_manager()
+        .delete_session(&body.session_token)
+        .await?;
     Ok(SuccessResponse { success: true })
 }
 
@@ -307,8 +306,7 @@ pub(crate) async fn revoke_user_sessions_core<DB: DatabaseAdapter>(
         .await?
         .ok_or_else(|| AuthError::not_found("User not found"))?;
 
-    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-    session_manager
+    ctx.session_manager()
         .revoke_all_user_sessions(&body.user_id)
         .await?;
 

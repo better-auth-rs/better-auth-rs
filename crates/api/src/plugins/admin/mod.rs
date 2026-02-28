@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::AuthUser;
-use better_auth_core::{AuthContext, AuthPlugin, AuthRoute, SessionManager};
+use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
@@ -325,7 +325,7 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+        let session_manager = ctx.session_manager();
         let token = session_manager
             .extract_session_token(req)
             .ok_or(AuthError::Unauthenticated)?;
