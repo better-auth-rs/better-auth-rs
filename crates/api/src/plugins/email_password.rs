@@ -55,7 +55,7 @@ impl std::fmt::Debug for EmailPasswordConfig {
 
 #[derive(Debug, Deserialize, Validate)]
 #[allow(dead_code)]
-struct SignUpRequest {
+pub(crate) struct SignUpRequest {
     #[validate(length(min = 1, message = "Name is required"))]
     name: String,
     #[validate(email(message = "Invalid email address"))]
@@ -71,7 +71,7 @@ struct SignUpRequest {
 
 #[derive(Debug, Deserialize, Validate)]
 #[allow(dead_code)]
-struct SignInRequest {
+pub(crate) struct SignInRequest {
     #[validate(email(message = "Invalid email address"))]
     email: String,
     #[validate(length(min = 1, message = "Password is required"))]
@@ -84,7 +84,7 @@ struct SignInRequest {
 
 #[derive(Debug, Deserialize, Validate)]
 #[allow(dead_code)]
-struct SignInUsernameRequest {
+pub(crate) struct SignInUsernameRequest {
     #[validate(length(min = 1, message = "Username is required"))]
     username: String,
     #[validate(length(min = 1, message = "Password is required"))]
@@ -94,17 +94,31 @@ struct SignInUsernameRequest {
 }
 
 #[derive(Debug, Serialize)]
-struct SignUpResponse<U: Serialize> {
+pub(crate) struct SignUpResponse<U: Serialize> {
     token: Option<String>,
     user: U,
 }
 
 #[derive(Debug, Serialize)]
-struct SignInResponse<U: Serialize> {
+pub(crate) struct SignInResponse<U: Serialize> {
     redirect: bool,
     token: String,
     url: Option<String>,
     user: U,
+}
+
+/// 2FA redirect response returned when the user has 2FA enabled.
+#[derive(Debug, Serialize)]
+pub(crate) struct TwoFactorRedirectResponse {
+    #[serde(rename = "twoFactorRedirect")]
+    two_factor_redirect: bool,
+    token: String,
+}
+
+/// Result of sign-in: either a successful session or a 2FA redirect.
+pub(crate) enum SignInCoreResult<U: Serialize> {
+    Success(SignInResponse<U>, String),
+    TwoFactorRedirect(TwoFactorRedirectResponse),
 }
 
 impl EmailPasswordPlugin {
@@ -165,67 +179,17 @@ impl EmailPasswordPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        if !self.config.enable_signup {
-            return Err(AuthError::forbidden("User registration is not enabled"));
-        }
-
         let signup_req: SignUpRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
-        // Validate password
-        self.validate_password(&signup_req.password, ctx)?;
+        let (response, session_token) = sign_up_core(&signup_req, &self.config, ctx).await?;
 
-        // Check if user already exists
-        if ctx
-            .database
-            .get_user_by_email(&signup_req.email)
-            .await?
-            .is_some()
-        {
-            return Err(AuthError::conflict("A user with this email already exists"));
-        }
-
-        // Hash password
-        let password_hash = self.hash_password(&signup_req.password).await?;
-
-        // Create user with password hash in metadata
-        let metadata = serde_json::json!({
-            "password_hash": password_hash,
-        });
-
-        let mut create_user = CreateUser::new()
-            .with_email(&signup_req.email)
-            .with_name(&signup_req.name);
-        if let Some(username) = signup_req.username {
-            create_user = create_user.with_username(username);
-        }
-        if let Some(display_username) = signup_req.display_username {
-            create_user.display_username = Some(display_username);
-        }
-        create_user.metadata = Some(metadata);
-
-        let user = ctx.database.create_user(create_user).await?;
-
-        if self.config.auto_sign_in {
-            // Create session
-            let session_manager =
-                better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-            let session = session_manager.create_session(&user, None, None).await?;
-
-            let response = SignUpResponse {
-                token: Some(session.token().to_string()),
-                user,
-            };
-
-            // Create session cookie
-            let cookie_header = create_session_cookie(session.token(), &ctx.config);
-
+        if let Some(token) = session_token {
+            let cookie_header = create_session_cookie(&token, &ctx.config);
             Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
         } else {
-            let response = SignUpResponse { token: None, user };
-
             Ok(AuthResponse::json(200, &response)?)
         }
     }
@@ -240,70 +204,22 @@ impl EmailPasswordPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        // Get user by email
-        let user = ctx
-            .database
-            .get_user_by_email(&signin_req.email)
-            .await?
-            .ok_or(AuthError::InvalidCredentials)?;
-
-        // Verify password
-        let stored_hash = user
-            .metadata()
-            .get("password_hash")
-            .and_then(|v| v.as_str())
-            .ok_or(AuthError::InvalidCredentials)?;
-
-        self.verify_password(&signin_req.password, stored_hash)
-            .await?;
-
-        // Check if 2FA is enabled
-        if user.two_factor_enabled() {
-            let pending_token = format!("2fa_{}", uuid::Uuid::new_v4());
-            ctx.database
-                .create_verification(CreateVerification {
-                    identifier: format!("2fa_pending:{}", pending_token),
-                    value: user.id().to_string(),
-                    expires_at: chrono::Utc::now() + chrono::Duration::minutes(5),
-                })
-                .await?;
-            return Ok(AuthResponse::json(
-                200,
-                &serde_json::json!({
-                    "twoFactorRedirect": true,
-                    "token": pending_token,
-                }),
-            )?);
-        }
-
-        // Send verification email on sign-in if configured
-        if let Some(ref ev) = self.email_verification
-            && let Err(e) = ev
-                .send_verification_on_sign_in(&user, signin_req.callback_url.as_deref(), ctx)
-                .await
+        match sign_in_core(
+            &signin_req,
+            &self.config,
+            self.email_verification.as_deref(),
+            ctx,
+        )
+        .await?
         {
-            tracing::warn!(
-                error = %e,
-                "Failed to send verification email on sign-in"
-            );
+            SignInCoreResult::Success(response, token) => {
+                let cookie_header = create_session_cookie(&token, &ctx.config);
+                Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+            }
+            SignInCoreResult::TwoFactorRedirect(redirect) => {
+                Ok(AuthResponse::json(200, &redirect)?)
+            }
         }
-
-        // Create session
-        let session_manager =
-            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager.create_session(&user, None, None).await?;
-
-        let response = SignInResponse {
-            redirect: false,
-            token: session.token().to_string(),
-            url: None,
-            user,
-        };
-
-        // Create session cookie
-        let cookie_header = create_session_cookie(session.token(), &ctx.config);
-
-        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
     async fn handle_sign_in_username<DB: DatabaseAdapter>(
@@ -316,90 +232,198 @@ impl EmailPasswordPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        // Get user by username
-        let user = ctx
-            .database
-            .get_user_by_username(&signin_req.username)
-            .await?
-            .ok_or(AuthError::InvalidCredentials)?;
-
-        // Verify password
-        let stored_hash = user
-            .metadata()
-            .get("password_hash")
-            .and_then(|v| v.as_str())
-            .ok_or(AuthError::InvalidCredentials)?;
-
-        self.verify_password(&signin_req.password, stored_hash)
-            .await?;
-
-        // Check if 2FA is enabled
-        if user.two_factor_enabled() {
-            let pending_token = format!("2fa_{}", uuid::Uuid::new_v4());
-            ctx.database
-                .create_verification(CreateVerification {
-                    identifier: format!("2fa_pending:{}", pending_token),
-                    value: user.id().to_string(),
-                    expires_at: chrono::Utc::now() + chrono::Duration::minutes(5),
-                })
-                .await?;
-            return Ok(AuthResponse::json(
-                200,
-                &serde_json::json!({
-                    "twoFactorRedirect": true,
-                    "token": pending_token,
-                }),
-            )?);
-        }
-
-        // Send verification email on sign-in if configured
-        if let Some(ref ev) = self.email_verification
-            && let Err(e) = ev.send_verification_on_sign_in(&user, None, ctx).await
+        match sign_in_username_core(
+            &signin_req,
+            &self.config,
+            self.email_verification.as_deref(),
+            ctx,
+        )
+        .await?
         {
-            tracing::warn!(
-                error = %e,
-                "Failed to send verification email on sign-in"
-            );
+            SignInCoreResult::Success(response, token) => {
+                let cookie_header = create_session_cookie(&token, &ctx.config);
+                Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+            }
+            SignInCoreResult::TwoFactorRedirect(redirect) => {
+                Ok(AuthResponse::json(200, &redirect)?)
+            }
         }
+    }
+}
 
-        // Create session
+// ---------------------------------------------------------------------------
+// Core functions — framework-agnostic business logic
+// ---------------------------------------------------------------------------
+
+/// Core sign-up logic.
+///
+/// Returns `(response, Option<session_token>)`. The session token is present
+/// only when `auto_sign_in` is true.
+pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
+    body: &SignUpRequest,
+    config: &EmailPasswordConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<(SignUpResponse<DB::User>, Option<String>)> {
+    if !config.enable_signup {
+        return Err(AuthError::forbidden("User registration is not enabled"));
+    }
+
+    password_utils::validate_password(
+        &body.password,
+        config.password_min_length,
+        config.password_max_length,
+        ctx,
+    )?;
+
+    // Check if user already exists
+    if ctx
+        .database
+        .get_user_by_email(&body.email)
+        .await?
+        .is_some()
+    {
+        return Err(AuthError::conflict("A user with this email already exists"));
+    }
+
+    // Hash password
+    let password_hash =
+        password_utils::hash_password(config.password_hasher.as_ref(), &body.password).await?;
+
+    let metadata = serde_json::json!({
+        "password_hash": password_hash,
+    });
+
+    let mut create_user = CreateUser::new()
+        .with_email(&body.email)
+        .with_name(&body.name);
+    if let Some(ref username) = body.username {
+        create_user = create_user.with_username(username.clone());
+    }
+    if let Some(ref display_username) = body.display_username {
+        create_user.display_username = Some(display_username.clone());
+    }
+    create_user.metadata = Some(metadata);
+
+    let user = ctx.database.create_user(create_user).await?;
+
+    if config.auto_sign_in {
         let session_manager =
             better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
         let session = session_manager.create_session(&user, None, None).await?;
+        let token = session.token().to_string();
 
-        let response = SignInResponse {
-            redirect: false,
-            token: session.token().to_string(),
-            url: None,
+        let response = SignUpResponse {
+            token: Some(token.clone()),
             user,
         };
+        Ok((response, Some(token)))
+    } else {
+        let response = SignUpResponse { token: None, user };
+        Ok((response, None))
+    }
+}
 
-        // Create session cookie
-        let cookie_header = create_session_cookie(session.token(), &ctx.config);
+/// Shared sign-in logic after user lookup: verify password, check 2FA, create session.
+async fn sign_in_with_user_core<DB: DatabaseAdapter>(
+    user: DB::User,
+    password: &str,
+    config: &EmailPasswordConfig,
+    email_verification: Option<&EmailVerificationPlugin>,
+    callback_url: Option<&str>,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<SignInCoreResult<DB::User>> {
+    // Verify password
+    let stored_hash = user
+        .metadata()
+        .get("password_hash")
+        .and_then(|v| v.as_str())
+        .ok_or(AuthError::InvalidCredentials)?;
 
-        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+    password_utils::verify_password(config.password_hasher.as_ref(), password, stored_hash).await?;
+
+    // Check if 2FA is enabled
+    if user.two_factor_enabled() {
+        let pending_token = format!("2fa_{}", uuid::Uuid::new_v4());
+        ctx.database
+            .create_verification(CreateVerification {
+                identifier: format!("2fa_pending:{}", pending_token),
+                value: user.id().to_string(),
+                expires_at: chrono::Utc::now() + chrono::Duration::minutes(5),
+            })
+            .await?;
+        return Ok(SignInCoreResult::TwoFactorRedirect(
+            TwoFactorRedirectResponse {
+                two_factor_redirect: true,
+                token: pending_token,
+            },
+        ));
     }
 
-    fn validate_password<DB: DatabaseAdapter>(
-        &self,
-        password: &str,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<()> {
-        password_utils::validate_password(
-            password,
-            self.config.password_min_length,
-            self.config.password_max_length,
-            ctx,
-        )
+    // Send verification email on sign-in if configured
+    if let Some(ev) = email_verification
+        && let Err(e) = ev
+            .send_verification_on_sign_in(&user, callback_url, ctx)
+            .await
+    {
+        tracing::warn!(
+            error = %e,
+            "Failed to send verification email on sign-in"
+        );
     }
 
-    async fn hash_password(&self, password: &str) -> AuthResult<String> {
-        password_utils::hash_password(self.config.password_hasher.as_ref(), password).await
-    }
+    // Create session
+    let session_manager =
+        better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let session = session_manager.create_session(&user, None, None).await?;
+    let token = session.token().to_string();
 
-    async fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
-        password_utils::verify_password(self.config.password_hasher.as_ref(), password, hash).await
-    }
+    let response = SignInResponse {
+        redirect: false,
+        token: token.clone(),
+        url: None,
+        user,
+    };
+    Ok(SignInCoreResult::Success(response, token))
+}
+
+/// Core sign-in by email.
+pub(crate) async fn sign_in_core<DB: DatabaseAdapter>(
+    body: &SignInRequest,
+    config: &EmailPasswordConfig,
+    email_verification: Option<&EmailVerificationPlugin>,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<SignInCoreResult<DB::User>> {
+    let user = ctx
+        .database
+        .get_user_by_email(&body.email)
+        .await?
+        .ok_or(AuthError::InvalidCredentials)?;
+
+    sign_in_with_user_core(
+        user,
+        &body.password,
+        config,
+        email_verification,
+        body.callback_url.as_deref(),
+        ctx,
+    )
+    .await
+}
+
+/// Core sign-in by username.
+pub(crate) async fn sign_in_username_core<DB: DatabaseAdapter>(
+    body: &SignInUsernameRequest,
+    config: &EmailPasswordConfig,
+    email_verification: Option<&EmailVerificationPlugin>,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<SignInCoreResult<DB::User>> {
+    let user = ctx
+        .database
+        .get_user_by_username(&body.username)
+        .await?
+        .ok_or(AuthError::InvalidCredentials)?;
+
+    sign_in_with_user_core(user, &body.password, config, email_verification, None, ctx).await
 }
 
 impl Default for EmailPasswordConfig {
@@ -467,45 +491,76 @@ mod axum_impl {
     use super::*;
     use std::sync::Arc;
 
+    use axum::Json;
     use axum::extract::{Extension, State};
-    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+    use axum::http::header;
+    use axum::response::IntoResponse;
+    use better_auth_core::{AuthState, ValidatedJson};
 
-    // EmailPasswordPlugin holds an Option<Arc<EmailVerificationPlugin>> which
-    // is not Clone on the plugin struct itself. We wrap the whole plugin in Arc.
+    /// Shared plugin state wrapping the full plugin (non-Clone due to
+    /// Option<Arc<EmailVerificationPlugin>>).
     type SharedPlugin = Arc<EmailPasswordPlugin>;
 
     async fn handle_sign_up<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(plugin): Extension<SharedPlugin>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
-        if !plugin.config.enable_signup {
-            return Err(better_auth_core::AuthError::forbidden(
-                "User registration is not enabled",
-            ));
-        }
+        ValidatedJson(body): ValidatedJson<SignUpRequest>,
+    ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
-        Ok(AxumAuthResponse(plugin.handle_sign_up(&req, &ctx).await?))
+        let (response, session_token) = sign_up_core(&body, &plugin.config, &ctx).await?;
+
+        if let Some(token) = session_token {
+            let cookie = state.session_cookie(&token);
+            Ok(([(header::SET_COOKIE, cookie)], Json(response)).into_response())
+        } else {
+            Ok(Json(response).into_response())
+        }
+    }
+
+    /// Helper to convert a `SignInCoreResult` into an axum response.
+    fn sign_in_result_to_response<DB: DatabaseAdapter>(
+        result: SignInCoreResult<DB::User>,
+        state: &AuthState<DB>,
+    ) -> axum::response::Response {
+        match result {
+            SignInCoreResult::Success(response, token) => {
+                let cookie = state.session_cookie(&token);
+                ([(header::SET_COOKIE, cookie)], Json(response)).into_response()
+            }
+            SignInCoreResult::TwoFactorRedirect(redirect) => Json(redirect).into_response(),
+        }
     }
 
     async fn handle_sign_in<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(plugin): Extension<SharedPlugin>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        ValidatedJson(body): ValidatedJson<SignInRequest>,
+    ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
-        Ok(AxumAuthResponse(plugin.handle_sign_in(&req, &ctx).await?))
+        let result = sign_in_core(
+            &body,
+            &plugin.config,
+            plugin.email_verification.as_deref(),
+            &ctx,
+        )
+        .await?;
+        Ok(sign_in_result_to_response::<DB>(result, &state))
     }
 
     async fn handle_sign_in_username<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(plugin): Extension<SharedPlugin>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        ValidatedJson(body): ValidatedJson<SignInUsernameRequest>,
+    ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
-        Ok(AxumAuthResponse(
-            plugin.handle_sign_in_username(&req, &ctx).await?,
-        ))
+        let result = sign_in_username_core(
+            &body,
+            &plugin.config,
+            plugin.email_verification.as_deref(),
+            &ctx,
+        )
+        .await?;
+        Ok(sign_in_result_to_response::<DB>(result, &state))
     }
 
     #[async_trait::async_trait]
@@ -517,7 +572,6 @@ mod axum_impl {
         fn router(&self) -> axum::Router<AuthState<DB>> {
             use axum::routing::post;
 
-            // Reconstruct a new plugin instance from cloneable parts.
             let shared: SharedPlugin = Arc::new(EmailPasswordPlugin {
                 config: self.config.clone(),
                 email_verification: self.email_verification.clone(),
