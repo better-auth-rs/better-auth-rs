@@ -73,26 +73,52 @@ impl EmailVerificationConfig {
 
 // Request structures for email verification endpoints
 #[derive(Debug, Deserialize, Validate)]
-struct SendVerificationEmailRequest {
+pub(crate) struct SendVerificationEmailRequest {
     #[validate(email(message = "Invalid email address"))]
-    email: String,
+    pub(crate) email: String,
     #[serde(rename = "callbackURL")]
-    callback_url: Option<String>,
+    pub(crate) callback_url: Option<String>,
+}
+
+/// Query parameters for `GET /verify-email`.
+#[derive(Debug, Deserialize)]
+pub(crate) struct VerifyEmailQuery {
+    pub(crate) token: String,
+    #[serde(rename = "callbackURL")]
+    pub(crate) callback_url: Option<String>,
 }
 
 // Response structures
 
 #[derive(Debug, Serialize)]
-struct VerifyEmailResponse<U: Serialize> {
-    user: U,
-    status: bool,
+pub(crate) struct VerifyEmailResponse<U: Serialize> {
+    pub(crate) user: U,
+    pub(crate) status: bool,
 }
 
 #[derive(Debug, Serialize)]
-struct VerifyEmailWithSessionResponse<U: Serialize, S: Serialize> {
-    user: U,
-    session: S,
-    status: bool,
+pub(crate) struct VerifyEmailWithSessionResponse<U: Serialize, S: Serialize> {
+    pub(crate) user: U,
+    pub(crate) session: S,
+    pub(crate) status: bool,
+}
+
+/// Result of the verify-email core function.
+pub(crate) enum VerifyEmailResult<U: Serialize, S: Serialize> {
+    /// Already verified -- return JSON with user.
+    AlreadyVerified(VerifyEmailResponse<U>),
+    /// Redirect to callback URL with optional session cookie.
+    Redirect {
+        url: String,
+        session_token: Option<String>,
+    },
+    /// JSON response with user only (no auto sign-in).
+    Json(VerifyEmailResponse<U>),
+    /// JSON response with user + session (auto sign-in).
+    JsonWithSession {
+        response: VerifyEmailWithSessionResponse<U, S>,
+        session_token: String,
+    },
 }
 
 impl EmailVerificationPlugin {
@@ -233,41 +259,23 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailVerificationPlugin {
     }
 }
 
-// Implementation methods outside the trait
+// ---------------------------------------------------------------------------
+// Route handlers (delegate to core functions)
+// ---------------------------------------------------------------------------
+
 impl EmailVerificationPlugin {
     async fn handle_send_verification_email<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let send_req: SendVerificationEmailRequest =
+        let body: SendVerificationEmailRequest =
             match better_auth_core::validate_request_body(req) {
                 Ok(v) => v,
                 Err(resp) => return Ok(resp),
             };
-
-        // Check if user exists
-        let user = ctx
-            .database
-            .get_user_by_email(&send_req.email)
-            .await?
-            .ok_or_else(|| AuthError::not_found("No user found with this email address"))?;
-
-        // Check if user is already verified
-        if user.email_verified() {
-            return Err(AuthError::bad_request("Email is already verified"));
-        }
-
-        // Send verification email
-        self.send_verification_email_for_user(
-            &user,
-            &send_req.email,
-            send_req.callback_url.as_deref(),
-            ctx,
-        )
-        .await?;
-
-        let response = StatusResponse { status: true };
+        let response =
+            send_verification_email_core(&body, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -276,102 +284,45 @@ impl EmailVerificationPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        // Extract token from query parameters
         let token = req
             .query
             .get("token")
             .ok_or_else(|| AuthError::bad_request("Verification token is required"))?;
-
-        let callback_url = req.query.get("callbackURL");
-
-        // Find verification token
-        let verification = ctx
-            .database
-            .get_verification_by_value(token)
-            .await?
-            .ok_or_else(|| AuthError::bad_request("Invalid or expired verification token"))?;
-
-        // Get user by email (stored in identifier field)
-        let user = ctx
-            .database
-            .get_user_by_email(verification.identifier())
-            .await?
-            .ok_or_else(|| AuthError::not_found("User associated with this token not found"))?;
-
-        // Check if already verified
-        if user.email_verified() {
-            let response = VerifyEmailResponse { user, status: true };
-            return Ok(AuthResponse::json(200, &response)?);
-        }
-
-        // Run before_email_verification hook
-        if let Some(ref hook) = self.config.before_email_verification {
-            let hook_user = User::from(&user);
-            hook(&hook_user).await?;
-        }
-
-        // Update user email verification status
-        let update_user = UpdateUser {
-            email_verified: Some(true),
-            ..Default::default()
+        let callback_url = req.query.get("callbackURL").cloned();
+        let query = VerifyEmailQuery {
+            token: token.clone(),
+            callback_url,
         };
 
-        let updated_user = ctx.database.update_user(user.id(), update_user).await?;
+        let ip_address = req.headers.get("x-forwarded-for").cloned();
+        let user_agent = req.headers.get("user-agent").cloned();
 
-        // Delete the used verification token
-        ctx.database.delete_verification(verification.id()).await?;
-
-        // Run after_email_verification hook
-        if let Some(ref hook) = self.config.after_email_verification {
-            let hook_user = User::from(&updated_user);
-            hook(&hook_user).await?;
-        }
-
-        // Optionally create a session when auto_sign_in_after_verification is
-        // enabled.  The cookie is attached to **both** the redirect and the
-        // JSON responses below.
-        let session_cookie = if self.config.auto_sign_in_after_verification {
-            let ip_address = req.headers.get("x-forwarded-for").cloned();
-            let user_agent = req.headers.get("user-agent").cloned();
-            let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-            let session = session_manager
-                .create_session(&updated_user, ip_address, user_agent)
-                .await?;
-            Some((create_session_cookie(session.token(), &ctx.config), session))
-        } else {
-            None
-        };
-
-        // If callback URL is provided, redirect
-        if let Some(callback_url) = callback_url {
-            let redirect_url = format!("{}?verified=true", callback_url);
-            let mut headers = std::collections::HashMap::new();
-            headers.insert("Location".to_string(), redirect_url);
-            if let Some((cookie, _)) = &session_cookie {
-                headers.insert("Set-Cookie".to_string(), cookie.clone());
+        match verify_email_core(&query, &self.config, ip_address, user_agent, ctx).await? {
+            VerifyEmailResult::AlreadyVerified(data) => {
+                Ok(AuthResponse::json(200, &data)?)
             }
-            return Ok(AuthResponse {
-                status: 302,
-                headers,
-                body: Vec::new(),
-            });
+            VerifyEmailResult::Redirect { url, session_token } => {
+                let mut headers = std::collections::HashMap::new();
+                headers.insert("Location".to_string(), url);
+                if let Some(token) = session_token {
+                    let cookie = create_session_cookie(&token, &ctx.config);
+                    headers.insert("Set-Cookie".to_string(), cookie);
+                }
+                Ok(AuthResponse {
+                    status: 302,
+                    headers,
+                    body: Vec::new(),
+                })
+            }
+            VerifyEmailResult::Json(data) => {
+                Ok(AuthResponse::json(200, &data)?)
+            }
+            VerifyEmailResult::JsonWithSession { response, session_token } => {
+                let cookie = create_session_cookie(&session_token, &ctx.config);
+                Ok(AuthResponse::json(200, &response)?
+                    .with_header("Set-Cookie", cookie))
+            }
         }
-
-        // Return JSON — include session when auto sign-in was performed
-        if let Some((cookie_header, session)) = session_cookie {
-            let response = VerifyEmailWithSessionResponse {
-                user: updated_user,
-                session,
-                status: true,
-            };
-            return Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header));
-        }
-
-        let response = VerifyEmailResponse {
-            user: updated_user,
-            status: true,
-        };
-        Ok(AuthResponse::json(200, &response)?)
     }
 
     /// Send a verification email for a specific user.
@@ -484,38 +435,253 @@ impl EmailVerificationPlugin {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Core functions (framework-agnostic business logic)
+// ---------------------------------------------------------------------------
+
+pub(crate) async fn send_verification_email_core<DB: DatabaseAdapter>(
+    body: &SendVerificationEmailRequest,
+    config: &EmailVerificationConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    // Check if user exists
+    let user = ctx
+        .database
+        .get_user_by_email(&body.email)
+        .await?
+        .ok_or_else(|| AuthError::not_found("No user found with this email address"))?;
+
+    // Check if user is already verified
+    if user.email_verified() {
+        return Err(AuthError::bad_request("Email is already verified"));
+    }
+
+    // Generate verification token
+    let verification_token = format!("verify_{}", Uuid::new_v4());
+    let expires_at = Utc::now() + config.verification_token_expiry;
+
+    let create_verification = CreateVerification {
+        identifier: body.email.to_string(),
+        value: verification_token.clone(),
+        expires_at,
+    };
+
+    ctx.database
+        .create_verification(create_verification)
+        .await?;
+
+    let verification_url = if let Some(ref callback_url) = body.callback_url {
+        format!("{}?token={}", callback_url, verification_token)
+    } else {
+        format!(
+            "{}/verify-email?token={}",
+            ctx.config.base_url, verification_token
+        )
+    };
+
+    // Use custom sender if configured, otherwise fall back to EmailProvider
+    if let Some(ref custom_sender) = config.send_verification_email {
+        let user = User::from(&user);
+        custom_sender
+            .send(&user, &verification_url, &verification_token)
+            .await?;
+    } else if config.send_email_notifications {
+        if ctx.email_provider.is_some() {
+            let subject = "Verify your email address";
+            let html = format!(
+                "<p>Click the link below to verify your email address:</p>\
+                 <p><a href=\"{url}\">Verify Email</a></p>",
+                url = verification_url
+            );
+            let text = format!("Verify your email address: {}", verification_url);
+
+            ctx.email_provider()?
+                .send(&body.email, subject, &html, &text)
+                .await?;
+        } else {
+            tracing::warn!(
+                email = %body.email,
+                "No email provider configured, skipping verification email"
+            );
+        }
+    }
+
+    Ok(StatusResponse { status: true })
+}
+
+pub(crate) async fn verify_email_core<DB: DatabaseAdapter>(
+    query: &VerifyEmailQuery,
+    config: &EmailVerificationConfig,
+    ip_address: Option<String>,
+    user_agent: Option<String>,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<VerifyEmailResult<DB::User, DB::Session>> {
+    // Find verification token
+    let verification = ctx
+        .database
+        .get_verification_by_value(&query.token)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("Invalid or expired verification token"))?;
+
+    // Get user by email (stored in identifier field)
+    let user = ctx
+        .database
+        .get_user_by_email(verification.identifier())
+        .await?
+        .ok_or_else(|| AuthError::not_found("User associated with this token not found"))?;
+
+    // Check if already verified
+    if user.email_verified() {
+        return Ok(VerifyEmailResult::AlreadyVerified(VerifyEmailResponse {
+            user,
+            status: true,
+        }));
+    }
+
+    // Run before_email_verification hook
+    if let Some(ref hook) = config.before_email_verification {
+        let hook_user = User::from(&user);
+        hook(&hook_user).await?;
+    }
+
+    // Update user email verification status
+    let update_user = UpdateUser {
+        email_verified: Some(true),
+        ..Default::default()
+    };
+
+    let updated_user = ctx.database.update_user(user.id(), update_user).await?;
+
+    // Delete the used verification token
+    ctx.database.delete_verification(verification.id()).await?;
+
+    // Run after_email_verification hook
+    if let Some(ref hook) = config.after_email_verification {
+        let hook_user = User::from(&updated_user);
+        hook(&hook_user).await?;
+    }
+
+    // Optionally create a session when auto_sign_in_after_verification is enabled.
+    let session_info = if config.auto_sign_in_after_verification {
+        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+        let session = session_manager
+            .create_session(&updated_user, ip_address, user_agent)
+            .await?;
+        let token = session.token().to_string();
+        Some((session, token))
+    } else {
+        None
+    };
+
+    // If callback URL is provided, redirect
+    if let Some(ref callback_url) = query.callback_url {
+        let redirect_url = format!("{}?verified=true", callback_url);
+        return Ok(VerifyEmailResult::Redirect {
+            url: redirect_url,
+            session_token: session_info.map(|(_, t)| t),
+        });
+    }
+
+    // Return JSON
+    match session_info {
+        Some((session, token)) => Ok(VerifyEmailResult::JsonWithSession {
+            response: VerifyEmailWithSessionResponse {
+                user: updated_user,
+                session,
+                status: true,
+            },
+            session_token: token,
+        }),
+        None => Ok(VerifyEmailResult::Json(VerifyEmailResponse {
+            user: updated_user,
+            status: true,
+        })),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Axum plugin
+// ---------------------------------------------------------------------------
+
 #[cfg(feature = "axum")]
 mod axum_impl {
     use super::*;
     use std::sync::Arc;
 
-    use axum::extract::{Extension, State};
-    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+    use axum::extract::{Extension, Query, State};
+    use axum::response::IntoResponse;
+    use axum::{Json, http::header};
+    use better_auth_core::{AuthError, AuthState, ValidatedJson};
 
-    // EmailVerificationConfig is NOT Clone (it has non-clone callback fields).
-    // Wrap the whole plugin in Arc.
-    type SharedPlugin = Arc<EmailVerificationPlugin>;
+    /// Plugin state stored as an axum extension.
+    ///
+    /// `EmailVerificationConfig` is NOT Clone (callback fields are `Arc<dyn ...>`
+    /// without `Clone`), so we clone each field individually.
+    struct PluginState {
+        config: EmailVerificationConfig,
+    }
+
+    fn clone_config(c: &EmailVerificationConfig) -> EmailVerificationConfig {
+        EmailVerificationConfig {
+            verification_token_expiry: c.verification_token_expiry,
+            send_email_notifications: c.send_email_notifications,
+            require_verification_for_signin: c.require_verification_for_signin,
+            auto_verify_new_users: c.auto_verify_new_users,
+            send_on_sign_in: c.send_on_sign_in,
+            auto_sign_in_after_verification: c.auto_sign_in_after_verification,
+            send_verification_email: c.send_verification_email.clone(),
+            before_email_verification: c.before_email_verification.clone(),
+            after_email_verification: c.after_email_verification.clone(),
+        }
+    }
 
     async fn handle_send_verification_email<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<SharedPlugin>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        Extension(ps): Extension<Arc<PluginState>>,
+        ValidatedJson(body): ValidatedJson<SendVerificationEmailRequest>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
-        Ok(AxumAuthResponse(
-            plugin.handle_send_verification_email(&req, &ctx).await?,
-        ))
+        let response =
+            send_verification_email_core(&body, &ps.config, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_verify_email<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<SharedPlugin>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        Extension(ps): Extension<Arc<PluginState>>,
+        Query(query): Query<VerifyEmailQuery>,
+    ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
-        Ok(AxumAuthResponse(
-            plugin.handle_verify_email(&req, &ctx).await?,
-        ))
+        // Note: axum Query extractor doesn't give us headers; pass None for
+        // ip/user-agent (these are only used for session creation metadata).
+        match verify_email_core(&query, &ps.config, None, None, &ctx).await? {
+            VerifyEmailResult::AlreadyVerified(data) => {
+                Ok(Json(data).into_response())
+            }
+            VerifyEmailResult::Redirect { url, session_token } => {
+                if let Some(token) = session_token {
+                    let cookie = state.session_cookie(&token);
+                    Ok((
+                        [(header::SET_COOKIE, cookie)],
+                        axum::response::Redirect::to(&url),
+                    )
+                        .into_response())
+                } else {
+                    Ok(axum::response::Redirect::to(&url).into_response())
+                }
+            }
+            VerifyEmailResult::Json(data) => {
+                Ok(Json(data).into_response())
+            }
+            VerifyEmailResult::JsonWithSession { response, session_token } => {
+                let cookie = state.session_cookie(&session_token);
+                Ok((
+                    [(header::SET_COOKIE, cookie)],
+                    Json(response),
+                )
+                    .into_response())
+            }
+        }
     }
 
     #[async_trait::async_trait]
@@ -527,21 +693,8 @@ mod axum_impl {
         fn router(&self) -> axum::Router<AuthState<DB>> {
             use axum::routing::{get, post};
 
-            // Build a new plugin from cloneable fields. EmailVerificationConfig
-            // fields that hold callbacks are all behind Arc, so we can clone
-            // them individually to construct a new config.
-            let shared: SharedPlugin = Arc::new(EmailVerificationPlugin {
-                config: EmailVerificationConfig {
-                    verification_token_expiry: self.config.verification_token_expiry,
-                    send_email_notifications: self.config.send_email_notifications,
-                    require_verification_for_signin: self.config.require_verification_for_signin,
-                    auto_verify_new_users: self.config.auto_verify_new_users,
-                    send_on_sign_in: self.config.send_on_sign_in,
-                    auto_sign_in_after_verification: self.config.auto_sign_in_after_verification,
-                    send_verification_email: self.config.send_verification_email.clone(),
-                    before_email_verification: self.config.before_email_verification.clone(),
-                    after_email_verification: self.config.after_email_verification.clone(),
-                },
+            let plugin_state = Arc::new(PluginState {
+                config: clone_config(&self.config),
             });
 
             axum::Router::new()
@@ -550,7 +703,7 @@ mod axum_impl {
                     post(handle_send_verification_email::<DB>),
                 )
                 .route("/verify-email", get(handle_verify_email::<DB>))
-                .layer(Extension(shared))
+                .layer(Extension(plugin_state))
         }
 
         async fn on_user_created(
