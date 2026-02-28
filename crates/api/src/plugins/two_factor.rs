@@ -358,6 +358,190 @@ async fn get_pending_2fa_user<DB: DatabaseAdapter>(
     Ok((user, verification.id().to_string()))
 }
 
+// -- Core functions (pending-2fa) --
+
+/// Returns `(VerifyTotpResponse<DB::User>, session_token)`.
+async fn verify_totp_core<DB: DatabaseAdapter>(
+    body: &VerifyTotpRequest,
+    user: &DB::User,
+    verification_id: &str,
+    config: &TwoFactorConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<(VerifyTotpResponse<DB::User>, String)> {
+    let two_factor = ctx
+        .database
+        .get_two_factor_by_user_id(user.id())
+        .await?
+        .ok_or_else(|| AuthError::not_found("Two-factor authentication not enabled"))?;
+
+    let secret = Secret::Encoded(two_factor.secret().to_string());
+    let secret_bytes = secret
+        .to_bytes()
+        .map_err(|e| AuthError::internal(format!("Failed to decode secret: {}", e)))?;
+
+    let email = user.email().unwrap_or("user");
+    let totp = build_totp(config, &secret_bytes, email, &config.issuer)?;
+
+    if !totp
+        .check_current(&body.code)
+        .map_err(|e| AuthError::internal(format!("TOTP check error: {}", e)))?
+    {
+        return Err(AuthError::bad_request("Invalid TOTP code"));
+    }
+
+    // Code valid — create session
+    let session_manager =
+        better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let session = session_manager.create_session(user, None, None).await?;
+
+    // Delete the pending verification
+    ctx.database.delete_verification(verification_id).await?;
+
+    let token = session.token().to_string();
+    let response = VerifyTotpResponse {
+        status: true,
+        token: token.clone(),
+        user: user.clone(),
+    };
+    Ok((response, token))
+}
+
+async fn send_otp_core<DB: DatabaseAdapter>(
+    user: &DB::User,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    // Generate 6-digit OTP
+    use rand::Rng;
+    let otp: String = format!("{:06}", rand::thread_rng().gen_range(0..1_000_000u32));
+
+    // Store the OTP verification (expires in 5 minutes)
+    let expires_at = chrono::Utc::now() + chrono::Duration::minutes(5);
+    ctx.database
+        .create_verification(CreateVerification {
+            identifier: format!("2fa_otp:{}", user.id()),
+            value: otp.clone(),
+            expires_at,
+        })
+        .await?;
+
+    // Send via email if provider is available
+    if let Some(email) = user.email()
+        && let Ok(provider) = ctx.email_provider()
+    {
+        let body = format!("Your 2FA verification code is: {}", otp);
+        let _ = provider
+            .send(email, "Your verification code", &body, &body)
+            .await;
+    }
+
+    Ok(StatusResponse { status: true })
+}
+
+/// Returns `(VerifyTotpResponse<DB::User>, session_token)`.
+async fn verify_otp_core<DB: DatabaseAdapter>(
+    body: &VerifyOtpRequest,
+    user: &DB::User,
+    verification_id: &str,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<(VerifyTotpResponse<DB::User>, String)> {
+    // Look up the OTP verification
+    let otp_identifier = format!("2fa_otp:{}", user.id());
+    let otp_verification = ctx
+        .database
+        .get_verification_by_identifier(&otp_identifier)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("No OTP found. Please request a new one."))?;
+
+    if otp_verification.expires_at() < chrono::Utc::now() {
+        return Err(AuthError::bad_request("OTP has expired"));
+    }
+
+    if otp_verification.value() != body.code {
+        return Err(AuthError::bad_request("Invalid OTP code"));
+    }
+
+    // Valid — create session
+    let session_manager =
+        better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let session = session_manager.create_session(user, None, None).await?;
+
+    // Clean up verifications
+    ctx.database
+        .delete_verification(otp_verification.id())
+        .await?;
+    ctx.database.delete_verification(verification_id).await?;
+
+    let token = session.token().to_string();
+    let response = VerifyTotpResponse {
+        status: true,
+        token: token.clone(),
+        user: user.clone(),
+    };
+    Ok((response, token))
+}
+
+/// Returns `(VerifyBackupCodeResponse<DB::User, DB::Session>, session_token)`.
+async fn verify_backup_code_core<DB: DatabaseAdapter>(
+    body: &VerifyBackupCodeRequest,
+    user: &DB::User,
+    verification_id: &str,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<(VerifyBackupCodeResponse<DB::User, DB::Session>, String)> {
+    let two_factor = ctx
+        .database
+        .get_two_factor_by_user_id(user.id())
+        .await?
+        .ok_or_else(|| AuthError::not_found("Two-factor authentication not enabled"))?;
+
+    let codes_json = two_factor
+        .backup_codes()
+        .ok_or_else(|| AuthError::bad_request("No backup codes available"))?;
+
+    let hashed_codes: Vec<String> = serde_json::from_str(codes_json)
+        .map_err(|e| AuthError::internal(format!("Failed to parse backup codes: {}", e)))?;
+
+    // Try to match the provided code against each hashed code
+    let mut matched_index: Option<usize> = None;
+
+    for (i, hash_str) in hashed_codes.iter().enumerate() {
+        if better_auth_core::verify_password(None, &body.code, hash_str)
+            .await
+            .is_ok()
+        {
+            matched_index = Some(i);
+            break;
+        }
+    }
+
+    let idx = matched_index.ok_or_else(|| AuthError::bad_request("Invalid backup code"))?;
+
+    // Remove used code and update
+    let mut remaining_codes = hashed_codes;
+    remaining_codes.remove(idx);
+
+    let updated_codes_json =
+        serde_json::to_string(&remaining_codes).map_err(|e| AuthError::internal(e.to_string()))?;
+
+    ctx.database
+        .update_two_factor_backup_codes(user.id(), &updated_codes_json)
+        .await?;
+
+    // Create session
+    let session_manager =
+        better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let session = session_manager.create_session(user, None, None).await?;
+
+    // Clean up pending verification
+    ctx.database.delete_verification(verification_id).await?;
+
+    let token = session.token().to_string();
+    let response = VerifyBackupCodeResponse {
+        user: user.clone(),
+        session,
+    };
+    Ok((response, token))
+}
+
 // -- Old-style handlers (delegating to core functions) --
 
 impl TwoFactorPlugin {
@@ -409,48 +593,13 @@ impl TwoFactorPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, verification_id) = get_pending_2fa_user(req, ctx).await?;
-
-        let verify_req: VerifyTotpRequest = match better_auth_core::validate_request_body(req) {
+        let body: VerifyTotpRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        let two_factor = ctx
-            .database
-            .get_two_factor_by_user_id(user.id())
-            .await?
-            .ok_or_else(|| AuthError::not_found("Two-factor authentication not enabled"))?;
-
-        let secret = Secret::Encoded(two_factor.secret().to_string());
-        let secret_bytes = secret
-            .to_bytes()
-            .map_err(|e| AuthError::internal(format!("Failed to decode secret: {}", e)))?;
-
-        let email = user.email().unwrap_or("user");
-        let totp = build_totp(&self.config, &secret_bytes, email, &self.config.issuer)?;
-
-        if !totp
-            .check_current(&verify_req.code)
-            .map_err(|e| AuthError::internal(format!("TOTP check error: {}", e)))?
-        {
-            return Err(AuthError::bad_request("Invalid TOTP code"));
-        }
-
-        // Code valid — create session
-        let session_manager =
-            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager.create_session(&user, None, None).await?;
-
-        // Delete the pending verification
-        ctx.database.delete_verification(&verification_id).await?;
-
-        let cookie_header = create_session_cookie(session.token(), &ctx.config);
-        let response = VerifyTotpResponse {
-            status: true,
-            token: session.token().to_string(),
-            user,
-        };
-
+        let (response, token) =
+            verify_totp_core(&body, &user, &verification_id, &self.config, ctx).await?;
+        let cookie_header = create_session_cookie(&token, &ctx.config);
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
@@ -460,32 +609,7 @@ impl TwoFactorPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _verification_id) = get_pending_2fa_user(req, ctx).await?;
-
-        // Generate 6-digit OTP
-        use rand::Rng;
-        let otp: String = format!("{:06}", rand::thread_rng().gen_range(0..1_000_000u32));
-
-        // Store the OTP verification (expires in 5 minutes)
-        let expires_at = chrono::Utc::now() + chrono::Duration::minutes(5);
-        ctx.database
-            .create_verification(CreateVerification {
-                identifier: format!("2fa_otp:{}", user.id()),
-                value: otp.clone(),
-                expires_at,
-            })
-            .await?;
-
-        // Send via email if provider is available
-        if let Some(email) = user.email()
-            && let Ok(provider) = ctx.email_provider()
-        {
-            let body = format!("Your 2FA verification code is: {}", otp);
-            let _ = provider
-                .send(email, "Your verification code", &body, &body)
-                .await;
-        }
-
-        let response = StatusResponse { status: true };
+        let response = send_otp_core(&user, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -494,49 +618,13 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, pending_verification_id) = get_pending_2fa_user(req, ctx).await?;
-
-        let verify_req: VerifyOtpRequest = match better_auth_core::validate_request_body(req) {
+        let (user, verification_id) = get_pending_2fa_user(req, ctx).await?;
+        let body: VerifyOtpRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        // Look up the OTP verification
-        let otp_identifier = format!("2fa_otp:{}", user.id());
-        let otp_verification = ctx
-            .database
-            .get_verification_by_identifier(&otp_identifier)
-            .await?
-            .ok_or_else(|| AuthError::bad_request("No OTP found. Please request a new one."))?;
-
-        if otp_verification.expires_at() < chrono::Utc::now() {
-            return Err(AuthError::bad_request("OTP has expired"));
-        }
-
-        if otp_verification.value() != verify_req.code {
-            return Err(AuthError::bad_request("Invalid OTP code"));
-        }
-
-        // Valid — create session
-        let session_manager =
-            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager.create_session(&user, None, None).await?;
-
-        // Clean up verifications
-        ctx.database
-            .delete_verification(otp_verification.id())
-            .await?;
-        ctx.database
-            .delete_verification(&pending_verification_id)
-            .await?;
-
-        let cookie_header = create_session_cookie(session.token(), &ctx.config);
-        let response = VerifyTotpResponse {
-            status: true,
-            token: session.token().to_string(),
-            user,
-        };
-
+        let (response, token) = verify_otp_core(&body, &user, &verification_id, ctx).await?;
+        let cookie_header = create_session_cookie(&token, &ctx.config);
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
@@ -559,66 +647,14 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let (user, pending_verification_id) = get_pending_2fa_user(req, ctx).await?;
-
-        let verify_req: VerifyBackupCodeRequest = match better_auth_core::validate_request_body(req)
-        {
+        let (user, verification_id) = get_pending_2fa_user(req, ctx).await?;
+        let body: VerifyBackupCodeRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        let two_factor = ctx
-            .database
-            .get_two_factor_by_user_id(user.id())
-            .await?
-            .ok_or_else(|| AuthError::not_found("Two-factor authentication not enabled"))?;
-
-        let codes_json = two_factor
-            .backup_codes()
-            .ok_or_else(|| AuthError::bad_request("No backup codes available"))?;
-
-        let hashed_codes: Vec<String> = serde_json::from_str(codes_json)
-            .map_err(|e| AuthError::internal(format!("Failed to parse backup codes: {}", e)))?;
-
-        // Try to match the provided code against each hashed code
-        let mut matched_index: Option<usize> = None;
-
-        for (i, hash_str) in hashed_codes.iter().enumerate() {
-            if better_auth_core::verify_password(None, &verify_req.code, hash_str)
-                .await
-                .is_ok()
-            {
-                matched_index = Some(i);
-                break;
-            }
-        }
-
-        let idx = matched_index.ok_or_else(|| AuthError::bad_request("Invalid backup code"))?;
-
-        // Remove used code and update
-        let mut remaining_codes = hashed_codes;
-        remaining_codes.remove(idx);
-
-        let updated_codes_json = serde_json::to_string(&remaining_codes)
-            .map_err(|e| AuthError::internal(e.to_string()))?;
-
-        ctx.database
-            .update_two_factor_backup_codes(user.id(), &updated_codes_json)
-            .await?;
-
-        // Create session
-        let session_manager =
-            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager.create_session(&user, None, None).await?;
-
-        // Clean up pending verification
-        ctx.database
-            .delete_verification(&pending_verification_id)
-            .await?;
-
-        let cookie_header = create_session_cookie(session.token(), &ctx.config);
-        let response = VerifyBackupCodeResponse { user, session };
-
+        let (response, token) =
+            verify_backup_code_core(&body, &user, &verification_id, ctx).await?;
+        let cookie_header = create_session_cookie(&token, &ctx.config);
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 }
