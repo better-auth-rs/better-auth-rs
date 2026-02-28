@@ -158,18 +158,29 @@ pub struct UserManagementConfig {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize, Validate)]
-struct ChangeEmailRequest {
+pub(crate) struct ChangeEmailRequest {
     #[serde(rename = "newEmail")]
     #[validate(email(message = "Invalid email address"))]
-    new_email: String,
+    pub(crate) new_email: String,
     #[serde(rename = "callbackURL")]
-    callback_url: Option<String>,
+    pub(crate) callback_url: Option<String>,
+}
+
+/// Request body for `POST /delete-user`. Currently empty; the user is
+/// identified by the session.
+#[derive(Debug, Deserialize, Validate)]
+pub(crate) struct DeleteUserRequest {}
+
+/// Query parameters for token-based verification endpoints.
+#[derive(Debug, Deserialize)]
+pub(crate) struct TokenQuery {
+    pub(crate) token: String,
 }
 
 #[derive(Debug, Serialize)]
-struct StatusMessageResponse {
-    status: bool,
-    message: String,
+pub(crate) struct StatusMessageResponse {
+    pub(crate) status: bool,
+    pub(crate) message: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -404,12 +415,10 @@ impl UserManagementPlugin {
 }
 
 // ---------------------------------------------------------------------------
-// Route handlers
+// Route handlers (delegate to core functions)
 // ---------------------------------------------------------------------------
 
 impl UserManagementPlugin {
-    // ── change email ──────────────────────────────────────────────────
-
     /// `POST /change-email`
     async fn handle_change_email<DB: DatabaseAdapter>(
         &self,
@@ -417,99 +426,11 @@ impl UserManagementPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-
-        let change_req: ChangeEmailRequest = match better_auth_core::validate_request_body(req) {
+        let body: ChangeEmailRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        // Prevent changing to the same email
-        if user
-            .email()
-            .map(|e| e == change_req.new_email)
-            .unwrap_or(false)
-        {
-            return Err(AuthError::bad_request(
-                "New email must be different from the current email",
-            ));
-        }
-
-        // Check if the new email is already in use
-        if ctx
-            .database
-            .get_user_by_email(&change_req.new_email)
-            .await?
-            .is_some()
-        {
-            return Err(AuthError::bad_request(
-                "Email is already in use by another account",
-            ));
-        }
-
-        // If update_without_verification is true, update the email immediately
-        // without creating a verification token or sending an email.
-        if self.config.change_email.update_without_verification {
-            let update_user = UpdateUser {
-                email: Some(change_req.new_email.clone()),
-                email_verified: Some(false),
-                ..Default::default()
-            };
-            ctx.database.update_user(user.id(), update_user).await?;
-
-            let response = StatusMessageResponse {
-                status: true,
-                message: "Email updated successfully".to_string(),
-            };
-            return Ok(AuthResponse::json(200, &response)?);
-        }
-
-        // Create verification token
-        let identifier = format!("change_email:{}:{}", user.id(), change_req.new_email);
-        let expires_at = Utc::now() + Duration::hours(24);
-        let (verification_token, verification_url) = Self::create_verification_token(
-            ctx,
-            &identifier,
-            "ce",
-            expires_at,
-            change_req.callback_url.as_deref(),
-            "change-email/verify",
-        )
-        .await?;
-
-        // Send confirmation email via custom callback or default provider
-        if let Some(ref cb) = self.config.change_email.send_change_email_confirmation {
-            let user_info = UserInfo::from_auth_user(&user);
-            cb.send(
-                &user_info,
-                &change_req.new_email,
-                &verification_url,
-                &verification_token,
-            )
-            .await?;
-        } else {
-            let subject = "Confirm your email change";
-            let html = format!(
-                "<p>Click the link below to confirm your new email address:</p>\
-                 <p><a href=\"{url}\">Confirm Email Change</a></p>",
-                url = verification_url
-            );
-            let text = format!("Confirm your email change: {}", verification_url);
-
-            Self::send_email_or_log(
-                ctx,
-                &change_req.new_email,
-                subject,
-                &html,
-                &text,
-                "change-email",
-            )
-            .await;
-        }
-
-        let response = StatusMessageResponse {
-            status: true,
-            message: "Verification email sent to your new email address".to_string(),
-        };
+        let response = change_email_core(&body, &user, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -519,51 +440,13 @@ impl UserManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        // Parse and validate token: identifier format is change_email:{user_id}:{new_email}
-        let (parts, verification_id) =
-            Self::consume_verification_token(ctx, req, "change_email", 3).await?;
-
-        let user_id = &parts[1];
-        let new_email = &parts[2];
-
-        // Fetch the user
-        let user = ctx
-            .database
-            .get_user_by_id(user_id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("User not found"))?;
-
-        // Check if the new email is still available
-        if ctx.database.get_user_by_email(new_email).await?.is_some() {
-            ctx.database.delete_verification(&verification_id).await?;
-            return Err(AuthError::bad_request(
-                "Email is already in use by another account",
-            ));
-        }
-
-        // When going through the verification flow, the new email is always
-        // marked as verified (the user proved ownership by clicking the link).
-        let new_verified = true;
-
-        let update_user = UpdateUser {
-            email: Some(new_email.to_string()),
-            email_verified: Some(new_verified),
-            ..Default::default()
-        };
-
-        ctx.database.update_user(user.id(), update_user).await?;
-
-        // Consume the verification token
-        ctx.database.delete_verification(&verification_id).await?;
-
-        let response = StatusMessageResponse {
-            status: true,
-            message: "Email updated successfully".to_string(),
-        };
+        let token = req
+            .query
+            .get("token")
+            .ok_or_else(|| AuthError::bad_request("Verification token is required"))?;
+        let response = change_email_verify_core(token, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
-
-    // ── delete user ───────────────────────────────────────────────────
 
     /// `POST /delete-user`
     async fn handle_delete_user<DB: DatabaseAdapter>(
@@ -572,18 +455,197 @@ impl UserManagementPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
+        let response = delete_user_core(&user, &self.config, ctx).await?;
+        Ok(AuthResponse::json(200, &response)?)
+    }
 
-        if self.config.delete_user.require_verification {
-            // Verification requires a valid email to send the token to.
-            let email = user.email().filter(|e| !e.is_empty()).ok_or_else(|| {
-                AuthError::bad_request("Cannot send verification email: user has no email address")
-            })?;
-            let email = email.to_string();
+    /// `GET /delete-user/verify`
+    async fn handle_delete_user_verify<DB: DatabaseAdapter>(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<AuthResponse> {
+        let token = req
+            .query
+            .get("token")
+            .ok_or_else(|| AuthError::bad_request("Verification token is required"))?;
+        let response = delete_user_verify_core(token, &self.config, ctx).await?;
+        Ok(AuthResponse::json(200, &response)?)
+    }
+}
 
-            // Send a verification email; actual deletion happens on GET /delete-user/verify.
-            let identifier = format!("delete_user:{}", user.id());
-            let expires_at = Utc::now() + self.config.delete_user.delete_token_expires_in;
-            let (_delete_token, verification_url) = Self::create_verification_token(
+// ---------------------------------------------------------------------------
+// Core functions (framework-agnostic business logic)
+// ---------------------------------------------------------------------------
+
+pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
+    body: &ChangeEmailRequest,
+    user: &DB::User,
+    config: &UserManagementConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusMessageResponse> {
+    // Prevent changing to the same email
+    if user
+        .email()
+        .map(|e| e == body.new_email)
+        .unwrap_or(false)
+    {
+        return Err(AuthError::bad_request(
+            "New email must be different from the current email",
+        ));
+    }
+
+    // Check if the new email is already in use
+    if ctx
+        .database
+        .get_user_by_email(&body.new_email)
+        .await?
+        .is_some()
+    {
+        return Err(AuthError::bad_request(
+            "Email is already in use by another account",
+        ));
+    }
+
+    // If update_without_verification is true, update the email immediately
+    if config.change_email.update_without_verification {
+        let update_user = UpdateUser {
+            email: Some(body.new_email.clone()),
+            email_verified: Some(false),
+            ..Default::default()
+        };
+        ctx.database.update_user(user.id(), update_user).await?;
+
+        return Ok(StatusMessageResponse {
+            status: true,
+            message: "Email updated successfully".to_string(),
+        });
+    }
+
+    // Create verification token
+    let identifier = format!("change_email:{}:{}", user.id(), body.new_email);
+    let expires_at = Utc::now() + Duration::hours(24);
+    let (verification_token, verification_url) =
+        UserManagementPlugin::create_verification_token(
+            ctx,
+            &identifier,
+            "ce",
+            expires_at,
+            body.callback_url.as_deref(),
+            "change-email/verify",
+        )
+        .await?;
+
+    // Send confirmation email via custom callback or default provider
+    if let Some(ref cb) = config.change_email.send_change_email_confirmation {
+        let user_info = UserInfo::from_auth_user(user);
+        cb.send(
+            &user_info,
+            &body.new_email,
+            &verification_url,
+            &verification_token,
+        )
+        .await?;
+    } else {
+        let subject = "Confirm your email change";
+        let html = format!(
+            "<p>Click the link below to confirm your new email address:</p>\
+             <p><a href=\"{url}\">Confirm Email Change</a></p>",
+            url = verification_url
+        );
+        let text = format!("Confirm your email change: {}", verification_url);
+
+        UserManagementPlugin::send_email_or_log(
+            ctx,
+            &body.new_email,
+            subject,
+            &html,
+            &text,
+            "change-email",
+        )
+        .await;
+    }
+
+    Ok(StatusMessageResponse {
+        status: true,
+        message: "Verification email sent to your new email address".to_string(),
+    })
+}
+
+pub(crate) async fn change_email_verify_core<DB: DatabaseAdapter>(
+    token: &str,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusMessageResponse> {
+    // Find verification by token value
+    let verification = ctx
+        .database
+        .get_verification_by_value(token)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("Invalid or expired verification token"))?;
+
+    if verification.expires_at() < Utc::now() {
+        ctx.database.delete_verification(verification.id()).await?;
+        return Err(AuthError::bad_request("Verification token has expired"));
+    }
+
+    let identifier = verification.identifier();
+    let parts: Vec<String> = identifier.splitn(3, ':').map(|s| s.to_string()).collect();
+    if parts.len() != 3 || parts[0] != "change_email" {
+        return Err(AuthError::bad_request("Invalid verification token"));
+    }
+
+    let user_id = &parts[1];
+    let new_email = &parts[2];
+    let verification_id = verification.id().to_string();
+
+    // Fetch the user
+    let user = ctx
+        .database
+        .get_user_by_id(user_id)
+        .await?
+        .ok_or_else(|| AuthError::not_found("User not found"))?;
+
+    // Check if the new email is still available
+    if ctx.database.get_user_by_email(new_email).await?.is_some() {
+        ctx.database.delete_verification(&verification_id).await?;
+        return Err(AuthError::bad_request(
+            "Email is already in use by another account",
+        ));
+    }
+
+    let update_user = UpdateUser {
+        email: Some(new_email.to_string()),
+        email_verified: Some(true),
+        ..Default::default()
+    };
+
+    ctx.database.update_user(user.id(), update_user).await?;
+
+    // Consume the verification token
+    ctx.database.delete_verification(&verification_id).await?;
+
+    Ok(StatusMessageResponse {
+        status: true,
+        message: "Email updated successfully".to_string(),
+    })
+}
+
+pub(crate) async fn delete_user_core<DB: DatabaseAdapter>(
+    user: &DB::User,
+    config: &UserManagementConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusMessageResponse> {
+    if config.delete_user.require_verification {
+        // Verification requires a valid email to send the token to.
+        let email = user.email().filter(|e| !e.is_empty()).ok_or_else(|| {
+            AuthError::bad_request("Cannot send verification email: user has no email address")
+        })?;
+        let email = email.to_string();
+
+        let identifier = format!("delete_user:{}", user.id());
+        let expires_at = Utc::now() + config.delete_user.delete_token_expires_in;
+        let (_delete_token, verification_url) =
+            UserManagementPlugin::create_verification_token(
                 ctx,
                 &identifier,
                 "del",
@@ -593,115 +655,213 @@ impl UserManagementPlugin {
             )
             .await?;
 
-            // Send confirmation email
-            let subject = "Confirm account deletion";
-            let html = format!(
-                "<p>Click the link below to confirm the deletion of your account:</p>\
-                 <p><a href=\"{url}\">Confirm Account Deletion</a></p>\
-                 <p>If you did not request this, please ignore this email.</p>",
-                url = verification_url
-            );
-            let text = format!("Confirm account deletion: {}", verification_url);
+        // Send confirmation email
+        let subject = "Confirm account deletion";
+        let html = format!(
+            "<p>Click the link below to confirm the deletion of your account:</p>\
+             <p><a href=\"{url}\">Confirm Account Deletion</a></p>\
+             <p>If you did not request this, please ignore this email.</p>",
+            url = verification_url
+        );
+        let text = format!("Confirm account deletion: {}", verification_url);
 
-            Self::send_email_or_log(ctx, &email, subject, &html, &text, "delete-user").await;
+        UserManagementPlugin::send_email_or_log(ctx, &email, subject, &html, &text, "delete-user")
+            .await;
 
-            let response = StatusMessageResponse {
-                status: true,
-                message: "Verification email sent. Please confirm to delete your account."
-                    .to_string(),
-            };
-            Ok(AuthResponse::json(200, &response)?)
-        } else {
-            // Immediate deletion (no verification required)
-            self.perform_user_deletion(&user, ctx).await?;
+        Ok(StatusMessageResponse {
+            status: true,
+            message: "Verification email sent. Please confirm to delete your account.".to_string(),
+        })
+    } else {
+        // Immediate deletion (no verification required)
+        perform_user_deletion(user, config, ctx).await?;
 
-            let response = StatusMessageResponse {
-                status: true,
-                message: "Account deleted successfully".to_string(),
-            };
-            Ok(AuthResponse::json(200, &response)?)
-        }
-    }
-
-    /// `GET /delete-user/verify`
-    async fn handle_delete_user_verify<DB: DatabaseAdapter>(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<AuthResponse> {
-        // Parse and validate token: identifier format is delete_user:{user_id}
-        let (parts, verification_id) =
-            Self::consume_verification_token(ctx, req, "delete_user", 2).await?;
-
-        let user_id = &parts[1];
-
-        // Fetch the user
-        let user = ctx
-            .database
-            .get_user_by_id(user_id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("User not found"))?;
-
-        // Perform the actual deletion first, then consume the token.
-        // This ensures the token remains valid for retry if deletion fails
-        // (e.g. before_delete hook rejects or transient DB error).
-        self.perform_user_deletion(&user, ctx).await?;
-
-        // Consume the verification token after successful deletion
-        ctx.database.delete_verification(&verification_id).await?;
-
-        let response = StatusMessageResponse {
+        Ok(StatusMessageResponse {
             status: true,
             message: "Account deleted successfully".to_string(),
-        };
-        Ok(AuthResponse::json(200, &response)?)
+        })
+    }
+}
+
+pub(crate) async fn delete_user_verify_core<DB: DatabaseAdapter>(
+    token: &str,
+    config: &UserManagementConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusMessageResponse> {
+    // Find verification by token value
+    let verification = ctx
+        .database
+        .get_verification_by_value(token)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("Invalid or expired verification token"))?;
+
+    if verification.expires_at() < Utc::now() {
+        ctx.database.delete_verification(verification.id()).await?;
+        return Err(AuthError::bad_request("Verification token has expired"));
     }
 
-    // ── shared deletion logic ─────────────────────────────────────────
+    let identifier = verification.identifier();
+    let parts: Vec<String> = identifier.splitn(2, ':').map(|s| s.to_string()).collect();
+    if parts.len() != 2 || parts[0] != "delete_user" {
+        return Err(AuthError::bad_request("Invalid verification token"));
+    }
 
-    /// Delete a user together with all their sessions and accounts.
-    ///
-    /// Calls the configured `before_delete` / `after_delete` hooks when
-    /// present.
-    async fn perform_user_deletion<DB: DatabaseAdapter>(
-        &self,
-        user: &DB::User,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<()> {
-        let user_info = UserInfo::from_auth_user(user);
+    let user_id = &parts[1];
+    let verification_id = verification.id().to_string();
 
-        // before_delete hook
-        if let Some(ref hook) = self.config.delete_user.before_delete {
-            hook.before_delete(&user_info).await?;
+    // Fetch the user
+    let user = ctx
+        .database
+        .get_user_by_id(user_id)
+        .await?
+        .ok_or_else(|| AuthError::not_found("User not found"))?;
+
+    // Perform the actual deletion first, then consume the token.
+    perform_user_deletion(&user, config, ctx).await?;
+
+    // Consume the verification token after successful deletion
+    ctx.database.delete_verification(&verification_id).await?;
+
+    Ok(StatusMessageResponse {
+        status: true,
+        message: "Account deleted successfully".to_string(),
+    })
+}
+
+/// Delete a user together with all their sessions and accounts.
+async fn perform_user_deletion<DB: DatabaseAdapter>(
+    user: &DB::User,
+    config: &UserManagementConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<()> {
+    let user_info = UserInfo::from_auth_user(user);
+
+    // before_delete hook
+    if let Some(ref hook) = config.delete_user.before_delete {
+        hook.before_delete(&user_info).await?;
+    }
+
+    // Delete all sessions
+    ctx.database.delete_user_sessions(user.id()).await?;
+
+    // Delete all linked accounts
+    let accounts = ctx.database.get_user_accounts(user.id()).await?;
+    for account in &accounts {
+        use better_auth_core::entity::AuthAccount;
+        ctx.database.delete_account(account.id()).await?;
+    }
+
+    // Delete the user record
+    ctx.database.delete_user(user.id()).await?;
+
+    // after_delete hook (non-fatal)
+    if let Some(ref hook) = config.delete_user.after_delete
+        && let Err(e) = hook.after_delete(&user_info).await
+    {
+        tracing::warn!(
+            error = %e,
+            user_id = %user_info.id,
+            "after_delete hook failed (user already deleted)"
+        );
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Axum plugin
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "axum")]
+mod axum_impl {
+    use super::*;
+    use std::sync::Arc;
+
+    use axum::extract::{Extension, Query, State};
+    use axum::Json;
+    use better_auth_core::{AuthError, AuthState, CurrentSession, ValidatedJson};
+
+    #[derive(Clone)]
+    struct PluginState {
+        config: UserManagementConfig,
+    }
+
+    async fn handle_change_email<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<ChangeEmailRequest>,
+    ) -> Result<Json<StatusMessageResponse>, AuthError> {
+        if !ps.config.change_email.enabled {
+            return Err(AuthError::not_found("Not found"));
+        }
+        let ctx = state.to_context();
+        let response = change_email_core(&body, &user, &ps.config, &ctx).await?;
+        Ok(Json(response))
+    }
+
+    async fn handle_change_email_verify<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        Query(query): Query<TokenQuery>,
+    ) -> Result<Json<StatusMessageResponse>, AuthError> {
+        if !ps.config.change_email.enabled {
+            return Err(AuthError::not_found("Not found"));
+        }
+        let ctx = state.to_context();
+        let response = change_email_verify_core(&query.token, &ctx).await?;
+        Ok(Json(response))
+    }
+
+    async fn handle_delete_user<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        CurrentSession { user, .. }: CurrentSession<DB>,
+    ) -> Result<Json<StatusMessageResponse>, AuthError> {
+        if !ps.config.delete_user.enabled {
+            return Err(AuthError::not_found("Not found"));
+        }
+        let ctx = state.to_context();
+        let response = delete_user_core(&user, &ps.config, &ctx).await?;
+        Ok(Json(response))
+    }
+
+    async fn handle_delete_user_verify<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        Query(query): Query<TokenQuery>,
+    ) -> Result<Json<StatusMessageResponse>, AuthError> {
+        if !ps.config.delete_user.enabled {
+            return Err(AuthError::not_found("Not found"));
+        }
+        let ctx = state.to_context();
+        let response =
+            delete_user_verify_core(&query.token, &ps.config, &ctx).await?;
+        Ok(Json(response))
+    }
+
+    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for UserManagementPlugin {
+        fn name(&self) -> &'static str {
+            "user-management"
         }
 
-        // Delete all sessions
-        ctx.database.delete_user_sessions(user.id()).await?;
+        fn router(&self) -> axum::Router<AuthState<DB>> {
+            use axum::routing::{get, post};
 
-        // Delete all linked accounts
-        let accounts = ctx.database.get_user_accounts(user.id()).await?;
-        for account in &accounts {
-            use better_auth_core::entity::AuthAccount;
-            ctx.database.delete_account(account.id()).await?;
+            let plugin_state = Arc::new(PluginState {
+                config: self.config.clone(),
+            });
+
+            axum::Router::new()
+                .route("/change-email", post(handle_change_email::<DB>))
+                .route(
+                    "/change-email/verify",
+                    get(handle_change_email_verify::<DB>),
+                )
+                .route("/delete-user", post(handle_delete_user::<DB>))
+                .route("/delete-user/verify", get(handle_delete_user_verify::<DB>))
+                .layer(Extension(plugin_state))
         }
-
-        // Delete the user record
-        ctx.database.delete_user(user.id()).await?;
-
-        // after_delete hook (non-fatal: user is already deleted, so we log
-        // errors instead of failing the request — matching the pattern in
-        // password_management's on_password_reset callback).
-        if let Some(ref hook) = self.config.delete_user.after_delete
-            && let Err(e) = hook.after_delete(&user_info).await
-        {
-            tracing::warn!(
-                error = %e,
-                user_id = %user_info.id,
-                "after_delete hook failed (user already deleted)"
-            );
-        }
-
-        Ok(())
     }
 }
 
