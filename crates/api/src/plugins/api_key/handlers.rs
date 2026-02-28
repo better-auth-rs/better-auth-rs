@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::{AuthContext, AuthResult, CreateApiKey, UpdateApiKey};
 
-use super::types::*;
 use super::ApiKeyPlugin;
+use super::types::*;
 use crate::plugins::helpers;
 
 // ---------------------------------------------------------------------------

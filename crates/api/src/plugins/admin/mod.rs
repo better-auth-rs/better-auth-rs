@@ -428,6 +428,7 @@ mod axum_impl {
     use axum::Json;
     use axum::extract::{Extension, Query, State};
     use axum::http::header;
+    use better_auth_core::entity::AuthSession;
     use better_auth_core::{AdminRole, AdminSession, AuthState, CurrentSession, ValidatedJson};
 
     #[derive(Clone)]
