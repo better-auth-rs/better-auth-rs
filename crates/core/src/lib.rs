@@ -8,6 +8,7 @@ pub mod config;
 pub mod email;
 pub mod entity;
 pub mod error;
+pub mod extractors;
 pub mod hooks;
 pub mod middleware;
 pub mod openapi;
@@ -48,13 +49,20 @@ pub use entity::{
 pub use error::{
     AuthError, AuthResult, DatabaseError, validate_request_body, validation_error_response,
 };
+#[cfg(feature = "axum")]
+pub use extractors::{
+    AdminRole, AdminSession, AuthRequestExt, AxumAuthResponse, CurrentSession, OptionalSession,
+    Pending2faToken, ValidatedJson,
+};
 pub use hooks::{DatabaseHooks, HookedDatabaseAdapter};
 pub use middleware::{
     BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig, CsrfMiddleware,
     EndpointRateLimit, Middleware, RateLimitConfig, RateLimitMiddleware,
 };
 pub use openapi::{OpenApiBuilder, OpenApiInfo, OpenApiOperation, OpenApiResponse, OpenApiSpec};
-pub use plugin::{AuthContext, AuthPlugin, AuthRoute, BeforeRequestAction};
+#[cfg(feature = "axum")]
+pub use plugin::AxumPlugin;
+pub use plugin::{AuthContext, AuthPlugin, AuthRoute, AuthState, BeforeRequestAction};
 pub use session::SessionManager;
 pub use types::{
     Account, ApiKey, AuthRequest, AuthResponse, CodeMessageResponse, CreateAccount, CreateApiKey,

@@ -551,7 +551,7 @@ impl PasskeyPlugin {
             .create_session(&user, ip_address, user_agent)
             .await?;
 
-        let cookie_header = create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), &ctx.config);
         let response = SessionUserResponse { session, user };
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -700,6 +700,158 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasskeyPlugin {
                 Ok(Some(self.handle_update_passkey(req, ctx).await?))
             }
             _ => Ok(None),
+        }
+    }
+}
+
+#[cfg(feature = "axum")]
+mod axum_impl {
+    use super::*;
+    use std::sync::Arc;
+
+    use axum::extract::{Extension, State};
+    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+
+    #[derive(Clone)]
+    struct PluginState {
+        config: PasskeyConfig,
+    }
+
+    async fn handle_generate_register_options<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = PasskeyPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_generate_register_options(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_verify_registration<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = PasskeyPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_verify_registration(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_generate_authenticate_options<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = PasskeyPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin
+                .handle_generate_authenticate_options(&req, &ctx)
+                .await?,
+        ))
+    }
+
+    async fn handle_verify_authentication<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = PasskeyPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_verify_authentication(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_list_user_passkeys<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = PasskeyPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_list_user_passkeys(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_delete_passkey<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = PasskeyPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_delete_passkey(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_update_passkey<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = PasskeyPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_update_passkey(&req, &ctx).await?,
+        ))
+    }
+
+    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for PasskeyPlugin {
+        fn name(&self) -> &'static str {
+            "passkey"
+        }
+
+        fn router(&self) -> axum::Router<AuthState<DB>> {
+            use axum::routing::{get, post};
+
+            let plugin_state = Arc::new(PluginState {
+                config: self.config.clone(),
+            });
+            axum::Router::new()
+                .route(
+                    "/passkey/generate-register-options",
+                    get(handle_generate_register_options::<DB>),
+                )
+                .route(
+                    "/passkey/verify-registration",
+                    post(handle_verify_registration::<DB>),
+                )
+                .route(
+                    "/passkey/generate-authenticate-options",
+                    post(handle_generate_authenticate_options::<DB>),
+                )
+                .route(
+                    "/passkey/verify-authentication",
+                    post(handle_verify_authentication::<DB>),
+                )
+                .route(
+                    "/passkey/list-user-passkeys",
+                    get(handle_list_user_passkeys::<DB>),
+                )
+                .route("/passkey/delete-passkey", post(handle_delete_passkey::<DB>))
+                .route("/passkey/update-passkey", post(handle_update_passkey::<DB>))
+                .layer(Extension(plugin_state))
         }
     }
 }

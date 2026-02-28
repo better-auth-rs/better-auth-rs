@@ -51,7 +51,7 @@ async fn create_oauth_session_response<DB: DatabaseAdapter>(
     };
 
     let cookie_header =
-        better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), ctx);
+        better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), &ctx.config);
     Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
 }
 

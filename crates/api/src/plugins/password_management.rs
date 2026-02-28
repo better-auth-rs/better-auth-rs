@@ -513,7 +513,7 @@ impl PasswordManagementPlugin {
         // Set session cookie if a new session was created
         if let Some(token) = new_token {
             let cookie_header =
-                better_auth_core::utils::cookie_utils::create_session_cookie(&token, ctx);
+                better_auth_core::utils::cookie_utils::create_session_cookie(&token, &ctx.config);
             Ok(auth_response.with_header("Set-Cookie", cookie_header))
         } else {
             Ok(auth_response)
@@ -671,6 +671,102 @@ impl PasswordManagementPlugin {
 
     async fn verify_password(&self, password: &str, hash: &str) -> AuthResult<()> {
         password_utils::verify_password(self.config.password_hasher.as_ref(), password, hash).await
+    }
+}
+
+#[cfg(feature = "axum")]
+mod axum_impl {
+    use super::*;
+    use std::sync::Arc;
+
+    use axum::extract::{Extension, Path, State};
+    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+
+    // PasswordManagementConfig is Clone (all non-clone fields are behind Arc).
+    // However the plugin struct itself is simple, so we wrap it in Arc.
+    type SharedPlugin = Arc<PasswordManagementPlugin>;
+
+    async fn handle_forget_password<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(plugin): Extension<SharedPlugin>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        Ok(AxumAuthResponse(
+            plugin.handle_forget_password(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_reset_password<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(plugin): Extension<SharedPlugin>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        Ok(AxumAuthResponse(
+            plugin.handle_reset_password(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_reset_password_token<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(plugin): Extension<SharedPlugin>,
+        Path(token): Path<String>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        Ok(AxumAuthResponse(
+            plugin
+                .handle_reset_password_token(&token, &req, &ctx)
+                .await?,
+        ))
+    }
+
+    async fn handle_change_password<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(plugin): Extension<SharedPlugin>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        Ok(AxumAuthResponse(
+            plugin.handle_change_password(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_set_password<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(plugin): Extension<SharedPlugin>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        Ok(AxumAuthResponse(
+            plugin.handle_set_password(&req, &ctx).await?,
+        ))
+    }
+
+    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for PasswordManagementPlugin {
+        fn name(&self) -> &'static str {
+            "password-management"
+        }
+
+        fn router(&self) -> axum::Router<AuthState<DB>> {
+            use axum::routing::{get, post};
+
+            let shared: SharedPlugin = Arc::new(PasswordManagementPlugin {
+                config: self.config.clone(),
+            });
+
+            axum::Router::new()
+                .route("/forget-password", post(handle_forget_password::<DB>))
+                .route("/reset-password", post(handle_reset_password::<DB>))
+                .route(
+                    "/reset-password/:token",
+                    get(handle_reset_password_token::<DB>),
+                )
+                .route("/change-password", post(handle_change_password::<DB>))
+                .route("/set-password", post(handle_set_password::<DB>))
+                .layer(Extension(shared))
+        }
     }
 }
 

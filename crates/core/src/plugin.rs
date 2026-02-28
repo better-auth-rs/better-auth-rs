@@ -7,6 +7,7 @@ use crate::config::AuthConfig;
 use crate::email::EmailProvider;
 use crate::entity::AuthSession;
 use crate::error::{AuthError, AuthResult};
+use crate::session::SessionManager;
 use crate::types::{AuthRequest, AuthResponse, HttpMethod};
 
 /// Action returned by [`AuthPlugin::before_request`].
@@ -183,5 +184,103 @@ impl<DB: DatabaseAdapter> AuthContext<DB> {
         }
 
         Err(AuthError::Unauthenticated)
+    }
+}
+
+/// Axum-friendly shared state type.
+///
+/// All fields are behind `Arc` so `AuthState` is cheap to clone and can
+/// be used directly as axum `State`.
+pub struct AuthState<DB: DatabaseAdapter> {
+    pub config: Arc<AuthConfig>,
+    pub database: Arc<DB>,
+    pub session_manager: SessionManager<DB>,
+    pub email_provider: Option<Arc<dyn EmailProvider>>,
+}
+
+impl<DB: DatabaseAdapter> Clone for AuthState<DB> {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            database: self.database.clone(),
+            session_manager: self.session_manager.clone(),
+            email_provider: self.email_provider.clone(),
+        }
+    }
+}
+
+impl<DB: DatabaseAdapter> AuthState<DB> {
+    /// Create a new `AuthState` from an `AuthContext` and `SessionManager`.
+    pub fn new(ctx: &AuthContext<DB>, session_manager: SessionManager<DB>) -> Self {
+        Self {
+            config: ctx.config.clone(),
+            database: ctx.database.clone(),
+            session_manager,
+            email_provider: ctx.email_provider.clone(),
+        }
+    }
+
+    /// Create an `AuthContext` for use with existing plugin handler methods.
+    pub fn to_context(&self) -> AuthContext<DB> {
+        let mut ctx = AuthContext::new(self.config.clone(), self.database.clone());
+        ctx.email_provider = self.email_provider.clone();
+        ctx
+    }
+
+    /// Build a `Set-Cookie` header value for a session token.
+    pub fn session_cookie(&self, token: &str) -> String {
+        crate::utils::cookie_utils::create_session_cookie(token, &self.config)
+    }
+
+    /// Build a `Set-Cookie` header value that clears the session cookie.
+    pub fn clear_session_cookie(&self) -> String {
+        crate::utils::cookie_utils::create_clear_session_cookie(&self.config)
+    }
+}
+
+/// Plugin trait for axum-native routing.
+///
+/// Unlike [`AuthPlugin`] which uses the custom `AuthRequest`/`AuthResponse`
+/// abstraction, `AxumPlugin` returns a standard `axum::Router` with handlers
+/// already bound to routes. This eliminates the triple route-matching overhead
+/// and enables use of axum extractors.
+#[cfg(feature = "axum")]
+#[async_trait]
+pub trait AxumPlugin<DB: DatabaseAdapter>: Send + Sync {
+    /// Plugin name — should be unique and match the `AuthPlugin` name when
+    /// both traits are implemented on the same type.
+    fn name(&self) -> &'static str;
+
+    /// Return an axum `Router` with all routes for this plugin.
+    ///
+    /// The router uses `AuthState<DB>` as its state type.
+    fn router(&self) -> axum::Router<AuthState<DB>>;
+
+    /// Called after a user is created.
+    async fn on_user_created(&self, _user: &DB::User, _ctx: &AuthContext<DB>) -> AuthResult<()> {
+        Ok(())
+    }
+
+    /// Called after a session is created.
+    async fn on_session_created(
+        &self,
+        _session: &DB::Session,
+        _ctx: &AuthContext<DB>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+
+    /// Called before a user is deleted.
+    async fn on_user_deleted(&self, _user_id: &str, _ctx: &AuthContext<DB>) -> AuthResult<()> {
+        Ok(())
+    }
+
+    /// Called before a session is deleted.
+    async fn on_session_deleted(
+        &self,
+        _session_token: &str,
+        _ctx: &AuthContext<DB>,
+    ) -> AuthResult<()> {
+        Ok(())
     }
 }

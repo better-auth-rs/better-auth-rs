@@ -393,7 +393,7 @@ impl TwoFactorPlugin {
         // Delete the pending verification
         ctx.database.delete_verification(&verification_id).await?;
 
-        let cookie_header = create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), &ctx.config);
         let response = VerifyTotpResponse {
             status: true,
             token: session.token().to_string(),
@@ -479,7 +479,7 @@ impl TwoFactorPlugin {
             .delete_verification(&pending_verification_id)
             .await?;
 
-        let cookie_header = create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), &ctx.config);
         let response = VerifyTotpResponse {
             status: true,
             token: session.token().to_string(),
@@ -581,7 +581,7 @@ impl TwoFactorPlugin {
             .delete_verification(&pending_verification_id)
             .await?;
 
-        let cookie_header = create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), &ctx.config);
         let response = VerifyBackupCodeResponse { user, session };
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
@@ -644,6 +644,156 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for TwoFactorPlugin {
                 Ok(Some(self.handle_verify_backup_code(req, ctx).await?))
             }
             _ => Ok(None),
+        }
+    }
+}
+
+#[cfg(feature = "axum")]
+mod axum_impl {
+    use super::*;
+    use std::sync::Arc;
+
+    use axum::extract::{Extension, State};
+    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+
+    #[derive(Clone)]
+    struct PluginState {
+        config: TwoFactorConfig,
+    }
+
+    async fn handle_enable<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = TwoFactorPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(plugin.handle_enable(&req, &ctx).await?))
+    }
+
+    async fn handle_disable<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = TwoFactorPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(plugin.handle_disable(&req, &ctx).await?))
+    }
+
+    async fn handle_get_totp_uri<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = TwoFactorPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_get_totp_uri(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_verify_totp<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = TwoFactorPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_verify_totp(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_send_otp<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = TwoFactorPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(plugin.handle_send_otp(&req, &ctx).await?))
+    }
+
+    async fn handle_verify_otp<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = TwoFactorPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_verify_otp(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_generate_backup_codes<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = TwoFactorPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_generate_backup_codes(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_verify_backup_code<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = TwoFactorPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_verify_backup_code(&req, &ctx).await?,
+        ))
+    }
+
+    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for TwoFactorPlugin {
+        fn name(&self) -> &'static str {
+            "two-factor"
+        }
+
+        fn router(&self) -> axum::Router<AuthState<DB>> {
+            use axum::routing::post;
+
+            let plugin_state = Arc::new(PluginState {
+                config: self.config.clone(),
+            });
+            axum::Router::new()
+                .route("/two-factor/enable", post(handle_enable::<DB>))
+                .route("/two-factor/disable", post(handle_disable::<DB>))
+                .route("/two-factor/get-totp-uri", post(handle_get_totp_uri::<DB>))
+                .route("/two-factor/verify-totp", post(handle_verify_totp::<DB>))
+                .route("/two-factor/send-otp", post(handle_send_otp::<DB>))
+                .route("/two-factor/verify-otp", post(handle_verify_otp::<DB>))
+                .route(
+                    "/two-factor/generate-backup-codes",
+                    post(handle_generate_backup_codes::<DB>),
+                )
+                .route(
+                    "/two-factor/verify-backup-code",
+                    post(handle_verify_backup_code::<DB>),
+                )
+                .layer(Extension(plugin_state))
         }
     }
 }

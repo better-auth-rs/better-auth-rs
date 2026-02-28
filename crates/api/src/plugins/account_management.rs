@@ -183,3 +183,63 @@ impl AccountManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 }
+
+#[cfg(feature = "axum")]
+mod axum_impl {
+    use super::*;
+    use std::sync::Arc;
+
+    use axum::extract::{Extension, State};
+    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+
+    #[derive(Clone)]
+    struct PluginState {
+        config: AccountManagementConfig,
+    }
+
+    async fn handle_list_accounts<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(_plugin): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AccountManagementPlugin {
+            config: _plugin.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_list_accounts(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_unlink_account<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(_plugin): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AccountManagementPlugin {
+            config: _plugin.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_unlink_account(&req, &ctx).await?,
+        ))
+    }
+
+    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for AccountManagementPlugin {
+        fn name(&self) -> &'static str {
+            "account-management"
+        }
+
+        fn router(&self) -> axum::Router<AuthState<DB>> {
+            use axum::routing::{get, post};
+
+            let plugin_state = Arc::new(PluginState {
+                config: self.config.clone(),
+            });
+            axum::Router::new()
+                .route("/list-accounts", get(handle_list_accounts::<DB>))
+                .route("/unlink-account", post(handle_unlink_account::<DB>))
+                .layer(Extension(plugin_state))
+        }
+    }
+}

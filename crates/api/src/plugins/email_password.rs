@@ -220,7 +220,7 @@ impl EmailPasswordPlugin {
             };
 
             // Create session cookie
-            let cookie_header = create_session_cookie(session.token(), ctx);
+            let cookie_header = create_session_cookie(session.token(), &ctx.config);
 
             Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
         } else {
@@ -301,7 +301,7 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header = create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), &ctx.config);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -375,7 +375,7 @@ impl EmailPasswordPlugin {
         };
 
         // Create session cookie
-        let cookie_header = create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), &ctx.config);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
@@ -459,6 +459,90 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailPasswordPlugin {
             println!("Email verification required for user: {}", email);
         }
         Ok(())
+    }
+}
+
+#[cfg(feature = "axum")]
+mod axum_impl {
+    use super::*;
+    use std::sync::Arc;
+
+    use axum::extract::{Extension, State};
+    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+
+    // EmailPasswordPlugin holds an Option<Arc<EmailVerificationPlugin>> which
+    // is not Clone on the plugin struct itself. We wrap the whole plugin in Arc.
+    type SharedPlugin = Arc<EmailPasswordPlugin>;
+
+    async fn handle_sign_up<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(plugin): Extension<SharedPlugin>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        if !plugin.config.enable_signup {
+            return Err(better_auth_core::AuthError::forbidden(
+                "User registration is not enabled",
+            ));
+        }
+        let ctx = state.to_context();
+        Ok(AxumAuthResponse(plugin.handle_sign_up(&req, &ctx).await?))
+    }
+
+    async fn handle_sign_in<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(plugin): Extension<SharedPlugin>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        Ok(AxumAuthResponse(plugin.handle_sign_in(&req, &ctx).await?))
+    }
+
+    async fn handle_sign_in_username<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(plugin): Extension<SharedPlugin>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        Ok(AxumAuthResponse(
+            plugin.handle_sign_in_username(&req, &ctx).await?,
+        ))
+    }
+
+    #[async_trait::async_trait]
+    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for EmailPasswordPlugin {
+        fn name(&self) -> &'static str {
+            "email-password"
+        }
+
+        fn router(&self) -> axum::Router<AuthState<DB>> {
+            use axum::routing::post;
+
+            // Reconstruct a new plugin instance from cloneable parts.
+            let shared: SharedPlugin = Arc::new(EmailPasswordPlugin {
+                config: self.config.clone(),
+                email_verification: self.email_verification.clone(),
+            });
+
+            axum::Router::new()
+                .route("/sign-up/email", post(handle_sign_up::<DB>))
+                .route("/sign-in/email", post(handle_sign_in::<DB>))
+                .route("/sign-in/username", post(handle_sign_in_username::<DB>))
+                .layer(Extension(shared))
+        }
+
+        async fn on_user_created(
+            &self,
+            user: &DB::User,
+            _ctx: &better_auth_core::AuthContext<DB>,
+        ) -> better_auth_core::AuthResult<()> {
+            if self.config.require_email_verification
+                && !user.email_verified()
+                && let Some(email) = user.email()
+            {
+                println!("Email verification required for user: {}", email);
+            }
+            Ok(())
+        }
     }
 }
 

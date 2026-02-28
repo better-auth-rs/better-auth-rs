@@ -155,7 +155,7 @@ impl SessionManagementPlugin {
         ctx.database.delete_session(current_session.token()).await?;
 
         let response = SignOutResponse { success: true };
-        let clear_cookie_header = create_clear_session_cookie(ctx);
+        let clear_cookie_header = create_clear_session_cookie(&ctx.config);
 
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", clear_cookie_header))
     }
@@ -233,6 +233,142 @@ impl SessionManagementPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<Vec<DB::Session>> {
         ctx.database.get_user_sessions(user_id).await
+    }
+}
+
+#[cfg(feature = "axum")]
+mod axum_impl {
+    use super::*;
+    use std::sync::Arc;
+
+    use axum::extract::{Extension, State};
+    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+
+    #[derive(Clone)]
+    struct PluginState {
+        config: SessionManagementConfig,
+    }
+
+    async fn handle_get_session<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(_plugin): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = SessionManagementPlugin {
+            config: _plugin.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_get_session(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_sign_out<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(_plugin): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = SessionManagementPlugin {
+            config: _plugin.config.clone(),
+        };
+        Ok(AxumAuthResponse(plugin.handle_sign_out(&req, &ctx).await?))
+    }
+
+    async fn handle_list_sessions<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        if !ps.config.enable_session_listing {
+            return Err(better_auth_core::AuthError::not_found("Not found"));
+        }
+        let ctx = state.to_context();
+        let plugin = SessionManagementPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_list_sessions(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_revoke_session<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        if !ps.config.enable_session_revocation {
+            return Err(better_auth_core::AuthError::not_found("Not found"));
+        }
+        let ctx = state.to_context();
+        let plugin = SessionManagementPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_revoke_session(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_revoke_sessions<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        if !ps.config.enable_session_revocation {
+            return Err(better_auth_core::AuthError::not_found("Not found"));
+        }
+        let ctx = state.to_context();
+        let plugin = SessionManagementPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_revoke_sessions(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_revoke_other_sessions<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        if !ps.config.enable_session_revocation {
+            return Err(better_auth_core::AuthError::not_found("Not found"));
+        }
+        let ctx = state.to_context();
+        let plugin = SessionManagementPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_revoke_other_sessions(&req, &ctx).await?,
+        ))
+    }
+
+    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for SessionManagementPlugin {
+        fn name(&self) -> &'static str {
+            "session-management"
+        }
+
+        fn router(&self) -> axum::Router<AuthState<DB>> {
+            use axum::routing::{get, post};
+
+            let plugin_state = Arc::new(PluginState {
+                config: self.config.clone(),
+            });
+            axum::Router::new()
+                .route(
+                    "/get-session",
+                    get(handle_get_session::<DB>).post(handle_get_session::<DB>),
+                )
+                .route("/sign-out", post(handle_sign_out::<DB>))
+                .route("/list-sessions", get(handle_list_sessions::<DB>))
+                .route("/revoke-session", post(handle_revoke_session::<DB>))
+                .route("/revoke-sessions", post(handle_revoke_sessions::<DB>))
+                .route(
+                    "/revoke-other-sessions",
+                    post(handle_revoke_other_sessions::<DB>),
+                )
+                .layer(Extension(plugin_state))
+        }
     }
 }
 

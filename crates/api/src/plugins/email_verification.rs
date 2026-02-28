@@ -337,7 +337,7 @@ impl EmailVerificationPlugin {
             let session = session_manager
                 .create_session(&updated_user, ip_address, user_agent)
                 .await?;
-            Some((create_session_cookie(session.token(), ctx), session))
+            Some((create_session_cookie(session.token(), &ctx.config), session))
         } else {
             None
         };
@@ -481,6 +481,100 @@ impl EmailVerificationPlugin {
     /// Check if user is verified or verification is not required
     pub async fn is_user_verified_or_not_required(&self, user: &impl AuthUser) -> bool {
         user.email_verified() || !self.config.require_verification_for_signin
+    }
+}
+
+#[cfg(feature = "axum")]
+mod axum_impl {
+    use super::*;
+    use std::sync::Arc;
+
+    use axum::extract::{Extension, State};
+    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+
+    // EmailVerificationConfig is NOT Clone (it has non-clone callback fields).
+    // Wrap the whole plugin in Arc.
+    type SharedPlugin = Arc<EmailVerificationPlugin>;
+
+    async fn handle_send_verification_email<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(plugin): Extension<SharedPlugin>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        Ok(AxumAuthResponse(
+            plugin.handle_send_verification_email(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_verify_email<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(plugin): Extension<SharedPlugin>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        Ok(AxumAuthResponse(
+            plugin.handle_verify_email(&req, &ctx).await?,
+        ))
+    }
+
+    #[async_trait::async_trait]
+    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for EmailVerificationPlugin {
+        fn name(&self) -> &'static str {
+            "email-verification"
+        }
+
+        fn router(&self) -> axum::Router<AuthState<DB>> {
+            use axum::routing::{get, post};
+
+            // Build a new plugin from cloneable fields. EmailVerificationConfig
+            // fields that hold callbacks are all behind Arc, so we can clone
+            // them individually to construct a new config.
+            let shared: SharedPlugin = Arc::new(EmailVerificationPlugin {
+                config: EmailVerificationConfig {
+                    verification_token_expiry: self.config.verification_token_expiry,
+                    send_email_notifications: self.config.send_email_notifications,
+                    require_verification_for_signin: self.config.require_verification_for_signin,
+                    auto_verify_new_users: self.config.auto_verify_new_users,
+                    send_on_sign_in: self.config.send_on_sign_in,
+                    auto_sign_in_after_verification: self.config.auto_sign_in_after_verification,
+                    send_verification_email: self.config.send_verification_email.clone(),
+                    before_email_verification: self.config.before_email_verification.clone(),
+                    after_email_verification: self.config.after_email_verification.clone(),
+                },
+            });
+
+            axum::Router::new()
+                .route(
+                    "/send-verification-email",
+                    post(handle_send_verification_email::<DB>),
+                )
+                .route("/verify-email", get(handle_verify_email::<DB>))
+                .layer(Extension(shared))
+        }
+
+        async fn on_user_created(
+            &self,
+            user: &DB::User,
+            ctx: &better_auth_core::AuthContext<DB>,
+        ) -> better_auth_core::AuthResult<()> {
+            // Delegate to the AuthPlugin implementation logic
+            if (self.config.send_email_notifications
+                || self.config.send_verification_email.is_some())
+                && !user.email_verified()
+                && let Some(email) = user.email()
+                && let Err(e) = self
+                    .send_verification_email_for_user(user, email, None, ctx)
+                    .await
+            {
+                tracing::warn!(
+                    email = %email,
+                    error = %e,
+                    "Failed to send verification email"
+                );
+            }
+            Ok(())
+        }
     }
 }
 
@@ -1448,7 +1542,7 @@ mod tests {
     #[test]
     fn test_create_session_cookie_format() {
         let ctx = test_helpers::create_test_context();
-        let cookie_str = create_session_cookie("my-token-123", &ctx);
+        let cookie_str = create_session_cookie("my-token-123", &ctx.config);
         // Should contain the cookie name and value
         assert!(cookie_str.contains("better-auth.session-token=my-token-123"));
         // Should contain Path
@@ -1463,7 +1557,7 @@ mod tests {
     fn test_create_session_cookie_special_characters_in_token() {
         let ctx = test_helpers::create_test_context();
         let token = "token+with/special=chars&more";
-        let cookie_str = create_session_cookie(token, &ctx);
+        let cookie_str = create_session_cookie(token, &ctx.config);
         // The cookie crate should handle encoding properly
         assert!(cookie_str.contains("better-auth.session-token="));
     }

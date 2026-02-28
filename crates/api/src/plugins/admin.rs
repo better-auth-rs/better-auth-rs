@@ -620,7 +620,7 @@ impl AdminPlugin {
 
         let session = ctx.database.create_session(create_session).await?;
 
-        let cookie_header = create_session_cookie(session.token(), ctx);
+        let cookie_header = create_session_cookie(session.token(), &ctx.config);
         let response = SessionUserResponse {
             session,
             user: target,
@@ -678,7 +678,7 @@ impl AdminPlugin {
 
         let admin_session = ctx.database.create_session(create_session).await?;
 
-        let cookie_header = create_session_cookie(admin_session.token(), ctx);
+        let cookie_header = create_session_cookie(admin_session.token(), &ctx.config);
         let response = SessionUserResponse {
             session: admin_session,
             user: admin_user,
@@ -906,6 +906,249 @@ impl AdminPlugin {
 
         let response = PermissionResponse { success, error };
         AuthResponse::json(200, &response).map_err(AuthError::from)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Axum integration
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "axum")]
+mod axum_impl {
+    use super::*;
+    use std::sync::Arc;
+
+    use axum::extract::{Extension, State};
+    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+
+    #[derive(Clone)]
+    struct PluginState {
+        config: AdminConfig,
+    }
+
+    async fn handle_set_role<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AdminPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(plugin.handle_set_role(&req, &ctx).await?))
+    }
+
+    async fn handle_create_user<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AdminPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_create_user(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_list_users<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AdminPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_list_users(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_list_user_sessions<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AdminPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_list_user_sessions(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_ban_user<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AdminPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(plugin.handle_ban_user(&req, &ctx).await?))
+    }
+
+    async fn handle_unban_user<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AdminPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_unban_user(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_impersonate_user<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AdminPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_impersonate_user(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_stop_impersonating<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AdminPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_stop_impersonating(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_revoke_user_session<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AdminPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_revoke_user_session(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_revoke_user_sessions<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AdminPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_revoke_user_sessions(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_remove_user<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AdminPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_remove_user(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_set_user_password<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AdminPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_set_user_password(&req, &ctx).await?,
+        ))
+    }
+
+    async fn handle_has_permission<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        let ctx = state.to_context();
+        let plugin = AdminPlugin {
+            config: ps.config.clone(),
+        };
+        Ok(AxumAuthResponse(
+            plugin.handle_has_permission(&req, &ctx).await?,
+        ))
+    }
+
+    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for AdminPlugin {
+        fn name(&self) -> &'static str {
+            "admin"
+        }
+
+        fn router(&self) -> axum::Router<AuthState<DB>> {
+            use axum::routing::{get, post};
+
+            let plugin_state = Arc::new(PluginState {
+                config: self.config.clone(),
+            });
+            axum::Router::new()
+                .route("/admin/set-role", post(handle_set_role::<DB>))
+                .route("/admin/create-user", post(handle_create_user::<DB>))
+                .route("/admin/list-users", get(handle_list_users::<DB>))
+                .route(
+                    "/admin/list-user-sessions",
+                    post(handle_list_user_sessions::<DB>),
+                )
+                .route("/admin/ban-user", post(handle_ban_user::<DB>))
+                .route("/admin/unban-user", post(handle_unban_user::<DB>))
+                .route(
+                    "/admin/impersonate-user",
+                    post(handle_impersonate_user::<DB>),
+                )
+                .route(
+                    "/admin/stop-impersonating",
+                    post(handle_stop_impersonating::<DB>),
+                )
+                .route(
+                    "/admin/revoke-user-session",
+                    post(handle_revoke_user_session::<DB>),
+                )
+                .route(
+                    "/admin/revoke-user-sessions",
+                    post(handle_revoke_user_sessions::<DB>),
+                )
+                .route("/admin/remove-user", post(handle_remove_user::<DB>))
+                .route(
+                    "/admin/set-user-password",
+                    post(handle_set_user_password::<DB>),
+                )
+                .route("/admin/has-permission", post(handle_has_permission::<DB>))
+                .layer(Extension(plugin_state))
+        }
     }
 }
 

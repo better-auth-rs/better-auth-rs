@@ -4,14 +4,13 @@
 //! duplicated across every plugin (`email_password`, `passkey`, `two_factor`,
 //! `admin`, `password_management`, `session_management`, `email_verification`).
 
-use crate::adapters::DatabaseAdapter;
-use crate::plugin::AuthContext;
+use crate::config::AuthConfig;
 use cookie::{Cookie, SameSite as CookieSameSite};
 
 /// Build a `Set-Cookie` header value for a session token using the `cookie`
 /// crate for correct formatting and escaping.
-pub fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext<DB>) -> String {
-    let session_config = &ctx.config.session;
+pub fn create_session_cookie(token: &str, config: &AuthConfig) -> String {
+    let session_config = &config.session;
 
     let expires_offset = cookie::time::OffsetDateTime::now_utc()
         + cookie::time::Duration::seconds(session_config.expires_in.num_seconds());
@@ -37,8 +36,8 @@ pub fn create_session_cookie<DB: DatabaseAdapter>(token: &str, ctx: &AuthContext
 }
 
 /// Build a `Set-Cookie` header value that clears the session cookie.
-pub fn create_clear_session_cookie<DB: DatabaseAdapter>(ctx: &AuthContext<DB>) -> String {
-    let session_config = &ctx.config.session;
+pub fn create_clear_session_cookie(config: &AuthConfig) -> String {
+    let session_config = &config.session;
 
     let same_site = map_same_site(&session_config.cookie_same_site);
 
