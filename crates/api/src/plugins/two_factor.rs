@@ -44,23 +44,23 @@ impl Default for TwoFactorConfig {
 // -- Request types --
 
 #[derive(Debug, Deserialize, Validate)]
-struct EnableRequest {
+pub(crate) struct EnableRequest {
     password: String,
     issuer: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
-struct DisableRequest {
+pub(crate) struct DisableRequest {
     password: String,
 }
 
 #[derive(Debug, Deserialize, Validate)]
-struct GetTotpUriRequest {
+pub(crate) struct GetTotpUriRequest {
     password: String,
 }
 
 #[derive(Debug, Deserialize, Validate)]
-struct VerifyTotpRequest {
+pub(crate) struct VerifyTotpRequest {
     code: String,
     #[serde(rename = "trustDevice")]
     #[allow(dead_code)]
@@ -68,7 +68,7 @@ struct VerifyTotpRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-struct VerifyOtpRequest {
+pub(crate) struct VerifyOtpRequest {
     code: String,
     #[serde(rename = "trustDevice")]
     #[allow(dead_code)]
@@ -76,12 +76,12 @@ struct VerifyOtpRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-struct GenerateBackupCodesRequest {
+pub(crate) struct GenerateBackupCodesRequest {
     password: String,
 }
 
 #[derive(Debug, Deserialize, Validate)]
-struct VerifyBackupCodeRequest {
+pub(crate) struct VerifyBackupCodeRequest {
     code: String,
     #[serde(rename = "disableSession")]
     #[allow(dead_code)]
@@ -94,7 +94,7 @@ struct VerifyBackupCodeRequest {
 // -- Response types --
 
 #[derive(Debug, Serialize)]
-struct EnableResponse {
+pub(crate) struct EnableResponse {
     #[serde(rename = "totpURI")]
     totp_uri: String,
     #[serde(rename = "backupCodes")]
@@ -102,30 +102,401 @@ struct EnableResponse {
 }
 
 #[derive(Debug, Serialize)]
-struct TotpUriResponse {
+pub(crate) struct TotpUriResponse {
     #[serde(rename = "totpURI")]
     totp_uri: String,
 }
 
 #[derive(Debug, Serialize)]
-struct VerifyTotpResponse<U: Serialize> {
+pub(crate) struct VerifyTotpResponse<U: Serialize> {
     status: bool,
     token: String,
     user: U,
 }
 
 #[derive(Debug, Serialize)]
-struct VerifyBackupCodeResponse<U: Serialize, S: Serialize> {
+pub(crate) struct VerifyBackupCodeResponse<U: Serialize, S: Serialize> {
     user: U,
     session: S,
 }
 
 #[derive(Debug, Serialize)]
-struct BackupCodesResponse {
+pub(crate) struct BackupCodesResponse {
     status: bool,
     #[serde(rename = "backupCodes")]
     backup_codes: Vec<String>,
 }
+
+// -- Core functions --
+
+fn build_totp(
+    config: &TwoFactorConfig,
+    secret: &[u8],
+    email: &str,
+    issuer: &str,
+) -> AuthResult<TOTP> {
+    TOTP::new(
+        Algorithm::SHA1,
+        config.totp_digits,
+        1,
+        config.totp_period,
+        secret.to_vec(),
+        Some(issuer.to_string()),
+        email.to_string(),
+    )
+    .map_err(|e| AuthError::internal(format!("Failed to create TOTP: {}", e)))
+}
+
+fn generate_backup_codes(config: &TwoFactorConfig) -> Vec<String> {
+    use rand::Rng;
+    (0..config.backup_code_count)
+        .map(|_| {
+            rand::thread_rng()
+                .sample_iter(&rand::distributions::Alphanumeric)
+                .take(config.backup_code_length)
+                .map(char::from)
+                .collect::<String>()
+                .to_uppercase()
+        })
+        .collect()
+}
+
+async fn hash_backup_codes(codes: &[String]) -> AuthResult<String> {
+    let mut hashed = Vec::with_capacity(codes.len());
+    for code in codes {
+        hashed.push(better_auth_core::hash_password(None, code).await?);
+    }
+    serde_json::to_string(&hashed).map_err(|e| AuthError::internal(e.to_string()))
+}
+
+async fn verify_user_password<U: AuthUser>(user: &U, password: &str) -> AuthResult<()> {
+    let stored_hash = user
+        .metadata()
+        .get("password_hash")
+        .and_then(|v| v.as_str())
+        .ok_or(AuthError::InvalidCredentials)?;
+
+    better_auth_core::verify_password(None, password, stored_hash).await
+}
+
+pub(crate) async fn enable_core<DB: DatabaseAdapter>(
+    body: &EnableRequest,
+    user: &DB::User,
+    config: &TwoFactorConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<EnableResponse> {
+    verify_user_password(user, &body.password).await?;
+
+    // Generate TOTP secret
+    let secret = Secret::generate_secret();
+    let secret_encoded = secret.to_encoded().to_string();
+    let secret_bytes = secret.to_bytes().map_err(|e| {
+        AuthError::internal(format!("Failed to convert secret to bytes: {}", e))
+    })?;
+
+    let issuer = body.issuer.as_deref().unwrap_or(&config.issuer);
+    let email = user.email().unwrap_or("user");
+
+    let totp = build_totp(config, &secret_bytes, email, issuer)?;
+    let totp_uri = totp.get_url();
+
+    // Generate and hash backup codes
+    let backup_codes = generate_backup_codes(config);
+    let hashed_codes = hash_backup_codes(&backup_codes).await?;
+
+    // Store 2FA record
+    ctx.database
+        .create_two_factor(CreateTwoFactor {
+            user_id: user.id().to_string(),
+            secret: secret_encoded,
+            backup_codes: Some(hashed_codes),
+        })
+        .await?;
+
+    // Update user flag
+    ctx.database
+        .update_user(
+            user.id(),
+            UpdateUser {
+                two_factor_enabled: Some(true),
+                ..Default::default()
+            },
+        )
+        .await?;
+
+    Ok(EnableResponse {
+        totp_uri,
+        backup_codes,
+    })
+}
+
+pub(crate) async fn disable_core<DB: DatabaseAdapter>(
+    body: &DisableRequest,
+    user: &DB::User,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    verify_user_password(user, &body.password).await?;
+
+    ctx.database.delete_two_factor(user.id()).await?;
+
+    ctx.database
+        .update_user(
+            user.id(),
+            UpdateUser {
+                two_factor_enabled: Some(false),
+                ..Default::default()
+            },
+        )
+        .await?;
+
+    Ok(StatusResponse { status: true })
+}
+
+pub(crate) async fn get_totp_uri_core<DB: DatabaseAdapter>(
+    body: &GetTotpUriRequest,
+    user: &DB::User,
+    config: &TwoFactorConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<TotpUriResponse> {
+    verify_user_password(user, &body.password).await?;
+
+    let two_factor = ctx
+        .database
+        .get_two_factor_by_user_id(user.id())
+        .await?
+        .ok_or_else(|| AuthError::not_found("Two-factor authentication not enabled"))?;
+
+    let secret = Secret::Encoded(two_factor.secret().to_string());
+    let secret_bytes = secret
+        .to_bytes()
+        .map_err(|e| AuthError::internal(format!("Failed to decode secret: {}", e)))?;
+
+    let email = user.email().unwrap_or("user");
+    let totp = build_totp(config, &secret_bytes, email, &config.issuer)?;
+
+    Ok(TotpUriResponse {
+        totp_uri: totp.get_url(),
+    })
+}
+
+pub(crate) async fn verify_totp_core<DB: DatabaseAdapter>(
+    body: &VerifyTotpRequest,
+    user: &DB::User,
+    verification_id: &str,
+    config: &TwoFactorConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<(VerifyTotpResponse<DB::User>, String)>
+where
+    DB::User: Clone,
+{
+    let two_factor = ctx
+        .database
+        .get_two_factor_by_user_id(user.id())
+        .await?
+        .ok_or_else(|| AuthError::not_found("Two-factor authentication not enabled"))?;
+
+    let secret = Secret::Encoded(two_factor.secret().to_string());
+    let secret_bytes = secret
+        .to_bytes()
+        .map_err(|e| AuthError::internal(format!("Failed to decode secret: {}", e)))?;
+
+    let email = user.email().unwrap_or("user");
+    let totp = build_totp(config, &secret_bytes, email, &config.issuer)?;
+
+    if !totp
+        .check_current(&body.code)
+        .map_err(|e| AuthError::internal(format!("TOTP check error: {}", e)))?
+    {
+        return Err(AuthError::bad_request("Invalid TOTP code"));
+    }
+
+    // Code valid -- create session
+    let session_manager =
+        better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let session = session_manager.create_session(user, None, None).await?;
+
+    // Delete the pending verification
+    ctx.database.delete_verification(verification_id).await?;
+
+    let token = session.token().to_string();
+    let response = VerifyTotpResponse {
+        status: true,
+        token: token.clone(),
+        user: user.clone(),
+    };
+
+    Ok((response, token))
+}
+
+pub(crate) async fn send_otp_core<DB: DatabaseAdapter>(
+    user: &DB::User,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    // Generate 6-digit OTP
+    use rand::Rng;
+    let otp: String = format!("{:06}", rand::thread_rng().gen_range(0..1_000_000u32));
+
+    // Store the OTP verification (expires in 5 minutes)
+    let expires_at = chrono::Utc::now() + chrono::Duration::minutes(5);
+    ctx.database
+        .create_verification(CreateVerification {
+            identifier: format!("2fa_otp:{}", user.id()),
+            value: otp.clone(),
+            expires_at,
+        })
+        .await?;
+
+    // Send via email if provider is available
+    if let Some(email) = user.email()
+        && let Ok(provider) = ctx.email_provider()
+    {
+        let body = format!("Your 2FA verification code is: {}", otp);
+        let _ = provider
+            .send(email, "Your verification code", &body, &body)
+            .await;
+    }
+
+    Ok(StatusResponse { status: true })
+}
+
+pub(crate) async fn verify_otp_core<DB: DatabaseAdapter>(
+    body: &VerifyOtpRequest,
+    user: &DB::User,
+    pending_verification_id: &str,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<(VerifyTotpResponse<DB::User>, String)>
+where
+    DB::User: Clone,
+{
+    // Look up the OTP verification
+    let otp_identifier = format!("2fa_otp:{}", user.id());
+    let otp_verification = ctx
+        .database
+        .get_verification_by_identifier(&otp_identifier)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("No OTP found. Please request a new one."))?;
+
+    if otp_verification.expires_at() < chrono::Utc::now() {
+        return Err(AuthError::bad_request("OTP has expired"));
+    }
+
+    if otp_verification.value() != body.code {
+        return Err(AuthError::bad_request("Invalid OTP code"));
+    }
+
+    // Valid -- create session
+    let session_manager =
+        better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let session = session_manager.create_session(user, None, None).await?;
+
+    // Clean up verifications
+    ctx.database
+        .delete_verification(otp_verification.id())
+        .await?;
+    ctx.database
+        .delete_verification(pending_verification_id)
+        .await?;
+
+    let token = session.token().to_string();
+    let response = VerifyTotpResponse {
+        status: true,
+        token: token.clone(),
+        user: user.clone(),
+    };
+
+    Ok((response, token))
+}
+
+pub(crate) async fn generate_backup_codes_core<DB: DatabaseAdapter>(
+    body: &GenerateBackupCodesRequest,
+    user: &DB::User,
+    config: &TwoFactorConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<BackupCodesResponse> {
+    verify_user_password(user, &body.password).await?;
+
+    // Generate new codes
+    let backup_codes = generate_backup_codes(config);
+    let hashed_codes = hash_backup_codes(&backup_codes).await?;
+
+    ctx.database
+        .update_two_factor_backup_codes(user.id(), &hashed_codes)
+        .await?;
+
+    Ok(BackupCodesResponse {
+        status: true,
+        backup_codes,
+    })
+}
+
+pub(crate) async fn verify_backup_code_core<DB: DatabaseAdapter>(
+    body: &VerifyBackupCodeRequest,
+    user: &DB::User,
+    pending_verification_id: &str,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<(VerifyBackupCodeResponse<DB::User, DB::Session>, String)>
+where
+    DB::User: Clone,
+{
+    let two_factor = ctx
+        .database
+        .get_two_factor_by_user_id(user.id())
+        .await?
+        .ok_or_else(|| AuthError::not_found("Two-factor authentication not enabled"))?;
+
+    let codes_json = two_factor
+        .backup_codes()
+        .ok_or_else(|| AuthError::bad_request("No backup codes available"))?;
+
+    let hashed_codes: Vec<String> = serde_json::from_str(codes_json)
+        .map_err(|e| AuthError::internal(format!("Failed to parse backup codes: {}", e)))?;
+
+    // Try to match the provided code against each hashed code
+    let mut matched_index: Option<usize> = None;
+
+    for (i, hash_str) in hashed_codes.iter().enumerate() {
+        if better_auth_core::verify_password(None, &body.code, hash_str)
+            .await
+            .is_ok()
+        {
+            matched_index = Some(i);
+            break;
+        }
+    }
+
+    let idx = matched_index.ok_or_else(|| AuthError::bad_request("Invalid backup code"))?;
+
+    // Remove used code and update
+    let mut remaining_codes = hashed_codes;
+    remaining_codes.remove(idx);
+
+    let updated_codes_json = serde_json::to_string(&remaining_codes)
+        .map_err(|e| AuthError::internal(e.to_string()))?;
+
+    ctx.database
+        .update_two_factor_backup_codes(user.id(), &updated_codes_json)
+        .await?;
+
+    // Create session
+    let session_manager =
+        better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let session = session_manager.create_session(user, None, None).await?;
+
+    // Clean up pending verification
+    ctx.database
+        .delete_verification(pending_verification_id)
+        .await?;
+
+    let token = session.token().to_string();
+    let response = VerifyBackupCodeResponse {
+        user: user.clone(),
+        session,
+    };
+
+    Ok((response, token))
+}
+
+// -- Plugin implementation --
 
 impl TwoFactorPlugin {
     pub fn new() -> Self {
@@ -141,43 +512,6 @@ impl TwoFactorPlugin {
     pub fn issuer(mut self, issuer: impl Into<String>) -> Self {
         self.config.issuer = issuer.into();
         self
-    }
-
-    // -- Helpers --
-
-    fn generate_backup_codes(&self) -> Vec<String> {
-        use rand::Rng;
-        (0..self.config.backup_code_count)
-            .map(|_| {
-                rand::thread_rng()
-                    .sample_iter(&rand::distributions::Alphanumeric)
-                    .take(self.config.backup_code_length)
-                    .map(char::from)
-                    .collect::<String>()
-                    .to_uppercase()
-            })
-            .collect()
-    }
-
-    async fn hash_backup_codes(codes: &[String]) -> AuthResult<String> {
-        let mut hashed = Vec::with_capacity(codes.len());
-        for code in codes {
-            hashed.push(better_auth_core::hash_password(None, code).await?);
-        }
-        serde_json::to_string(&hashed).map_err(|e| AuthError::internal(e.to_string()))
-    }
-
-    fn build_totp(&self, secret: &[u8], email: &str, issuer: &str) -> AuthResult<TOTP> {
-        TOTP::new(
-            Algorithm::SHA1,
-            self.config.totp_digits,
-            1,
-            self.config.totp_period,
-            secret.to_vec(),
-            Some(issuer.to_string()),
-            email.to_string(),
-        )
-        .map_err(|e| AuthError::internal(format!("Failed to create TOTP: {}", e)))
     }
 
     // -- Session / auth helpers --
@@ -218,17 +552,7 @@ impl TwoFactorPlugin {
         Ok((user, verification.id().to_string()))
     }
 
-    async fn verify_user_password<U: AuthUser>(user: &U, password: &str) -> AuthResult<()> {
-        let stored_hash = user
-            .metadata()
-            .get("password_hash")
-            .and_then(|v| v.as_str())
-            .ok_or(AuthError::InvalidCredentials)?;
-
-        better_auth_core::verify_password(None, password, stored_hash).await
-    }
-
-    // -- Handlers --
+    // -- Handlers (old, delegate to core) --
 
     async fn handle_enable<DB: DatabaseAdapter>(
         &self,
@@ -237,54 +561,12 @@ impl TwoFactorPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
 
-        let enable_req: EnableRequest = match better_auth_core::validate_request_body(req) {
+        let body: EnableRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
-        Self::verify_user_password(&user, &enable_req.password).await?;
-
-        // Generate TOTP secret
-        let secret = Secret::generate_secret();
-        let secret_encoded = secret.to_encoded().to_string();
-        let secret_bytes = secret.to_bytes().map_err(|e| {
-            AuthError::internal(format!("Failed to convert secret to bytes: {}", e))
-        })?;
-
-        let issuer = enable_req.issuer.as_deref().unwrap_or(&self.config.issuer);
-        let email = user.email().unwrap_or("user");
-
-        let totp = self.build_totp(&secret_bytes, email, issuer)?;
-        let totp_uri = totp.get_url();
-
-        // Generate and hash backup codes
-        let backup_codes = self.generate_backup_codes();
-        let hashed_codes = Self::hash_backup_codes(&backup_codes).await?;
-
-        // Store 2FA record
-        ctx.database
-            .create_two_factor(CreateTwoFactor {
-                user_id: user.id().to_string(),
-                secret: secret_encoded,
-                backup_codes: Some(hashed_codes),
-            })
-            .await?;
-
-        // Update user flag
-        ctx.database
-            .update_user(
-                user.id(),
-                UpdateUser {
-                    two_factor_enabled: Some(true),
-                    ..Default::default()
-                },
-            )
-            .await?;
-
-        let response = EnableResponse {
-            totp_uri,
-            backup_codes,
-        };
+        let response = enable_core(&body, &user, &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -295,26 +577,12 @@ impl TwoFactorPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
 
-        let disable_req: DisableRequest = match better_auth_core::validate_request_body(req) {
+        let body: DisableRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
-        Self::verify_user_password(&user, &disable_req.password).await?;
-
-        ctx.database.delete_two_factor(user.id()).await?;
-
-        ctx.database
-            .update_user(
-                user.id(),
-                UpdateUser {
-                    two_factor_enabled: Some(false),
-                    ..Default::default()
-                },
-            )
-            .await?;
-
-        let response = StatusResponse { status: true };
+        let response = disable_core(&body, &user, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -325,30 +593,12 @@ impl TwoFactorPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
 
-        let uri_req: GetTotpUriRequest = match better_auth_core::validate_request_body(req) {
+        let body: GetTotpUriRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
-        Self::verify_user_password(&user, &uri_req.password).await?;
-
-        let two_factor = ctx
-            .database
-            .get_two_factor_by_user_id(user.id())
-            .await?
-            .ok_or_else(|| AuthError::not_found("Two-factor authentication not enabled"))?;
-
-        let secret = Secret::Encoded(two_factor.secret().to_string());
-        let secret_bytes = secret
-            .to_bytes()
-            .map_err(|e| AuthError::internal(format!("Failed to decode secret: {}", e)))?;
-
-        let email = user.email().unwrap_or("user");
-        let totp = self.build_totp(&secret_bytes, email, &self.config.issuer)?;
-
-        let response = TotpUriResponse {
-            totp_uri: totp.get_url(),
-        };
+        let response = get_totp_uri_core(&body, &user, &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -359,47 +609,14 @@ impl TwoFactorPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, verification_id) = Self::get_pending_2fa_user(req, ctx).await?;
 
-        let verify_req: VerifyTotpRequest = match better_auth_core::validate_request_body(req) {
+        let body: VerifyTotpRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
-        let two_factor = ctx
-            .database
-            .get_two_factor_by_user_id(user.id())
-            .await?
-            .ok_or_else(|| AuthError::not_found("Two-factor authentication not enabled"))?;
-
-        let secret = Secret::Encoded(two_factor.secret().to_string());
-        let secret_bytes = secret
-            .to_bytes()
-            .map_err(|e| AuthError::internal(format!("Failed to decode secret: {}", e)))?;
-
-        let email = user.email().unwrap_or("user");
-        let totp = self.build_totp(&secret_bytes, email, &self.config.issuer)?;
-
-        if !totp
-            .check_current(&verify_req.code)
-            .map_err(|e| AuthError::internal(format!("TOTP check error: {}", e)))?
-        {
-            return Err(AuthError::bad_request("Invalid TOTP code"));
-        }
-
-        // Code valid — create session
-        let session_manager =
-            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager.create_session(&user, None, None).await?;
-
-        // Delete the pending verification
-        ctx.database.delete_verification(&verification_id).await?;
-
-        let cookie_header = create_session_cookie(session.token(), &ctx.config);
-        let response = VerifyTotpResponse {
-            status: true,
-            token: session.token().to_string(),
-            user,
-        };
-
+        let (response, token) =
+            verify_totp_core(&body, &user, &verification_id, &self.config, ctx).await?;
+        let cookie_header = create_session_cookie(&token, &ctx.config);
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
@@ -410,31 +627,7 @@ impl TwoFactorPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _verification_id) = Self::get_pending_2fa_user(req, ctx).await?;
 
-        // Generate 6-digit OTP
-        use rand::Rng;
-        let otp: String = format!("{:06}", rand::thread_rng().gen_range(0..1_000_000u32));
-
-        // Store the OTP verification (expires in 5 minutes)
-        let expires_at = chrono::Utc::now() + chrono::Duration::minutes(5);
-        ctx.database
-            .create_verification(CreateVerification {
-                identifier: format!("2fa_otp:{}", user.id()),
-                value: otp.clone(),
-                expires_at,
-            })
-            .await?;
-
-        // Send via email if provider is available
-        if let Some(email) = user.email()
-            && let Ok(provider) = ctx.email_provider()
-        {
-            let body = format!("Your 2FA verification code is: {}", otp);
-            let _ = provider
-                .send(email, "Your verification code", &body, &body)
-                .await;
-        }
-
-        let response = StatusResponse { status: true };
+        let response = send_otp_core(&user, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -445,47 +638,14 @@ impl TwoFactorPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, pending_verification_id) = Self::get_pending_2fa_user(req, ctx).await?;
 
-        let verify_req: VerifyOtpRequest = match better_auth_core::validate_request_body(req) {
+        let body: VerifyOtpRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
-        // Look up the OTP verification
-        let otp_identifier = format!("2fa_otp:{}", user.id());
-        let otp_verification = ctx
-            .database
-            .get_verification_by_identifier(&otp_identifier)
-            .await?
-            .ok_or_else(|| AuthError::bad_request("No OTP found. Please request a new one."))?;
-
-        if otp_verification.expires_at() < chrono::Utc::now() {
-            return Err(AuthError::bad_request("OTP has expired"));
-        }
-
-        if otp_verification.value() != verify_req.code {
-            return Err(AuthError::bad_request("Invalid OTP code"));
-        }
-
-        // Valid — create session
-        let session_manager =
-            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager.create_session(&user, None, None).await?;
-
-        // Clean up verifications
-        ctx.database
-            .delete_verification(otp_verification.id())
-            .await?;
-        ctx.database
-            .delete_verification(&pending_verification_id)
-            .await?;
-
-        let cookie_header = create_session_cookie(session.token(), &ctx.config);
-        let response = VerifyTotpResponse {
-            status: true,
-            token: session.token().to_string(),
-            user,
-        };
-
+        let (response, token) =
+            verify_otp_core(&body, &user, &pending_verification_id, ctx).await?;
+        let cookie_header = create_session_cookie(&token, &ctx.config);
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
@@ -496,26 +656,13 @@ impl TwoFactorPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
 
-        let gen_req: GenerateBackupCodesRequest = match better_auth_core::validate_request_body(req)
-        {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body: GenerateBackupCodesRequest =
+            match better_auth_core::validate_request_body(req) {
+                Ok(v) => v,
+                Err(resp) => return Ok(resp),
+            };
 
-        Self::verify_user_password(&user, &gen_req.password).await?;
-
-        // Generate new codes
-        let backup_codes = self.generate_backup_codes();
-        let hashed_codes = Self::hash_backup_codes(&backup_codes).await?;
-
-        ctx.database
-            .update_two_factor_backup_codes(user.id(), &hashed_codes)
-            .await?;
-
-        let response = BackupCodesResponse {
-            status: true,
-            backup_codes,
-        };
+        let response = generate_backup_codes_core(&body, &user, &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -526,64 +673,15 @@ impl TwoFactorPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, pending_verification_id) = Self::get_pending_2fa_user(req, ctx).await?;
 
-        let verify_req: VerifyBackupCodeRequest = match better_auth_core::validate_request_body(req)
-        {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body: VerifyBackupCodeRequest =
+            match better_auth_core::validate_request_body(req) {
+                Ok(v) => v,
+                Err(resp) => return Ok(resp),
+            };
 
-        let two_factor = ctx
-            .database
-            .get_two_factor_by_user_id(user.id())
-            .await?
-            .ok_or_else(|| AuthError::not_found("Two-factor authentication not enabled"))?;
-
-        let codes_json = two_factor
-            .backup_codes()
-            .ok_or_else(|| AuthError::bad_request("No backup codes available"))?;
-
-        let hashed_codes: Vec<String> = serde_json::from_str(codes_json)
-            .map_err(|e| AuthError::internal(format!("Failed to parse backup codes: {}", e)))?;
-
-        // Try to match the provided code against each hashed code
-        let mut matched_index: Option<usize> = None;
-
-        for (i, hash_str) in hashed_codes.iter().enumerate() {
-            if better_auth_core::verify_password(None, &verify_req.code, hash_str)
-                .await
-                .is_ok()
-            {
-                matched_index = Some(i);
-                break;
-            }
-        }
-
-        let idx = matched_index.ok_or_else(|| AuthError::bad_request("Invalid backup code"))?;
-
-        // Remove used code and update
-        let mut remaining_codes = hashed_codes;
-        remaining_codes.remove(idx);
-
-        let updated_codes_json = serde_json::to_string(&remaining_codes)
-            .map_err(|e| AuthError::internal(e.to_string()))?;
-
-        ctx.database
-            .update_two_factor_backup_codes(user.id(), &updated_codes_json)
-            .await?;
-
-        // Create session
-        let session_manager =
-            better_auth_core::SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let session = session_manager.create_session(&user, None, None).await?;
-
-        // Clean up pending verification
-        ctx.database
-            .delete_verification(&pending_verification_id)
-            .await?;
-
-        let cookie_header = create_session_cookie(session.token(), &ctx.config);
-        let response = VerifyBackupCodeResponse { user, session };
-
+        let (response, token) =
+            verify_backup_code_core(&body, &user, &pending_verification_id, ctx).await?;
+        let cookie_header = create_session_cookie(&token, &ctx.config);
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 }
@@ -653,8 +751,10 @@ mod axum_impl {
     use super::*;
     use std::sync::Arc;
 
+    use axum::Json;
     use axum::extract::{Extension, State};
-    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+    use axum::http::header;
+    use better_auth_core::{AuthState, CurrentSession, Pending2faToken, ValidatedJson};
 
     #[derive(Clone)]
     struct PluginState {
@@ -664,107 +764,117 @@ mod axum_impl {
     async fn handle_enable<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<EnableRequest>,
+    ) -> Result<Json<EnableResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(plugin.handle_enable(&req, &ctx).await?))
+        let response = enable_core(&body, &user, &ps.config, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_disable<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<DisableRequest>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(plugin.handle_disable(&req, &ctx).await?))
+        let response = disable_core(&body, &user, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_get_totp_uri<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<GetTotpUriRequest>,
+    ) -> Result<Json<TotpUriResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_get_totp_uri(&req, &ctx).await?,
-        ))
+        let response = get_totp_uri_core(&body, &user, &ps.config, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_verify_totp<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        Pending2faToken {
+            user,
+            verification_id,
+            ..
+        }: Pending2faToken<DB>,
+        ValidatedJson(body): ValidatedJson<VerifyTotpRequest>,
+    ) -> Result<([(header::HeaderName, String); 1], Json<VerifyTotpResponse<DB::User>>), AuthError>
+    where
+        DB::User: Clone,
+    {
         let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_verify_totp(&req, &ctx).await?,
-        ))
+        let (response, token) =
+            verify_totp_core(&body, &user, &verification_id, &ps.config, &ctx).await?;
+        let cookie = state.session_cookie(&token);
+        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
     async fn handle_send_otp<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        Pending2faToken { user, .. }: Pending2faToken<DB>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(plugin.handle_send_otp(&req, &ctx).await?))
+        let response = send_otp_core(&user, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_verify_otp<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        Pending2faToken {
+            user,
+            verification_id,
+            ..
+        }: Pending2faToken<DB>,
+        ValidatedJson(body): ValidatedJson<VerifyOtpRequest>,
+    ) -> Result<([(header::HeaderName, String); 1], Json<VerifyTotpResponse<DB::User>>), AuthError>
+    where
+        DB::User: Clone,
+    {
         let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_verify_otp(&req, &ctx).await?,
-        ))
+        let (response, token) =
+            verify_otp_core(&body, &user, &verification_id, &ctx).await?;
+        let cookie = state.session_cookie(&token);
+        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
     async fn handle_generate_backup_codes<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<GenerateBackupCodesRequest>,
+    ) -> Result<Json<BackupCodesResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_generate_backup_codes(&req, &ctx).await?,
-        ))
+        let response = generate_backup_codes_core(&body, &user, &ps.config, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_verify_backup_code<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        Pending2faToken {
+            user,
+            verification_id,
+            ..
+        }: Pending2faToken<DB>,
+        ValidatedJson(body): ValidatedJson<VerifyBackupCodeRequest>,
+    ) -> Result<
+        (
+            [(header::HeaderName, String); 1],
+            Json<VerifyBackupCodeResponse<DB::User, DB::Session>>,
+        ),
+        AuthError,
+    >
+    where
+        DB::User: Clone,
+    {
         let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_verify_backup_code(&req, &ctx).await?,
-        ))
+        let (response, token) =
+            verify_backup_code_core(&body, &user, &verification_id, &ctx).await?;
+        let cookie = state.session_cookie(&token);
+        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
     impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for TwoFactorPlugin {

@@ -15,7 +15,7 @@ pub mod user_management;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-struct StatusResponse {
+pub(crate) struct StatusResponse {
     status: bool,
 }
 
