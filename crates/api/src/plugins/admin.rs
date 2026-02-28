@@ -285,13 +285,462 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for AdminPlugin {
     }
 }
 
+
 // ---------------------------------------------------------------------------
-// Handler implementations
+// Core functions — framework-agnostic business logic
+// ---------------------------------------------------------------------------
+
+pub(crate) async fn set_role_core<DB: DatabaseAdapter>(
+    body: &SetRoleRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<UserResponse<DB::User>> {
+    let _target = ctx
+        .database
+        .get_user_by_id(&body.user_id)
+        .await?
+        .ok_or_else(|| AuthError::not_found("User not found"))?;
+
+    let update = UpdateUser {
+        role: Some(body.role.clone()),
+        ..Default::default()
+    };
+
+    let updated_user = ctx.database.update_user(&body.user_id, update).await?;
+    Ok(UserResponse { user: updated_user })
+}
+
+pub(crate) async fn create_user_core<DB: DatabaseAdapter>(
+    body: &CreateUserRequest,
+    config: &AdminConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<UserResponse<DB::User>> {
+    if ctx.database.get_user_by_email(&body.email).await?.is_some() {
+        return Err(AuthError::conflict("A user with this email already exists"));
+    }
+
+    if body.password.len() < ctx.config.password.min_length {
+        return Err(AuthError::bad_request(format!(
+            "Password must be at least {} characters long",
+            ctx.config.password.min_length
+        )));
+    }
+
+    let password_hash = better_auth_core::hash_password(None, &body.password).await?;
+
+    let role = body
+        .role
+        .clone()
+        .unwrap_or_else(|| config.default_user_role.clone());
+
+    let metadata_value = body.data.clone().unwrap_or(serde_json::json!({}));
+    let metadata = if let serde_json::Value::Object(mut obj) = metadata_value {
+        obj.insert(
+            "password_hash".to_string(),
+            serde_json::json!(password_hash),
+        );
+        serde_json::Value::Object(obj)
+    } else {
+        let mut obj = serde_json::Map::new();
+        obj.insert(
+            "password_hash".to_string(),
+            serde_json::json!(password_hash),
+        );
+        serde_json::Value::Object(obj)
+    };
+
+    let create_user = CreateUser::new()
+        .with_email(&body.email)
+        .with_name(&body.name)
+        .with_role(role)
+        .with_email_verified(true)
+        .with_metadata(metadata);
+
+    let user = ctx.database.create_user(create_user).await?;
+
+    ctx.database
+        .create_account(CreateAccount {
+            user_id: user.id().to_string(),
+            account_id: user.id().to_string(),
+            provider_id: "credential".to_string(),
+            access_token: None,
+            refresh_token: None,
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: None,
+            password: Some(password_hash),
+        })
+        .await?;
+
+    Ok(UserResponse { user })
+}
+
+/// Query parameters for `list_users`.
+#[derive(Debug, Deserialize)]
+pub(crate) struct ListUsersQueryParams {
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+    #[serde(rename = "searchField")]
+    pub search_field: Option<String>,
+    #[serde(rename = "searchValue")]
+    pub search_value: Option<String>,
+    #[serde(rename = "searchOperator")]
+    pub search_operator: Option<String>,
+    #[serde(rename = "sortBy")]
+    pub sort_by: Option<String>,
+    #[serde(rename = "sortDirection")]
+    pub sort_direction: Option<String>,
+    #[serde(rename = "filterField")]
+    pub filter_field: Option<String>,
+    #[serde(rename = "filterValue")]
+    pub filter_value: Option<String>,
+    #[serde(rename = "filterOperator")]
+    pub filter_operator: Option<String>,
+}
+
+pub(crate) async fn list_users_core<DB: DatabaseAdapter>(
+    query: &ListUsersQueryParams,
+    config: &AdminConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<ListUsersResponse<DB::User>> {
+    let limit = query
+        .limit
+        .unwrap_or(config.default_page_limit)
+        .min(config.max_page_limit);
+    let offset = query.offset.unwrap_or(0);
+
+    let params = ListUsersParams {
+        limit: Some(limit),
+        offset: Some(offset),
+        search_field: query.search_field.clone(),
+        search_value: query.search_value.clone(),
+        search_operator: query.search_operator.clone(),
+        sort_by: query.sort_by.clone(),
+        sort_direction: query.sort_direction.clone(),
+        filter_field: query.filter_field.clone(),
+        filter_value: query.filter_value.clone(),
+        filter_operator: query.filter_operator.clone(),
+    };
+
+    let (users, total) = ctx.database.list_users(params).await?;
+    Ok(ListUsersResponse {
+        users,
+        total,
+        limit,
+        offset,
+    })
+}
+
+pub(crate) async fn list_user_sessions_core<DB: DatabaseAdapter>(
+    body: &UserIdRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<ListSessionsResponse<DB::Session>> {
+    let _target = ctx
+        .database
+        .get_user_by_id(&body.user_id)
+        .await?
+        .ok_or_else(|| AuthError::not_found("User not found"))?;
+
+    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    let sessions = session_manager.list_user_sessions(&body.user_id).await?;
+    Ok(ListSessionsResponse { sessions })
+}
+
+pub(crate) async fn ban_user_core<DB: DatabaseAdapter>(
+    body: &BanUserRequest,
+    admin_user_id: &str,
+    config: &AdminConfig,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<UserResponse<DB::User>> {
+    if body.user_id == admin_user_id {
+        return Err(AuthError::bad_request("You cannot ban yourself"));
+    }
+
+    let target = ctx
+        .database
+        .get_user_by_id(&body.user_id)
+        .await?
+        .ok_or_else(|| AuthError::not_found("User not found"))?;
+
+    if !config.allow_ban_admin && target.role().unwrap_or("user") == config.admin_role {
+        return Err(AuthError::forbidden("Cannot ban an admin user"));
+    }
+
+    let ban_expires = body
+        .ban_expires_in
+        .and_then(Duration::try_seconds)
+        .map(|d| Utc::now() + d);
+
+    let update = UpdateUser {
+        banned: Some(true),
+        ban_reason: body.ban_reason.clone(),
+        ban_expires,
+        ..Default::default()
+    };
+
+    let updated_user = ctx.database.update_user(&body.user_id, update).await?;
+
+    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    session_manager
+        .revoke_all_user_sessions(&body.user_id)
+        .await?;
+
+    Ok(UserResponse { user: updated_user })
+}
+
+pub(crate) async fn unban_user_core<DB: DatabaseAdapter>(
+    body: &UserIdRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<UserResponse<DB::User>> {
+    let _target = ctx
+        .database
+        .get_user_by_id(&body.user_id)
+        .await?
+        .ok_or_else(|| AuthError::not_found("User not found"))?;
+
+    let update = UpdateUser {
+        banned: Some(false),
+        ban_reason: None,
+        ban_expires: None,
+        ..Default::default()
+    };
+
+    let updated_user = ctx.database.update_user(&body.user_id, update).await?;
+    Ok(UserResponse { user: updated_user })
+}
+
+pub(crate) async fn impersonate_user_core<DB: DatabaseAdapter>(
+    body: &UserIdRequest,
+    admin_user_id: &str,
+    ip_address: Option<&str>,
+    user_agent: Option<&str>,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<(SessionUserResponse<DB::Session, DB::User>, String)> {
+    if body.user_id == admin_user_id {
+        return Err(AuthError::bad_request("Cannot impersonate yourself"));
+    }
+
+    let target = ctx
+        .database
+        .get_user_by_id(&body.user_id)
+        .await?
+        .ok_or_else(|| AuthError::not_found("User not found"))?;
+
+    let expires_at = Utc::now() + ctx.config.session.expires_in;
+    let create_session = CreateSession {
+        user_id: target.id().to_string(),
+        expires_at,
+        ip_address: ip_address.map(|s| s.to_string()),
+        user_agent: user_agent.map(|s| s.to_string()),
+        impersonated_by: Some(admin_user_id.to_string()),
+        active_organization_id: None,
+    };
+
+    let session = ctx.database.create_session(create_session).await?;
+    let token = session.token().to_string();
+    let response = SessionUserResponse {
+        session,
+        user: target,
+    };
+
+    Ok((response, token))
+}
+
+pub(crate) async fn stop_impersonating_core<DB: DatabaseAdapter>(
+    session: &DB::Session,
+    session_token: &str,
+    ip_address: Option<&str>,
+    user_agent: Option<&str>,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<(SessionUserResponse<DB::Session, DB::User>, String)> {
+    let admin_id = session
+        .impersonated_by()
+        .ok_or_else(|| {
+            AuthError::bad_request("Current session is not an impersonation session")
+        })?
+        .to_string();
+
+    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    session_manager.delete_session(session_token).await?;
+
+    let admin_user = ctx
+        .database
+        .get_user_by_id(&admin_id)
+        .await?
+        .ok_or(AuthError::UserNotFound)?;
+
+    let expires_at = Utc::now() + ctx.config.session.expires_in;
+    let create_session = CreateSession {
+        user_id: admin_id,
+        expires_at,
+        ip_address: ip_address.map(|s| s.to_string()),
+        user_agent: user_agent.map(|s| s.to_string()),
+        impersonated_by: None,
+        active_organization_id: None,
+    };
+
+    let admin_session = ctx.database.create_session(create_session).await?;
+    let token = admin_session.token().to_string();
+    let response = SessionUserResponse {
+        session: admin_session,
+        user: admin_user,
+    };
+
+    Ok((response, token))
+}
+
+pub(crate) async fn revoke_user_session_core<DB: DatabaseAdapter>(
+    body: &RevokeSessionRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<SuccessResponse> {
+    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    session_manager.delete_session(&body.session_token).await?;
+    Ok(SuccessResponse { success: true })
+}
+
+pub(crate) async fn revoke_user_sessions_core<DB: DatabaseAdapter>(
+    body: &UserIdRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<SuccessResponse> {
+    let _target = ctx
+        .database
+        .get_user_by_id(&body.user_id)
+        .await?
+        .ok_or_else(|| AuthError::not_found("User not found"))?;
+
+    let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
+    session_manager
+        .revoke_all_user_sessions(&body.user_id)
+        .await?;
+
+    Ok(SuccessResponse { success: true })
+}
+
+pub(crate) async fn remove_user_core<DB: DatabaseAdapter>(
+    body: &UserIdRequest,
+    admin_user_id: &str,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<SuccessResponse> {
+    if body.user_id == admin_user_id {
+        return Err(AuthError::bad_request("You cannot remove yourself"));
+    }
+
+    let _target = ctx
+        .database
+        .get_user_by_id(&body.user_id)
+        .await?
+        .ok_or_else(|| AuthError::not_found("User not found"))?;
+
+    ctx.database.delete_user_sessions(&body.user_id).await?;
+
+    let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
+    for account in &accounts {
+        ctx.database.delete_account(account.id()).await?;
+    }
+
+    ctx.database.delete_user(&body.user_id).await?;
+    Ok(SuccessResponse { success: true })
+}
+
+pub(crate) async fn set_user_password_core<DB: DatabaseAdapter>(
+    body: &SetUserPasswordRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    if body.new_password.len() < ctx.config.password.min_length {
+        return Err(AuthError::bad_request(format!(
+            "Password must be at least {} characters long",
+            ctx.config.password.min_length
+        )));
+    }
+
+    let user = ctx
+        .database
+        .get_user_by_id(&body.user_id)
+        .await?
+        .ok_or_else(|| AuthError::not_found("User not found"))?;
+
+    let password_hash = better_auth_core::hash_password(None, &body.new_password).await?;
+
+    let mut metadata = user.metadata().clone();
+    if let Some(obj) = metadata.as_object_mut() {
+        obj.insert(
+            "password_hash".to_string(),
+            serde_json::json!(password_hash),
+        );
+    } else {
+        return Err(AuthError::bad_request(
+            "User metadata must be a JSON object to store password hash",
+        ));
+    }
+
+    let update = UpdateUser {
+        metadata: Some(metadata),
+        ..Default::default()
+    };
+    ctx.database.update_user(&body.user_id, update).await?;
+
+    let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
+    let has_credential = accounts.iter().any(|a| a.provider_id() == "credential");
+
+    if has_credential {
+        for account in &accounts {
+            if account.provider_id() == "credential" {
+                let account_update = better_auth_core::UpdateAccount {
+                    password: Some(password_hash.clone()),
+                    ..Default::default()
+                };
+                ctx.database
+                    .update_account(account.id(), account_update)
+                    .await?;
+                break;
+            }
+        }
+    } else {
+        ctx.database
+            .create_account(CreateAccount {
+                user_id: body.user_id.clone(),
+                account_id: body.user_id.clone(),
+                provider_id: "credential".to_string(),
+                access_token: None,
+                refresh_token: None,
+                id_token: None,
+                access_token_expires_at: None,
+                refresh_token_expires_at: None,
+                scope: None,
+                password: Some(password_hash.clone()),
+            })
+            .await?;
+    }
+
+    Ok(StatusResponse { status: true })
+}
+
+pub(crate) async fn has_permission_core<DB: DatabaseAdapter>(
+    body: &HasPermissionRequest,
+    user: &DB::User,
+    config: &AdminConfig,
+) -> AuthResult<PermissionResponse> {
+    let _permissions = body.permissions.clone().or(body.permission.clone());
+
+    let is_admin = user.role().unwrap_or("user") == config.admin_role;
+
+    let (success, error) = if is_admin {
+        (true, None)
+    } else {
+        (
+            false,
+            Some("User does not have the required permissions".to_string()),
+        )
+    };
+
+    Ok(PermissionResponse { success, error })
+}
+
+// ---------------------------------------------------------------------------
+// Handler implementations (old — delegate to core)
 // ---------------------------------------------------------------------------
 
 impl AdminPlugin {
-    // -- Auth helpers --------------------------------------------------------
-
     /// Authenticate the caller and verify they have the admin role.
     async fn require_admin<DB: DatabaseAdapter>(
         &self,
@@ -300,7 +749,6 @@ impl AdminPlugin {
     ) -> AuthResult<(DB::User, DB::Session)> {
         let (user, session) = ctx.require_session(req).await?;
 
-        // Check admin role
         let user_role = user.role().unwrap_or("user");
         if user_role != self.config.admin_role {
             return Err(AuthError::forbidden(
@@ -311,142 +759,43 @@ impl AdminPlugin {
         Ok((user, session))
     }
 
-    // -- Handlers -----------------------------------------------------------
-
-    /// POST /admin/set-role — Set the role of a user.
     async fn handle_set_role<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
-
         let body: SetRoleRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        // Find target user
-        let _target = ctx
-            .database
-            .get_user_by_id(&body.user_id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("User not found"))?;
-
-        let update = UpdateUser {
-            role: Some(body.role),
-            ..Default::default()
-        };
-
-        let updated_user = ctx.database.update_user(&body.user_id, update).await?;
-
-        let response = UserResponse { user: updated_user };
+        let response = set_role_core(&body, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    /// POST /admin/create-user — Create a new user (admin only).
     async fn handle_create_user<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
-
         let body: CreateUserRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        // Check if user with email already exists
-        if ctx.database.get_user_by_email(&body.email).await?.is_some() {
-            return Err(AuthError::conflict("A user with this email already exists"));
-        }
-
-        // Validate password length
-        if body.password.len() < ctx.config.password.min_length {
-            return Err(AuthError::bad_request(format!(
-                "Password must be at least {} characters long",
-                ctx.config.password.min_length
-            )));
-        }
-
-        // Hash the password
-        let password_hash = better_auth_core::hash_password(None, &body.password).await?;
-
-        let role = body
-            .role
-            .unwrap_or_else(|| self.config.default_user_role.clone());
-
-        // Normalize metadata to always be a JSON object and include the password_hash
-        let metadata_value = body.data.unwrap_or(serde_json::json!({}));
-        let metadata = if let serde_json::Value::Object(mut obj) = metadata_value {
-            obj.insert(
-                "password_hash".to_string(),
-                serde_json::json!(password_hash),
-            );
-            serde_json::Value::Object(obj)
-        } else {
-            let mut obj = serde_json::Map::new();
-            obj.insert(
-                "password_hash".to_string(),
-                serde_json::json!(password_hash),
-            );
-            serde_json::Value::Object(obj)
-        };
-
-        let create_user = CreateUser::new()
-            .with_email(&body.email)
-            .with_name(&body.name)
-            .with_role(role)
-            .with_email_verified(true)
-            .with_metadata(metadata);
-
-        let user = ctx.database.create_user(create_user).await?;
-
-        // Create a credential account for the user
-        ctx.database
-            .create_account(CreateAccount {
-                user_id: user.id().to_string(),
-                account_id: user.id().to_string(),
-                provider_id: "credential".to_string(),
-                access_token: None,
-                refresh_token: None,
-                id_token: None,
-                access_token_expires_at: None,
-                refresh_token_expires_at: None,
-                scope: None,
-                password: Some(password_hash),
-            })
-            .await?;
-
-        let response = UserResponse { user };
+        let response = create_user_core(&body, &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    /// GET /admin/list-users — List users with optional search, filter, sort, and pagination.
     async fn handle_list_users<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
-
-        let limit = req
-            .query
-            .get("limit")
-            .and_then(|v| v.parse::<usize>().ok())
-            .unwrap_or(self.config.default_page_limit)
-            .min(self.config.max_page_limit);
-
-        let offset = req
-            .query
-            .get("offset")
-            .and_then(|v| v.parse::<usize>().ok())
-            .unwrap_or(0);
-
-        let params = ListUsersParams {
-            limit: Some(limit),
-            offset: Some(offset),
+        let query = ListUsersQueryParams {
+            limit: req.query.get("limit").and_then(|v| v.parse().ok()),
+            offset: req.query.get("offset").and_then(|v| v.parse().ok()),
             search_field: req.query.get("searchField").cloned(),
             search_value: req.query.get("searchValue").cloned(),
             search_operator: req.query.get("searchOperator").cloned(),
@@ -456,455 +805,166 @@ impl AdminPlugin {
             filter_value: req.query.get("filterValue").cloned(),
             filter_operator: req.query.get("filterOperator").cloned(),
         };
-
-        let (users, total) = ctx.database.list_users(params).await?;
-
-        let response = ListUsersResponse {
-            users,
-            total,
-            limit,
-            offset,
-        };
+        let response = list_users_core(&query, &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    /// POST /admin/list-user-sessions — List all active sessions for a user.
     async fn handle_list_user_sessions<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
-
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        // Verify the target user exists
-        let _target = ctx
-            .database
-            .get_user_by_id(&body.user_id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("User not found"))?;
-
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        let sessions = session_manager.list_user_sessions(&body.user_id).await?;
-
-        let response = ListSessionsResponse { sessions };
+        let response = list_user_sessions_core(&body, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    /// POST /admin/ban-user — Ban a user.
     async fn handle_ban_user<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (admin_user, _admin_session) = self.require_admin(req, ctx).await?;
-
         let body: BanUserRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        // Prevent banning yourself
-        if body.user_id == admin_user.id() {
-            return Err(AuthError::bad_request("You cannot ban yourself"));
-        }
-
-        let target = ctx
-            .database
-            .get_user_by_id(&body.user_id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("User not found"))?;
-
-        // Prevent banning other admins unless explicitly allowed
-        if !self.config.allow_ban_admin && target.role().unwrap_or("user") == self.config.admin_role
-        {
-            return Err(AuthError::forbidden("Cannot ban an admin user"));
-        }
-
-        let ban_expires = body
-            .ban_expires_in
-            .and_then(Duration::try_seconds)
-            .map(|d| Utc::now() + d);
-
-        let update = UpdateUser {
-            banned: Some(true),
-            ban_reason: body.ban_reason,
-            ban_expires,
-            ..Default::default()
-        };
-
-        let updated_user = ctx.database.update_user(&body.user_id, update).await?;
-
-        // Revoke all sessions for the banned user
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        session_manager
-            .revoke_all_user_sessions(&body.user_id)
-            .await?;
-
-        let response = UserResponse { user: updated_user };
+        let response = ban_user_core(&body, admin_user.id(), &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    /// POST /admin/unban-user — Unban a user.
     async fn handle_unban_user<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
-
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        let _target = ctx
-            .database
-            .get_user_by_id(&body.user_id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("User not found"))?;
-
-        let update = UpdateUser {
-            banned: Some(false),
-            ban_reason: None,
-            ban_expires: None,
-            ..Default::default()
-        };
-
-        // The adapter's apply_update clears ban_reason and ban_expires
-        // when banned is explicitly set to false.
-        let updated_user = ctx.database.update_user(&body.user_id, update).await?;
-
-        let response = UserResponse { user: updated_user };
+        let response = unban_user_core(&body, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    /// POST /admin/impersonate-user — Create an impersonation session.
     async fn handle_impersonate_user<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (admin_user, _admin_session) = self.require_admin(req, ctx).await?;
-
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        // Cannot impersonate yourself
-        if body.user_id == admin_user.id() {
-            return Err(AuthError::bad_request("Cannot impersonate yourself"));
-        }
-
-        let target = ctx
-            .database
-            .get_user_by_id(&body.user_id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("User not found"))?;
-
-        // Create an impersonation session
-        let expires_at = Utc::now() + ctx.config.session.expires_in;
-        let create_session = CreateSession {
-            user_id: target.id().to_string(),
-            expires_at,
-            ip_address: req.headers.get("x-forwarded-for").cloned(),
-            user_agent: req.headers.get("user-agent").cloned(),
-            impersonated_by: Some(admin_user.id().to_string()),
-            active_organization_id: None,
-        };
-
-        let session = ctx.database.create_session(create_session).await?;
-
-        let cookie_header = create_session_cookie(session.token(), &ctx.config);
-        let response = SessionUserResponse {
-            session,
-            user: target,
-        };
-
+        let (response, token) = impersonate_user_core(
+            &body,
+            admin_user.id(),
+            req.headers.get("x-forwarded-for").map(|s| s.as_str()),
+            req.headers.get("user-agent").map(|s| s.as_str()),
+            ctx,
+        )
+        .await?;
+        let cookie_header = create_session_cookie(&token, &ctx.config);
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
-    /// POST /admin/stop-impersonating — Stop the current impersonation session.
     async fn handle_stop_impersonating<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-
         let token = session_manager
             .extract_session_token(req)
             .ok_or(AuthError::Unauthenticated)?;
-
         let session = session_manager
             .get_session(&token)
             .await?
             .ok_or(AuthError::Unauthenticated)?;
-
-        // Must be an impersonation session
-        let admin_id = session
-            .impersonated_by()
-            .ok_or_else(|| {
-                AuthError::bad_request("Current session is not an impersonation session")
-            })?
-            .to_string();
-
-        // Delete the impersonation session
-        session_manager.delete_session(&token).await?;
-
-        // Look up the original admin user
-        let admin_user = ctx
-            .database
-            .get_user_by_id(&admin_id)
-            .await?
-            .ok_or(AuthError::UserNotFound)?;
-
-        // Create a new session for the admin user so the client
-        // transitions back to a valid admin session.
-        let expires_at = Utc::now() + ctx.config.session.expires_in;
-        let create_session = CreateSession {
-            user_id: admin_id,
-            expires_at,
-            ip_address: req.headers.get("x-forwarded-for").cloned(),
-            user_agent: req.headers.get("user-agent").cloned(),
-            impersonated_by: None,
-            active_organization_id: None,
-        };
-
-        let admin_session = ctx.database.create_session(create_session).await?;
-
-        let cookie_header = create_session_cookie(admin_session.token(), &ctx.config);
-        let response = SessionUserResponse {
-            session: admin_session,
-            user: admin_user,
-        };
-
+        let (response, new_token) = stop_impersonating_core(
+            &session,
+            &token,
+            req.headers.get("x-forwarded-for").map(|s| s.as_str()),
+            req.headers.get("user-agent").map(|s| s.as_str()),
+            ctx,
+        )
+        .await?;
+        let cookie_header = create_session_cookie(&new_token, &ctx.config);
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
-    /// POST /admin/revoke-user-session — Revoke a specific session by token.
     async fn handle_revoke_user_session<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
-
         let body: RevokeSessionRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        session_manager.delete_session(&body.session_token).await?;
-
-        let response = SuccessResponse { success: true };
+        let response = revoke_user_session_core(&body, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    /// POST /admin/revoke-user-sessions — Revoke all sessions for a user.
     async fn handle_revoke_user_sessions<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
-
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        // Verify the target user exists
-        let _target = ctx
-            .database
-            .get_user_by_id(&body.user_id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("User not found"))?;
-
-        let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
-        session_manager
-            .revoke_all_user_sessions(&body.user_id)
-            .await?;
-
-        let response = SuccessResponse { success: true };
+        let response = revoke_user_sessions_core(&body, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    /// POST /admin/remove-user — Delete a user and all their data.
-    ///
-    /// **Note:** This endpoint deletes sessions, accounts, and the user record.
-    /// Data owned by other plugins (passkeys, two-factor settings, API keys,
-    /// organization memberships) is **not** cleaned up here.  Those records
-    /// should be removed through the respective plugin APIs or via database
-    /// cascade rules.
     async fn handle_remove_user<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (admin_user, _admin_session) = self.require_admin(req, ctx).await?;
-
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        // Prevent self-deletion
-        if body.user_id == admin_user.id() {
-            return Err(AuthError::bad_request("You cannot remove yourself"));
-        }
-
-        // Verify user exists
-        let _target = ctx
-            .database
-            .get_user_by_id(&body.user_id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("User not found"))?;
-
-        // Revoke all sessions first
-        ctx.database.delete_user_sessions(&body.user_id).await?;
-
-        // Delete all accounts linked to this user
-        let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
-        for account in &accounts {
-            ctx.database.delete_account(account.id()).await?;
-        }
-
-        // Delete the user
-        ctx.database.delete_user(&body.user_id).await?;
-
-        let response = SuccessResponse { success: true };
+        let response = remove_user_core(&body, admin_user.id(), ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    /// POST /admin/set-user-password — Set a user's password.
     async fn handle_set_user_password<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
-
         let body: SetUserPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        // Validate password length
-        if body.new_password.len() < ctx.config.password.min_length {
-            return Err(AuthError::bad_request(format!(
-                "Password must be at least {} characters long",
-                ctx.config.password.min_length
-            )));
-        }
-
-        // Verify user exists
-        let user = ctx
-            .database
-            .get_user_by_id(&body.user_id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("User not found"))?;
-
-        let password_hash = better_auth_core::hash_password(None, &body.new_password).await?;
-
-        // Update password in user metadata
-        let mut metadata = user.metadata().clone();
-        if let Some(obj) = metadata.as_object_mut() {
-            obj.insert(
-                "password_hash".to_string(),
-                serde_json::json!(password_hash),
-            );
-        } else {
-            return Err(AuthError::bad_request(
-                "User metadata must be a JSON object to store password hash",
-            ));
-        }
-
-        let update = UpdateUser {
-            metadata: Some(metadata),
-            ..Default::default()
-        };
-        ctx.database.update_user(&body.user_id, update).await?;
-
-        // Update the credential account's password field (or create one if missing)
-        let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
-        let has_credential = accounts.iter().any(|a| a.provider_id() == "credential");
-
-        if has_credential {
-            for account in &accounts {
-                if account.provider_id() == "credential" {
-                    let account_update = better_auth_core::UpdateAccount {
-                        password: Some(password_hash.clone()),
-                        ..Default::default()
-                    };
-                    ctx.database
-                        .update_account(account.id(), account_update)
-                        .await?;
-                    break;
-                }
-            }
-        } else {
-            // User has no credential account (e.g. OAuth-only user).
-            // Create one so the password is usable for email/password sign-in.
-            ctx.database
-                .create_account(CreateAccount {
-                    user_id: body.user_id.clone(),
-                    account_id: body.user_id.clone(),
-                    provider_id: "credential".to_string(),
-                    access_token: None,
-                    refresh_token: None,
-                    id_token: None,
-                    access_token_expires_at: None,
-                    refresh_token_expires_at: None,
-                    scope: None,
-                    password: Some(password_hash.clone()),
-                })
-                .await?;
-        }
-
-        let response = StatusResponse { status: true };
+        let response = set_user_password_core(&body, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    /// POST /admin/has-permission — Check if the calling user has a given permission.
     async fn handle_has_permission<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-
         let body: HasPermissionRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-
-        // Use the `permissions` field, falling back to deprecated `permission`.
-        let _permissions = body.permissions.or(body.permission);
-
-        let is_admin = user.role().unwrap_or("user") == self.config.admin_role;
-
-        // If the user is an admin they have all permissions.
-        // Otherwise check if the requested permission matches a simple
-        // role-based scheme. The `permissions` object from the spec is
-        // free-form; we treat it as a map of resource -> action arrays
-        // and grant access if the user's role matches the admin role.
-        let (success, error) = if is_admin {
-            (true, None)
-        } else {
-            (
-                false,
-                Some("User does not have the required permissions".to_string()),
-            )
-        };
-
-        let response = PermissionResponse { success, error };
+        let response = has_permission_core::<DB>(&body, &user, &self.config).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 }
@@ -918,8 +978,10 @@ mod axum_impl {
     use super::*;
     use std::sync::Arc;
 
-    use axum::extract::{Extension, State};
-    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+    use axum::Json;
+    use axum::extract::{Extension, Query, State};
+    use axum::http::header;
+    use better_auth_core::{AdminRole, AdminSession, AuthState, CurrentSession, ValidatedJson};
 
     #[derive(Clone)]
     struct PluginState {
@@ -929,179 +991,141 @@ mod axum_impl {
     async fn handle_set_role<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        AdminSession { .. }: AdminSession<DB>,
+        ValidatedJson(body): ValidatedJson<SetRoleRequest>,
+    ) -> Result<Json<UserResponse<DB::User>>, AuthError> {
         let ctx = state.to_context();
-        let plugin = AdminPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(plugin.handle_set_role(&req, &ctx).await?))
+        let response = set_role_core(&body, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_create_user<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        AdminSession { .. }: AdminSession<DB>,
+        ValidatedJson(body): ValidatedJson<CreateUserRequest>,
+    ) -> Result<Json<UserResponse<DB::User>>, AuthError> {
         let ctx = state.to_context();
-        let plugin = AdminPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_create_user(&req, &ctx).await?,
-        ))
+        let response = create_user_core(&body, &ps.config, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_list_users<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        AdminSession { .. }: AdminSession<DB>,
+        Query(query): Query<ListUsersQueryParams>,
+    ) -> Result<Json<ListUsersResponse<DB::User>>, AuthError> {
         let ctx = state.to_context();
-        let plugin = AdminPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_list_users(&req, &ctx).await?,
-        ))
+        let response = list_users_core(&query, &ps.config, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_list_user_sessions<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        AdminSession { .. }: AdminSession<DB>,
+        ValidatedJson(body): ValidatedJson<UserIdRequest>,
+    ) -> Result<Json<ListSessionsResponse<DB::Session>>, AuthError> {
         let ctx = state.to_context();
-        let plugin = AdminPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_list_user_sessions(&req, &ctx).await?,
-        ))
+        let response = list_user_sessions_core(&body, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_ban_user<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        AdminSession { user, .. }: AdminSession<DB>,
+        ValidatedJson(body): ValidatedJson<BanUserRequest>,
+    ) -> Result<Json<UserResponse<DB::User>>, AuthError> {
         let ctx = state.to_context();
-        let plugin = AdminPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(plugin.handle_ban_user(&req, &ctx).await?))
+        let response = ban_user_core(&body, user.id(), &ps.config, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_unban_user<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        AdminSession { .. }: AdminSession<DB>,
+        ValidatedJson(body): ValidatedJson<UserIdRequest>,
+    ) -> Result<Json<UserResponse<DB::User>>, AuthError> {
         let ctx = state.to_context();
-        let plugin = AdminPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_unban_user(&req, &ctx).await?,
-        ))
+        let response = unban_user_core(&body, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_impersonate_user<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        AdminSession { user, .. }: AdminSession<DB>,
+        ValidatedJson(body): ValidatedJson<UserIdRequest>,
+    ) -> Result<([(header::HeaderName, String); 1], Json<SessionUserResponse<DB::Session, DB::User>>), AuthError>
+    {
         let ctx = state.to_context();
-        let plugin = AdminPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_impersonate_user(&req, &ctx).await?,
-        ))
+        let (response, token) =
+            impersonate_user_core(&body, user.id(), None, None, &ctx).await?;
+        let cookie = state.session_cookie(&token);
+        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
     async fn handle_stop_impersonating<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { session, .. }: CurrentSession<DB>,
+    ) -> Result<([(header::HeaderName, String); 1], Json<SessionUserResponse<DB::Session, DB::User>>), AuthError>
+    {
         let ctx = state.to_context();
-        let plugin = AdminPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_stop_impersonating(&req, &ctx).await?,
-        ))
+        let token = session.token().to_string();
+        let (response, new_token) =
+            stop_impersonating_core(&session, &token, None, None, &ctx).await?;
+        let cookie = state.session_cookie(&new_token);
+        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
     async fn handle_revoke_user_session<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        AdminSession { .. }: AdminSession<DB>,
+        ValidatedJson(body): ValidatedJson<RevokeSessionRequest>,
+    ) -> Result<Json<SuccessResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = AdminPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_revoke_user_session(&req, &ctx).await?,
-        ))
+        let response = revoke_user_session_core(&body, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_revoke_user_sessions<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        AdminSession { .. }: AdminSession<DB>,
+        ValidatedJson(body): ValidatedJson<UserIdRequest>,
+    ) -> Result<Json<SuccessResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = AdminPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_revoke_user_sessions(&req, &ctx).await?,
-        ))
+        let response = revoke_user_sessions_core(&body, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_remove_user<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        AdminSession { user, .. }: AdminSession<DB>,
+        ValidatedJson(body): ValidatedJson<UserIdRequest>,
+    ) -> Result<Json<SuccessResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = AdminPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_remove_user(&req, &ctx).await?,
-        ))
+        let response = remove_user_core(&body, user.id(), &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_set_user_password<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        AdminSession { .. }: AdminSession<DB>,
+        ValidatedJson(body): ValidatedJson<SetUserPasswordRequest>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = AdminPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_set_user_password(&req, &ctx).await?,
-        ))
+        let response = set_user_password_core(&body, &ctx).await?;
+        Ok(Json(response))
     }
 
     async fn handle_has_permission<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
-        let ctx = state.to_context();
-        let plugin = AdminPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_has_permission(&req, &ctx).await?,
-        ))
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<HasPermissionRequest>,
+    ) -> Result<Json<PermissionResponse>, AuthError> {
+        let response = has_permission_core::<DB>(&body, &user, &ps.config).await?;
+        Ok(Json(response))
     }
 
     impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for AdminPlugin {
@@ -1148,6 +1172,7 @@ mod axum_impl {
                 )
                 .route("/admin/has-permission", post(handle_has_permission::<DB>))
                 .layer(Extension(plugin_state))
+                .layer(Extension(AdminRole(self.config.admin_role.clone())))
         }
     }
 }
