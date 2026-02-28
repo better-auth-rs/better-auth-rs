@@ -14,7 +14,7 @@ mod axum_impl {
     use validator::Validate;
 
     use crate::adapters::DatabaseAdapter;
-    use crate::entity::{AuthSession, AuthUser};
+    use crate::entity::{AuthSession, AuthUser, AuthVerification};
     use crate::error::AuthError;
     use crate::plugin::AuthState;
 
@@ -283,6 +283,63 @@ mod axum_impl {
             Ok(AdminSession {
                 user: current.user,
                 session: current.session,
+            })
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pending2faToken — extract user from a pending 2FA verification token
+    // -----------------------------------------------------------------------
+
+    /// Extractor for pending two-factor authentication flows.
+    ///
+    /// Extracts a `Bearer 2fa_xxx` token from the `Authorization` header,
+    /// looks up the corresponding verification record, validates expiry,
+    /// and returns the associated user and verification ID.
+    pub struct Pending2faToken<DB: DatabaseAdapter> {
+        pub user: DB::User,
+        pub verification_id: String,
+    }
+
+    impl<DB: DatabaseAdapter> FromRequestParts<AuthState<DB>> for Pending2faToken<DB> {
+        type Rejection = AuthError;
+
+        async fn from_request_parts(
+            parts: &mut Parts,
+            state: &AuthState<DB>,
+        ) -> Result<Self, Self::Rejection> {
+            let token = parts
+                .headers
+                .get("authorization")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.strip_prefix("Bearer "))
+                .ok_or(AuthError::Unauthenticated)?;
+
+            if !token.starts_with("2fa_") {
+                return Err(AuthError::bad_request("Invalid 2FA pending token"));
+            }
+
+            let identifier = format!("2fa_pending:{}", token);
+            let verification = state
+                .database
+                .get_verification_by_identifier(&identifier)
+                .await?
+                .ok_or_else(|| AuthError::bad_request("Invalid or expired 2FA token"))?;
+
+            if verification.expires_at() < chrono::Utc::now() {
+                return Err(AuthError::bad_request("2FA token expired"));
+            }
+
+            let user_id = verification.value();
+            let user = state
+                .database
+                .get_user_by_id(user_id)
+                .await?
+                .ok_or(AuthError::UserNotFound)?;
+
+            Ok(Pending2faToken {
+                user,
+                verification_id: verification.id().to_string(),
             })
         }
     }
