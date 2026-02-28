@@ -1,6 +1,6 @@
 use super::*;
 use better_auth_core::adapters::{ApiKeyOps, MemoryDatabaseAdapter, SessionOps, UserOps};
-use better_auth_core::{CreateSession, CreateUser, Session, User};
+use better_auth_core::{AuthPlugin, CreateSession, CreateUser, HttpMethod, Session, User};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;

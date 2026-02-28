@@ -1,9 +1,6 @@
-use async_trait::async_trait;
-
 use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
-use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
+use better_auth_core::{AuthContext, AuthError, AuthResult};
+use better_auth_core::{AuthRequest, AuthResponse};
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
@@ -198,65 +195,16 @@ impl Default for PasskeyPlugin {
     }
 }
 
-#[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasskeyPlugin {
-    fn name(&self) -> &'static str {
-        "passkey"
-    }
-
-    fn routes(&self) -> Vec<AuthRoute> {
-        vec![
-            AuthRoute::get(
-                "/passkey/generate-register-options",
-                "passkey_generate_register_options",
-            ),
-            AuthRoute::post(
-                "/passkey/verify-registration",
-                "passkey_verify_registration",
-            ),
-            AuthRoute::post(
-                "/passkey/generate-authenticate-options",
-                "passkey_generate_authenticate_options",
-            ),
-            AuthRoute::post(
-                "/passkey/verify-authentication",
-                "passkey_verify_authentication",
-            ),
-            AuthRoute::get("/passkey/list-user-passkeys", "passkey_list_user_passkeys"),
-            AuthRoute::post("/passkey/delete-passkey", "passkey_delete_passkey"),
-            AuthRoute::post("/passkey/update-passkey", "passkey_update_passkey"),
-        ]
-    }
-
-    async fn on_request(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<Option<AuthResponse>> {
-        match (req.method(), req.path()) {
-            (HttpMethod::Get, "/passkey/generate-register-options") => {
-                Ok(Some(self.handle_generate_register_options(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/passkey/verify-registration") => {
-                Ok(Some(self.handle_verify_registration(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/passkey/generate-authenticate-options") => Ok(Some(
-                self.handle_generate_authenticate_options(req, ctx).await?,
-            )),
-            (HttpMethod::Post, "/passkey/verify-authentication") => {
-                Ok(Some(self.handle_verify_authentication(req, ctx).await?))
-            }
-            (HttpMethod::Get, "/passkey/list-user-passkeys") => {
-                Ok(Some(self.handle_list_user_passkeys(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/passkey/delete-passkey") => {
-                Ok(Some(self.handle_delete_passkey(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/passkey/update-passkey") => {
-                Ok(Some(self.handle_update_passkey(req, ctx).await?))
-            }
-            _ => Ok(None),
-        }
+better_auth_core::impl_auth_plugin! {
+    PasskeyPlugin, "passkey";
+    routes {
+        get  "/passkey/generate-register-options"      => handle_generate_register_options,      "passkey_generate_register_options";
+        post "/passkey/verify-registration"            => handle_verify_registration,            "passkey_verify_registration";
+        post "/passkey/generate-authenticate-options"  => handle_generate_authenticate_options,  "passkey_generate_authenticate_options";
+        post "/passkey/verify-authentication"          => handle_verify_authentication,          "passkey_verify_authentication";
+        get  "/passkey/list-user-passkeys"             => handle_list_user_passkeys,             "passkey_list_user_passkeys";
+        post "/passkey/delete-passkey"                 => handle_delete_passkey,                 "passkey_delete_passkey";
+        post "/passkey/update-passkey"                 => handle_update_passkey,                 "passkey_update_passkey";
     }
 }
 

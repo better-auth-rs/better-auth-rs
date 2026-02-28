@@ -1,10 +1,7 @@
-use async_trait::async_trait;
-
 use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::AuthUser;
-use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
-use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
+use better_auth_core::{AuthContext, AuthError, AuthResult};
+use better_auth_core::{AuthRequest, AuthResponse};
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
@@ -109,77 +106,22 @@ impl Default for AdminPlugin {
 // Plugin trait implementation
 // ---------------------------------------------------------------------------
 
-#[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for AdminPlugin {
-    fn name(&self) -> &'static str {
-        "admin"
-    }
-
-    fn routes(&self) -> Vec<AuthRoute> {
-        vec![
-            AuthRoute::post("/admin/set-role", "admin_set_role"),
-            AuthRoute::post("/admin/create-user", "admin_create_user"),
-            AuthRoute::get("/admin/list-users", "admin_list_users"),
-            AuthRoute::post("/admin/list-user-sessions", "admin_list_user_sessions"),
-            AuthRoute::post("/admin/ban-user", "admin_ban_user"),
-            AuthRoute::post("/admin/unban-user", "admin_unban_user"),
-            AuthRoute::post("/admin/impersonate-user", "admin_impersonate_user"),
-            AuthRoute::post("/admin/stop-impersonating", "admin_stop_impersonating"),
-            AuthRoute::post("/admin/revoke-user-session", "admin_revoke_user_session"),
-            AuthRoute::post("/admin/revoke-user-sessions", "admin_revoke_user_sessions"),
-            AuthRoute::post("/admin/remove-user", "admin_remove_user"),
-            AuthRoute::post("/admin/set-user-password", "admin_set_user_password"),
-            AuthRoute::post("/admin/has-permission", "admin_has_permission"),
-        ]
-    }
-
-    async fn on_request(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<Option<AuthResponse>> {
-        match (req.method(), req.path()) {
-            (HttpMethod::Post, "/admin/set-role") => {
-                Ok(Some(self.handle_set_role(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/admin/create-user") => {
-                Ok(Some(self.handle_create_user(req, ctx).await?))
-            }
-            (HttpMethod::Get, "/admin/list-users") => {
-                Ok(Some(self.handle_list_users(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/admin/list-user-sessions") => {
-                Ok(Some(self.handle_list_user_sessions(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/admin/ban-user") => {
-                Ok(Some(self.handle_ban_user(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/admin/unban-user") => {
-                Ok(Some(self.handle_unban_user(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/admin/impersonate-user") => {
-                Ok(Some(self.handle_impersonate_user(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/admin/stop-impersonating") => {
-                Ok(Some(self.handle_stop_impersonating(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/admin/revoke-user-session") => {
-                Ok(Some(self.handle_revoke_user_session(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/admin/revoke-user-sessions") => {
-                Ok(Some(self.handle_revoke_user_sessions(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/admin/remove-user") => {
-                Ok(Some(self.handle_remove_user(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/admin/set-user-password") => {
-                Ok(Some(self.handle_set_user_password(req, ctx).await?))
-            }
-            (HttpMethod::Post, "/admin/has-permission") => {
-                Ok(Some(self.handle_has_permission(req, ctx).await?))
-            }
-            _ => Ok(None),
-        }
+better_auth_core::impl_auth_plugin! {
+    AdminPlugin, "admin";
+    routes {
+        post "/admin/set-role" => handle_set_role, "admin_set_role";
+        post "/admin/create-user" => handle_create_user, "admin_create_user";
+        get  "/admin/list-users" => handle_list_users, "admin_list_users";
+        post "/admin/list-user-sessions" => handle_list_user_sessions, "admin_list_user_sessions";
+        post "/admin/ban-user" => handle_ban_user, "admin_ban_user";
+        post "/admin/unban-user" => handle_unban_user, "admin_unban_user";
+        post "/admin/impersonate-user" => handle_impersonate_user, "admin_impersonate_user";
+        post "/admin/stop-impersonating" => handle_stop_impersonating, "admin_stop_impersonating";
+        post "/admin/revoke-user-session" => handle_revoke_user_session, "admin_revoke_user_session";
+        post "/admin/revoke-user-sessions" => handle_revoke_user_sessions, "admin_revoke_user_sessions";
+        post "/admin/remove-user" => handle_remove_user, "admin_remove_user";
+        post "/admin/set-user-password" => handle_set_user_password, "admin_set_user_password";
+        post "/admin/has-permission" => handle_has_permission, "admin_has_permission";
     }
 }
 

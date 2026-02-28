@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use governor::clock::DefaultClock;
@@ -13,9 +12,8 @@ use std::sync::Mutex;
 
 use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthApiKey, AuthUser};
-use better_auth_core::{AuthContext, AuthPlugin, AuthRoute, BeforeRequestAction};
-use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, UpdateApiKey};
+use better_auth_core::{AuthContext, AuthError, AuthResult, BeforeRequestAction};
+use better_auth_core::{AuthRequest, AuthResponse, UpdateApiKey};
 
 pub(super) mod handlers;
 pub(super) mod types;
@@ -774,105 +772,78 @@ impl ApiKeyPlugin {
 // AuthPlugin trait implementation
 // ---------------------------------------------------------------------------
 
-#[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for ApiKeyPlugin {
-    fn name(&self) -> &'static str {
-        "api-key"
+better_auth_core::impl_auth_plugin! {
+    ApiKeyPlugin, "api-key";
+    routes {
+        post "/api-key/create"                    => handle_create,             "api_key_create";
+        get  "/api-key/get"                       => handle_get,                "api_key_get";
+        post "/api-key/update"                    => handle_update,             "api_key_update";
+        post "/api-key/delete"                    => handle_delete,             "api_key_delete";
+        get  "/api-key/list"                      => handle_list,               "api_key_list";
+        post "/api-key/verify"                    => handle_verify,             "api_key_verify";
+        post "/api-key/delete-all-expired-api-keys" => handle_delete_all_expired, "api_key_delete_all_expired";
     }
-
-    fn routes(&self) -> Vec<AuthRoute> {
-        vec![
-            AuthRoute::post("/api-key/create", "api_key_create"),
-            AuthRoute::get("/api-key/get", "api_key_get"),
-            AuthRoute::post("/api-key/update", "api_key_update"),
-            AuthRoute::post("/api-key/delete", "api_key_delete"),
-            AuthRoute::get("/api-key/list", "api_key_list"),
-            AuthRoute::post("/api-key/verify", "api_key_verify"),
-            AuthRoute::post(
-                "/api-key/delete-all-expired-api-keys",
-                "api_key_delete_all_expired",
-            ),
-        ]
-    }
-
-    async fn before_request(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<Option<BeforeRequestAction>> {
-        if !self.config.enable_session_for_api_keys {
-            return Ok(None);
-        }
-
-        // Check for API key in the configured header
-        let raw_key = match req.headers.get(&self.config.api_key_header) {
-            Some(k) if !k.is_empty() => k.clone(),
-            _ => return Ok(None),
-        };
-
-        // Skip session emulation for API-key management routes to avoid
-        // double-validating the key (before_request + handle_verify both
-        // call validate_api_key, consuming usage/rate-limit budget twice).
-        if req.path().starts_with("/api-key/") {
-            return Ok(None);
-        }
-
-        // Validate the key (reuses the full verify logic)
-        let view = self
-            .validate_api_key(ctx, &raw_key, None)
-            .await
-            .map_err(|e| AuthError::bad_request(e.message))?;
-
-        // Look up the user
-        let user = ctx
-            .database
-            .get_user_by_id(&view.user_id)
-            .await?
-            .ok_or_else(|| api_key_error(ApiKeyErrorCode::InvalidUserIdFromApiKey))?;
-
-        // Build a virtual session response for `/get-session`
-        if req.path() == "/get-session" {
-            let session_json = serde_json::json!({
-                "user": {
-                    "id": user.id(),
-                    "email": user.email(),
-                    "name": user.name(),
-                },
-                "session": {
-                    "id": view.id,
-                    "token": raw_key,
-                    "userId": view.user_id,
-                }
-            });
-            return Ok(Some(BeforeRequestAction::Respond(AuthResponse::json(
-                200,
-                &session_json,
-            )?)));
-        }
-
-        // For all other routes, inject the session
-        Ok(Some(BeforeRequestAction::InjectSession {
-            user_id: view.user_id,
-            session_token: raw_key,
-        }))
-    }
-
-    async fn on_request(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<Option<AuthResponse>> {
-        match (req.method(), req.path()) {
-            (HttpMethod::Post, "/api-key/create") => Ok(Some(self.handle_create(req, ctx).await?)),
-            (HttpMethod::Get, "/api-key/get") => Ok(Some(self.handle_get(req, ctx).await?)),
-            (HttpMethod::Post, "/api-key/update") => Ok(Some(self.handle_update(req, ctx).await?)),
-            (HttpMethod::Post, "/api-key/delete") => Ok(Some(self.handle_delete(req, ctx).await?)),
-            (HttpMethod::Get, "/api-key/list") => Ok(Some(self.handle_list(req, ctx).await?)),
-            (HttpMethod::Post, "/api-key/verify") => Ok(Some(self.handle_verify(req, ctx).await?)),
-            (HttpMethod::Post, "/api-key/delete-all-expired-api-keys") => {
-                Ok(Some(self.handle_delete_all_expired(req, ctx).await?))
+    extra {
+        async fn before_request(
+            &self,
+            req: &AuthRequest,
+            ctx: &AuthContext<DB>,
+        ) -> AuthResult<Option<BeforeRequestAction>> {
+            if !self.config.enable_session_for_api_keys {
+                return Ok(None);
             }
-            _ => Ok(None),
+
+            // Check for API key in the configured header
+            let raw_key = match req.headers.get(&self.config.api_key_header) {
+                Some(k) if !k.is_empty() => k.clone(),
+                _ => return Ok(None),
+            };
+
+            // Skip session emulation for API-key management routes to avoid
+            // double-validating the key (before_request + handle_verify both
+            // call validate_api_key, consuming usage/rate-limit budget twice).
+            if req.path().starts_with("/api-key/") {
+                return Ok(None);
+            }
+
+            // Validate the key (reuses the full verify logic)
+            let view = self
+                .validate_api_key(ctx, &raw_key, None)
+                .await
+                .map_err(|e| AuthError::bad_request(e.message))?;
+
+            // Look up the user
+            let user = ctx
+                .database
+                .get_user_by_id(&view.user_id)
+                .await?
+                .ok_or_else(|| api_key_error(ApiKeyErrorCode::InvalidUserIdFromApiKey))?;
+
+            // Build a virtual session response for `/get-session`
+            if req.path() == "/get-session" {
+                let session_json = serde_json::json!({
+                    "user": {
+                        "id": user.id(),
+                        "email": user.email(),
+                        "name": user.name(),
+                    },
+                    "session": {
+                        "id": view.id,
+                        "token": raw_key,
+                        "userId": view.user_id,
+                    }
+                });
+                return Ok(Some(BeforeRequestAction::Respond(AuthResponse::json(
+                    200,
+                    &session_json,
+                )?)));
+            }
+
+            // For all other routes, inject the session
+            Ok(Some(BeforeRequestAction::InjectSession {
+                user_id: view.user_id,
+                session_token: raw_key,
+            }))
         }
     }
 }
