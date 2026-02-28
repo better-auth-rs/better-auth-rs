@@ -109,19 +109,26 @@ mod axum_impl {
     use std::sync::Arc;
 
     use axum::Json;
-    use axum::extract::{Extension, Path, State};
+    use axum::extract::{Extension, Path, Query, State};
+    use axum::http::header;
+    use axum::response::IntoResponse;
     use better_auth_core::error::AuthError;
-    use better_auth_core::extractors::{
-        AuthRequestExt, AxumAuthResponse, CurrentSession, ValidatedJson,
-    };
+    use better_auth_core::extractors::{CurrentSession, ValidatedJson};
 
     use super::handlers::{
-        get_access_token_core, link_social_core, refresh_token_core, social_sign_in_core,
+        callback_core, get_access_token_core, link_social_core, refresh_token_core,
+        social_sign_in_core,
     };
     use super::types::{
         AccessTokenResponse, GetAccessTokenRequest, LinkSocialRequest, RefreshTokenRequest,
         RefreshTokenResponse, SocialSignInRequest, SocialSignInResponse,
     };
+
+    #[derive(serde::Deserialize)]
+    struct CallbackQuery {
+        code: String,
+        state: String,
+    }
 
     #[derive(Clone)]
     struct PluginState {
@@ -138,18 +145,17 @@ mod axum_impl {
         Ok(Json(result))
     }
 
-    /// Callback handler uses AuthRequestExt bridge because it sets cookies
-    /// and returns a complex response with headers.
     async fn handle_callback<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
         Path(provider): Path<String>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, AuthError> {
+        Query(params): Query<CallbackQuery>,
+    ) -> Result<impl IntoResponse, AuthError> {
         let ctx = state.to_context();
-        Ok(AxumAuthResponse(
-            handlers::handle_callback(&ps.config, &provider, &req, &ctx).await?,
-        ))
+        let (response, token) =
+            callback_core(&params.code, &params.state, &provider, &ps.config, &ctx).await?;
+        let cookie = state.session_cookie(&token);
+        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
     async fn handle_link_social<DB: DatabaseAdapter>(

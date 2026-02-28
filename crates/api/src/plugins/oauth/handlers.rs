@@ -37,22 +37,21 @@ async fn require_session<DB: DatabaseAdapter>(
         .ok_or(AuthError::Unauthenticated)
 }
 
-/// Create session + cookie + JSON response for the OAuth callback flow.
-async fn create_oauth_session_response<DB: DatabaseAdapter>(
+/// Create session and return the `(OAuthCallbackResponse, token)` tuple for the core function.
+async fn create_oauth_session_tuple<DB: DatabaseAdapter>(
     user: DB::User,
     ctx: &AuthContext<DB>,
-) -> AuthResult<AuthResponse> {
+) -> AuthResult<(OAuthCallbackResponse<DB::User>, String)> {
     let session_manager = SessionManager::new(ctx.config.clone(), ctx.database.clone());
     let session = session_manager.create_session(&user, None, None).await?;
+    let token = session.token().to_string();
 
     let response = OAuthCallbackResponse {
-        token: session.token().to_string(),
+        token: token.clone(),
         user,
     };
 
-    let cookie_header =
-        better_auth_core::utils::cookie_utils::create_session_cookie(session.token(), &ctx.config);
-    Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+    Ok((response, token))
 }
 
 /// Find the account for a specific provider among a user's linked accounts.
@@ -345,32 +344,17 @@ pub async fn handle_social_sign_in<DB: DatabaseAdapter>(
     AuthResponse::json(200, &response).map_err(AuthError::from)
 }
 
-pub async fn handle_callback<DB: DatabaseAdapter>(
-    config: &OAuthConfig,
+pub(crate) async fn callback_core<DB: DatabaseAdapter>(
+    code: &str,
+    state_param: &str,
     provider_name: &str,
-    req: &AuthRequest,
+    config: &OAuthConfig,
     ctx: &AuthContext<DB>,
-) -> AuthResult<AuthResponse> {
-    // Extract query params: code and state
-    // They may be in req.query or embedded in the path as ?code=xxx&state=yyy
-    let code = req
-        .query
-        .get("code")
-        .cloned()
-        .or_else(|| extract_query_param(req.path(), "code"))
-        .ok_or_else(|| AuthError::bad_request("Missing code parameter"))?;
-
-    let state = req
-        .query
-        .get("state")
-        .cloned()
-        .or_else(|| extract_query_param(req.path(), "state"))
-        .ok_or_else(|| AuthError::bad_request("Missing state parameter"))?;
-
+) -> AuthResult<(OAuthCallbackResponse<DB::User>, String)> {
     // Look up state verification
     let verification = ctx
         .database
-        .get_verification_by_identifier(&format!("oauth:{}", state))
+        .get_verification_by_identifier(&format!("oauth:{}", state_param))
         .await?
         .ok_or_else(|| AuthError::bad_request("Invalid or expired OAuth state"))?;
 
@@ -412,7 +396,7 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
         .header("Accept", "application/json")
         .form(&[
             ("grant_type", "authorization_code"),
-            ("code", &code),
+            ("code", code),
             ("redirect_uri", callback_url),
             ("client_id", &provider.client_id),
             ("client_secret", &provider.client_secret),
@@ -515,7 +499,7 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
             })
             .await?;
 
-        return create_oauth_session_response(user, ctx).await;
+        return create_oauth_session_tuple(user, ctx).await;
     }
 
     // Check if an account already exists for this provider + account_id
@@ -554,7 +538,7 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
             .await?
             .ok_or(AuthError::UserNotFound)?;
 
-        return create_oauth_session_response(user, ctx).await;
+        return create_oauth_session_tuple(user, ctx).await;
     }
 
     let linking_cfg = &ctx.config.account.account_linking;
@@ -626,7 +610,33 @@ pub async fn handle_callback<DB: DatabaseAdapter>(
         })
         .await?;
 
-    create_oauth_session_response(user, ctx).await
+    create_oauth_session_tuple(user, ctx).await
+}
+
+pub async fn handle_callback<DB: DatabaseAdapter>(
+    config: &OAuthConfig,
+    provider_name: &str,
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<AuthResponse> {
+    let code = req
+        .query
+        .get("code")
+        .cloned()
+        .or_else(|| extract_query_param(req.path(), "code"))
+        .ok_or_else(|| AuthError::bad_request("Missing code parameter"))?;
+
+    let state = req
+        .query
+        .get("state")
+        .cloned()
+        .or_else(|| extract_query_param(req.path(), "state"))
+        .ok_or_else(|| AuthError::bad_request("Missing state parameter"))?;
+
+    let (response, token) = callback_core(&code, &state, provider_name, config, ctx).await?;
+    let cookie_header =
+        better_auth_core::utils::cookie_utils::create_session_cookie(&token, &ctx.config);
+    Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
 }
 
 pub async fn handle_link_social<DB: DatabaseAdapter>(
