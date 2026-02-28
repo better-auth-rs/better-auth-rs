@@ -724,118 +724,118 @@ mod axum_impl {
     use super::*;
     use std::sync::Arc;
 
+    use axum::Json;
     use axum::extract::{Extension, State};
-    use better_auth_core::{AuthRequestExt, AuthState, AxumAuthResponse};
+    use axum::http::header;
+    use axum::response::IntoResponse;
+    use better_auth_core::error::AuthError;
+    use better_auth_core::extractors::{CurrentSession, Pending2faToken, ValidatedJson};
+    use better_auth_core::plugin::AuthState;
 
     #[derive(Clone)]
     struct PluginState {
         config: TwoFactorConfig,
     }
 
+    // -- Session-based handlers --
+
     async fn handle_enable<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<EnableRequest>,
+    ) -> Result<Json<EnableResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(plugin.handle_enable(&req, &ctx).await?))
+        let result = enable_core(&body, &user, &ps.config, &ctx).await?;
+        Ok(Json(result))
     }
 
     async fn handle_disable<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<DisableRequest>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(plugin.handle_disable(&req, &ctx).await?))
+        let result = disable_core(&body, &user, &ctx).await?;
+        Ok(Json(result))
     }
 
     async fn handle_get_totp_uri<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<GetTotpUriRequest>,
+    ) -> Result<Json<TotpUriResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_get_totp_uri(&req, &ctx).await?,
-        ))
-    }
-
-    async fn handle_verify_totp<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
-        let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_verify_totp(&req, &ctx).await?,
-        ))
-    }
-
-    async fn handle_send_otp<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
-        let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(plugin.handle_send_otp(&req, &ctx).await?))
-    }
-
-    async fn handle_verify_otp<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
-        let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_verify_otp(&req, &ctx).await?,
-        ))
+        let result = get_totp_uri_core(&body, &user, &ps.config, &ctx).await?;
+        Ok(Json(result))
     }
 
     async fn handle_generate_backup_codes<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<GenerateBackupCodesRequest>,
+    ) -> Result<Json<BackupCodesResponse>, AuthError> {
         let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_generate_backup_codes(&req, &ctx).await?,
-        ))
+        let result = generate_backup_codes_core(&body, &user, &ps.config, &ctx).await?;
+        Ok(Json(result))
+    }
+
+    // -- Pending-2fa handlers --
+
+    async fn handle_verify_totp<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        Pending2faToken {
+            user,
+            verification_id,
+        }: Pending2faToken<DB>,
+        ValidatedJson(body): ValidatedJson<VerifyTotpRequest>,
+    ) -> Result<impl IntoResponse, AuthError> {
+        let ctx = state.to_context();
+        let (response, token) =
+            verify_totp_core(&body, &user, &verification_id, &ps.config, &ctx).await?;
+        let cookie = state.session_cookie(&token);
+        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
+    }
+
+    async fn handle_send_otp<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Pending2faToken { user, .. }: Pending2faToken<DB>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
+        let ctx = state.to_context();
+        let result = send_otp_core(&user, &ctx).await?;
+        Ok(Json(result))
+    }
+
+    async fn handle_verify_otp<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Pending2faToken {
+            user,
+            verification_id,
+        }: Pending2faToken<DB>,
+        ValidatedJson(body): ValidatedJson<VerifyOtpRequest>,
+    ) -> Result<impl IntoResponse, AuthError> {
+        let ctx = state.to_context();
+        let (response, token) = verify_otp_core(&body, &user, &verification_id, &ctx).await?;
+        let cookie = state.session_cookie(&token);
+        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
     async fn handle_verify_backup_code<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AuthRequestExt(req): AuthRequestExt,
-    ) -> Result<AxumAuthResponse, better_auth_core::AuthError> {
+        Pending2faToken {
+            user,
+            verification_id,
+        }: Pending2faToken<DB>,
+        ValidatedJson(body): ValidatedJson<VerifyBackupCodeRequest>,
+    ) -> Result<impl IntoResponse, AuthError> {
         let ctx = state.to_context();
-        let plugin = TwoFactorPlugin {
-            config: ps.config.clone(),
-        };
-        Ok(AxumAuthResponse(
-            plugin.handle_verify_backup_code(&req, &ctx).await?,
-        ))
+        let (response, token) =
+            verify_backup_code_core(&body, &user, &verification_id, &ctx).await?;
+        let cookie = state.session_cookie(&token);
+        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
     impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for TwoFactorPlugin {
