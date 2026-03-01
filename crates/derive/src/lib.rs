@@ -33,6 +33,7 @@ mod auth_derive;
 mod from_row;
 mod helpers;
 mod memory_derive;
+mod plugin_config;
 
 use proc_macro::TokenStream;
 use quote::quote;
@@ -260,4 +261,10 @@ pub fn derive_memory_invitation(input: TokenStream) -> TokenStream {
 pub fn derive_memory_verification(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     derive_memory_trait(&input, &MEMORY_VERIFICATION_DEF).into()
+}
+
+#[proc_macro_derive(PluginConfig, attributes(plugin, config))]
+pub fn derive_plugin_config(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    plugin_config::derive_plugin_config(&input).into()
 }

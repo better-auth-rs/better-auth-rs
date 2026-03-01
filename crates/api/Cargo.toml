@@ -7,7 +7,7 @@ description = "Plugin implementations for better-auth"
 repository = { workspace = true }
 
 [dependencies]
-better-auth-core = { workspace = true }
+better-auth-core = { workspace = true, features = ["derive"] }
 
 # Asynchronous runtime
 async-trait = { workspace = true }
