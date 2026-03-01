@@ -16,25 +16,19 @@ pub struct TwoFactorPlugin {
     config: TwoFactorConfig,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, better_auth_core::PluginConfig)]
+#[plugin(name = "TwoFactorPlugin")]
 pub struct TwoFactorConfig {
+    #[config(default = "BetterAuth".to_string())]
     pub issuer: String,
+    #[config(default = 10)]
     pub backup_code_count: usize,
+    #[config(default = 8)]
     pub backup_code_length: usize,
+    #[config(default = 30)]
     pub totp_period: u64,
+    #[config(default = 6)]
     pub totp_digits: usize,
-}
-
-impl Default for TwoFactorConfig {
-    fn default() -> Self {
-        Self {
-            issuer: "BetterAuth".to_string(),
-            backup_code_count: 10,
-            backup_code_length: 8,
-            totp_period: 30,
-            totp_digits: 6,
-        }
-    }
 }
 
 // -- Request types --
@@ -121,23 +115,6 @@ pub(crate) struct BackupCodesResponse {
     status: bool,
     #[serde(rename = "backupCodes")]
     backup_codes: Vec<String>,
-}
-
-impl TwoFactorPlugin {
-    pub fn new() -> Self {
-        Self {
-            config: TwoFactorConfig::default(),
-        }
-    }
-
-    pub fn with_config(config: TwoFactorConfig) -> Self {
-        Self { config }
-    }
-
-    pub fn issuer(mut self, issuer: impl Into<String>) -> Self {
-        self.config.issuer = issuer.into();
-        self
-    }
 }
 
 // -- Free-standing helpers --
@@ -644,12 +621,6 @@ impl TwoFactorPlugin {
             verify_backup_code_core(&body, &user, &verification_id, ctx).await?;
         let cookie_header = create_session_cookie(&token, &ctx.config);
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
-    }
-}
-
-impl Default for TwoFactorPlugin {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

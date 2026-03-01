@@ -28,64 +28,28 @@ pub struct PasskeyPlugin {
     config: PasskeyConfig,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, better_auth_core::PluginConfig)]
+#[plugin(name = "PasskeyPlugin")]
 pub struct PasskeyConfig {
+    #[config(default = "localhost".to_string())]
     pub rp_id: String,
+    #[config(default = "Better Auth".to_string())]
     pub rp_name: String,
+    #[config(default = "http://localhost:3000".to_string())]
     pub origin: String,
+    #[config(default = 300)]
     pub challenge_ttl_secs: i64,
     /// Allows simplified (non-cryptographic) response verification.
     ///
     /// Keep disabled in production. This exists only for local development
     /// until full WebAuthn validation is integrated.
+    #[config(default = false)]
     pub allow_insecure_unverified_assertion: bool,
-}
-
-impl Default for PasskeyConfig {
-    fn default() -> Self {
-        Self {
-            rp_id: "localhost".to_string(),
-            rp_name: "Better Auth".to_string(),
-            origin: "http://localhost:3000".to_string(),
-            challenge_ttl_secs: 300, // 5 minutes
-            allow_insecure_unverified_assertion: false,
-        }
-    }
 }
 
 // -- Plugin --
 
 impl PasskeyPlugin {
-    pub fn new() -> Self {
-        Self {
-            config: PasskeyConfig::default(),
-        }
-    }
-
-    pub fn with_config(config: PasskeyConfig) -> Self {
-        Self { config }
-    }
-
-    pub fn rp_id(mut self, rp_id: impl Into<String>) -> Self {
-        self.config.rp_id = rp_id.into();
-        self
-    }
-
-    pub fn rp_name(mut self, rp_name: impl Into<String>) -> Self {
-        self.config.rp_name = rp_name.into();
-        self
-    }
-
-    pub fn origin(mut self, origin: impl Into<String>) -> Self {
-        self.config.origin = origin.into();
-        self
-    }
-
-    pub fn allow_insecure_unverified_assertion(mut self, allow: bool) -> Self {
-        self.config.allow_insecure_unverified_assertion = allow;
-        self
-    }
-
     // -- Handlers (delegate to core functions) --
 
     /// GET /passkey/generate-register-options
@@ -186,12 +150,6 @@ impl PasskeyPlugin {
         };
         let result = update_passkey_core(&body, &user, ctx).await?;
         AuthResponse::json(200, &result).map_err(AuthError::from)
-    }
-}
-
-impl Default for PasskeyPlugin {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

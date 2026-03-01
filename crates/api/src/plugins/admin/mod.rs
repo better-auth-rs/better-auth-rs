@@ -33,73 +33,24 @@ pub struct AdminPlugin {
 }
 
 /// Configuration for the admin plugin.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, better_auth_core::PluginConfig)]
+#[plugin(name = "AdminPlugin")]
 pub struct AdminConfig {
     /// The role required to access admin endpoints (default: `"admin"`).
+    #[config(default = "admin".to_string())]
     pub admin_role: String,
     /// Default role assigned to newly created users (default: `"user"`).
+    #[config(default = "user".to_string())]
     pub default_user_role: String,
     /// Whether to allow banning other admins (default: `false`).
+    #[config(default = false)]
     pub allow_ban_admin: bool,
     /// Default number of users returned in list-users (default: 100).
+    #[config(default = 100)]
     pub default_page_limit: usize,
     /// Maximum number of users returned in list-users (default: 500).
+    #[config(default = 500)]
     pub max_page_limit: usize,
-}
-
-impl Default for AdminConfig {
-    fn default() -> Self {
-        Self {
-            admin_role: "admin".to_string(),
-            default_user_role: "user".to_string(),
-            allow_ban_admin: false,
-            default_page_limit: 100,
-            max_page_limit: 500,
-        }
-    }
-}
-
-impl AdminPlugin {
-    pub fn new() -> Self {
-        Self {
-            config: AdminConfig::default(),
-        }
-    }
-
-    pub fn with_config(config: AdminConfig) -> Self {
-        Self { config }
-    }
-
-    pub fn admin_role(mut self, role: impl Into<String>) -> Self {
-        self.config.admin_role = role.into();
-        self
-    }
-
-    pub fn default_user_role(mut self, role: impl Into<String>) -> Self {
-        self.config.default_user_role = role.into();
-        self
-    }
-
-    pub fn allow_ban_admin(mut self, allow: bool) -> Self {
-        self.config.allow_ban_admin = allow;
-        self
-    }
-
-    pub fn default_page_limit(mut self, limit: usize) -> Self {
-        self.config.default_page_limit = limit;
-        self
-    }
-
-    pub fn max_page_limit(mut self, limit: usize) -> Self {
-        self.config.max_page_limit = limit;
-        self
-    }
-}
-
-impl Default for AdminPlugin {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 // ---------------------------------------------------------------------------

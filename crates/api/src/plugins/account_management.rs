@@ -13,8 +13,10 @@ pub struct AccountManagementPlugin {
     config: AccountManagementConfig,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, better_auth_core::PluginConfig)]
+#[plugin(name = "AccountManagementPlugin")]
 pub struct AccountManagementConfig {
+    #[config(default = true)]
     pub require_authentication: bool,
 }
 
@@ -36,37 +38,6 @@ pub(crate) struct AccountResponse {
     #[serde(rename = "updatedAt")]
     updated_at: String,
     scopes: Vec<String>,
-}
-
-impl AccountManagementPlugin {
-    pub fn new() -> Self {
-        Self {
-            config: AccountManagementConfig::default(),
-        }
-    }
-
-    pub fn with_config(config: AccountManagementConfig) -> Self {
-        Self { config }
-    }
-
-    pub fn require_authentication(mut self, require: bool) -> Self {
-        self.config.require_authentication = require;
-        self
-    }
-}
-
-impl Default for AccountManagementPlugin {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Default for AccountManagementConfig {
-    fn default() -> Self {
-        Self {
-            require_authentication: true,
-        }
-    }
 }
 
 better_auth_core::impl_auth_plugin! {

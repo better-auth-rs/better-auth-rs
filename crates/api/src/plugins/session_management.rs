@@ -17,10 +17,14 @@ pub struct SessionManagementPlugin {
     config: SessionManagementConfig,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, better_auth_core::PluginConfig)]
+#[plugin(name = "SessionManagementPlugin")]
 pub struct SessionManagementConfig {
+    #[config(default = true)]
     pub enable_session_listing: bool,
+    #[config(default = true)]
     pub enable_session_revocation: bool,
+    #[config(default = true)]
     pub require_authentication: bool,
 }
 
@@ -35,49 +39,6 @@ struct RevokeSessionRequest {
 struct GetSessionResponse<S: Serialize, U: Serialize> {
     session: S,
     user: U,
-}
-
-impl SessionManagementPlugin {
-    pub fn new() -> Self {
-        Self {
-            config: SessionManagementConfig::default(),
-        }
-    }
-
-    pub fn with_config(config: SessionManagementConfig) -> Self {
-        Self { config }
-    }
-
-    pub fn enable_session_listing(mut self, enable: bool) -> Self {
-        self.config.enable_session_listing = enable;
-        self
-    }
-
-    pub fn enable_session_revocation(mut self, enable: bool) -> Self {
-        self.config.enable_session_revocation = enable;
-        self
-    }
-
-    pub fn require_authentication(mut self, require: bool) -> Self {
-        self.config.require_authentication = require;
-        self
-    }
-}
-
-impl Default for SessionManagementPlugin {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Default for SessionManagementConfig {
-    fn default() -> Self {
-        Self {
-            enable_session_listing: true,
-            enable_session_revocation: true,
-            require_authentication: true,
-        }
-    }
 }
 
 #[async_trait]
