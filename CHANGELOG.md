@@ -3,6 +3,105 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [0.9.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.8.0...v0.9.0) - 2026-03-01
+
+### Bug Fixes
+
+- add missing AuthSession import for axum handler
+
+
+### Build
+
+- add axum feature flag, SessionManager Clone, and AuthError IntoResponse
+
+
+### Documentation
+
+- streamline README to be guide-oriented
+
+- bump version to 0.8 in README
+
+
+### Features
+
+- add PluginConfig derive macro
+
+- add Pending2faToken axum extractor
+
+- add impl_auth_plugin! macro for route deduplication
+
+
+### Refactoring
+
+- migrate to core-function pattern with native axum extractors
+
+- migrate to core-function pattern with native axum extractors
+
+- extract core functions and add axum handlers
+
+- extract core functions and add axum handlers
+
+- extract core functions and add axum handlers
+
+- extract core functions and add axum handlers
+
+- extract core functions and add axum handlers
+
+- extract core functions and add axum handlers
+
+- extract core functions and add axum handlers
+
+- extract core functions and add axum handlers
+
+- extract core functions and add axum handlers
+
+- update cookie_utils calls for new signature
+
+- extract core functions for session-based handlers
+
+- extract callback core and rewrite axum handler
+
+- extract core functions for pending-2fa handlers
+
+- rewrite axum handlers with native extractors
+
+- extract core functions from handler methods
+
+- rewrite axum handlers with native extractors
+
+- split into directory module
+
+- split into directory module
+
+- split into directory module
+
+- split into directory module
+
+- split into directory module
+
+- unify request body parsing to validate_request_body
+
+- apply impl_auth_plugin! to larger plugins
+
+- unify success response to StatusResponse
+
+- apply PluginConfig derive to simple plugins
+
+- apply PluginConfig derive to plugins with skip fields
+
+- decouple cookie_utils from AuthContext, add AuthState helpers and Pending2faToken extractor
+
+- centralize SessionManager creation in AuthContext
+
+- add AuthUser::password_hash() default method
+
+- apply impl_auth_plugin! to simple plugins
+
+
+### Style
+
+- apply cargo fmt to all migrated plugins
+
 ## [0.8.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.7.0...v0.8.0) - 2026-02-27
 
 ### Bug Fixes
