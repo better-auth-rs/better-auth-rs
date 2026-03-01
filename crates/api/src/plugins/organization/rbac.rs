@@ -109,7 +109,7 @@ pub fn has_permission(
     role: &str,
     resource: &Resource,
     action: &Action,
-    custom_roles: &HashMap<String, crate::plugins::organization::config::RolePermissions>,
+    custom_roles: &HashMap<String, crate::plugins::organization::RolePermissions>,
 ) -> bool {
     let default = default_roles();
 
@@ -147,7 +147,7 @@ pub fn has_permission_any(
     roles_str: &str,
     resource: &Resource,
     action: &Action,
-    custom_roles: &HashMap<String, crate::plugins::organization::config::RolePermissions>,
+    custom_roles: &HashMap<String, crate::plugins::organization::RolePermissions>,
 ) -> bool {
     for role in roles_str.split(',').map(|s| s.trim()) {
         if has_permission(role, resource, action, custom_roles) {

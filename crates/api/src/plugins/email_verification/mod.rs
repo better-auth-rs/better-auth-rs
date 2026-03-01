@@ -42,27 +42,38 @@ pub struct EmailVerificationPlugin {
     config: EmailVerificationConfig,
 }
 
+#[derive(better_auth_core::PluginConfig)]
+#[plugin(name = "EmailVerificationPlugin")]
 pub struct EmailVerificationConfig {
-    /// How long a verification token stays valid. Default: 1 hour.
+    /// How long a verification token stays valid. Default: 24 hours.
+    #[config(default = Duration::hours(24))]
     pub verification_token_expiry: Duration,
     /// Whether to send email notifications (on sign-up). Default: true.
+    #[config(default = true)]
     pub send_email_notifications: bool,
     /// Whether email verification is required before sign-in. Default: false.
+    #[config(default = false)]
     pub require_verification_for_signin: bool,
     /// Whether to auto-verify newly created users. Default: false.
+    #[config(default = false)]
     pub auto_verify_new_users: bool,
     /// When true, automatically send a verification email on sign-in if the
     /// user is unverified. Default: false.
+    #[config(default = false)]
     pub send_on_sign_in: bool,
     /// When true, create a session after email verification and return the
     /// session token in the verify-email response. Default: false.
+    #[config(default = false)]
     pub auto_sign_in_after_verification: bool,
     /// Optional custom email sender. When set this overrides the default
     /// `EmailProvider`-based sending.
+    #[config(default = None, skip)]
     pub send_verification_email: Option<Arc<dyn SendVerificationEmail>>,
     /// Hook invoked **before** email verification (before updating the user).
+    #[config(default = None)]
     pub before_email_verification: Option<EmailVerificationHook>,
     /// Hook invoked **after** email verification (after the user has been updated).
+    #[config(default = None)]
     pub after_email_verification: Option<EmailVerificationHook>,
 }
 
@@ -75,50 +86,9 @@ impl EmailVerificationConfig {
 }
 
 impl EmailVerificationPlugin {
-    pub fn new() -> Self {
-        Self {
-            config: EmailVerificationConfig::default(),
-        }
-    }
-
-    pub fn with_config(config: EmailVerificationConfig) -> Self {
-        Self { config }
-    }
-
-    /// Set the token expiry as a [`Duration`].
-    pub fn verification_token_expiry(mut self, duration: Duration) -> Self {
-        self.config.verification_token_expiry = duration;
-        self
-    }
-
     /// Backward-compatible builder: set token expiry in hours.
     pub fn verification_token_expiry_hours(mut self, hours: i64) -> Self {
         self.config.verification_token_expiry = Duration::hours(hours);
-        self
-    }
-
-    pub fn send_email_notifications(mut self, send: bool) -> Self {
-        self.config.send_email_notifications = send;
-        self
-    }
-
-    pub fn require_verification_for_signin(mut self, require: bool) -> Self {
-        self.config.require_verification_for_signin = require;
-        self
-    }
-
-    pub fn auto_verify_new_users(mut self, auto_verify: bool) -> Self {
-        self.config.auto_verify_new_users = auto_verify;
-        self
-    }
-
-    pub fn send_on_sign_in(mut self, send: bool) -> Self {
-        self.config.send_on_sign_in = send;
-        self
-    }
-
-    pub fn auto_sign_in_after_verification(mut self, auto_sign_in: bool) -> Self {
-        self.config.auto_sign_in_after_verification = auto_sign_in;
         self
     }
 
@@ -128,38 +98,6 @@ impl EmailVerificationPlugin {
     ) -> Self {
         self.config.send_verification_email = Some(sender);
         self
-    }
-
-    pub fn before_email_verification(mut self, hook: EmailVerificationHook) -> Self {
-        self.config.before_email_verification = Some(hook);
-        self
-    }
-
-    pub fn after_email_verification(mut self, hook: EmailVerificationHook) -> Self {
-        self.config.after_email_verification = Some(hook);
-        self
-    }
-}
-
-impl Default for EmailVerificationPlugin {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Default for EmailVerificationConfig {
-    fn default() -> Self {
-        Self {
-            verification_token_expiry: Duration::hours(24),
-            send_email_notifications: true,
-            require_verification_for_signin: false,
-            auto_verify_new_users: false,
-            send_on_sign_in: false,
-            auto_sign_in_after_verification: false,
-            send_verification_email: None,
-            before_email_verification: None,
-            after_email_verification: None,
-        }
     }
 }
 

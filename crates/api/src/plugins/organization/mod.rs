@@ -1,75 +1,59 @@
-pub mod config;
 pub mod handlers;
 pub mod rbac;
 pub mod types;
+
+use std::collections::HashMap;
 
 use async_trait::async_trait;
 use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::error::AuthResult;
 use better_auth_core::plugin::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::types::{AuthRequest, AuthResponse, HttpMethod};
-pub use config::OrganizationConfig;
 
 #[cfg(feature = "axum")]
 use better_auth_core::plugin::{AuthState, AxumPlugin};
 
+/// Permission definitions for a role
+#[derive(Debug, Clone, Default)]
+pub struct RolePermissions {
+    pub organization: Vec<String>,
+    pub member: Vec<String>,
+    pub invitation: Vec<String>,
+}
+
+/// Configuration for the Organization plugin
+#[derive(Debug, Clone, better_auth_core::PluginConfig)]
+#[plugin(name = "OrganizationPlugin")]
+pub struct OrganizationConfig {
+    /// Allow users to create organizations (default: true)
+    #[config(default = true)]
+    pub allow_user_to_create_organization: bool,
+    /// Maximum organizations per user (None = unlimited)
+    #[config(default = None)]
+    pub organization_limit: Option<usize>,
+    /// Maximum members per organization (None = unlimited)
+    #[config(default = Some(100))]
+    pub membership_limit: Option<usize>,
+    /// Role assigned to organization creator (default: "owner")
+    #[config(default = "owner".to_string())]
+    pub creator_role: String,
+    /// Invitation expiration in seconds (default: 48 hours)
+    #[config(default = 60 * 60 * 48)]
+    pub invitation_expires_in: u64,
+    /// Maximum pending invitations per organization (None = unlimited)
+    #[config(default = Some(100))]
+    pub invitation_limit: Option<usize>,
+    /// Disable organization deletion (default: false)
+    #[config(default = false)]
+    pub disable_organization_deletion: bool,
+    /// Custom role definitions (extending default roles)
+    #[config(default = HashMap::new(), skip)]
+    pub roles: HashMap<String, RolePermissions>,
+}
+
 /// Organization plugin for multi-tenancy support
 pub struct OrganizationPlugin {
     config: OrganizationConfig,
-}
-
-impl OrganizationPlugin {
-    pub fn new() -> Self {
-        Self {
-            config: OrganizationConfig::default(),
-        }
-    }
-
-    pub fn with_config(config: OrganizationConfig) -> Self {
-        Self { config }
-    }
-
-    // Builder methods
-    pub fn allow_user_to_create_organization(mut self, allow: bool) -> Self {
-        self.config.allow_user_to_create_organization = allow;
-        self
-    }
-
-    pub fn organization_limit(mut self, limit: usize) -> Self {
-        self.config.organization_limit = Some(limit);
-        self
-    }
-
-    pub fn membership_limit(mut self, limit: usize) -> Self {
-        self.config.membership_limit = Some(limit);
-        self
-    }
-
-    pub fn creator_role(mut self, role: impl Into<String>) -> Self {
-        self.config.creator_role = role.into();
-        self
-    }
-
-    pub fn invitation_expires_in(mut self, seconds: u64) -> Self {
-        self.config.invitation_expires_in = seconds;
-        self
-    }
-
-    pub fn invitation_limit(mut self, limit: usize) -> Self {
-        self.config.invitation_limit = Some(limit);
-        self
-    }
-
-    pub fn disable_organization_deletion(mut self, disable: bool) -> Self {
-        self.config.disable_organization_deletion = disable;
-        self
-    }
-}
-
-impl Default for OrganizationPlugin {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 #[async_trait]

@@ -12,7 +12,7 @@ use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
 use better_auth_core::types::{AuthRequest, AuthResponse};
 
-use super::config::OrganizationConfig;
+use super::OrganizationConfig;
 use super::rbac::{Action, Resource, has_permission_any};
 use super::types::{HasPermissionRequest, HasPermissionResponse};
 

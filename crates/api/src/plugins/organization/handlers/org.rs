@@ -1,5 +1,5 @@
 use super::{require_session, resolve_organization_id};
-use crate::plugins::organization::config::OrganizationConfig;
+use crate::plugins::organization::OrganizationConfig;
 use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
 use crate::plugins::organization::types::{
     CheckSlugRequest, CheckSlugResponse, CreateOrganizationRequest, CreateOrganizationResponse,

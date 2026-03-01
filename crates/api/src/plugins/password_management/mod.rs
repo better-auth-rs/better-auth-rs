@@ -45,19 +45,27 @@ pub struct PasswordManagementPlugin {
     config: PasswordManagementConfig,
 }
 
-#[derive(Clone)]
+#[derive(Clone, better_auth_core::PluginConfig)]
+#[plugin(name = "PasswordManagementPlugin")]
 pub struct PasswordManagementConfig {
+    #[config(default = 24)]
     pub reset_token_expiry_hours: i64,
+    #[config(default = true)]
     pub require_current_password: bool,
+    #[config(default = true)]
     pub send_email_notifications: bool,
     /// When true, all existing sessions are revoked on password reset (default: true).
+    #[config(default = true)]
     pub revoke_sessions_on_password_reset: bool,
     /// Custom password reset email sender. When set, overrides the default `EmailProvider`.
+    #[config(default = None)]
     pub send_reset_password: Option<Arc<dyn SendResetPassword>>,
     /// Callback invoked after a password is successfully reset.
     /// The user is provided as a serialized `serde_json::Value`.
+    #[config(default = None)]
     pub on_password_reset: Option<Arc<OnPasswordResetCallback>>,
     /// Custom password hasher. When `None`, the default Argon2 hasher is used.
+    #[config(default = None)]
     pub password_hasher: Option<Arc<dyn PasswordHasher>>,
 }
 
@@ -87,72 +95,6 @@ impl std::fmt::Debug for PasswordManagementConfig {
     }
 }
 
-impl PasswordManagementPlugin {
-    pub fn new() -> Self {
-        Self {
-            config: PasswordManagementConfig::default(),
-        }
-    }
-
-    pub fn with_config(config: PasswordManagementConfig) -> Self {
-        Self { config }
-    }
-
-    pub fn reset_token_expiry_hours(mut self, hours: i64) -> Self {
-        self.config.reset_token_expiry_hours = hours;
-        self
-    }
-
-    pub fn require_current_password(mut self, require: bool) -> Self {
-        self.config.require_current_password = require;
-        self
-    }
-
-    pub fn send_email_notifications(mut self, send: bool) -> Self {
-        self.config.send_email_notifications = send;
-        self
-    }
-
-    pub fn revoke_sessions_on_password_reset(mut self, revoke: bool) -> Self {
-        self.config.revoke_sessions_on_password_reset = revoke;
-        self
-    }
-
-    pub fn send_reset_password(mut self, sender: Arc<dyn SendResetPassword>) -> Self {
-        self.config.send_reset_password = Some(sender);
-        self
-    }
-
-    pub fn on_password_reset(mut self, callback: Arc<OnPasswordResetCallback>) -> Self {
-        self.config.on_password_reset = Some(callback);
-        self
-    }
-
-    pub fn password_hasher(mut self, hasher: Arc<dyn PasswordHasher>) -> Self {
-        self.config.password_hasher = Some(hasher);
-        self
-    }
-}
-
-impl Default for PasswordManagementPlugin {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Default for PasswordManagementConfig {
-    fn default() -> Self {
-        Self {
-            reset_token_expiry_hours: 24, // 24 hours default expiry
-            require_current_password: true,
-            send_email_notifications: true,
-            revoke_sessions_on_password_reset: true,
-            send_reset_password: None,
-            on_password_reset: None,
-            password_hasher: None,
-        }
-    }
-}
 
 #[async_trait]
 impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
