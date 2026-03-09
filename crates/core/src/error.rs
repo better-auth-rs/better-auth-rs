@@ -104,7 +104,10 @@ impl AuthError {
     pub fn into_response(self) -> crate::types::AuthResponse {
         let status = self.status_code();
         let message = match status {
-            500 => "Internal server error".to_string(),
+            500 => {
+                tracing::error!(error = %self, "Internal server error");
+                "Internal server error".to_string()
+            }
             _ => self.to_string(),
         };
 
@@ -208,7 +211,10 @@ impl axum::response::IntoResponse for AuthError {
         let status = axum::http::StatusCode::from_u16(self.status_code())
             .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
         let message = match self.status_code() {
-            500 => "Internal server error".to_string(),
+            500 => {
+                tracing::error!(error = %self, "Internal server error");
+                "Internal server error".to_string()
+            }
             _ => self.to_string(),
         };
         (

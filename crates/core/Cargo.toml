@@ -48,6 +48,7 @@ redis = { workspace = true, optional = true }
 better-auth-derive = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
+tracing.workspace = true
 
 [features]
 default = []
