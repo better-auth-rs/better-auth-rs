@@ -29,18 +29,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("WARN: AUTH_SECRET not set, using a default dev-only value");
         "x".repeat(32)
     });
+
+    // Allow the frontend origin through the built-in CSRF middleware.
     let config = AuthConfig::new(secret)
+        .trusted_origins(vec![frontend_url.clone()])
         .base_url(&backend_url)
         .password_min_length(8);
 
     let database = MemoryDatabaseAdapter::new();
 
-    // Allow the frontend origin through the built-in CSRF middleware.
-    let csrf = CsrfConfig::new().trusted_origin(&frontend_url);
-
     let auth = Arc::new(
         AuthBuilder::new(config)
-            .csrf(csrf)
+            .csrf(CsrfConfig::new().enabled(true))
             .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
