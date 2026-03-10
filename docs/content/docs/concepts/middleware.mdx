@@ -13,7 +13,7 @@ Validates the `Origin` or `Referer` header against the configured base URL on mu
 use better_auth::{AuthBuilder, AuthConfig, CsrfConfig};
 
 let config = AuthConfig::new(secret)
-        .trusted_origins(vec!["https://myapp.com".to_string()])
+        .trusted_origins(vec!["https://myapp.com".to_string()]);
 
 let auth = AuthBuilder::new(config)
     .csrf(CsrfConfig::new().enabled(true))
