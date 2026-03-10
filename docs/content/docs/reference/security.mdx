@@ -70,7 +70,7 @@ Better Auth includes built-in CSRF protection that validates the `Origin` or `Re
 use better_auth::{AuthBuilder, AuthConfig, CsrfConfig};
 
 let config = AuthConfig::new(secret)
-        .trusted_origins(vec!["https://myapp.com".toString()])
+        .trusted_origins(vec!["https://myapp.com".to_string()])
 
 let auth = AuthBuilder::new(config)
     .csrf(CsrfConfig::new().enabled(true))
