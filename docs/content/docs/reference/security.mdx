@@ -43,11 +43,11 @@ config.session.cookie_http_only = true;     // Not accessible via JavaScript
 config.session.cookie_same_site = SameSite::Lax; // CSRF protection
 ```
 
-| Setting | Recommended | Description |
-|---------|-------------|-------------|
-| `cookie_secure` | `true` | Only send over HTTPS |
-| `cookie_http_only` | `true` | Block JavaScript access (prevents XSS token theft) |
-| `cookie_same_site` | `Lax` | Prevents CSRF while allowing top-level navigations |
+| Setting            | Recommended | Description                                        |
+| ------------------ | ----------- | -------------------------------------------------- |
+| `cookie_secure`    | `true`      | Only send over HTTPS                               |
+| `cookie_http_only` | `true`      | Block JavaScript access (prevents XSS token theft) |
+| `cookie_same_site` | `Lax`       | Prevents CSRF while allowing top-level navigations |
 
 See [Cookies](/docs/concepts/cookies) for more details.
 
@@ -67,14 +67,13 @@ let config = AuthConfig::new("secret-key")
 Better Auth includes built-in CSRF protection that validates the `Origin` or `Referer` header on mutating requests (POST, PUT, DELETE, PATCH).
 
 ```rust
-use better_auth::CsrfConfig;
+use better_auth::{AuthBuilder, AuthConfig, CsrfConfig};
 
-let auth = BetterAuth::new(config)
-    .csrf(
-        CsrfConfig::new()
-            .trusted_origin("https://myapp.com")
-            .enabled(true)
-    )
+let config = AuthConfig::new(secret)
+        .trusted_origins(vec!["https://myapp.com".toString()])
+
+let auth = AuthBuilder::new(config)
+    .csrf(CsrfConfig::new().enabled(true))
     .build()
     .await?;
 ```
@@ -104,12 +103,12 @@ Rate limiting protects against brute-force attacks. See [Rate Limiting](/docs/co
 
 Recommended limits for authentication endpoints:
 
-| Endpoint | Limit | Window |
-|----------|-------|--------|
-| `/sign-in/email` | 10 | 60s |
-| `/sign-up/email` | 5 | 60s |
-| `/forget-password` | 3 | 300s |
-| `/two-factor/verify-*` | 5 | 60s |
+| Endpoint               | Limit | Window |
+| ---------------------- | ----- | ------ |
+| `/sign-in/email`       | 10    | 60s    |
+| `/sign-up/email`       | 5     | 60s    |
+| `/forget-password`     | 3     | 300s   |
+| `/two-factor/verify-*` | 5     | 60s    |
 
 ## OAuth Security
 

@@ -10,14 +10,13 @@ Better Auth includes middleware that runs before and after every request. Enable
 Validates the `Origin` or `Referer` header against the configured base URL on mutating requests (POST, PUT, DELETE, PATCH).
 
 ```rust
-use better_auth::CsrfConfig;
+use better_auth::{AuthBuilder, AuthConfig, CsrfConfig};
 
-let auth = BetterAuth::new(config)
-    .csrf(
-        CsrfConfig::new()
-            .trusted_origin("https://myapp.com")
-            .enabled(true)
-    )
+let config = AuthConfig::new(secret)
+        .trusted_origins(vec!["https://myapp.com".toString()])
+
+let auth = AuthBuilder::new(config)
+    .csrf(CsrfConfig::new().enabled(true))
     .build()
     .await?;
 ```
