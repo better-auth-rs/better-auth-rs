@@ -272,8 +272,7 @@ pub(crate) async fn set_password_core<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<StatusResponse> {
     // Verify the user does NOT already have a password
-    if user.password_hash().is_some()
-    {
+    if user.password_hash().is_some() {
         return Err(AuthError::bad_request(
             "User already has a password. Use /change-password instead.",
         ));

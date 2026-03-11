@@ -309,7 +309,10 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
     let user = ctx.database.create_user(create_user).await?;
 
     if config.auto_sign_in {
-        let session = ctx.session_manager().create_session(&user, None, None).await?;
+        let session = ctx
+            .session_manager()
+            .create_session(&user, None, None)
+            .await?;
         let token = session.token().to_string();
 
         let response = SignUpResponse {
@@ -333,9 +336,7 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<SignInCoreResult<DB::User>> {
     // Verify password
-    let stored_hash = user
-        .password_hash()
-        .ok_or(AuthError::InvalidCredentials)?;
+    let stored_hash = user.password_hash().ok_or(AuthError::InvalidCredentials)?;
 
     password_utils::verify_password(config.password_hasher.as_ref(), password, stored_hash).await?;
 
@@ -370,7 +371,10 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
     }
 
     // Create session
-    let session = ctx.session_manager().create_session(&user, None, None).await?;
+    let session = ctx
+        .session_manager()
+        .create_session(&user, None, None)
+        .await?;
     let token = session.token().to_string();
 
     let response = SignInResponse {

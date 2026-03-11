@@ -95,7 +95,6 @@ impl std::fmt::Debug for PasswordManagementConfig {
     }
 }
 
-
 #[async_trait]
 impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
     fn name(&self) -> &'static str {

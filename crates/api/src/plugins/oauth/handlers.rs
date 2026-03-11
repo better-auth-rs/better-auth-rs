@@ -42,7 +42,10 @@ async fn create_oauth_session_tuple<DB: DatabaseAdapter>(
     user: DB::User,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<(OAuthCallbackResponse<DB::User>, String)> {
-    let session = ctx.session_manager().create_session(&user, None, None).await?;
+    let session = ctx
+        .session_manager()
+        .create_session(&user, None, None)
+        .await?;
     let token = session.token().to_string();
 
     let response = OAuthCallbackResponse {
