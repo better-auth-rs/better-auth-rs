@@ -8,7 +8,7 @@
     "start": "node server.mjs"
   },
   "dependencies": {
-    "better-auth": "1.4.19",
+    "better-auth": "1.5.5",
     "better-sqlite3": "^12.0.0"
   }
 }
