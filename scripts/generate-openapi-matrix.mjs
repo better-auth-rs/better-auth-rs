@@ -54,6 +54,20 @@ const loadPasskeyFactory = async () => {
 
 const passkeyFactory = await loadPasskeyFactory();
 
+const loadExternalPlugin = async (packageName, exportName) => {
+  try {
+    const mod = await import(packageName);
+    if (typeof mod[exportName] === "function") {
+      return mod[exportName];
+    }
+  } catch {
+    // not installed
+  }
+  return null;
+};
+
+const apiKeyFactory = await loadExternalPlugin("@better-auth/api-key", "apiKey");
+
 const requiredPlugin = (name, ...factoryArgs) => {
   const factory = plugins[name];
   if (typeof factory !== "function") {
@@ -84,11 +98,16 @@ const profiles = {
   "aligned-rs": () => {
     const selected = [
       requiredPlugin("openAPI"),
-      requiredPlugin("apiKey"),
       requiredPlugin("twoFactor"),
       requiredPlugin("organization"),
       requiredPlugin("username"),
     ];
+    // apiKey moved to @better-auth/api-key in 1.5
+    if (typeof apiKeyFactory === "function") {
+      selected.push(apiKeyFactory());
+    } else {
+      pushIf(selected, optionalPlugin("apiKey"));
+    }
     if (typeof passkeyFactory === "function") {
       selected.push(passkeyFactory());
     } else {
@@ -101,7 +120,12 @@ const profiles = {
 
     pushIf(selected, optionalPlugin("admin"));
     pushIf(selected, optionalPlugin("anonymous"));
-    pushIf(selected, optionalPlugin("apiKey"));
+    // apiKey moved to @better-auth/api-key in 1.5
+    if (typeof apiKeyFactory === "function") {
+      selected.push(apiKeyFactory());
+    } else {
+      pushIf(selected, optionalPlugin("apiKey"));
+    }
     pushIf(selected, optionalPlugin("bearer"));
     pushIf(
       selected,

@@ -190,6 +190,7 @@ pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
     fn device_type(&self) -> &str;
     fn backed_up(&self) -> bool;
     fn transports(&self) -> Option<&str>;
+    fn aaguid(&self) -> Option<&str>;
     fn created_at(&self) -> DateTime<Utc>;
 }
 
@@ -598,6 +599,9 @@ pub trait AuthPasskeyMeta {
     }
     fn col_transports() -> &'static str {
         "transports"
+    }
+    fn col_aaguid() -> &'static str {
+        "aaguid"
     }
     fn col_created_at() -> &'static str {
         "created_at"

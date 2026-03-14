@@ -183,6 +183,7 @@ fn test_builtin_passkey_meta_defaults() {
     assert_eq!(Passkey::col_device_type(), "device_type");
     assert_eq!(Passkey::col_backed_up(), "backed_up");
     assert_eq!(Passkey::col_transports(), "transports");
+    assert_eq!(Passkey::col_aaguid(), "aaguid");
     assert_eq!(Passkey::col_created_at(), "created_at");
 }
 
@@ -478,6 +479,7 @@ struct CustomPasskey {
     device_type: String,
     backed_up: bool,
     transports: Option<String>,
+    aaguid: Option<String>,
     created_at: DateTime<Utc>,
 }
 
@@ -624,5 +626,6 @@ fn test_all_builtin_meta_traits_callable() {
     let _ = Passkey::col_device_type();
     let _ = Passkey::col_backed_up();
     let _ = Passkey::col_transports();
+    let _ = Passkey::col_aaguid();
     let _ = Passkey::col_created_at();
 }

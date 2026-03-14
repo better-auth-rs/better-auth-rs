@@ -27,7 +27,7 @@
 //! |------|-----------|------|----------|
 //! | Error responses | `{code, message}` | `{message}` only | Missing `code` field |
 //! | `/list-accounts` | Returns account objects with `scopes` | Returns `[]` | Not yet implemented |
-//! | `/forget-password` | Empty 200 body | `{status: true}` | Acceptable deviation |
+//! | `/request-password-reset` | Empty 200 body | `{status: true}` | Acceptable deviation |
 //! | `/delete-user` | Disabled by default | `{message, success}` | TS requires opt-in |
 
 mod compat;
@@ -314,9 +314,9 @@ async fn snapshot_change_email_response() {
     });
 }
 
-/// POST /forget-password response shape
+/// POST /request-password-reset response shape
 #[tokio::test]
-async fn snapshot_forget_password_response() {
+async fn snapshot_request_password_reset_response() {
     let auth = create_test_auth().await;
     signup_user(
         &auth,
@@ -329,14 +329,14 @@ async fn snapshot_forget_password_response() {
     let (status, body) = send_request(
         &auth,
         post_json(
-            "/forget-password",
+            "/request-password-reset",
             serde_json::json!({ "email": "forgotpwd_snap@example.com" }),
         ),
     )
     .await;
     assert_eq!(status, 200);
 
-    with_settings!({snapshot_suffix => "forget_password"}, {
+    with_settings!({snapshot_suffix => "request_password_reset"}, {
         assert_yaml_snapshot!(redact(&body));
     });
 }

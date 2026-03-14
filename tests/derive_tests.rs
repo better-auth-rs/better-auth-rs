@@ -124,6 +124,7 @@ struct MyPasskey {
     device_type: String,
     backed_up: bool,
     transports: Option<String>,
+    aaguid: Option<String>,
     created_at: DateTime<Utc>,
 }
 
@@ -274,6 +275,7 @@ fn test_derive_auth_passkey() {
         device_type: "usb".into(),
         backed_up: true,
         transports: Some("[\"usb\"]".into()),
+        aaguid: None,
         created_at: Utc::now(),
     };
 

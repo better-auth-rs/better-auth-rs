@@ -42,6 +42,11 @@ struct GetSessionResponse<S: Serialize, U: Serialize> {
     user: U,
 }
 
+#[derive(Debug, Serialize)]
+struct UpdateSessionResponse<S: Serialize> {
+    session: S,
+}
+
 #[async_trait]
 impl<DB: DatabaseAdapter> AuthPlugin<DB> for SessionManagementPlugin {
     fn name(&self) -> &'static str {
@@ -57,6 +62,7 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for SessionManagementPlugin {
             AuthRoute::post("/revoke-session", "revoke_session"),
             AuthRoute::post("/revoke-sessions", "revoke_sessions"),
             AuthRoute::post("/revoke-other-sessions", "revoke_other_sessions"),
+            AuthRoute::post("/update-session", "update_session"),
         ]
     }
 
@@ -83,6 +89,9 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for SessionManagementPlugin {
                 if self.config.enable_session_revocation =>
             {
                 Ok(Some(self.handle_revoke_other_sessions(req, ctx).await?))
+            }
+            (HttpMethod::Post, "/update-session") => {
+                Ok(Some(self.handle_update_session(req, ctx).await?))
             }
             _ => Ok(None),
         }
@@ -220,6 +229,16 @@ impl SessionManagementPlugin {
         let response = revoke_other_sessions_core(user.id(), &current_session, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
+
+    async fn handle_update_session<DB: DatabaseAdapter>(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<AuthResponse> {
+        let (_user, session) = ctx.require_session(req).await?;
+        let response = UpdateSessionResponse { session };
+        Ok(AuthResponse::json(200, &response)?)
+    }
 }
 
 #[cfg(feature = "axum")]
@@ -307,6 +326,12 @@ mod axum_impl {
         Ok(Json(response))
     }
 
+    async fn handle_update_session<DB: DatabaseAdapter>(
+        CurrentSession { session, .. }: CurrentSession<DB>,
+    ) -> Result<Json<UpdateSessionResponse<DB::Session>>, AuthError> {
+        Ok(Json(UpdateSessionResponse { session }))
+    }
+
     impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for SessionManagementPlugin {
         fn name(&self) -> &'static str {
             "session-management"
@@ -331,6 +356,7 @@ mod axum_impl {
                     "/revoke-other-sessions",
                     post(handle_revoke_other_sessions::<DB>),
                 )
+                .route("/update-session", post(handle_update_session::<DB>))
                 .layer(Extension(plugin_state))
         }
     }
@@ -578,7 +604,7 @@ mod tests {
         let plugin = SessionManagementPlugin::new();
         let routes = AuthPlugin::<MemoryDatabaseAdapter>::routes(&plugin);
 
-        assert_eq!(routes.len(), 7);
+        assert_eq!(routes.len(), 8);
         assert!(
             routes
                 .iter()

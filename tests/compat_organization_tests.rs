@@ -95,7 +95,7 @@ async fn test_organization_crud_endpoints() {
         post_json_with_auth(
             "/organization/update",
             serde_json::json!({
-                "name": "Updated Org Name",
+                "data": { "name": "Updated Org Name" },
                 "organizationId": org_id
             }),
             &token,

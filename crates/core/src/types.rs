@@ -140,6 +140,8 @@ pub struct Passkey {
     pub backed_up: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transports: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aaguid: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
 }
@@ -155,6 +157,7 @@ pub struct CreatePasskey {
     pub device_type: String,
     pub backed_up: bool,
     pub transports: Option<String>,
+    pub aaguid: Option<String>,
 }
 
 /// Input for updating a passkey

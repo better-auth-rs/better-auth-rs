@@ -59,7 +59,7 @@ async fn create_reset_token(ctx: &AuthContext<MemoryDatabaseAdapter>, email: &st
 }
 
 #[tokio::test]
-async fn test_forget_password_success() {
+async fn test_request_password_reset_success() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, _user, _session) = create_test_context_with_user().await;
 
@@ -70,7 +70,7 @@ async fn test_forget_password_success() {
 
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
-        "/forget-password",
+        "/request-password-reset",
         None,
         Some(body.to_string().into_bytes()),
     );
@@ -84,7 +84,7 @@ async fn test_forget_password_success() {
 }
 
 #[tokio::test]
-async fn test_forget_password_unknown_email() {
+async fn test_request_password_reset_unknown_email() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, _user, _session) = create_test_context_with_user().await;
 
@@ -94,7 +94,7 @@ async fn test_forget_password_unknown_email() {
 
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
-        "/forget-password",
+        "/request-password-reset",
         None,
         Some(body.to_string().into_bytes()),
     );
@@ -561,11 +561,11 @@ async fn test_plugin_routes() {
     let plugin = PasswordManagementPlugin::new();
     let routes = AuthPlugin::<MemoryDatabaseAdapter>::routes(&plugin);
 
-    assert_eq!(routes.len(), 5);
+    assert_eq!(routes.len(), 6);
     assert!(
         routes
             .iter()
-            .any(|r| r.path == "/forget-password" && r.method == HttpMethod::Post)
+            .any(|r| r.path == "/request-password-reset" && r.method == HttpMethod::Post)
     );
     assert!(
         routes
@@ -589,11 +589,11 @@ async fn test_plugin_on_request_routing() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, _user, session) = create_test_context_with_user().await;
 
-    // Test forget password
+    // Test request password reset
     let body = serde_json::json!({"email": "test@example.com"});
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
-        "/forget-password",
+        "/request-password-reset",
         None,
         Some(body.to_string().into_bytes()),
     );
@@ -674,7 +674,7 @@ async fn test_send_reset_password_custom_sender() {
     });
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
-        "/forget-password",
+        "/request-password-reset",
         None,
         Some(body.to_string().into_bytes()),
     );

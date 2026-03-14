@@ -40,11 +40,28 @@ pub(crate) struct AccountResponse {
     scopes: Vec<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub(crate) struct AccountInfoResponse {
+    user: AccountInfoUser,
+    data: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+struct AccountInfoUser {
+    id: String,
+    name: Option<String>,
+    email: Option<String>,
+    image: Option<String>,
+    #[serde(rename = "emailVerified")]
+    email_verified: bool,
+}
+
 better_auth_core::impl_auth_plugin! {
     AccountManagementPlugin, "account-management";
     routes {
         get "/list-accounts" => handle_list_accounts, "list_accounts";
         post "/unlink-account" => handle_unlink_account, "unlink_account";
+        get "/account-info" => handle_account_info, "account_info";
     }
 }
 
@@ -79,6 +96,19 @@ pub(crate) async fn list_accounts_core<DB: DatabaseAdapter>(
         .collect();
 
     Ok(filtered)
+}
+
+pub(crate) fn account_info_from_user<U: AuthUser>(user: &U) -> AccountInfoResponse {
+    AccountInfoResponse {
+        user: AccountInfoUser {
+            id: user.id().to_string(),
+            name: user.name().map(|s| s.to_string()),
+            email: user.email().map(|s| s.to_string()),
+            image: user.image().map(|s| s.to_string()),
+            email_verified: user.email_verified(),
+        },
+        data: serde_json::json!({}),
+    }
 }
 
 pub(crate) async fn unlink_account_core<DB: DatabaseAdapter>(
@@ -147,6 +177,16 @@ impl AccountManagementPlugin {
         let response = unlink_account_core(&user, &unlink_req.provider_id, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
+
+    async fn handle_account_info<DB: DatabaseAdapter>(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<AuthResponse> {
+        let (user, _session) = ctx.require_session(req).await?;
+        let response = account_info_from_user(&user);
+        Ok(AuthResponse::json(200, &response)?)
+    }
 }
 
 #[cfg(feature = "axum")]
@@ -176,6 +216,13 @@ mod axum_impl {
         Ok(Json(response))
     }
 
+    async fn handle_account_info<DB: DatabaseAdapter>(
+        CurrentSession { user, .. }: CurrentSession<DB>,
+    ) -> Result<Json<AccountInfoResponse>, AuthError> {
+        let response = account_info_from_user(&user);
+        Ok(Json(response))
+    }
+
     impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for AccountManagementPlugin {
         fn name(&self) -> &'static str {
             "account-management"
@@ -187,6 +234,7 @@ mod axum_impl {
             axum::Router::new()
                 .route("/list-accounts", get(handle_list_accounts::<DB>))
                 .route("/unlink-account", post(handle_unlink_account::<DB>))
+                .route("/account-info", get(handle_account_info::<DB>))
         }
     }
 }

@@ -59,6 +59,8 @@ pub(crate) struct PasskeyView {
     backed_up: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     transports: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    aaguid: Option<String>,
     #[serde(rename = "createdAt")]
     created_at: String,
 }
@@ -75,6 +77,7 @@ impl PasskeyView {
             device_type: pk.device_type().to_string(),
             backed_up: pk.backed_up(),
             transports: pk.transports().map(|s| s.to_string()),
+            aaguid: pk.aaguid().map(|s| s.to_string()),
             created_at: pk.created_at().to_rfc3339(),
         }
     }

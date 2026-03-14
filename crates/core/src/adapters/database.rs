@@ -1693,8 +1693,8 @@ pub mod sqlx_adapter {
                 .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
 
             let sql = format!(
-                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *",
                 qi(PK::table()),
                 qi(PK::col_id()),
                 qi(PK::col_name()),
@@ -1705,6 +1705,7 @@ pub mod sqlx_adapter {
                 qi(PK::col_device_type()),
                 qi(PK::col_backed_up()),
                 qi(PK::col_transports()),
+                qi(PK::col_aaguid()),
                 qi(PK::col_created_at()),
             );
             let passkey = sqlx::query_as::<_, PK>(&sql)
@@ -1717,6 +1718,7 @@ pub mod sqlx_adapter {
                 .bind(&input.device_type)
                 .bind(input.backed_up)
                 .bind(&input.transports)
+                .bind(&input.aaguid)
                 .bind(now)
                 .fetch_one(&self.pool)
                 .await

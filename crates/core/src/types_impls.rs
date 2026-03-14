@@ -379,6 +379,9 @@ impl AuthPasskey for Passkey {
     fn transports(&self) -> Option<&str> {
         self.transports.as_deref()
     }
+    fn aaguid(&self) -> Option<&str> {
+        self.aaguid.as_deref()
+    }
     fn created_at(&self) -> DateTime<Utc> {
         self.created_at
     }
@@ -543,6 +546,7 @@ mod postgres_impls {
                 device_type: row.try_get("device_type")?,
                 backed_up: row.try_get("backed_up")?,
                 transports: row.try_get("transports")?,
+                aaguid: row.try_get("aaguid")?,
                 created_at: row.try_get("created_at")?,
             })
         }

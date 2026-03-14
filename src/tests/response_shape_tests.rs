@@ -264,14 +264,14 @@ async fn test_list_sessions_response_shape() {
     );
 }
 
-/// Spec: POST /forget-password => { status: bool }
+/// Spec: POST /request-password-reset => { status: bool }
 #[tokio::test]
-async fn test_forget_password_response_shape() {
+async fn test_request_password_reset_response_shape() {
     let auth = create_test_auth().await;
     signup_user(&auth, "fp@example.com", "password123", "FP User").await;
 
     let req = post_json(
-        "/forget-password",
+        "/request-password-reset",
         serde_json::json!({
             "email": "fp@example.com",
         }),
@@ -279,7 +279,7 @@ async fn test_forget_password_response_shape() {
     let resp = auth
         .handle_request(req)
         .await
-        .expect("forget-password request failed");
+        .expect("request-password-reset request failed");
     assert_eq!(resp.status, 200);
 
     let json: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();

@@ -100,7 +100,7 @@ pub(crate) async fn update_organization_core<DB: DatabaseAdapter>(
         ));
     }
 
-    if let Some(ref new_slug) = body.slug
+    if let Some(ref new_slug) = body.data.slug
         && let Some(existing) = ctx.database.get_organization_by_slug(new_slug).await?
         && existing.id() != org_id
     {
@@ -108,10 +108,10 @@ pub(crate) async fn update_organization_core<DB: DatabaseAdapter>(
     }
 
     let update_data = UpdateOrganization {
-        name: body.name.clone(),
-        slug: body.slug.clone(),
-        logo: body.logo.clone(),
-        metadata: body.metadata.clone(),
+        name: body.data.name.clone(),
+        slug: body.data.slug.clone(),
+        logo: body.data.logo.clone(),
+        metadata: body.data.metadata.clone(),
     };
 
     let updated = ctx
@@ -225,7 +225,7 @@ pub(crate) async fn set_active_organization_core<DB: DatabaseAdapter>(
     user: &DB::User,
     session: &DB::Session,
     ctx: &AuthContext<DB>,
-) -> AuthResult<DB::Session> {
+) -> AuthResult<Option<DB::Organization>> {
     let org_id = if body.organization_id.is_some() || body.organization_slug.is_some() {
         Some(
             resolve_organization_id(
@@ -247,12 +247,21 @@ pub(crate) async fn set_active_organization_core<DB: DatabaseAdapter>(
             .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
     }
 
-    let updated_session = ctx
-        .database
+    ctx.database
         .update_session_active_organization(session.token(), org_id.as_deref())
         .await?;
 
-    Ok(updated_session)
+    // Return the organization (or null if unsetting)
+    if let Some(ref oid) = org_id {
+        let organization = ctx
+            .database
+            .get_organization_by_id(oid)
+            .await?
+            .ok_or_else(|| AuthError::not_found("Organization not found"))?;
+        Ok(Some(organization))
+    } else {
+        Ok(None)
+    }
 }
 
 pub(crate) async fn leave_organization_core<DB: DatabaseAdapter>(
@@ -389,8 +398,8 @@ pub async fn handle_set_active_organization<DB: DatabaseAdapter>(
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-    let updated_session = set_active_organization_core(&body, &user, &session, ctx).await?;
-    Ok(AuthResponse::json(200, &updated_session)?)
+    let organization = set_active_organization_core(&body, &user, &session, ctx).await?;
+    Ok(AuthResponse::json(200, &organization)?)
 }
 
 /// Handle leave organization request

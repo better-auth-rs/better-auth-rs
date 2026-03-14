@@ -402,6 +402,7 @@ impl MemoryPasskey for Passkey {
             device_type: input.device_type.clone(),
             backed_up: input.backed_up,
             transports: input.transports.clone(),
+            aaguid: input.aaguid.clone(),
             created_at: now,
         }
     }

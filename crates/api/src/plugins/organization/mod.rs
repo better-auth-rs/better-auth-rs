@@ -78,6 +78,10 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for OrganizationPlugin {
             AuthRoute::post("/organization/leave", "leave_organization"),
             // Member management
             AuthRoute::get("/organization/get-active-member", "get_active_member"),
+            AuthRoute::get(
+                "/organization/get-active-member-role",
+                "get_active_member_role",
+            ),
             AuthRoute::get("/organization/list-members", "list_members"),
             AuthRoute::post("/organization/remove-member", "remove_member"),
             AuthRoute::post("/organization/update-member-role", "update_member_role"),
@@ -131,6 +135,9 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for OrganizationPlugin {
             // Member management
             (HttpMethod::Get, "/organization/get-active-member") => Ok(Some(
                 handlers::member::handle_get_active_member(req, ctx).await?,
+            )),
+            (HttpMethod::Get, "/organization/get-active-member-role") => Ok(Some(
+                handlers::member::handle_get_active_member_role(req, ctx).await?,
             )),
             (HttpMethod::Get, "/organization/list-members") => {
                 Ok(Some(handlers::member::handle_list_members(req, ctx).await?))
@@ -192,7 +199,8 @@ mod axum_impl {
         list_invitations_core, list_user_invitations_core, reject_invitation_core,
     };
     use super::handlers::member::{
-        get_active_member_core, list_members_core, remove_member_core, update_member_role_core,
+        get_active_member_core, get_active_member_role_core, list_members_core,
+        remove_member_core, update_member_role_core,
     };
     use super::handlers::org::{
         check_slug_core, create_organization_core, delete_organization_core,
@@ -274,7 +282,7 @@ mod axum_impl {
         State(state): State<AuthState<DB>>,
         CurrentSession { user, session, .. }: CurrentSession<DB>,
         Json(body): Json<SetActiveOrganizationRequest>,
-    ) -> Result<Json<DB::Session>, AuthError> {
+    ) -> Result<Json<Option<DB::Organization>>, AuthError> {
         let ctx = state.to_context();
         let result = set_active_organization_core(&body, &user, &session, &ctx).await?;
         Ok(Json(result))
@@ -298,6 +306,15 @@ mod axum_impl {
     ) -> Result<Json<MemberResponse>, AuthError> {
         let ctx = state.to_context();
         let result = get_active_member_core(&user, &session, &ctx).await?;
+        Ok(Json(result))
+    }
+
+    async fn handle_get_active_member_role<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        CurrentSession { user, session, .. }: CurrentSession<DB>,
+    ) -> Result<Json<ActiveMemberRoleResponse>, AuthError> {
+        let ctx = state.to_context();
+        let result = get_active_member_role_core(&user, &session, &ctx).await?;
         Ok(Json(result))
     }
 
@@ -463,6 +480,10 @@ mod axum_impl {
                 .route(
                     "/organization/get-active-member",
                     get(handle_get_active_member::<DB>),
+                )
+                .route(
+                    "/organization/get-active-member-role",
+                    get(handle_get_active_member_role::<DB>),
                 )
                 .route("/organization/list-members", get(handle_list_members::<DB>))
                 .route(

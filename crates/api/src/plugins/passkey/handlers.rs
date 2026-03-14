@@ -262,6 +262,7 @@ pub(crate) async fn verify_registration_core<DB: DatabaseAdapter>(
             device_type,
             backed_up,
             transports,
+            aaguid: None,
         })
         .await?;
 

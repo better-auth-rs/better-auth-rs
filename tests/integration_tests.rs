@@ -155,16 +155,16 @@ async fn test_unauthorized_session_access() {
     assert_eq!(status, 401);
 }
 
-/// Integration test for forget-password endpoint
+/// Integration test for request-password-reset endpoint
 #[tokio::test]
-async fn test_forget_password_integration() {
+async fn test_request_password_reset_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, _session_token) = create_test_user_and_session(auth.clone()).await;
 
     let (status, response_data) = send_request(
         &auth,
         post_json(
-            "/forget-password",
+            "/request-password-reset",
             serde_json::json!({
                 "email": "integration@test.com",
                 "redirectTo": "http://localhost:3000/reset"

@@ -11,16 +11,27 @@ pub struct CreateOrganizationRequest {
     pub slug: String,
     pub logo: Option<String>,
     pub metadata: Option<serde_json::Value>,
+    /// Optional user ID override (for admin/server use)
+    #[serde(rename = "userId")]
+    pub user_id: Option<String>,
+    /// Whether to keep the current active organization after creating a new one
+    #[serde(rename = "keepCurrentActiveOrganization")]
+    pub keep_current_active_organization: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct UpdateOrganizationRequest {
+    pub data: UpdateOrganizationData,
+    #[serde(rename = "organizationId")]
+    pub organization_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct UpdateOrganizationData {
     pub name: Option<String>,
     pub slug: Option<String>,
     pub logo: Option<String>,
     pub metadata: Option<serde_json::Value>,
-    #[serde(rename = "organizationId")]
-    pub organization_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -211,6 +222,11 @@ pub struct GetInvitationResponse<I: Serialize> {
     pub organization_slug: String,
     #[serde(rename = "inviterEmail")]
     pub inviter_email: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ActiveMemberRoleResponse {
+    pub role: String,
 }
 
 /// Member with user details (for API responses).
