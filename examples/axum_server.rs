@@ -52,6 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("     POST /auth/sign-up/email       - Sign up with email/password");
     println!("     POST /auth/sign-in/email       - Sign in with email/password");
     println!("     POST /auth/sign-in/username     - Sign in with username/password");
+    println!("     POST /auth/is-username-available - Check username availability (auth)");
     println!("   Session Management:");
     println!("     GET  /auth/get-session          - Get current session info");
     println!("     POST /auth/sign-out             - Sign out current session");
@@ -59,12 +60,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("     POST /auth/revoke-session       - Revoke specific session");
     println!("     POST /auth/revoke-sessions      - Revoke all user sessions");
     println!("     POST /auth/revoke-other-sessions - Revoke all except current");
+    println!("     POST /auth/update-session       - Update current session");
     println!("   Password Management:");
-    println!("     POST /auth/forget-password      - Request password reset");
+    println!("     POST /auth/request-password-reset - Request password reset");
     println!("     POST /auth/reset-password       - Reset password with token");
     println!("     GET  /auth/reset-password/{{token}} - Validate reset token");
     println!("     POST /auth/change-password      - Change password (auth)");
     println!("     POST /auth/set-password         - Set password for OAuth users (auth)");
+    println!("     POST /auth/verify-password     - Verify current password (auth)");
     println!("   Email Verification:");
     println!("     POST /auth/send-verification-email - Send verification email (auth)");
     println!("     GET  /auth/verify-email         - Verify email with token");
@@ -76,6 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Account Management:");
     println!("     GET  /auth/list-accounts        - List linked accounts (auth)");
     println!("     POST /auth/unlink-account       - Unlink an account (auth)");
+    println!("     GET  /auth/account-info         - Get account info (auth)");
     println!("   Organization:");
     println!("     POST /auth/organization/create           - Create organization (auth)");
     println!("     POST /auth/organization/update           - Update organization (auth)");
@@ -86,7 +90,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("     POST /auth/organization/leave            - Leave organization (auth)");
     println!("     POST /auth/organization/check-slug       - Check slug availability (auth)");
     println!("   Organization Members:");
-    println!("     GET  /auth/organization/get-active-member  - Get active member (auth)");
+    println!("     GET  /auth/organization/get-active-member      - Get active member (auth)");
+    println!("     GET  /auth/organization/get-active-member-role - Get active member role (auth)");
     println!("     GET  /auth/organization/list-members       - List members (auth)");
     println!("     POST /auth/organization/remove-member      - Remove member (auth)");
     println!("     POST /auth/organization/update-member-role - Update role (auth)");
