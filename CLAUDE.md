@@ -267,10 +267,14 @@ in the same change.
 
 ### Testing
 
-100% function coverage. Add tests for new behavior and regressions.
-Every function with meaningful logic (branching, transformations, error
-handling) must be tested. Do not test code that can only break if the
-language, runtime, or a dependency breaks.
+Coverage should be judged by behavior and risk, not by a raw percentage
+target. Broad, meaningful coverage is encouraged when it improves
+confidence. Add tests for new behavior and regressions. Every change
+that affects meaningful logic (branching, transformations, error
+handling, compatibility-critical flows) should have tests at the right
+layer. Prefer tests that exercise real behavior over low-value tests for
+code that can only break if the language, runtime, or a dependency
+breaks.
 
 ### Git
 
@@ -297,8 +301,13 @@ code.
 
 ### Performance
 
-Hot paths must have benchmarks. Any performance regression must be
-explained to the human before committing.
+Performance matters, especially on hot paths and user-visible auth
+flows. Prefer simple designs, avoid obvious regressions, and measure
+when a change is performance-sensitive or the tradeoff is unclear.
+Benchmarks are encouraged when they meaningfully guide or protect the
+design, but they are not required for every hot path. Any known
+performance regression must be explained to the human before
+committing.
 
 ### Workarounds
 
