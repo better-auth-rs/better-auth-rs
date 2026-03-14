@@ -3,6 +3,15 @@
 //! Core abstractions for the Better Auth authentication framework.
 //! Contains traits, types, configuration, and error handling.
 
+#![cfg_attr(
+    test,
+    allow(
+        unused_results,
+        unreachable_pub,
+        reason = "test code intentionally discards setup return values and exposes helpers broadly"
+    )
+)]
+
 pub mod adapters;
 pub mod config;
 pub mod email;

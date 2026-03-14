@@ -1,5 +1,10 @@
 //! Route coverage analysis — compares spec endpoints against implementation.
 
+#![allow(
+    unused_results,
+    reason = "test code discards set insertion results while building coverage fixtures"
+)]
+
 mod compat;
 
 use std::collections::{BTreeMap, HashSet};

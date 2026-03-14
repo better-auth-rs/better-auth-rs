@@ -23,6 +23,15 @@
 //! }
 //! ```
 
+#![cfg_attr(
+    test,
+    allow(
+        unused_results,
+        unreachable_pub,
+        reason = "test code intentionally discards setup return values and exposes helpers broadly"
+    )
+)]
+
 // Core module — BetterAuth struct lives here in the root crate
 // because it orchestrates plugins (from better-auth-api) + core (from better-auth-core)
 pub mod core;
