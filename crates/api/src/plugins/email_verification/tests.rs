@@ -958,7 +958,7 @@ fn test_create_session_cookie_format() {
     let ctx = test_helpers::create_test_context();
     let cookie_str = create_session_cookie("my-token-123", &ctx.config);
     // Should contain the cookie name and value
-    assert!(cookie_str.contains("better-auth.session-token=my-token-123"));
+    assert!(cookie_str.contains("better-auth.session_token=my-token-123"));
     // Should contain Path
     assert!(cookie_str.contains("Path=/"));
     // Should contain HttpOnly (default)
@@ -975,5 +975,5 @@ fn test_create_session_cookie_special_characters_in_token() {
     let token = "token+with/special=chars&more";
     let cookie_str = create_session_cookie(token, &ctx.config);
     // The cookie crate should handle encoding properly
-    assert!(cookie_str.contains("better-auth.session-token="));
+    assert!(cookie_str.contains("better-auth.session_token="));
 }

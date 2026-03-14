@@ -179,7 +179,7 @@ impl Default for SessionConfig {
             update_age: Some(Duration::hours(24)), // refresh once per day
             disable_session_refresh: false,
             fresh_age: None,
-            cookie_name: "better-auth.session-token".to_string(),
+            cookie_name: "better-auth.session_token".to_string(),
             cookie_secure: true,
             cookie_http_only: true,
             cookie_same_site: SameSite::Lax,

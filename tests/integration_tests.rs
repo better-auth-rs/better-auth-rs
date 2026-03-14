@@ -585,7 +585,7 @@ async fn test_cookie_based_auth() {
     let mut headers = HashMap::new();
     headers.insert(
         "cookie".to_string(),
-        format!("better-auth.session-token={}; other=value", session_token),
+        format!("better-auth.session_token={}; other=value", session_token),
     );
 
     let request = AuthRequest::from_parts(
@@ -621,7 +621,7 @@ async fn test_bearer_takes_precedence_over_cookie() {
     );
     headers.insert(
         "cookie".to_string(),
-        "better-auth.session-token=invalid_token".to_string(),
+        "better-auth.session_token=invalid_token".to_string(),
     );
 
     let request = AuthRequest::from_parts(

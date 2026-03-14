@@ -254,7 +254,7 @@ async fn test_encrypt_oauth_tokens_stored_encrypted_in_db() {
         .insert("content-type".to_string(), "application/json".to_string());
     req.headers.insert(
         "cookie".to_string(),
-        format!("better-auth.session-token={}", session_token),
+        format!("better-auth.session_token={}", session_token),
     );
 
     let oauth_plugin = OAuthPlugin::new();
@@ -343,7 +343,7 @@ async fn test_unlink_last_account_blocked_by_default() {
         .insert("content-type".to_string(), "application/json".to_string());
     req.headers.insert(
         "cookie".to_string(),
-        format!("better-auth.session-token={}", session_token),
+        format!("better-auth.session_token={}", session_token),
     );
 
     let result = plugin.on_request(&req, &ctx).await;
@@ -393,7 +393,7 @@ async fn test_unlink_last_account_allowed_when_configured() {
         .insert("content-type".to_string(), "application/json".to_string());
     req.headers.insert(
         "cookie".to_string(),
-        format!("better-auth.session-token={}", session_token),
+        format!("better-auth.session_token={}", session_token),
     );
 
     let result = plugin.on_request(&req, &ctx).await;
@@ -477,7 +477,7 @@ async fn test_unlink_non_last_account_always_allowed() {
         .insert("content-type".to_string(), "application/json".to_string());
     req.headers.insert(
         "cookie".to_string(),
-        format!("better-auth.session-token={}", session.token()),
+        format!("better-auth.session_token={}", session.token()),
     );
 
     let result = plugin.on_request(&req, &ctx).await;
@@ -631,7 +631,7 @@ async fn test_link_social_returns_redirect_url_with_state() {
         .insert("content-type".to_string(), "application/json".to_string());
     req.headers.insert(
         "cookie".to_string(),
-        format!("better-auth.session-token={}", session_token),
+        format!("better-auth.session_token={}", session_token),
     );
 
     let result = oauth_plugin.on_request(&req, &ctx).await;
