@@ -18,6 +18,27 @@ pub mod core_paths {
     pub const DELETE_USER: &str = "/delete-user";
     pub const CHANGE_EMAIL: &str = "/change-email";
     pub const DELETE_USER_CALLBACK: &str = "/delete-user/callback";
+
+    /// Build the HTML error page returned by `GET /error`.
+    ///
+    /// Matches the TS better-auth error page that displays the error code.
+    pub fn error_page_html(error_code: &str) -> String {
+        format!(
+            r#"<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Error</title>
+  </head>
+  <body>
+    <h1>ERROR</h1>
+    <h2>Something went wrong</h2>
+    <p>CODE: {error_code}</p>
+  </body>
+</html>"#
+        )
+    }
 }
 
 /// Main configuration for BetterAuth

@@ -393,30 +393,12 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
                 Ok(Some(AuthResponse::json(200, &OkResponse { ok: true })?))
             }
             (HttpMethod::Get, core_paths::ERROR) => {
-                // NOTE: matches TS behavior — /error returns an HTML error page,
-                // not JSON. Query params ?error=CODE&error_description=DESC are
-                // used to populate the page.
                 let error_code = req
                     .query
                     .get("error")
                     .cloned()
                     .unwrap_or_else(|| "UNKNOWN".to_string());
-                let html = format!(
-                    r#"<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Error</title>
-  </head>
-  <body>
-    <h1>ERROR</h1>
-    <h2>Something went wrong</h2>
-    <p>CODE: {}</p>
-  </body>
-</html>"#,
-                    error_code
-                );
+                let html = core_paths::error_page_html(&error_code);
                 Ok(Some(AuthResponse::html(200, html)))
             }
             (HttpMethod::Get, core_paths::OPENAPI_SPEC) => {

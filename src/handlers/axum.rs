@@ -124,8 +124,15 @@ async fn ok_check() -> impl IntoResponse {
 }
 
 #[cfg(feature = "axum")]
-async fn error_check() -> impl IntoResponse {
-    axum::Json(OkResponse { ok: false })
+async fn error_check(
+    query: axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let error_code = query
+        .get("error")
+        .cloned()
+        .unwrap_or_else(|| "UNKNOWN".to_string());
+    let html = core_paths::error_page_html(&error_code);
+    axum::response::Html(html)
 }
 
 #[cfg(feature = "axum")]
