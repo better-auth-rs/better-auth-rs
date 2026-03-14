@@ -251,7 +251,7 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
             }
             Err(err) => {
                 // Convert error to standardized response, then run after-middleware
-                let response = err.into_response();
+                let response = err.to_auth_response();
                 middleware::run_after(&self.middlewares, &req, response).await
             }
         }

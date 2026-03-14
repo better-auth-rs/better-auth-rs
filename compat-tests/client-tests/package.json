@@ -1,0 +1,13 @@
+{
+  "name": "better-auth-client-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test tests/",
+    "test:ts": "AUTH_BASE_URL=http://localhost:3100 bun test tests/",
+    "test:rust": "AUTH_BASE_URL=http://localhost:3200 bun test tests/"
+  },
+  "dependencies": {
+    "better-auth": "1.4.19"
+  }
+}

@@ -3,7 +3,7 @@ use thiserror::Error;
 /// Authentication framework error types.
 ///
 /// Each variant maps to an HTTP status code via [`AuthError::status_code`].
-/// Use [`AuthError::into_response`] to produce a standardized JSON response
+/// Use [`AuthError::to_auth_response`] to produce a standardized JSON response
 /// matching the better-auth OpenAPI spec: `{ "message": "..." }`.
 #[derive(Error, Debug)]
 pub enum AuthError {
@@ -132,7 +132,10 @@ impl AuthError {
 
     /// Convert this error into a standardized [`AuthResponse`] matching the
     /// better-auth spec: `{ "code": "...", "message": "..." }`.
-    pub fn into_response(self) -> crate::types::AuthResponse {
+    ///
+    /// Named `to_auth_response` to avoid collision with Axum's
+    /// `IntoResponse::into_response` when the `axum` feature is enabled.
+    pub fn to_auth_response(self) -> crate::types::AuthResponse {
         let (status, code, message) = self.error_payload();
         crate::types::AuthResponse::json(
             status,

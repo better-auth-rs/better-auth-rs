@@ -57,7 +57,7 @@ Before writing any code, you MUST have:
 
 - The TS better-auth source (cloned locally or available to read).
 - The reference server dependencies installed
-  (`cd compat-tests/reference-server && npm install`).
+  (`cd compat-tests/reference-server && bun install`).
 - The `better-auth.yaml` spec in the workspace root.
 
 If any of these are missing, stop and ask.
@@ -67,11 +67,20 @@ If any of these are missing, stop and ask.
 ```bash
 cargo fmt --check
 cargo clippy --workspace
-cargo test --workspace --lib          # library unit tests
-cargo test --test dual_server_tests   # dual-server comparison (needs ref server)
-./scripts/alignment-check.sh          # full alignment pipeline (build + ref server + tests)
-./scripts/alignment-check.sh --skip-build  # skip cargo build step
+cargo test --workspace --lib                   # library unit tests
+cargo test --test dual_server_tests            # dual-server comparison (needs ref server)
+./scripts/alignment-check.sh                   # full alignment pipeline (all 3 layers)
+./scripts/alignment-check.sh --skip-build      # skip cargo build step
+cd compat-tests/client-tests && bun test:ts    # client tests against TS only
+cd compat-tests/client-tests && bun test:rust  # client tests against Rust only
+bash compat-tests/client-tests/run-against-both.sh  # client tests against both
 ```
+
+### JavaScript runtime
+
+All JS/TS tooling in this project uses **Bun** (not npm/node). Use
+`bun install`, `bun run`, `bun test` for all JS operations. The
+reference server and client test projects both use `bun.lock`.
 
 ## Feedback Loop
 
@@ -133,6 +142,38 @@ Once the infrastructure is built, run the alignment check on the
 Phase 0 endpoints (`/ok`, `/error`, `/sign-up/email`, `/sign-in/email`,
 `/get-session`, `/sign-out`). This will produce the first real alignment
 report. Commit the infrastructure, then start fixing mismatches.
+
+### Three-layer testing strategy
+
+1. **Unit/integration tests** (`cargo test --workspace --lib`) — Rust-only,
+   in-process. Tests individual functions and modules without network I/O.
+
+2. **Dual-server shape comparison** (`cargo test --test dual_server_tests`) —
+   Raw HTTP requests sent to both the Rust server (in-process) and the
+   TS reference server (port 3100). Compares status codes, response
+   bodies, cookies, headers, and error shapes structurally.
+
+3. **Client integration tests** (`compat-tests/client-tests/`) — Uses the
+   real `better-auth/client` JavaScript SDK (`createAuthClient`) to
+   exercise both backends. This proves that a real app using the
+   better-auth client can switch between TS and Rust at zero cost.
+   The client handles cookies, session state, and error parsing — bugs
+   in any of these are invisible to raw HTTP comparison.
+
+   - `compat-tests/client-tests/` — Bun test project with the client SDK
+   - `compat-tests/rust-server/` — Minimal Axum server matching the
+     reference server config exactly (same secret, same basePath)
+   - `compat-tests/client-tests/run-against-both.sh` — Starts both
+     servers and runs the same test suite against each
+
+   Port allocation:
+   | Server | Port | Purpose |
+   |--------|------|---------|
+   | TS reference | 3100 | Canonical TS better-auth |
+   | Rust compat | 3200 | Rust server for client tests |
+
+Use all three layers. Layer 1 catches logic bugs fast. Layer 2 catches
+structural mismatches. Layer 3 catches client-visible integration bugs.
 
 ## How to Work
 
@@ -276,7 +317,7 @@ approval. Keep the implementation direct and clean.
 The reference server is pinned to `better-auth@1.4.19`. When upgrading:
 
 1. Update `compat-tests/reference-server/package.json`.
-2. Run `npm install`.
+2. Run `bun install`.
 3. Re-run the full alignment check.
 4. Update `better-auth.yaml` from the new version's OpenAPI output.
 5. Fix any new mismatches.

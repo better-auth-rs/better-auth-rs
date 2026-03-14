@@ -12,7 +12,7 @@ workspace = true
 [workspace]
 resolver = "2"
 members = ["crates/core", "crates/api", "crates/derive"]
-exclude = ["examples/sqlx-custom-entities", "examples/sea-orm-migration", "examples/fullstack/backend"]
+exclude = ["examples/sqlx-custom-entities", "examples/sea-orm-migration", "examples/fullstack/backend", "compat-tests/rust-server"]
 
 [workspace.package]
 version = "0.9.0"
@@ -91,7 +91,7 @@ syn = { version = "2", features = ["full"] }
 
 [features]
 default = []
-axum = ["dep:axum", "dep:tower", "dep:url"]
+axum = ["dep:axum", "dep:tower", "dep:url", "better-auth-core/axum", "better-auth-api/axum"]
 derive = ["better-auth-core/derive"]
 sqlx-postgres = ["dep:sqlx", "better-auth-core/sqlx-postgres"]
 redis-cache = ["dep:redis"]
