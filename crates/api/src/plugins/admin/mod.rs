@@ -331,7 +331,7 @@ mod axum_impl {
 
     async fn handle_set_role<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
+        Extension(_ps): Extension<Arc<PluginState>>,
         AdminSession { .. }: AdminSession<DB>,
         ValidatedJson(body): ValidatedJson<SetRoleRequest>,
     ) -> Result<Json<UserResponse<DB::User>>, AuthError> {
@@ -469,7 +469,7 @@ mod axum_impl {
     }
 
     async fn handle_has_permission<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+        State(_state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
         CurrentSession { user, .. }: CurrentSession<DB>,
         ValidatedJson(body): ValidatedJson<HasPermissionRequest>,

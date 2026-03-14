@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "bun test tests/",
-    "test:ts": "AUTH_BASE_URL=http://localhost:3100 bun test tests/",
-    "test:rust": "AUTH_BASE_URL=http://localhost:3200 bun test tests/"
+    "test": "node --test tests/*.test.mjs",
+    "test:ts": "AUTH_BASE_URL=http://localhost:3100 node --test tests/*.test.mjs",
+    "test:rust": "AUTH_BASE_URL=http://localhost:3200 node --test tests/*.test.mjs"
   },
   "dependencies": {
     "better-auth": "1.4.19"

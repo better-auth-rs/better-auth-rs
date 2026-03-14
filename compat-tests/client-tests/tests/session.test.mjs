@@ -1,15 +1,16 @@
-import { describe, test, expect, beforeAll } from "bun:test";
+import { describe, it, before } from "node:test";
+import assert from "node:assert/strict";
 import { createTestClient, BASE_URL } from "../auth-client.mjs";
 
 describe("session", () => {
-  beforeAll(async () => {
+  before(async () => {
     const res = await fetch(`${BASE_URL}/api/auth/ok`).catch(() => null);
     if (!res?.ok) {
       throw new Error(`Server not reachable at ${BASE_URL}`);
     }
   });
 
-  test("get session after sign-in returns session and user", async () => {
+  it("get session after sign-in returns session and user", async () => {
     const { client } = createTestClient();
     const email = `session-${Date.now()}@test.com`;
 
@@ -19,25 +20,25 @@ describe("session", () => {
       password: "password123",
       name: "Session User",
     });
-    expect(signup.error).toBeNull();
+    assert.equal(signup.error, null);
 
     // Get session — cookie should carry over
     const session = await client.getSession();
 
-    expect(session.error).toBeNull();
-    expect(session.data).toBeDefined();
-    expect(session.data.user).toBeDefined();
-    expect(session.data.user.email).toBe(email);
-    expect(session.data.session).toBeDefined();
-    expect(typeof session.data.session.id).toBe("string");
+    assert.equal(session.error, null);
+    assert.ok(session.data);
+    assert.ok(session.data.user);
+    assert.equal(session.data.user.email, email);
+    assert.ok(session.data.session);
+    assert.equal(typeof session.data.session.id, "string");
   });
 
-  test("get session without auth returns null", async () => {
+  it("get session without auth returns null", async () => {
     const { client } = createTestClient();
 
     const session = await client.getSession();
 
     // Client returns null data when unauthenticated
-    expect(session.data).toBeNull();
+    assert.equal(session.data, null);
   });
 });

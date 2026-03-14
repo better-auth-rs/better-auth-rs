@@ -1,11 +1,12 @@
-import { describe, test, expect, beforeAll } from "bun:test";
+import { describe, it, before } from "node:test";
+import assert from "node:assert/strict";
 import { createTestClient, BASE_URL } from "../auth-client.mjs";
 
 describe("sign-in", () => {
   const TEST_EMAIL = `signin-${Date.now()}@test.com`;
   const TEST_PASSWORD = "password123";
 
-  beforeAll(async () => {
+  before(async () => {
     const res = await fetch(`${BASE_URL}/api/auth/ok`).catch(() => null);
     if (!res?.ok) {
       throw new Error(`Server not reachable at ${BASE_URL}`);
@@ -23,7 +24,7 @@ describe("sign-in", () => {
     }
   });
 
-  test("sign in with valid credentials returns user and token", async () => {
+  it("sign in with valid credentials returns user and token", async () => {
     const { client } = createTestClient();
 
     const result = await client.signIn.email({
@@ -31,14 +32,14 @@ describe("sign-in", () => {
       password: TEST_PASSWORD,
     });
 
-    expect(result.error).toBeNull();
-    expect(result.data).toBeDefined();
-    expect(result.data.user).toBeDefined();
-    expect(result.data.user.email).toBe(TEST_EMAIL);
-    expect(typeof result.data.token).toBe("string");
+    assert.equal(result.error, null);
+    assert.ok(result.data);
+    assert.ok(result.data.user);
+    assert.equal(result.data.user.email, TEST_EMAIL);
+    assert.equal(typeof result.data.token, "string");
   });
 
-  test("sign in with wrong password returns error", async () => {
+  it("sign in with wrong password returns error", async () => {
     const { client } = createTestClient();
 
     const result = await client.signIn.email({
@@ -46,12 +47,11 @@ describe("sign-in", () => {
       password: "wrong-password",
     });
 
-    expect(result.error).toBeDefined();
-    expect(result.error).not.toBeNull();
-    expect(result.data).toBeNull();
+    assert.ok(result.error);
+    assert.equal(result.data, null);
   });
 
-  test("sign in with nonexistent email returns error", async () => {
+  it("sign in with nonexistent email returns error", async () => {
     const { client } = createTestClient();
 
     const result = await client.signIn.email({
@@ -59,8 +59,7 @@ describe("sign-in", () => {
       password: TEST_PASSWORD,
     });
 
-    expect(result.error).toBeDefined();
-    expect(result.error).not.toBeNull();
-    expect(result.data).toBeNull();
+    assert.ok(result.error);
+    assert.equal(result.data, null);
   });
 });

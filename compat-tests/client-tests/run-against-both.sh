@@ -47,6 +47,12 @@ trap cleanup EXIT INT TERM
 echo "=== Client Integration Tests ==="
 echo ""
 
+if ! command -v node &>/dev/null; then
+  echo "ERROR: node is not available. Install Node.js and try again."
+  exit 1
+fi
+echo "  node $(node --version) ✓"
+
 if ! command -v bun &>/dev/null; then
   echo "ERROR: bun is not available. Install Bun and try again."
   exit 1
@@ -89,7 +95,7 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[2/5] Starting TS reference server on port $TS_PORT..."
 cd "$REF_SERVER_DIR"
-PORT=$TS_PORT bun run server.mjs &
+PORT=$TS_PORT node server.mjs &
 TS_PID=$!
 cd "$PROJECT_ROOT"
 
@@ -139,7 +145,7 @@ echo ""
 echo "[4/5] Running client tests against TS server..."
 cd "$CLIENT_DIR"
 TS_EXIT=0
-AUTH_BASE_URL="http://localhost:$TS_PORT" bun test tests/ 2>&1 | tee /tmp/client-test-ts.log || TS_EXIT=$?
+AUTH_BASE_URL="http://localhost:$TS_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-ts.log || TS_EXIT=$?
 
 if [[ "$TS_EXIT" -eq 0 ]]; then
   echo "  TS tests: PASS ✓"
@@ -153,7 +159,7 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[5/5] Running client tests against Rust server..."
 RUST_EXIT=0
-AUTH_BASE_URL="http://localhost:$RUST_PORT" bun test tests/ 2>&1 | tee /tmp/client-test-rust.log || RUST_EXIT=$?
+AUTH_BASE_URL="http://localhost:$RUST_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-rust.log || RUST_EXIT=$?
 
 if [[ "$RUST_EXIT" -eq 0 ]]; then
   echo "  Rust tests: PASS ✓"

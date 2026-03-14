@@ -71,16 +71,18 @@ cargo test --workspace --lib                   # library unit tests
 cargo test --test dual_server_tests            # dual-server comparison (needs ref server)
 ./scripts/alignment-check.sh                   # full alignment pipeline (all 3 layers)
 ./scripts/alignment-check.sh --skip-build      # skip cargo build step
-cd compat-tests/client-tests && bun test:ts    # client tests against TS only
-cd compat-tests/client-tests && bun test:rust  # client tests against Rust only
+cd compat-tests/client-tests && npm run test:ts    # client tests against TS only
+cd compat-tests/client-tests && npm run test:rust  # client tests against Rust only
 bash compat-tests/client-tests/run-against-both.sh  # client tests against both
 ```
 
-### JavaScript runtime
+### JavaScript tooling
 
-All JS/TS tooling in this project uses **Bun** (not npm/node). Use
-`bun install`, `bun run`, `bun test` for all JS operations. The
-reference server and client test projects both use `bun.lock`.
+**Bun** is the package manager (not npm). Use `bun install` to manage
+dependencies. All JS projects use `bun.lock` (no `package-lock.json`).
+
+**Node.js** is the runtime. Use `node` to run servers and tests. The
+reference server requires `better-sqlite3` which needs native Node.
 
 ## Feedback Loop
 

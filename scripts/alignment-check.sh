@@ -54,6 +54,12 @@ echo "=== Alignment Check ==="
 echo ""
 echo "[preflight] Checking prerequisites..."
 
+if ! command -v node &>/dev/null; then
+  echo "ERROR: node is not available. Install Node.js and try again."
+  exit 1
+fi
+echo "  node $(node --version) ✓"
+
 if ! command -v bun &>/dev/null; then
   echo "ERROR: bun is not available. Install Bun and try again."
   exit 1
@@ -125,7 +131,7 @@ if command -v lsof &>/dev/null; then
 fi
 
 cd "$REF_SERVER_DIR"
-PORT=$REF_PORT bun run server.mjs &
+PORT=$REF_PORT node server.mjs &
 REF_PID=$!
 cd "$PROJECT_ROOT"
 
@@ -223,10 +229,10 @@ else
 
   cd "$CLIENT_DIR"
   CLIENT_TS_EXIT=0
-  AUTH_BASE_URL="http://localhost:$REF_PORT" bun test tests/ 2>&1 | tee /tmp/client-test-ts.log || CLIENT_TS_EXIT=$?
+  AUTH_BASE_URL="http://localhost:$REF_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-ts.log || CLIENT_TS_EXIT=$?
 
   CLIENT_RUST_EXIT=0
-  AUTH_BASE_URL="http://localhost:$RUST_PORT" bun test tests/ 2>&1 | tee /tmp/client-test-rust.log || CLIENT_RUST_EXIT=$?
+  AUTH_BASE_URL="http://localhost:$RUST_PORT" node --test tests/*.test.mjs 2>&1 | tee /tmp/client-test-rust.log || CLIENT_RUST_EXIT=$?
 fi
 
 if [[ "$CLIENT_TS_EXIT" -eq 0 ]]; then

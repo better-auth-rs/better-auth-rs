@@ -144,7 +144,10 @@ async fn health_check() -> impl IntoResponse {
 }
 
 #[cfg(feature = "axum")]
-#[allow(clippy::type_complexity)]
+#[expect(
+    clippy::type_complexity,
+    reason = "Axum handler signature requires nested generics"
+)]
 fn create_plugin_handler<DB: DatabaseAdapter>() -> impl Fn(
     State<Arc<BetterAuth<DB>>>,
     Request,
@@ -190,7 +193,7 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
     let mut headers = HashMap::new();
     for (name, value) in parts.headers.iter() {
         if let Ok(value_str) = value.to_str() {
-            headers.insert(name.to_string(), value_str.to_string());
+            let _ = headers.insert(name.to_string(), value_str.to_string());
         }
     }
 
@@ -201,7 +204,7 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
     let mut query = HashMap::new();
     if let Some(query_str) = parts.uri.query() {
         for (key, value) in url::form_urlencoded::parse(query_str.as_bytes()) {
-            query.insert(key.to_string(), value.to_string());
+            let _ = query.insert(key.to_string(), value.to_string());
         }
     }
 
@@ -238,14 +241,14 @@ fn convert_auth_response(auth_response: AuthResponse) -> Response {
         }
     }
 
-    response
-        .body(axum::body::Body::from(auth_response.body))
-        .unwrap_or_else(|_| {
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(axum::body::Body::from("Internal server error"))
-                .unwrap()
-        })
+    match response.body(axum::body::Body::from(auth_response.body)) {
+        Ok(resp) => resp,
+        Err(_) => {
+            let (mut parts, _) = Response::new(()).into_parts();
+            parts.status = StatusCode::INTERNAL_SERVER_ERROR;
+            Response::from_parts(parts, axum::body::Body::from("Internal server error"))
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -1,15 +1,16 @@
-import { describe, test, expect, beforeAll } from "bun:test";
+import { describe, it, before } from "node:test";
+import assert from "node:assert/strict";
 import { createTestClient, BASE_URL } from "../auth-client.mjs";
 
 describe("sign-out", () => {
-  beforeAll(async () => {
+  before(async () => {
     const res = await fetch(`${BASE_URL}/api/auth/ok`).catch(() => null);
     if (!res?.ok) {
       throw new Error(`Server not reachable at ${BASE_URL}`);
     }
   });
 
-  test("sign out after sign-in invalidates session", async () => {
+  it("sign out after sign-in invalidates session", async () => {
     const { client } = createTestClient();
     const email = `signout-${Date.now()}@test.com`;
 
@@ -19,30 +20,29 @@ describe("sign-out", () => {
       password: "password123",
       name: "Signout User",
     });
-    expect(signup.error).toBeNull();
+    assert.equal(signup.error, null);
 
     // Verify session exists
     const sessionBefore = await client.getSession();
-    expect(sessionBefore.data).toBeDefined();
-    expect(sessionBefore.data).not.toBeNull();
+    assert.ok(sessionBefore.data);
 
     // Sign out
     const signout = await client.signOut();
-    expect(signout.error).toBeNull();
-    expect(signout.data).toBeDefined();
-    expect(signout.data.success).toBe(true);
+    assert.equal(signout.error, null);
+    assert.ok(signout.data);
+    assert.equal(signout.data.success, true);
 
     // Session should be gone
     const sessionAfter = await client.getSession();
-    expect(sessionAfter.data).toBeNull();
+    assert.equal(sessionAfter.data, null);
   });
 
-  test("sign out without auth still succeeds", async () => {
+  it("sign out without auth still succeeds", async () => {
     const { client } = createTestClient();
 
     const result = await client.signOut();
 
     // Should not error — sign-out is always 200
-    expect(result.error).toBeNull();
+    assert.equal(result.error, null);
   });
 });
