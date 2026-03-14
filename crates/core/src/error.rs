@@ -114,11 +114,11 @@ impl AuthError {
             .collect()
     }
 
-    /// Convert this error into a standardized [`AuthResponse`] matching the
-    /// better-auth spec: `{ "code": "...", "message": "..." }`.
+    /// Compute the HTTP status, error code, and user-facing message.
     ///
-    /// Internal errors (500) use a generic message to avoid leaking details.
-    pub fn into_response(self) -> crate::types::AuthResponse {
+    /// Internal errors (500) are logged and replaced with a generic message
+    /// to avoid leaking details.
+    pub fn error_payload(&self) -> (u16, String, String) {
         let status = self.status_code();
         let message = match status {
             500 => {
@@ -128,7 +128,13 @@ impl AuthError {
             _ => self.to_string(),
         };
         let code = Self::code_from_message(&message);
+        (status, code, message)
+    }
 
+    /// Convert this error into a standardized [`AuthResponse`] matching the
+    /// better-auth spec: `{ "code": "...", "message": "..." }`.
+    pub fn into_response(self) -> crate::types::AuthResponse {
+        let (status, code, message) = self.error_payload();
         crate::types::AuthResponse::json(
             status,
             &crate::types::ErrorCodeMessageResponse {
@@ -227,16 +233,9 @@ pub type AuthResult<T> = Result<T, AuthError>;
 #[cfg(feature = "axum")]
 impl axum::response::IntoResponse for AuthError {
     fn into_response(self) -> axum::response::Response {
-        let status = axum::http::StatusCode::from_u16(self.status_code())
+        let (status_u16, code, message) = self.error_payload();
+        let status = axum::http::StatusCode::from_u16(status_u16)
             .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
-        let message = match self.status_code() {
-            500 => {
-                tracing::error!(error = %self, "Internal server error");
-                "Internal server error".to_string()
-            }
-            _ => self.to_string(),
-        };
-        let code = Self::code_from_message(&message);
         (
             status,
             axum::Json(crate::types::ErrorCodeMessageResponse { code, message }),

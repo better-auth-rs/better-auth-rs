@@ -17,8 +17,8 @@ use better_auth_core::SessionManager;
 #[cfg(feature = "axum")]
 use better_auth_core::entity::AuthSession as AuthSessionTrait;
 use better_auth_core::{
-    AuthError, AuthRequest, AuthResponse, DatabaseAdapter, ErrorCodeMessageResponse,
-    HealthCheckResponse, HttpMethod, OkResponse, core_paths,
+    AuthError, AuthRequest, AuthResponse, DatabaseAdapter, HealthCheckResponse, HttpMethod,
+    OkResponse, core_paths,
 };
 
 /// Integration trait for Axum web framework
@@ -149,9 +149,9 @@ fn create_plugin_handler<DB: DatabaseAdapter>() -> impl Fn(
             match convert_axum_request(req).await {
                 Ok(auth_req) => match auth.handle_request(auth_req).await {
                     Ok(auth_response) => convert_auth_response(auth_response),
-                    Err(err) => convert_auth_error(err),
+                    Err(err) => err.into_response(),
                 },
-                Err(err) => convert_auth_error(err),
+                Err(err) => err.into_response(),
             }
         })
     }
@@ -239,22 +239,6 @@ fn convert_auth_response(auth_response: AuthResponse) -> Response {
                 .body(axum::body::Body::from("Internal server error"))
                 .unwrap()
         })
-}
-
-#[cfg(feature = "axum")]
-fn convert_auth_error(err: AuthError) -> Response {
-    let status_code =
-        StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-
-    let message = match err.status_code() {
-        500 => "Internal server error".to_string(),
-        _ => err.to_string(),
-    };
-
-    let code = AuthError::code_from_message(&message);
-    let body = ErrorCodeMessageResponse { code, message };
-
-    (status_code, axum::Json(body)).into_response()
 }
 
 // ---------------------------------------------------------------------------
@@ -346,7 +330,7 @@ impl<DB: DatabaseAdapter> FromRequestParts<Arc<BetterAuth<DB>>> for CurrentSessi
     ) -> Result<Self, Self::Rejection> {
         let cookie_name = &state.config().session.cookie_name;
         let token = extract_token_from_parts(parts, cookie_name)
-            .ok_or_else(|| convert_auth_error(AuthError::Unauthenticated))?;
+            .ok_or_else(|| AuthError::Unauthenticated.into_response())?;
 
         let session_manager =
             SessionManager::new(Arc::new(state.config().clone()), state.database().clone());
@@ -354,15 +338,15 @@ impl<DB: DatabaseAdapter> FromRequestParts<Arc<BetterAuth<DB>>> for CurrentSessi
         let session = session_manager
             .get_session(&token)
             .await
-            .map_err(convert_auth_error)?
-            .ok_or_else(|| convert_auth_error(AuthError::SessionNotFound))?;
+            .map_err(IntoResponse::into_response)?
+            .ok_or_else(|| AuthError::SessionNotFound.into_response())?;
 
         let user = state
             .database()
             .get_user_by_id(session.user_id())
             .await
-            .map_err(convert_auth_error)?
-            .ok_or_else(|| convert_auth_error(AuthError::UserNotFound))?;
+            .map_err(IntoResponse::into_response)?
+            .ok_or_else(|| AuthError::UserNotFound.into_response())?;
 
         Ok(CurrentSession { user, session })
     }
