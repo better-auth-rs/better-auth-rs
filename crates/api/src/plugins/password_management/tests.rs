@@ -1,10 +1,29 @@
 use super::*;
 use crate::plugins::test_helpers;
-use better_auth_core::adapters::{MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps};
+use better_auth_core::adapters::{AccountOps, MemoryDatabaseAdapter, SessionOps, VerificationOps};
 use better_auth_core::config::{Argon2Config, AuthConfig, PasswordConfig};
-use better_auth_core::{CreateUser, CreateVerification, PASSWORD_HASH_KEY, Session, User};
+use better_auth_core::{
+    CreateAccount, CreateUser, CreateVerification, PASSWORD_HASH_KEY, Session, User,
+};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
+use std::sync::Arc;
+
+const PASSWORD_RESET_SUCCESS_MESSAGE: &str =
+    "If this email exists in our system, check your email for the reset link";
+
+struct NoopResetSender;
+
+#[async_trait::async_trait]
+impl SendResetPassword for NoopResetSender {
+    async fn send(&self, _user: &serde_json::Value, _url: &str, _token: &str) -> AuthResult<()> {
+        Ok(())
+    }
+}
+
+fn plugin_with_reset_sender() -> PasswordManagementPlugin {
+    PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender))
+}
 
 async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>, User, Session) {
     let mut config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
@@ -37,18 +56,38 @@ async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>,
         .with_name("Test User")
         .with_metadata(metadata);
     let user = test_helpers::create_user(&ctx, create_user).await;
+    let _ = ctx
+        .database
+        .create_account(CreateAccount {
+            user_id: user.id.clone(),
+            account_id: user.id.clone(),
+            provider_id: "credential".to_string(),
+            access_token: None,
+            refresh_token: None,
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: None,
+            password: user
+                .metadata
+                .get(PASSWORD_HASH_KEY)
+                .and_then(|value| value.as_str())
+                .map(str::to_string),
+        })
+        .await
+        .unwrap();
     let session = test_helpers::create_session(&ctx, user.id.clone(), Duration::hours(24)).await;
 
     (ctx, user, session)
 }
 
 /// Helper: create a reset-password verification token for the given user
-/// email and store it in the database. Returns the token string.
-async fn create_reset_token(ctx: &AuthContext<MemoryDatabaseAdapter>, email: &str) -> String {
-    let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
+/// and store it in the database. Returns the token string.
+async fn create_reset_token(ctx: &AuthContext<MemoryDatabaseAdapter>, user_id: &str) -> String {
+    let reset_token = uuid::Uuid::new_v4().simple().to_string();
     let create_verification = CreateVerification {
-        identifier: email.to_string(),
-        value: reset_token.clone(),
+        identifier: format!("reset-password:{}", reset_token),
+        value: user_id.to_string(),
         expires_at: Utc::now() + Duration::hours(24),
     };
     ctx.database
@@ -59,8 +98,8 @@ async fn create_reset_token(ctx: &AuthContext<MemoryDatabaseAdapter>, email: &st
 }
 
 #[tokio::test]
-async fn test_forget_password_success() {
-    let plugin = PasswordManagementPlugin::new();
+async fn test_request_password_reset_success() {
+    let plugin = plugin_with_reset_sender();
     let (ctx, _user, _session) = create_test_context_with_user().await;
 
     let body = serde_json::json!({
@@ -70,22 +109,26 @@ async fn test_forget_password_success() {
 
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
-        "/forget-password",
+        "/request-password-reset",
         None,
         Some(body.to_string().into_bytes()),
     );
 
-    let response = plugin.handle_forget_password(&req, &ctx).await.unwrap();
+    let response = plugin
+        .handle_request_password_reset(&req, &ctx)
+        .await
+        .unwrap();
     assert_eq!(response.status, 200);
 
     let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: StatusResponse = serde_json::from_str(&body_str).unwrap();
+    let response_data: RequestPasswordResetResponse = serde_json::from_str(&body_str).unwrap();
     assert!(response_data.status);
+    assert_eq!(response_data.message, PASSWORD_RESET_SUCCESS_MESSAGE);
 }
 
 #[tokio::test]
-async fn test_forget_password_unknown_email() {
-    let plugin = PasswordManagementPlugin::new();
+async fn test_request_password_reset_unknown_email() {
+    let plugin = plugin_with_reset_sender();
     let (ctx, _user, _session) = create_test_context_with_user().await;
 
     let body = serde_json::json!({
@@ -94,18 +137,21 @@ async fn test_forget_password_unknown_email() {
 
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
-        "/forget-password",
+        "/request-password-reset",
         None,
         Some(body.to_string().into_bytes()),
     );
 
-    let response = plugin.handle_forget_password(&req, &ctx).await.unwrap();
+    let response = plugin
+        .handle_request_password_reset(&req, &ctx)
+        .await
+        .unwrap();
     assert_eq!(response.status, 200);
 
-    // Should return success even for unknown emails (security)
     let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: StatusResponse = serde_json::from_str(&body_str).unwrap();
+    let response_data: RequestPasswordResetResponse = serde_json::from_str(&body_str).unwrap();
     assert!(response_data.status);
+    assert_eq!(response_data.message, PASSWORD_RESET_SUCCESS_MESSAGE);
 }
 
 #[tokio::test]
@@ -113,7 +159,7 @@ async fn test_reset_password_success() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
     let body = serde_json::json!({
         "newPassword": "NewPassword123!",
@@ -135,17 +181,11 @@ async fn test_reset_password_success() {
     assert!(response_data.status);
 
     // Verify password was updated
-    let updated_user = ctx
-        .database
-        .get_user_by_id(&user.id)
-        .await
-        .unwrap()
-        .unwrap();
-    let stored_hash = updated_user
-        .metadata
-        .get(PASSWORD_HASH_KEY)
-        .unwrap()
-        .as_str()
+    let accounts = ctx.database.get_user_accounts(&user.id).await.unwrap();
+    let stored_hash = accounts
+        .iter()
+        .find(|account| account.provider_id == "credential")
+        .and_then(|account| account.password.as_deref())
         .unwrap();
     assert!(
         plugin
@@ -154,10 +194,9 @@ async fn test_reset_password_success() {
             .is_ok()
     );
 
-    // Verify token was deleted
     let verification_check = ctx
         .database
-        .get_verification_by_value(&reset_token)
+        .get_verification_by_identifier(&format!("reset-password:{}", reset_token))
         .await
         .unwrap();
     assert!(verification_check.is_none());
@@ -189,7 +228,7 @@ async fn test_reset_password_weak_password() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
     let body = serde_json::json!({
         "newPassword": "weak",
@@ -234,12 +273,11 @@ async fn test_change_password_success() {
 
     // Verify password was updated by checking the database directly
     let user_id = response_data["user"]["id"].as_str().unwrap();
-    let updated_user = ctx.database.get_user_by_id(user_id).await.unwrap().unwrap();
-    let stored_hash = updated_user
-        .metadata
-        .get(PASSWORD_HASH_KEY)
-        .unwrap()
-        .as_str()
+    let accounts = ctx.database.get_user_accounts(user_id).await.unwrap();
+    let stored_hash = accounts
+        .iter()
+        .find(|account| account.provider_id == "credential")
+        .and_then(|account| account.password.as_deref())
         .unwrap();
     assert!(
         plugin
@@ -394,7 +432,7 @@ async fn test_change_password_wrong_current_password() {
     );
 
     let err = plugin.handle_change_password(&req, &ctx).await.unwrap_err();
-    assert_eq!(err.status_code(), 401);
+    assert_eq!(err.status_code(), 400);
 }
 
 #[tokio::test]
@@ -419,28 +457,39 @@ async fn test_change_password_unauthorized() {
 }
 
 #[tokio::test]
-async fn test_reset_password_token_endpoint_success() {
+async fn test_reset_password_token_endpoint_redirects_with_callback_token() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
-    let req = test_helpers::create_auth_request_no_query(
+    let mut query = HashMap::new();
+    query.insert(
+        "callbackURL".to_string(),
+        "http://localhost:3000/reset".to_string(),
+    );
+
+    let req = AuthRequest::from_parts(
         HttpMethod::Get,
-        "/reset-password/token",
+        "/reset-password/token".to_string(),
+        HashMap::new(),
         None,
-        None,
+        query,
     );
 
     let response = plugin
         .handle_reset_password_token(&reset_token, &req, &ctx)
         .await
         .unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: types::ResetPasswordTokenResponse = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(response_data.token, reset_token);
+    assert_eq!(response.status, 302);
+    assert!(
+        response.headers["Location"].contains("http://localhost:3000/reset"),
+        "redirect must preserve the callback URL"
+    );
+    assert!(
+        response.headers["Location"].contains(&format!("token={}", reset_token)),
+        "redirect must contain the reset token"
+    );
 }
 
 #[tokio::test]
@@ -448,7 +497,7 @@ async fn test_reset_password_token_endpoint_with_callback() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
     let mut query = HashMap::new();
     query.insert(
@@ -490,18 +539,25 @@ async fn test_reset_password_token_endpoint_invalid_token() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, _user, _session) = create_test_context_with_user().await;
 
-    let req = test_helpers::create_auth_request_no_query(
+    let mut query = HashMap::new();
+    query.insert(
+        "callbackURL".to_string(),
+        "http://localhost:3000/reset".to_string(),
+    );
+    let req = AuthRequest::from_parts(
         HttpMethod::Get,
-        "/reset-password/token",
+        "/reset-password/token".to_string(),
+        HashMap::new(),
         None,
-        None,
+        query,
     );
 
-    let err = plugin
+    let response = plugin
         .handle_reset_password_token("invalid_token", &req, &ctx)
         .await
-        .unwrap_err();
-    assert_eq!(err.status_code(), 400);
+        .unwrap();
+    assert_eq!(response.status, 302);
+    assert!(response.headers["Location"].contains("error=INVALID_TOKEN"));
 }
 
 #[tokio::test]
@@ -565,7 +621,7 @@ async fn test_plugin_routes() {
     assert!(
         routes
             .iter()
-            .any(|r| r.path == "/forget-password" && r.method == HttpMethod::Post)
+            .any(|r| r.path == "/request-password-reset" && r.method == HttpMethod::Post)
     );
     assert!(
         routes
@@ -586,14 +642,13 @@ async fn test_plugin_routes() {
 
 #[tokio::test]
 async fn test_plugin_on_request_routing() {
-    let plugin = PasswordManagementPlugin::new();
+    let plugin = plugin_with_reset_sender();
     let (ctx, _user, session) = create_test_context_with_user().await;
 
-    // Test forget password
     let body = serde_json::json!({"email": "test@example.com"});
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
-        "/forget-password",
+        "/request-password-reset",
         None,
         Some(body.to_string().into_bytes()),
     );
@@ -674,12 +729,15 @@ async fn test_send_reset_password_custom_sender() {
     });
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
-        "/forget-password",
+        "/request-password-reset",
         None,
         Some(body.to_string().into_bytes()),
     );
 
-    let response = plugin.handle_forget_password(&req, &ctx).await.unwrap();
+    let response = plugin
+        .handle_request_password_reset(&req, &ctx)
+        .await
+        .unwrap();
     assert_eq!(response.status, 200);
 
     // The custom sender should have been called
@@ -707,7 +765,7 @@ async fn test_on_password_reset_callback() {
     let plugin = PasswordManagementPlugin::new().on_password_reset(callback);
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
     let body = serde_json::json!({
         "newPassword": "NewPassword123!",
@@ -735,7 +793,7 @@ async fn test_revoke_sessions_on_password_reset_false() {
     let plugin = PasswordManagementPlugin::new().revoke_sessions_on_password_reset(false);
     let (ctx, user, session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
     let body = serde_json::json!({
         "newPassword": "NewPassword123!",
@@ -765,11 +823,10 @@ async fn test_revoke_sessions_on_password_reset_false() {
 
 #[tokio::test]
 async fn test_revoke_sessions_on_password_reset_true() {
-    // Default is true
-    let plugin = PasswordManagementPlugin::new();
+    let plugin = PasswordManagementPlugin::new().revoke_sessions_on_password_reset(true);
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
     let body = serde_json::json!({
         "newPassword": "NewPassword123!",

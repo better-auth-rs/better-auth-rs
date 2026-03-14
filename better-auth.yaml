@@ -857,7 +857,7 @@ paths:
                     type: string
           description: Internal Server Error. This is a problem with the server that you
             cannot fix.
-  /forget-password:
+  /request-password-reset:
     post:
       tags:
         - Default

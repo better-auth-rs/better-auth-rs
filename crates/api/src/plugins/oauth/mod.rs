@@ -171,11 +171,12 @@ mod axum_impl {
 
     async fn handle_get_access_token<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
         CurrentSession { session, .. }: CurrentSession<DB>,
         ValidatedJson(body): ValidatedJson<GetAccessTokenRequest>,
     ) -> Result<Json<AccessTokenResponse>, AuthError> {
         let ctx = state.to_context();
-        let result = get_access_token_core(&body, &session, &ctx).await?;
+        let result = get_access_token_core(&body, &ps.config, &session, &ctx).await?;
         Ok(Json(result))
     }
 

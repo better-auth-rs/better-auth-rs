@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::ops::Index;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -254,8 +255,109 @@ impl RequestMeta {
 #[derive(Debug, Clone)]
 pub struct AuthResponse {
     pub status: u16,
-    pub headers: HashMap<String, String>,
+    pub headers: Headers,
     pub body: Vec<u8>,
+}
+
+/// Response headers preserving repeated header names such as `Set-Cookie`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Headers(Vec<(String, String)>);
+
+impl Headers {
+    /// Create an empty header collection.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Insert a header, replacing any existing values for the same name.
+    pub fn insert(&mut self, name: impl Into<String>, value: impl Into<String>) -> Option<String> {
+        let name = name.into();
+        let value = value.into();
+        let mut previous = None;
+
+        self.0.retain(|(existing_name, existing_value)| {
+            if existing_name.eq_ignore_ascii_case(&name) {
+                previous = Some(existing_value.clone());
+                false
+            } else {
+                true
+            }
+        });
+
+        self.0.push((name, value));
+        previous
+    }
+
+    /// Append a header without removing existing values of the same name.
+    pub fn append(&mut self, name: impl Into<String>, value: impl Into<String>) {
+        self.0.push((name.into(), value.into()));
+    }
+
+    /// Get the last value stored for a header name.
+    pub fn get(&self, name: &str) -> Option<&String> {
+        self.0.iter().rev().find_map(|(existing_name, value)| {
+            existing_name.eq_ignore_ascii_case(name).then_some(value)
+        })
+    }
+
+    /// Iterate over all values stored for a header name.
+    pub fn get_all<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a String> + 'a {
+        self.0.iter().filter_map(move |(existing_name, value)| {
+            existing_name.eq_ignore_ascii_case(name).then_some(value)
+        })
+    }
+
+    /// Check whether a header name exists.
+    pub fn contains_key(&self, name: &str) -> bool {
+        self.get(name).is_some()
+    }
+
+    /// Return whether the collection is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Iterate over stored header pairs in insertion order.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
+        self.0.iter().map(|(name, value)| (name, value))
+    }
+}
+
+impl<'a> IntoIterator for &'a Headers {
+    type Item = (&'a String, &'a String);
+    type IntoIter = std::iter::Map<
+        std::slice::Iter<'a, (String, String)>,
+        fn(&(String, String)) -> (&String, &String),
+    >;
+
+    fn into_iter(self) -> Self::IntoIter {
+        fn map_pair((name, value): &(String, String)) -> (&String, &String) {
+            (name, value)
+        }
+
+        self.0.iter().map(map_pair)
+    }
+}
+
+impl IntoIterator for Headers {
+    type Item = (String, String);
+    type IntoIter = std::vec::IntoIter<(String, String)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl Index<&str> for Headers {
+    type Output = String;
+
+    #[expect(
+        clippy::expect_used,
+        reason = "Index must panic on missing headers to satisfy the trait contract"
+    )]
+    fn index(&self, index: &str) -> &Self::Output {
+        self.get(index).expect("header not found")
+    }
 }
 
 /// User creation data
@@ -560,14 +662,14 @@ impl AuthResponse {
     pub fn new(status: u16) -> Self {
         Self {
             status,
-            headers: HashMap::new(),
+            headers: Headers::new(),
             body: Vec::new(),
         }
     }
 
     pub fn json<T: Serialize>(status: u16, data: &T) -> Result<Self, serde_json::Error> {
         let body = serde_json::to_vec(data)?;
-        let mut headers = HashMap::new();
+        let mut headers = Headers::new();
         _ = headers.insert("content-type".to_string(), "application/json".to_string());
 
         Ok(Self {
@@ -579,7 +681,7 @@ impl AuthResponse {
 
     pub fn text(status: u16, text: impl Into<String>) -> Self {
         let body = text.into().into_bytes();
-        let mut headers = HashMap::new();
+        let mut headers = Headers::new();
         _ = headers.insert("content-type".to_string(), "text/plain".to_string());
 
         Self {
@@ -591,7 +693,7 @@ impl AuthResponse {
 
     pub fn html(status: u16, html: impl Into<String>) -> Self {
         let body = html.into().into_bytes();
-        let mut headers = HashMap::new();
+        let mut headers = Headers::new();
         _ = headers.insert(
             "content-type".to_string(),
             "text/html; charset=utf-8".to_string(),
@@ -606,6 +708,15 @@ impl AuthResponse {
 
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         _ = self.headers.insert(name.into(), value.into());
+        self
+    }
+
+    pub fn with_appended_header(
+        mut self,
+        name: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
+        self.headers.append(name.into(), value.into());
         self
     }
 }

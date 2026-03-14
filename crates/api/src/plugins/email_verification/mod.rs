@@ -169,11 +169,11 @@ impl EmailVerificationPlugin {
         match verify_email_core(&query, &self.config, ip_address, user_agent, ctx).await? {
             VerifyEmailResult::AlreadyVerified(data) => Ok(AuthResponse::json(200, &data)?),
             VerifyEmailResult::Redirect { url, session_token } => {
-                let mut headers = std::collections::HashMap::new();
+                let mut headers = better_auth_core::Headers::new();
                 _ = headers.insert("Location".to_string(), url);
                 if let Some(token) = session_token {
                     let cookie = create_session_cookie(&token, &ctx.config);
-                    _ = headers.insert("Set-Cookie".to_string(), cookie);
+                    headers.append("Set-Cookie".to_string(), cookie);
                 }
                 Ok(AuthResponse {
                     status: 302,

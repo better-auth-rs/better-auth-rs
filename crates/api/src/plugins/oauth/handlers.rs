@@ -12,7 +12,7 @@ use better_auth_core::{
 
 use super::encryption::{encrypt_token_set, maybe_decrypt};
 
-use super::providers::OAuthConfig;
+use super::providers::{OAuthConfig, OAuthProvider};
 use super::types::{
     AccessTokenResponse, GetAccessTokenRequest, LinkSocialRequest, OAuthCallbackResponse,
     RefreshTokenRequest, RefreshTokenResponse, SocialSignInRequest, SocialSignInResponse,
@@ -60,16 +60,99 @@ async fn create_oauth_session_tuple<DB: DatabaseAdapter>(
 fn find_account_for_provider<'a, A: AuthAccount>(
     accounts: &'a [A],
     provider_id: &str,
+    account_id: Option<&str>,
 ) -> Result<&'a A, AuthError> {
     accounts
         .iter()
-        .find(|a| a.provider_id() == provider_id)
-        .ok_or_else(|| {
-            AuthError::not_found(format!(
-                "No linked account found for provider: {}",
-                provider_id
-            ))
+        .find(|account| {
+            if account.provider_id() != provider_id {
+                return false;
+            }
+            match account_id {
+                Some(account_id) => account.id() == account_id,
+                None => true,
+            }
         })
+        .ok_or_else(|| AuthError::bad_request("Account not found"))
+}
+
+struct RefreshedTokenSet {
+    access_token: String,
+    refresh_token: Option<String>,
+    id_token: Option<String>,
+    access_token_expires_at: Option<chrono::DateTime<Utc>>,
+    refresh_token_expires_at: Option<chrono::DateTime<Utc>>,
+    scope: Option<String>,
+}
+
+async fn refresh_tokens_via_provider(
+    provider: &OAuthProvider,
+    refresh_token: &str,
+) -> AuthResult<RefreshedTokenSet> {
+    let client = reqwest::Client::new();
+    let token_resp = client
+        .post(&provider.token_url)
+        .header("Accept", "application/json")
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", refresh_token),
+            ("client_id", &provider.client_id),
+            ("client_secret", &provider.client_secret),
+        ])
+        .send()
+        .await
+        .map_err(|e| AuthError::internal(format!("Token refresh failed: {}", e)))?;
+
+    if !token_resp.status().is_success() {
+        let error_body = token_resp
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(AuthError::internal(format!(
+            "Token refresh returned error: {}",
+            error_body
+        )));
+    }
+
+    let token_data: serde_json::Value = token_resp
+        .json()
+        .await
+        .map_err(|e| AuthError::internal(format!("Failed to parse refresh response: {}", e)))?;
+
+    let access_token = token_data
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::internal("Missing access_token in refresh response"))?
+        .to_string();
+    let refresh_token = token_data
+        .get("refresh_token")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let id_token = token_data
+        .get("id_token")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let access_token_expires_at = token_data
+        .get("expires_in")
+        .and_then(|v| v.as_i64())
+        .map(|secs| Utc::now() + Duration::seconds(secs));
+    let refresh_token_expires_at = token_data
+        .get("refresh_token_expires_in")
+        .and_then(|v| v.as_i64())
+        .map(|secs| Utc::now() + Duration::seconds(secs));
+    let scope = token_data
+        .get("scope")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    Ok(RefreshedTokenSet {
+        access_token,
+        refresh_token,
+        id_token,
+        access_token_expires_at,
+        refresh_token_expires_at,
+        scope,
+    })
 }
 
 fn generate_pkce() -> (String, String) {
@@ -168,19 +251,88 @@ pub(crate) async fn link_social_core<DB: DatabaseAdapter>(
 
 pub(crate) async fn get_access_token_core<DB: DatabaseAdapter>(
     body: &GetAccessTokenRequest,
+    config: &OAuthConfig,
     session: &DB::Session,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<AccessTokenResponse> {
+    let _ = body.user_id.as_deref();
+    let provider = config.providers.get(&body.provider_id).ok_or_else(|| {
+        AuthError::bad_request(format!("Provider {} is not supported.", body.provider_id))
+    })?;
     let accounts = ctx.database.get_user_accounts(session.user_id()).await?;
-    let account = find_account_for_provider(&accounts, &body.provider_id)?;
+    let account =
+        find_account_for_provider(&accounts, &body.provider_id, body.account_id.as_deref())?;
 
     let encrypt = ctx.config.account.encrypt_oauth_tokens;
     let secret = &ctx.config.secret;
 
+    let mut access_token = maybe_decrypt(account.access_token(), encrypt, secret)?;
+    let mut access_token_expires_at = account.access_token_expires_at().map(|dt| dt.to_rfc3339());
+    let mut scopes = account
+        .scope()
+        .map(|scope| {
+            scope
+                .split(',')
+                .filter(|value| !value.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut id_token = maybe_decrypt(account.id_token(), encrypt, secret)?;
+
+    let access_token_expired = account
+        .access_token_expires_at()
+        .map(|expires_at| expires_at.timestamp_millis() - Utc::now().timestamp_millis() < 5_000)
+        .unwrap_or(false);
+    if access_token_expired
+        && let Some(refresh_token) = maybe_decrypt(account.refresh_token(), encrypt, secret)?
+    {
+        let refreshed = refresh_tokens_via_provider(provider, &refresh_token)
+            .await
+            .map_err(|_| AuthError::bad_request("Failed to get a valid access token"))?;
+        let tokens = encrypt_token_set(
+            ctx,
+            Some(refreshed.access_token.clone()),
+            refreshed.refresh_token.clone(),
+            refreshed.id_token.clone(),
+        )?;
+        let _ = ctx
+            .database
+            .update_account(
+                account.id(),
+                UpdateAccount {
+                    access_token: tokens.access_token,
+                    refresh_token: tokens.refresh_token,
+                    id_token: tokens.id_token,
+                    access_token_expires_at: refreshed.access_token_expires_at,
+                    refresh_token_expires_at: refreshed.refresh_token_expires_at,
+                    scope: refreshed.scope.clone(),
+                    ..Default::default()
+                },
+            )
+            .await?;
+
+        access_token = Some(refreshed.access_token);
+        access_token_expires_at = refreshed
+            .access_token_expires_at
+            .map(|expires_at| expires_at.to_rfc3339());
+        if let Some(scope) = refreshed.scope.as_deref() {
+            scopes = scope
+                .split(',')
+                .filter(|value| !value.is_empty())
+                .map(String::from)
+                .collect();
+        }
+        if refreshed.id_token.is_some() {
+            id_token = refreshed.id_token;
+        }
+    }
+
     Ok(AccessTokenResponse {
-        access_token: maybe_decrypt(account.access_token(), encrypt, secret)?,
-        access_token_expires_at: account.access_token_expires_at().map(|dt| dt.to_rfc3339()),
-        scope: account.scope().map(String::from),
+        access_token,
+        access_token_expires_at,
+        scopes,
+        id_token,
     })
 }
 
@@ -190,74 +342,32 @@ pub(crate) async fn refresh_token_core<DB: DatabaseAdapter>(
     config: &OAuthConfig,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<RefreshTokenResponse> {
+    let _ = body.user_id.as_deref();
     let provider_name = &body.provider_id;
 
     let provider = config
         .providers
         .get(provider_name)
-        .ok_or_else(|| AuthError::bad_request(format!("Unknown provider: {}", provider_name)))?;
+        .ok_or_else(|| AuthError::bad_request(format!("Provider {} not found.", provider_name)))?;
 
     let accounts = ctx.database.get_user_accounts(session.user_id()).await?;
-    let account = find_account_for_provider(&accounts, provider_name)?;
+    let account = find_account_for_provider(&accounts, provider_name, body.account_id.as_deref())?;
 
     let encrypt = ctx.config.account.encrypt_oauth_tokens;
     let secret = &ctx.config.secret;
 
     let current_refresh_token = maybe_decrypt(account.refresh_token(), encrypt, secret)?
-        .ok_or_else(|| AuthError::bad_request("No refresh token available for this provider"))?;
+        .ok_or_else(|| AuthError::bad_request("Refresh token not found"))?;
 
-    let client = reqwest::Client::new();
-    let token_resp = client
-        .post(&provider.token_url)
-        .header("Accept", "application/json")
-        .form(&[
-            ("grant_type", "refresh_token"),
-            ("refresh_token", &current_refresh_token),
-            ("client_id", &provider.client_id),
-            ("client_secret", &provider.client_secret),
-        ])
-        .send()
+    let refreshed = refresh_tokens_via_provider(provider, &current_refresh_token)
         .await
-        .map_err(|e| AuthError::internal(format!("Token refresh failed: {}", e)))?;
-
-    if !token_resp.status().is_success() {
-        let error_body = token_resp
-            .text()
-            .await
-            .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(AuthError::internal(format!(
-            "Token refresh returned error: {}",
-            error_body
-        )));
-    }
-
-    let token_data: serde_json::Value = token_resp
-        .json()
-        .await
-        .map_err(|e| AuthError::internal(format!("Failed to parse refresh response: {}", e)))?;
-
-    let new_access_token = token_data
-        .get("access_token")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| AuthError::internal("Missing access_token in refresh response"))?;
-
-    let new_refresh_token = token_data
-        .get("refresh_token")
-        .and_then(|v| v.as_str())
-        .map(String::from);
-    let expires_in = token_data.get("expires_in").and_then(|v| v.as_i64());
-    let new_scope = token_data
-        .get("scope")
-        .and_then(|v| v.as_str())
-        .map(String::from);
-
-    let access_token_expires_at = expires_in.map(|secs| Utc::now() + Duration::seconds(secs));
+        .map_err(|_| AuthError::bad_request("Failed to refresh access token"))?;
 
     let tokens = encrypt_token_set(
         ctx,
-        Some(new_access_token.to_string()),
-        new_refresh_token.clone(),
-        None,
+        Some(refreshed.access_token.clone()),
+        refreshed.refresh_token.clone(),
+        refreshed.id_token.clone(),
     )?;
     let _ = ctx
         .database
@@ -266,18 +376,27 @@ pub(crate) async fn refresh_token_core<DB: DatabaseAdapter>(
             UpdateAccount {
                 access_token: tokens.access_token,
                 refresh_token: tokens.refresh_token,
-                access_token_expires_at,
-                scope: new_scope.clone(),
+                id_token: tokens.id_token,
+                access_token_expires_at: refreshed.access_token_expires_at,
+                refresh_token_expires_at: refreshed.refresh_token_expires_at,
+                scope: refreshed.scope.clone(),
                 ..Default::default()
             },
         )
         .await?;
+    let existing_id_token = maybe_decrypt(account.id_token(), encrypt, secret)?;
 
     Ok(RefreshTokenResponse {
-        access_token: Some(new_access_token.to_string()),
-        access_token_expires_at: access_token_expires_at.map(|dt| dt.to_rfc3339()),
-        refresh_token: new_refresh_token,
-        scope: new_scope,
+        access_token: Some(refreshed.access_token),
+        access_token_expires_at: refreshed.access_token_expires_at.map(|dt| dt.to_rfc3339()),
+        refresh_token: refreshed.refresh_token,
+        refresh_token_expires_at: refreshed.refresh_token_expires_at.map(|dt| dt.to_rfc3339()),
+        scope: refreshed
+            .scope
+            .or_else(|| account.scope().map(String::from)),
+        id_token: refreshed.id_token.or(existing_id_token),
+        provider_id: account.provider_id().to_string(),
+        account_id: account.account_id().to_string(),
     })
 }
 
@@ -688,13 +807,12 @@ pub(crate) async fn handle_get_access_token<DB: DatabaseAdapter>(
     req: &AuthRequest,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<AuthResponse> {
-    let _ = config;
     let session = require_session(req, ctx).await?;
     let body: GetAccessTokenRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-    let response = get_access_token_core(&body, &session, ctx).await?;
+    let response = get_access_token_core(&body, config, &session, ctx).await?;
     AuthResponse::json(200, &response).map_err(AuthError::from)
 }
 

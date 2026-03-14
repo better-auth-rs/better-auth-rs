@@ -8,6 +8,7 @@ use better_auth::adapters::MemoryDatabaseAdapter;
 use better_auth::handlers::AxumIntegration;
 use better_auth::plugins::{
     EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
+    password_management::SendResetPassword,
 };
 use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
 use serde_json::{Value, json};
@@ -17,6 +18,20 @@ use tower_http::cors::CorsLayer;
 
 /// Helper to create test BetterAuth instance with all plugins
 async fn create_test_auth() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
+    struct NoopResetSender;
+
+    #[async_trait::async_trait]
+    impl SendResetPassword for NoopResetSender {
+        async fn send(
+            &self,
+            _user: &serde_json::Value,
+            _url: &str,
+            _token: &str,
+        ) -> better_auth::AuthResult<()> {
+            Ok(())
+        }
+    }
+
     let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
         .base_url("http://localhost:3000")
         .password_min_length(6);
@@ -26,7 +41,7 @@ async fn create_test_auth() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
             .database(MemoryDatabaseAdapter::new())
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
-            .plugin(PasswordManagementPlugin::new())
+            .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender)))
             .build()
             .await
             .expect("Failed to create test auth instance"),
@@ -319,7 +334,7 @@ async fn test_axum_forget_password() {
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/auth/forget-password")
+        .uri("/auth/request-password-reset")
         .header("content-type", "application/json")
         .body(Body::from(forget_data.to_string()))
         .unwrap();

@@ -3,7 +3,7 @@
 //! Extracted to avoid duplicating common patterns across plugins (DRY).
 
 use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::entity::AuthApiKey;
+use better_auth_core::entity::{AuthAccount, AuthApiKey, AuthUser};
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 
 /// Convert an `expiresIn` value (milliseconds from now) into an RFC 3339
@@ -45,4 +45,37 @@ pub async fn get_owned_api_key<DB: DatabaseAdapter>(
     }
 
     Ok(api_key)
+}
+
+/// Fetch the user's credential account, if present.
+pub async fn get_credential_account<DB: DatabaseAdapter>(
+    ctx: &AuthContext<DB>,
+    user_id: &str,
+) -> AuthResult<Option<DB::Account>> {
+    Ok(ctx
+        .database
+        .get_user_accounts(user_id)
+        .await?
+        .into_iter()
+        .find(|account| account.provider_id() == "credential"))
+}
+
+/// Resolve the user's stored password hash from the credential account first,
+/// falling back to legacy user metadata when needed.
+pub async fn get_user_password_hash<DB: DatabaseAdapter>(
+    ctx: &AuthContext<DB>,
+    user: &DB::User,
+) -> AuthResult<Option<String>> {
+    Ok(get_credential_account(ctx, user.id())
+        .await?
+        .and_then(|account| account.password().map(str::to_string))
+        .or_else(|| user.password_hash().map(str::to_string)))
+}
+
+/// Whether the user currently has a password set.
+pub async fn user_has_password<DB: DatabaseAdapter>(
+    ctx: &AuthContext<DB>,
+    user: &DB::User,
+) -> AuthResult<bool> {
+    Ok(get_user_password_hash(ctx, user).await?.is_some())
 }

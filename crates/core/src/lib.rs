@@ -77,7 +77,7 @@ pub use types::{
     Account, ApiKey, AuthRequest, AuthResponse, CodeMessageResponse, CreateAccount, CreateApiKey,
     CreateInvitation, CreateMember, CreateOrganization, CreatePasskey, CreateSession,
     CreateTwoFactor, CreateUser, CreateVerification, ErrorCodeMessageResponse,
-    ErrorMessageResponse, HealthCheckResponse, HttpMethod, Invitation, InvitationStatus,
+    ErrorMessageResponse, Headers, HealthCheckResponse, HttpMethod, Invitation, InvitationStatus,
     ListUsersParams, OkResponse, Passkey, RateLimitErrorResponse, RequestMeta, Session,
     StatusMessageResponse, StatusResponse, SuccessMessageResponse, SuccessResponse, TwoFactor,
     UpdateAccount, UpdateApiKey, UpdateOrganization, UpdatePasskey, UpdateUser, UpdateUserRequest,

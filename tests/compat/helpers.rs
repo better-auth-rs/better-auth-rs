@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 use better_auth::{
     AuthBuilder, AuthConfig, BetterAuth, MemoryDatabaseAdapter,
@@ -12,10 +13,46 @@ use better_auth::{
         AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, EmailPasswordPlugin,
         EmailVerificationPlugin, OAuthPlugin, OrganizationPlugin, PasskeyPlugin,
         PasswordManagementPlugin, SessionManagementPlugin, TwoFactorPlugin,
+        oauth::{OAuthProvider, OAuthUserInfo},
+        password_management::SendResetPassword,
     },
     types::{AuthRequest, HttpMethod},
 };
 use serde_json::Value;
+
+struct NoopResetSender;
+
+static RESET_PASSWORD_OUTBOX: OnceLock<Mutex<std::collections::HashMap<String, String>>> =
+    OnceLock::new();
+
+fn reset_password_outbox() -> &'static Mutex<std::collections::HashMap<String, String>> {
+    RESET_PASSWORD_OUTBOX.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
+
+#[async_trait::async_trait]
+impl SendResetPassword for NoopResetSender {
+    async fn send(
+        &self,
+        user: &serde_json::Value,
+        _url: &str,
+        token: &str,
+    ) -> better_auth::AuthResult<()> {
+        if let Some(email) = user.get("email").and_then(|value| value.as_str()) {
+            reset_password_outbox()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(email.to_string(), token.to_string());
+        }
+        Ok(())
+    }
+}
+
+pub fn take_reset_password_token(email: &str) -> Option<String> {
+    reset_password_outbox()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(email)
+}
 
 // ---------------------------------------------------------------------------
 // Unique email generator
@@ -44,16 +81,47 @@ pub fn test_config() -> AuthConfig {
         .password_min_length(8)
 }
 
+fn mock_oauth_plugin() -> OAuthPlugin {
+    OAuthPlugin::new().add_provider(
+        "mock",
+        OAuthProvider {
+            client_id: "mock-client-id".to_string(),
+            client_secret: "mock-client-secret".to_string(),
+            auth_url: "http://127.0.0.1:3100/__test/oauth/authorize".to_string(),
+            token_url: "http://127.0.0.1:3100/__test/oauth/token".to_string(),
+            user_info_url: "http://127.0.0.1:3100/__test/oauth/userinfo".to_string(),
+            scopes: vec![
+                "openid".to_string(),
+                "email".to_string(),
+                "profile".to_string(),
+            ],
+            map_user_info: |_value| {
+                Ok(OAuthUserInfo {
+                    id: "mock-account-id".to_string(),
+                    email: "mock@example.com".to_string(),
+                    name: Some("Mock OAuth User".to_string()),
+                    image: None,
+                    email_verified: true,
+                })
+            },
+        },
+    )
+}
+
 pub async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
     AuthBuilder::new(test_config())
         .database(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
-        .plugin(PasswordManagementPlugin::new().require_current_password(true))
+        .plugin(
+            PasswordManagementPlugin::new()
+                .require_current_password(true)
+                .send_reset_password(Arc::new(NoopResetSender)),
+        )
         .plugin(AccountManagementPlugin::new())
         .plugin(EmailVerificationPlugin::new())
         .plugin(ApiKeyPlugin::builder().build())
-        .plugin(OAuthPlugin::new())
+        .plugin(mock_oauth_plugin())
         .plugin(TwoFactorPlugin::new())
         .plugin(OrganizationPlugin::new())
         .plugin(
@@ -264,9 +332,10 @@ impl TestHarness {
             .database(MemoryDatabaseAdapter::new())
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
-            .plugin(PasswordManagementPlugin::new())
+            .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender)))
             .plugin(AccountManagementPlugin::new())
             .plugin(ApiKeyPlugin::builder().build())
+            .plugin(mock_oauth_plugin())
             .build()
             .await
             .unwrap_or_else(|e| panic!("Failed to create test auth instance: {e}"));

@@ -54,8 +54,8 @@ pub struct PasswordManagementConfig {
     pub require_current_password: bool,
     #[config(default = true)]
     pub send_email_notifications: bool,
-    /// When true, all existing sessions are revoked on password reset (default: true).
-    #[config(default = true)]
+    /// When true, all existing sessions are revoked on password reset (default: false).
+    #[config(default = false)]
     pub revoke_sessions_on_password_reset: bool,
     /// Custom password reset email sender. When set, overrides the default `EmailProvider`.
     #[config(default = None)]
@@ -103,7 +103,7 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
 
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::post("/forget-password", "forget_password"),
+            AuthRoute::post("/request-password-reset", "request_password_reset"),
             AuthRoute::post("/reset-password", "reset_password"),
             AuthRoute::get("/reset-password/{token}", "reset_password_token"),
             AuthRoute::post("/change-password", "change_password"),
@@ -117,8 +117,8 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
-            (HttpMethod::Post, "/forget-password") => {
-                Ok(Some(self.handle_forget_password(req, ctx).await?))
+            (HttpMethod::Post, "/request-password-reset") => {
+                Ok(Some(self.handle_request_password_reset(req, ctx).await?))
             }
             (HttpMethod::Post, "/reset-password") => {
                 Ok(Some(self.handle_reset_password(req, ctx).await?))
@@ -142,16 +142,16 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
 
 // Implementation methods outside the trait
 impl PasswordManagementPlugin {
-    async fn handle_forget_password<DB: DatabaseAdapter>(
+    async fn handle_request_password_reset<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let body: ForgetPasswordRequest = match better_auth_core::validate_request_body(req) {
+        let body: RequestPasswordResetRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = forget_password_core(&body, &self.config, ctx).await?;
+        let response = request_password_reset_core(&body, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -160,10 +160,13 @@ impl PasswordManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        let body: ResetPasswordRequest = match better_auth_core::validate_request_body(req) {
+        let mut body: ResetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
+        if body.token.is_none() {
+            body.token = req.query.get("token").cloned();
+        }
         let response = reset_password_core(&body, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
@@ -229,7 +232,7 @@ impl PasswordManagementPlugin {
         };
         match reset_password_token_core(token, &query, ctx).await? {
             ResetPasswordTokenResult::Redirect(url) => {
-                let mut headers = std::collections::HashMap::new();
+                let mut headers = better_auth_core::Headers::new();
                 let _ = headers.insert("Location".to_string(), url);
                 Ok(AuthResponse {
                     status: 302,
@@ -237,7 +240,6 @@ impl PasswordManagementPlugin {
                     body: Vec::new(),
                 })
             }
-            ResetPasswordTokenResult::Json(data) => Ok(AuthResponse::json(200, &data)?),
         }
     }
 
@@ -306,22 +308,26 @@ mod axum_impl {
         config: PasswordManagementConfig,
     }
 
-    async fn handle_forget_password<DB: DatabaseAdapter>(
+    async fn handle_request_password_reset<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        ValidatedJson(body): ValidatedJson<ForgetPasswordRequest>,
-    ) -> Result<Json<StatusResponse>, AuthError> {
+        ValidatedJson(body): ValidatedJson<RequestPasswordResetRequest>,
+    ) -> Result<Json<RequestPasswordResetResponse>, AuthError> {
         let ctx = state.to_context();
-        let response = forget_password_core(&body, &ps.config, &ctx).await?;
+        let response = request_password_reset_core(&body, &ps.config, &ctx).await?;
         Ok(Json(response))
     }
 
     async fn handle_reset_password<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        ValidatedJson(body): ValidatedJson<ResetPasswordRequest>,
+        Query(query): Query<ResetPasswordQuery>,
+        ValidatedJson(mut body): ValidatedJson<ResetPasswordRequest>,
     ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
+        if body.token.is_none() {
+            body.token = query.token;
+        }
         let response = reset_password_core(&body, &ps.config, &ctx).await?;
         Ok(Json(response))
     }
@@ -336,7 +342,6 @@ mod axum_impl {
             ResetPasswordTokenResult::Redirect(url) => {
                 Ok(axum::response::Redirect::to(&url).into_response())
             }
-            ResetPasswordTokenResult::Json(data) => Ok(Json(data).into_response()),
         }
     }
 
@@ -381,7 +386,10 @@ mod axum_impl {
             });
 
             axum::Router::new()
-                .route("/forget-password", post(handle_forget_password::<DB>))
+                .route(
+                    "/request-password-reset",
+                    post(handle_request_password_reset::<DB>),
+                )
                 .route("/reset-password", post(handle_reset_password::<DB>))
                 .route(
                     "/reset-password/:token",

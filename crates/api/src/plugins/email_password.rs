@@ -4,12 +4,12 @@ use std::sync::Arc;
 use validator::Validate;
 
 use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::entity::{AuthSession, AuthUser};
+use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
-    AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod, PASSWORD_HASH_KEY,
-    RequestMeta,
+    AuthRequest, AuthResponse, CreateAccount, CreateUser, CreateVerification, HttpMethod,
+    PASSWORD_HASH_KEY, RequestMeta,
 };
 
 use super::email_verification::EmailVerificationPlugin;
@@ -322,6 +322,22 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
 
     let user = ctx.database.create_user(create_user).await?;
 
+    let _ = ctx
+        .database
+        .create_account(CreateAccount {
+            user_id: user.id().to_string(),
+            account_id: user.id().to_string(),
+            provider_id: "credential".to_string(),
+            access_token: None,
+            refresh_token: None,
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: None,
+            password: user.password_hash().map(str::to_string),
+        })
+        .await?;
+
     if config.auto_sign_in {
         let session = ctx
             .session_manager()
@@ -351,9 +367,18 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<SignInCoreResult<DB::User>> {
     // Verify password
-    let stored_hash = user.password_hash().ok_or(AuthError::InvalidCredentials)?;
+    let stored_hash = ctx
+        .database
+        .get_user_accounts(user.id())
+        .await?
+        .into_iter()
+        .find(|account| account.provider_id() == "credential" && account.password().is_some())
+        .and_then(|account| account.password().map(str::to_string))
+        .or_else(|| user.password_hash().map(str::to_string))
+        .ok_or(AuthError::InvalidCredentials)?;
 
-    password_utils::verify_password(config.password_hasher.as_ref(), password, stored_hash).await?;
+    password_utils::verify_password(config.password_hasher.as_ref(), password, &stored_hash)
+        .await?;
 
     // Check if 2FA is enabled
     if user.two_factor_enabled() {

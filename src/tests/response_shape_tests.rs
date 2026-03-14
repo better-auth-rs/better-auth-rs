@@ -8,9 +8,10 @@
 use crate::adapters::{MemoryDatabaseAdapter, SessionOps, VerificationOps};
 use crate::plugins::{
     AccountManagementPlugin, ApiKeyPlugin, EmailPasswordPlugin, EmailVerificationPlugin,
-    PasswordManagementPlugin, SessionManagementPlugin,
+    PasswordManagementPlugin, SessionManagementPlugin, password_management::SendResetPassword,
 };
 use crate::{AuthBuilder, AuthConfig, AuthRequest, BetterAuth, CreateVerification, HttpMethod};
+use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,11 +24,29 @@ fn test_config() -> AuthConfig {
 }
 
 async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
+    struct NoopResetSender;
+
+    #[async_trait::async_trait]
+    impl SendResetPassword for NoopResetSender {
+        async fn send(
+            &self,
+            _user: &serde_json::Value,
+            _url: &str,
+            _token: &str,
+        ) -> crate::AuthResult<()> {
+            Ok(())
+        }
+    }
+
     AuthBuilder::new(test_config())
         .database(MemoryDatabaseAdapter::new())
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
-        .plugin(PasswordManagementPlugin::new().require_current_password(true))
+        .plugin(
+            PasswordManagementPlugin::new()
+                .require_current_password(true)
+                .send_reset_password(Arc::new(NoopResetSender)),
+        )
         .plugin(AccountManagementPlugin::new())
         .plugin(EmailVerificationPlugin::new())
         .plugin(ApiKeyPlugin::builder().build())
@@ -264,14 +283,14 @@ async fn test_list_sessions_response_shape() {
     );
 }
 
-/// Spec: POST /forget-password => { status: bool }
+/// Spec: POST /request-password-reset => { status: bool, message: string }
 #[tokio::test]
 async fn test_forget_password_response_shape() {
     let auth = create_test_auth().await;
     signup_user(&auth, "fp@example.com", "password123", "FP User").await;
 
     let req = post_json(
-        "/forget-password",
+        "/request-password-reset",
         serde_json::json!({
             "email": "fp@example.com",
         }),
@@ -288,6 +307,11 @@ async fn test_forget_password_response_shape() {
         "status must be a boolean, got: {:?}",
         json
     );
+    assert!(
+        json["message"].is_string(),
+        "message must be a string, got: {:?}",
+        json
+    );
 }
 
 /// Spec: POST /reset-password => { status: bool }
@@ -298,13 +322,13 @@ async fn test_forget_password_response_shape() {
 async fn test_reset_password_response_shape() {
     let auth = create_test_auth().await;
     let (token, signup_json) = signup_user(&auth, "rp@example.com", "password123", "RP User").await;
-    let _user_id = signup_json["user"]["id"].as_str().unwrap();
+    let user_id = signup_json["user"]["id"].as_str().unwrap();
 
     // Create a reset token directly in the database
-    let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
+    let reset_token = uuid::Uuid::new_v4().simple().to_string();
     let create_verification = CreateVerification {
-        identifier: "rp@example.com".to_string(),
-        value: reset_token.clone(),
+        identifier: format!("reset-password:{}", reset_token),
+        value: user_id.to_string(),
         expires_at: chrono::Utc::now() + chrono::Duration::hours(24),
     };
     auth.database()

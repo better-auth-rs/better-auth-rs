@@ -218,7 +218,7 @@ async fn test_core_endpoints_present() {
         ("post", "/sign-out"),
         ("post", "/update-user"),
         ("post", "/delete-user"),
-        ("post", "/forget-password"),
+        ("post", "/request-password-reset"),
         ("post", "/reset-password"),
         ("post", "/change-password"),
         ("post", "/set-password"),
@@ -329,13 +329,15 @@ async fn test_contract_ok_endpoint() {
     assert_eq!(body["ok"], true);
 }
 
-/// GET /error should return { "ok": false }
+/// GET /error should return the TS-compatible HTML error page.
 #[tokio::test]
 async fn test_contract_error_endpoint() {
     let auth = create_full_auth().await;
     let (status, body) = send_json_request(&auth, HttpMethod::Get, "/error", None).await;
     assert_eq!(status, 200);
-    assert_eq!(body["ok"], false);
+    let html = body.as_str().expect("/error should return HTML text");
+    assert!(html.contains("<h1>ERROR</h1>"));
+    assert!(html.contains("CODE: UNKNOWN"));
 }
 
 /// POST /sign-up/email should return { token, user: { id, email, name, ... } }

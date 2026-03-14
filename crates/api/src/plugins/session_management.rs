@@ -3,10 +3,11 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 use better_auth_core::adapters::DatabaseAdapter;
+use better_auth_core::config::AuthConfig;
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 
-use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::AuthResult;
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
 use super::StatusResponse;
@@ -104,7 +105,7 @@ pub(crate) async fn list_sessions_core<DB: DatabaseAdapter>(
     user_id: &str,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<Vec<DB::Session>> {
-    ctx.database.get_user_sessions(user_id).await
+    ctx.session_manager().list_user_sessions(user_id).await
 }
 
 pub(crate) async fn revoke_session_core<DB: DatabaseAdapter>(
@@ -112,17 +113,12 @@ pub(crate) async fn revoke_session_core<DB: DatabaseAdapter>(
     token: &str,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<StatusResponse> {
-    // Verify the session belongs to the current user before revoking
     let session_manager = ctx.session_manager();
     if let Some(session_to_revoke) = session_manager.get_session(token).await?
-        && session_to_revoke.user_id() != user.id()
+        && session_to_revoke.user_id() == user.id()
     {
-        return Err(AuthError::forbidden(
-            "Cannot revoke session that belongs to another user",
-        ));
+        ctx.database.delete_session(token).await?;
     }
-
-    ctx.database.delete_session(token).await?;
     Ok(StatusResponse { status: true })
 }
 
@@ -139,7 +135,7 @@ pub(crate) async fn revoke_other_sessions_core<DB: DatabaseAdapter>(
     current_session: &DB::Session,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<StatusResponse> {
-    let all_sessions: Vec<DB::Session> = ctx.database.get_user_sessions(user_id).await?;
+    let all_sessions: Vec<DB::Session> = ctx.session_manager().list_user_sessions(user_id).await?;
     for session in all_sessions {
         if session.token() != current_session.token() {
             ctx.database.delete_session(session.token()).await?;
@@ -173,19 +169,30 @@ impl SessionManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
-        // Sign-out always returns 200 with { success: true }. If authenticated,
-        // the session is deleted from the DB first.
         if let Ok((_user, session)) = ctx.require_session(req).await {
             let _ = sign_out_core(&session, ctx).await;
         }
 
-        // TS clears session_token, session_data, and dont_remember cookies on sign-out.
-        let clear_cookie = better_auth_core::utils::cookie_utils::create_clear_cookie(
-            "better-auth.dont_remember",
-            &ctx.config,
+        let mut response = AuthResponse::json(200, &SuccessResponse { success: true })?;
+        response.headers.append(
+            "Set-Cookie",
+            better_auth_core::utils::cookie_utils::create_clear_session_cookie(&ctx.config),
         );
-        Ok(AuthResponse::json(200, &SuccessResponse { success: true })?
-            .with_header("Set-Cookie", clear_cookie))
+        response.headers.append(
+            "Set-Cookie",
+            better_auth_core::utils::cookie_utils::create_clear_cookie(
+                &related_cookie_name(&ctx.config, "session_data"),
+                &ctx.config,
+            ),
+        );
+        response.headers.append(
+            "Set-Cookie",
+            better_auth_core::utils::cookie_utils::create_clear_cookie(
+                &related_cookie_name(&ctx.config, "dont_remember"),
+                &ctx.config,
+            ),
+        );
+        Ok(response)
     }
 
     async fn handle_list_sessions<DB: DatabaseAdapter>(
@@ -235,6 +242,15 @@ impl SessionManagementPlugin {
     }
 }
 
+fn related_cookie_name(config: &AuthConfig, suffix: &str) -> String {
+    config
+        .session
+        .cookie_name
+        .strip_suffix("session_token")
+        .map(|prefix| format!("{}{}", prefix, suffix))
+        .unwrap_or_else(|| format!("better-auth.{}", suffix))
+}
+
 #[cfg(feature = "axum")]
 mod axum_impl {
     use super::*;
@@ -242,8 +258,9 @@ mod axum_impl {
 
     use axum::Json;
     use axum::extract::{Extension, State};
-    use axum::http::header;
-    use better_auth_core::{AuthState, CurrentSession, ValidatedJson};
+    use axum::http::{HeaderValue, header};
+    use axum::response::IntoResponse;
+    use better_auth_core::{AuthError, AuthState, CurrentSession, OptionalSession, ValidatedJson};
 
     #[derive(Clone)]
     struct PluginState {
@@ -259,12 +276,34 @@ mod axum_impl {
 
     async fn handle_sign_out<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        CurrentSession { session, .. }: CurrentSession<DB>,
-    ) -> Result<([(header::HeaderName, String); 1], Json<SuccessResponse>), AuthError> {
-        let ctx = state.to_context();
-        let response = sign_out_core(&session, &ctx).await?;
-        let cookie = state.clear_session_cookie();
-        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
+        OptionalSession(session): OptionalSession<DB>,
+    ) -> Result<axum::response::Response, AuthError> {
+        let response = if let Some(CurrentSession { session, .. }) = session {
+            let ctx = state.to_context();
+            sign_out_core(&session, &ctx).await?
+        } else {
+            SuccessResponse { success: true }
+        };
+
+        let mut headers = axum::http::HeaderMap::new();
+        for cookie in [
+            state.clear_session_cookie(),
+            better_auth_core::utils::cookie_utils::create_clear_cookie(
+                &related_cookie_name(&state.config, "session_data"),
+                &state.config,
+            ),
+            better_auth_core::utils::cookie_utils::create_clear_cookie(
+                &related_cookie_name(&state.config, "dont_remember"),
+                &state.config,
+            ),
+        ] {
+            let header_value = HeaderValue::from_str(&cookie).map_err(|error| {
+                AuthError::internal(format!("Invalid cookie header: {}", error))
+            })?;
+            _ = headers.append(header::SET_COOKIE, header_value);
+        }
+
+        Ok((headers, Json(response)).into_response())
     }
 
     async fn handle_list_sessions<DB: DatabaseAdapter>(
@@ -550,8 +589,17 @@ mod tests {
             Some(body.to_string().into_bytes()),
         );
 
-        let err = plugin.handle_revoke_session(&req, &ctx).await.unwrap_err();
-        assert_eq!(err.status_code(), 403);
+        let response = plugin.handle_revoke_session(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(body["status"], true);
+
+        let still_exists = ctx.database.get_session(&session2.token).await.unwrap();
+        assert!(
+            still_exists.is_some(),
+            "other user's session must not be revoked"
+        );
     }
 
     #[tokio::test]

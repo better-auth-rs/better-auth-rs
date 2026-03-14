@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("     POST /auth/revoke-sessions      - Revoke all user sessions");
     println!("     POST /auth/revoke-other-sessions - Revoke all except current");
     println!("   Password Management:");
-    println!("     POST /auth/forget-password      - Request password reset");
+    println!("     POST /auth/request-password-reset      - Request password reset");
     println!("     POST /auth/reset-password       - Reset password with token");
     println!("     GET  /auth/reset-password/{{token}} - Validate reset token");
     println!("     POST /auth/change-password      - Change password (auth)");

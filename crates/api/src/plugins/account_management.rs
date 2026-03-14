@@ -6,6 +6,8 @@ use better_auth_core::entity::{AuthAccount, AuthUser};
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse};
 
+use crate::plugins::helpers::user_has_password;
+
 use super::StatusResponse;
 
 /// Account management plugin for listing and unlinking user accounts.
@@ -91,7 +93,7 @@ pub(crate) async fn unlink_account_core<DB: DatabaseAdapter>(
     let allow_unlinking_all = ctx.config.account.account_linking.allow_unlinking_all;
 
     // Check if user has a password (credential provider)
-    let has_password = user.password_hash().is_some();
+    let has_password = user_has_password(ctx, user).await?;
 
     // Count remaining credentials after unlinking
     let remaining_accounts = accounts

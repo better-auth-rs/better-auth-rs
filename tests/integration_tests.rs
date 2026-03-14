@@ -164,7 +164,7 @@ async fn test_forget_password_integration() {
     let (status, response_data) = send_request(
         &auth,
         post_json(
-            "/forget-password",
+            "/request-password-reset",
             serde_json::json!({
                 "email": "integration@test.com",
                 "redirectTo": "http://localhost:3000/reset"

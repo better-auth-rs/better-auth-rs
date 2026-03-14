@@ -11,6 +11,8 @@ use better_auth_core::{
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
+use crate::plugins::helpers::get_user_password_hash;
+
 use super::StatusResponse;
 
 /// Two-factor authentication plugin providing TOTP, OTP, and backup code flows.
@@ -161,10 +163,16 @@ fn build_totp(
     .map_err(|e| AuthError::internal(format!("Failed to create TOTP: {}", e)))
 }
 
-async fn verify_user_password<U: AuthUser>(user: &U, password: &str) -> AuthResult<()> {
-    let stored_hash = user.password_hash().ok_or(AuthError::InvalidCredentials)?;
+async fn verify_user_password<DB: DatabaseAdapter>(
+    ctx: &AuthContext<DB>,
+    user: &DB::User,
+    password: &str,
+) -> AuthResult<()> {
+    let stored_hash = get_user_password_hash(ctx, user)
+        .await?
+        .ok_or(AuthError::InvalidCredentials)?;
 
-    better_auth_core::verify_password(None, password, stored_hash).await
+    better_auth_core::verify_password(None, password, &stored_hash).await
 }
 
 // -- Core functions (session-based) --
@@ -175,7 +183,7 @@ async fn enable_core<DB: DatabaseAdapter>(
     config: &TwoFactorConfig,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<EnableResponse> {
-    verify_user_password(user, &body.password).await?;
+    verify_user_password(ctx, user, &body.password).await?;
 
     // Generate TOTP secret
     let secret = Secret::generate_secret();
@@ -227,7 +235,7 @@ async fn disable_core<DB: DatabaseAdapter>(
     user: &DB::User,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<StatusResponse> {
-    verify_user_password(user, &body.password).await?;
+    verify_user_password(ctx, user, &body.password).await?;
 
     ctx.database.delete_two_factor(user.id()).await?;
 
@@ -251,7 +259,7 @@ async fn get_totp_uri_core<DB: DatabaseAdapter>(
     config: &TwoFactorConfig,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<TotpUriResponse> {
-    verify_user_password(user, &body.password).await?;
+    verify_user_password(ctx, user, &body.password).await?;
 
     let two_factor = ctx
         .database
@@ -278,7 +286,7 @@ async fn generate_backup_codes_core<DB: DatabaseAdapter>(
     config: &TwoFactorConfig,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<BackupCodesResponse> {
-    verify_user_password(user, &body.password).await?;
+    verify_user_password(ctx, user, &body.password).await?;
 
     // Generate new codes
     let backup_codes = generate_backup_codes(config);

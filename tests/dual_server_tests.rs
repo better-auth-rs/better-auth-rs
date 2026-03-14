@@ -38,6 +38,8 @@
 
 mod compat;
 
+use better_auth::{AccountOps, CreateAccount};
+use chrono::{Duration as ChronoDuration, Utc};
 use compat::helpers::*;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -325,6 +327,123 @@ impl RefClient {
     }
 }
 
+fn localhost_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .no_proxy()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap_or_default()
+}
+
+async fn ref_reset_password_token(email: &str) -> Result<String, String> {
+    let client = localhost_client();
+    let response = client
+        .get(format!(
+            "http://127.0.0.1:{REFERENCE_PORT}/__test/reset-password-token"
+        ))
+        .query(&[("email", email)])
+        .send()
+        .await
+        .map_err(|e| format!("reset token fetch failed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("reset token fetch returned {}", response.status()));
+    }
+
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|e| format!("reset token JSON parse failed: {}", e))?;
+    body.get("token")
+        .and_then(|token| token.as_str())
+        .map(str::to_string)
+        .ok_or_else(|| format!("reset token missing in response: {}", body))
+}
+
+async fn ref_seed_oauth_account(email: &str) -> Result<(), String> {
+    let client = localhost_client();
+    let response = client
+        .post(format!(
+            "http://127.0.0.1:{REFERENCE_PORT}/__test/seed-oauth-account"
+        ))
+        .json(&serde_json::json!({
+            "email": email,
+            "providerId": "mock",
+            "accountId": "mock-account-id",
+            "accessToken": "stale-access-token",
+            "refreshToken": "seed-refresh-token",
+            "idToken": "seed-id-token",
+            "accessTokenExpiresAt": "2000-01-01T00:00:00Z",
+            "scope": "openid,email,profile"
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("seed oauth account failed: {}", e))?;
+
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!("seed oauth account returned {}", response.status()))
+    }
+}
+
+async fn seed_rust_oauth_account(
+    auth: &better_auth::BetterAuth<better_auth::MemoryDatabaseAdapter>,
+    user_id: &str,
+) {
+    let _ = auth
+        .database()
+        .create_account(CreateAccount {
+            user_id: user_id.to_string(),
+            account_id: "mock-account-id".to_string(),
+            provider_id: "mock".to_string(),
+            access_token: Some("stale-access-token".to_string()),
+            refresh_token: Some("seed-refresh-token".to_string()),
+            id_token: Some("seed-id-token".to_string()),
+            access_token_expires_at: Some(Utc::now() - ChronoDuration::minutes(1)),
+            refresh_token_expires_at: Some(Utc::now() + ChronoDuration::hours(2)),
+            scope: Some("openid,email,profile".to_string()),
+            password: None,
+        })
+        .await
+        .unwrap();
+}
+
+async fn signup_on_both(
+    auth: &better_auth::BetterAuth<better_auth::MemoryDatabaseAdapter>,
+    ref_client: &mut RefClient,
+    prefix: &str,
+) -> (String, String, String) {
+    let email = unique_email(prefix);
+    let body = serde_json::json!({
+        "name": format!("{} user", prefix),
+        "email": email,
+        "password": "password123"
+    });
+
+    let rust_signup = rust_send(auth, post_json("/sign-up/email", body.clone())).await;
+    let _ = ref_client
+        .post_full("/sign-up/email", &body)
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    let rust_token = rust_signup
+        .body
+        .get("token")
+        .and_then(|token| token.as_str())
+        .unwrap_or("")
+        .to_string();
+    let rust_user_id = rust_signup
+        .body
+        .get("user")
+        .and_then(|user| user.get("id"))
+        .and_then(|id| id.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    (email, rust_token, rust_user_id)
+}
+
 // ---------------------------------------------------------------------------
 // Rust server response helpers
 // ---------------------------------------------------------------------------
@@ -469,9 +588,6 @@ fn filter_known_diffs(diffs: &[String]) -> Vec<String> {
                 }
             }
             if d.contains(".url: present in Rust") {
-                return false;
-            }
-            if d.contains(".code: missing in Rust") {
                 return false;
             }
             // ipAddress/userAgent: null in Rust in-memory harness vs string
@@ -710,6 +826,13 @@ fn log_alignment_gaps(reports: &[EndpointReport]) {
             eprintln!("  - {}: header: {}", r.name, d);
         }
     }
+}
+
+fn assert_report_pass(report: EndpointReport) {
+    if !report.is_pass() {
+        print_report(std::slice::from_ref(&report));
+    }
+    assert!(report.is_pass(), "{} should match exactly", report.name);
 }
 
 // ===========================================================================
@@ -1299,4 +1422,362 @@ async fn phase0_comprehensive_alignment_report() {
             total_unexpected
         );
     }
+}
+
+// ===========================================================================
+// Phase 1 endpoint tests
+// ===========================================================================
+
+#[tokio::test]
+async fn phase1_request_password_reset() {
+    let _lock = SERIAL.lock().await;
+    require_ref_server!();
+
+    let auth = create_test_auth().await;
+    let mut ref_client = RefClient::new();
+    let (email, _rust_token, _rust_user_id) =
+        signup_on_both(&auth, &mut ref_client, "p1_request_reset").await;
+
+    let body = serde_json::json!({
+        "email": email,
+        "redirectTo": "/reset"
+    });
+
+    let rust = rust_send(&auth, post_json("/request-password-reset", body.clone())).await;
+    let reference = ref_client
+        .post_full("/request-password-reset", &body)
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    assert_report_pass(compare_full(
+        "POST /request-password-reset",
+        &rust,
+        &reference,
+    ));
+}
+
+#[tokio::test]
+async fn phase1_reset_password() {
+    let _lock = SERIAL.lock().await;
+    require_ref_server!();
+
+    let auth = create_test_auth().await;
+    let mut ref_client = RefClient::new();
+    let (email, _rust_token, _rust_user_id) =
+        signup_on_both(&auth, &mut ref_client, "p1_reset_password").await;
+
+    let request_body = serde_json::json!({
+        "email": email,
+        "redirectTo": "/reset"
+    });
+    let _ = rust_send(
+        &auth,
+        post_json("/request-password-reset", request_body.clone()),
+    )
+    .await;
+    let _ = ref_client
+        .post_full("/request-password-reset", &request_body)
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    let rust_reset_token = take_reset_password_token(&email).expect("rust reset token missing");
+    let ref_reset_token = ref_reset_password_token(&email)
+        .await
+        .expect("reference reset token missing");
+
+    let rust = rust_send(
+        &auth,
+        post_json(
+            "/reset-password",
+            serde_json::json!({
+                "newPassword": "newPassword123!",
+                "token": rust_reset_token,
+            }),
+        ),
+    )
+    .await;
+    let reference = ref_client
+        .post_full(
+            "/reset-password",
+            &serde_json::json!({
+                "newPassword": "newPassword123!",
+                "token": ref_reset_token,
+            }),
+        )
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    assert_report_pass(compare_full("POST /reset-password", &rust, &reference));
+}
+
+#[tokio::test]
+async fn phase1_change_password() {
+    let _lock = SERIAL.lock().await;
+    require_ref_server!();
+
+    let auth = create_test_auth().await;
+    let mut ref_client = RefClient::new();
+    let (_email, rust_token, _rust_user_id) =
+        signup_on_both(&auth, &mut ref_client, "p1_change_password").await;
+
+    let body = serde_json::json!({
+        "currentPassword": "password123",
+        "newPassword": "newPassword123!",
+        "revokeOtherSessions": true,
+    });
+
+    let rust = rust_send(
+        &auth,
+        post_json_with_auth("/change-password", body.clone(), &rust_token),
+    )
+    .await;
+    let reference = ref_client
+        .post_full("/change-password", &body)
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    assert_report_pass(compare_full("POST /change-password", &rust, &reference));
+}
+
+#[tokio::test]
+async fn phase1_list_sessions() {
+    let _lock = SERIAL.lock().await;
+    require_ref_server!();
+
+    let auth = create_test_auth().await;
+    let mut ref_client = RefClient::new();
+    let (email, _rust_token, _rust_user_id) =
+        signup_on_both(&auth, &mut ref_client, "p1_list_sessions").await;
+
+    let signin_body = serde_json::json!({
+        "email": email,
+        "password": "password123"
+    });
+    let rust_signin = rust_send(&auth, post_json("/sign-in/email", signin_body.clone())).await;
+    let _ = ref_client
+        .post_full("/sign-in/email", &signin_body)
+        .await
+        .unwrap_or_else(ref_error_response);
+    let rust_token = rust_signin
+        .body
+        .get("token")
+        .and_then(|token| token.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let rust = rust_send(&auth, get_with_auth("/list-sessions", &rust_token)).await;
+    let reference = ref_client
+        .get_full("/list-sessions")
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    assert_report_pass(compare_full("GET /list-sessions", &rust, &reference));
+}
+
+#[tokio::test]
+async fn phase1_revoke_session() {
+    let _lock = SERIAL.lock().await;
+    require_ref_server!();
+
+    let auth = create_test_auth().await;
+    let mut ref_client = RefClient::new();
+    let (email, _rust_token, _rust_user_id) =
+        signup_on_both(&auth, &mut ref_client, "p1_revoke_session").await;
+
+    let signin_body = serde_json::json!({
+        "email": email,
+        "password": "password123"
+    });
+    let rust_signin = rust_send(&auth, post_json("/sign-in/email", signin_body.clone())).await;
+    let _ = ref_client
+        .post_full("/sign-in/email", &signin_body)
+        .await
+        .unwrap_or_else(ref_error_response);
+    let rust_token = rust_signin
+        .body
+        .get("token")
+        .and_then(|token| token.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let rust_sessions = rust_send(&auth, get_with_auth("/list-sessions", &rust_token)).await;
+    let rust_target = rust_sessions
+        .body
+        .as_array()
+        .and_then(|sessions| sessions.first())
+        .and_then(|session| session.get("token"))
+        .and_then(|token| token.as_str())
+        .expect("rust session token missing")
+        .to_string();
+    let ref_sessions = ref_client
+        .get_full("/list-sessions")
+        .await
+        .unwrap_or_else(ref_error_response);
+    let ref_target = ref_sessions
+        .body
+        .as_array()
+        .and_then(|sessions| sessions.first())
+        .and_then(|session| session.get("token"))
+        .and_then(|token| token.as_str())
+        .expect("reference session token missing")
+        .to_string();
+
+    let rust = rust_send(
+        &auth,
+        post_json_with_auth(
+            "/revoke-session",
+            serde_json::json!({ "token": rust_target }),
+            &rust_token,
+        ),
+    )
+    .await;
+    let reference = ref_client
+        .post_full(
+            "/revoke-session",
+            &serde_json::json!({ "token": ref_target }),
+        )
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    assert_report_pass(compare_full("POST /revoke-session", &rust, &reference));
+}
+
+#[tokio::test]
+async fn phase1_revoke_sessions() {
+    let _lock = SERIAL.lock().await;
+    require_ref_server!();
+
+    let auth = create_test_auth().await;
+    let mut ref_client = RefClient::new();
+    let (email, _rust_token, _rust_user_id) =
+        signup_on_both(&auth, &mut ref_client, "p1_revoke_sessions").await;
+
+    let signin_body = serde_json::json!({
+        "email": email,
+        "password": "password123"
+    });
+    let rust_signin = rust_send(&auth, post_json("/sign-in/email", signin_body.clone())).await;
+    let _ = ref_client
+        .post_full("/sign-in/email", &signin_body)
+        .await
+        .unwrap_or_else(ref_error_response);
+    let rust_token = rust_signin
+        .body
+        .get("token")
+        .and_then(|token| token.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let rust = rust_send(&auth, post_with_auth("/revoke-sessions", &rust_token)).await;
+    let reference = ref_client
+        .post_full("/revoke-sessions", &serde_json::json!({}))
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    assert_report_pass(compare_full("POST /revoke-sessions", &rust, &reference));
+}
+
+#[tokio::test]
+async fn phase1_revoke_other_sessions() {
+    let _lock = SERIAL.lock().await;
+    require_ref_server!();
+
+    let auth = create_test_auth().await;
+    let mut ref_client = RefClient::new();
+    let (email, _rust_token, _rust_user_id) =
+        signup_on_both(&auth, &mut ref_client, "p1_revoke_other_sessions").await;
+
+    let signin_body = serde_json::json!({
+        "email": email,
+        "password": "password123"
+    });
+    let rust_signin = rust_send(&auth, post_json("/sign-in/email", signin_body.clone())).await;
+    let _ = ref_client
+        .post_full("/sign-in/email", &signin_body)
+        .await
+        .unwrap_or_else(ref_error_response);
+    let rust_token = rust_signin
+        .body
+        .get("token")
+        .and_then(|token| token.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let rust = rust_send(&auth, post_with_auth("/revoke-other-sessions", &rust_token)).await;
+    let reference = ref_client
+        .post_full("/revoke-other-sessions", &serde_json::json!({}))
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    assert_report_pass(compare_full(
+        "POST /revoke-other-sessions",
+        &rust,
+        &reference,
+    ));
+}
+
+#[tokio::test]
+async fn phase1_get_access_token() {
+    let _lock = SERIAL.lock().await;
+    require_ref_server!();
+
+    let auth = create_test_auth().await;
+    let mut ref_client = RefClient::new();
+    let (email, rust_token, rust_user_id) =
+        signup_on_both(&auth, &mut ref_client, "p1_get_access_token").await;
+
+    seed_rust_oauth_account(&auth, &rust_user_id).await;
+    ref_seed_oauth_account(&email)
+        .await
+        .expect("reference oauth seed failed");
+
+    let body = serde_json::json!({
+        "providerId": "mock",
+        "accountId": "mock-account-id"
+    });
+
+    let rust = rust_send(
+        &auth,
+        post_json_with_auth("/get-access-token", body.clone(), &rust_token),
+    )
+    .await;
+    let reference = ref_client
+        .post_full("/get-access-token", &body)
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    assert_report_pass(compare_full("POST /get-access-token", &rust, &reference));
+}
+
+#[tokio::test]
+async fn phase1_refresh_token() {
+    let _lock = SERIAL.lock().await;
+    require_ref_server!();
+
+    let auth = create_test_auth().await;
+    let mut ref_client = RefClient::new();
+    let (email, rust_token, rust_user_id) =
+        signup_on_both(&auth, &mut ref_client, "p1_refresh_token").await;
+
+    seed_rust_oauth_account(&auth, &rust_user_id).await;
+    ref_seed_oauth_account(&email)
+        .await
+        .expect("reference oauth seed failed");
+
+    let body = serde_json::json!({
+        "providerId": "mock",
+        "accountId": "mock-account-id"
+    });
+
+    let rust = rust_send(
+        &auth,
+        post_json_with_auth("/refresh-token", body.clone(), &rust_token),
+    )
+    .await;
+    let reference = ref_client
+        .post_full("/refresh-token", &body)
+        .await
+        .unwrap_or_else(ref_error_response);
+
+    assert_report_pass(compare_full("POST /refresh-token", &rust, &reference));
 }

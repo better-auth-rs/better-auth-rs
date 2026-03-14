@@ -24,6 +24,10 @@ pub(crate) struct GetAccessTokenRequest {
     #[validate(length(min = 1, message = "Provider ID is required"))]
     #[serde(rename = "providerId")]
     pub provider_id: String,
+    #[serde(rename = "accountId")]
+    pub account_id: Option<String>,
+    #[serde(rename = "userId")]
+    pub user_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -31,6 +35,10 @@ pub(crate) struct RefreshTokenRequest {
     #[validate(length(min = 1, message = "Provider ID is required"))]
     #[serde(rename = "providerId")]
     pub provider_id: String,
+    #[serde(rename = "accountId")]
+    pub account_id: Option<String>,
+    #[serde(rename = "userId")]
+    pub user_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -51,7 +59,9 @@ pub(crate) struct AccessTokenResponse {
     pub access_token: Option<String>,
     #[serde(rename = "accessTokenExpiresAt")]
     pub access_token_expires_at: Option<String>,
-    pub scope: Option<String>,
+    pub scopes: Vec<String>,
+    #[serde(rename = "idToken")]
+    pub id_token: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -62,5 +72,13 @@ pub(crate) struct RefreshTokenResponse {
     pub access_token_expires_at: Option<String>,
     #[serde(rename = "refreshToken")]
     pub refresh_token: Option<String>,
+    #[serde(rename = "refreshTokenExpiresAt")]
+    pub refresh_token_expires_at: Option<String>,
     pub scope: Option<String>,
+    #[serde(rename = "idToken")]
+    pub id_token: Option<String>,
+    #[serde(rename = "providerId")]
+    pub provider_id: String,
+    #[serde(rename = "accountId")]
+    pub account_id: String,
 }

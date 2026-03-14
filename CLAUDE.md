@@ -192,7 +192,7 @@ behavior fix is its own commit.
 **Phase 1 — Session and password management:**
 `/list-sessions`, `/revoke-session`, `/revoke-sessions`,
 `/revoke-other-sessions`, `/refresh-token`, `/get-access-token`,
-`/forget-password`, `/reset-password`, `/change-password`
+`/request-password-reset`, `/reset-password`, `/change-password`
 
 **Phase 2 — User and account management:**
 `/update-user`, `/delete-user`, `/change-email`,
