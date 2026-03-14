@@ -260,16 +260,17 @@ Read `packages/better-auth/src/cookies/` in the TS source carefully.
 
 ### Documentation
 
-Doc comments on every public item. `cargo doc` should produce useful,
-navigable documentation. When behavior or a public API changes, update
-related comments and docs in the same change.
+Doc comments on every public item — no exceptions. `cargo doc` must
+produce clean, navigable documentation with no missing-docs warnings.
+When behavior or a public API changes, update related comments and docs
+in the same change.
 
 ### Testing
 
-Add tests for new behavior and regressions. Only test code that has
-meaningful logic (branching, transformations, error handling). Do not
-test code that can only break if the language, runtime, or a dependency
-breaks.
+100% function coverage. Add tests for new behavior and regressions.
+Every function with meaningful logic (branching, transformations, error
+handling) must be tested. Do not test code that can only break if the
+language, runtime, or a dependency breaks.
 
 ### Git
 
@@ -293,6 +294,11 @@ Zero warnings. Both `cargo clippy --workspace` and
 Do not use `#[allow(...)]`. Use `#[expect(...)]` with a `reason` field
 only when suppression is genuinely justified. If a lint fires, fix the
 code.
+
+### Performance
+
+Hot paths must have benchmarks. Any performance regression must be
+explained to the human before committing.
 
 ### Workarounds
 
