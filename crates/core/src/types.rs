@@ -723,3 +723,275 @@ pub struct ListUsersParams {
     pub filter_value: Option<String>,
     pub filter_operator: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── User serialization ──────────────────────────────────────────────
+
+    #[test]
+    fn user_serializes_camel_case() {
+        let user = User {
+            id: "u1".into(),
+            name: Some("Test".into()),
+            email: Some("test@test.com".into()),
+            email_verified: true,
+            image: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            username: None,
+            display_username: None,
+            two_factor_enabled: false,
+            role: None,
+            banned: false,
+            ban_reason: None,
+            ban_expires: None,
+            metadata: serde_json::Value::Null,
+        };
+        let json = serde_json::to_string(&user).expect("serialize");
+        assert!(json.contains("\"emailVerified\""));
+        assert!(json.contains("\"createdAt\""));
+        assert!(json.contains("\"updatedAt\""));
+        // Plugin fields at default should be omitted
+        assert!(!json.contains("\"twoFactorEnabled\""));
+        assert!(!json.contains("\"banned\""));
+        assert!(!json.contains("\"role\""));
+        assert!(!json.contains("\"username\""));
+    }
+
+    #[test]
+    fn user_serializes_plugin_fields_when_set() {
+        let user = User {
+            id: "u1".into(),
+            name: None,
+            email: None,
+            email_verified: false,
+            image: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            username: Some("testuser".into()),
+            display_username: None,
+            two_factor_enabled: true,
+            role: Some("admin".into()),
+            banned: true,
+            ban_reason: Some("spam".into()),
+            ban_expires: None,
+            metadata: serde_json::Value::Null,
+        };
+        let json = serde_json::to_string(&user).expect("serialize");
+        assert!(json.contains("\"twoFactorEnabled\":true"));
+        assert!(json.contains("\"banned\":true"));
+        assert!(json.contains("\"role\":\"admin\""));
+        assert!(json.contains("\"username\":\"testuser\""));
+        assert!(json.contains("\"banReason\":\"spam\""));
+    }
+
+    #[test]
+    fn user_deserializes_camel_case() {
+        let json = r#"{
+            "id": "u1",
+            "name": "Test",
+            "email": "test@test.com",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": "2024-01-01T00:00:00Z",
+            "updatedAt": "2024-01-01T00:00:00Z"
+        }"#;
+        let user: User = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(user.id, "u1");
+        assert!(user.email_verified);
+        assert!(!user.two_factor_enabled); // default
+        assert!(!user.banned); // default
+    }
+
+    // ── Session serialization ───────────────────────────────────────────
+
+    #[test]
+    fn session_serializes_camel_case() {
+        let session = Session {
+            id: "s1".into(),
+            expires_at: Utc::now(),
+            token: "tok".into(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            ip_address: Some("1.2.3.4".into()),
+            user_agent: Some("test".into()),
+            user_id: "u1".into(),
+            impersonated_by: None,
+            active_organization_id: None,
+            active: true,
+        };
+        let json = serde_json::to_string(&session).expect("serialize");
+        assert!(json.contains("\"expiresAt\""));
+        assert!(json.contains("\"userId\""));
+        assert!(json.contains("\"ipAddress\""));
+        assert!(json.contains("\"userAgent\""));
+        // active is #[serde(skip)] — should not appear
+        assert!(!json.contains("\"active\""));
+        // Plugin fields at None should be omitted
+        assert!(!json.contains("\"impersonatedBy\""));
+        assert!(!json.contains("\"activeOrganizationId\""));
+    }
+
+    // ── AuthRequest ─────────────────────────────────────────────────────
+
+    #[test]
+    fn auth_request_new_defaults() {
+        let req = AuthRequest::new(HttpMethod::Get, "/test");
+        assert_eq!(req.method(), &HttpMethod::Get);
+        assert_eq!(req.path(), "/test");
+        assert!(req.headers.is_empty());
+        assert!(req.body.is_none());
+        assert!(req.virtual_user_id().is_none());
+    }
+
+    #[test]
+    fn auth_request_from_parts() {
+        let mut headers = HashMap::new();
+        let _ = headers.insert("host".to_string(), "localhost".to_string());
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/login".into(),
+            headers,
+            Some(b"{}".to_vec()),
+            HashMap::new(),
+        );
+        assert_eq!(req.method(), &HttpMethod::Post);
+        assert_eq!(req.header("host"), Some(&"localhost".to_string()));
+        assert!(req.body.is_some());
+    }
+
+    #[test]
+    fn auth_request_body_as_json_with_body() {
+        let req = AuthRequest {
+            method: HttpMethod::Post,
+            path: "/test".into(),
+            headers: HashMap::new(),
+            body: Some(br#"{"name":"test"}"#.to_vec()),
+            query: HashMap::new(),
+            virtual_user_id: None,
+        };
+        let val: serde_json::Value = req.body_as_json().expect("parse");
+        assert_eq!(val["name"], "test");
+    }
+
+    #[test]
+    fn auth_request_body_as_json_without_body() {
+        let req = AuthRequest::new(HttpMethod::Get, "/test");
+        let val: serde_json::Value = req.body_as_json().expect("parse empty");
+        assert!(val.is_object());
+    }
+
+    #[test]
+    fn auth_request_virtual_user_id() {
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        assert!(req.virtual_user_id().is_none());
+        req.set_virtual_user_id("user-123".into());
+        assert_eq!(req.virtual_user_id(), Some("user-123"));
+    }
+
+    // ── AuthResponse ────────────────────────────────────────────────────
+
+    #[test]
+    fn auth_response_new() {
+        let resp = AuthResponse::new(200);
+        assert_eq!(resp.status, 200);
+        assert!(resp.body.is_empty());
+    }
+
+    #[test]
+    fn auth_response_json() {
+        let resp = AuthResponse::json(200, &OkResponse { ok: true }).expect("json");
+        assert_eq!(resp.status, 200);
+        assert_eq!(resp.headers.get("content-type").unwrap(), "application/json");
+        let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+        assert_eq!(body["ok"], true);
+    }
+
+    #[test]
+    fn auth_response_text() {
+        let resp = AuthResponse::text(404, "Not found");
+        assert_eq!(resp.status, 404);
+        assert_eq!(resp.headers.get("content-type").unwrap(), "text/plain");
+        assert_eq!(std::str::from_utf8(&resp.body).unwrap(), "Not found");
+    }
+
+    #[test]
+    fn auth_response_html() {
+        let resp = AuthResponse::html(200, "<h1>Hi</h1>");
+        assert_eq!(resp.headers.get("content-type").unwrap(), "text/html; charset=utf-8");
+    }
+
+    #[test]
+    fn auth_response_with_header() {
+        let resp = AuthResponse::new(200).with_header("x-custom", "val");
+        assert_eq!(resp.headers.get("x-custom").unwrap(), "val");
+    }
+
+    // ── RequestMeta ─────────────────────────────────────────────────────
+
+    #[test]
+    fn request_meta_extracts_from_headers() {
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        let _ = req.headers.insert("x-forwarded-for".into(), "1.2.3.4".into());
+        let _ = req.headers.insert("user-agent".into(), "TestAgent".into());
+        let meta = RequestMeta::from_request(&req);
+        assert_eq!(meta.ip_address.as_deref(), Some("1.2.3.4"));
+        assert_eq!(meta.user_agent.as_deref(), Some("TestAgent"));
+    }
+
+    #[test]
+    fn request_meta_falls_back_to_real_ip() {
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        let _ = req.headers.insert("x-real-ip".into(), "5.6.7.8".into());
+        let meta = RequestMeta::from_request(&req);
+        assert_eq!(meta.ip_address.as_deref(), Some("5.6.7.8"));
+    }
+
+    #[test]
+    fn request_meta_none_when_no_headers() {
+        let req = AuthRequest::new(HttpMethod::Get, "/test");
+        let meta = RequestMeta::from_request(&req);
+        assert!(meta.ip_address.is_none());
+        assert!(meta.user_agent.is_none());
+    }
+
+    // ── CreateUser builder ──────────────────────────────────────────────
+
+    #[test]
+    fn create_user_builder() {
+        let cu = CreateUser::new()
+            .with_email("test@test.com")
+            .with_name("Test")
+            .with_password("pass123")
+            .with_email_verified(true)
+            .with_username("testuser")
+            .with_role("admin")
+            .with_metadata(serde_json::json!({"key": "val"}));
+
+        assert!(cu.id.is_some()); // auto-generated UUID
+        assert_eq!(cu.email.as_deref(), Some("test@test.com"));
+        assert_eq!(cu.name.as_deref(), Some("Test"));
+        assert_eq!(cu.password.as_deref(), Some("pass123"));
+        assert_eq!(cu.email_verified, Some(true));
+        assert_eq!(cu.username.as_deref(), Some("testuser"));
+        assert_eq!(cu.role.as_deref(), Some("admin"));
+        assert!(cu.metadata.is_some());
+    }
+
+    #[test]
+    fn create_user_default() {
+        let cu = CreateUser::default();
+        assert!(cu.id.is_some());
+        assert!(cu.email.is_none());
+    }
+
+    // ── is_false helper ─────────────────────────────────────────────────
+
+    #[test]
+    fn is_false_helper() {
+        assert!(is_false(&false));
+        assert!(!is_false(&true));
+    }
+}
