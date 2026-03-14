@@ -72,6 +72,7 @@ cargo test --workspace --lib                   # library unit tests
 cargo test --test dual_server_tests            # dual-server comparison (needs ref server)
 ./scripts/alignment-check.sh                   # full alignment pipeline (all 3 layers)
 ./scripts/alignment-check.sh --skip-build      # skip cargo build step
+cargo tarpaulin --workspace --lib              # measure function coverage
 cd compat-tests/client-tests && node --test tests/*.test.mjs  # client tests (set AUTH_BASE_URL)
 bash compat-tests/client-tests/run-against-both.sh            # client tests against both
 ```
@@ -267,10 +268,11 @@ in the same change.
 
 ### Testing
 
-100% function coverage. Add tests for new behavior and regressions.
-Every function with meaningful logic (branching, transformations, error
-handling) must be tested. Do not test code that can only break if the
-language, runtime, or a dependency breaks.
+100% function coverage — enforced with `cargo tarpaulin`. Add tests for
+new behavior and regressions. Every function with meaningful logic
+(branching, transformations, error handling) must be tested. Do not test
+code that can only break if the language, runtime, or a dependency breaks.
+Run `cargo tarpaulin --workspace --lib` regularly to verify coverage.
 
 ### Git
 
@@ -297,8 +299,8 @@ code.
 
 ### Performance
 
-Hot paths must have benchmarks. Any performance regression must be
-explained to the human before committing.
+Be mindful of performance on hot paths. Profile before optimizing.
+Any performance regression must be explained before committing.
 
 ### Workarounds
 

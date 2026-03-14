@@ -30,6 +30,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --lib -- -D warnings
+      - run: cargo clippy --workspace --lib --features axum -- -D warnings
 
   test:
     name: Test
@@ -96,7 +97,7 @@ jobs:
         with:
           node-version: '20'
       - name: Install reference server dependencies
-        run: npm ci
+        run: npm install
         working-directory: compat-tests/reference-server
       - name: Run snapshot tests
         run: cargo test --test snapshot_tests -- --nocapture
@@ -104,6 +105,17 @@ jobs:
         run: cargo test --test property_tests -- --nocapture
       - name: Run dual-server comparison tests
         run: cargo test --test dual_server_tests -- --nocapture
+
+  doc:
+    name: Documentation
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc --workspace --no-deps
 
   standalone-examples:
     name: Check Standalone Examples
