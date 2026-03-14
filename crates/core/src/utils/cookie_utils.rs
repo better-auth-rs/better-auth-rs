@@ -58,6 +58,30 @@ pub fn create_clear_session_cookie(config: &AuthConfig) -> String {
     cookie.build().to_string()
 }
 
+/// Build a `Set-Cookie` header value that clears an arbitrary cookie by name,
+/// using the session config's cookie attributes for consistency.
+pub fn create_clear_cookie(name: &str, config: &AuthConfig) -> String {
+    let session_config = &config.session;
+    let same_site = map_same_site(&session_config.cookie_same_site);
+
+    let mut cookie = Cookie::build((name, ""))
+        .path("/")
+        .expires(cookie::time::OffsetDateTime::UNIX_EPOCH)
+        .http_only(session_config.cookie_http_only)
+        .same_site(same_site);
+
+    if session_config.cookie_secure
+        || matches!(
+            session_config.cookie_same_site,
+            crate::config::SameSite::None
+        )
+    {
+        cookie = cookie.secure(true);
+    }
+
+    cookie.build().to_string()
+}
+
 fn map_same_site(s: &crate::config::SameSite) -> CookieSameSite {
     match s {
         crate::config::SameSite::Strict => CookieSameSite::Strict,

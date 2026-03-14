@@ -180,14 +180,13 @@ impl SessionManagementPlugin {
             let _ = sign_out_core(&session, ctx).await;
         }
 
-        // NOTE: matches TS behavior — clears dont_remember cookie on sign-out.
-        // The TS server uses `expireCookie` to clear session_token, session_data,
-        // and dont_remember, but the session_token clearing uses signed cookies
-        // which shows as dont_remember in the response.
-        let dont_remember_cookie =
-            "better-auth.dont_remember=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax";
+        // TS clears session_token, session_data, and dont_remember cookies on sign-out.
+        let clear_cookie = better_auth_core::utils::cookie_utils::create_clear_cookie(
+            "better-auth.dont_remember",
+            &ctx.config,
+        );
         Ok(AuthResponse::json(200, &SuccessResponse { success: true })?
-            .with_header("Set-Cookie", dont_remember_cookie))
+            .with_header("Set-Cookie", clear_cookie))
     }
 
     async fn handle_list_sessions<DB: DatabaseAdapter>(
