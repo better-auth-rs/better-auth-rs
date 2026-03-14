@@ -119,14 +119,12 @@ impl SpecValidator {
         lines.join("\n")
     }
 
-    #[allow(dead_code)]
     pub fn all_passed(&self) -> bool {
         self.results.iter().filter(|r| !r.skipped).all(|r| r.passed)
     }
 
     /// Return the number of endpoints that were skipped due to missing spec
     /// schemas.
-    #[allow(dead_code)]
     pub fn skipped_count(&self) -> usize {
         self.results.iter().filter(|r| r.skipped).count()
     }

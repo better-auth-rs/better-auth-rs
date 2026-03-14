@@ -39,7 +39,7 @@ pub fn test_secret() -> String {
 }
 
 pub fn test_config() -> AuthConfig {
-    AuthConfig::new(&test_secret())
+    AuthConfig::new(test_secret())
         .base_url("http://localhost:3000")
         .password_min_length(8)
 }
@@ -66,7 +66,7 @@ pub async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
         .plugin(AdminPlugin::new())
         .build()
         .await
-        .expect("Failed to create test auth instance")
+        .unwrap_or_else(|e| panic!("Failed to create test auth instance: {e}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -76,53 +76,63 @@ pub async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
 pub fn post_json(path: &str, body: Value) -> AuthRequest {
     let mut req = AuthRequest::new(HttpMethod::Post, path);
     req.body = Some(body.to_string().into_bytes());
-    req.headers
+    let _ = req
+        .headers
         .insert("content-type".to_string(), "application/json".to_string());
-    req.headers
+    let _ = req
+        .headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
     req
 }
 
 pub fn get_request(path: &str) -> AuthRequest {
     let mut req = AuthRequest::new(HttpMethod::Get, path);
-    req.headers
+    let _ = req
+        .headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
     req
 }
 
 pub fn get_with_auth(path: &str, token: &str) -> AuthRequest {
     let mut req = AuthRequest::new(HttpMethod::Get, path);
-    req.headers
+    let _ = req
+        .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
-    req.headers
+    let _ = req
+        .headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
     req
 }
 
 pub fn get_with_auth_and_query(path: &str, token: &str, query: Vec<(&str, &str)>) -> AuthRequest {
     let mut req = AuthRequest::new(HttpMethod::Get, path);
-    req.headers
+    let _ = req
+        .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
-    req.headers
+    let _ = req
+        .headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
     for (k, v) in query {
-        req.query.insert(k.to_string(), v.to_string());
+        let _ = req.query.insert(k.to_string(), v.to_string());
     }
     req
 }
 
 pub fn post_json_with_auth(path: &str, body: Value, token: &str) -> AuthRequest {
     let mut req = post_json(path, body);
-    req.headers
+    let _ = req
+        .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
     req
 }
 
 pub fn delete_with_auth(path: &str, token: &str) -> AuthRequest {
     let mut req = AuthRequest::new(HttpMethod::Delete, path);
-    req.headers
+    let _ = req
+        .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
-    req.headers
+    let _ = req
+        .headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
     req
 }
@@ -134,9 +144,11 @@ pub fn delete_with_auth(path: &str, token: &str) -> AuthRequest {
 pub fn post_with_auth(path: &str, token: &str) -> AuthRequest {
     let mut req = AuthRequest::new(HttpMethod::Post, path);
     req.body = Some(b"{}".to_vec());
-    req.headers
+    let _ = req
+        .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
-    req.headers
+    let _ = req
+        .headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
     req
 }
@@ -152,7 +164,7 @@ pub async fn send_request(
     let resp = auth
         .handle_request(req)
         .await
-        .expect("Request should not panic");
+        .unwrap_or_else(|e| panic!("Request should not panic: {e}"));
     let status = resp.status;
     let json: Value = serde_json::from_slice(&resp.body)
         .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&resp.body).to_string()));
@@ -179,9 +191,10 @@ pub async fn signup_user(
         "signup should succeed, got status {}: {}",
         status, json
     );
-    let token = json["token"]
-        .as_str()
-        .expect("signup response missing token")
+    let token = json
+        .get("token")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| panic!("signup response missing token"))
         .to_string();
     (token, json)
 }
@@ -204,9 +217,10 @@ pub async fn signin_user(
         "signin should succeed, got status {}: {}",
         status, json
     );
-    let token = json["token"]
-        .as_str()
-        .expect("signin response missing token")
+    let token = json
+        .get("token")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| panic!("signin response missing token"))
         .to_string();
     (token, json)
 }
@@ -255,7 +269,7 @@ impl TestHarness {
             .plugin(ApiKeyPlugin::builder().build())
             .build()
             .await
-            .expect("Failed to create test auth instance");
+            .unwrap_or_else(|e| panic!("Failed to create test auth instance: {e}"));
         Self {
             auth: Arc::new(auth),
         }
@@ -327,9 +341,10 @@ impl TestHarness {
             "signup should succeed, got status {}: {}",
             status, json
         );
-        let token = json["token"]
-            .as_str()
-            .expect("signup response missing token")
+        let token = json
+            .get("token")
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| panic!("signup response missing token"))
             .to_string();
         (token, json)
     }
@@ -346,9 +361,10 @@ impl TestHarness {
             "signin should succeed, got status {}: {}",
             status, json
         );
-        let token = json["token"]
-            .as_str()
-            .expect("signin response missing token")
+        let token = json
+            .get("token")
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| panic!("signin response missing token"))
             .to_string();
         (token, json)
     }
@@ -357,9 +373,11 @@ impl TestHarness {
     pub async fn create_user_with_session(&self) -> (String, String) {
         let email = unique_email("harness");
         let (token, json) = self.signup(&email, "password123", "Test User").await;
-        let user_id = json["user"]["id"]
-            .as_str()
-            .expect("missing user id")
+        let user_id = json
+            .get("user")
+            .and_then(|u| u.get("id"))
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| panic!("missing user id"))
             .to_string();
         (user_id, token)
     }

@@ -41,7 +41,7 @@ pub struct FieldExpectation {
 /// handing it to the parser.
 pub fn load_openapi_spec() -> oas3::spec::Spec {
     let yaml_str = std::fs::read_to_string("better-auth.yaml")
-        .expect("better-auth.yaml must exist in the project root");
+        .unwrap_or_else(|e| panic!("better-auth.yaml must exist in the project root: {e}"));
 
     // Normalise non-standard "type: date" -> "type: string" (+ format kept in
     // our FieldExpectation as "date" via a post-processing step).
@@ -71,7 +71,8 @@ pub fn load_openapi_spec() -> oas3::spec::Spec {
         .collect::<Vec<_>>()
         .join("\n");
 
-    oas3::from_yaml(yaml_str).expect("better-auth.yaml must be valid OpenAPI 3.1")
+    oas3::from_yaml(yaml_str)
+        .unwrap_or_else(|e| panic!("better-auth.yaml must be valid OpenAPI 3.1: {e}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -164,13 +165,13 @@ pub fn extract_error_schemas(
         return result;
     };
     for (status, response) in responses {
-        if status.starts_with('4') || status.starts_with('5') {
-            if let Some(obj_schema) = schema_from_response(spec, response) {
-                result.insert(
-                    status.clone(),
-                    object_schema_to_expectation(spec, &obj_schema),
-                );
-            }
+        if (status.starts_with('4') || status.starts_with('5'))
+            && let Some(obj_schema) = schema_from_response(spec, response)
+        {
+            let _ = result.insert(
+                status.clone(),
+                object_schema_to_expectation(spec, &obj_schema),
+            );
         }
     }
     result
@@ -190,10 +191,10 @@ pub fn object_schema_to_expectation(
 
     for (name, prop_ref) in &obj.properties {
         if let Some(prop_schema) = resolve_object_schema(spec, prop_ref) {
-            fields.insert(name.clone(), object_schema_to_field(spec, &prop_schema));
+            let _ = fields.insert(name.clone(), object_schema_to_field(spec, &prop_schema));
         } else {
             // Unresolvable ref -- treat as unknown string
-            fields.insert(
+            let _ = fields.insert(
                 name.clone(),
                 FieldExpectation {
                     field_type: "string".to_string(),
