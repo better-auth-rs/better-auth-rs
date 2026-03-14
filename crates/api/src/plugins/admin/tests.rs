@@ -483,7 +483,12 @@ async fn test_ban_unban_user() {
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
     assert_eq!(resp.status, 200);
     let body = json_body(&resp);
-    assert_eq!(body["user"]["banned"], false);
+    // After unbanning, `banned` is either false or absent (skip_serializing_if)
+    assert!(
+        body["user"]["banned"] == false || body["user"]["banned"].is_null(),
+        "expected banned to be false or absent, got {:?}",
+        body["user"]["banned"]
+    );
 }
 
 #[tokio::test]
@@ -542,7 +547,12 @@ async fn test_unban_clears_ban_reason_and_expires() {
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
     assert_eq!(resp.status, 200);
     let body = json_body(&resp);
-    assert_eq!(body["user"]["banned"], false);
+    // After unbanning, `banned` is either false or absent (skip_serializing_if)
+    assert!(
+        body["user"]["banned"] == false || body["user"]["banned"].is_null(),
+        "expected banned to be false or absent, got {:?}",
+        body["user"]["banned"]
+    );
 
     // Verify ban_reason and ban_expires are cleared by checking the DB directly
     let updated_user = ctx

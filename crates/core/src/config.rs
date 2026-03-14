@@ -379,7 +379,9 @@ impl Default for SessionConfig {
             disable_session_refresh: false,
             fresh_age: None,
             cookie_name: "better-auth.session_token".to_string(),
-            cookie_secure: true,
+            // NOTE: matches TS behavior — Secure defaults based on base_url scheme.
+            // Default base_url is http://localhost:3000, so Secure defaults to false.
+            cookie_secure: false,
             cookie_http_only: true,
             cookie_same_site: SameSite::Lax,
             cookie_cache: None,
@@ -454,8 +456,12 @@ impl AuthConfig {
     }
 
     /// Set the base URL (e.g. `"https://myapp.com"`).
+    ///
+    /// Also updates `session.cookie_secure` to match the URL scheme:
+    /// HTTPS URLs set `Secure=true`, HTTP URLs set `Secure=false`.
     pub fn base_url(mut self, url: impl Into<String>) -> Self {
         self.base_url = url.into();
+        self.session.cookie_secure = self.base_url.starts_with("https://");
         self
     }
 

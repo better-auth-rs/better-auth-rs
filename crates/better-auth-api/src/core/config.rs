@@ -180,7 +180,7 @@ impl Default for SessionConfig {
             disable_session_refresh: false,
             fresh_age: None,
             cookie_name: "better-auth.session_token".to_string(),
-            cookie_secure: true,
+            cookie_secure: false,
             cookie_http_only: true,
             cookie_same_site: SameSite::Lax,
             cookie_cache: None,

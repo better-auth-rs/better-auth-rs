@@ -4,6 +4,11 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use validator::Validate;
 
+/// Helper for `#[serde(skip_serializing_if = "is_false")]`
+fn is_false(v: &bool) -> bool {
+    !(*v)
+}
+
 // Re-export organization types
 pub use super::types_org::{
     CreateInvitation, CreateMember, CreateOrganization, FullOrganization, Invitation,
@@ -11,6 +16,11 @@ pub use super::types_org::{
 };
 
 /// Core user type - matches OpenAPI schema
+///
+/// Plugin-added fields (username, role, banned, twoFactorEnabled, etc.) are
+/// omitted from serialization when at their default values, matching TS
+/// behavior where these fields only appear when the corresponding plugin is
+/// enabled.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct User {
     pub id: String,
@@ -23,16 +33,20 @@ pub struct User {
     pub created_at: DateTime<Utc>,
     #[serde(rename = "updatedAt")]
     pub updated_at: DateTime<Utc>,
+    // Plugin-added fields — skip when at default values to match TS core behavior
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub username: Option<String>,
-    #[serde(rename = "displayUsername")]
+    #[serde(rename = "displayUsername", skip_serializing_if = "Option::is_none")]
     pub display_username: Option<String>,
-    #[serde(rename = "twoFactorEnabled")]
+    #[serde(rename = "twoFactorEnabled", skip_serializing_if = "is_false", default)]
     pub two_factor_enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    #[serde(skip_serializing_if = "is_false", default)]
     pub banned: bool,
-    #[serde(rename = "banReason")]
+    #[serde(rename = "banReason", skip_serializing_if = "Option::is_none")]
     pub ban_reason: Option<String>,
-    #[serde(rename = "banExpires")]
+    #[serde(rename = "banExpires", skip_serializing_if = "Option::is_none")]
     pub ban_expires: Option<DateTime<Utc>>,
     // Keep metadata for internal use but don't serialize
     #[serde(skip)]
@@ -56,9 +70,13 @@ pub struct Session {
     pub user_agent: Option<String>,
     #[serde(rename = "userId")]
     pub user_id: String,
-    #[serde(rename = "impersonatedBy")]
+    // Plugin-added fields — skip when at default values to match TS core behavior
+    #[serde(rename = "impersonatedBy", skip_serializing_if = "Option::is_none")]
     pub impersonated_by: Option<String>,
-    #[serde(rename = "activeOrganizationId")]
+    #[serde(
+        rename = "activeOrganizationId",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub active_organization_id: Option<String>,
     // Keep active field for internal use but don't serialize
     #[serde(skip)]
