@@ -170,10 +170,10 @@ impl EmailVerificationPlugin {
             VerifyEmailResult::AlreadyVerified(data) => Ok(AuthResponse::json(200, &data)?),
             VerifyEmailResult::Redirect { url, session_token } => {
                 let mut headers = std::collections::HashMap::new();
-                headers.insert("Location".to_string(), url);
+                _ = headers.insert("Location".to_string(), url);
                 if let Some(token) = session_token {
                     let cookie = create_session_cookie(&token, &ctx.config);
-                    headers.insert("Set-Cookie".to_string(), cookie);
+                    _ = headers.insert("Set-Cookie".to_string(), cookie);
                 }
                 Ok(AuthResponse {
                     status: 302,
@@ -215,7 +215,8 @@ impl EmailVerificationPlugin {
             expires_at,
         };
 
-        ctx.database
+        let _ = ctx
+            .database
             .create_verification(create_verification)
             .await?;
 
@@ -297,7 +298,7 @@ impl EmailVerificationPlugin {
     }
 
     /// Check if user is verified or verification is not required
-    pub async fn is_user_verified_or_not_required(&self, user: &impl AuthUser) -> bool {
+    pub fn is_user_verified_or_not_required(&self, user: &impl AuthUser) -> bool {
         user.email_verified() || !self.config.require_verification_for_signin
     }
 }

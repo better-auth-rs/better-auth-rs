@@ -58,11 +58,22 @@ impl OAuthProvider {
             ],
             map_user_info: |v| {
                 Ok(OAuthUserInfo {
-                    id: v.get("sub").and_then(|v| v.as_str()).ok_or("missing sub")?.to_string(),
-                    email: v.get("email").and_then(|v| v.as_str()).ok_or("missing email")?.to_string(),
+                    id: v
+                        .get("sub")
+                        .and_then(|v| v.as_str())
+                        .ok_or("missing sub")?
+                        .to_string(),
+                    email: v
+                        .get("email")
+                        .and_then(|v| v.as_str())
+                        .ok_or("missing email")?
+                        .to_string(),
                     name: v.get("name").and_then(|v| v.as_str()).map(String::from),
                     image: v.get("picture").and_then(|v| v.as_str()).map(String::from),
-                    email_verified: v.get("email_verified").and_then(|v| v.as_bool()).unwrap_or(false),
+                    email_verified: v
+                        .get("email_verified")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
                 })
             },
         }
@@ -78,14 +89,22 @@ impl OAuthProvider {
             scopes: vec!["user:email".to_string()],
             map_user_info: |v| {
                 Ok(OAuthUserInfo {
-                    id: v.get("id")
+                    id: v
+                        .get("id")
                         .and_then(|v| v.as_i64())
                         .map(|i| i.to_string())
                         .or_else(|| v.get("id").and_then(|v| v.as_str()).map(String::from))
                         .ok_or("missing id")?,
-                    email: v.get("email").and_then(|v| v.as_str()).ok_or("missing email")?.to_string(),
+                    email: v
+                        .get("email")
+                        .and_then(|v| v.as_str())
+                        .ok_or("missing email")?
+                        .to_string(),
                     name: v.get("name").and_then(|v| v.as_str()).map(String::from),
-                    image: v.get("avatar_url").and_then(|v| v.as_str()).map(String::from),
+                    image: v
+                        .get("avatar_url")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
                     email_verified: true,
                 })
             },
@@ -102,8 +121,16 @@ impl OAuthProvider {
             scopes: vec!["identify".to_string(), "email".to_string()],
             map_user_info: |v| {
                 Ok(OAuthUserInfo {
-                    id: v.get("id").and_then(|v| v.as_str()).ok_or("missing id")?.to_string(),
-                    email: v.get("email").and_then(|v| v.as_str()).ok_or("missing email")?.to_string(),
+                    id: v
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .ok_or("missing id")?
+                        .to_string(),
+                    email: v
+                        .get("email")
+                        .and_then(|v| v.as_str())
+                        .ok_or("missing email")?
+                        .to_string(),
                     name: v.get("username").and_then(|v| v.as_str()).map(String::from),
                     image: v.get("avatar").and_then(|v| v.as_str()).map(|a| {
                         format!(

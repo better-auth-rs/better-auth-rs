@@ -36,7 +36,8 @@ pub(super) async fn send_verification_email_core<DB: DatabaseAdapter>(
         expires_at,
     };
 
-    ctx.database
+    let _ = ctx
+        .database
         .create_verification(create_verification)
         .await?;
 

@@ -124,7 +124,10 @@ pub(crate) enum SignInCoreResult<U: Serialize> {
 }
 
 impl EmailPasswordPlugin {
-    #[expect(clippy::new_without_default, reason = "plugin construction is intentionally explicit")]
+    #[expect(
+        clippy::new_without_default,
+        reason = "plugin construction is intentionally explicit"
+    )]
     pub fn new() -> Self {
         Self {
             config: EmailPasswordConfig::default(),

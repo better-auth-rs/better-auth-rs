@@ -225,7 +225,10 @@ impl<DB: DatabaseAdapter> TypedAuthBuilder<DB> {
 
 impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// Create a new BetterAuth builder.
-    #[expect(clippy::new_ret_no_self, reason = "returns AuthBuilder by design — builder pattern entry point")]
+    #[expect(
+        clippy::new_ret_no_self,
+        reason = "returns AuthBuilder by design — builder pattern entry point"
+    )]
     pub fn new(config: AuthConfig) -> AuthBuilder {
         AuthBuilder::new(config)
     }

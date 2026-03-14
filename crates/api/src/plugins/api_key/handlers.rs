@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::{AuthContext, AuthResult, CreateApiKey, UpdateApiKey};
+use better_auth_core::{AuthContext, AuthError, AuthResult, CreateApiKey, UpdateApiKey};
 
 use super::ApiKeyPlugin;
 use super::types::*;
@@ -231,10 +231,10 @@ pub(crate) async fn update_key_core<DB: DatabaseAdapter>(
         || body.rate_limit_max.is_some()
         || body.rate_limit_enabled.is_some()
     {
-        plugin
+        let _ = plugin
             .rate_limiters
             .lock()
-            .expect("rate_limiters mutex poisoned")
+            .map_err(|_| AuthError::internal("Rate-limit lock poisoned"))?
             .remove(&body.id);
     }
 
@@ -255,10 +255,10 @@ pub(crate) async fn delete_key_core<DB: DatabaseAdapter>(
     ctx.database.delete_api_key(&body.id).await?;
 
     // Evict cached rate limiter for the deleted key
-    plugin
+    let _ = plugin
         .rate_limiters
         .lock()
-        .expect("rate_limiters mutex poisoned")
+        .map_err(|_| AuthError::internal("Rate-limit lock poisoned"))?
         .remove(&body.id);
 
     Ok(serde_json::json!({ "status": true }))
@@ -306,7 +306,7 @@ pub(crate) async fn delete_all_expired_core<DB: DatabaseAdapter>(
         plugin
             .rate_limiters
             .lock()
-            .expect("rate_limiters mutex poisoned")
+            .map_err(|_| AuthError::internal("Rate-limit lock poisoned"))?
             .clear();
     }
 

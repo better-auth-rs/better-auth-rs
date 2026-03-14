@@ -241,9 +241,15 @@ pub(crate) async fn refresh_token_core<DB: DatabaseAdapter>(
         .and_then(|v| v.as_str())
         .ok_or_else(|| AuthError::internal("Missing access_token in refresh response"))?;
 
-    let new_refresh_token = token_data.get("refresh_token").and_then(|v| v.as_str()).map(String::from);
+    let new_refresh_token = token_data
+        .get("refresh_token")
+        .and_then(|v| v.as_str())
+        .map(String::from);
     let expires_in = token_data.get("expires_in").and_then(|v| v.as_i64());
-    let new_scope = token_data.get("scope").and_then(|v| v.as_str()).map(String::from);
+    let new_scope = token_data
+        .get("scope")
+        .and_then(|v| v.as_str())
+        .map(String::from);
 
     let access_token_expires_at = expires_in.map(|secs| Utc::now() + Duration::seconds(secs));
 
@@ -385,9 +391,15 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
         .and_then(|v| v.as_str())
         .ok_or_else(|| AuthError::internal("Missing code_verifier in state"))?;
 
-    let link_user_id = payload.get("link_user_id").and_then(|v| v.as_str()).map(String::from);
+    let link_user_id = payload
+        .get("link_user_id")
+        .and_then(|v| v.as_str())
+        .map(String::from);
 
-    let scopes = payload.get("scopes").and_then(|v| v.as_str()).map(String::from);
+    let scopes = payload
+        .get("scopes")
+        .and_then(|v| v.as_str())
+        .map(String::from);
 
     // Delete the verification now that we've used it
     ctx.database.delete_verification(verification.id()).await?;
@@ -435,8 +447,14 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
         .and_then(|v| v.as_str())
         .ok_or_else(|| AuthError::internal("Missing access_token in token response"))?;
 
-    let refresh_token = token_data.get("refresh_token").and_then(|v| v.as_str()).map(String::from);
-    let id_token = token_data.get("id_token").and_then(|v| v.as_str()).map(String::from);
+    let refresh_token = token_data
+        .get("refresh_token")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let id_token = token_data
+        .get("id_token")
+        .and_then(|v| v.as_str())
+        .map(String::from);
     let expires_in = token_data.get("expires_in").and_then(|v| v.as_i64());
 
     // Fetch user info
@@ -493,7 +511,8 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
         // Create account link (encrypt tokens if configured)
         let tokens =
             encrypt_token_set(ctx, Some(access_token.to_string()), refresh_token, id_token)?;
-        let _ = ctx.database
+        let _ = ctx
+            .database
             .create_account(CreateAccount {
                 user_id: link_user_id,
                 account_id: user_info.id,
@@ -525,7 +544,8 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
                 refresh_token.clone(),
                 id_token.clone(),
             )?;
-            let _ = ctx.database
+            let _ = ctx
+                .database
                 .update_account(
                     existing_account.id(),
                     UpdateAccount {
@@ -604,7 +624,8 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
 
     // Create account (encrypt tokens if configured)
     let tokens = encrypt_token_set(ctx, Some(access_token.to_string()), refresh_token, id_token)?;
-    let _ = ctx.database
+    let _ = ctx
+        .database
         .create_account(CreateAccount {
             user_id: user.id().to_string(),
             account_id: user_info.id,

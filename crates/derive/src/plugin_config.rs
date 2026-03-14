@@ -114,7 +114,10 @@ fn parse_plugin_name(input: &DeriveInput) -> Ident {
     panic!("missing #[plugin(name = \"...\")] attribute");
 }
 
-#[expect(clippy::unwrap_used, reason = "proc-macro error reporting: named fields always have idents")]
+#[expect(
+    clippy::unwrap_used,
+    reason = "proc-macro error reporting: named fields always have idents"
+)]
 fn parse_field_info(field: &syn::Field) -> Result<FieldInfo, syn::Error> {
     let ident = field.ident.clone().unwrap();
     let ty = field.ty.clone();

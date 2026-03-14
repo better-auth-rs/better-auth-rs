@@ -178,7 +178,8 @@ pub(crate) async fn get_full_organization_core<DB: DatabaseAdapter>(
     )
     .await?;
 
-    ctx.database
+    let _ = ctx
+        .database
         .get_member(&org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
@@ -241,7 +242,8 @@ pub(crate) async fn set_active_organization_core<DB: DatabaseAdapter>(
     };
 
     if let Some(ref oid) = org_id {
-        ctx.database
+        let _ = ctx
+            .database
             .get_member(oid, user.id())
             .await?
             .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
@@ -287,7 +289,8 @@ pub(crate) async fn leave_organization_core<DB: DatabaseAdapter>(
     ctx.database.delete_member(member.id()).await?;
 
     if session.active_organization_id() == Some(&body.organization_id) {
-        ctx.database
+        let _ = ctx
+            .database
             .update_session_active_organization(session.token(), None)
             .await?;
     }

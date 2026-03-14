@@ -48,7 +48,8 @@ pub(crate) async fn list_members_core<DB: DatabaseAdapter>(
     )
     .await?;
 
-    ctx.database
+    let _ = ctx
+        .database
         .get_member(&org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;

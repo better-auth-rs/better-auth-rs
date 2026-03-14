@@ -130,7 +130,7 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
                 Ok(Some(self.handle_set_password(req, ctx).await?))
             }
             (HttpMethod::Get, path) if path.starts_with("/reset-password/") => {
-                let token = &path[16..]; // Remove "/reset-password/" prefix
+                let token = path.get(16..).unwrap_or(""); // Remove "/reset-password/" prefix
                 Ok(Some(
                     self.handle_reset_password_token(token, req, ctx).await?,
                 ))
@@ -230,7 +230,7 @@ impl PasswordManagementPlugin {
         match reset_password_token_core(token, &query, ctx).await? {
             ResetPasswordTokenResult::Redirect(url) => {
                 let mut headers = std::collections::HashMap::new();
-                headers.insert("Location".to_string(), url);
+                let _ = headers.insert("Location".to_string(), url);
                 Ok(AuthResponse {
                     status: 302,
                     headers,

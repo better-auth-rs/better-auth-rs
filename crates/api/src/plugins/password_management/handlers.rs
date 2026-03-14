@@ -38,7 +38,8 @@ pub(crate) async fn forget_password_core<DB: DatabaseAdapter>(
         expires_at,
     };
 
-    ctx.database
+    let _ = ctx
+        .database
         .create_verification(create_verification)
         .await?;
 
@@ -132,9 +133,15 @@ pub(crate) async fn reset_password_core<DB: DatabaseAdapter>(
 
     // Update user password
     let mut metadata = user.metadata().clone();
-    metadata[PASSWORD_HASH_KEY] = serde_json::Value::String(password_hash);
+    if let Some(obj) = metadata.as_object_mut() {
+        let _ = obj.insert(
+            PASSWORD_HASH_KEY.to_string(),
+            serde_json::Value::String(password_hash),
+        );
+    }
 
-    ctx.database
+    let _ = ctx
+        .database
         .update_user(user.id(), password_utils::update_user_metadata(metadata))
         .await?;
 
@@ -235,7 +242,12 @@ pub(crate) async fn change_password_core<DB: DatabaseAdapter>(
 
     // Update user password
     let mut metadata = user.metadata().clone();
-    metadata[PASSWORD_HASH_KEY] = serde_json::Value::String(password_hash);
+    if let Some(obj) = metadata.as_object_mut() {
+        let _ = obj.insert(
+            PASSWORD_HASH_KEY.to_string(),
+            serde_json::Value::String(password_hash),
+        );
+    }
 
     let updated_user = ctx
         .database
@@ -291,9 +303,15 @@ pub(crate) async fn set_password_core<DB: DatabaseAdapter>(
         password_utils::hash_password(config.password_hasher.as_ref(), &body.new_password).await?;
 
     let mut metadata = user.metadata().clone();
-    metadata[PASSWORD_HASH_KEY] = serde_json::Value::String(password_hash);
+    if let Some(obj) = metadata.as_object_mut() {
+        let _ = obj.insert(
+            PASSWORD_HASH_KEY.to_string(),
+            serde_json::Value::String(password_hash),
+        );
+    }
 
-    ctx.database
+    let _ = ctx
+        .database
         .update_user(user.id(), password_utils::update_user_metadata(metadata))
         .await?;
 

@@ -111,7 +111,10 @@ pub(crate) fn derive_meta_trait(
         //    (the field was remapped → DB column follows the logical name)
         // 3. Otherwise, use the struct field name (field name == getter name)
         let col_name = {
-            #[expect(clippy::unwrap_used, reason = "proc-macro: field_ident was found in field_infos above")]
+            #[expect(
+                clippy::unwrap_used,
+                reason = "proc-macro: field_ident was found in field_infos above"
+            )]
             let fi = field_infos
                 .iter()
                 .find(|f| f.ident == *field_ident)

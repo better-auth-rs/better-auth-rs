@@ -197,19 +197,15 @@ async fn test_is_user_verified_or_not_required() {
     let plugin = EmailVerificationPlugin::new();
     let user = make_test_user("a@b.com", false);
     // verification not required -> true even if unverified
-    assert!(plugin.is_user_verified_or_not_required(&user).await);
+    assert!(plugin.is_user_verified_or_not_required(&user));
 
     let plugin = EmailVerificationPlugin::new().require_verification_for_signin(true);
     // verification required + unverified -> false
-    assert!(!plugin.is_user_verified_or_not_required(&user).await);
+    assert!(!plugin.is_user_verified_or_not_required(&user));
 
     let verified_user = make_test_user("a@b.com", true);
     // verified -> always true
-    assert!(
-        plugin
-            .is_user_verified_or_not_required(&verified_user)
-            .await
-    );
+    assert!(plugin.is_user_verified_or_not_required(&verified_user));
 }
 
 // ------------------------------------------------------------------

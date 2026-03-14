@@ -81,7 +81,8 @@ pub(crate) async fn create_user_core<DB: DatabaseAdapter>(
 
     let user = ctx.database.create_user(create_user).await?;
 
-    let _ = ctx.database
+    let _ = ctx
+        .database
         .create_account(CreateAccount {
             user_id: user.id().to_string(),
             account_id: user.id().to_string(),
@@ -181,7 +182,8 @@ pub(crate) async fn ban_user_core<DB: DatabaseAdapter>(
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
 
-    let _ = ctx.session_manager()
+    let _ = ctx
+        .session_manager()
         .revoke_all_user_sessions(&body.user_id)
         .await?;
 
@@ -306,7 +308,8 @@ pub(crate) async fn revoke_user_sessions_core<DB: DatabaseAdapter>(
         .await?
         .ok_or_else(|| AuthError::not_found("User not found"))?;
 
-    let _ = ctx.session_manager()
+    let _ = ctx
+        .session_manager()
         .revoke_all_user_sessions(&body.user_id)
         .await?;
 
@@ -386,14 +389,16 @@ pub(crate) async fn set_user_password_core<DB: DatabaseAdapter>(
                     password: Some(password_hash.clone()),
                     ..Default::default()
                 };
-                let _ = ctx.database
+                let _ = ctx
+                    .database
                     .update_account(account.id(), account_update)
                     .await?;
                 break;
             }
         }
     } else {
-        let _ = ctx.database
+        let _ = ctx
+            .database
             .create_account(CreateAccount {
                 user_id: body.user_id.clone(),
                 account_id: body.user_id.clone(),

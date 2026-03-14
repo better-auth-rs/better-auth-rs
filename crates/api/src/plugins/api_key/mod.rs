@@ -383,7 +383,10 @@ impl ApiKeyPlugin {
     /// Throttled cleanup -- at most once per 10 seconds.
     pub(super) async fn maybe_delete_expired<DB: DatabaseAdapter>(&self, ctx: &AuthContext<DB>) {
         let should_run = {
-            let mut last = self.last_expired_check.lock().unwrap();
+            let mut last = self
+                .last_expired_check
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             let now = std::time::Instant::now();
             match *last {
                 Some(prev) if now.duration_since(prev).as_secs() < 10 => false,
@@ -599,9 +602,10 @@ impl ApiKeyPlugin {
         {
             // Delete expired key and evict its cached rate limiter
             let _ = ctx.database.delete_api_key(api_key.id()).await;
-            self.rate_limiters
+            let _ = self
+                .rate_limiters
                 .lock()
-                .expect("rate_limiters mutex poisoned")
+                .unwrap_or_else(|e| e.into_inner())
                 .remove(api_key.id());
             return Err(ApiKeyValidationError::new(ApiKeyErrorCode::KeyExpired));
         }
@@ -627,9 +631,10 @@ impl ApiKeyPlugin {
         {
             // Usage exhausted, no refill configured -- delete key and evict cache
             let _ = ctx.database.delete_api_key(api_key.id()).await;
-            self.rate_limiters
+            let _ = self
+                .rate_limiters
                 .lock()
-                .expect("rate_limiters mutex poisoned")
+                .unwrap_or_else(|e| e.into_inner())
                 .remove(api_key.id());
             return Err(ApiKeyValidationError::new(ApiKeyErrorCode::UsageExceeded));
         }
@@ -726,10 +731,7 @@ impl ApiKeyPlugin {
 
         // Get or create the rate limiter for this key
         let limiter = {
-            let mut limiters = self
-                .rate_limiters
-                .lock()
-                .expect("rate_limiters mutex poisoned");
+            let mut limiters = self.rate_limiters.lock().unwrap_or_else(|e| e.into_inner());
             limiters
                 .entry(key_id)
                 .or_insert_with(|| {
@@ -739,8 +741,10 @@ impl ApiKeyPlugin {
                         .unwrap_or(0);
                     // Guard against zero-period panic (e.g. time_window_ms < max_requests)
                     let period = std::time::Duration::from_millis(period_ms.max(1));
+                    // `period` is guaranteed >= 1ms because of `.max(1)` above,
+                    // so `with_period` always returns `Some`.
                     let quota = Quota::with_period(period)
-                        .expect("period >= 1ms is always valid")
+                        .unwrap_or_else(|| Quota::per_second(max))
                         .allow_burst(max);
                     std::sync::Arc::new(RateLimiter::direct(quota))
                 })

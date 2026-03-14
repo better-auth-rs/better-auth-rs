@@ -148,7 +148,8 @@ pub(crate) async fn list_invitations_core<DB: DatabaseAdapter>(
     let org_id =
         resolve_organization_id(query.organization_id.as_deref(), None, session, ctx).await?;
 
-    ctx.database
+    let _ = ctx
+        .database
         .get_member(&org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
@@ -226,7 +227,8 @@ pub(crate) async fn accept_invitation_core<DB: DatabaseAdapter>(
         .await?
         .is_some()
     {
-        ctx.database
+        let _ = ctx
+            .database
             .update_invitation_status(invitation.id(), InvitationStatus::Accepted)
             .await?;
         return Err(AuthError::bad_request(
@@ -247,7 +249,8 @@ pub(crate) async fn accept_invitation_core<DB: DatabaseAdapter>(
         .update_invitation_status(invitation.id(), InvitationStatus::Accepted)
         .await?;
 
-    ctx.database
+    let _ = ctx
+        .database
         .update_session_active_organization(session.token(), Some(invitation.organization_id()))
         .await?;
 
@@ -285,7 +288,8 @@ pub(crate) async fn reject_invitation_core<DB: DatabaseAdapter>(
         )));
     }
 
-    ctx.database
+    let _ = ctx
+        .database
         .update_invitation_status(invitation.id(), InvitationStatus::Rejected)
         .await?;
 
@@ -328,7 +332,8 @@ pub(crate) async fn cancel_invitation_core<DB: DatabaseAdapter>(
         )));
     }
 
-    ctx.database
+    let _ = ctx
+        .database
         .update_invitation_status(invitation.id(), InvitationStatus::Canceled)
         .await?;
 

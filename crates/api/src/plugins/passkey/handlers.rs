@@ -114,7 +114,8 @@ pub(crate) async fn generate_register_options_core<DB: DatabaseAdapter>(
     // Store challenge as a verification token
     let identifier = format!("passkey_reg:{}", user.id());
     let expires_at = chrono::Utc::now() + chrono::Duration::seconds(config.challenge_ttl_secs);
-    let _ = ctx.database
+    let _ = ctx
+        .database
         .create_verification(CreateVerification {
             identifier: identifier.clone(),
             value: challenge.clone(),
@@ -133,10 +134,9 @@ pub(crate) async fn generate_register_options_core<DB: DatabaseAdapter>(
             });
             if let Some(transports) = pk.transports()
                 && let Ok(t) = serde_json::from_str::<Vec<String>>(transports)
+                && let Some(obj) = cred.as_object_mut()
             {
-                if let Some(obj) = cred.as_object_mut() {
-                    let _ = obj.insert("transports".to_string(), serde_json::json!(t));
-                }
+                let _ = obj.insert("transports".to_string(), serde_json::json!(t));
             }
             cred
         })
@@ -193,7 +193,8 @@ pub(crate) async fn verify_registration_core<DB: DatabaseAdapter>(
 
     // Atomically consume the challenge (single-use)
     let identifier = format!("passkey_reg:{}", user.id());
-    ctx.database
+    let _ = ctx
+        .database
         .consume_verification(&identifier, &challenge)
         .await?
         .ok_or_else(|| {
@@ -289,10 +290,9 @@ pub(crate) async fn generate_authenticate_options_core<DB: DatabaseAdapter>(
                 });
                 if let Some(transports) = pk.transports()
                     && let Ok(t) = serde_json::from_str::<Vec<String>>(transports)
+                    && let Some(obj) = cred.as_object_mut()
                 {
-                    if let Some(obj) = cred.as_object_mut() {
-                        let _ = obj.insert("transports".to_string(), serde_json::json!(t));
-                    }
+                    let _ = obj.insert("transports".to_string(), serde_json::json!(t));
                 }
                 cred
             })
@@ -304,7 +304,8 @@ pub(crate) async fn generate_authenticate_options_core<DB: DatabaseAdapter>(
     // Store challenge with the challenge itself as part of the identifier
     let identifier = format!("passkey_auth:{}", challenge);
     let expires_at = chrono::Utc::now() + chrono::Duration::seconds(config.challenge_ttl_secs);
-    let _ = ctx.database
+    let _ = ctx
+        .database
         .create_verification(CreateVerification {
             identifier,
             value: challenge.clone(),
@@ -346,7 +347,8 @@ pub(crate) async fn verify_authentication_core<DB: DatabaseAdapter>(
 
     // Atomically consume challenge so it cannot be replayed.
     let identifier = format!("passkey_auth:{}", challenge);
-    ctx.database
+    let _ = ctx
+        .database
         .consume_verification(&identifier, &challenge)
         .await?
         .ok_or_else(|| AuthError::bad_request("Invalid or expired authentication challenge"))?;
@@ -370,7 +372,8 @@ pub(crate) async fn verify_authentication_core<DB: DatabaseAdapter>(
         .counter()
         .checked_add(1)
         .ok_or_else(|| AuthError::internal("Passkey counter overflow"))?;
-    let _ = ctx.database
+    let _ = ctx
+        .database
         .update_passkey_counter(passkey.id(), new_counter)
         .await?;
 
