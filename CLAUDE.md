@@ -47,12 +47,12 @@ Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
    aligned with the pinned reference version `better-auth@1.4.19`.
    When in doubt, send a request to both servers and observe what the TS
    server actually does.
-2. **TypeScript better-auth source code** — when a local checkout of the
-   TypeScript Better Auth repository is available, use it to understand
-   intent, edge cases, schema generation, and hook semantics that the
-   OpenAPI spec does not capture. The portable reference harness itself
-   must not depend on that checkout at runtime; it uses the published
-   package pinned to `better-auth@1.4.19`.
+2. **TypeScript better-auth source code** — use the local checkout at
+   `/home/peron/dev/better-auth` to understand intent, edge cases, schema
+   generation, and hook semantics that the OpenAPI spec does not capture
+   when it is available. The portable reference harness itself must not
+   depend on that checkout at runtime; it uses the published package
+   pinned to `better-auth@1.4.19`.
 3. **`better-auth.yaml` OpenAPI spec** — the structural contract for
    endpoints, request/response schemas, and field names.
 4. **better-auth documentation** (https://www.better-auth.com/docs) —
@@ -70,16 +70,16 @@ Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
 - **Design for many consumers** — public Rust interfaces should be
   broadly usable across many applications, not specialized to a single
   product or demo.
-- **Downstream consumers are compatibility signals** — use real external
-  adopters as pressure tests for usability and compatibility when they
-  are available, but treat them as independent consumers whose migration
-  work cannot be planned or assumed here.
+- **`platform` is a reference consumer** — `/home/peron/dev/platform` is
+  an important downstream non-demo adopter and pressure test for
+  real-world usability. Treat it as an external compatibility signal,
+  not as a project whose migration work can be planned or assumed here.
 - **Do not optimize for the demo** — demos and compat harnesses are
   validation tools, not the product target.
-- **PaaS surface coverage is required** — prioritize the maintained
-  PaaS-facing API surface checklist before colder optional capability.
-  Remaining Better Auth capability can be scheduled after that checklist
-  is complete.
+- **PaaS surface coverage is required** — the interface list in
+  `/home/peron/downloads/better-auth-paas-api-surface.md` must be
+  fully covered across the roadmap. Remaining Better Auth capability can
+  be scheduled after that checklist is complete.
 
 If the TS source, the OpenAPI spec, and the docs contradict each other,
 trust the TS source. If a TS behavior looks like a bug, match it anyway
@@ -92,9 +92,10 @@ Before writing any code, you MUST have:
   (`cd compat-tests/reference-server && bun install`).
 - The `better-auth.yaml` spec in the workspace root.
 
-If a local Better Auth checkout is available, use it for source
-inspection. If it is not available, the portable Bun reference harness
-remains the runtime oracle.
+If the local Better Auth checkout is available at
+`/home/peron/dev/better-auth`, use it for source inspection. If it is
+not available, the portable Bun reference harness remains the runtime
+oracle.
 
 ## Commands
 
@@ -214,11 +215,11 @@ consumer-relevant.
    keeping it bundled together.
 3. Prefer finishing already-implemented or already-tested endpoints
    before starting colder surfaces.
-4. Then pick the next uncovered capability from the maintained
-   PaaS-facing API surface checklist.
-5. Use downstream consumers only as compatibility references for
-   prioritization and sanity checks; do not plan work that assumes
-   control over changes in those repos.
+4. Then pick the next uncovered capability from
+   `/home/peron/downloads/better-auth-paas-api-surface.md`.
+5. Use `/home/peron/dev/platform` only as a downstream compatibility
+   reference for prioritization and sanity checks; do not plan work that
+   assumes control over changes in that repo.
 6. Read the TS source for that capability to understand the full
    behavior, including edge cases and error paths.
 7. Implement or fix the Rust version.
