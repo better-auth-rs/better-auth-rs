@@ -241,13 +241,12 @@ impl RequestMeta {
     /// to `x-real-ip`. User-agent is read from the `user-agent` header.
     pub fn from_request(req: &AuthRequest) -> Self {
         Self {
-            ip_address: Some(
-                req.headers
-                    .get("x-forwarded-for")
-                    .or_else(|| req.headers.get("x-real-ip"))
-                    .cloned()
-                    .unwrap_or_default(),
-            ),
+            ip_address: req
+                .headers
+                .get("x-forwarded-for")
+                .or_else(|| req.headers.get("x-real-ip"))
+                .cloned()
+                .filter(|value| !value.is_empty()),
             user_agent: req.headers.get("user-agent").cloned(),
         }
     }

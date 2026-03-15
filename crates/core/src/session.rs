@@ -400,6 +400,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn create_session_without_metadata_uses_empty_strings() {
+        let db = test_database().await;
+        let mgr = SessionManager::new(test_config(), db.clone());
+
+        let user = db
+            .create_user(crate::types::CreateUser::new().with_email("test@test.com"))
+            .await
+            .unwrap();
+
+        let session = mgr.create_session(&user, None, None).await.unwrap();
+        assert_eq!(session.ip_address.as_deref(), Some(""));
+        assert_eq!(session.user_agent.as_deref(), Some(""));
+    }
+
+    #[tokio::test]
     async fn delete_session_removes_it() {
         let db = test_database().await;
         let mgr = SessionManager::new(test_config(), db.clone());

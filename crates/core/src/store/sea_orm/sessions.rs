@@ -12,6 +12,13 @@ use super::entities::session::{Column, Entity};
 use super::{AuthStore, cancelled_by_hook, map_db_err};
 
 impl AuthStore {
+    fn normalize_session_client_field(value: Option<String>) -> Option<String> {
+        match value {
+            Some(value) => Some(value),
+            None => Some(String::new()),
+        }
+    }
+
     async fn create_session_with_connection<C>(
         &self,
         db: &C,
@@ -39,8 +46,12 @@ impl AuthStore {
             expires_at: Set(create_session.expires_at),
             created_at: Set(now),
             updated_at: Set(now),
-            ip_address: Set(create_session.ip_address),
-            user_agent: Set(create_session.user_agent),
+            ip_address: Set(Self::normalize_session_client_field(
+                create_session.ip_address,
+            )),
+            user_agent: Set(Self::normalize_session_client_field(
+                create_session.user_agent,
+            )),
             impersonated_by: Set(create_session.impersonated_by),
             active_organization_id: Set(create_session.active_organization_id),
             active: Set(true),
