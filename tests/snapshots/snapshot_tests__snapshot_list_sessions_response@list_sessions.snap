@@ -1,12 +1,11 @@
 ---
 source: tests/snapshot_tests.rs
+assertion_line: 177
 expression: redact(&body)
 ---
-- activeOrganizationId: ~
-  createdAt: "[timestamp]"
+- createdAt: "[timestamp]"
   expiresAt: "[timestamp]"
   id: "[uuid]"
-  impersonatedBy: ~
   ipAddress: ~
   token: "[session_token]"
   updatedAt: "[timestamp]"

@@ -1,5 +1,7 @@
 ---
 source: tests/snapshot_tests.rs
+assertion_line: 387
 expression: redact(&body_400)
 ---
+code: INVALID_JSON_MISSING_FIELD_NAME_AT_LINE_1_COLUMN_2
 message: "Invalid JSON: missing field `name` at line 1 column 2"

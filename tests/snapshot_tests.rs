@@ -373,7 +373,7 @@ async fn snapshot_ok_response() {
     });
 }
 
-/// Error response shapes (400, 401, 409)
+/// Error response shapes (400, 401, 422)
 #[tokio::test]
 async fn snapshot_error_responses() {
     let auth = create_test_auth().await;
@@ -405,10 +405,10 @@ async fn snapshot_error_responses() {
         assert_yaml_snapshot!(redact(&body_401));
     });
 
-    // 409: Duplicate email
+    // 422: Duplicate email
     signup_user(&auth, "dup_snap@example.com", "password123", "Dup User").await;
 
-    let (status_409, body_409) = send_request(
+    let (status_422, body_422) = send_request(
         &auth,
         post_json(
             "/sign-up/email",
@@ -420,9 +420,9 @@ async fn snapshot_error_responses() {
         ),
     )
     .await;
-    assert_eq!(status_409, 409);
+    assert_eq!(status_422, 422);
 
-    with_settings!({snapshot_suffix => "error_409"}, {
-        assert_yaml_snapshot!(redact(&body_409));
+    with_settings!({snapshot_suffix => "error_422"}, {
+        assert_yaml_snapshot!(redact(&body_422));
     });
 }

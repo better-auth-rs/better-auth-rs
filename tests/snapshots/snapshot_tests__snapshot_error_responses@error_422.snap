@@ -1,0 +1,7 @@
+---
+source: tests/snapshot_tests.rs
+assertion_line: 426
+expression: redact(&body_422)
+---
+code: USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL
+message: User already exists. Use another email.

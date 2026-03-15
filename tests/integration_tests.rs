@@ -32,6 +32,18 @@ async fn create_test_user_and_session(
     (user_id, session_token)
 }
 
+async fn user_id_from_email(
+    auth: &Arc<BetterAuth<MemoryDatabaseAdapter>>,
+    email: &str,
+) -> String {
+    auth.database()
+        .get_user_by_email(email)
+        .await
+        .unwrap()
+        .and_then(|user| Some(user.id))
+        .unwrap_or_else(|| panic!("expected user for email {email}"))
+}
+
 /// Integration test for get-session endpoint
 #[tokio::test]
 async fn test_get_session_integration() {
@@ -58,9 +70,11 @@ async fn test_sign_out_integration() {
     assert_eq!(status, 200);
     assert_eq!(response_data["success"], true);
 
-    // Verify session is no longer valid
-    let (status2, _) = send_request(&auth, get_with_auth("/get-session", &session_token)).await;
-    assert_eq!(status2, 401); // Session should be invalidated
+    // Verify session is no longer valid; get-session returns 200 with null body.
+    let (status2, response2) =
+        send_request(&auth, get_with_auth("/get-session", &session_token)).await;
+    assert_eq!(status2, 200);
+    assert_eq!(response2, serde_json::Value::Null);
 }
 
 /// Integration test for list-sessions endpoint
@@ -150,9 +164,10 @@ async fn test_revoke_sessions_integration() {
 async fn test_unauthorized_session_access() {
     let auth = create_test_auth_memory().await;
 
-    // Try to access get-session without token
-    let (status, _) = send_request(&auth, get_request("/get-session")).await;
-    assert_eq!(status, 401);
+    // Unauthenticated get-session returns 200 with a null JSON body.
+    let (status, response) = send_request(&auth, get_request("/get-session")).await;
+    assert_eq!(status, 200);
+    assert_eq!(response, serde_json::Value::Null);
 }
 
 /// Integration test for forget-password endpoint
@@ -190,8 +205,8 @@ async fn test_reset_password_integration() {
 
     let reset_token = format!("reset_{}", Uuid::new_v4());
     let create_verification = CreateVerification {
-        identifier: "integration@test.com".to_string(),
-        value: reset_token.clone(),
+        identifier: format!("reset-password:{}", reset_token),
+        value: user_id_from_email(&auth, "integration@test.com").await,
         expires_at: Utc::now() + Duration::hours(24),
     };
     auth.database()
@@ -291,8 +306,8 @@ async fn test_reset_password_token_integration() {
 
     let reset_token = format!("reset_{}", Uuid::new_v4());
     let create_verification = CreateVerification {
-        identifier: "integration@test.com".to_string(),
-        value: reset_token.clone(),
+        identifier: format!("reset-password:{}", reset_token),
+        value: user_id_from_email(&auth, "integration@test.com").await,
         expires_at: Utc::now() + Duration::hours(24),
     };
     auth.database()
@@ -308,16 +323,17 @@ async fn test_reset_password_token_integration() {
         format!("/reset-password/{}", reset_token),
         HashMap::new(),
         None,
-        HashMap::new(),
+        HashMap::from([(
+            "callbackURL".to_string(),
+            "http://localhost:3000/reset".to_string(),
+        )]),
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-
-    assert_eq!(response_data["token"], reset_token);
+    assert_eq!(response.status, 302);
+    let location = response.headers.get("Location").cloned().unwrap_or_default();
+    assert!(location.contains("http://localhost:3000/reset"));
+    assert!(location.contains(&format!("token={reset_token}")));
 }
 
 /// Integration test for /ok endpoint
@@ -337,7 +353,8 @@ async fn test_error_endpoint() {
 
     let (status, response_data) = send_request(&auth, get_request("/error")).await;
     assert_eq!(status, 200);
-    assert_eq!(response_data["ok"], false);
+    let html = response_data.as_str().unwrap_or_default();
+    assert!(html.contains("CODE: UNKNOWN"));
 }
 
 /// Integration test for POST /get-session (in addition to GET)
@@ -858,7 +875,8 @@ async fn test_list_accounts_empty() {
 
     let body_str = String::from_utf8(response.body).unwrap();
     let accounts: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(accounts.len(), 0); // No linked accounts yet
+    assert_eq!(accounts.len(), 1); // Sign-up creates the credential account.
+    assert_eq!(accounts[0]["provider"], "credential");
 }
 
 /// Integration test for list-accounts with an account
@@ -907,15 +925,18 @@ async fn test_list_accounts_with_account() {
 
     let body_str = String::from_utf8(response.body).unwrap();
     let accounts: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(accounts.len(), 1);
-    assert_eq!(accounts[0]["provider"], "google");
+    assert_eq!(accounts.len(), 2);
+    let google_account = accounts
+        .iter()
+        .find(|account| account["provider"] == "google")
+        .expect("google account should be present");
     assert_eq!(
-        accounts[0]["scopes"],
+        google_account["scopes"],
         serde_json::json!(["email", "profile"])
     );
     // Sensitive fields should NOT be present
-    assert!(accounts[0].get("access_token").is_none());
-    assert!(accounts[0].get("password").is_none());
+    assert!(google_account.get("access_token").is_none());
+    assert!(google_account.get("password").is_none());
 }
 
 /// Integration test for unlink-account success
@@ -969,10 +990,11 @@ async fn test_unlink_account_success() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    // Verify only one account remains
+    // Verify only the remaining social account and the credential account remain.
     let accounts = auth.database().get_user_accounts(&user_id).await.unwrap();
-    assert_eq!(accounts.len(), 1);
-    assert_eq!(accounts[0].provider_id, "github");
+    assert_eq!(accounts.len(), 2);
+    assert!(accounts.iter().any(|account| account.provider_id == "github"));
+    assert!(accounts.iter().any(|account| account.provider_id == "credential"));
 }
 
 /// Integration test for unlink-account last credential → 400

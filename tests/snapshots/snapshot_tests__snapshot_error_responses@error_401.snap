@@ -1,5 +1,7 @@
 ---
 source: tests/snapshot_tests.rs
+assertion_line: 405
 expression: redact(&body_401)
 ---
-message: Invalid credentials
+code: INVALID_EMAIL_OR_PASSWORD
+message: Invalid email or password

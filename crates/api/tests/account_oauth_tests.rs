@@ -5,7 +5,7 @@
 //! 3. account_linking.enabled=false: callback rejects linking for existing emails
 //! 4. handle_link_social: confirm token handling in the link flow
 
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 
 use better_auth_core::adapters::{AccountOps, UserOps, VerificationOps};
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
@@ -23,6 +23,16 @@ use better_auth_api::plugins::oauth::{OAuthConfig, OAuthProvider, OAuthUserInfo}
 use serde_json::json;
 
 const TEST_SECRET: &str = "test-secret-key-that-is-at-least-32-characters-long";
+static LOCAL_PROXY_BYPASS: Once = Once::new();
+
+fn ensure_local_proxy_bypass() {
+    LOCAL_PROXY_BYPASS.call_once(|| unsafe {
+        // SAFETY: Tests in this binary all need the same localhost bypass values.
+        // We set them once before issuing any local OAuth mock-server requests.
+        std::env::set_var("NO_PROXY", "localhost,127.0.0.1");
+        std::env::set_var("no_proxy", "localhost,127.0.0.1");
+    });
+}
 
 fn test_config() -> AuthConfig {
     AuthConfig::new(TEST_SECRET)
@@ -116,9 +126,10 @@ async fn setup_user_with_account(
 /// Start a mock HTTP server that responds to OAuth token + userinfo requests.
 /// `email` is the email returned from the userinfo endpoint.
 async fn start_mock_oauth_server(email: &str) -> String {
+    ensure_local_proxy_bypass();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    let mock_url = format!("http://{}", addr);
+    let mock_url = format!("http://localhost:{}", addr.port());
     let email = email.to_string();
 
     tokio::spawn(async move {
@@ -131,6 +142,8 @@ async fn start_mock_oauth_server(email: &str) -> String {
             }
         }
     });
+
+    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
 
     mock_url
 }
@@ -257,7 +270,20 @@ async fn test_encrypt_oauth_tokens_stored_encrypted_in_db() {
         format!("better-auth.session_token={}", session_token),
     );
 
-    let oauth_plugin = OAuthPlugin::new();
+    let mut oauth_config = OAuthConfig::default();
+    let provider = make_test_provider("http://localhost:65535");
+    oauth_config
+        .providers
+        .insert("google".to_string(), OAuthProvider {
+            client_id: provider.client_id,
+            client_secret: provider.client_secret,
+            auth_url: provider.auth_url,
+            token_url: provider.token_url,
+            user_info_url: provider.user_info_url,
+            scopes: provider.scopes,
+            map_user_info: provider.map_user_info,
+        });
+    let oauth_plugin = OAuthPlugin::with_config(oauth_config);
     let result = oauth_plugin.on_request(&req, &ctx).await;
 
     match result {

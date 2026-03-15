@@ -1,20 +1,14 @@
 ---
 source: tests/snapshot_tests.rs
+assertion_line: 110
 expression: redact(&body)
 ---
 token: "[session_token]"
 user:
-  banExpires: ~
-  banReason: ~
-  banned: false
   createdAt: "[timestamp]"
-  displayUsername: ~
   email: snap@example.com
   emailVerified: false
   id: "[uuid]"
   image: ~
   name: Snapshot User
-  role: ~
-  twoFactorEnabled: false
   updatedAt: "[timestamp]"
-  username: ~
