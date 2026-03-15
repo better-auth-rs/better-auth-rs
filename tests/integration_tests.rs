@@ -1804,6 +1804,20 @@ async fn test_api_key_get() {
     // key_hash should NOT be in the response
     assert!(data.get("keyHash").is_none());
     assert!(data.get("key_hash").is_none());
+    // 1.5.5: referenceId replaces userId, configId defaults to "default"
+    assert!(
+        data["referenceId"].is_string(),
+        "response must include referenceId"
+    );
+    assert_eq!(
+        data["configId"].as_str().unwrap(),
+        "default",
+        "configId should default to 'default'"
+    );
+    assert!(
+        data.get("userId").is_none(),
+        "userId should no longer be present (renamed to referenceId)"
+    );
 }
 
 /// Integration test: list API keys
