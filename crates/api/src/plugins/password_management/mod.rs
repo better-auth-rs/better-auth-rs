@@ -3,10 +3,10 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use better_auth_core::AuthSession;
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
-use better_auth_core::{AuthSession, DatabaseAdapter};
 
 use better_auth_core::utils::password::PasswordHasher;
 
@@ -96,7 +96,7 @@ impl std::fmt::Debug for PasswordManagementConfig {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
+impl AuthPlugin for PasswordManagementPlugin {
     fn name(&self) -> &'static str {
         "password-management"
     }
@@ -114,7 +114,7 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/request-password-reset") => {
@@ -142,10 +142,10 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
 
 // Implementation methods outside the trait
 impl PasswordManagementPlugin {
-    async fn handle_request_password_reset<DB: DatabaseAdapter>(
+    async fn handle_request_password_reset(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let body: RequestPasswordResetRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -155,10 +155,10 @@ impl PasswordManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_reset_password<DB: DatabaseAdapter>(
+    async fn handle_reset_password(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let mut body: ResetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -171,10 +171,10 @@ impl PasswordManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_change_password<DB: DatabaseAdapter>(
+    async fn handle_change_password(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let body: ChangePasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -201,10 +201,10 @@ impl PasswordManagementPlugin {
         }
     }
 
-    async fn handle_set_password<DB: DatabaseAdapter>(
+    async fn handle_set_password(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let body: SetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -221,11 +221,11 @@ impl PasswordManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_reset_password_token<DB: DatabaseAdapter>(
+    async fn handle_reset_password_token(
         &self,
         token: &str,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let query = ResetPasswordTokenQuery {
             callback_url: req.query.get("callbackURL").cloned(),
@@ -243,11 +243,11 @@ impl PasswordManagementPlugin {
         }
     }
 
-    async fn get_current_user<DB: DatabaseAdapter>(
+    async fn get_current_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<Option<DB::User>> {
+        ctx: &AuthContext,
+    ) -> AuthResult<Option<better_auth_core::User>> {
         let session_manager = ctx.session_manager();
 
         if let Some(token) = session_manager.extract_session_token(req)
@@ -262,11 +262,7 @@ impl PasswordManagementPlugin {
 
 #[cfg(test)]
 impl PasswordManagementPlugin {
-    fn validate_password<DB: DatabaseAdapter>(
-        &self,
-        password: &str,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<()> {
+    fn validate_password(&self, password: &str, ctx: &AuthContext) -> AuthResult<()> {
         better_auth_core::utils::password::validate_password(
             password,
             ctx.config.password.min_length,
@@ -308,8 +304,8 @@ mod axum_impl {
         config: PasswordManagementConfig,
     }
 
-    async fn handle_request_password_reset<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_request_password_reset(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
         ValidatedJson(body): ValidatedJson<RequestPasswordResetRequest>,
     ) -> Result<Json<RequestPasswordResetResponse>, AuthError> {
@@ -318,8 +314,8 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_reset_password<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_reset_password(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
         Query(query): Query<ResetPasswordQuery>,
         ValidatedJson(mut body): ValidatedJson<ResetPasswordRequest>,
@@ -332,8 +328,8 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_reset_password_token<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_reset_password_token(
+        State(state): State<AuthState>,
         Path(token): Path<String>,
         Query(query): Query<ResetPasswordTokenQuery>,
     ) -> Result<axum::response::Response, AuthError> {
@@ -345,10 +341,10 @@ mod axum_impl {
         }
     }
 
-    async fn handle_change_password<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_change_password(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<ChangePasswordRequest>,
     ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
@@ -362,10 +358,10 @@ mod axum_impl {
         }
     }
 
-    async fn handle_set_password<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_set_password(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<SetPasswordRequest>,
     ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
@@ -373,12 +369,12 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for PasswordManagementPlugin {
+    impl better_auth_core::AxumPlugin for PasswordManagementPlugin {
         fn name(&self) -> &'static str {
             "password-management"
         }
 
-        fn router(&self) -> axum::Router<AuthState<DB>> {
+        fn router(&self) -> axum::Router<AuthState> {
             use axum::routing::{get, post};
 
             let plugin_state = Arc::new(PluginState {
@@ -388,15 +384,12 @@ mod axum_impl {
             axum::Router::new()
                 .route(
                     "/request-password-reset",
-                    post(handle_request_password_reset::<DB>),
+                    post(handle_request_password_reset),
                 )
-                .route("/reset-password", post(handle_reset_password::<DB>))
-                .route(
-                    "/reset-password/:token",
-                    get(handle_reset_password_token::<DB>),
-                )
-                .route("/change-password", post(handle_change_password::<DB>))
-                .route("/set-password", post(handle_set_password::<DB>))
+                .route("/reset-password", post(handle_reset_password))
+                .route("/reset-password/:token", get(handle_reset_password_token))
+                .route("/change-password", post(handle_change_password))
+                .route("/set-password", post(handle_set_password))
                 .layer(Extension(plugin_state))
         }
     }

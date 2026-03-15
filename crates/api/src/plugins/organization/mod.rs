@@ -5,7 +5,6 @@ pub mod types;
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::error::AuthResult;
 use better_auth_core::plugin::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::types::{AuthRequest, AuthResponse, HttpMethod};
@@ -57,7 +56,7 @@ pub struct OrganizationPlugin {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for OrganizationPlugin {
+impl AuthPlugin for OrganizationPlugin {
     fn name(&self) -> &'static str {
         "organization"
     }
@@ -100,7 +99,7 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for OrganizationPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             // Organization CRUD
@@ -208,32 +207,35 @@ mod axum_impl {
 
     // -- Organization CRUD --
 
-    async fn handle_create_organization<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_create_organization(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<CreateOrganizationRequest>,
-    ) -> Result<Json<CreateOrganizationResponse<DB::Organization, MemberResponse>>, AuthError> {
+    ) -> Result<
+        Json<CreateOrganizationResponse<better_auth_core::Organization, MemberResponse>>,
+        AuthError,
+    > {
         let ctx = state.to_context();
         let result = create_organization_core(&body, &user, &ps.config, &ctx).await?;
         Ok(Json(result))
     }
 
-    async fn handle_update_organization<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_update_organization(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, session, .. }: CurrentSession<DB>,
+        CurrentSession { user, session, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<UpdateOrganizationRequest>,
-    ) -> Result<Json<DB::Organization>, AuthError> {
+    ) -> Result<Json<better_auth_core::Organization>, AuthError> {
         let ctx = state.to_context();
         let result = update_organization_core(&body, &user, &session, &ps.config, &ctx).await?;
         Ok(Json(result))
     }
 
-    async fn handle_delete_organization<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_delete_organization(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         Json(body): Json<DeleteOrganizationRequest>,
     ) -> Result<Json<SuccessResponse>, AuthError> {
         let ctx = state.to_context();
@@ -241,28 +243,33 @@ mod axum_impl {
         Ok(Json(result))
     }
 
-    async fn handle_list_organizations<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-    ) -> Result<Json<Vec<DB::Organization>>, AuthError> {
+    async fn handle_list_organizations(
+        State(state): State<AuthState>,
+        CurrentSession { user, .. }: CurrentSession,
+    ) -> Result<Json<Vec<better_auth_core::Organization>>, AuthError> {
         let ctx = state.to_context();
         let result = list_organizations_core(&user, &ctx).await?;
         Ok(Json(result))
     }
 
-    async fn handle_get_full_organization<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { user, session, .. }: CurrentSession<DB>,
+    async fn handle_get_full_organization(
+        State(state): State<AuthState>,
+        CurrentSession { user, session, .. }: CurrentSession,
         Query(query): Query<GetFullOrganizationQuery>,
-    ) -> Result<Json<FullOrganizationResponse<DB::Organization, DB::Invitation>>, AuthError> {
+    ) -> Result<
+        Json<
+            FullOrganizationResponse<better_auth_core::Organization, better_auth_core::Invitation>,
+        >,
+        AuthError,
+    > {
         let ctx = state.to_context();
         let result = get_full_organization_core(&query, &user, &session, &ctx).await?;
         Ok(Json(result))
     }
 
-    async fn handle_check_slug<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { .. }: CurrentSession<DB>,
+    async fn handle_check_slug(
+        State(state): State<AuthState>,
+        CurrentSession { .. }: CurrentSession,
         Json(body): Json<CheckSlugRequest>,
     ) -> Result<Json<CheckSlugResponse>, AuthError> {
         let ctx = state.to_context();
@@ -270,19 +277,19 @@ mod axum_impl {
         Ok(Json(result))
     }
 
-    async fn handle_set_active_organization<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { user, session, .. }: CurrentSession<DB>,
+    async fn handle_set_active_organization(
+        State(state): State<AuthState>,
+        CurrentSession { user, session, .. }: CurrentSession,
         Json(body): Json<SetActiveOrganizationRequest>,
-    ) -> Result<Json<DB::Session>, AuthError> {
+    ) -> Result<Json<better_auth_core::Session>, AuthError> {
         let ctx = state.to_context();
         let result = set_active_organization_core(&body, &user, &session, &ctx).await?;
         Ok(Json(result))
     }
 
-    async fn handle_leave_organization<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { user, session, .. }: CurrentSession<DB>,
+    async fn handle_leave_organization(
+        State(state): State<AuthState>,
+        CurrentSession { user, session, .. }: CurrentSession,
         Json(body): Json<LeaveOrganizationRequest>,
     ) -> Result<Json<SuccessResponse>, AuthError> {
         let ctx = state.to_context();
@@ -292,18 +299,18 @@ mod axum_impl {
 
     // -- Member management --
 
-    async fn handle_get_active_member<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { user, session, .. }: CurrentSession<DB>,
+    async fn handle_get_active_member(
+        State(state): State<AuthState>,
+        CurrentSession { user, session, .. }: CurrentSession,
     ) -> Result<Json<MemberResponse>, AuthError> {
         let ctx = state.to_context();
         let result = get_active_member_core(&user, &session, &ctx).await?;
         Ok(Json(result))
     }
 
-    async fn handle_list_members<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { user, session, .. }: CurrentSession<DB>,
+    async fn handle_list_members(
+        State(state): State<AuthState>,
+        CurrentSession { user, session, .. }: CurrentSession,
         Query(query): Query<ListMembersQuery>,
     ) -> Result<Json<ListMembersResponse>, AuthError> {
         let ctx = state.to_context();
@@ -311,10 +318,10 @@ mod axum_impl {
         Ok(Json(result))
     }
 
-    async fn handle_remove_member<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_remove_member(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, session, .. }: CurrentSession<DB>,
+        CurrentSession { user, session, .. }: CurrentSession,
         Json(body): Json<RemoveMemberRequest>,
     ) -> Result<Json<RemovedMemberResponse>, AuthError> {
         let ctx = state.to_context();
@@ -322,10 +329,10 @@ mod axum_impl {
         Ok(Json(result))
     }
 
-    async fn handle_update_member_role<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_update_member_role(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, session, .. }: CurrentSession<DB>,
+        CurrentSession { user, session, .. }: CurrentSession,
         Json(body): Json<UpdateMemberRoleRequest>,
     ) -> Result<Json<MemberWrappedResponse>, AuthError> {
         let ctx = state.to_context();
@@ -335,59 +342,59 @@ mod axum_impl {
 
     // -- Invitations --
 
-    async fn handle_invite_member<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_invite_member(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, session, .. }: CurrentSession<DB>,
+        CurrentSession { user, session, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<InviteMemberRequest>,
-    ) -> Result<Json<DB::Invitation>, AuthError> {
+    ) -> Result<Json<better_auth_core::Invitation>, AuthError> {
         let ctx = state.to_context();
         let result = invite_member_core(&body, &user, &session, &ps.config, &ctx).await?;
         Ok(Json(result))
     }
 
-    async fn handle_get_invitation<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_get_invitation(
+        State(state): State<AuthState>,
         Query(query): Query<GetInvitationQuery>,
-    ) -> Result<Json<GetInvitationResponse<DB::Invitation>>, AuthError> {
+    ) -> Result<Json<GetInvitationResponse<better_auth_core::Invitation>>, AuthError> {
         let ctx = state.to_context();
         let result = get_invitation_core(&query, &ctx).await?;
         Ok(Json(result))
     }
 
-    async fn handle_list_invitations<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { user, session, .. }: CurrentSession<DB>,
+    async fn handle_list_invitations(
+        State(state): State<AuthState>,
+        CurrentSession { user, session, .. }: CurrentSession,
         Query(query): Query<ListInvitationsQuery>,
-    ) -> Result<Json<Vec<DB::Invitation>>, AuthError> {
+    ) -> Result<Json<Vec<better_auth_core::Invitation>>, AuthError> {
         let ctx = state.to_context();
         let result = list_invitations_core(&query, &user, &session, &ctx).await?;
         Ok(Json(result))
     }
 
-    async fn handle_list_user_invitations<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-    ) -> Result<Json<Vec<DB::Invitation>>, AuthError> {
+    async fn handle_list_user_invitations(
+        State(state): State<AuthState>,
+        CurrentSession { user, .. }: CurrentSession,
+    ) -> Result<Json<Vec<better_auth_core::Invitation>>, AuthError> {
         let ctx = state.to_context();
         let result = list_user_invitations_core(&user, &ctx).await?;
         Ok(Json(result))
     }
 
-    async fn handle_accept_invitation<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_accept_invitation(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, session, .. }: CurrentSession<DB>,
+        CurrentSession { user, session, .. }: CurrentSession,
         Json(body): Json<AcceptInvitationRequest>,
-    ) -> Result<Json<AcceptInvitationResponse<DB::Invitation>>, AuthError> {
+    ) -> Result<Json<AcceptInvitationResponse<better_auth_core::Invitation>>, AuthError> {
         let ctx = state.to_context();
         let result = accept_invitation_core(&body, &user, &session, &ps.config, &ctx).await?;
         Ok(Json(result))
     }
 
-    async fn handle_reject_invitation<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+    async fn handle_reject_invitation(
+        State(state): State<AuthState>,
+        CurrentSession { user, .. }: CurrentSession,
         Json(body): Json<RejectInvitationRequest>,
     ) -> Result<Json<SuccessResponse>, AuthError> {
         let ctx = state.to_context();
@@ -395,10 +402,10 @@ mod axum_impl {
         Ok(Json(result))
     }
 
-    async fn handle_cancel_invitation<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_cancel_invitation(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         Json(body): Json<CancelInvitationRequest>,
     ) -> Result<Json<SuccessResponse>, AuthError> {
         let ctx = state.to_context();
@@ -408,10 +415,10 @@ mod axum_impl {
 
     // -- Permission check --
 
-    async fn handle_has_permission<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_has_permission(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, session, .. }: CurrentSession<DB>,
+        CurrentSession { user, session, .. }: CurrentSession,
         Json(body): Json<HasPermissionRequest>,
     ) -> Result<Json<HasPermissionResponse>, AuthError> {
         let ctx = state.to_context();
@@ -422,12 +429,12 @@ mod axum_impl {
     // -- AxumPlugin impl --
 
     #[async_trait]
-    impl<DB: DatabaseAdapter> AxumPlugin<DB> for OrganizationPlugin {
+    impl AxumPlugin for OrganizationPlugin {
         fn name(&self) -> &'static str {
             "organization"
         }
 
-        fn router(&self) -> axum::Router<AuthState<DB>> {
+        fn router(&self) -> axum::Router<AuthState> {
             use axum::routing::{get, post};
 
             let plugin_state = Arc::new(PluginState {
@@ -436,77 +443,56 @@ mod axum_impl {
 
             axum::Router::new()
                 // Organization CRUD
-                .route(
-                    "/organization/create",
-                    post(handle_create_organization::<DB>),
-                )
-                .route(
-                    "/organization/update",
-                    post(handle_update_organization::<DB>),
-                )
-                .route(
-                    "/organization/delete",
-                    post(handle_delete_organization::<DB>),
-                )
-                .route("/organization/list", get(handle_list_organizations::<DB>))
+                .route("/organization/create", post(handle_create_organization))
+                .route("/organization/update", post(handle_update_organization))
+                .route("/organization/delete", post(handle_delete_organization))
+                .route("/organization/list", get(handle_list_organizations))
                 .route(
                     "/organization/get-full-organization",
-                    get(handle_get_full_organization::<DB>),
+                    get(handle_get_full_organization),
                 )
-                .route("/organization/check-slug", post(handle_check_slug::<DB>))
+                .route("/organization/check-slug", post(handle_check_slug))
                 .route(
                     "/organization/set-active",
-                    post(handle_set_active_organization::<DB>),
+                    post(handle_set_active_organization),
                 )
-                .route("/organization/leave", post(handle_leave_organization::<DB>))
+                .route("/organization/leave", post(handle_leave_organization))
                 // Member management
                 .route(
                     "/organization/get-active-member",
-                    get(handle_get_active_member::<DB>),
+                    get(handle_get_active_member),
                 )
-                .route("/organization/list-members", get(handle_list_members::<DB>))
-                .route(
-                    "/organization/remove-member",
-                    post(handle_remove_member::<DB>),
-                )
+                .route("/organization/list-members", get(handle_list_members))
+                .route("/organization/remove-member", post(handle_remove_member))
                 .route(
                     "/organization/update-member-role",
-                    post(handle_update_member_role::<DB>),
+                    post(handle_update_member_role),
                 )
                 // Invitations
-                .route(
-                    "/organization/invite-member",
-                    post(handle_invite_member::<DB>),
-                )
-                .route(
-                    "/organization/get-invitation",
-                    get(handle_get_invitation::<DB>),
-                )
+                .route("/organization/invite-member", post(handle_invite_member))
+                .route("/organization/get-invitation", get(handle_get_invitation))
                 .route(
                     "/organization/list-invitations",
-                    get(handle_list_invitations::<DB>),
+                    get(handle_list_invitations),
                 )
                 .route(
                     "/organization/list-user-invitations",
-                    get(handle_list_user_invitations::<DB>),
+                    get(handle_list_user_invitations),
                 )
                 .route(
                     "/organization/accept-invitation",
-                    post(handle_accept_invitation::<DB>),
+                    post(handle_accept_invitation),
                 )
                 .route(
                     "/organization/reject-invitation",
-                    post(handle_reject_invitation::<DB>),
+                    post(handle_reject_invitation),
                 )
                 .route(
                     "/organization/cancel-invitation",
-                    post(handle_cancel_invitation::<DB>),
+                    post(handle_cancel_invitation),
                 )
                 // Permission check
-                .route(
-                    "/organization/has-permission",
-                    post(handle_has_permission::<DB>),
-                )
+                .route("/organization/has-permission", post(handle_has_permission))
                 .layer(Extension(plugin_state))
         }
     }

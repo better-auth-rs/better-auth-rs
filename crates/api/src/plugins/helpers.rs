@@ -2,7 +2,6 @@
 //!
 //! Extracted to avoid duplicating common patterns across plugins (DRY).
 
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthAccount, AuthApiKey, AuthUser};
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 
@@ -29,11 +28,11 @@ pub fn expires_in_to_at(expires_in_ms: Option<i64>) -> AuthResult<Option<String>
 /// Returns `AuthError::not_found` if the key does not exist or belongs to
 /// another user.  This pattern was duplicated in `handle_get`, `handle_update`,
 /// and `handle_delete`.
-pub async fn get_owned_api_key<DB: DatabaseAdapter>(
-    ctx: &AuthContext<DB>,
+pub async fn get_owned_api_key(
+    ctx: &AuthContext,
     key_id: &str,
     user_id: &str,
-) -> AuthResult<DB::ApiKey> {
+) -> AuthResult<better_auth_core::ApiKey> {
     let api_key = ctx
         .database
         .get_api_key_by_id(key_id)
@@ -48,10 +47,10 @@ pub async fn get_owned_api_key<DB: DatabaseAdapter>(
 }
 
 /// Fetch the user's credential account, if present.
-pub async fn get_credential_account<DB: DatabaseAdapter>(
-    ctx: &AuthContext<DB>,
+pub async fn get_credential_account(
+    ctx: &AuthContext,
     user_id: &str,
-) -> AuthResult<Option<DB::Account>> {
+) -> AuthResult<Option<better_auth_core::Account>> {
     Ok(ctx
         .database
         .get_user_accounts(user_id)
@@ -62,9 +61,9 @@ pub async fn get_credential_account<DB: DatabaseAdapter>(
 
 /// Resolve the user's stored password hash from the credential account first,
 /// falling back to legacy user metadata when needed.
-pub async fn get_user_password_hash<DB: DatabaseAdapter>(
-    ctx: &AuthContext<DB>,
-    user: &DB::User,
+pub async fn get_user_password_hash(
+    ctx: &AuthContext,
+    user: &better_auth_core::User,
 ) -> AuthResult<Option<String>> {
     Ok(get_credential_account(ctx, user.id())
         .await?
@@ -73,9 +72,9 @@ pub async fn get_user_password_hash<DB: DatabaseAdapter>(
 }
 
 /// Whether the user currently has a password set.
-pub async fn user_has_password<DB: DatabaseAdapter>(
-    ctx: &AuthContext<DB>,
-    user: &DB::User,
+pub async fn user_has_password(
+    ctx: &AuthContext,
+    user: &better_auth_core::User,
 ) -> AuthResult<bool> {
     Ok(get_user_password_hash(ctx, user).await?.is_some())
 }

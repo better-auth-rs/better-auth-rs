@@ -1,7 +1,6 @@
 use chrono::{Duration, Utc};
 use uuid::Uuid;
 
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthUser, AuthVerification};
 use better_auth_core::{AuthContext, AuthError, AuthResult, UpdateUser};
 
@@ -14,8 +13,8 @@ use better_auth_core::SuccessMessageResponse;
 // ---------------------------------------------------------------------------
 
 /// Create a verification token, persist it, and return `(token_value, verification_url)`.
-pub(super) async fn create_verification_token<DB: DatabaseAdapter>(
-    ctx: &AuthContext<DB>,
+pub(super) async fn create_verification_token(
+    ctx: &AuthContext,
     identifier: &str,
     token_prefix: &str,
     expires_at: chrono::DateTime<Utc>,
@@ -48,8 +47,8 @@ pub(super) async fn create_verification_token<DB: DatabaseAdapter>(
 }
 
 /// Send an email using the configured email provider, logging on failure.
-pub(super) async fn send_email_or_log<DB: DatabaseAdapter>(
-    ctx: &AuthContext<DB>,
+pub(super) async fn send_email_or_log(
+    ctx: &AuthContext,
     to: &str,
     subject: &str,
     html: &str,
@@ -80,11 +79,11 @@ pub(super) async fn send_email_or_log<DB: DatabaseAdapter>(
 // Core functions (framework-agnostic business logic)
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
+pub(crate) async fn change_email_core(
     body: &super::types::ChangeEmailRequest,
-    user: &DB::User,
+    user: &better_auth_core::User,
     config: &UserManagementConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<StatusMessageResponse> {
     // Prevent changing to the same email
     if user.email().map(|e| e == body.new_email).unwrap_or(false) {
@@ -161,9 +160,9 @@ pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
     })
 }
 
-pub(crate) async fn change_email_verify_core<DB: DatabaseAdapter>(
+pub(crate) async fn change_email_verify_core(
     token: &str,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<StatusMessageResponse> {
     // Find verification by token value
     let verification = ctx
@@ -223,10 +222,10 @@ pub(crate) async fn change_email_verify_core<DB: DatabaseAdapter>(
     })
 }
 
-pub(crate) async fn delete_user_core<DB: DatabaseAdapter>(
-    user: &DB::User,
+pub(crate) async fn delete_user_core(
+    user: &better_auth_core::User,
     config: &UserManagementConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<SuccessMessageResponse> {
     if config.delete_user.require_verification {
         // Verification requires a valid email to send the token to.
@@ -274,10 +273,10 @@ pub(crate) async fn delete_user_core<DB: DatabaseAdapter>(
     }
 }
 
-pub(crate) async fn delete_user_verify_core<DB: DatabaseAdapter>(
+pub(crate) async fn delete_user_verify_core(
     token: &str,
     config: &UserManagementConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<SuccessMessageResponse> {
     // Find verification by token value
     let verification = ctx
@@ -322,10 +321,10 @@ pub(crate) async fn delete_user_verify_core<DB: DatabaseAdapter>(
 }
 
 /// Delete a user together with all their sessions and accounts.
-async fn perform_user_deletion<DB: DatabaseAdapter>(
-    user: &DB::User,
+async fn perform_user_deletion(
+    user: &better_auth_core::User,
     config: &UserManagementConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<()> {
     let user_info = UserInfo::from_auth_user(user);
 

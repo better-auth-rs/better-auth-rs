@@ -158,9 +158,27 @@ impl ApiKeyOps for SeaOrmAdapter {
     }
 
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
-        Entity::delete_many()
+        let now = Utc::now();
+        let expired_ids: Vec<String> = Entity::find()
             .filter(Column::ExpiresAt.is_not_null())
-            .filter(Column::ExpiresAt.lt(Utc::now()))
+            .all(self.connection())
+            .await
+            .map_err(map_db_err)?
+            .into_iter()
+            .filter_map(|model| {
+                model
+                    .expires_at
+                    .filter(|expires_at| *expires_at <= now)
+                    .map(|_| model.id)
+            })
+            .collect();
+
+        if expired_ids.is_empty() {
+            return Ok(0);
+        }
+
+        Entity::delete_many()
+            .filter(Column::Id.is_in(expired_ids))
             .exec(self.connection())
             .await
             .map(|result| result.rows_affected as usize)

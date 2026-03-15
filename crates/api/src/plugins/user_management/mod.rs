@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use chrono::Duration;
 use std::sync::Arc;
 
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::AuthUser;
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
@@ -237,10 +236,10 @@ impl Default for UserManagementPlugin {
 
 impl UserManagementPlugin {
     /// `POST /change-email`
-    async fn handle_change_email<DB: DatabaseAdapter>(
+    async fn handle_change_email(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: ChangeEmailRequest = match better_auth_core::validate_request_body(req) {
@@ -252,10 +251,10 @@ impl UserManagementPlugin {
     }
 
     /// `GET /change-email/verify`
-    async fn handle_change_email_verify<DB: DatabaseAdapter>(
+    async fn handle_change_email_verify(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let token = req
             .query
@@ -266,10 +265,10 @@ impl UserManagementPlugin {
     }
 
     /// `POST /delete-user`
-    async fn handle_delete_user<DB: DatabaseAdapter>(
+    async fn handle_delete_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let response = delete_user_core(&user, &self.config, ctx).await?;
@@ -277,10 +276,10 @@ impl UserManagementPlugin {
     }
 
     /// `GET /delete-user/verify`
-    async fn handle_delete_user_verify<DB: DatabaseAdapter>(
+    async fn handle_delete_user_verify(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let token = req
             .query
@@ -296,7 +295,7 @@ impl UserManagementPlugin {
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for UserManagementPlugin {
+impl AuthPlugin for UserManagementPlugin {
     fn name(&self) -> &'static str {
         "user-management"
     }
@@ -320,7 +319,7 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for UserManagementPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             // -- change email --
@@ -362,10 +361,10 @@ mod axum_impl {
         config: UserManagementConfig,
     }
 
-    async fn handle_change_email<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_change_email(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<ChangeEmailRequest>,
     ) -> Result<Json<StatusMessageResponse>, AuthError> {
         if !ps.config.change_email.enabled {
@@ -376,8 +375,8 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_change_email_verify<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_change_email_verify(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
         Query(query): Query<TokenQuery>,
     ) -> Result<Json<StatusMessageResponse>, AuthError> {
@@ -389,10 +388,10 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_delete_user<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_delete_user(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
     ) -> Result<Json<SuccessMessageResponse>, AuthError> {
         if !ps.config.delete_user.enabled {
             return Err(AuthError::not_found("Not found"));
@@ -402,8 +401,8 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_delete_user_verify<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_delete_user_verify(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
         Query(query): Query<TokenQuery>,
     ) -> Result<Json<SuccessMessageResponse>, AuthError> {
@@ -415,12 +414,12 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for UserManagementPlugin {
+    impl better_auth_core::AxumPlugin for UserManagementPlugin {
         fn name(&self) -> &'static str {
             "user-management"
         }
 
-        fn router(&self) -> axum::Router<AuthState<DB>> {
+        fn router(&self) -> axum::Router<AuthState> {
             use axum::routing::{get, post};
 
             let plugin_state = Arc::new(PluginState {
@@ -428,13 +427,10 @@ mod axum_impl {
             });
 
             axum::Router::new()
-                .route("/change-email", post(handle_change_email::<DB>))
-                .route(
-                    "/change-email/verify",
-                    get(handle_change_email_verify::<DB>),
-                )
-                .route("/delete-user", post(handle_delete_user::<DB>))
-                .route("/delete-user/verify", get(handle_delete_user_verify::<DB>))
+                .route("/change-email", post(handle_change_email))
+                .route("/change-email/verify", get(handle_change_email_verify))
+                .route("/delete-user", post(handle_delete_user))
+                .route("/delete-user/verify", get(handle_delete_user_verify))
                 .layer(Extension(plugin_state))
         }
     }

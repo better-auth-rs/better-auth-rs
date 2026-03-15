@@ -5,7 +5,7 @@ use uuid::Uuid;
 use better_auth_core::utils::password::{self as password_utils};
 use better_auth_core::{
     AuthAccount, AuthContext, AuthError, AuthResult, AuthSession, AuthUser, AuthVerification,
-    CreateAccount, DatabaseAdapter, UpdateAccount, extract_origin,
+    CreateAccount, UpdateAccount, extract_origin,
 };
 
 use crate::plugins::helpers::{get_credential_account, get_user_password_hash, user_has_password};
@@ -20,10 +20,10 @@ const PASSWORD_RESET_SUCCESS_MESSAGE: &str =
 // Core functions (framework-agnostic business logic)
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn request_password_reset_core<DB: DatabaseAdapter>(
+pub(crate) async fn request_password_reset_core(
     body: &RequestPasswordResetRequest,
     config: &PasswordManagementConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<RequestPasswordResetResponse> {
     if let Some(redirect_to) = &body.redirect_to {
         validate_redirect_target(redirect_to, ctx, "Invalid redirectURL")?;
@@ -86,10 +86,10 @@ pub(crate) async fn request_password_reset_core<DB: DatabaseAdapter>(
     Ok(success)
 }
 
-pub(crate) async fn reset_password_core<DB: DatabaseAdapter>(
+pub(crate) async fn reset_password_core(
     body: &ResetPasswordRequest,
     config: &PasswordManagementConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<StatusResponse> {
     password_utils::validate_password(
         &body.new_password,
@@ -170,10 +170,10 @@ pub(crate) async fn reset_password_core<DB: DatabaseAdapter>(
     Ok(StatusResponse { status: true })
 }
 
-pub(crate) async fn reset_password_token_core<DB: DatabaseAdapter>(
+pub(crate) async fn reset_password_token_core(
     token: &str,
     query: &ResetPasswordTokenQuery,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<ResetPasswordTokenResult> {
     if let Some(callback_url) = &query.callback_url {
         validate_redirect_target(callback_url, ctx, "Invalid callbackURL")?;
@@ -211,12 +211,15 @@ pub(crate) async fn reset_password_token_core<DB: DatabaseAdapter>(
 }
 
 /// Change the user's password. Returns the response and an optional new session token.
-pub(crate) async fn change_password_core<DB: DatabaseAdapter>(
+pub(crate) async fn change_password_core(
     body: &ChangePasswordRequest,
-    user: &DB::User,
+    user: &better_auth_core::User,
     config: &PasswordManagementConfig,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(ChangePasswordResponse<DB::User>, Option<String>)> {
+    ctx: &AuthContext,
+) -> AuthResult<(
+    ChangePasswordResponse<better_auth_core::User>,
+    Option<String>,
+)> {
     if config.require_current_password {
         let stored_hash = get_user_password_hash(ctx, user)
             .await?
@@ -278,11 +281,11 @@ pub(crate) async fn change_password_core<DB: DatabaseAdapter>(
     Ok((response, new_token))
 }
 
-pub(crate) async fn set_password_core<DB: DatabaseAdapter>(
+pub(crate) async fn set_password_core(
     body: &SetPasswordRequest,
-    user: &DB::User,
+    user: &better_auth_core::User,
     config: &PasswordManagementConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<StatusResponse> {
     if user_has_password(ctx, user).await? {
         return Err(AuthError::bad_request("user already has a password"));
@@ -330,9 +333,9 @@ pub(crate) async fn set_password_core<DB: DatabaseAdapter>(
     Ok(StatusResponse { status: true })
 }
 
-fn validate_redirect_target<DB: DatabaseAdapter>(
+fn validate_redirect_target(
     target: &str,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
     error_message: &str,
 ) -> AuthResult<()> {
     if !target.starts_with("//") && Url::parse(target).is_err() {

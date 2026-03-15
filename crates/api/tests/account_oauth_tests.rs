@@ -13,8 +13,7 @@ use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{
     AccountConfig, AccountLinkingConfig, AuthConfig, AuthContext, AuthPlugin, AuthRequest,
     CreateAccount, CreateUser, CreateVerification, HookedDatabaseAdapter, HttpMethod,
-    SessionManager, run_migrations,
-    sea_orm::Database,
+    SessionManager, run_migrations, sea_orm::Database,
 };
 
 use better_auth_api::AccountManagementPlugin;
@@ -282,9 +281,9 @@ async fn test_encrypt_oauth_tokens_stored_encrypted_in_db() {
 
     let mut oauth_config = OAuthConfig::default();
     let provider = make_test_provider("http://localhost:65535");
-    oauth_config
-        .providers
-        .insert("google".to_string(), OAuthProvider {
+    oauth_config.providers.insert(
+        "google".to_string(),
+        OAuthProvider {
             client_id: provider.client_id,
             client_secret: provider.client_secret,
             auth_url: provider.auth_url,
@@ -292,7 +291,8 @@ async fn test_encrypt_oauth_tokens_stored_encrypted_in_db() {
             user_info_url: provider.user_info_url,
             scopes: provider.scopes,
             map_user_info: provider.map_user_info,
-        });
+        },
+    );
     let oauth_plugin = OAuthPlugin::with_config(oauth_config);
     let result = oauth_plugin.on_request(&req, &ctx).await;
 

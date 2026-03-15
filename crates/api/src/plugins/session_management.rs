@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::config::AuthConfig;
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
@@ -43,7 +42,7 @@ struct GetSessionResponse<S: Serialize, U: Serialize> {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for SessionManagementPlugin {
+impl AuthPlugin for SessionManagementPlugin {
     fn name(&self) -> &'static str {
         "session-management"
     }
@@ -63,7 +62,7 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for SessionManagementPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Get | HttpMethod::Post, "/get-session") => {
@@ -93,25 +92,25 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for SessionManagementPlugin {
 // Core functions — framework-agnostic business logic
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn sign_out_core<DB: DatabaseAdapter>(
-    session: &DB::Session,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn sign_out_core(
+    session: &better_auth_core::Session,
+    ctx: &AuthContext,
 ) -> AuthResult<SuccessResponse> {
     ctx.database.delete_session(session.token()).await?;
     Ok(SuccessResponse { success: true })
 }
 
-pub(crate) async fn list_sessions_core<DB: DatabaseAdapter>(
+pub(crate) async fn list_sessions_core(
     user_id: &str,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<Vec<DB::Session>> {
+    ctx: &AuthContext,
+) -> AuthResult<Vec<better_auth_core::Session>> {
     ctx.session_manager().list_user_sessions(user_id).await
 }
 
-pub(crate) async fn revoke_session_core<DB: DatabaseAdapter>(
-    user: &DB::User,
+pub(crate) async fn revoke_session_core(
+    user: &better_auth_core::User,
     token: &str,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<StatusResponse> {
     let session_manager = ctx.session_manager();
     if let Some(session_to_revoke) = session_manager.get_session(token).await?
@@ -122,20 +121,21 @@ pub(crate) async fn revoke_session_core<DB: DatabaseAdapter>(
     Ok(StatusResponse { status: true })
 }
 
-pub(crate) async fn revoke_sessions_core<DB: DatabaseAdapter>(
+pub(crate) async fn revoke_sessions_core(
     user_id: &str,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<StatusResponse> {
     ctx.database.delete_user_sessions(user_id).await?;
     Ok(StatusResponse { status: true })
 }
 
-pub(crate) async fn revoke_other_sessions_core<DB: DatabaseAdapter>(
+pub(crate) async fn revoke_other_sessions_core(
     user_id: &str,
-    current_session: &DB::Session,
-    ctx: &AuthContext<DB>,
+    current_session: &better_auth_core::Session,
+    ctx: &AuthContext,
 ) -> AuthResult<StatusResponse> {
-    let all_sessions: Vec<DB::Session> = ctx.session_manager().list_user_sessions(user_id).await?;
+    let all_sessions: Vec<better_auth_core::Session> =
+        ctx.session_manager().list_user_sessions(user_id).await?;
     for session in all_sessions {
         if session.token() != current_session.token() {
             ctx.database.delete_session(session.token()).await?;
@@ -149,10 +149,10 @@ pub(crate) async fn revoke_other_sessions_core<DB: DatabaseAdapter>(
 // ---------------------------------------------------------------------------
 
 impl SessionManagementPlugin {
-    async fn handle_get_session<DB: DatabaseAdapter>(
+    async fn handle_get_session(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         // Returns 200 with null body when unauthenticated (never an error status).
         match ctx.require_session(req).await {
@@ -164,10 +164,10 @@ impl SessionManagementPlugin {
         }
     }
 
-    async fn handle_sign_out<DB: DatabaseAdapter>(
+    async fn handle_sign_out(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         if let Ok((_user, session)) = ctx.require_session(req).await {
             let _ = sign_out_core(&session, ctx).await;
@@ -195,20 +195,20 @@ impl SessionManagementPlugin {
         Ok(response)
     }
 
-    async fn handle_list_sessions<DB: DatabaseAdapter>(
+    async fn handle_list_sessions(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
         let sessions = list_sessions_core(user.id(), ctx).await?;
         Ok(AuthResponse::json(200, &sessions)?)
     }
 
-    async fn handle_revoke_session<DB: DatabaseAdapter>(
+    async fn handle_revoke_session(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
 
@@ -221,20 +221,20 @@ impl SessionManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_revoke_sessions<DB: DatabaseAdapter>(
+    async fn handle_revoke_sessions(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
         let response = revoke_sessions_core(user.id(), ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_revoke_other_sessions<DB: DatabaseAdapter>(
+    async fn handle_revoke_other_sessions(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, current_session) = ctx.require_session(req).await?;
         let response = revoke_other_sessions_core(user.id(), &current_session, ctx).await?;
@@ -268,15 +268,18 @@ mod axum_impl {
     }
 
     // get_session is trivially simple: just construct the response directly.
-    async fn handle_get_session<DB: DatabaseAdapter>(
-        CurrentSession { user, session }: CurrentSession<DB>,
-    ) -> Result<Json<GetSessionResponse<DB::Session, DB::User>>, AuthError> {
+    async fn handle_get_session(
+        CurrentSession { user, session }: CurrentSession,
+    ) -> Result<
+        Json<GetSessionResponse<better_auth_core::Session, better_auth_core::User>>,
+        AuthError,
+    > {
         Ok(Json(GetSessionResponse { session, user }))
     }
 
-    async fn handle_sign_out<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        OptionalSession(session): OptionalSession<DB>,
+    async fn handle_sign_out(
+        State(state): State<AuthState>,
+        OptionalSession(session): OptionalSession,
     ) -> Result<axum::response::Response, AuthError> {
         let response = if let Some(CurrentSession { session, .. }) = session {
             let ctx = state.to_context();
@@ -306,11 +309,11 @@ mod axum_impl {
         Ok((headers, Json(response)).into_response())
     }
 
-    async fn handle_list_sessions<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_list_sessions(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-    ) -> Result<Json<Vec<DB::Session>>, AuthError> {
+        CurrentSession { user, .. }: CurrentSession,
+    ) -> Result<Json<Vec<better_auth_core::Session>>, AuthError> {
         if !ps.config.enable_session_listing {
             return Err(AuthError::not_found("Not found"));
         }
@@ -319,10 +322,10 @@ mod axum_impl {
         Ok(Json(sessions))
     }
 
-    async fn handle_revoke_session<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_revoke_session(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<RevokeSessionRequest>,
     ) -> Result<Json<StatusResponse>, AuthError> {
         if !ps.config.enable_session_revocation {
@@ -333,10 +336,10 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_revoke_sessions<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_revoke_sessions(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
     ) -> Result<Json<StatusResponse>, AuthError> {
         if !ps.config.enable_session_revocation {
             return Err(AuthError::not_found("Not found"));
@@ -346,10 +349,10 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_revoke_other_sessions<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_revoke_other_sessions(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, session }: CurrentSession<DB>,
+        CurrentSession { user, session }: CurrentSession,
     ) -> Result<Json<StatusResponse>, AuthError> {
         if !ps.config.enable_session_revocation {
             return Err(AuthError::not_found("Not found"));
@@ -359,12 +362,12 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for SessionManagementPlugin {
+    impl better_auth_core::AxumPlugin for SessionManagementPlugin {
         fn name(&self) -> &'static str {
             "session-management"
         }
 
-        fn router(&self) -> axum::Router<AuthState<DB>> {
+        fn router(&self) -> axum::Router<AuthState> {
             use axum::routing::{get, post};
 
             let plugin_state = Arc::new(PluginState {
@@ -373,16 +376,13 @@ mod axum_impl {
             axum::Router::new()
                 .route(
                     "/get-session",
-                    get(handle_get_session::<DB>).post(handle_get_session::<DB>),
+                    get(handle_get_session).post(handle_get_session),
                 )
-                .route("/sign-out", post(handle_sign_out::<DB>))
-                .route("/list-sessions", get(handle_list_sessions::<DB>))
-                .route("/revoke-session", post(handle_revoke_session::<DB>))
-                .route("/revoke-sessions", post(handle_revoke_sessions::<DB>))
-                .route(
-                    "/revoke-other-sessions",
-                    post(handle_revoke_other_sessions::<DB>),
-                )
+                .route("/sign-out", post(handle_sign_out))
+                .route("/list-sessions", get(handle_list_sessions))
+                .route("/revoke-session", post(handle_revoke_session))
+                .route("/revoke-sessions", post(handle_revoke_sessions))
+                .route("/revoke-other-sessions", post(handle_revoke_other_sessions))
                 .layer(Extension(plugin_state))
         }
     }
@@ -641,7 +641,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_routes() {
         let plugin = SessionManagementPlugin::new();
-        let routes = AuthPlugin::<TestDatabase>::routes(&plugin);
+        let routes = AuthPlugin::routes(&plugin);
 
         assert_eq!(routes.len(), 7);
         assert!(

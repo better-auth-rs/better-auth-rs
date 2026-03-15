@@ -42,19 +42,17 @@ pub mod handlers;
 pub use better_auth_core as types_mod;
 pub use better_auth_core::sea_orm;
 pub use better_auth_core::{
-    Account, AccountOps, Argon2Config, AuthConfig, AuthContext, AuthError, AuthMigrator,
-    AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute, BodyLimitConfig,
-    BodyLimitMiddleware, CacheAdapter, ConsoleEmailProvider, CookieCacheConfig,
-    CookieCacheStrategy, CorsConfig, CorsMiddleware, CreateAccount, CreateInvitation, CreateMember,
-    CreateOrganization, CreatePasskey, CreateSession, CreateUser, CreateVerification, CsrfConfig,
-    CsrfMiddleware, DatabaseAdapter, DatabaseError, DatabaseHooks, EmailProvider,
-    EndpointRateLimit, HookedDatabaseAdapter, HttpMethod, Invitation, InvitationOps,
-    InvitationStatus, JwtConfig, MemberOps, MemoryCacheAdapter, Middleware, OpenApiBuilder,
-    OpenApiSpec, OrganizationOps, Passkey, PasskeyOps, PasswordConfig, RateLimitConfig,
-    RateLimitMiddleware, SameSite, SeaOrmAdapter, Session, SessionConfig, SessionManager,
-    SessionOps, TwoFactor,
-    UpdateOrganization, UpdatePasskey, UpdateUser, UpdateUserRequest, UpdateUserResponse, User,
-    UserOps, Verification, VerificationOps, core_paths, run_migrations,
+    Account, Argon2Config, AuthConfig, AuthContext, AuthError, AuthMigrator, AuthPlugin,
+    AuthRequest, AuthResponse, AuthResult, AuthRoute, BodyLimitConfig, BodyLimitMiddleware,
+    CacheAdapter, ConsoleEmailProvider, CookieCacheConfig, CookieCacheStrategy, CorsConfig,
+    CorsMiddleware, CreateAccount, CreateInvitation, CreateMember, CreateOrganization,
+    CreatePasskey, CreateSession, CreateUser, CreateVerification, CsrfConfig, CsrfMiddleware,
+    DatabaseError, DatabaseHooks, EmailProvider, EndpointRateLimit, HttpMethod, Invitation,
+    InvitationStatus, JwtConfig, Member, MemoryCacheAdapter, Middleware, OpenApiBuilder,
+    OpenApiSpec, Organization, Passkey, PasswordConfig, RateLimitConfig, RateLimitMiddleware,
+    SameSite, Session, SessionConfig, SessionManager, TwoFactor, UpdateOrganization, UpdatePasskey,
+    UpdateUser, UpdateUserRequest, UpdateUserResponse, User, Verification, core_paths,
+    run_migrations,
 };
 
 // Re-export entity traits
@@ -68,16 +66,9 @@ pub mod types {
     pub use better_auth_core::{
         Account, AuthRequest, AuthResponse, CreateAccount, CreateInvitation, CreateMember,
         CreateOrganization, CreatePasskey, CreateSession, CreateUser, CreateVerification,
-        HttpMethod, Invitation, InvitationStatus, Passkey, Session, TwoFactor, UpdateOrganization,
-        UpdatePasskey, UpdateUser, UpdateUserRequest, UpdateUserResponse, User, Verification,
-    };
-}
-
-// Re-export adapters
-pub mod adapters {
-    pub use better_auth_core::{
-        AccountOps, CacheAdapter, DatabaseAdapter, InvitationOps, MemberOps, MemoryCacheAdapter,
-        OrganizationOps, PasskeyOps, SeaOrmAdapter, SessionOps, UserOps, VerificationOps,
+        HttpMethod, Invitation, InvitationStatus, Member, Organization, Passkey, Session,
+        TwoFactor, UpdateOrganization, UpdatePasskey, UpdateUser, UpdateUserRequest,
+        UpdateUserResponse, User, Verification,
     };
 }
 
@@ -88,7 +79,7 @@ pub mod plugins {
 }
 
 // Re-export the main BetterAuth struct
-pub use core::{AuthBuilder, BetterAuth, DefaultDatabase, TypedAuthBuilder};
+pub use core::{AuthBuilder, BetterAuth};
 
 #[cfg(feature = "axum")]
 pub use handlers::axum::{AxumIntegration, CurrentSession, OptionalSession};

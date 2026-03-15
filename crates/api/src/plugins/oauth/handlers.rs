@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser, AuthVerification};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, CreateAccount, CreateUser,
-    CreateVerification, DatabaseAdapter, UpdateAccount, UpdateUser,
+    CreateVerification, UpdateAccount, UpdateUser,
 };
 
 use super::encryption::{encrypt_token_set, maybe_decrypt};
@@ -23,10 +23,10 @@ use super::types::{
 // ---------------------------------------------------------------------------
 
 /// Authenticate the current request and return the validated session.
-async fn require_session<DB: DatabaseAdapter>(
+async fn require_session(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
-) -> Result<DB::Session, AuthError> {
+    ctx: &AuthContext,
+) -> Result<better_auth_core::Session, AuthError> {
     let session_manager = ctx.session_manager();
     let token = session_manager
         .extract_session_token(req)
@@ -38,10 +38,10 @@ async fn require_session<DB: DatabaseAdapter>(
 }
 
 /// Create session and return the `(OAuthCallbackResponse, token)` tuple for the core function.
-async fn create_oauth_session_tuple<DB: DatabaseAdapter>(
-    user: DB::User,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(OAuthCallbackResponse<DB::User>, String)> {
+async fn create_oauth_session_tuple(
+    user: better_auth_core::User,
+    ctx: &AuthContext,
+) -> AuthResult<(OAuthCallbackResponse<better_auth_core::User>, String)> {
     let session = ctx
         .session_manager()
         .create_session(&user, None, None)
@@ -202,10 +202,10 @@ fn build_authorization_url(
 // Core functions
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn social_sign_in_core<DB: DatabaseAdapter>(
+pub(crate) async fn social_sign_in_core(
     body: &SocialSignInRequest,
     config: &OAuthConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<SocialSignInResponse> {
     let provider_name = &body.provider;
 
@@ -225,11 +225,11 @@ pub(crate) async fn social_sign_in_core<DB: DatabaseAdapter>(
     .await
 }
 
-pub(crate) async fn link_social_core<DB: DatabaseAdapter>(
+pub(crate) async fn link_social_core(
     body: &LinkSocialRequest,
-    session: &DB::Session,
+    session: &better_auth_core::Session,
     config: &OAuthConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<SocialSignInResponse> {
     let provider_name = &body.provider;
 
@@ -249,11 +249,11 @@ pub(crate) async fn link_social_core<DB: DatabaseAdapter>(
     .await
 }
 
-pub(crate) async fn get_access_token_core<DB: DatabaseAdapter>(
+pub(crate) async fn get_access_token_core(
     body: &GetAccessTokenRequest,
     config: &OAuthConfig,
-    session: &DB::Session,
-    ctx: &AuthContext<DB>,
+    session: &better_auth_core::Session,
+    ctx: &AuthContext,
 ) -> AuthResult<AccessTokenResponse> {
     let _ = body.user_id.as_deref();
     let provider = config.providers.get(&body.provider_id).ok_or_else(|| {
@@ -336,11 +336,11 @@ pub(crate) async fn get_access_token_core<DB: DatabaseAdapter>(
     })
 }
 
-pub(crate) async fn refresh_token_core<DB: DatabaseAdapter>(
+pub(crate) async fn refresh_token_core(
     body: &RefreshTokenRequest,
-    session: &DB::Session,
+    session: &better_auth_core::Session,
     config: &OAuthConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<RefreshTokenResponse> {
     let _ = body.user_id.as_deref();
     let provider_name = &body.provider_id;
@@ -405,9 +405,9 @@ pub(crate) async fn refresh_token_core<DB: DatabaseAdapter>(
 /// Both flows build a verification payload, store it, construct the
 /// authorization URL, and return a redirect response. The only difference
 /// is `link_user_id` (None for sign-in, Some for linking).
-async fn initiate_oauth_flow_core<DB: DatabaseAdapter>(
+async fn initiate_oauth_flow_core(
     config: &OAuthConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
     provider_name: &str,
     callback_url: &str,
     scopes: Option<&[String]>,
@@ -461,10 +461,10 @@ async fn initiate_oauth_flow_core<DB: DatabaseAdapter>(
 // Old handlers (rewritten to call core)
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn handle_social_sign_in<DB: DatabaseAdapter>(
+pub(crate) async fn handle_social_sign_in(
     config: &OAuthConfig,
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<AuthResponse> {
     let body: SocialSignInRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
@@ -474,13 +474,13 @@ pub(crate) async fn handle_social_sign_in<DB: DatabaseAdapter>(
     AuthResponse::json(200, &response).map_err(AuthError::from)
 }
 
-pub(crate) async fn callback_core<DB: DatabaseAdapter>(
+pub(crate) async fn callback_core(
     code: &str,
     state_param: &str,
     provider_name: &str,
     config: &OAuthConfig,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(OAuthCallbackResponse<DB::User>, String)> {
+    ctx: &AuthContext,
+) -> AuthResult<(OAuthCallbackResponse<better_auth_core::User>, String)> {
     // Look up state verification
     let verification = ctx
         .database
@@ -762,11 +762,11 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
     create_oauth_session_tuple(user, ctx).await
 }
 
-pub(crate) async fn handle_callback<DB: DatabaseAdapter>(
+pub(crate) async fn handle_callback(
     config: &OAuthConfig,
     provider_name: &str,
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<AuthResponse> {
     let code = req
         .query
@@ -788,10 +788,10 @@ pub(crate) async fn handle_callback<DB: DatabaseAdapter>(
     Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
 }
 
-pub(crate) async fn handle_link_social<DB: DatabaseAdapter>(
+pub(crate) async fn handle_link_social(
     config: &OAuthConfig,
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<AuthResponse> {
     let session = require_session(req, ctx).await?;
     let body: LinkSocialRequest = match better_auth_core::validate_request_body(req) {
@@ -802,10 +802,10 @@ pub(crate) async fn handle_link_social<DB: DatabaseAdapter>(
     AuthResponse::json(200, &response).map_err(AuthError::from)
 }
 
-pub(crate) async fn handle_get_access_token<DB: DatabaseAdapter>(
+pub(crate) async fn handle_get_access_token(
     config: &OAuthConfig,
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<AuthResponse> {
     let session = require_session(req, ctx).await?;
     let body: GetAccessTokenRequest = match better_auth_core::validate_request_body(req) {
@@ -816,10 +816,10 @@ pub(crate) async fn handle_get_access_token<DB: DatabaseAdapter>(
     AuthResponse::json(200, &response).map_err(AuthError::from)
 }
 
-pub(crate) async fn handle_refresh_token<DB: DatabaseAdapter>(
+pub(crate) async fn handle_refresh_token(
     config: &OAuthConfig,
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<AuthResponse> {
     let session = require_session(req, ctx).await?;
     let body: RefreshTokenRequest = match better_auth_core::validate_request_body(req) {

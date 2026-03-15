@@ -4,15 +4,15 @@ use uuid::Uuid;
 use better_auth_core::User;
 use better_auth_core::{AuthContext, AuthResult};
 use better_auth_core::{AuthError, CreateVerification, UpdateUser};
-use better_auth_core::{AuthSession, AuthUser, AuthVerification, DatabaseAdapter};
+use better_auth_core::{AuthSession, AuthUser, AuthVerification};
 
 use super::types::*;
 use super::{EmailVerificationConfig, StatusResponse};
 
-pub(super) async fn send_verification_email_core<DB: DatabaseAdapter>(
+pub(super) async fn send_verification_email_core(
     body: &SendVerificationEmailRequest,
     config: &EmailVerificationConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<StatusResponse> {
     // Check if user exists
     let user = ctx
@@ -80,13 +80,13 @@ pub(super) async fn send_verification_email_core<DB: DatabaseAdapter>(
     Ok(StatusResponse { status: true })
 }
 
-pub(super) async fn verify_email_core<DB: DatabaseAdapter>(
+pub(super) async fn verify_email_core(
     query: &VerifyEmailQuery,
     config: &EmailVerificationConfig,
     ip_address: Option<String>,
     user_agent: Option<String>,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<VerifyEmailResult<DB::User, DB::Session>> {
+    ctx: &AuthContext,
+) -> AuthResult<VerifyEmailResult<better_auth_core::User, better_auth_core::Session>> {
     // Find verification token
     let verification = ctx
         .database

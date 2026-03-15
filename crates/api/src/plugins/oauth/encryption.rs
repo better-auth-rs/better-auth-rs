@@ -122,8 +122,8 @@ pub struct EncryptedTokenSet {
 
 /// Read `encrypt_oauth_tokens` and `secret` from the auth context and
 /// conditionally encrypt a full set of OAuth tokens in one call.
-pub fn encrypt_token_set<DB: better_auth_core::DatabaseAdapter>(
-    ctx: &better_auth_core::AuthContext<DB>,
+pub fn encrypt_token_set(
+    ctx: &better_auth_core::AuthContext,
     access_token: Option<String>,
     refresh_token: Option<String>,
     id_token: Option<String>,

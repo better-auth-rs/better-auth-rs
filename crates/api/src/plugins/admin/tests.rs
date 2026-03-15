@@ -9,13 +9,7 @@ use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-async fn create_admin_context() -> (
-    AuthContext<DefaultDatabase>,
-    User,
-    Session,
-    User,
-    Session,
-) {
+async fn create_admin_context() -> (AuthContext, User, Session, User, Session) {
     let ctx = test_helpers::create_test_context().await;
 
     // Create admin user
@@ -1250,15 +1244,12 @@ async fn test_set_role_persists_in_database() {
 #[tokio::test]
 async fn test_plugin_name() {
     let plugin = AdminPlugin::new();
-    assert_eq!(
-        <AdminPlugin as AuthPlugin<DefaultDatabase>>::name(&plugin),
-        "admin"
-    );
+    assert_eq!(<AdminPlugin as AuthPlugin>::name(&plugin), "admin");
 }
 
 #[tokio::test]
 async fn test_plugin_routes_count() {
     let plugin = AdminPlugin::new();
-    let routes = <AdminPlugin as AuthPlugin<DefaultDatabase>>::routes(&plugin);
+    let routes = <AdminPlugin as AuthPlugin>::routes(&plugin);
     assert_eq!(routes.len(), 13, "admin plugin should register 13 routes");
 }

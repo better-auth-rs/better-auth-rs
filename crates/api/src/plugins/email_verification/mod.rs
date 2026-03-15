@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, CreateVerification};
-use better_auth_core::{AuthUser, DatabaseAdapter, User};
+use better_auth_core::{AuthUser, User};
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
@@ -108,7 +108,7 @@ better_auth_core::impl_auth_plugin! {
         get "/verify-email" => handle_verify_email, "verify_email";
     }
     extra {
-        async fn on_user_created(&self, user: &DB::User, ctx: &AuthContext<DB>) -> AuthResult<()> {
+        async fn on_user_created(&self, user: &better_auth_core::User, ctx: &AuthContext) -> AuthResult<()> {
             // Send verification email for new users if configured.
             // Also fire when a custom sender is set, even if send_email_notifications is false.
             if (self.config.send_email_notifications || self.config.send_verification_email.is_some())
@@ -134,10 +134,10 @@ better_auth_core::impl_auth_plugin! {
 // ---------------------------------------------------------------------------
 
 impl EmailVerificationPlugin {
-    async fn handle_send_verification_email<DB: DatabaseAdapter>(
+    async fn handle_send_verification_email(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let body: SendVerificationEmailRequest = match better_auth_core::validate_request_body(req)
         {
@@ -148,10 +148,10 @@ impl EmailVerificationPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_verify_email<DB: DatabaseAdapter>(
+    async fn handle_verify_email(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let token = req
             .query
@@ -197,12 +197,12 @@ impl EmailVerificationPlugin {
     /// If [`EmailVerificationConfig::send_verification_email`] is set the
     /// custom callback is used; otherwise the default `EmailProvider` path is
     /// taken.
-    async fn send_verification_email_for_user<DB: DatabaseAdapter>(
+    async fn send_verification_email_for_user(
         &self,
-        user: &DB::User,
+        user: &better_auth_core::User,
         email: &str,
         callback_url: Option<&str>,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<()> {
         // Generate verification token
         let verification_token = format!("verify_{}", Uuid::new_v4());
@@ -265,11 +265,11 @@ impl EmailVerificationPlugin {
     /// Callers (e.g. the sign-in plugin) should invoke this when
     /// [`EmailVerificationConfig::send_on_sign_in`] is `true` and the user is
     /// not yet verified.
-    pub async fn send_verification_on_sign_in<DB: DatabaseAdapter>(
+    pub async fn send_verification_on_sign_in(
         &self,
-        user: &DB::User,
+        user: &better_auth_core::User,
         callback_url: Option<&str>,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<()> {
         if !self.config.send_on_sign_in {
             return Ok(());
@@ -339,8 +339,8 @@ mod axum_impl {
         }
     }
 
-    async fn handle_send_verification_email<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_send_verification_email(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
         ValidatedJson(body): ValidatedJson<SendVerificationEmailRequest>,
     ) -> Result<Json<StatusResponse>, AuthError> {
@@ -349,8 +349,8 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_verify_email<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_verify_email(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
         Query(query): Query<VerifyEmailQuery>,
     ) -> Result<axum::response::Response, AuthError> {
@@ -383,12 +383,12 @@ mod axum_impl {
     }
 
     #[async_trait::async_trait]
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for EmailVerificationPlugin {
+    impl better_auth_core::AxumPlugin for EmailVerificationPlugin {
         fn name(&self) -> &'static str {
             "email-verification"
         }
 
-        fn router(&self) -> axum::Router<AuthState<DB>> {
+        fn router(&self) -> axum::Router<AuthState> {
             use axum::routing::{get, post};
 
             let plugin_state = Arc::new(PluginState {
@@ -398,16 +398,16 @@ mod axum_impl {
             axum::Router::new()
                 .route(
                     "/send-verification-email",
-                    post(handle_send_verification_email::<DB>),
+                    post(handle_send_verification_email),
                 )
-                .route("/verify-email", get(handle_verify_email::<DB>))
+                .route("/verify-email", get(handle_verify_email))
                 .layer(Extension(plugin_state))
         }
 
         async fn on_user_created(
             &self,
-            user: &DB::User,
-            ctx: &better_auth_core::AuthContext<DB>,
+            user: &better_auth_core::User,
+            ctx: &better_auth_core::AuthContext,
         ) -> better_auth_core::AuthResult<()> {
             // Delegate to the AuthPlugin implementation logic
             if (self.config.send_email_notifications

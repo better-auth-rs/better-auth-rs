@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 use std::sync::Mutex;
 
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthApiKey, AuthUser};
 use better_auth_core::{AuthContext, AuthError, AuthResult, BeforeRequestAction};
 use better_auth_core::{AuthRequest, AuthResponse, UpdateApiKey};
@@ -381,7 +380,7 @@ impl ApiKeyPlugin {
     }
 
     /// Throttled cleanup -- at most once per 10 seconds.
-    pub(super) async fn maybe_delete_expired<DB: DatabaseAdapter>(&self, ctx: &AuthContext<DB>) {
+    pub(super) async fn maybe_delete_expired(&self, ctx: &AuthContext) {
         let should_run = {
             let mut last = self
                 .last_expired_check
@@ -479,10 +478,10 @@ impl ApiKeyPlugin {
     // Route handlers (old -- delegate to core functions)
     // -----------------------------------------------------------------------
 
-    async fn handle_create<DB: DatabaseAdapter>(
+    async fn handle_create(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: CreateKeyRequest = match better_auth_core::validate_request_body(req) {
@@ -493,11 +492,7 @@ impl ApiKeyPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_get<DB: DatabaseAdapter>(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<AuthResponse> {
+    async fn handle_get(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let id = req
             .query
@@ -507,20 +502,16 @@ impl ApiKeyPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_list<DB: DatabaseAdapter>(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<AuthResponse> {
+    async fn handle_list(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let response = list_keys_core(user.id(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_update<DB: DatabaseAdapter>(
+    async fn handle_update(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: UpdateKeyRequest = match better_auth_core::validate_request_body(req) {
@@ -531,10 +522,10 @@ impl ApiKeyPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_delete<DB: DatabaseAdapter>(
+    async fn handle_delete(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: DeleteKeyRequest = match better_auth_core::validate_request_body(req) {
@@ -549,10 +540,10 @@ impl ApiKeyPlugin {
     // POST /api-key/verify -- core verification endpoint
     // -----------------------------------------------------------------------
 
-    async fn handle_verify<DB: DatabaseAdapter>(
+    async fn handle_verify(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let verify_req: VerifyKeyRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -569,9 +560,9 @@ impl ApiKeyPlugin {
     ///
     /// Returns `Ok(ApiKeyView)` on success, or `Err(ApiKeyValidationError)` with
     /// a structured error code (no fragile string matching needed).
-    async fn validate_api_key<DB: DatabaseAdapter>(
+    async fn validate_api_key(
         &self,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
         raw_key: &str,
         required_permissions: Option<&serde_json::Value>,
     ) -> Result<ApiKeyView, ApiKeyValidationError> {
@@ -761,10 +752,10 @@ impl ApiKeyPlugin {
     // POST /api-key/delete-all-expired-api-keys
     // -----------------------------------------------------------------------
 
-    async fn handle_delete_all_expired<DB: DatabaseAdapter>(
+    async fn handle_delete_all_expired(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let response = delete_all_expired_core(user.id(), self, ctx).await?;
@@ -791,7 +782,7 @@ better_auth_core::impl_auth_plugin! {
         async fn before_request(
             &self,
             req: &AuthRequest,
-            ctx: &AuthContext<DB>,
+            ctx: &AuthContext,
         ) -> AuthResult<Option<BeforeRequestAction>> {
             if !self.config.enable_session_for_api_keys {
                 return Ok(None);
@@ -873,10 +864,10 @@ mod axum_impl {
         id: String,
     }
 
-    async fn handle_create<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_create(
+        State(state): State<AuthState>,
         Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<CreateKeyRequest>,
     ) -> Result<Json<CreateKeyResponse>, AuthError> {
         let ctx = state.to_context();
@@ -884,10 +875,10 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_get<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_get(
+        State(state): State<AuthState>,
         Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         Query(query): Query<GetKeyQuery>,
     ) -> Result<Json<ApiKeyView>, AuthError> {
         let ctx = state.to_context();
@@ -895,20 +886,20 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_list<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_list(
+        State(state): State<AuthState>,
         Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
     ) -> Result<Json<Vec<ApiKeyView>>, AuthError> {
         let ctx = state.to_context();
         let response = list_keys_core(user.id(), &plugin, &ctx).await?;
         Ok(Json(response))
     }
 
-    async fn handle_update<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_update(
+        State(state): State<AuthState>,
         Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<UpdateKeyRequest>,
     ) -> Result<Json<ApiKeyView>, AuthError> {
         let ctx = state.to_context();
@@ -916,10 +907,10 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_delete<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_delete(
+        State(state): State<AuthState>,
         Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<DeleteKeyRequest>,
     ) -> Result<Json<serde_json::Value>, AuthError> {
         let ctx = state.to_context();
@@ -927,8 +918,8 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_verify<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_verify(
+        State(state): State<AuthState>,
         Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
         Json(body): Json<VerifyKeyRequest>,
     ) -> Result<Json<VerifyKeyResponse>, AuthError> {
@@ -937,35 +928,35 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_delete_all_expired<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_delete_all_expired(
+        State(state): State<AuthState>,
         Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
     ) -> Result<Json<serde_json::Value>, AuthError> {
         let ctx = state.to_context();
         let response = delete_all_expired_core(user.id(), &plugin, &ctx).await?;
         Ok(Json(response))
     }
 
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for ApiKeyPlugin {
+    impl better_auth_core::AxumPlugin for ApiKeyPlugin {
         fn name(&self) -> &'static str {
             "api-key"
         }
 
-        fn router(&self) -> axum::Router<AuthState<DB>> {
+        fn router(&self) -> axum::Router<AuthState> {
             use axum::routing::{get, post};
 
             let plugin = Arc::new(ApiKeyPlugin::with_config(self.config.clone()));
             axum::Router::new()
-                .route("/api-key/create", post(handle_create::<DB>))
-                .route("/api-key/get", get(handle_get::<DB>))
-                .route("/api-key/update", post(handle_update::<DB>))
-                .route("/api-key/delete", post(handle_delete::<DB>))
-                .route("/api-key/list", get(handle_list::<DB>))
-                .route("/api-key/verify", post(handle_verify::<DB>))
+                .route("/api-key/create", post(handle_create))
+                .route("/api-key/get", get(handle_get))
+                .route("/api-key/update", post(handle_update))
+                .route("/api-key/delete", post(handle_delete))
+                .route("/api-key/list", get(handle_list))
+                .route("/api-key/verify", post(handle_verify))
                 .route(
                     "/api-key/delete-all-expired-api-keys",
-                    post(handle_delete_all_expired::<DB>),
+                    post(handle_delete_all_expired),
                 )
                 .layer(Extension(plugin))
         }

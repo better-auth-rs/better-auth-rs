@@ -1,8 +1,8 @@
 mod compat;
 
 use better_auth::BetterAuth;
-use better_auth::adapters::{AccountOps, SessionOps, UserOps, VerificationOps};
 use better_auth::{run_migrations, sea_orm::Database};
+use better_auth_core::{SeaOrmAdapter, UserOps};
 use compat::helpers::*;
 use std::sync::Arc;
 
@@ -12,9 +12,7 @@ async fn create_test_auth_memory() -> Arc<BetterAuth> {
 }
 
 /// Helper to create user and get session token
-async fn create_test_user_and_session(
-    auth: Arc<BetterAuth>,
-) -> (String, String) {
+async fn create_test_user_and_session(auth: Arc<BetterAuth>) -> (String, String) {
     let req = post_json(
         "/sign-up/email",
         serde_json::json!({
@@ -31,10 +29,7 @@ async fn create_test_user_and_session(
     (user_id, session_token)
 }
 
-async fn user_id_from_email(
-    auth: &Arc<BetterAuth>,
-    email: &str,
-) -> String {
+async fn user_id_from_email(auth: &Arc<BetterAuth>, email: &str) -> String {
     auth.database()
         .get_user_by_email(email)
         .await
@@ -330,7 +325,11 @@ async fn test_reset_password_token_integration() {
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 302);
-    let location = response.headers.get("Location").cloned().unwrap_or_default();
+    let location = response
+        .headers
+        .get("Location")
+        .cloned()
+        .unwrap_or_default();
     assert!(location.contains("http://localhost:3000/reset"));
     assert!(location.contains(&format!("token={reset_token}")));
 }
@@ -992,8 +991,16 @@ async fn test_unlink_account_success() {
     // Verify only the remaining social account and the credential account remain.
     let accounts = auth.database().get_user_accounts(&user_id).await.unwrap();
     assert_eq!(accounts.len(), 2);
-    assert!(accounts.iter().any(|account| account.provider_id == "github"));
-    assert!(accounts.iter().any(|account| account.provider_id == "credential"));
+    assert!(
+        accounts
+            .iter()
+            .any(|account| account.provider_id == "github")
+    );
+    assert!(
+        accounts
+            .iter()
+            .any(|account| account.provider_id == "credential")
+    );
 }
 
 /// Integration test for unlink-account last credential → 400
@@ -2216,7 +2223,7 @@ async fn test_get_user_by_username_adapter() {
 
     let database = Database::connect("sqlite::memory:").await.unwrap();
     run_migrations(&database).await.unwrap();
-    let db = better_auth::SeaOrmAdapter::new(database);
+    let db = SeaOrmAdapter::new(database);
 
     // Create user with username
     let create = CreateUser::new()

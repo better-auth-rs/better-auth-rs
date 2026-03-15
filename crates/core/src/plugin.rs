@@ -2,13 +2,13 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::adapters::DatabaseAdapter;
+use crate::adapters::AuthDatabase;
 use crate::config::AuthConfig;
 use crate::email::EmailProvider;
 use crate::entity::AuthSession;
 use crate::error::{AuthError, AuthResult};
 use crate::session::SessionManager;
-use crate::types::{AuthRequest, AuthResponse, HttpMethod};
+use crate::types::{AuthRequest, AuthResponse, HttpMethod, Session, User};
 
 /// Action returned by [`AuthPlugin::before_request`].
 #[derive(Debug)]
@@ -24,10 +24,8 @@ pub enum BeforeRequestAction {
 
 /// Plugin trait that all authentication plugins must implement.
 ///
-/// Generic over `DB` so that lifecycle hooks receive the adapter's concrete
-/// entity types (e.g., `DB::User`, `DB::Session`).
 #[async_trait]
-pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
+pub trait AuthPlugin: Send + Sync {
     /// Plugin name - should be unique
     fn name(&self) -> &'static str;
 
@@ -35,7 +33,7 @@ pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
     fn routes(&self) -> Vec<AuthRoute>;
 
     /// Called when the plugin is initialized
-    async fn on_init(&self, ctx: &mut AuthContext<DB>) -> AuthResult<()> {
+    async fn on_init(&self, ctx: &mut AuthContext) -> AuthResult<()> {
         let _ = ctx;
         Ok(())
     }
@@ -49,7 +47,7 @@ pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
     async fn before_request(
         &self,
         _req: &AuthRequest,
-        _ctx: &AuthContext<DB>,
+        _ctx: &AuthContext,
     ) -> AuthResult<Option<BeforeRequestAction>> {
         Ok(None)
     }
@@ -58,43 +56,35 @@ pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<Option<AuthResponse>>;
 
     /// Called after a user is created
-    async fn on_user_created(&self, user: &DB::User, ctx: &AuthContext<DB>) -> AuthResult<()> {
+    async fn on_user_created(&self, user: &User, ctx: &AuthContext) -> AuthResult<()> {
         let _ = (user, ctx);
         Ok(())
     }
 
     /// Called after a session is created
-    async fn on_session_created(
-        &self,
-        session: &DB::Session,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<()> {
+    async fn on_session_created(&self, session: &Session, ctx: &AuthContext) -> AuthResult<()> {
         let _ = (session, ctx);
         Ok(())
     }
 
     /// Called before a user is deleted
-    async fn on_user_deleted(&self, user_id: &str, ctx: &AuthContext<DB>) -> AuthResult<()> {
+    async fn on_user_deleted(&self, user_id: &str, ctx: &AuthContext) -> AuthResult<()> {
         let _ = (user_id, ctx);
         Ok(())
     }
 
     /// Called before a session is deleted
-    async fn on_session_deleted(
-        &self,
-        session_token: &str,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<()> {
+    async fn on_session_deleted(&self, session_token: &str, ctx: &AuthContext) -> AuthResult<()> {
         let _ = (session_token, ctx);
         Ok(())
     }
 }
 
-/// Generates the [`AuthPlugin<DB>`] impl for a plugin with static route dispatch.
+/// Generates the [`AuthPlugin`] impl for a plugin with static route dispatch.
 ///
 /// Eliminates the dual declaration of routes in `routes()` and `on_request()`
 /// by generating both from a single route table.
@@ -128,7 +118,7 @@ macro_rules! impl_auth_plugin {
         $( extra { $($extra:tt)* } )?
     ) => {
         #[::async_trait::async_trait]
-        impl<DB: $crate::adapters::DatabaseAdapter> $crate::AuthPlugin<DB> for $plugin {
+        impl $crate::AuthPlugin for $plugin {
             fn name(&self) -> &'static str { $name }
 
             fn routes(&self) -> Vec<$crate::AuthRoute> {
@@ -140,7 +130,7 @@ macro_rules! impl_auth_plugin {
             async fn on_request(
                 &self,
                 req: &$crate::AuthRequest,
-                ctx: &$crate::AuthContext<DB>,
+                ctx: &$crate::AuthContext,
             ) -> $crate::AuthResult<Option<$crate::AuthResponse>> {
                 match (req.method(), req.path()) {
                     $(
@@ -166,10 +156,10 @@ pub struct AuthRoute {
     pub operation_id: String,
 }
 
-/// Context passed to plugin methods
-pub struct AuthContext<DB: DatabaseAdapter> {
+/// Context passed to plugin methods.
+pub struct AuthContext {
     pub config: Arc<AuthConfig>,
-    pub database: Arc<DB>,
+    pub database: Arc<AuthDatabase>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -204,8 +194,8 @@ impl AuthRoute {
     }
 }
 
-impl<DB: DatabaseAdapter> AuthContext<DB> {
-    pub fn new(config: Arc<AuthConfig>, database: Arc<DB>) -> Self {
+impl AuthContext {
+    pub fn new(config: Arc<AuthConfig>, database: Arc<AuthDatabase>) -> Self {
         let email_provider = config.email_provider.clone();
         Self {
             config,
@@ -231,7 +221,7 @@ impl<DB: DatabaseAdapter> AuthContext<DB> {
     }
 
     /// Create a `SessionManager` from this context's config and database.
-    pub fn session_manager(&self) -> crate::session::SessionManager<DB> {
+    pub fn session_manager(&self) -> crate::session::SessionManager {
         crate::session::SessionManager::new(self.config.clone(), self.database.clone())
     }
 
@@ -240,7 +230,7 @@ impl<DB: DatabaseAdapter> AuthContext<DB> {
     ///
     /// This centralises the pattern previously duplicated across many plugins
     /// (`get_authenticated_user`, `require_session`, etc.).
-    pub async fn require_session(&self, req: &AuthRequest) -> AuthResult<(DB::User, DB::Session)> {
+    pub async fn require_session(&self, req: &AuthRequest) -> AuthResult<(User, Session)> {
         let session_manager = self.session_manager();
 
         if let Some(token) = session_manager.extract_session_token(req)
@@ -258,14 +248,14 @@ impl<DB: DatabaseAdapter> AuthContext<DB> {
 ///
 /// All fields are behind `Arc` so `AuthState` is cheap to clone and can
 /// be used directly as axum `State`.
-pub struct AuthState<DB: DatabaseAdapter> {
+pub struct AuthState {
     pub config: Arc<AuthConfig>,
-    pub database: Arc<DB>,
-    pub session_manager: SessionManager<DB>,
+    pub database: Arc<AuthDatabase>,
+    pub session_manager: SessionManager,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
 }
 
-impl<DB: DatabaseAdapter> Clone for AuthState<DB> {
+impl Clone for AuthState {
     fn clone(&self) -> Self {
         Self {
             config: self.config.clone(),
@@ -276,9 +266,9 @@ impl<DB: DatabaseAdapter> Clone for AuthState<DB> {
     }
 }
 
-impl<DB: DatabaseAdapter> AuthState<DB> {
+impl AuthState {
     /// Create a new `AuthState` from an `AuthContext` and `SessionManager`.
-    pub fn new(ctx: &AuthContext<DB>, session_manager: SessionManager<DB>) -> Self {
+    pub fn new(ctx: &AuthContext, session_manager: SessionManager) -> Self {
         Self {
             config: ctx.config.clone(),
             database: ctx.database.clone(),
@@ -288,7 +278,7 @@ impl<DB: DatabaseAdapter> AuthState<DB> {
     }
 
     /// Create an `AuthContext` for use with existing plugin handler methods.
-    pub fn to_context(&self) -> AuthContext<DB> {
+    pub fn to_context(&self) -> AuthContext {
         let mut ctx = AuthContext::new(self.config.clone(), self.database.clone());
         ctx.email_provider = self.email_provider.clone();
         ctx
@@ -308,9 +298,19 @@ impl<DB: DatabaseAdapter> AuthState<DB> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::MemoryDatabaseAdapter;
-    use crate::adapters::traits::UserOps;
+    use crate::adapters::{DatabaseAdapter, SeaOrmAdapter, run_migrations};
     use crate::entity::AuthUser;
+    use crate::sea_orm::Database;
+
+    async fn test_database() -> Arc<AuthDatabase> {
+        let database = Database::connect("sqlite::memory:")
+            .await
+            .expect("sqlite test database should connect");
+        run_migrations(&database)
+            .await
+            .expect("sqlite test migrations should run");
+        Arc::new(SeaOrmAdapter::new(database))
+    }
 
     #[test]
     fn auth_route_constructors() {
@@ -339,7 +339,8 @@ mod tests {
     #[test]
     fn auth_context_new() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let db = runtime.block_on(test_database());
         let ctx = AuthContext::new(config.clone(), db);
         assert!(ctx.email_provider.is_none());
         assert!(ctx.metadata.is_empty());
@@ -348,7 +349,8 @@ mod tests {
     #[test]
     fn auth_context_metadata() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let db = runtime.block_on(test_database());
         let mut ctx = AuthContext::new(config, db);
 
         ctx.set_metadata("key", serde_json::json!("value"));
@@ -359,7 +361,8 @@ mod tests {
     #[test]
     fn auth_context_email_provider_error_when_none() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let db = runtime.block_on(test_database());
         let ctx = AuthContext::new(config, db);
         assert!(ctx.email_provider().is_err());
     }
@@ -367,7 +370,8 @@ mod tests {
     #[test]
     fn auth_state_clones() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let db = runtime.block_on(test_database());
         let ctx = AuthContext::new(config.clone(), db.clone());
         let sm = SessionManager::new(config, db);
         let state = AuthState::new(&ctx, sm);
@@ -378,7 +382,8 @@ mod tests {
     #[test]
     fn auth_state_to_context() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let db = runtime.block_on(test_database());
         let ctx = AuthContext::new(config.clone(), db.clone());
         let sm = SessionManager::new(config, db);
         let state = AuthState::new(&ctx, sm);
@@ -389,7 +394,7 @@ mod tests {
     #[tokio::test]
     async fn auth_context_require_session_unauthenticated() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let db = test_database().await;
         let ctx = AuthContext::new(config, db);
         let req = AuthRequest::new(HttpMethod::Get, "/test");
         let result = ctx.require_session(&req).await;
@@ -399,7 +404,7 @@ mod tests {
     #[tokio::test]
     async fn auth_context_require_session_with_valid_session() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let db = test_database().await;
 
         // Create a user
         let user = db
@@ -426,7 +431,8 @@ mod tests {
     #[test]
     fn auth_state_session_cookie() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let db = runtime.block_on(test_database());
         let ctx = AuthContext::new(config.clone(), db.clone());
         let sm = SessionManager::new(config, db);
         let state = AuthState::new(&ctx, sm);
@@ -439,7 +445,8 @@ mod tests {
     #[test]
     fn auth_state_clear_session_cookie() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let db = runtime.block_on(test_database());
         let ctx = AuthContext::new(config.clone(), db.clone());
         let sm = SessionManager::new(config, db);
         let state = AuthState::new(&ctx, sm);
@@ -459,41 +466,33 @@ mod tests {
 /// and enables use of axum extractors.
 #[cfg(feature = "axum")]
 #[async_trait]
-pub trait AxumPlugin<DB: DatabaseAdapter>: Send + Sync {
+pub trait AxumPlugin: Send + Sync {
     /// Plugin name — should be unique and match the `AuthPlugin` name when
     /// both traits are implemented on the same type.
     fn name(&self) -> &'static str;
 
     /// Return an axum `Router` with all routes for this plugin.
     ///
-    /// The router uses `AuthState<DB>` as its state type.
-    fn router(&self) -> axum::Router<AuthState<DB>>;
+    /// The router uses [`AuthState`] as its state type.
+    fn router(&self) -> axum::Router<AuthState>;
 
     /// Called after a user is created.
-    async fn on_user_created(&self, _user: &DB::User, _ctx: &AuthContext<DB>) -> AuthResult<()> {
+    async fn on_user_created(&self, _user: &User, _ctx: &AuthContext) -> AuthResult<()> {
         Ok(())
     }
 
     /// Called after a session is created.
-    async fn on_session_created(
-        &self,
-        _session: &DB::Session,
-        _ctx: &AuthContext<DB>,
-    ) -> AuthResult<()> {
+    async fn on_session_created(&self, _session: &Session, _ctx: &AuthContext) -> AuthResult<()> {
         Ok(())
     }
 
     /// Called before a user is deleted.
-    async fn on_user_deleted(&self, _user_id: &str, _ctx: &AuthContext<DB>) -> AuthResult<()> {
+    async fn on_user_deleted(&self, _user_id: &str, _ctx: &AuthContext) -> AuthResult<()> {
         Ok(())
     }
 
     /// Called before a session is deleted.
-    async fn on_session_deleted(
-        &self,
-        _session_token: &str,
-        _ctx: &AuthContext<DB>,
-    ) -> AuthResult<()> {
+    async fn on_session_deleted(&self, _session_token: &str, _ctx: &AuthContext) -> AuthResult<()> {
         Ok(())
     }
 }

@@ -1,12 +1,14 @@
 use super::*;
 use crate::plugins::test_helpers::TestDatabase;
 use better_auth_core::adapters::{ApiKeyOps, SessionOps, UserOps};
-use better_auth_core::{AuthPlugin, AuthContext, CreateSession, CreateUser, HttpMethod, Session, User};
+use better_auth_core::{
+    AuthContext, AuthPlugin, CreateSession, CreateUser, HttpMethod, Session, User,
+};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-async fn create_test_context_with_user() -> (AuthContext<TestDatabase>, User, Session) {
+async fn create_test_context_with_user() -> (AuthContext, User, Session) {
     let config = Arc::new(better_auth_core::AuthConfig::new(
         "test-secret-key-at-least-32-chars-long",
     ));
@@ -37,10 +39,7 @@ async fn create_test_context_with_user() -> (AuthContext<TestDatabase>, User, Se
     (ctx, user, session)
 }
 
-async fn create_user_with_session(
-    ctx: &AuthContext<TestDatabase>,
-    email: &str,
-) -> (User, Session) {
+async fn create_user_with_session(ctx: &AuthContext, email: &str) -> (User, Session) {
     let user = ctx
         .database
         .create_user(
@@ -94,7 +93,7 @@ fn json_body(response: &AuthResponse) -> serde_json::Value {
 
 async fn create_key_and_get_id(
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<TestDatabase>,
+    ctx: &AuthContext,
     token: &str,
     name: &str,
 ) -> String {
@@ -113,7 +112,7 @@ async fn create_key_and_get_id(
 /// Helper: create a key and return (id, raw_key)
 async fn create_key_and_get_raw(
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<TestDatabase>,
+    ctx: &AuthContext,
     token: &str,
     body: serde_json::Value,
 ) -> (String, String) {

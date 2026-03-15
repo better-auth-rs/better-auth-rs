@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use better_auth::{
-    AuthBuilder, AuthConfig, BetterAuth, run_migrations,
+    AuthBuilder, AuthConfig, BetterAuth,
     plugins::{
         AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, EmailPasswordPlugin,
         EmailVerificationPlugin, OAuthPlugin, OrganizationPlugin, PasskeyPlugin,
@@ -16,6 +16,7 @@ use better_auth::{
         oauth::{OAuthProvider, OAuthUserInfo},
         password_management::SendResetPassword,
     },
+    run_migrations,
     sea_orm::{Database, DatabaseConnection},
     types::{AuthRequest, HttpMethod},
 };
@@ -238,10 +239,7 @@ pub fn post_with_auth(path: &str, token: &str) -> AuthRequest {
 // Send / signup / signin
 // ---------------------------------------------------------------------------
 
-pub async fn send_request(
-    auth: &TestAuth,
-    req: AuthRequest,
-) -> (u16, Value) {
+pub async fn send_request(auth: &TestAuth, req: AuthRequest) -> (u16, Value) {
     let resp = auth
         .handle_request(req)
         .await
@@ -280,11 +278,7 @@ pub async fn signup_user(
     (token, json)
 }
 
-pub async fn signin_user(
-    auth: &TestAuth,
-    email: &str,
-    password: &str,
-) -> (String, Value) {
+pub async fn signin_user(auth: &TestAuth, email: &str, password: &str) -> (String, Value) {
     let req = post_json(
         "/sign-in/email",
         serde_json::json!({

@@ -38,7 +38,7 @@
 
 mod compat;
 
-use better_auth::{AccountOps, CreateAccount};
+use better_auth::CreateAccount;
 use chrono::{Duration as ChronoDuration, Utc};
 use compat::helpers::*;
 use serde_json::Value;
@@ -387,10 +387,7 @@ async fn ref_seed_oauth_account(email: &str) -> Result<(), String> {
     }
 }
 
-async fn seed_rust_oauth_account(
-    auth: &better_auth::BetterAuth,
-    user_id: &str,
-) {
+async fn seed_rust_oauth_account(auth: &better_auth::BetterAuth, user_id: &str) {
     let _ = auth
         .database()
         .create_account(CreateAccount {

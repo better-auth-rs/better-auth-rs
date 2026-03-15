@@ -3,8 +3,8 @@ use std::sync::Arc;
 use serde::Deserialize;
 
 use better_auth_core::{
-    AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-    BeforeRequestAction, DatabaseAdapter, DatabaseHooks, EmailProvider, HookedDatabaseAdapter,
+    AuthConfig, AuthContext, AuthDatabase, AuthError, AuthPlugin, AuthRequest, AuthResponse,
+    AuthResult, BeforeRequestAction, DatabaseHooks, EmailProvider, HookedDatabaseAdapter,
     HttpMethod, OkResponse, OpenApiBuilder, OpenApiSpec, SeaOrmAdapter, SessionManager,
     StatusMessageResponse, SuccessMessageResponse, UpdateUser, UpdateUserRequest, core_paths,
     entity::{AuthAccount, AuthSession, AuthUser, AuthVerification},
@@ -24,13 +24,13 @@ struct ChangeEmailRequest {
 /// The main BetterAuth instance, generic over the database adapter.
 pub type DefaultDatabase = HookedDatabaseAdapter<SeaOrmAdapter>;
 
-pub struct BetterAuth<DB: DatabaseAdapter = DefaultDatabase> {
+pub struct BetterAuth {
     config: Arc<AuthConfig>,
-    plugins: Vec<Box<dyn AuthPlugin<DB>>>,
+    plugins: Vec<Box<dyn AuthPlugin>>,
     middlewares: Vec<Box<dyn Middleware>>,
-    database: Arc<DB>,
-    session_manager: SessionManager<DB>,
-    context: AuthContext<DB>,
+    database: Arc<AuthDatabase>,
+    session_manager: SessionManager,
+    context: AuthContext,
 }
 
 /// Initial builder for configuring BetterAuth.
@@ -49,10 +49,10 @@ pub struct AuthBuilder {
 /// Typed builder returned by [`AuthBuilder::database`].
 ///
 /// Accepts plugins, hooks, and middleware before calling `.build()`.
-pub struct TypedAuthBuilder<DB: DatabaseAdapter = DefaultDatabase> {
+pub struct TypedAuthBuilder {
     config: AuthConfig,
-    database: DB,
-    plugins: Vec<Box<dyn AuthPlugin<DB>>>,
+    database: DefaultDatabase,
+    plugins: Vec<Box<dyn AuthPlugin>>,
     csrf_config: Option<CsrfConfig>,
     rate_limit_config: Option<RateLimitConfig>,
     cors_config: Option<CorsConfig>,
@@ -73,7 +73,7 @@ impl AuthBuilder {
     }
 
     /// Set the SeaORM connection, returning a [`TypedAuthBuilder`].
-    pub fn database(self, database: DatabaseConnection) -> TypedAuthBuilder<DefaultDatabase> {
+    pub fn database(self, database: DatabaseConnection) -> TypedAuthBuilder {
         TypedAuthBuilder {
             config: self.config,
             database: HookedDatabaseAdapter::new(Arc::new(SeaOrmAdapter::new(database))),
@@ -117,9 +117,9 @@ impl AuthBuilder {
     }
 }
 
-impl<DB: DatabaseAdapter> TypedAuthBuilder<DB> {
+impl TypedAuthBuilder {
     /// Add a plugin to the authentication system.
-    pub fn plugin<P: AuthPlugin<DB> + 'static>(mut self, plugin: P) -> Self {
+    pub fn plugin<P: AuthPlugin + 'static>(mut self, plugin: P) -> Self {
         self.plugins.push(Box::new(plugin));
         self
     }
@@ -161,12 +161,12 @@ impl<DB: DatabaseAdapter> TypedAuthBuilder<DB> {
     }
 
     /// Build the BetterAuth instance.
-    pub async fn build(self) -> AuthResult<BetterAuth<DB>> {
+    pub async fn build(self) -> AuthResult<BetterAuth> {
         // Validate configuration
         self.config.validate()?;
 
         let config = Arc::new(self.config);
-        let database = Arc::new(self.database);
+        let database: Arc<AuthDatabase> = Arc::new(self.database);
 
         // Create session manager
         let session_manager = SessionManager::new(config.clone(), database.clone());
@@ -207,7 +207,7 @@ impl<DB: DatabaseAdapter> TypedAuthBuilder<DB> {
     }
 }
 
-impl TypedAuthBuilder<DefaultDatabase> {
+impl TypedAuthBuilder {
     /// Add a database lifecycle hook for the built-in SeaORM store.
     pub fn hook<H: DatabaseHooks<SeaOrmAdapter> + 'static>(mut self, hook: H) -> Self {
         self.database.add_hook(Arc::new(hook));
@@ -215,7 +215,7 @@ impl TypedAuthBuilder<DefaultDatabase> {
     }
 }
 
-impl BetterAuth<DefaultDatabase> {
+impl BetterAuth {
     /// Create a new BetterAuth builder.
     #[expect(
         clippy::new_ret_no_self,
@@ -226,7 +226,7 @@ impl BetterAuth<DefaultDatabase> {
     }
 }
 
-impl<DB: DatabaseAdapter> BetterAuth<DB> {
+impl BetterAuth {
     /// Handle an authentication request.
     ///
     /// Errors from plugins and core handlers are automatically converted
@@ -329,17 +329,17 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     }
 
     /// Get the database adapter.
-    pub fn database(&self) -> &Arc<DB> {
+    pub fn database(&self) -> &Arc<AuthDatabase> {
         &self.database
     }
 
     /// Get the session manager.
-    pub fn session_manager(&self) -> &SessionManager<DB> {
+    pub fn session_manager(&self) -> &SessionManager {
         &self.session_manager
     }
 
     /// Get all routes from plugins.
-    pub fn routes(&self) -> Vec<(String, &dyn AuthPlugin<DB>)> {
+    pub fn routes(&self) -> Vec<(String, &dyn AuthPlugin)> {
         let mut routes = Vec::new();
         for plugin in &self.plugins {
             for route in plugin.routes() {
@@ -350,12 +350,12 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     }
 
     /// Get all plugins.
-    pub fn plugins(&self) -> &[Box<dyn AuthPlugin<DB>>] {
+    pub fn plugins(&self) -> &[Box<dyn AuthPlugin>] {
         &self.plugins
     }
 
     /// Get plugin by name.
-    pub fn get_plugin(&self, name: &str) -> Option<&dyn AuthPlugin<DB>> {
+    pub fn get_plugin(&self, name: &str) -> Option<&dyn AuthPlugin> {
         self.plugins
             .iter()
             .find(|p| p.name() == name)
@@ -555,7 +555,7 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// API-key session emulation), the user is resolved directly by ID
     /// **without** a database session lookup — matching the TypeScript
     /// `ctx.context.session` virtual-session behaviour.
-    async fn extract_current_user(&self, req: &AuthRequest) -> AuthResult<DB::User> {
+    async fn extract_current_user(&self, req: &AuthRequest) -> AuthResult<better_auth_core::User> {
         // Fast path: virtual session injected by before_request hook
         if let Some(uid) = req.virtual_user_id() {
             return self

@@ -34,11 +34,11 @@ pub use better_auth_derive::*;
 
 // Re-export commonly used items
 pub use adapters::{
-    AccountOps, ApiKeyOps, AuthMigrator, CacheAdapter, DatabaseAdapter, InvitationOps, MemberOps,
-    MemoryAccount, MemoryApiKey, MemoryCacheAdapter, MemoryDatabaseAdapter, MemoryInvitation,
-    MemoryMember, MemoryOrganization, MemoryPasskey, MemorySession, MemoryTwoFactor, MemoryUser,
-    MemoryVerification, OrganizationOps, PasskeyOps, SeaOrmAdapter, SessionOps, TwoFactorOps,
-    UserOps, VerificationOps, run_migrations,
+    AccountOps, ApiKeyOps, AuthDatabase, AuthMigrator, CacheAdapter, DatabaseAdapter,
+    InvitationOps, MemberOps, MemoryAccount, MemoryApiKey, MemoryCacheAdapter,
+    MemoryDatabaseAdapter, MemoryInvitation, MemoryMember, MemoryOrganization, MemoryPasskey,
+    MemorySession, MemoryTwoFactor, MemoryUser, MemoryVerification, OrganizationOps, PasskeyOps,
+    SeaOrmAdapter, SessionOps, TwoFactorOps, UserOps, VerificationOps, run_migrations,
 };
 #[cfg(feature = "sqlx-postgres")]
 pub use adapters::{SqlxAdapter, SqlxEntity};
@@ -80,9 +80,9 @@ pub use types::{
     CreateInvitation, CreateMember, CreateOrganization, CreatePasskey, CreateSession,
     CreateTwoFactor, CreateUser, CreateVerification, ErrorCodeMessageResponse,
     ErrorMessageResponse, Headers, HealthCheckResponse, HttpMethod, Invitation, InvitationStatus,
-    ListUsersParams, OkResponse, Passkey, RateLimitErrorResponse, RequestMeta, Session,
-    StatusMessageResponse, StatusResponse, SuccessMessageResponse, SuccessResponse, TwoFactor,
-    UpdateAccount, UpdateApiKey, UpdateOrganization, UpdatePasskey, UpdateUser, UpdateUserRequest,
-    UpdateUserResponse, User, ValidationErrorResponse, Verification,
+    ListUsersParams, Member, OkResponse, Organization, Passkey, RateLimitErrorResponse,
+    RequestMeta, Session, StatusMessageResponse, StatusResponse, SuccessMessageResponse,
+    SuccessResponse, TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdatePasskey,
+    UpdateUser, UpdateUserRequest, UpdateUserResponse, User, ValidationErrorResponse, Verification,
 };
 pub use utils::password::{PasswordHasher, hash_password, verify_password};

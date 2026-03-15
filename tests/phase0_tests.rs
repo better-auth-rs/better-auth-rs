@@ -2,8 +2,7 @@ use async_trait::async_trait;
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
 use better_auth::types::{AuthRequest, AuthResponse, HttpMethod};
 use better_auth::{
-    AuthBuilder, AuthConfig, AuthContext, AuthPlugin, AuthResult, AuthRoute, DefaultDatabase,
-    run_migrations,
+    AuthBuilder, AuthConfig, AuthContext, AuthPlugin, AuthResult, AuthRoute, run_migrations,
     sea_orm::{Database, DatabaseConnection},
 };
 use serde_json::json;
@@ -11,7 +10,7 @@ use serde_json::json;
 struct RouteTestPlugin;
 
 #[async_trait]
-impl AuthPlugin<DefaultDatabase> for RouteTestPlugin {
+impl AuthPlugin for RouteTestPlugin {
     fn name(&self) -> &'static str {
         "route-test"
     }
@@ -26,7 +25,7 @@ impl AuthPlugin<DefaultDatabase> for RouteTestPlugin {
     async fn on_request(
         &self,
         _req: &AuthRequest,
-        _ctx: &AuthContext<DefaultDatabase>,
+        _ctx: &AuthContext,
     ) -> AuthResult<Option<AuthResponse>> {
         Ok(None)
     }
@@ -55,7 +54,7 @@ async fn test_routes_include_plugin_routes() {
 
     let routes = auth.routes();
 
-    // routes() returns Vec<(String, &dyn AuthPlugin<DB>)> — tuples of (path, plugin_ref)
+    // routes() returns Vec<(String, &dyn AuthPlugin)> — tuples of (path, plugin_ref)
     // Note: core routes (/update-user, /delete-user) are handled by handle_core_request()
     // and are NOT included in routes(); only plugin-registered routes appear here.
     let has_plugin_route = routes.iter().any(|(path, _)| path == "/route-test");

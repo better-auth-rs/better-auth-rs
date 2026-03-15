@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthAccount, AuthUser};
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse};
@@ -54,9 +53,9 @@ better_auth_core::impl_auth_plugin! {
 // Core functions — framework-agnostic business logic
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn list_accounts_core<DB: DatabaseAdapter>(
-    user: &DB::User,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn list_accounts_core(
+    user: &better_auth_core::User,
+    ctx: &AuthContext,
 ) -> AuthResult<Vec<AccountResponse>> {
     let accounts = ctx.database.get_user_accounts(user.id()).await?;
 
@@ -83,10 +82,10 @@ pub(crate) async fn list_accounts_core<DB: DatabaseAdapter>(
     Ok(filtered)
 }
 
-pub(crate) async fn unlink_account_core<DB: DatabaseAdapter>(
-    user: &DB::User,
+pub(crate) async fn unlink_account_core(
+    user: &better_auth_core::User,
     provider_id: &str,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<StatusResponse> {
     let accounts = ctx.database.get_user_accounts(user.id()).await?;
 
@@ -124,20 +123,20 @@ pub(crate) async fn unlink_account_core<DB: DatabaseAdapter>(
 // ---------------------------------------------------------------------------
 
 impl AccountManagementPlugin {
-    async fn handle_list_accounts<DB: DatabaseAdapter>(
+    async fn handle_list_accounts(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let filtered = list_accounts_core(&user, ctx).await?;
         Ok(AuthResponse::json(200, &filtered)?)
     }
 
-    async fn handle_unlink_account<DB: DatabaseAdapter>(
+    async fn handle_unlink_account(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
 
@@ -159,18 +158,18 @@ mod axum_impl {
     use axum::extract::State;
     use better_auth_core::{AuthState, CurrentSession, ValidatedJson};
 
-    async fn handle_list_accounts<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+    async fn handle_list_accounts(
+        State(state): State<AuthState>,
+        CurrentSession { user, .. }: CurrentSession,
     ) -> Result<Json<Vec<AccountResponse>>, AuthError> {
         let ctx = state.to_context();
         let accounts = list_accounts_core(&user, &ctx).await?;
         Ok(Json(accounts))
     }
 
-    async fn handle_unlink_account<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+    async fn handle_unlink_account(
+        State(state): State<AuthState>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<UnlinkAccountRequest>,
     ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
@@ -178,17 +177,17 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for AccountManagementPlugin {
+    impl better_auth_core::AxumPlugin for AccountManagementPlugin {
         fn name(&self) -> &'static str {
             "account-management"
         }
 
-        fn router(&self) -> axum::Router<AuthState<DB>> {
+        fn router(&self) -> axum::Router<AuthState> {
             use axum::routing::{get, post};
 
             axum::Router::new()
-                .route("/list-accounts", get(handle_list_accounts::<DB>))
-                .route("/unlink-account", post(handle_unlink_account::<DB>))
+                .route("/list-accounts", get(handle_list_accounts))
+                .route("/unlink-account", post(handle_unlink_account))
         }
     }
 }

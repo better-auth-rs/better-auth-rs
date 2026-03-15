@@ -1,19 +1,19 @@
 use chrono::Utc;
 use std::sync::Arc;
 
-use crate::adapters::DatabaseAdapter;
+use crate::adapters::AuthDatabase;
 use crate::config::AuthConfig;
 use crate::entity::{AuthSession, AuthUser};
 use crate::error::AuthResult;
-use crate::types::CreateSession;
+use crate::types::{CreateSession, Session};
 
 /// Session manager handles session creation, validation, and cleanup
-pub struct SessionManager<DB: DatabaseAdapter> {
+pub struct SessionManager {
     config: Arc<AuthConfig>,
-    database: Arc<DB>,
+    database: Arc<AuthDatabase>,
 }
 
-impl<DB: DatabaseAdapter> Clone for SessionManager<DB> {
+impl Clone for SessionManager {
     fn clone(&self) -> Self {
         Self {
             config: self.config.clone(),
@@ -22,8 +22,8 @@ impl<DB: DatabaseAdapter> Clone for SessionManager<DB> {
     }
 }
 
-impl<DB: DatabaseAdapter> SessionManager<DB> {
-    pub fn new(config: Arc<AuthConfig>, database: Arc<DB>) -> Self {
+impl SessionManager {
+    pub fn new(config: Arc<AuthConfig>, database: Arc<AuthDatabase>) -> Self {
         Self { config, database }
     }
 
@@ -33,7 +33,7 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
         user: &impl AuthUser,
         ip_address: Option<String>,
         user_agent: Option<String>,
-    ) -> AuthResult<DB::Session> {
+    ) -> AuthResult<Session> {
         let expires_at = Utc::now() + self.config.session.expires_in;
 
         let create_session = CreateSession {
@@ -50,8 +50,8 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
     }
 
     /// Get session by token
-    pub async fn get_session(&self, token: &str) -> AuthResult<Option<DB::Session>> {
-        let session = self.database.get_session(token).await?;
+    pub async fn get_session(&self, token: &str) -> AuthResult<Option<Session>> {
+        let session: Option<Session> = self.database.get_session(token).await?;
 
         // Check if session exists and is not expired
         if let Some(ref session) = session {
@@ -70,7 +70,7 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
                         // Only refresh if the session was last updated more than
                         // `update_age` ago.
                         let updated = session.updated_at();
-                        Utc::now() - updated >= age
+                        Utc::now().signed_duration_since(updated) >= age
                     }
                     // No update_age set → refresh on every access.
                     None => true,
@@ -102,14 +102,14 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
     }
 
     /// Get all active sessions for a user
-    pub async fn list_user_sessions(&self, user_id: &str) -> AuthResult<Vec<DB::Session>> {
-        let sessions = self.database.get_user_sessions(user_id).await?;
+    pub async fn list_user_sessions(&self, user_id: &str) -> AuthResult<Vec<Session>> {
+        let sessions: Vec<Session> = self.database.get_user_sessions(user_id).await?;
         let now = Utc::now();
 
         // Filter out expired sessions
-        let active_sessions: Vec<DB::Session> = sessions
+        let active_sessions: Vec<Session> = sessions
             .into_iter()
-            .filter(|session| session.expires_at() > now && session.active())
+            .filter(|session: &Session| session.expires_at() > now && session.active())
             .collect();
 
         Ok(active_sessions)
@@ -210,9 +210,9 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::MemoryDatabaseAdapter;
-    use crate::adapters::traits::UserOps;
+    use crate::adapters::{AuthDatabase, DatabaseAdapter, SeaOrmAdapter, run_migrations};
     use crate::entity::AuthSession;
+    use crate::sea_orm::Database;
     use crate::types::AuthRequest;
     use crate::types::HttpMethod;
     use chrono::Duration;
@@ -221,8 +221,19 @@ mod tests {
         Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"))
     }
 
-    fn test_manager() -> SessionManager<MemoryDatabaseAdapter> {
-        SessionManager::new(test_config(), Arc::new(MemoryDatabaseAdapter::new()))
+    async fn test_database() -> Arc<AuthDatabase> {
+        let database = Database::connect("sqlite::memory:")
+            .await
+            .expect("sqlite test database should connect");
+        run_migrations(&database)
+            .await
+            .expect("sqlite test migrations should run");
+        Arc::new(SeaOrmAdapter::new(database))
+    }
+
+    fn test_manager() -> SessionManager {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        SessionManager::new(test_config(), runtime.block_on(test_database()))
     }
 
     // ── validate_token_format ───────────────────────────────────────────
@@ -306,7 +317,8 @@ mod tests {
     fn session_fresh_when_within_window() {
         let mut config = AuthConfig::new("test-secret-min-32-chars-1234567");
         config.session.fresh_age = Some(Duration::minutes(10));
-        let mgr = SessionManager::new(Arc::new(config), Arc::new(MemoryDatabaseAdapter::new()));
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let mgr = SessionManager::new(Arc::new(config), runtime.block_on(test_database()));
 
         // A session created "now" is fresh within a 10-minute window.
         let session = crate::types::Session {
@@ -329,7 +341,8 @@ mod tests {
     fn session_not_fresh_when_old() {
         let mut config = AuthConfig::new("test-secret-min-32-chars-1234567");
         config.session.fresh_age = Some(Duration::minutes(10));
-        let mgr = SessionManager::new(Arc::new(config), Arc::new(MemoryDatabaseAdapter::new()));
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let mgr = SessionManager::new(Arc::new(config), runtime.block_on(test_database()));
 
         let session = crate::types::Session {
             id: "s1".into(),
@@ -370,7 +383,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_and_get_session() {
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let db = test_database().await;
         let mgr = SessionManager::new(test_config(), db.clone());
 
         // Create a user first
@@ -388,7 +401,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_session_removes_it() {
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let db = test_database().await;
         let mgr = SessionManager::new(test_config(), db.clone());
 
         let user = db
@@ -406,7 +419,7 @@ mod tests {
 
     #[tokio::test]
     async fn revoke_session_returns_true_when_found() {
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let db = test_database().await;
         let mgr = SessionManager::new(test_config(), db.clone());
 
         let user = db
@@ -421,14 +434,14 @@ mod tests {
 
     #[tokio::test]
     async fn revoke_session_returns_false_when_not_found() {
-        let mgr = test_manager();
+        let mgr = SessionManager::new(test_config(), test_database().await);
         let result = mgr.revoke_session("nonexistent-token").await.unwrap();
         assert!(!result);
     }
 
     #[tokio::test]
     async fn list_user_sessions_excludes_expired() {
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let db = test_database().await;
         let mgr = SessionManager::new(test_config(), db.clone());
 
         let user = db
@@ -446,7 +459,7 @@ mod tests {
 
     #[tokio::test]
     async fn revoke_all_user_sessions() {
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let db = test_database().await;
         let mgr = SessionManager::new(test_config(), db.clone());
 
         let user = db
@@ -466,7 +479,7 @@ mod tests {
 
     #[tokio::test]
     async fn revoke_other_sessions_keeps_current() {
-        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let db = test_database().await;
         let mgr = SessionManager::new(test_config(), db.clone());
 
         let user = db

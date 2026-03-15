@@ -10,7 +10,7 @@
 
 mod compat;
 
-use better_auth::{AuthUser, UserOps};
+use better_auth::AuthUser;
 use compat::helpers::*;
 use serde_json::json;
 

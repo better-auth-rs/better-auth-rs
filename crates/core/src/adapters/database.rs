@@ -2,6 +2,10 @@ pub use super::traits::{
     AccountOps, ApiKeyOps, InvitationOps, MemberOps, OrganizationOps, PasskeyOps, SessionOps,
     TwoFactorOps, UserOps, VerificationOps,
 };
+use crate::types::{
+    Account, ApiKey, Invitation, Member, Organization, Passkey, Session, TwoFactor, User,
+    Verification,
+};
 
 /// Database adapter trait for persistence.
 ///
@@ -38,6 +42,23 @@ impl<T> DatabaseAdapter for T where
         + PasskeyOps
 {
 }
+
+/// Concrete auth store trait object used by the built-in SeaORM-backed runtime.
+///
+/// This binds all associated entity types to the crate's built-in auth models so
+/// the public auth surface no longer needs database type parameters.
+pub type AuthDatabase = dyn DatabaseAdapter<
+        User = User,
+        Session = Session,
+        Account = Account,
+        Organization = Organization,
+        Member = Member,
+        Invitation = Invitation,
+        Verification = Verification,
+        TwoFactor = TwoFactor,
+        ApiKey = ApiKey,
+        Passkey = Passkey,
+    >;
 
 #[cfg(feature = "sqlx-postgres")]
 pub mod sqlx_adapter {

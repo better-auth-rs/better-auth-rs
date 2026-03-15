@@ -26,7 +26,7 @@ fn plugin_with_reset_sender() -> PasswordManagementPlugin {
     PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender))
 }
 
-async fn create_test_context_with_user() -> (AuthContext<DefaultDatabase>, User, Session) {
+async fn create_test_context_with_user() -> (AuthContext, User, Session) {
     let mut config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
     config.password = PasswordConfig {
         min_length: 8,
@@ -84,7 +84,7 @@ async fn create_test_context_with_user() -> (AuthContext<DefaultDatabase>, User,
 
 /// Helper: create a reset-password verification token for the given user
 /// and store it in the database. Returns the token string.
-async fn create_reset_token(ctx: &AuthContext<DefaultDatabase>, user_id: &str) -> String {
+async fn create_reset_token(ctx: &AuthContext, user_id: &str) -> String {
     let reset_token = uuid::Uuid::new_v4().simple().to_string();
     let create_verification = CreateVerification {
         identifier: format!("reset-password:{}", reset_token),
@@ -617,7 +617,7 @@ async fn test_password_hashing_and_verification() {
 #[tokio::test]
 async fn test_plugin_routes() {
     let plugin = PasswordManagementPlugin::new();
-    let routes = AuthPlugin::<DefaultDatabase>::routes(&plugin);
+    let routes = AuthPlugin::routes(&plugin);
 
     assert_eq!(routes.len(), 5);
     assert!(

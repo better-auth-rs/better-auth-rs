@@ -256,16 +256,13 @@ fn test_to_user_preserves_fields() {
 #[test]
 fn test_plugin_name() {
     let plugin = EmailVerificationPlugin::new();
-    assert_eq!(
-        AuthPlugin::<DefaultDatabase>::name(&plugin),
-        "email-verification"
-    );
+    assert_eq!(AuthPlugin::name(&plugin), "email-verification");
 }
 
 #[test]
 fn test_plugin_routes() {
     let plugin = EmailVerificationPlugin::new();
-    let routes = AuthPlugin::<DefaultDatabase>::routes(&plugin);
+    let routes = AuthPlugin::routes(&plugin);
     assert_eq!(routes.len(), 2);
     assert!(
         routes

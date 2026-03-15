@@ -3,7 +3,6 @@ use base64::engine::general_purpose::STANDARD;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use rand::RngCore;
 
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthPasskey, AuthSession, AuthUser};
 use better_auth_core::{AuthContext, CreatePasskey, CreateVerification};
 use better_auth_core::{AuthError, AuthResult};
@@ -103,11 +102,11 @@ pub(super) fn validate_client_data(
 // Core functions
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn generate_register_options_core<DB: DatabaseAdapter>(
-    user: &DB::User,
+pub(crate) async fn generate_register_options_core(
+    user: &better_auth_core::User,
     authenticator_attachment: Option<&str>,
     config: &PasskeyConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<serde_json::Value> {
     let challenge = generate_challenge();
 
@@ -180,11 +179,11 @@ pub(crate) async fn generate_register_options_core<DB: DatabaseAdapter>(
     Ok(options)
 }
 
-pub(crate) async fn verify_registration_core<DB: DatabaseAdapter>(
+pub(crate) async fn verify_registration_core(
     body: &VerifyRegistrationRequest,
-    user: &DB::User,
+    user: &better_auth_core::User,
     config: &PasskeyConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<PasskeyView> {
     ensure_insecure_verification_enabled(config)?;
 
@@ -271,10 +270,10 @@ pub(crate) async fn verify_registration_core<DB: DatabaseAdapter>(
     Ok(PasskeyView::from_entity(&passkey))
 }
 
-pub(crate) async fn generate_authenticate_options_core<DB: DatabaseAdapter>(
-    maybe_user: Option<&DB::User>,
+pub(crate) async fn generate_authenticate_options_core(
+    maybe_user: Option<&better_auth_core::User>,
     config: &PasskeyConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<serde_json::Value> {
     let challenge = generate_challenge();
 
@@ -324,13 +323,16 @@ pub(crate) async fn generate_authenticate_options_core<DB: DatabaseAdapter>(
     Ok(options)
 }
 
-pub(crate) async fn verify_authentication_core<DB: DatabaseAdapter>(
+pub(crate) async fn verify_authentication_core(
     body: &VerifyAuthenticationRequest,
     config: &PasskeyConfig,
     ip_address: Option<String>,
     user_agent: Option<String>,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(SessionUserResponse<DB::User, DB::Session>, String)> {
+    ctx: &AuthContext,
+) -> AuthResult<(
+    SessionUserResponse<better_auth_core::User, better_auth_core::Session>,
+    String,
+)> {
     ensure_insecure_verification_enabled(config)?;
 
     let resp = &body.response;
@@ -388,18 +390,18 @@ pub(crate) async fn verify_authentication_core<DB: DatabaseAdapter>(
     Ok((response, token))
 }
 
-pub(crate) async fn list_user_passkeys_core<DB: DatabaseAdapter>(
-    user: &DB::User,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn list_user_passkeys_core(
+    user: &better_auth_core::User,
+    ctx: &AuthContext,
 ) -> AuthResult<Vec<PasskeyView>> {
     let passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
     Ok(passkeys.iter().map(PasskeyView::from_entity).collect())
 }
 
-pub(crate) async fn delete_passkey_core<DB: DatabaseAdapter>(
+pub(crate) async fn delete_passkey_core(
     body: &DeletePasskeyRequest,
-    user: &DB::User,
-    ctx: &AuthContext<DB>,
+    user: &better_auth_core::User,
+    ctx: &AuthContext,
 ) -> AuthResult<StatusResponse> {
     // Verify ownership
     let passkey = ctx
@@ -417,10 +419,10 @@ pub(crate) async fn delete_passkey_core<DB: DatabaseAdapter>(
     Ok(StatusResponse { status: true })
 }
 
-pub(crate) async fn update_passkey_core<DB: DatabaseAdapter>(
+pub(crate) async fn update_passkey_core(
     body: &UpdatePasskeyRequest,
-    user: &DB::User,
-    ctx: &AuthContext<DB>,
+    user: &better_auth_core::User,
+    ctx: &AuthContext,
 ) -> AuthResult<PasskeyResponse> {
     // Verify ownership
     let passkey = ctx

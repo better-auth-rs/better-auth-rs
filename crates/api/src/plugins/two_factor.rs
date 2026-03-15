@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use totp_rs::{Algorithm, Secret, TOTP};
 use validator::Validate;
 
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthSession, AuthTwoFactor, AuthUser, AuthVerification};
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{
@@ -163,9 +162,9 @@ fn build_totp(
     .map_err(|e| AuthError::internal(format!("Failed to create TOTP: {}", e)))
 }
 
-async fn verify_user_password<DB: DatabaseAdapter>(
-    ctx: &AuthContext<DB>,
-    user: &DB::User,
+async fn verify_user_password(
+    ctx: &AuthContext,
+    user: &better_auth_core::User,
     password: &str,
 ) -> AuthResult<()> {
     let stored_hash = get_user_password_hash(ctx, user)
@@ -177,11 +176,11 @@ async fn verify_user_password<DB: DatabaseAdapter>(
 
 // -- Core functions (session-based) --
 
-async fn enable_core<DB: DatabaseAdapter>(
+async fn enable_core(
     body: &EnableRequest,
-    user: &DB::User,
+    user: &better_auth_core::User,
     config: &TwoFactorConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<EnableResponse> {
     verify_user_password(ctx, user, &body.password).await?;
 
@@ -230,10 +229,10 @@ async fn enable_core<DB: DatabaseAdapter>(
     })
 }
 
-async fn disable_core<DB: DatabaseAdapter>(
+async fn disable_core(
     body: &DisableRequest,
-    user: &DB::User,
-    ctx: &AuthContext<DB>,
+    user: &better_auth_core::User,
+    ctx: &AuthContext,
 ) -> AuthResult<StatusResponse> {
     verify_user_password(ctx, user, &body.password).await?;
 
@@ -253,11 +252,11 @@ async fn disable_core<DB: DatabaseAdapter>(
     Ok(StatusResponse { status: true })
 }
 
-async fn get_totp_uri_core<DB: DatabaseAdapter>(
+async fn get_totp_uri_core(
     body: &GetTotpUriRequest,
-    user: &DB::User,
+    user: &better_auth_core::User,
     config: &TwoFactorConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<TotpUriResponse> {
     verify_user_password(ctx, user, &body.password).await?;
 
@@ -280,11 +279,11 @@ async fn get_totp_uri_core<DB: DatabaseAdapter>(
     })
 }
 
-async fn generate_backup_codes_core<DB: DatabaseAdapter>(
+async fn generate_backup_codes_core(
     body: &GenerateBackupCodesRequest,
-    user: &DB::User,
+    user: &better_auth_core::User,
     config: &TwoFactorConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<BackupCodesResponse> {
     verify_user_password(ctx, user, &body.password).await?;
 
@@ -306,10 +305,10 @@ async fn generate_backup_codes_core<DB: DatabaseAdapter>(
 // -- Session / auth helpers --
 
 /// Extract the user_id from a `2fa_xxx` pending verification token.
-async fn get_pending_2fa_user<DB: DatabaseAdapter>(
+async fn get_pending_2fa_user(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(DB::User, String)> {
+    ctx: &AuthContext,
+) -> AuthResult<(better_auth_core::User, String)> {
     let token = req
         .headers
         .get("authorization")
@@ -343,14 +342,14 @@ async fn get_pending_2fa_user<DB: DatabaseAdapter>(
 
 // -- Core functions (pending-2fa) --
 
-/// Returns `(VerifyTotpResponse<DB::User>, session_token)`.
-async fn verify_totp_core<DB: DatabaseAdapter>(
+/// Returns `(VerifyTotpResponse<better_auth_core::User>, session_token)`.
+async fn verify_totp_core(
     body: &VerifyTotpRequest,
-    user: &DB::User,
+    user: &better_auth_core::User,
     verification_id: &str,
     config: &TwoFactorConfig,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(VerifyTotpResponse<DB::User>, String)> {
+    ctx: &AuthContext,
+) -> AuthResult<(VerifyTotpResponse<better_auth_core::User>, String)> {
     let two_factor = ctx
         .database
         .get_two_factor_by_user_id(user.id())
@@ -390,9 +389,9 @@ async fn verify_totp_core<DB: DatabaseAdapter>(
     Ok((response, token))
 }
 
-async fn send_otp_core<DB: DatabaseAdapter>(
-    user: &DB::User,
-    ctx: &AuthContext<DB>,
+async fn send_otp_core(
+    user: &better_auth_core::User,
+    ctx: &AuthContext,
 ) -> AuthResult<StatusResponse> {
     // Generate 6-digit OTP
     use rand::Rng;
@@ -422,13 +421,13 @@ async fn send_otp_core<DB: DatabaseAdapter>(
     Ok(StatusResponse { status: true })
 }
 
-/// Returns `(VerifyTotpResponse<DB::User>, session_token)`.
-async fn verify_otp_core<DB: DatabaseAdapter>(
+/// Returns `(VerifyTotpResponse<better_auth_core::User>, session_token)`.
+async fn verify_otp_core(
     body: &VerifyOtpRequest,
-    user: &DB::User,
+    user: &better_auth_core::User,
     verification_id: &str,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(VerifyTotpResponse<DB::User>, String)> {
+    ctx: &AuthContext,
+) -> AuthResult<(VerifyTotpResponse<better_auth_core::User>, String)> {
     // Look up the OTP verification
     let otp_identifier = format!("2fa_otp:{}", user.id());
     let otp_verification = ctx
@@ -466,13 +465,16 @@ async fn verify_otp_core<DB: DatabaseAdapter>(
     Ok((response, token))
 }
 
-/// Returns `(VerifyBackupCodeResponse<DB::User, DB::Session>, session_token)`.
-async fn verify_backup_code_core<DB: DatabaseAdapter>(
+/// Returns `(VerifyBackupCodeResponse<better_auth_core::User, better_auth_core::Session>, session_token)`.
+async fn verify_backup_code_core(
     body: &VerifyBackupCodeRequest,
-    user: &DB::User,
+    user: &better_auth_core::User,
     verification_id: &str,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(VerifyBackupCodeResponse<DB::User, DB::Session>, String)> {
+    ctx: &AuthContext,
+) -> AuthResult<(
+    VerifyBackupCodeResponse<better_auth_core::User, better_auth_core::Session>,
+    String,
+)> {
     let two_factor = ctx
         .database
         .get_two_factor_by_user_id(user.id())
@@ -533,10 +535,10 @@ async fn verify_backup_code_core<DB: DatabaseAdapter>(
 // -- Old-style handlers (delegating to core functions) --
 
 impl TwoFactorPlugin {
-    async fn handle_enable<DB: DatabaseAdapter>(
+    async fn handle_enable(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: EnableRequest = match better_auth_core::validate_request_body(req) {
@@ -547,10 +549,10 @@ impl TwoFactorPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_disable<DB: DatabaseAdapter>(
+    async fn handle_disable(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: DisableRequest = match better_auth_core::validate_request_body(req) {
@@ -561,10 +563,10 @@ impl TwoFactorPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_get_totp_uri<DB: DatabaseAdapter>(
+    async fn handle_get_totp_uri(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: GetTotpUriRequest = match better_auth_core::validate_request_body(req) {
@@ -575,10 +577,10 @@ impl TwoFactorPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_verify_totp<DB: DatabaseAdapter>(
+    async fn handle_verify_totp(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, verification_id) = get_pending_2fa_user(req, ctx).await?;
         let body: VerifyTotpRequest = match better_auth_core::validate_request_body(req) {
@@ -591,20 +593,20 @@ impl TwoFactorPlugin {
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
-    async fn handle_send_otp<DB: DatabaseAdapter>(
+    async fn handle_send_otp(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _verification_id) = get_pending_2fa_user(req, ctx).await?;
         let response = send_otp_core(&user, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_verify_otp<DB: DatabaseAdapter>(
+    async fn handle_verify_otp(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, verification_id) = get_pending_2fa_user(req, ctx).await?;
         let body: VerifyOtpRequest = match better_auth_core::validate_request_body(req) {
@@ -616,10 +618,10 @@ impl TwoFactorPlugin {
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
-    async fn handle_generate_backup_codes<DB: DatabaseAdapter>(
+    async fn handle_generate_backup_codes(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: GenerateBackupCodesRequest = match better_auth_core::validate_request_body(req) {
@@ -630,10 +632,10 @@ impl TwoFactorPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_verify_backup_code<DB: DatabaseAdapter>(
+    async fn handle_verify_backup_code(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, verification_id) = get_pending_2fa_user(req, ctx).await?;
         let body: VerifyBackupCodeRequest = match better_auth_core::validate_request_body(req) {
@@ -681,10 +683,10 @@ mod axum_impl {
 
     // -- Session-based handlers --
 
-    async fn handle_enable<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_enable(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<EnableRequest>,
     ) -> Result<Json<EnableResponse>, AuthError> {
         let ctx = state.to_context();
@@ -692,9 +694,9 @@ mod axum_impl {
         Ok(Json(result))
     }
 
-    async fn handle_disable<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+    async fn handle_disable(
+        State(state): State<AuthState>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<DisableRequest>,
     ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
@@ -702,10 +704,10 @@ mod axum_impl {
         Ok(Json(result))
     }
 
-    async fn handle_get_totp_uri<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_get_totp_uri(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<GetTotpUriRequest>,
     ) -> Result<Json<TotpUriResponse>, AuthError> {
         let ctx = state.to_context();
@@ -713,10 +715,10 @@ mod axum_impl {
         Ok(Json(result))
     }
 
-    async fn handle_generate_backup_codes<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_generate_backup_codes(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<GenerateBackupCodesRequest>,
     ) -> Result<Json<BackupCodesResponse>, AuthError> {
         let ctx = state.to_context();
@@ -726,13 +728,13 @@ mod axum_impl {
 
     // -- Pending-2fa handlers --
 
-    async fn handle_verify_totp<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_verify_totp(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
         Pending2faToken {
             user,
             verification_id,
-        }: Pending2faToken<DB>,
+        }: Pending2faToken,
         ValidatedJson(body): ValidatedJson<VerifyTotpRequest>,
     ) -> Result<impl IntoResponse, AuthError> {
         let ctx = state.to_context();
@@ -742,21 +744,21 @@ mod axum_impl {
         Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
-    async fn handle_send_otp<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Pending2faToken { user, .. }: Pending2faToken<DB>,
+    async fn handle_send_otp(
+        State(state): State<AuthState>,
+        Pending2faToken { user, .. }: Pending2faToken,
     ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
         let result = send_otp_core(&user, &ctx).await?;
         Ok(Json(result))
     }
 
-    async fn handle_verify_otp<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_verify_otp(
+        State(state): State<AuthState>,
         Pending2faToken {
             user,
             verification_id,
-        }: Pending2faToken<DB>,
+        }: Pending2faToken,
         ValidatedJson(body): ValidatedJson<VerifyOtpRequest>,
     ) -> Result<impl IntoResponse, AuthError> {
         let ctx = state.to_context();
@@ -765,12 +767,12 @@ mod axum_impl {
         Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
-    async fn handle_verify_backup_code<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_verify_backup_code(
+        State(state): State<AuthState>,
         Pending2faToken {
             user,
             verification_id,
-        }: Pending2faToken<DB>,
+        }: Pending2faToken,
         ValidatedJson(body): ValidatedJson<VerifyBackupCodeRequest>,
     ) -> Result<impl IntoResponse, AuthError> {
         let ctx = state.to_context();
@@ -780,31 +782,31 @@ mod axum_impl {
         Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for TwoFactorPlugin {
+    impl better_auth_core::AxumPlugin for TwoFactorPlugin {
         fn name(&self) -> &'static str {
             "two-factor"
         }
 
-        fn router(&self) -> axum::Router<AuthState<DB>> {
+        fn router(&self) -> axum::Router<AuthState> {
             use axum::routing::post;
 
             let plugin_state = Arc::new(PluginState {
                 config: self.config.clone(),
             });
             axum::Router::new()
-                .route("/two-factor/enable", post(handle_enable::<DB>))
-                .route("/two-factor/disable", post(handle_disable::<DB>))
-                .route("/two-factor/get-totp-uri", post(handle_get_totp_uri::<DB>))
-                .route("/two-factor/verify-totp", post(handle_verify_totp::<DB>))
-                .route("/two-factor/send-otp", post(handle_send_otp::<DB>))
-                .route("/two-factor/verify-otp", post(handle_verify_otp::<DB>))
+                .route("/two-factor/enable", post(handle_enable))
+                .route("/two-factor/disable", post(handle_disable))
+                .route("/two-factor/get-totp-uri", post(handle_get_totp_uri))
+                .route("/two-factor/verify-totp", post(handle_verify_totp))
+                .route("/two-factor/send-otp", post(handle_send_otp))
+                .route("/two-factor/verify-otp", post(handle_verify_otp))
                 .route(
                     "/two-factor/generate-backup-codes",
-                    post(handle_generate_backup_codes::<DB>),
+                    post(handle_generate_backup_codes),
                 )
                 .route(
                     "/two-factor/verify-backup-code",
-                    post(handle_verify_backup_code::<DB>),
+                    post(handle_verify_backup_code),
                 )
                 .layer(Extension(plugin_state))
         }

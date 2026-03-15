@@ -13,33 +13,31 @@ mod axum_impl {
     use serde::de::DeserializeOwned;
     use validator::Validate;
 
-    use crate::adapters::DatabaseAdapter;
     use crate::entity::{AuthSession, AuthUser, AuthVerification};
     use crate::error::AuthError;
     use crate::plugin::AuthState;
+    use crate::types::{Session, User};
 
     // -----------------------------------------------------------------------
     // CurrentSession — extract and validate the current user + session
     // -----------------------------------------------------------------------
 
-    /// Authenticated session extractor for `AuthState<DB>`.
+    /// Authenticated session extractor for [`AuthState`].
     ///
     /// Extracts a session token from the `Authorization: Bearer <token>` header
     /// or the configured session cookie, validates it, and returns the user and
     /// session.  Returns `AuthError::Unauthenticated` if no valid session is
     /// found.
-    pub struct CurrentSession<DB: DatabaseAdapter = crate::DefaultDatabase> {
-        pub user: DB::User,
-        pub session: DB::Session,
+    pub struct CurrentSession {
+        pub user: User,
+        pub session: Session,
     }
 
     /// Optional authenticated session extractor.
     ///
     /// Like [`CurrentSession`] but returns `None` instead of a rejection when
     /// no valid session is found.
-    pub struct OptionalSession<DB: DatabaseAdapter = crate::DefaultDatabase>(
-        pub Option<CurrentSession<DB>>,
-    );
+    pub struct OptionalSession(pub Option<CurrentSession>);
 
     /// Extract a session token from request parts.
     ///
@@ -71,12 +69,12 @@ mod axum_impl {
         None
     }
 
-    impl<DB: DatabaseAdapter> FromRequestParts<AuthState<DB>> for CurrentSession<DB> {
+    impl FromRequestParts<AuthState> for CurrentSession {
         type Rejection = AuthError;
 
         async fn from_request_parts(
             parts: &mut Parts,
-            state: &AuthState<DB>,
+            state: &AuthState,
         ) -> Result<Self, Self::Rejection> {
             let cookie_name = &state.config.session.cookie_name;
             let token =
@@ -98,12 +96,12 @@ mod axum_impl {
         }
     }
 
-    impl<DB: DatabaseAdapter> FromRequestParts<AuthState<DB>> for OptionalSession<DB> {
+    impl FromRequestParts<AuthState> for OptionalSession {
         type Rejection = AuthError;
 
         async fn from_request_parts(
             parts: &mut Parts,
-            state: &AuthState<DB>,
+            state: &AuthState,
         ) -> Result<Self, Self::Rejection> {
             match CurrentSession::from_request_parts(parts, state).await {
                 Ok(session) => Ok(OptionalSession(Some(session))),
@@ -249,11 +247,11 @@ mod axum_impl {
 
     /// Extractor that validates the session and checks for admin role.
     ///
-    /// Requires `AuthState<DB>` and an `Extension<AdminRole>` to be present
+    /// Requires [`AuthState`] and an `Extension<AdminRole>` to be present
     /// in the router (set by the admin plugin's router).
-    pub struct AdminSession<DB: DatabaseAdapter> {
-        pub user: DB::User,
-        pub session: DB::Session,
+    pub struct AdminSession {
+        pub user: User,
+        pub session: Session,
     }
 
     /// The role string required for admin access.
@@ -262,14 +260,14 @@ mod axum_impl {
     #[derive(Clone)]
     pub struct AdminRole(pub String);
 
-    impl<DB: DatabaseAdapter> FromRequestParts<AuthState<DB>> for AdminSession<DB> {
+    impl FromRequestParts<AuthState> for AdminSession {
         type Rejection = AuthError;
 
         async fn from_request_parts(
             parts: &mut Parts,
-            state: &AuthState<DB>,
+            state: &AuthState,
         ) -> Result<Self, Self::Rejection> {
-            let current = CurrentSession::<DB>::from_request_parts(parts, state).await?;
+            let current = CurrentSession::from_request_parts(parts, state).await?;
 
             // Try to get AdminRole from extensions, default to "admin"
             let required_role = parts
@@ -301,17 +299,17 @@ mod axum_impl {
     /// Extracts a `Bearer 2fa_xxx` token from the `Authorization` header,
     /// looks up the corresponding verification record, validates expiry,
     /// and returns the associated user and verification ID.
-    pub struct Pending2faToken<DB: DatabaseAdapter> {
-        pub user: DB::User,
+    pub struct Pending2faToken {
+        pub user: User,
         pub verification_id: String,
     }
 
-    impl<DB: DatabaseAdapter> FromRequestParts<AuthState<DB>> for Pending2faToken<DB> {
+    impl FromRequestParts<AuthState> for Pending2faToken {
         type Rejection = AuthError;
 
         async fn from_request_parts(
             parts: &mut Parts,
-            state: &AuthState<DB>,
+            state: &AuthState,
         ) -> Result<Self, Self::Rejection> {
             let token = parts
                 .headers

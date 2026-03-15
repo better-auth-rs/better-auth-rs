@@ -17,20 +17,19 @@ use better_auth_core::SessionManager;
 #[cfg(feature = "axum")]
 use better_auth_core::entity::AuthSession as AuthSessionTrait;
 use better_auth_core::{
-    AuthError, AuthRequest, AuthResponse, DatabaseAdapter, HealthCheckResponse, HttpMethod,
-    OkResponse, core_paths,
+    AuthError, AuthRequest, AuthResponse, HealthCheckResponse, HttpMethod, OkResponse, core_paths,
 };
 
 /// Integration trait for Axum web framework
 #[cfg(feature = "axum")]
-pub trait AxumIntegration<DB: DatabaseAdapter> {
+pub trait AxumIntegration {
     /// Create an Axum router with all authentication routes
-    fn axum_router(self) -> Router<Arc<BetterAuth<DB>>>;
+    fn axum_router(self) -> Router<Arc<BetterAuth>>;
 }
 
 #[cfg(feature = "axum")]
-impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
-    fn axum_router(self) -> Router<Arc<BetterAuth<DB>>> {
+impl AxumIntegration for Arc<BetterAuth> {
+    fn axum_router(self) -> Router<Arc<BetterAuth>> {
         // NOTE: disabled_paths is checked here at route-registration time so
         // that disabled routes are never mounted in Axum at all.  The core
         // handler (`handle_request_inner`) performs the same check at
@@ -55,30 +54,24 @@ impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
 
         // Add OpenAPI spec endpoint
         if !disabled_paths.contains(&core_paths::OPENAPI_SPEC.to_string()) {
-            router = router.route(core_paths::OPENAPI_SPEC, get(create_plugin_handler::<DB>()));
+            router = router.route(core_paths::OPENAPI_SPEC, get(create_plugin_handler()));
         }
 
         // Add core user management routes
         if !disabled_paths.contains(&core_paths::UPDATE_USER.to_string()) {
-            router = router.route(core_paths::UPDATE_USER, post(create_plugin_handler::<DB>()));
+            router = router.route(core_paths::UPDATE_USER, post(create_plugin_handler()));
         }
         if !disabled_paths.contains(&core_paths::DELETE_USER.to_string()) {
-            router = router.route(core_paths::DELETE_USER, post(create_plugin_handler::<DB>()));
-            router = router.route(
-                core_paths::DELETE_USER,
-                delete(create_plugin_handler::<DB>()),
-            );
+            router = router.route(core_paths::DELETE_USER, post(create_plugin_handler()));
+            router = router.route(core_paths::DELETE_USER, delete(create_plugin_handler()));
         }
         if !disabled_paths.contains(&core_paths::CHANGE_EMAIL.to_string()) {
-            router = router.route(
-                core_paths::CHANGE_EMAIL,
-                post(create_plugin_handler::<DB>()),
-            );
+            router = router.route(core_paths::CHANGE_EMAIL, post(create_plugin_handler()));
         }
         if !disabled_paths.contains(&core_paths::DELETE_USER_CALLBACK.to_string()) {
             router = router.route(
                 core_paths::DELETE_USER_CALLBACK,
-                get(create_plugin_handler::<DB>()),
+                get(create_plugin_handler()),
             );
         }
 
@@ -90,7 +83,7 @@ impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
                     continue;
                 }
 
-                let handler_fn = create_plugin_handler::<DB>();
+                let handler_fn = create_plugin_handler();
                 match route.method {
                     HttpMethod::Get => {
                         router = router.route(&route.path, get(handler_fn.clone()));
@@ -144,17 +137,13 @@ async fn health_check() -> impl IntoResponse {
 }
 
 #[cfg(feature = "axum")]
-#[expect(
-    clippy::type_complexity,
-    reason = "Axum handler signature requires nested generics"
-)]
-fn create_plugin_handler<DB: DatabaseAdapter>() -> impl Fn(
-    State<Arc<BetterAuth<DB>>>,
+fn create_plugin_handler() -> impl Fn(
+    State<Arc<BetterAuth>>,
     Request,
 ) -> std::pin::Pin<
     Box<dyn std::future::Future<Output = Response> + Send>,
 > + Clone {
-    |State(auth): State<Arc<BetterAuth<DB>>>, req: Request| {
+    |State(auth): State<Arc<BetterAuth>>, req: Request| {
         Box::pin(async move {
             match convert_axum_request(req).await {
                 Ok(auth_req) => match auth.handle_request(auth_req).await {
@@ -260,23 +249,23 @@ fn convert_auth_response(auth_response: AuthResponse) -> Response {
 /// Extracts and validates the current user and session from the request.
 /// Returns `401 Unauthorized` if no valid session is found.
 ///
-/// Requires `State<Arc<BetterAuth<DB>>>` to be present in the router.
+/// Requires `State<Arc<BetterAuth>>` to be present in the router.
 ///
 /// # Example
 ///
 /// ```rust,ignore
 /// use better_auth::handlers::axum::CurrentSession;
 ///
-/// async fn profile(session: CurrentSession<MyDB>) -> impl IntoResponse {
+/// async fn profile(session: CurrentSession) -> impl IntoResponse {
 ///     let user = &session.user;
 ///     let session = &session.session;
 ///     axum::Json(serde_json::json!({ "id": user.id() }))
 /// }
 /// ```
 #[cfg(feature = "axum")]
-pub struct CurrentSession<DB: DatabaseAdapter = crate::DefaultDatabase> {
-    pub user: DB::User,
-    pub session: DB::Session,
+pub struct CurrentSession {
+    pub user: better_auth_core::User,
+    pub session: better_auth_core::Session,
 }
 
 /// Optional authenticated session extractor.
@@ -288,7 +277,7 @@ pub struct CurrentSession<DB: DatabaseAdapter = crate::DefaultDatabase> {
 /// # Example
 ///
 /// ```rust,ignore
-/// async fn home(session: OptionalSession<MyDB>) -> impl IntoResponse {
+/// async fn home(session: OptionalSession) -> impl IntoResponse {
 ///     if let Some(session) = session.0 {
 ///         axum::Json(serde_json::json!({ "user": session.user.id() }))
 ///     } else {
@@ -297,9 +286,7 @@ pub struct CurrentSession<DB: DatabaseAdapter = crate::DefaultDatabase> {
 /// }
 /// ```
 #[cfg(feature = "axum")]
-pub struct OptionalSession<DB: DatabaseAdapter = crate::DefaultDatabase>(
-    pub Option<CurrentSession<DB>>,
-);
+pub struct OptionalSession(pub Option<CurrentSession>);
 
 /// Extract a session token from the request parts.
 ///
@@ -333,12 +320,12 @@ fn extract_token_from_parts(parts: &Parts, cookie_name: &str) -> Option<String> 
 }
 
 #[cfg(feature = "axum")]
-impl<DB: DatabaseAdapter> FromRequestParts<Arc<BetterAuth<DB>>> for CurrentSession<DB> {
+impl FromRequestParts<Arc<BetterAuth>> for CurrentSession {
     type Rejection = Response;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &Arc<BetterAuth<DB>>,
+        state: &Arc<BetterAuth>,
     ) -> Result<Self, Self::Rejection> {
         let cookie_name = &state.config().session.cookie_name;
         let token = extract_token_from_parts(parts, cookie_name)
@@ -365,12 +352,12 @@ impl<DB: DatabaseAdapter> FromRequestParts<Arc<BetterAuth<DB>>> for CurrentSessi
 }
 
 #[cfg(feature = "axum")]
-impl<DB: DatabaseAdapter> FromRequestParts<Arc<BetterAuth<DB>>> for OptionalSession<DB> {
+impl FromRequestParts<Arc<BetterAuth>> for OptionalSession {
     type Rejection = Response;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &Arc<BetterAuth<DB>>,
+        state: &Arc<BetterAuth>,
     ) -> Result<Self, Self::Rejection> {
         match CurrentSession::from_request_parts(parts, state).await {
             Ok(session) => Ok(OptionalSession(Some(session))),

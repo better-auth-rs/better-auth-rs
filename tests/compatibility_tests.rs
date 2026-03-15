@@ -7,8 +7,9 @@
 use std::collections::{BTreeMap, HashSet};
 
 use better_auth::{
-    AuthBuilder, AuthConfig, BetterAuth, run_migrations,
+    AuthBuilder, AuthConfig, BetterAuth,
     plugins::EmailPasswordPlugin,
+    run_migrations,
     sea_orm::{Database, DatabaseConnection},
     types::{AuthRequest, HttpMethod},
 };
@@ -76,9 +77,7 @@ async fn create_full_auth() -> BetterAuth {
 }
 
 /// Collect all routes our implementation exposes (core + plugin).
-fn collect_implemented_routes(
-    auth: &BetterAuth,
-) -> BTreeMap<String, HashSet<String>> {
+fn collect_implemented_routes(auth: &BetterAuth) -> BTreeMap<String, HashSet<String>> {
     let mut routes: BTreeMap<String, HashSet<String>> = BTreeMap::new();
 
     // Core routes (from handle_core_request)

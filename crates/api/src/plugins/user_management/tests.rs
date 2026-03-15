@@ -1,8 +1,8 @@
 use super::*;
 use crate::plugins::test_helpers;
+use crate::plugins::test_helpers::TestDatabase;
 use async_trait::async_trait;
 use better_auth_core::CreateUser;
-use crate::plugins::test_helpers::TestDatabase;
 use better_auth_core::adapters::{UserOps, VerificationOps};
 use chrono::Duration;
 use std::collections::HashMap;
@@ -426,18 +426,18 @@ async fn test_delete_user_before_hook_abort() {
 async fn test_plugin_routes_conditional() {
     // All disabled
     let plugin = UserManagementPlugin::new();
-    assert!(<UserManagementPlugin as AuthPlugin<TestDatabase>>::routes(&plugin).is_empty());
+    assert!(<UserManagementPlugin as AuthPlugin>::routes(&plugin).is_empty());
 
     // Only change-email enabled
     let plugin = UserManagementPlugin::new().change_email_enabled(true);
-    let routes = <UserManagementPlugin as AuthPlugin<TestDatabase>>::routes(&plugin);
+    let routes = <UserManagementPlugin as AuthPlugin>::routes(&plugin);
     assert_eq!(routes.len(), 2);
     assert!(routes.iter().any(|r| r.path == "/change-email"));
     assert!(routes.iter().any(|r| r.path == "/change-email/verify"));
 
     // Only delete-user enabled
     let plugin = UserManagementPlugin::new().delete_user_enabled(true);
-    let routes = <UserManagementPlugin as AuthPlugin<TestDatabase>>::routes(&plugin);
+    let routes = <UserManagementPlugin as AuthPlugin>::routes(&plugin);
     assert_eq!(routes.len(), 2);
     assert!(routes.iter().any(|r| r.path == "/delete-user"));
     assert!(routes.iter().any(|r| r.path == "/delete-user/verify"));
@@ -447,7 +447,7 @@ async fn test_plugin_routes_conditional() {
         .change_email_enabled(true)
         .delete_user_enabled(true);
     assert_eq!(
-        <UserManagementPlugin as AuthPlugin<TestDatabase>>::routes(&plugin).len(),
+        <UserManagementPlugin as AuthPlugin>::routes(&plugin).len(),
         4
     );
 }
