@@ -123,7 +123,8 @@ pub(crate) async fn create_key_core<DB: DatabaseAdapter>(
     };
 
     let input = CreateApiKey {
-        user_id: user_id.to_string(),
+        reference_id: user_id.to_string(),
+        config_id: Some("default".to_string()),
         name: body.name.clone(),
         prefix: body.prefix.clone().or_else(|| plugin.config.prefix.clone()),
         key_hash: hash,

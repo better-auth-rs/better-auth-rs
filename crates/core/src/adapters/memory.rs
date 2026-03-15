@@ -927,7 +927,7 @@ where
         let api_keys = self.api_keys.lock().unwrap();
         let mut keys: Vec<ApiKey> = api_keys
             .values()
-            .filter(|k| k.user_id == user_id)
+            .filter(|k| k.reference_id == user_id)
             .cloned()
             .collect();
         keys.sort_by(|a, b| b.created_at.cmp(&a.created_at));

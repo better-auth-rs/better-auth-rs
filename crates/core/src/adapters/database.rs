@@ -1475,16 +1475,19 @@ pub mod sqlx_adapter {
             let id = Uuid::new_v4().to_string();
             let now = Utc::now();
 
+            let config_id = input.config_id.as_deref().unwrap_or("default");
+
             let sql = format!(
-                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::timestamptz, $15, $16, $17, $18) RETURNING *",
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::timestamptz, $16, $17, $18, $19) RETURNING *",
                 qi(AK::table()),
                 qi(AK::col_id()),
                 qi(AK::col_name()),
                 qi(AK::col_start()),
                 qi(AK::col_prefix()),
                 qi(AK::col_key_hash()),
-                qi(AK::col_user_id()),
+                qi(AK::col_reference_id()),
+                qi(AK::col_config_id()),
                 qi(AK::col_refill_interval()),
                 qi(AK::col_refill_amount()),
                 qi(AK::col_enabled()),
@@ -1504,7 +1507,8 @@ pub mod sqlx_adapter {
                 .bind(&input.start)
                 .bind(&input.prefix)
                 .bind(&input.key_hash)
-                .bind(&input.user_id)
+                .bind(&input.reference_id)
+                .bind(config_id)
                 .bind(input.refill_interval)
                 .bind(input.refill_amount)
                 .bind(input.enabled)
@@ -1553,7 +1557,7 @@ pub mod sqlx_adapter {
             let sql = format!(
                 "SELECT * FROM {} WHERE {} = $1 ORDER BY {} DESC",
                 qi(AK::table()),
-                qi(AK::col_user_id()),
+                qi(AK::col_reference_id()),
                 qi(AK::col_created_at())
             );
             let keys = sqlx::query_as::<_, AK>(&sql)

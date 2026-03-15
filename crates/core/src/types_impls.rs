@@ -288,8 +288,11 @@ impl AuthApiKey for ApiKey {
     fn key_hash(&self) -> &str {
         &self.key_hash
     }
-    fn user_id(&self) -> &str {
-        &self.user_id
+    fn reference_id(&self) -> &str {
+        &self.reference_id
+    }
+    fn config_id(&self) -> &str {
+        &self.config_id
     }
     fn refill_interval(&self) -> Option<i64> {
         self.refill_interval

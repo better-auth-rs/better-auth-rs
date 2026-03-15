@@ -161,7 +161,8 @@ pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stati
     fn start(&self) -> Option<&str>;
     fn prefix(&self) -> Option<&str>;
     fn key_hash(&self) -> &str;
-    fn user_id(&self) -> &str;
+    fn reference_id(&self) -> &str;
+    fn config_id(&self) -> &str;
     fn refill_interval(&self) -> Option<i64>;
     fn refill_amount(&self) -> Option<i64>;
     fn last_refill_at(&self) -> Option<&str>;
@@ -518,8 +519,11 @@ pub trait AuthApiKeyMeta {
     fn col_key_hash() -> &'static str {
         "key"
     }
-    fn col_user_id() -> &'static str {
-        "user_id"
+    fn col_reference_id() -> &'static str {
+        "reference_id"
+    }
+    fn col_config_id() -> &'static str {
+        "config_id"
     }
     fn col_refill_interval() -> &'static str {
         "refill_interval"
