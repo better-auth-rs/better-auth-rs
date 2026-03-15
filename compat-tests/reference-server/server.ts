@@ -37,6 +37,45 @@ const database = new Database(":memory:");
 const resetPasswordOutbox = new Map<string, { url: string; token: string }>();
 let resetPasswordMode: "capture" | "throw" = "capture";
 let oauthRefreshMode: "success" | "error" = "success";
+const oauthServer = Bun.serve({
+  port: 0,
+  async fetch(request) {
+    const url = new URL(request.url);
+
+    if (url.pathname === "/oauth/token" && request.method === "POST") {
+      if (oauthRefreshMode === "error") {
+        return jsonResponse(
+          {
+            error: "invalid_grant",
+            error_description: "invalid refresh token",
+          },
+          { status: 400 },
+        );
+      }
+
+      return jsonResponse({
+        access_token: "new-access-token",
+        refresh_token: "new-refresh-token",
+        id_token: "new-id-token",
+        expires_in: 3600,
+        refresh_token_expires_in: 7200,
+        scope: "openid,email,profile",
+      });
+    }
+
+    if (url.pathname === "/oauth/userinfo") {
+      return jsonResponse({
+        sub: "mock-account-id",
+        email: "mock@example.com",
+        name: "Mock OAuth User",
+        email_verified: true,
+      });
+    }
+
+    return jsonResponse({ message: "Not found" }, { status: 404 });
+  },
+});
+const oauthBaseURL = `http://127.0.0.1:${oauthServer.port}`;
 
 const authOptions = {
   baseURL: `http://localhost:${PORT}`,
@@ -64,9 +103,9 @@ const authOptions = {
       config: [
         {
           providerId: "mock",
-          authorizationUrl: `http://127.0.0.1:${PORT}/__test/oauth/authorize`,
-          tokenUrl: `http://127.0.0.1:${PORT}/__test/oauth/token`,
-          userInfoUrl: `http://127.0.0.1:${PORT}/__test/oauth/userinfo`,
+          authorizationUrl: `${oauthBaseURL}/oauth/authorize`,
+          tokenUrl: `${oauthBaseURL}/oauth/token`,
+          userInfoUrl: `${oauthBaseURL}/oauth/userinfo`,
           clientId: "mock-client-id",
           clientSecret: "mock-client-secret",
           scopes: ["openid", "email", "profile"],
@@ -220,36 +259,6 @@ const server = Bun.serve({
         return jsonResponse({ status: true });
       }
 
-      if (url.pathname === "/__test/oauth/token" && request.method === "POST") {
-        if (oauthRefreshMode === "error") {
-          return jsonResponse(
-            {
-              error: "invalid_grant",
-              error_description: "invalid refresh token",
-            },
-            { status: 400 },
-          );
-        }
-
-        return jsonResponse({
-          access_token: "new-access-token",
-          refresh_token: "new-refresh-token",
-          id_token: "new-id-token",
-          expires_in: 3600,
-          refresh_token_expires_in: 7200,
-          scope: "openid,email,profile",
-        });
-      }
-
-      if (url.pathname === "/__test/oauth/userinfo") {
-        return jsonResponse({
-          sub: "mock-account-id",
-          email: "mock@example.com",
-          name: "Mock OAuth User",
-          email_verified: true,
-        });
-      }
-
       return auth.handler(request);
     } catch (error) {
       console.error("[reference-server] Error:", error);
@@ -264,6 +273,7 @@ console.log("READY");
 for (const signal of ["SIGTERM", "SIGINT"]) {
   process.on(signal, () => {
     server.stop(true);
+    oauthServer.stop(true);
     process.exit(0);
   });
 }

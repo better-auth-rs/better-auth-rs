@@ -5,7 +5,7 @@ use uuid::Uuid;
 use better_auth_core::utils::password::{self as password_utils};
 use better_auth_core::{
     AuthAccount, AuthContext, AuthError, AuthResult, AuthSession, AuthUser, AuthVerification,
-    CreateAccount, UpdateAccount, extract_origin,
+    CreateAccount, RequestMeta, UpdateAccount, extract_origin,
 };
 
 use crate::plugins::helpers::{get_credential_account, get_user_password_hash, user_has_password};
@@ -215,6 +215,7 @@ pub(crate) async fn change_password_core(
     body: &ChangePasswordRequest,
     user: &better_auth_core::User,
     config: &PasswordManagementConfig,
+    meta: &RequestMeta,
     ctx: &AuthContext,
 ) -> AuthResult<(
     ChangePasswordResponse<better_auth_core::User>,
@@ -262,7 +263,7 @@ pub(crate) async fn change_password_core(
         ctx.database.delete_user_sessions(user.id()).await?;
         let session = ctx
             .session_manager()
-            .create_session(user, None, None)
+            .create_session(user, meta.ip_address.clone(), meta.user_agent.clone())
             .await?;
         Some(session.token().to_string())
     } else {

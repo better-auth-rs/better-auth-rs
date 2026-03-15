@@ -86,6 +86,8 @@ fn start_reference_server(port: u16) -> ManagedChild {
         .args(["run", "server.ts"])
         .current_dir(project_root().join("compat-tests/reference-server"))
         .env("PORT", port.to_string())
+        .env("NO_PROXY", "localhost,127.0.0.1")
+        .env("no_proxy", "localhost,127.0.0.1")
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn()

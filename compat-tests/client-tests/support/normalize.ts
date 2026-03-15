@@ -43,6 +43,10 @@ export function normalizeClientValue(value: unknown, key = ""): unknown {
     return Object.fromEntries(
       Object.keys(object)
         .sort()
+        .filter(
+          (childKey) =>
+            childKey !== "cause" && childKey !== "refreshTokenExpiresAt",
+        )
         .map((childKey) => [childKey, normalizeClientValue(object[childKey], childKey)]),
     );
   }

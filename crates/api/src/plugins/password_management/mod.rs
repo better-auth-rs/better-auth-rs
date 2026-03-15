@@ -8,6 +8,7 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
+use better_auth_core::RequestMeta;
 use better_auth_core::utils::password::PasswordHasher;
 
 use super::StatusResponse;
@@ -186,8 +187,10 @@ impl PasswordManagementPlugin {
             .get_current_user(req, ctx)
             .await?
             .ok_or(AuthError::Unauthenticated)?;
+        let meta = RequestMeta::from_request(req);
 
-        let (response, new_token) = change_password_core(&body, &user, &self.config, ctx).await?;
+        let (response, new_token) =
+            change_password_core(&body, &user, &self.config, &meta, ctx).await?;
 
         let auth_response = AuthResponse::json(200, &response)?;
 
@@ -345,10 +348,21 @@ mod axum_impl {
         State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
         CurrentSession { user, .. }: CurrentSession,
+        headers: axum::http::HeaderMap,
         ValidatedJson(body): ValidatedJson<ChangePasswordRequest>,
     ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
-        let (response, new_token) = change_password_core(&body, &user, &ps.config, &ctx).await?;
+        let mut request = AuthRequest::new(HttpMethod::Post, "/change-password");
+        for (name, value) in &headers {
+            if let Ok(value) = value.to_str() {
+                let _ = request
+                    .headers
+                    .insert(name.as_str().to_ascii_lowercase(), value.to_string());
+            }
+        }
+        let meta = RequestMeta::from_request(&request);
+        let (response, new_token) =
+            change_password_core(&body, &user, &ps.config, &meta, &ctx).await?;
 
         if let Some(ref token) = new_token {
             let cookie = state.session_cookie(token);
