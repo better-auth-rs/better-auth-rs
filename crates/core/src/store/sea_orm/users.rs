@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::error::{AuthError, AuthResult};
 use crate::types::{CreateUser, ListUsersParams, UpdateUser, User};
+use crate::utils::email::{normalize_optional_user_email, normalize_user_email};
 
 use super::entities::user::{ActiveModel, Column, Entity};
 use super::{AuthStore, cancelled_by_hook, map_db_err};
@@ -21,6 +22,7 @@ impl AuthStore {
     where
         C: ConnectionTrait,
     {
+        create_user.email = normalize_optional_user_email(create_user.email);
         let hook_context = self.hook_context(tx);
         for hook in self.hooks() {
             if hook
@@ -82,6 +84,7 @@ impl AuthStore {
     }
 
     pub async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<User>> {
+        let email = normalize_user_email(email);
         Entity::find()
             .filter(Column::Email.eq(email))
             .one(self.connection())
@@ -100,6 +103,7 @@ impl AuthStore {
     }
 
     pub async fn update_user(&self, id: &str, mut update: UpdateUser) -> AuthResult<User> {
+        update.email = normalize_optional_user_email(update.email);
         let hook_context = self.hook_context(None);
         for hook in self.hooks() {
             if hook

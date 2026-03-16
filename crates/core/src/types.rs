@@ -5,6 +5,8 @@ use std::ops::Index;
 use uuid::Uuid;
 use validator::Validate;
 
+use crate::utils::email::normalize_user_email;
+
 /// Helper for `#[serde(skip_serializing_if = "is_false")]`
 fn is_false(v: &bool) -> bool {
     !(*v)
@@ -548,7 +550,7 @@ impl CreateUser {
     }
 
     pub fn with_email(mut self, email: impl Into<String>) -> Self {
-        self.email = Some(email.into());
+        self.email = Some(normalize_user_email(&email.into()));
         self
     }
 
@@ -1100,7 +1102,7 @@ mod tests {
     #[test]
     fn create_user_builder() {
         let cu = CreateUser::new()
-            .with_email("test@test.com")
+            .with_email("Test@Example.COM")
             .with_name("Test")
             .with_password("pass123")
             .with_email_verified(true)
@@ -1109,7 +1111,7 @@ mod tests {
             .with_metadata(serde_json::json!({"key": "val"}));
 
         assert!(cu.id.is_some()); // auto-generated UUID
-        assert_eq!(cu.email.as_deref(), Some("test@test.com"));
+        assert_eq!(cu.email.as_deref(), Some("test@example.com"));
         assert_eq!(cu.name.as_deref(), Some("Test"));
         assert_eq!(cu.password.as_deref(), Some("pass123"));
         assert_eq!(cu.email_verified, Some(true));
