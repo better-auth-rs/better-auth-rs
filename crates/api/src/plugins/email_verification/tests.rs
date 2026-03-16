@@ -569,6 +569,126 @@ async fn test_verify_email_calls_before_and_after_hooks() {
     assert_eq!(after_count.load(Ordering::Relaxed), 1);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.ts :: change-email-verification branch runs `afterEmailVerification(updatedUser, ...)` only after the email update succeeds.
+#[tokio::test]
+async fn test_change_email_verification_after_hook_observes_updated_user() {
+    let captured = Arc::new(std::sync::Mutex::new(Vec::<(Option<String>, bool)>::new()));
+    let hook_state = captured.clone();
+    let after_hook: EmailVerificationHook = Arc::new(move |user: &User| {
+        let hook_state = hook_state.clone();
+        let email = user.email.clone();
+        let verified = user.email_verified;
+        Box::pin(async move {
+            hook_state.lock().unwrap().push((email, verified));
+            Ok(())
+        })
+    });
+
+    let plugin = EmailVerificationPlugin::new().after_email_verification(after_hook);
+
+    let ctx = test_helpers::create_test_context().await;
+    let _user = ctx
+        .database
+        .create_user(
+            CreateUser::new()
+                .with_email("change-email@test.com")
+                .with_name("ChangeEmail"),
+        )
+        .await
+        .unwrap();
+
+    let token_value = jwt_token(
+        &ctx,
+        "change-email@test.com",
+        Some("updated-email@test.com"),
+        Some("change-email-verification"),
+    );
+
+    let mut query = HashMap::new();
+    query.insert("token".to_string(), token_value);
+    let req =
+        test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+    let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
+
+    assert_eq!(response.status, 200);
+    assert_eq!(
+        *captured.lock().unwrap(),
+        vec![(Some("updated-email@test.com".to_string()), true)]
+    );
+
+    let updated_user = ctx
+        .database
+        .get_user_by_email("updated-email@test.com")
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(updated_user.email_verified);
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/email-verification.ts :: `afterEmailVerification` runs only after `updateUserByEmail(...)`, so failed updates must not fire the hook.
+#[tokio::test]
+async fn test_change_email_verification_does_not_fire_after_hook_when_update_fails() {
+    let after_count = Arc::new(AtomicU32::new(0));
+    let counter = after_count.clone();
+    let after_hook: EmailVerificationHook = Arc::new(move |_user: &User| {
+        let counter = counter.clone();
+        Box::pin(async move {
+            counter.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        })
+    });
+
+    let plugin = EmailVerificationPlugin::new().after_email_verification(after_hook);
+
+    let ctx = test_helpers::create_test_context().await;
+    let _source_user = ctx
+        .database
+        .create_user(
+            CreateUser::new()
+                .with_email("duplicate-source@test.com")
+                .with_name("DuplicateSource"),
+        )
+        .await
+        .unwrap();
+    let _existing_user = ctx
+        .database
+        .create_user(
+            CreateUser::new()
+                .with_email("duplicate-target@test.com")
+                .with_name("DuplicateTarget"),
+        )
+        .await
+        .unwrap();
+
+    let token_value = jwt_token(
+        &ctx,
+        "duplicate-source@test.com",
+        Some("duplicate-target@test.com"),
+        Some("change-email-verification"),
+    );
+
+    let mut query = HashMap::new();
+    query.insert("token".to_string(), token_value);
+    let req =
+        test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+    let err = plugin.handle_verify_email(&req, &ctx).await.unwrap_err();
+
+    assert_ne!(err.status_code(), 200);
+    assert_eq!(after_count.load(Ordering::Relaxed), 0);
+
+    let source_user = ctx
+        .database
+        .get_user_by_email("duplicate-source@test.com")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        source_user.email.as_deref(),
+        Some("duplicate-source@test.com")
+    );
+    assert!(!source_user.email_verified);
+}
+
 // Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[tokio::test]
 async fn test_verify_email_before_hook_error_aborts() {

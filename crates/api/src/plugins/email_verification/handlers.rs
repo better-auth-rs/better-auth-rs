@@ -192,11 +192,6 @@ pub(super) async fn verify_email_core(
                     }
                 };
 
-                if let Some(ref hook) = config.after_email_verification {
-                    let hook_user = better_auth_core::User::from(&user);
-                    hook(&hook_user).await?;
-                }
-
                 let updated_user = ctx
                     .database
                     .update_user(
@@ -208,6 +203,11 @@ pub(super) async fn verify_email_core(
                         },
                     )
                     .await?;
+
+                if let Some(ref hook) = config.after_email_verification {
+                    let hook_user = better_auth_core::User::from(&updated_user);
+                    hook(&hook_user).await?;
+                }
 
                 let _session_user = better_auth_core::User {
                     email: Some(update_to.to_string()),
