@@ -219,11 +219,11 @@ mod axum_impl {
     async fn handle_create_organization<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, session, .. }: CurrentSession<DB>,
         ValidatedJson(body): ValidatedJson<CreateOrganizationRequest>,
     ) -> Result<Json<CreateOrganizationResponse<DB::Organization, MemberResponse>>, AuthError> {
         let ctx = state.to_context();
-        let result = create_organization_core(&body, &user, &ps.config, &ctx).await?;
+        let result = create_organization_core(&body, &user, &session, &ps.config, &ctx).await?;
         Ok(Json(result))
     }
 
