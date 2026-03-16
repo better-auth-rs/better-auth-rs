@@ -30,14 +30,30 @@ pub(crate) async fn create_organization_core<DB: DatabaseAdapter>(
         return Err(AuthError::forbidden("Organization creation is not allowed"));
     }
 
-    // Use the provided userId if given (admin/server use), otherwise the authenticated user.
-    let owner_id = body
-        .user_id
-        .as_deref()
-        .unwrap_or_else(|| user.id());
+    // Determine the owner: only admins may override via userId.
+    let delegated = body.user_id.is_some();
+    let owner_user = if let Some(ref target_id) = body.user_id {
+        // Only admins may create organizations on behalf of another user.
+        if user.role().unwrap_or("user") != "admin" {
+            return Err(AuthError::forbidden(
+                "Only admins can create organizations for other users",
+            ));
+        }
+        // Validate the target user exists before we create anything.
+        ctx.database
+            .get_user_by_id(target_id)
+            .await?
+            .ok_or_else(|| AuthError::bad_request("Specified userId not found"))?
+    } else {
+        ctx.database
+            .get_user_by_id(user.id())
+            .await?
+            .ok_or_else(|| AuthError::not_found("User not found"))?
+    };
+    let owner_id = owner_user.id().to_owned();
 
     if let Some(limit) = config.organization_limit {
-        let user_orgs = ctx.database.list_user_organizations(owner_id).await?;
+        let user_orgs = ctx.database.list_user_organizations(&owner_id).await?;
         if user_orgs.len() >= limit {
             return Err(AuthError::bad_request(format!(
                 "Organization limit of {} reached",
@@ -65,32 +81,19 @@ pub(crate) async fn create_organization_core<DB: DatabaseAdapter>(
 
     let organization = ctx.database.create_organization(org_data).await?;
 
-    // Look up the owner user for the member response (may differ from authenticated user).
-    let owner_user = if body.user_id.is_some() {
-        ctx.database
-            .get_user_by_id(owner_id)
-            .await?
-            .ok_or_else(|| AuthError::bad_request("Specified userId not found"))?
-    } else {
-        // Avoid an extra DB round-trip when the owner is the authenticated user.
-        // We need to return a DB::User, so clone via get_user_by_id.
-        ctx.database
-            .get_user_by_id(user.id())
-            .await?
-            .ok_or_else(|| AuthError::not_found("User not found"))?
-    };
-
     let member_data = CreateMember {
         organization_id: organization.id().to_string(),
-        user_id: owner_id.to_string(),
+        user_id: owner_id,
         role: config.creator_role.clone(),
     };
 
     let member = ctx.database.create_member(member_data).await?;
     let member_response = MemberResponse::from_member_and_user(&member, &owner_user);
 
-    // Unless keepCurrentActiveOrganization is true, set the new org as active.
-    if !body.keep_current_active_organization.unwrap_or(false) {
+    // Only update the caller's active organization when they are the owner.
+    // In delegated (admin) creates the caller is not a member, so updating
+    // their session would point to an org they can't access.
+    if !delegated && !body.keep_current_active_organization.unwrap_or(false) {
         ctx.database
             .update_session_active_organization(
                 session.token(),
