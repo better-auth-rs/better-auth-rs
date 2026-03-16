@@ -271,8 +271,7 @@ self-contained test plan.
 
 **Phase 2 — User self-service and verification:**
 `/update-user`, `/delete-user`, `/delete-user/callback`,
-`/change-email`, `/send-verification-email`, `/verify-email`,
-`/set-password`
+`/change-email`, `/send-verification-email`, `/verify-email`
 
 Phase 2 is self-contained on top of Phases 0 and 1. Completion requires
 direct end-to-end coverage for each endpoint in this group.

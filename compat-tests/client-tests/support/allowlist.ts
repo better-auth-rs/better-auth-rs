@@ -160,9 +160,4 @@ export const RAW_DIFF_ALLOWLIST: RawDiffAllowance[] = [
     path: /responseCookies\.better-auth\.session_token\.maxAge/,
     reason: "cookie max-age drift is currently client-inert",
   },
-  {
-    scenario: /set password is not exposed over the public HTTP surface/i,
-    path: /responseCookies\.better-auth\.session_token\.maxAge/,
-    reason: "cookie max-age drift is currently client-inert",
-  },
 ];
