@@ -348,29 +348,6 @@ impl UserManagementPlugin {
         append_clear_session_cookies(&mut response, &ctx.config);
         Ok(response)
     }
-
-    #[cfg(test)]
-    async fn handle_change_email_verify(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext,
-    ) -> AuthResult<AuthResponse> {
-        let token = req
-            .query
-            .get("token")
-            .ok_or_else(|| AuthError::bad_request("Verification token is required"))?;
-        let response = change_email_verify_core(token, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
-    }
-
-    #[cfg(test)]
-    async fn handle_delete_user_verify(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext,
-    ) -> AuthResult<AuthResponse> {
-        self.handle_delete_user_callback(req, ctx).await
-    }
 }
 
 // ---------------------------------------------------------------------------

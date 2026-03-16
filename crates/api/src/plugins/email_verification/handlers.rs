@@ -1,7 +1,7 @@
 use jsonwebtoken::errors::ErrorKind;
 
 use better_auth_core::{AuthContext, AuthError, AuthResult, UpdateUser};
-use better_auth_core::{AuthSession, AuthUser, AuthVerification};
+use better_auth_core::{AuthSession, AuthUser};
 
 use super::token::{create_email_verification_token, decode_email_verification_token};
 use super::types::*;
@@ -91,79 +91,6 @@ fn redirect_url(callback_url: &str, error: Option<&str>) -> String {
     }
 }
 
-async fn verify_legacy_db_token(
-    query: &VerifyEmailQuery,
-    config: &EmailVerificationConfig,
-    ip_address: Option<String>,
-    user_agent: Option<String>,
-    ctx: &AuthContext,
-) -> AuthResult<VerifyEmailResult> {
-    let verification = ctx
-        .database
-        .get_verification_by_value(&query.token)
-        .await?
-        .ok_or_else(|| AuthError::bad_request("Invalid or expired verification token"))?;
-
-    let user = ctx
-        .database
-        .get_user_by_email(verification.identifier())
-        .await?
-        .ok_or_else(|| AuthError::not_found("User associated with this token not found"))?;
-
-    if user.email_verified() {
-        return Ok(VerifyEmailResult::Json {
-            body: serde_json::json!({ "status": true, "user": user }),
-            session_token: None,
-        });
-    }
-
-    if let Some(ref hook) = config.before_email_verification {
-        let hook_user = better_auth_core::User::from(&user);
-        hook(&hook_user).await?;
-    }
-
-    let updated_user = ctx
-        .database
-        .update_user(
-            user.id(),
-            UpdateUser {
-                email_verified: Some(true),
-                ..Default::default()
-            },
-        )
-        .await?;
-    ctx.database.delete_verification(verification.id()).await?;
-
-    if let Some(ref hook) = config.after_email_verification {
-        let hook_user = better_auth_core::User::from(&updated_user);
-        hook(&hook_user).await?;
-    }
-
-    let session_token = if config.auto_sign_in_after_verification {
-        Some(
-            ctx.session_manager()
-                .create_session(&updated_user, ip_address, user_agent)
-                .await?
-                .token()
-                .to_string(),
-        )
-    } else {
-        None
-    };
-
-    if let Some(callback_url) = query.callback_url.as_deref() {
-        return Ok(VerifyEmailResult::Redirect {
-            url: redirect_url(callback_url, None),
-            session_token,
-        });
-    }
-
-    Ok(VerifyEmailResult::Json {
-        body: serde_json::json!({ "status": true, "user": updated_user }),
-        session_token,
-    })
-}
-
 pub(super) async fn verify_email_core(
     query: &VerifyEmailQuery,
     current_session: Option<(better_auth_core::User, better_auth_core::Session)>,
@@ -183,11 +110,6 @@ pub(super) async fn verify_email_core(
                     | ErrorKind::MissingRequiredClaim(_)
                     | ErrorKind::ExpiredSignature
             ) {
-                if query.token.starts_with("verify_") {
-                    return verify_legacy_db_token(query, config, ip_address, user_agent, ctx)
-                        .await;
-                }
-
                 if let Some(callback_url) = query.callback_url.as_deref() {
                     let error_code = if matches!(error.kind(), ErrorKind::ExpiredSignature) {
                         "token_expired"

@@ -1,5 +1,4 @@
 use chrono::{Duration, Utc};
-use uuid::Uuid;
 
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser, AuthVerification};
 use better_auth_core::utils::password as password_utils;
@@ -9,43 +8,6 @@ use super::types::{ChangeEmailRequest, DeleteUserRequest};
 use super::{UserInfo, UserManagementConfig};
 use crate::plugins::email_verification::token::create_email_verification_token;
 use better_auth_core::SuccessMessageResponse;
-
-/// Create a legacy verification token, persist it, and return `(token_value, verification_url)`.
-///
-/// This DB-backed flow is retained for the existing Rust-only tests while the
-/// public wire behaviour moves to the JWT-based TypeScript flow.
-pub(super) async fn create_verification_token(
-    ctx: &AuthContext,
-    identifier: &str,
-    token_prefix: &str,
-    expires_at: chrono::DateTime<Utc>,
-    callback_url: Option<&str>,
-    default_path: &str,
-) -> AuthResult<(String, String)> {
-    let token_value = format!("{}_{}", token_prefix, Uuid::new_v4());
-
-    let create_verification = better_auth_core::CreateVerification {
-        identifier: identifier.to_string(),
-        value: token_value.clone(),
-        expires_at,
-    };
-
-    let _ = ctx
-        .database
-        .create_verification(create_verification)
-        .await?;
-
-    let verification_url = if let Some(cb_url) = callback_url {
-        format!("{}?token={}", cb_url, token_value)
-    } else {
-        format!(
-            "{}/{}?token={}",
-            ctx.config.base_url, default_path, token_value
-        )
-    };
-
-    Ok((token_value, verification_url))
-}
 
 /// Send an email using the configured email provider, logging on failure.
 pub(super) async fn send_email_or_log(
@@ -108,18 +70,6 @@ pub(crate) async fn change_email_core(
         return Ok(StatusResponse { status: true });
     }
 
-    // Retain the legacy DB-backed token for the Rust-only direct tests.
-    let legacy_identifier = format!("change_email:{}:{}", user.id(), new_email);
-    let _ = create_verification_token(
-        ctx,
-        &legacy_identifier,
-        "ce",
-        Utc::now() + Duration::hours(24),
-        body.callback_url.as_deref(),
-        "change-email/verify",
-    )
-    .await?;
-
     let request_type =
         if user.email_verified() && config.change_email.send_change_email_confirmation.is_some() {
             "change-email-confirmation"
@@ -164,66 +114,6 @@ pub(crate) async fn change_email_core(
     Ok(StatusResponse { status: true })
 }
 
-#[cfg(test)]
-pub(crate) async fn change_email_verify_core(
-    token: &str,
-    ctx: &AuthContext,
-) -> AuthResult<better_auth_core::StatusMessageResponse> {
-    let verification = ctx
-        .database
-        .get_verification_by_value(token)
-        .await?
-        .ok_or_else(|| AuthError::bad_request("Invalid or expired verification token"))?;
-
-    if verification.expires_at() < Utc::now() {
-        ctx.database.delete_verification(verification.id()).await?;
-        return Err(AuthError::bad_request("Verification token has expired"));
-    }
-
-    let identifier = verification.identifier();
-    let parts: Vec<String> = identifier
-        .splitn(3, ':')
-        .map(|part| part.to_string())
-        .collect();
-    if parts.len() != 3 || parts.first().map(String::as_str) != Some("change_email") {
-        return Err(AuthError::bad_request("Invalid verification token"));
-    }
-
-    let user_id = parts
-        .get(1)
-        .ok_or_else(|| AuthError::bad_request("Invalid verification token"))?;
-    let new_email = parts
-        .get(2)
-        .ok_or_else(|| AuthError::bad_request("Invalid verification token"))?;
-    let verification_id = verification.id().to_string();
-
-    let user = ctx
-        .database
-        .get_user_by_id(user_id)
-        .await?
-        .ok_or_else(|| AuthError::not_found("User not found"))?;
-
-    if ctx.database.get_user_by_email(new_email).await?.is_some() {
-        ctx.database.delete_verification(&verification_id).await?;
-        return Err(AuthError::bad_request(
-            "Email is already in use by another account",
-        ));
-    }
-
-    let update_user = UpdateUser {
-        email: Some(new_email.to_string()),
-        email_verified: Some(true),
-        ..Default::default()
-    };
-    let _ = ctx.database.update_user(user.id(), update_user).await?;
-    ctx.database.delete_verification(&verification_id).await?;
-
-    Ok(better_auth_core::StatusMessageResponse {
-        status: true,
-        message: "Email updated successfully".to_string(),
-    })
-}
-
 pub(crate) async fn delete_user_core(
     body: &DeleteUserRequest,
     user: &better_auth_core::User,
@@ -262,17 +152,21 @@ pub(crate) async fn delete_user_core(
             .ok_or_else(|| {
                 AuthError::bad_request("Cannot send verification email: user has no email address")
             })?;
-
-        let identifier = format!("delete_user:{}", user.id());
-        let (_token, verification_url) = create_verification_token(
-            ctx,
-            &identifier,
-            "del",
-            Utc::now() + config.delete_user.delete_token_expires_in,
-            body.callback_url.as_deref(),
-            "delete-user/verify",
-        )
-        .await?;
+        let token = uuid::Uuid::new_v4().simple().to_string();
+        let _ = ctx
+            .database
+            .create_verification(better_auth_core::CreateVerification {
+                identifier: format!("delete-account-{token}"),
+                value: user.id().to_string(),
+                expires_at: Utc::now() + config.delete_user.delete_token_expires_in,
+            })
+            .await?;
+        let verification_url = format!(
+            "{}/delete-user/callback?token={}&callbackURL={}",
+            ctx.config.base_url,
+            token,
+            urlencoding::encode(body.callback_url.as_deref().unwrap_or("/")),
+        );
 
         let subject = "Confirm account deletion";
         let html = format!(
@@ -307,51 +201,6 @@ pub(crate) async fn delete_user_core(
     })
 }
 
-pub(crate) async fn delete_user_verify_core(
-    token: &str,
-    config: &UserManagementConfig,
-    ctx: &AuthContext,
-) -> AuthResult<SuccessMessageResponse> {
-    let verification = ctx
-        .database
-        .get_verification_by_value(token)
-        .await?
-        .ok_or_else(|| AuthError::bad_request("Invalid or expired verification token"))?;
-
-    if verification.expires_at() < Utc::now() {
-        ctx.database.delete_verification(verification.id()).await?;
-        return Err(AuthError::bad_request("Verification token has expired"));
-    }
-
-    let identifier = verification.identifier();
-    let parts: Vec<String> = identifier
-        .splitn(2, ':')
-        .map(|part| part.to_string())
-        .collect();
-    if parts.len() != 2 || parts.first().map(String::as_str) != Some("delete_user") {
-        return Err(AuthError::bad_request("Invalid verification token"));
-    }
-
-    let user_id = parts
-        .get(1)
-        .ok_or_else(|| AuthError::bad_request("Invalid verification token"))?;
-    let verification_id = verification.id().to_string();
-
-    let user = ctx
-        .database
-        .get_user_by_id(user_id)
-        .await?
-        .ok_or_else(|| AuthError::not_found("User not found"))?;
-
-    perform_user_deletion(&user, config, ctx).await?;
-    ctx.database.delete_verification(&verification_id).await?;
-
-    Ok(SuccessMessageResponse {
-        success: true,
-        message: "User deleted".to_string(),
-    })
-}
-
 pub(crate) async fn delete_user_callback_core(
     token: &str,
     current_user: &better_auth_core::User,
@@ -374,15 +223,6 @@ pub(crate) async fn delete_user_callback_core(
             success: true,
             message: "User deleted".to_string(),
         });
-    }
-
-    if ctx
-        .database
-        .get_verification_by_value(token)
-        .await?
-        .is_some()
-    {
-        return delete_user_verify_core(token, config, ctx).await;
     }
 
     Err(AuthError::not_found("Invalid token"))

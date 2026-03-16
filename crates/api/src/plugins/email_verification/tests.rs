@@ -1,12 +1,12 @@
+use super::token::create_email_verification_token;
 use super::*;
 use crate::plugins::test_helpers;
 use async_trait::async_trait;
-use better_auth_core::{AuthResult, CreateUser, CreateVerification, UpdateUser};
+use better_auth_core::{AuthResult, CreateUser, UpdateUser};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use uuid::Uuid;
 
 use better_auth_core::{AuthPlugin, HttpMethod};
 
@@ -189,6 +189,22 @@ fn make_test_user(email: &str, verified: bool) -> User {
         ban_expires: None,
         metadata: serde_json::Value::Null,
     }
+}
+
+fn jwt_token(
+    ctx: &better_auth_core::AuthContext,
+    email: &str,
+    update_to: Option<&str>,
+    request_type: Option<&str>,
+) -> String {
+    create_email_verification_token(
+        &ctx.config.secret,
+        email,
+        update_to,
+        Duration::hours(1),
+        request_type,
+    )
+    .unwrap()
 }
 
 #[tokio::test]
@@ -472,16 +488,7 @@ async fn test_verify_email_basic_flow() {
         .await
         .unwrap();
 
-    // Create a verification token
-    let token_value = format!("verify_{}", Uuid::new_v4());
-    ctx.database
-        .create_verification(CreateVerification {
-            identifier: "verify@test.com".to_string(),
-            value: token_value.clone(),
-            expires_at: Utc::now() + Duration::hours(1),
-        })
-        .await
-        .unwrap();
+    let token_value = jwt_token(&ctx, "verify@test.com", None, None);
 
     // Call verify-email
     let mut query = HashMap::new();
@@ -493,7 +500,7 @@ async fn test_verify_email_basic_flow() {
     assert_eq!(response.status, 200);
     let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
     assert_eq!(body["status"], true);
-    assert_eq!(body["user"]["email"], "verify@test.com");
+    assert!(body["user"].is_null());
 
     // User should now be verified in the database
     let updated = ctx
@@ -503,14 +510,6 @@ async fn test_verify_email_basic_flow() {
         .unwrap()
         .unwrap();
     assert!(updated.email_verified);
-
-    // Verification token should be deleted
-    let v = ctx
-        .database
-        .get_verification_by_value(&token_value)
-        .await
-        .unwrap();
-    assert!(v.is_none());
 }
 
 // ------------------------------------------------------------------
@@ -554,15 +553,7 @@ async fn test_verify_email_calls_before_and_after_hooks() {
         .await
         .unwrap();
 
-    let token_value = format!("verify_{}", Uuid::new_v4());
-    ctx.database
-        .create_verification(CreateVerification {
-            identifier: "hooks@test.com".to_string(),
-            value: token_value.clone(),
-            expires_at: Utc::now() + Duration::hours(1),
-        })
-        .await
-        .unwrap();
+    let token_value = jwt_token(&ctx, "hooks@test.com", None, None);
 
     let mut query = HashMap::new();
     query.insert("token".to_string(), token_value);
@@ -593,15 +584,7 @@ async fn test_verify_email_before_hook_error_aborts() {
         .await
         .unwrap();
 
-    let token_value = format!("verify_{}", Uuid::new_v4());
-    ctx.database
-        .create_verification(CreateVerification {
-            identifier: "hook-err@test.com".to_string(),
-            value: token_value.clone(),
-            expires_at: Utc::now() + Duration::hours(1),
-        })
-        .await
-        .unwrap();
+    let token_value = jwt_token(&ctx, "hook-err@test.com", None, None);
 
     let mut query = HashMap::new();
     query.insert("token".to_string(), token_value.clone());
@@ -700,15 +683,7 @@ async fn test_verify_email_no_auto_sign_in_no_session() {
         .await
         .unwrap();
 
-    let token_value = format!("verify_{}", Uuid::new_v4());
-    ctx.database
-        .create_verification(CreateVerification {
-            identifier: "noautosign@test.com".to_string(),
-            value: token_value.clone(),
-            expires_at: Utc::now() + Duration::hours(1),
-        })
-        .await
-        .unwrap();
+    let token_value = jwt_token(&ctx, "noautosign@test.com", None, None);
 
     let mut query = HashMap::new();
     query.insert("token".to_string(), token_value);
@@ -744,15 +719,7 @@ async fn test_verify_email_auto_sign_in_redirect_includes_cookie() {
         .await
         .unwrap();
 
-    let token_value = format!("verify_{}", Uuid::new_v4());
-    ctx.database
-        .create_verification(CreateVerification {
-            identifier: "redirect@test.com".to_string(),
-            value: token_value.clone(),
-            expires_at: Utc::now() + Duration::hours(1),
-        })
-        .await
-        .unwrap();
+    let token_value = jwt_token(&ctx, "redirect@test.com", None, None);
 
     let mut query = HashMap::new();
     query.insert("token".to_string(), token_value);
@@ -786,15 +753,7 @@ async fn test_verify_email_redirect_without_auto_sign_in_no_cookie() {
         .await
         .unwrap();
 
-    let token_value = format!("verify_{}", Uuid::new_v4());
-    ctx.database
-        .create_verification(CreateVerification {
-            identifier: "redir-nocookie@test.com".to_string(),
-            value: token_value.clone(),
-            expires_at: Utc::now() + Duration::hours(1),
-        })
-        .await
-        .unwrap();
+    let token_value = jwt_token(&ctx, "redir-nocookie@test.com", None, None);
 
     let mut query = HashMap::new();
     query.insert("token".to_string(), token_value);
@@ -873,15 +832,7 @@ async fn test_verify_email_already_verified_returns_ok() {
         .await
         .unwrap();
 
-    let token_value = format!("verify_{}", Uuid::new_v4());
-    ctx.database
-        .create_verification(CreateVerification {
-            identifier: "already@test.com".to_string(),
-            value: token_value.clone(),
-            expires_at: Utc::now() + Duration::hours(1),
-        })
-        .await
-        .unwrap();
+    let token_value = jwt_token(&ctx, "already@test.com", None, None);
 
     let mut query = HashMap::new();
     query.insert("token".to_string(), token_value);
