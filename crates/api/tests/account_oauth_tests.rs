@@ -175,6 +175,143 @@ async fn handle_mock_connection(stream: tokio::net::TcpStream, email: &str) {
     let _ = stream.flush().await;
 }
 
+async fn start_mock_github_oauth_server(
+    user_email: Option<&str>,
+    emails_body: serde_json::Value,
+) -> String {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let mock_url = format!("http://{}", addr);
+    let user_email = user_email.map(str::to_string);
+    let emails_body = emails_body.to_string();
+
+    tokio::spawn(async move {
+        loop {
+            if let Ok((stream, _)) = listener.accept().await {
+                let user_email = user_email.clone();
+                let emails_body = emails_body.clone();
+                tokio::spawn(async move {
+                    handle_mock_github_connection(stream, user_email, emails_body).await;
+                });
+            }
+        }
+    });
+
+    mock_url
+}
+
+async fn handle_mock_github_connection(
+    stream: tokio::net::TcpStream,
+    user_email: Option<String>,
+    emails_body: String,
+) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut stream = stream;
+    let mut buf = vec![0u8; 4096];
+    let n = stream.read(&mut buf).await.unwrap_or(0);
+    let request = String::from_utf8_lossy(&buf[..n]);
+
+    let (status, body) = if request.contains("POST") && request.contains("/token") {
+        let body = json!({
+            "access_token": "mock-github-access-token",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "scope": "user:email"
+        });
+        ("200 OK", body.to_string())
+    } else if request.contains("GET") && request.contains("/api/v3/user/emails") {
+        ("200 OK", emails_body)
+    } else if request.contains("GET") && request.contains("/api/v3/user") {
+        let body = json!({
+            "id": 123456,
+            "email": user_email,
+            "name": "Mock GitHub User",
+            "avatar_url": "https://avatars.example/mock.png"
+        });
+        ("200 OK", body.to_string())
+    } else {
+        ("404 Not Found", json!({"error": "not found"}).to_string())
+    };
+
+    let response = format!(
+        "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        status,
+        body.len(),
+        body
+    );
+
+    let _ = stream.write_all(response.as_bytes()).await;
+    let _ = stream.flush().await;
+}
+
+async fn start_mock_github_oauth_server_with_email_failure(user_email: &str) -> String {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let mock_url = format!("http://{}", addr);
+    let user_email = user_email.to_string();
+
+    tokio::spawn(async move {
+        loop {
+            if let Ok((stream, _)) = listener.accept().await {
+                let user_email = user_email.clone();
+                tokio::spawn(async move {
+                    handle_mock_github_connection_with_email_failure(stream, user_email).await;
+                });
+            }
+        }
+    });
+
+    mock_url
+}
+
+async fn handle_mock_github_connection_with_email_failure(
+    stream: tokio::net::TcpStream,
+    user_email: String,
+) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut stream = stream;
+    let mut buf = vec![0u8; 4096];
+    let n = stream.read(&mut buf).await.unwrap_or(0);
+    let request = String::from_utf8_lossy(&buf[..n]);
+
+    let (status, body) = if request.contains("POST") && request.contains("/token") {
+        let body = json!({
+            "access_token": "mock-github-access-token",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "scope": "user:email"
+        });
+        ("200 OK", body.to_string())
+    } else if request.contains("GET") && request.contains("/api/v3/user/emails") {
+        (
+            "500 Internal Server Error",
+            json!({"error": "emails endpoint should not be called"}).to_string(),
+        )
+    } else if request.contains("GET") && request.contains("/api/v3/user") {
+        let body = json!({
+            "id": 123456,
+            "email": user_email,
+            "name": "Mock GitHub User",
+            "avatar_url": "https://avatars.example/mock.png"
+        });
+        ("200 OK", body.to_string())
+    } else {
+        ("404 Not Found", json!({"error": "not found"}).to_string())
+    };
+
+    let response = format!(
+        "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        status,
+        body.len(),
+        body
+    );
+
+    let _ = stream.write_all(response.as_bytes()).await;
+    let _ = stream.flush().await;
+}
+
 fn make_test_provider(mock_url: &str) -> OAuthProvider {
     OAuthProvider {
         client_id: "client".to_string(),
@@ -586,6 +723,242 @@ async fn test_account_linking_disabled_rejects_new_provider() {
             );
         }
         Ok(None) => panic!("Expected a response from callback"),
+    }
+}
+
+#[tokio::test]
+async fn test_github_callback_uses_verified_email_from_emails_endpoint_when_profile_email_missing()
+{
+    let mock_url = start_mock_github_oauth_server(
+        None,
+        json!([
+            {
+                "email": "github-user@example.com",
+                "primary": true,
+                "verified": true,
+                "visibility": null
+            }
+        ]),
+    )
+    .await;
+
+    let config = Arc::new(test_config());
+    let db = Arc::new(MemoryDatabaseAdapter::new());
+
+    let mut oauth_config = OAuthConfig::default();
+    oauth_config.providers.insert(
+        "github".to_string(),
+        OAuthProvider {
+            client_id: "client".to_string(),
+            client_secret: "secret".to_string(),
+            auth_url: format!("{}/login/oauth/authorize", mock_url),
+            token_url: format!("{}/token", mock_url),
+            user_info_url: format!("{}/api/v3/user", mock_url),
+            scopes: vec!["user:email".to_string()],
+            map_user_info: OAuthProvider::github("client", "secret").map_user_info,
+        },
+    );
+
+    let state = "github-private-email-state";
+    let payload = json!({
+        "provider": "github",
+        "callback_url": format!("{}/callback/github", mock_url),
+        "code_verifier": "test-verifier",
+        "link_user_id": null,
+        "scopes": "user:email",
+    });
+
+    db.create_verification(CreateVerification {
+        identifier: format!("oauth:{}", state),
+        value: payload.to_string(),
+        expires_at: chrono::Utc::now() + chrono::Duration::minutes(10),
+    })
+    .await
+    .unwrap();
+
+    let ctx = AuthContext::new(config.clone(), db.clone());
+
+    let mut req = AuthRequest::new(
+        HttpMethod::Get,
+        &format!("/callback/github?code=test-code&state={}", state),
+    );
+    req.query
+        .insert("code".to_string(), "test-code".to_string());
+    req.query.insert("state".to_string(), state.to_string());
+
+    let oauth_plugin = OAuthPlugin::with_config(oauth_config);
+    let result = oauth_plugin.on_request(&req, &ctx).await;
+
+    match result {
+        Ok(Some(resp)) => {
+            assert_eq!(resp.status, 200);
+
+            let user = db
+                .get_user_by_email("github-user@example.com")
+                .await
+                .unwrap()
+                .expect("GitHub callback should create a user using /user/emails");
+            assert_eq!(user.email(), Some("github-user@example.com"));
+            assert!(user.email_verified());
+        }
+        Err(e) => panic!(
+            "GitHub callback should succeed when /user/emails has a verified email: {:?}",
+            e
+        ),
+        Ok(None) => panic!("Expected a response"),
+    }
+}
+
+#[tokio::test]
+async fn test_github_callback_does_not_require_emails_endpoint_when_profile_email_exists() {
+    let mock_url =
+        start_mock_github_oauth_server_with_email_failure("public-github-user@example.com").await;
+
+    let config = Arc::new(test_config());
+    let db = Arc::new(MemoryDatabaseAdapter::new());
+
+    let mut oauth_config = OAuthConfig::default();
+    oauth_config.providers.insert(
+        "github".to_string(),
+        OAuthProvider {
+            client_id: "client".to_string(),
+            client_secret: "secret".to_string(),
+            auth_url: format!("{}/login/oauth/authorize", mock_url),
+            token_url: format!("{}/token", mock_url),
+            user_info_url: format!("{}/api/v3/user", mock_url),
+            scopes: vec!["user:email".to_string()],
+            map_user_info: OAuthProvider::github("client", "secret").map_user_info,
+        },
+    );
+
+    let state = "github-profile-email-state";
+    let payload = json!({
+        "provider": "github",
+        "callback_url": format!("{}/callback/github", mock_url),
+        "code_verifier": "test-verifier",
+        "link_user_id": null,
+        "scopes": "user:email",
+    });
+
+    db.create_verification(CreateVerification {
+        identifier: format!("oauth:{}", state),
+        value: payload.to_string(),
+        expires_at: chrono::Utc::now() + chrono::Duration::minutes(10),
+    })
+    .await
+    .unwrap();
+
+    let ctx = AuthContext::new(config.clone(), db.clone());
+
+    let mut req = AuthRequest::new(
+        HttpMethod::Get,
+        &format!("/callback/github?code=test-code&state={}", state),
+    );
+    req.query
+        .insert("code".to_string(), "test-code".to_string());
+    req.query.insert("state".to_string(), state.to_string());
+
+    let oauth_plugin = OAuthPlugin::with_config(oauth_config);
+    let result = oauth_plugin.on_request(&req, &ctx).await;
+
+    match result {
+        Ok(Some(resp)) => {
+            assert_eq!(resp.status, 200);
+
+            let user = db
+                .get_user_by_email("public-github-user@example.com")
+                .await
+                .unwrap()
+                .expect("GitHub callback should use /user.email directly");
+            assert_eq!(user.email(), Some("public-github-user@example.com"));
+            assert!(user.email_verified());
+        }
+        Err(e) => panic!(
+            "GitHub callback should succeed without calling /user/emails when /user.email exists: {:?}",
+            e
+        ),
+        Ok(None) => panic!("Expected a response"),
+    }
+}
+
+#[tokio::test]
+async fn test_github_callback_fails_when_emails_endpoint_has_no_verified_email() {
+    let mock_url = start_mock_github_oauth_server(
+        None,
+        json!([
+            {
+                "email": "github-user@example.com",
+                "primary": true,
+                "verified": false,
+                "visibility": null
+            }
+        ]),
+    )
+    .await;
+
+    let config = Arc::new(test_config());
+    let db = Arc::new(MemoryDatabaseAdapter::new());
+
+    let mut oauth_config = OAuthConfig::default();
+    oauth_config.providers.insert(
+        "github".to_string(),
+        OAuthProvider {
+            client_id: "client".to_string(),
+            client_secret: "secret".to_string(),
+            auth_url: format!("{}/login/oauth/authorize", mock_url),
+            token_url: format!("{}/token", mock_url),
+            user_info_url: format!("{}/api/v3/user", mock_url),
+            scopes: vec!["user:email".to_string()],
+            map_user_info: OAuthProvider::github("client", "secret").map_user_info,
+        },
+    );
+
+    let state = "github-no-verified-email-state";
+    let payload = json!({
+        "provider": "github",
+        "callback_url": format!("{}/callback/github", mock_url),
+        "code_verifier": "test-verifier",
+        "link_user_id": null,
+        "scopes": "user:email",
+    });
+
+    db.create_verification(CreateVerification {
+        identifier: format!("oauth:{}", state),
+        value: payload.to_string(),
+        expires_at: chrono::Utc::now() + chrono::Duration::minutes(10),
+    })
+    .await
+    .unwrap();
+
+    let ctx = AuthContext::new(config.clone(), db.clone());
+
+    let mut req = AuthRequest::new(
+        HttpMethod::Get,
+        &format!("/callback/github?code=test-code&state={}", state),
+    );
+    req.query
+        .insert("code".to_string(), "test-code".to_string());
+    req.query.insert("state".to_string(), state.to_string());
+
+    let oauth_plugin = OAuthPlugin::with_config(oauth_config);
+    let result = oauth_plugin.on_request(&req, &ctx).await;
+
+    match result {
+        Err(e) => {
+            let msg = format!("{:?}", e);
+            assert!(
+                msg.contains("no verified email"),
+                "Expected a no verified email error, got: {}",
+                msg
+            );
+        }
+        Ok(Some(resp)) => {
+            assert_ne!(
+                resp.status, 200,
+                "GitHub callback should not succeed without a verified email"
+            );
+        }
+        Ok(None) => panic!("Expected a response"),
     }
 }
 

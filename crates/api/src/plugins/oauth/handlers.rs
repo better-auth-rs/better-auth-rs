@@ -452,10 +452,46 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
         )));
     }
 
-    let user_info_json: serde_json::Value = user_info_resp
+    let mut user_info_json: serde_json::Value = user_info_resp
         .json()
         .await
         .map_err(|e| AuthError::internal(format!("Failed to parse user info: {}", e)))?;
+
+    if provider_name == "github" && user_info_json["email"].as_str().is_none() {
+        let emails_url = format!("{}/emails", provider.user_info_url.trim_end_matches('/'));
+        let emails_resp = client
+            .get(&emails_url)
+            .bearer_auth(access_token)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .map_err(|e| AuthError::internal(format!("Failed to fetch GitHub user emails: {e}")))?;
+
+        if !emails_resp.status().is_success() {
+            let error_body = emails_resp
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(AuthError::internal(format!(
+                "GitHub user emails request failed: {}",
+                error_body
+            )));
+        }
+
+        let emails: Vec<serde_json::Value> = emails_resp
+            .json()
+            .await
+            .map_err(|e| AuthError::internal(format!("Failed to parse GitHub user emails: {e}")))?;
+
+        let email = emails
+            .iter()
+            .find(|e| e["primary"] == true && e["verified"] == true)
+            .or_else(|| emails.iter().find(|e| e["verified"] == true))
+            .and_then(|e| e["email"].as_str())
+            .ok_or_else(|| AuthError::internal("GitHub account has no verified email"))?;
+
+        user_info_json["email"] = email.into();
+    }
 
     let user_info = (provider.map_user_info)(user_info_json)
         .map_err(|e| AuthError::internal(format!("Failed to map user info: {}", e)))?;
