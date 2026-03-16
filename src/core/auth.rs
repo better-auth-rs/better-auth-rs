@@ -379,9 +379,29 @@ impl BetterAuth {
         let body: serde_json::Value = req
             .body_as_json()
             .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
-        let body = body
-            .as_object()
-            .ok_or_else(|| AuthError::bad_request("Body must be an object"))?;
+        let body = match body.as_object() {
+            Some(body) => body,
+            None => {
+                let actual = match &body {
+                    serde_json::Value::Null => "null",
+                    serde_json::Value::Bool(_) => "boolean",
+                    serde_json::Value::Number(_) => "number",
+                    serde_json::Value::String(_) => "string",
+                    serde_json::Value::Array(_) => "array",
+                    serde_json::Value::Object(_) => "record",
+                };
+                return Ok(AuthResponse::json(
+                    400,
+                    &better_auth_core::ErrorCodeMessageResponse {
+                        code: "VALIDATION_ERROR".to_string(),
+                        message: format!(
+                            "[body] Invalid input: expected record, received {}",
+                            actual
+                        ),
+                    },
+                )?);
+            }
+        };
 
         if body.contains_key("email") {
             return Err(AuthError::bad_request("Email can not be updated"));

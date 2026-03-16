@@ -74,7 +74,22 @@ function pickHeaders(headers: Headers) {
   return Object.fromEntries(
     selected.flatMap((header) => {
       const value = headers.get(header);
-      return value ? [[header, value.split(";")[0]!.trim()]] : [];
+      if (!value) {
+        return [];
+      }
+
+      const normalized = header === "location"
+        ? (() => {
+            try {
+              const url = new URL(value);
+              return `${url.pathname}${url.search}${url.hash}`;
+            } catch {
+              return value;
+            }
+          })()
+        : value.split(";")[0]!.trim();
+
+      return [[header, normalized]];
     }),
   );
 }

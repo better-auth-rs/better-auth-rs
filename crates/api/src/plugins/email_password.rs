@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use validator::Validate;
+use validator::{Validate, ValidateEmail};
 
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
@@ -206,6 +206,13 @@ impl EmailPasswordPlugin {
         req: &AuthRequest,
         ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
+        if let Ok(raw_body) = req.body_as_json::<serde_json::Value>()
+            && let Some(email) = raw_body.get("email").and_then(|value| value.as_str())
+            && !email.validate_email()
+        {
+            return Err(AuthError::bad_request("Invalid email"));
+        }
+
         let signin_req: SignInRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),

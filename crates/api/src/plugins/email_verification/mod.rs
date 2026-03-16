@@ -168,6 +168,7 @@ impl EmailVerificationPlugin {
             VerifyEmailResult::Redirect { url, session_token } => {
                 let mut headers = better_auth_core::Headers::new();
                 _ = headers.insert("Location".to_string(), url);
+                _ = headers.insert("content-type".to_string(), "application/json".to_string());
                 if let Some(token) = session_token {
                     let cookie = create_session_cookie(&token, &ctx.config);
                     headers.append("Set-Cookie".to_string(), cookie);

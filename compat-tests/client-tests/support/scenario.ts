@@ -32,6 +32,7 @@ type ScenarioServerContext = {
     body?: BodyInit;
     headers?: HeadersInit;
     json?: unknown;
+    redirect?: RequestRedirect;
   }): Promise<{
     status: number;
     location: string | null;
@@ -144,7 +145,15 @@ async function runScenario(
     snapshot(value) {
       return normalizeClientValue(value);
     },
-    async rawRequest({ actor = "primary", path, method = "GET", body, headers, json }) {
+    async rawRequest({
+      actor = "primary",
+      path,
+      method = "GET",
+      body,
+      headers,
+      json,
+      redirect,
+    }) {
       const requestHeaders = new Headers(headers);
       let requestBody = body;
       if (json !== undefined) {
@@ -156,6 +165,7 @@ async function runScenario(
         method,
         headers: requestHeaders,
         body: requestBody,
+        redirect,
       });
       const text = await response.text();
       let parsed: unknown = null;

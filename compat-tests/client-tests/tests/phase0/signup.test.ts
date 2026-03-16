@@ -46,3 +46,16 @@ compatScenario("sign up with short password returns error", async (ctx) => {
     signup: ctx.snapshot(signup),
   };
 });
+
+compatScenario("sign up with invalid email returns error", async (ctx) => {
+  const primary = ctx.actor();
+  const signup = await primary.client.signUp.email({
+    email: "invalid-email",
+    password: "password123",
+    name: "Invalid Email User",
+  });
+
+  return {
+    signup: ctx.snapshot(signup),
+  };
+});

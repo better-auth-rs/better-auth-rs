@@ -20,6 +20,9 @@ pub fn create_session_cookie(token: &str, config: &AuthConfig) -> String {
     let mut cookie = Cookie::build((&*session_config.cookie_name, token))
         .path("/")
         .expires(expires_offset)
+        .max_age(cookie::time::Duration::seconds(
+            session_config.expires_in.num_seconds(),
+        ))
         .secure(session_config.cookie_secure)
         .http_only(session_config.cookie_http_only)
         .same_site(same_site);

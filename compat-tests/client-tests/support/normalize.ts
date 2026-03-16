@@ -1,4 +1,13 @@
 function normalizeScalar(value: string, key: string) {
+  if (key === "location") {
+    try {
+      const url = new URL(value);
+      return `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+      return value;
+    }
+  }
+
   if (
     key === "id" ||
     key.endsWith("Id") ||

@@ -45,6 +45,48 @@ compatScenario("update user rejects direct email mutation", async (ctx) => {
   };
 });
 
+compatScenario("update user rejects no-op body", async (ctx) => {
+  const primary = ctx.actor();
+  const email = ctx.uniqueEmail("phase2-update-noop");
+
+  const signup = await primary.client.signUp.email({
+    email,
+    password: "password123",
+    name: "Noop Update User",
+  });
+  const update = await ctx.rawRequest({
+    path: "/api/auth/update-user",
+    method: "POST",
+    json: {},
+  });
+
+  return {
+    signup: ctx.snapshot(signup),
+    update: ctx.snapshot(update),
+  };
+});
+
+compatScenario("update user rejects non-object body", async (ctx) => {
+  const primary = ctx.actor();
+  const email = ctx.uniqueEmail("phase2-update-array");
+
+  const signup = await primary.client.signUp.email({
+    email,
+    password: "password123",
+    name: "Array Update User",
+  });
+  const update = await ctx.rawRequest({
+    path: "/api/auth/update-user",
+    method: "POST",
+    json: [],
+  });
+
+  return {
+    signup: ctx.snapshot(signup),
+    update: ctx.snapshot(update),
+  };
+});
+
 compatScenario("change email for an unverified user completes after verify email", async (ctx) => {
   const primary = ctx.actor();
   const email = ctx.uniqueEmail("phase2-change-unverified");
@@ -118,6 +160,25 @@ compatScenario("change email for a verified user requires old-email confirmation
     confirm: ctx.snapshot(confirm),
     finish: ctx.snapshot(finish),
     session: ctx.snapshot(session),
+  };
+});
+
+compatScenario("change email rejects setting the same email", async (ctx) => {
+  const primary = ctx.actor();
+  const email = ctx.uniqueEmail("phase2-change-same");
+
+  const signup = await primary.client.signUp.email({
+    email,
+    password: "password123",
+    name: "Same Email User",
+  });
+  const change = await primary.client.changeEmail({
+    newEmail: email,
+  });
+
+  return {
+    signup: ctx.snapshot(signup),
+    change: ctx.snapshot(change),
   };
 });
 

@@ -49,3 +49,15 @@ compatScenario("sign in with nonexistent email returns error", async (ctx) => {
     signin: ctx.snapshot(signin),
   };
 });
+
+compatScenario("sign in with invalid email returns error", async (ctx) => {
+  const primary = ctx.actor();
+  const signin = await primary.client.signIn.email({
+    email: "invalid-email",
+    password: "password123",
+  });
+
+  return {
+    signin: ctx.snapshot(signin),
+  };
+});

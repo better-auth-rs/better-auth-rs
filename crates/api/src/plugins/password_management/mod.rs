@@ -213,6 +213,7 @@ impl PasswordManagementPlugin {
             ResetPasswordTokenResult::Redirect(url) => {
                 let mut headers = better_auth_core::Headers::new();
                 let _ = headers.insert("Location".to_string(), url);
+                let _ = headers.insert("content-type".to_string(), "application/json".to_string());
                 Ok(AuthResponse {
                     status: 302,
                     headers,

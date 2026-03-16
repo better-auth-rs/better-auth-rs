@@ -116,3 +116,43 @@ compatScenario("reset password token cannot be reused", async (ctx) => {
     second: ctx.snapshot(second),
   };
 });
+
+compatScenario("reset password callback redirects with token and preserves callbackURL query params", async (ctx) => {
+  const primary = ctx.actor();
+  const email = ctx.uniqueEmail("phase1-reset-callback");
+  const token = ctx.uniqueToken("phase1-reset-callback-token");
+  const callbackURL = "/callback?foo=bar&baz=qux";
+
+  await primary.client.signUp.email({
+    email,
+    password: "password123",
+    name: "Reset Callback User",
+  });
+  await ctx.seedResetPasswordToken({
+    email,
+    token,
+    expiresAt: "2099-01-01T00:00:00Z",
+  });
+
+  const callback = await ctx.rawRequest({
+    path: `/api/auth/reset-password/${encodeURIComponent(token)}?callbackURL=${encodeURIComponent(callbackURL)}`,
+    redirect: "manual",
+  });
+
+  return {
+    callback: ctx.snapshot(callback),
+  };
+});
+
+compatScenario("reset password callback redirects invalid token to error callback", async (ctx) => {
+  const callbackURL = "/callback?foo=bar&baz=qux";
+
+  const callback = await ctx.rawRequest({
+    path: `/api/auth/reset-password/invalid-reset-token?callbackURL=${encodeURIComponent(callbackURL)}`,
+    redirect: "manual",
+  });
+
+  return {
+    callback: ctx.snapshot(callback),
+  };
+});
