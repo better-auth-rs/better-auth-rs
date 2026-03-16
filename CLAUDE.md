@@ -27,13 +27,26 @@ transparent drop-in for the TS server: any client built against
 better-auth (JS/TS) must work identically against better-auth-rs without
 code changes. "Identically" means matching response shapes, status codes,
 headers, cookies, error formats, and observable side effects for every
-endpoint in the reference spec.
+endpoint in the reference spec and every route exposed by the pinned TS
+runtime.
 
 This is not a loose port or an "inspired by" project. The TypeScript
 implementation is the spec.
 
-The behavioral target is the same capability as the TS implementation,
-with idiomatic Rust interfaces preserving TS-compatible wire behavior.
+The target is strict 1:1 feature parity with the pinned TS runtime:
+
+- no missing public endpoint or behavior
+- no extra public endpoint
+- no extra public capability
+- no Rust-only migration path for pre-alignment behavior
+
+If a route or behavior exists only to preserve old better-auth-rs
+semantics, it is a bug. If a helper or endpoint is needed only for
+tests, it must be test-only and must not leak into the normal library or
+server surface.
+
+Rust interfaces should still be idiomatic where they do not change the
+observable TS-compatible wire behavior.
 
 Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
 
@@ -64,10 +77,18 @@ Licensed under MIT OR Apache-2.0. The project uses Rust edition 2024.
 If these sources contradict each other, trust them in the order above.
 If a TS behavior looks like a bug, match it anyway and leave a
 `// NOTE: matches TS bug — <link>` comment; do not "improve" the
-behavior.
+behavior. Never preserve old Rust behavior when TS disagrees. Assume
+zero legacy users and zero migration obligation.
 
 ## Capability and Consumer Policy
 
+- **Exact upstream surface only** — the pinned TS runtime defines the
+  complete allowed public feature surface. Any extra route, extra wire
+  behavior, extra capability, or extra compatibility mode in Rust is a
+  bug. Any missing TS route or behavior is also a bug.
+- **No legacy migration layers** — do not keep fallbacks, aliases,
+  deprecated paths, old storage reads, or backward-compat shims for
+  prior better-auth-rs behavior. Remove them or make them test-only.
 - **Rust should be Rust-native** — builders, traits, extractors, router
   integration, hooks, and embedding APIs should follow Rust idioms
   rather than mirroring TS ergonomics mechanically.
@@ -224,7 +245,9 @@ consumer-relevant.
    assumes control over changes in that repo.
 6. Read the TS source for that capability to understand the full
    behavior, including edge cases and error paths.
-7. Implement or fix the Rust version.
+7. Implement or fix the Rust version to match the TS runtime exactly,
+   removing any Rust-only fallback or extra surface instead of layering
+   compatibility shims on top.
 8. Run the dual-server test for that capability whenever possible.
 9. Iterate until the diff is clean.
 10. Commit.
@@ -245,6 +268,8 @@ A phase is only complete when all of the following are true:
 2. Every endpoint or behavior in the phase has dual-server TS
    comparison coverage whenever a reference-server comparison is
    possible.
+3. The phase exposes no extra public route or behavior beyond the
+   pinned TS runtime for that phase.
 
 Only completed phases may join the blocking schema-driven baseline.
 Currently, Phases 0 and 1 are the only completed phases, so the
