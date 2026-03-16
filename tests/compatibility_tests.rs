@@ -11,9 +11,9 @@ use std::collections::{BTreeMap, HashSet};
 use better_auth::{
     AuthBuilder, AuthConfig, BetterAuth,
     plugins::EmailPasswordPlugin,
+    prelude::{AuthRequest, HttpMethod},
     run_migrations,
-    sea_orm::{Database, DatabaseConnection},
-    types::{AuthRequest, HttpMethod},
+    store::store::sea_orm::{Database, DatabaseConnection},
 };
 use serde_json::Value;
 

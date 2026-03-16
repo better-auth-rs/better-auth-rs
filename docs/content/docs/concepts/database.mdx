@@ -9,12 +9,13 @@ The supported public path is:
 
 1. Create a `DatabaseConnection`.
 2. Run the built-in auth migrations.
-3. Pass the connection to `AuthBuilder::database(...)`.
+3. Pass the connection to `BetterAuth::new(config).database(...)`.
 
 ## Setup
 
 ```rust
-use better_auth::{run_migrations, sea_orm::Database, AuthBuilder, AuthConfig};
+use better_auth::{run_migrations, AuthConfig, BetterAuth};
+use better_auth::store::sea_orm::Database;
 use better_auth::plugins::EmailPasswordPlugin;
 
 #[tokio::main]
@@ -22,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database = Database::connect("sqlite::memory:").await?;
     run_migrations(&database).await?;
 
-    let auth = AuthBuilder::new(
+    let auth = BetterAuth::new(
         AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
             .base_url("http://localhost:3000"),
     )
@@ -41,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 For production, pass a PostgreSQL connection string to SeaORM and then run the same migrations:
 
 ```rust
-use better_auth::{run_migrations, sea_orm::Database};
+use better_auth::{run_migrations, store::sea_orm::Database};
 
 let database = Database::connect("postgresql://user:pass@localhost:5432/mydb").await?;
 run_migrations(&database).await?;

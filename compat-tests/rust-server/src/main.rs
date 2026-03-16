@@ -4,7 +4,8 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use better_auth::handlers::axum::AxumIntegration;
+use better_auth::integrations::axum::AxumIntegration;
+use better_auth::prelude::{AuthAccount, AuthUser, CreateAccount, CreateVerification, User};
 use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, EmailVerificationPlugin, OAuthPlugin,
     PasswordManagementPlugin, SessionManagementPlugin, UserManagementPlugin,
@@ -15,10 +16,7 @@ use better_auth::plugins::{
     },
     password_management::SendResetPassword,
 };
-use better_auth::{
-    AuthAccount, AuthBuilder, AuthConfig, AuthUser, CreateAccount, CreateVerification, run_migrations,
-    sea_orm::Database,
-};
+use better_auth::{AuthBuilder, AuthConfig, run_migrations, store::sea_orm::Database};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -148,7 +146,7 @@ struct CompatVerificationSender {
 impl SendVerificationEmail for CompatVerificationSender {
     async fn send(
         &self,
-        user: &better_auth::User,
+        user: &User,
         url: &str,
         token: &str,
     ) -> better_auth::AuthResult<()> {

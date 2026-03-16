@@ -1,3 +1,3 @@
-pub mod auth;
+pub(crate) mod auth;
 
 pub use auth::{AuthBuilder, BetterAuth};

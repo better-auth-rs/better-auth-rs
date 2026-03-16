@@ -9,22 +9,23 @@ Better Auth provides first-class integration with [Axum](https://github.com/toki
 
 ```toml title="Cargo.toml"
 [dependencies]
-better-auth = { version = "0.6", features = ["axum"] }
+better-auth = { version = "0.9", features = ["axum"] }
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 ```
 
 ## Mounting Auth Routes
 
-Use `.axum_router()` to convert the auth instance into an Axum `Router`:
+Use `.axum_router()` when `Arc<BetterAuth>` is the router state:
 
 ```rust
-use better_auth::{run_migrations, sea_orm::Database, AuthConfig, BetterAuth};
+use better_auth::{run_migrations, AuthConfig, BetterAuth};
+use better_auth::store::sea_orm::Database;
 use better_auth::plugins::{
     EmailPasswordPlugin, SessionManagementPlugin,
     PasswordManagementPlugin, AccountManagementPlugin,
 };
-use better_auth::handlers::AxumIntegration;
+use better_auth::integrations::axum::AxumIntegration;
 use axum::Router;
 use std::sync::Arc;
 
@@ -59,6 +60,73 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Using Better Auth Inside Your AppState
+
+For real applications, prefer `axum_router_with_state::<AppState>()` and let
+Axum extract `Arc<BetterAuth>` from your application state via `FromRef`.
+
+```rust
+use axum::extract::FromRef;
+use axum::{Json, Router, routing::get};
+use better_auth::{run_migrations, AuthConfig, BetterAuth};
+use better_auth::integrations::axum::{AxumIntegration, CurrentSession};
+use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
+use better_auth::prelude::AuthUser;
+use better_auth::store::sea_orm::Database;
+use std::sync::Arc;
+
+#[derive(Clone)]
+struct AppState {
+    auth: Arc<BetterAuth>,
+    app_name: &'static str,
+}
+
+impl FromRef<AppState> for Arc<BetterAuth> {
+    fn from_ref(state: &AppState) -> Self {
+        state.auth.clone()
+    }
+}
+
+async fn profile(session: CurrentSession) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "id": session.user.id(),
+        "email": session.user.email(),
+    }))
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let database = Database::connect("sqlite::memory:").await?;
+    run_migrations(&database).await?;
+
+    let auth = Arc::new(
+        BetterAuth::new(
+            AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
+                .base_url("http://localhost:8080"),
+        )
+        .database(database)
+        .plugin(EmailPasswordPlugin::new().enable_signup(true))
+        .plugin(SessionManagementPlugin::new())
+        .build()
+        .await?,
+    );
+
+    let state = AppState {
+        auth: auth.clone(),
+        app_name: "my-app",
+    };
+
+    let app = Router::new()
+        .route("/api/profile", get(profile))
+        .nest("/auth", auth.axum_router_with_state::<AppState>())
+        .with_state(state);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+```
+
 ### What Gets Mounted
 
 `.axum_router()` automatically registers:
@@ -81,8 +149,8 @@ Better Auth provides Axum extractors that automatically validate the session tok
 Use `CurrentSession` in your handler signature to require a valid session. Returns `401 Unauthorized` automatically if no valid session is found.
 
 ```rust
-use better_auth::handlers::CurrentSession;
-use better_auth::AuthUser; // trait for .id(), .email(), etc.
+use better_auth::integrations::axum::CurrentSession;
+use better_auth::prelude::AuthUser; // trait for .id(), .email(), etc.
 use axum::{Json, response::IntoResponse};
 
 async fn get_profile(
@@ -100,16 +168,16 @@ async fn get_profile(
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `user` | `DB::User` | The authenticated user (implements `AuthUser`) |
-| `session` | `DB::Session` | The current session (implements `AuthSession`) |
+| `user` | `better_auth::prelude::User` | The authenticated user (implements `AuthUser`) |
+| `session` | `better_auth::prelude::Session` | The current session (implements `AuthSession`) |
 
 ### `OptionalSession` — Optional Authentication
 
 Use `OptionalSession` for routes that should work for both authenticated and anonymous users. Never returns an error — wraps the result in `Option`.
 
 ```rust
-use better_auth::handlers::OptionalSession;
-use better_auth::AuthUser;
+use better_auth::integrations::axum::OptionalSession;
+use better_auth::prelude::AuthUser;
 use axum::{Json, response::IntoResponse};
 
 async fn home(
@@ -134,15 +202,17 @@ async fn home(
 Both extractors look for the session token in this order:
 
 1. `Authorization: Bearer <token>` header
-2. Session cookie (name from `SessionConfig::cookie_name`, default `better-auth.session-token`)
+2. Session cookie (name from `SessionConfig::cookie_name`, default `better-auth.session_token`)
 
 ## Full Example
 
 ```rust
 use axum::{Json, Router, response::IntoResponse, routing::get};
-use better_auth::handlers::{AxumIntegration, CurrentSession, OptionalSession};
+use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
-use better_auth::{run_migrations, sea_orm::Database, AuthBuilder, AuthConfig, AuthUser};
+use better_auth::{run_migrations, AuthConfig, BetterAuth};
+use better_auth::prelude::AuthUser;
+use better_auth::store::sea_orm::Database;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -153,7 +223,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     run_migrations(&database).await?;
 
     let auth = Arc::new(
-        AuthBuilder::new(config)
+        BetterAuth::new(config)
             .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())

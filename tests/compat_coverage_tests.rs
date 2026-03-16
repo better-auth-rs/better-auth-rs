@@ -9,7 +9,7 @@ mod compat;
 
 use std::collections::{BTreeMap, HashSet};
 
-use better_auth::types::HttpMethod;
+use better_auth::prelude::HttpMethod;
 
 use compat::helpers::*;
 use compat::schema::{OpenApiProfile, load_openapi_spec_with_profile};

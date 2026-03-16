@@ -1,8 +1,9 @@
 use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
 };
-use better_auth::types::{AuthRequest, HttpMethod};
-use better_auth::{AuthBuilder, AuthConfig, BetterAuth, run_migrations, sea_orm::Database};
+use better_auth::prelude::{AuthRequest, HttpMethod};
+use better_auth::store::sea_orm::Database;
+use better_auth::{AuthConfig, BetterAuth, run_migrations};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -26,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .password_min_length(8);
 
     // Build authentication system with all Phase 1 plugins
-    let auth = AuthBuilder::new(config)
+    let auth = BetterAuth::new(config)
         .database(database)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(PasswordManagementPlugin::new())
@@ -154,7 +155,7 @@ async fn send(
     path: &str,
     body: Option<&serde_json::Value>,
     bearer_token: Option<&str>,
-) -> better_auth::types::AuthResponse {
+) -> better_auth::prelude::AuthResponse {
     let mut headers = HashMap::new();
     if body.is_some() {
         _ = headers.insert("content-type".to_string(), "application/json".to_string());

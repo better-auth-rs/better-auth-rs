@@ -1,12 +1,12 @@
 use axum::{Json, Router, response::IntoResponse, routing::get};
-use better_auth::handlers::{AxumIntegration, CurrentSession, OptionalSession};
+use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
 use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, OrganizationPlugin, PasswordManagementPlugin,
     SessionManagementPlugin,
 };
-use better_auth::{
-    AuthBuilder, AuthConfig, AuthUser, BetterAuth, run_migrations, sea_orm::Database,
-};
+use better_auth::prelude::AuthUser;
+use better_auth::store::sea_orm::Database;
+use better_auth::{AuthConfig, BetterAuth, run_migrations};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
@@ -32,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build the authentication system
     let auth = Arc::new(
-        AuthBuilder::new(config)
+        BetterAuth::new(config)
             .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())

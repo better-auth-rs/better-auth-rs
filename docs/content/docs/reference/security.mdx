@@ -35,7 +35,8 @@ Session tokens are generated using cryptographically secure random number genera
 ### Cookie Configuration
 
 ```rust
-use better_auth::{AuthConfig, SameSite};
+use better_auth::AuthConfig;
+use better_auth::config::SameSite;
 
 let mut config = AuthConfig::new("secret-key");
 config.session.cookie_secure = true;        // HTTPS only
@@ -67,12 +68,13 @@ let config = AuthConfig::new("secret-key")
 Better Auth includes built-in CSRF protection that validates the `Origin` or `Referer` header on mutating requests (POST, PUT, DELETE, PATCH).
 
 ```rust
-use better_auth::{AuthBuilder, AuthConfig, CsrfConfig};
+use better_auth::middleware::CsrfConfig;
+use better_auth::{AuthConfig, BetterAuth};
 
 let config = AuthConfig::new(secret)
         .trusted_origins(vec!["https://myapp.com".to_string()]);
 
-let auth = AuthBuilder::new(config)
+let auth = BetterAuth::new(config)
     .csrf(CsrfConfig::new().enabled(true))
     .build()
     .await?;
@@ -85,7 +87,7 @@ Requests from untrusted origins receive a `403 Forbidden` response.
 Properly configured CORS prevents unauthorized cross-origin access:
 
 ```rust
-use better_auth::CorsConfig;
+use better_auth::middleware::CorsConfig;
 
 let auth = BetterAuth::new(config)
     .cors(

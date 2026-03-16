@@ -2,14 +2,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use better_auth::error::{AuthResult, DatabaseError};
+use better_auth::hooks::{DatabaseHookContext, DatabaseHooks, HookControl};
+use better_auth::plugin::{AuthContext, AuthInitContext, AuthPlugin, AuthRoute};
 use better_auth::plugins::EmailPasswordPlugin;
-use better_auth::sea_orm::sea_query::{Alias, ColumnDef, Expr, ExprTrait, Query, Table};
-use better_auth::sea_orm::{ConnectionTrait, Database, DatabaseConnection};
-use better_auth::{
-    AuthBuilder, AuthConfig, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-    AuthRoute, CreateUser, DatabaseError, DatabaseHookContext, DatabaseHooks, HookControl,
-    HttpMethod, User, run_migrations,
+use better_auth::prelude::{AuthRequest, AuthResponse, CreateUser, HttpMethod, User};
+use better_auth::store::store::sea_orm::sea_query::{
+    Alias, ColumnDef, Expr, ExprTrait, Query, Table,
 };
+use better_auth::store::store::sea_orm::{ConnectionTrait, Database, DatabaseConnection};
+use better_auth::{AuthBuilder, AuthConfig, run_migrations};
 
 fn test_config() -> AuthConfig {
     AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
@@ -117,7 +119,7 @@ impl AuthPlugin for HookRegistrationPlugin {
     async fn on_request(
         &self,
         _req: &AuthRequest,
-        _ctx: &better_auth::AuthContext,
+        _ctx: &AuthContext,
     ) -> AuthResult<Option<AuthResponse>> {
         Ok(None)
     }

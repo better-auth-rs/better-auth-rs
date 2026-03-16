@@ -19,7 +19,7 @@ async fn test_all_responses_use_camel_case() {
         vec![("POST /sign-up/email", signup_body.clone())];
 
     // Endpoints that require auth
-    let auth_endpoints: Vec<(&str, better_auth::types::AuthRequest)> = vec![
+    let auth_endpoints: Vec<(&str, better_auth::prelude::AuthRequest)> = vec![
         ("GET /get-session", get_with_auth("/get-session", &token)),
         (
             "GET /list-sessions",

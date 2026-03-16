@@ -4,8 +4,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use better_auth::types::CreateVerification;
-use better_auth::{BetterAuth, CreateAccount};
+use better_auth::BetterAuth;
+use better_auth::prelude::{CreateAccount, CreateVerification};
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use reqwest::StatusCode;
 use serde::Serialize;
@@ -568,7 +568,7 @@ pub async fn request_reset_on_both(
     (rust_token, reference_token)
 }
 
-pub async fn rust_send(auth: &BetterAuth, req: better_auth::types::AuthRequest) -> FullResponse {
+pub async fn rust_send(auth: &BetterAuth, req: better_auth::prelude::AuthRequest) -> FullResponse {
     let resp = auth
         .handle_request(req)
         .await

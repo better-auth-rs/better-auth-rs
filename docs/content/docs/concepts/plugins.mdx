@@ -91,7 +91,7 @@ Routes are defined with a method, path, and operation ID (used as the OpenAPI `o
 
 ```rust
 use better_auth::plugin::AuthRoute;
-use better_auth::types::HttpMethod;
+use better_auth::prelude::HttpMethod;
 
 let routes = vec![
     AuthRoute::post("/my-endpoint", "handle_my_endpoint"),

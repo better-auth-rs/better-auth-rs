@@ -10,7 +10,7 @@
 
 mod compat;
 
-use better_auth::AuthUser;
+use better_auth::prelude::AuthUser;
 use compat::helpers::*;
 use serde_json::json;
 
@@ -30,7 +30,7 @@ async fn setup_admin(auth: &better_auth::BetterAuth) -> String {
         .unwrap()
         .unwrap();
 
-    use better_auth::types::UpdateUser;
+    use better_auth::prelude::UpdateUser;
     let update = UpdateUser {
         role: Some("admin".to_string()),
         ..Default::default()

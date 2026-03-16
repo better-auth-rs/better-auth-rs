@@ -23,11 +23,11 @@ The most comprehensive authentication framework for Rust. Inspired by [Better Au
 
 ```toml
 [dependencies]
-better-auth = "0.8"
+better-auth = "0.9"
 ```
 
 ```rust
-use better_auth::{run_migrations, sea_orm::Database, BetterAuth, AuthConfig};
+use better_auth::{run_migrations, store::sea_orm::Database, BetterAuth, AuthConfig};
 use better_auth::plugins::EmailPasswordPlugin;
 
 #[tokio::main]

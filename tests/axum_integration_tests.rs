@@ -2,21 +2,33 @@
 
 use axum::{
     body::Body,
+    extract::{FromRef, State},
     http::{Method, Request, StatusCode},
 };
-use better_auth::handlers::{AxumIntegration, CurrentSession, OptionalSession};
+use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
 use better_auth::plugins::{
     EmailPasswordPlugin, EmailVerificationPlugin, PasswordManagementPlugin,
     SessionManagementPlugin, UserManagementPlugin, password_management::SendResetPassword,
 };
-use better_auth::{
-    AuthBuilder, AuthConfig, BetterAuth, run_migrations,
-    sea_orm::{Database, DatabaseConnection},
-};
+use better_auth::prelude::AuthUser;
+use better_auth::store::sea_orm::{Database, DatabaseConnection};
+use better_auth::{AuthBuilder, AuthConfig, BetterAuth, run_migrations};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tower::ServiceExt; // for oneshot
 use tower_http::cors::CorsLayer;
+
+#[derive(Clone)]
+struct AppState {
+    auth: Arc<BetterAuth>,
+    app_name: &'static str,
+}
+
+impl FromRef<AppState> for Arc<BetterAuth> {
+    fn from_ref(state: &AppState) -> Self {
+        state.auth.clone()
+    }
+}
 
 /// Helper to create test BetterAuth instance with all plugins
 async fn test_database() -> DatabaseConnection {
@@ -106,6 +118,43 @@ fn create_extractor_test_router(auth: Arc<BetterAuth>) -> axum::Router {
         .route("/optional-session", get(optional_session_route))
         .layer(CorsLayer::permissive())
         .with_state(auth)
+}
+
+fn create_app_state_test_router(auth: Arc<BetterAuth>) -> axum::Router {
+    use axum::{Json, Router, routing::get};
+
+    async fn current_session_route(
+        State(state): State<AppState>,
+        session: CurrentSession,
+    ) -> Json<Value> {
+        Json(json!({
+            "app": state.app_name,
+            "authenticated": true,
+            "userId": session.user.id(),
+        }))
+    }
+
+    async fn optional_session_route(
+        State(state): State<AppState>,
+        session: OptionalSession,
+    ) -> Json<Value> {
+        Json(json!({
+            "app": state.app_name,
+            "authenticated": session.0.is_some(),
+        }))
+    }
+
+    let state = AppState {
+        auth: auth.clone(),
+        app_name: "test-app",
+    };
+
+    Router::new()
+        .nest("/auth", auth.axum_router_with_state::<AppState>())
+        .route("/current-session", get(current_session_route))
+        .route("/optional-session", get(optional_session_route))
+        .layer(CorsLayer::permissive())
+        .with_state(state)
 }
 
 /// Helper to create a user and return user data + session token
@@ -214,6 +263,35 @@ async fn test_axum_current_session_extractor() {
     assert_eq!(response_data["userId"], user_data["user"]["id"]);
 }
 
+// Rust-specific surface: `CurrentSession` must work with app state that
+// exposes `Arc<BetterAuth>` via `FromRef`, without wrapper extractors.
+#[tokio::test]
+async fn test_axum_current_session_extractor_with_app_state() {
+    let auth = create_test_auth().await;
+    let router = create_app_state_test_router(auth);
+
+    let (user_data, token) = create_test_user(router.clone()).await;
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/current-session")
+        .header("authorization", format!("Bearer {}", token))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let response_data: Value = serde_json::from_slice(&body_bytes).unwrap();
+
+    assert_eq!(response_data["authenticated"], true);
+    assert_eq!(response_data["app"], "test-app");
+    assert_eq!(response_data["userId"], user_data["user"]["id"]);
+}
+
 // Rust-specific surface: `OptionalSession` is a public Axum extractor re-exported
 // from the Rust library.
 #[tokio::test]
@@ -236,6 +314,31 @@ async fn test_axum_optional_session_extractor_without_auth() {
     let response_data: Value = serde_json::from_slice(&body_bytes).unwrap();
 
     assert_eq!(response_data["authenticated"], false);
+}
+
+// Rust-specific surface: `OptionalSession` must also work with custom app
+// state that embeds BetterAuth.
+#[tokio::test]
+async fn test_axum_optional_session_extractor_without_auth_with_app_state() {
+    let auth = create_test_auth().await;
+    let router = create_app_state_test_router(auth);
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/optional-session")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let response_data: Value = serde_json::from_slice(&body_bytes).unwrap();
+
+    assert_eq!(response_data["authenticated"], false);
+    assert_eq!(response_data["app"], "test-app");
 }
 
 // Rust-specific surface: Axum route mounting must honor `disabled_path` when

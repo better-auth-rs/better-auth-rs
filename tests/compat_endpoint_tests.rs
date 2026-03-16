@@ -276,7 +276,7 @@ async fn test_error_response_shapes_match_spec() {
     let spec = compat::schema::load_openapi_spec();
 
     // Collect error scenarios
-    let error_scenarios: Vec<(&str, &str, better_auth::types::AuthRequest, u16)> = vec![
+    let error_scenarios: Vec<(&str, &str, better_auth::prelude::AuthRequest, u16)> = vec![
         (
             "/sign-in/email",
             "post",

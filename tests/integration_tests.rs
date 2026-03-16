@@ -5,8 +5,9 @@
 
 mod compat;
 
-use better_auth::{AuthStore, BetterAuth};
-use better_auth::{run_migrations, sea_orm::Database};
+use better_auth::store::AuthStore;
+use better_auth::store::store::sea_orm::Database;
+use better_auth::{BetterAuth, run_migrations};
 use compat::helpers::*;
 use std::sync::Arc;
 
@@ -101,7 +102,7 @@ async fn test_revoke_session_integration() {
     let (user_id, session_token1) = create_test_user_and_session(auth.clone()).await;
 
     // Create a second session for the same user
-    use better_auth::types::CreateSession;
+    use better_auth::prelude::CreateSession;
     use chrono::{Duration, Utc};
 
     let create_session = CreateSession {
@@ -119,7 +120,7 @@ async fn test_revoke_session_integration() {
         .await
         .unwrap();
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -133,7 +134,7 @@ async fn test_revoke_session_integration() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/revoke-session".to_string(),
         headers,
         Some(revoke_data.to_string().into_bytes()),
@@ -205,7 +206,7 @@ async fn test_reset_password_integration() {
 
     // First, create a verification token manually
 
-    use better_auth::types::CreateVerification;
+    use better_auth::prelude::CreateVerification;
     use chrono::{Duration, Utc};
     use uuid::Uuid;
 
@@ -220,7 +221,7 @@ async fn test_reset_password_integration() {
         .await
         .unwrap();
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -232,7 +233,7 @@ async fn test_reset_password_integration() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/reset-password".to_string(),
         headers,
         Some(reset_data.to_string().into_bytes()),
@@ -309,7 +310,7 @@ async fn test_reset_password_token_integration() {
 
     // Create a verification token manually
 
-    use better_auth::types::CreateVerification;
+    use better_auth::prelude::CreateVerification;
     use chrono::{Duration, Utc};
     use uuid::Uuid;
 
@@ -324,11 +325,11 @@ async fn test_reset_password_token_integration() {
         .await
         .unwrap();
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         format!("/reset-password/{}", reset_token),
         HashMap::new(),
         None,
@@ -379,7 +380,7 @@ async fn test_get_session_post_route_absent() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -389,7 +390,7 @@ async fn test_get_session_post_route_absent() {
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/get-session".to_string(),
         headers,
         Some(b"{}".to_vec()),
@@ -407,7 +408,7 @@ async fn test_delete_user_post_method() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -417,7 +418,7 @@ async fn test_delete_user_post_method() {
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/delete-user".to_string(),
         headers,
         Some(b"{}".to_vec()),
@@ -438,7 +439,7 @@ async fn test_delete_user_post_method() {
 async fn test_set_password_public_route_absent_for_social_user() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::{AuthRequest, CreateSession, CreateUser};
+    use better_auth::prelude::{AuthRequest, CreateSession, CreateUser};
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
 
@@ -474,7 +475,7 @@ async fn test_set_password_public_route_absent_for_social_user() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/set-password".to_string(),
         headers,
         Some(set_data.to_string().into_bytes()),
@@ -492,7 +493,7 @@ async fn test_set_password_already_has_password() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -507,7 +508,7 @@ async fn test_set_password_already_has_password() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/set-password".to_string(),
         headers,
         Some(set_data.to_string().into_bytes()),
@@ -524,7 +525,7 @@ async fn test_set_password_already_has_password() {
 async fn test_set_password_unauthenticated() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -535,7 +536,7 @@ async fn test_set_password_unauthenticated() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/set-password".to_string(),
         headers,
         Some(set_data.to_string().into_bytes()),
@@ -555,7 +556,7 @@ async fn test_revoke_other_sessions_integration() {
 
     // Create a second session for the same user
 
-    use better_auth::types::{AuthRequest, CreateSession};
+    use better_auth::prelude::{AuthRequest, CreateSession};
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
 
@@ -580,7 +581,7 @@ async fn test_revoke_other_sessions_integration() {
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/revoke-other-sessions".to_string(),
         headers,
         Some(b"{}".to_vec()),
@@ -606,7 +607,7 @@ async fn test_cookie_based_auth() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     // Use cookie header instead of Bearer token
@@ -617,7 +618,7 @@ async fn test_cookie_based_auth() {
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/get-session".to_string(),
         headers,
         None,
@@ -639,7 +640,7 @@ async fn test_bearer_takes_precedence_over_cookie() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     // Provide both Bearer and cookie, but cookie has invalid token
@@ -654,7 +655,7 @@ async fn test_bearer_takes_precedence_over_cookie() {
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/get-session".to_string(),
         headers,
         None,
@@ -672,7 +673,7 @@ async fn test_bearer_takes_precedence_over_cookie() {
 async fn test_unauthorized_password_operations() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -684,7 +685,7 @@ async fn test_unauthorized_password_operations() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/change-password".to_string(),
         headers,
         Some(change_data.to_string().into_bytes()),
@@ -701,7 +702,7 @@ async fn test_change_email_success() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -714,7 +715,7 @@ async fn test_change_email_success() {
     let body = serde_json::json!({ "newEmail": "newemail@test.com" });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/change-email".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
@@ -736,7 +737,7 @@ async fn test_change_email_success() {
 async fn test_change_email_duplicate() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::{AuthRequest, CreateUser};
+    use better_auth::prelude::{AuthRequest, CreateUser};
     use std::collections::HashMap;
 
     // Create first user
@@ -758,7 +759,7 @@ async fn test_change_email_duplicate() {
     let body = serde_json::json!({ "newEmail": "existing@test.com" });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/change-email".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
@@ -775,7 +776,7 @@ async fn test_change_email_duplicate() {
 async fn test_change_email_unauthenticated() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -784,7 +785,7 @@ async fn test_change_email_unauthenticated() {
     let body = serde_json::json!({ "newEmail": "x@y.com" });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/change-email".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
@@ -802,7 +803,7 @@ async fn test_delete_user_callback_success() {
     let auth = create_test_auth_memory().await;
     let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::{AuthRequest, CreateVerification};
+    use better_auth::prelude::{AuthRequest, CreateVerification};
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
 
@@ -822,7 +823,7 @@ async fn test_delete_user_callback_success() {
     query.insert("token".to_string(), token);
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/delete-user/callback".to_string(),
         {
             let mut headers = HashMap::new();
@@ -855,14 +856,14 @@ async fn test_delete_user_callback_invalid_token() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut query = HashMap::new();
     query.insert("token".to_string(), "invalid_token".to_string());
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/delete-user/callback".to_string(),
         {
             let mut headers = HashMap::new();
@@ -887,7 +888,7 @@ async fn test_list_accounts_empty() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -897,7 +898,7 @@ async fn test_list_accounts_empty() {
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/list-accounts".to_string(),
         headers,
         None,
@@ -920,7 +921,7 @@ async fn test_list_accounts_with_account() {
     let auth = create_test_auth_memory().await;
     let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::{AuthRequest, CreateAccount};
+    use better_auth::prelude::{AuthRequest, CreateAccount};
     use std::collections::HashMap;
 
     // Create an account for the user
@@ -948,7 +949,7 @@ async fn test_list_accounts_with_account() {
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/list-accounts".to_string(),
         headers,
         None,
@@ -981,7 +982,7 @@ async fn test_unlink_account_success() {
     let auth = create_test_auth_memory().await;
     let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::{AuthRequest, CreateAccount};
+    use better_auth::prelude::{AuthRequest, CreateAccount};
     use std::collections::HashMap;
 
     // Create two accounts
@@ -1016,7 +1017,7 @@ async fn test_unlink_account_success() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/unlink-account".to_string(),
         headers,
         Some(unlink_data.to_string().into_bytes()),
@@ -1047,7 +1048,7 @@ async fn test_unlink_account_success() {
 async fn test_unlink_last_account_fails() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::{AuthRequest, CreateAccount, CreateSession, CreateUser};
+    use better_auth::prelude::{AuthRequest, CreateAccount, CreateSession, CreateUser};
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
 
@@ -1101,7 +1102,7 @@ async fn test_unlink_last_account_fails() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/unlink-account".to_string(),
         headers,
         Some(unlink_data.to_string().into_bytes()),
@@ -1118,11 +1119,11 @@ async fn test_unlink_last_account_fails() {
 async fn test_list_accounts_unauthenticated() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/list-accounts".to_string(),
         HashMap::new(),
         None,
@@ -1291,7 +1292,7 @@ async fn test_axum_duplicate_email() {
 
 mod postgres_tests {
     use super::*;
-    use better_auth::{run_migrations, sea_orm::Database};
+    use better_auth::{run_migrations, store::sea_orm::Database};
     use std::env;
 
     /// Helper to create test BetterAuth instance with PostgreSQL
@@ -1447,7 +1448,7 @@ mod postgres_tests {
         let database = auth.database();
         let session_manager = auth.session_manager();
 
-        let create_user = better_auth::types::CreateUser::new()
+        let create_user = better_auth::prelude::CreateUser::new()
             .with_email("session.persistence.test.example@test.com")
             .with_name("Session Persistence User");
 
@@ -1577,7 +1578,7 @@ async fn test_concurrent_requests() {
 async fn test_sign_up_with_username_and_sign_in() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     // Sign up with username
@@ -1593,7 +1594,7 @@ async fn test_sign_up_with_username_and_sign_in() {
     headers.insert("content-type".to_string(), "application/json".to_string());
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-up/email".to_string(),
         headers.clone(),
         Some(signup_data.to_string().into_bytes()),
@@ -1615,7 +1616,7 @@ async fn test_sign_up_with_username_and_sign_in() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-in/username".to_string(),
         headers,
         Some(signin_data.to_string().into_bytes()),
@@ -1638,7 +1639,7 @@ async fn test_sign_up_with_username_and_sign_in() {
 async fn test_sign_in_username_wrong_password() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     // Sign up with username
@@ -1653,7 +1654,7 @@ async fn test_sign_in_username_wrong_password() {
     headers.insert("content-type".to_string(), "application/json".to_string());
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-up/email".to_string(),
         headers.clone(),
         Some(signup_data.to_string().into_bytes()),
@@ -1669,7 +1670,7 @@ async fn test_sign_in_username_wrong_password() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-in/username".to_string(),
         headers,
         Some(signin_data.to_string().into_bytes()),
@@ -1686,7 +1687,7 @@ async fn test_sign_in_username_wrong_password() {
 async fn test_sign_in_username_nonexistent() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let signin_data = serde_json::json!({
@@ -1698,7 +1699,7 @@ async fn test_sign_in_username_nonexistent() {
     headers.insert("content-type".to_string(), "application/json".to_string());
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-in/username".to_string(),
         headers,
         Some(signin_data.to_string().into_bytes()),
@@ -1726,7 +1727,7 @@ async fn create_api_key(
     token: &str,
     body: serde_json::Value,
 ) -> (String, String) {
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -1734,7 +1735,7 @@ async fn create_api_key(
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/create".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
@@ -1779,7 +1780,7 @@ async fn test_api_key_create() {
 async fn test_api_key_create_with_options() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -1796,7 +1797,7 @@ async fn test_api_key_create_with_options() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/create".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
@@ -1824,7 +1825,7 @@ async fn test_api_key_get() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
     let (_key, id) = create_api_key(&auth, &token, serde_json::json!({"name": "get-test"})).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -1834,7 +1835,7 @@ async fn test_api_key_get() {
     query.insert("id".to_string(), id.clone());
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/get".to_string(),
         headers,
         None,
@@ -1865,14 +1866,14 @@ async fn test_api_key_list() {
     create_api_key(&auth, &token, serde_json::json!({"name": "key-1"})).await;
     create_api_key(&auth, &token, serde_json::json!({"name": "key-2"})).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/list".to_string(),
         headers,
         None,
@@ -1896,7 +1897,7 @@ async fn test_api_key_update() {
     let (_key, id) =
         create_api_key(&auth, &token, serde_json::json!({"name": "original-name"})).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -1911,7 +1912,7 @@ async fn test_api_key_update() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/update".to_string(),
         headers,
         Some(update_body.to_string().into_bytes()),
@@ -1937,7 +1938,7 @@ async fn test_api_key_delete() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
     let (_key, id) = create_api_key(&auth, &token, serde_json::json!({"name": "delete-me"})).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -1947,7 +1948,7 @@ async fn test_api_key_delete() {
     let delete_body = serde_json::json!({"id": id});
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/delete".to_string(),
         headers,
         Some(delete_body.to_string().into_bytes()),
@@ -1966,7 +1967,7 @@ async fn test_api_key_delete() {
     headers2.insert("authorization".to_string(), format!("Bearer {}", token));
 
     let list_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/list".to_string(),
         headers2,
         None,
@@ -1984,7 +1985,7 @@ async fn test_api_key_delete() {
 async fn test_api_key_create_unauthenticated() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -1993,7 +1994,7 @@ async fn test_api_key_create_unauthenticated() {
     let body = serde_json::json!({"name": "no-auth"});
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/create".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
@@ -2010,11 +2011,11 @@ async fn test_api_key_create_unauthenticated() {
 async fn test_api_key_list_unauthenticated() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/list".to_string(),
         HashMap::new(),
         None,
@@ -2033,7 +2034,7 @@ async fn test_api_key_get_other_users_key() {
     let (_key, id) = create_api_key(&auth, &token1, serde_json::json!({"name": "user1-key"})).await;
 
     // Create a second user
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -2046,7 +2047,7 @@ async fn test_api_key_get_other_users_key() {
     });
 
     let signup_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-up/email".to_string(),
         headers,
         Some(signup_data.to_string().into_bytes()),
@@ -2065,7 +2066,7 @@ async fn test_api_key_get_other_users_key() {
     query.insert("id".to_string(), id.clone());
 
     let get_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/get".to_string(),
         headers2,
         None,
@@ -2084,7 +2085,7 @@ async fn test_api_key_delete_other_users_key() {
     let (_key, id) = create_api_key(&auth, &token1, serde_json::json!({"name": "user1-key"})).await;
 
     // Create a second user
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -2097,7 +2098,7 @@ async fn test_api_key_delete_other_users_key() {
     });
 
     let signup_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-up/email".to_string(),
         headers,
         Some(signup_data.to_string().into_bytes()),
@@ -2116,7 +2117,7 @@ async fn test_api_key_delete_other_users_key() {
     let delete_body = serde_json::json!({"id": id});
 
     let delete_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/delete".to_string(),
         headers2,
         Some(delete_body.to_string().into_bytes()),
@@ -2135,7 +2136,7 @@ async fn test_api_key_update_other_users_key() {
     let (_key, id) = create_api_key(&auth, &token1, serde_json::json!({"name": "user1-key"})).await;
 
     // Create a second user
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -2148,7 +2149,7 @@ async fn test_api_key_update_other_users_key() {
     });
 
     let signup_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-up/email".to_string(),
         headers,
         Some(signup_data.to_string().into_bytes()),
@@ -2170,7 +2171,7 @@ async fn test_api_key_update_other_users_key() {
     });
 
     let update_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/update".to_string(),
         headers2,
         Some(update_body.to_string().into_bytes()),
@@ -2187,14 +2188,14 @@ async fn test_api_key_update_other_users_key() {
 async fn test_api_key_list_empty() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/list".to_string(),
         headers,
         None,
@@ -2214,14 +2215,14 @@ async fn test_api_key_list_empty() {
 async fn test_api_key_get_missing_id() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/get".to_string(),
         headers,
         None,
@@ -2238,7 +2239,7 @@ async fn test_api_key_get_missing_id() {
 async fn test_api_key_get_nonexistent() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -2248,7 +2249,7 @@ async fn test_api_key_get_nonexistent() {
     query.insert("id".to_string(), "nonexistent-id".to_string());
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/get".to_string(),
         headers,
         None,
@@ -2263,7 +2264,7 @@ async fn test_api_key_get_nonexistent() {
 // Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_get_user_by_username_adapter() {
-    use better_auth::types::CreateUser;
+    use better_auth::prelude::CreateUser;
 
     let database = Database::connect("sqlite::memory:").await.unwrap();
     run_migrations(&database).await.unwrap();

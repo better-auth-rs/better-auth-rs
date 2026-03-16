@@ -16,9 +16,9 @@ use better_auth::{
         oauth::{OAuthProvider, OAuthUserInfo},
         password_management::SendResetPassword,
     },
+    prelude::{AuthRequest, HttpMethod},
     run_migrations,
-    sea_orm::{Database, DatabaseConnection},
-    types::{AuthRequest, HttpMethod},
+    store::store::sea_orm::{Database, DatabaseConnection},
 };
 use serde_json::Value;
 
