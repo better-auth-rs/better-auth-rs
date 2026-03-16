@@ -5,8 +5,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
     start TEXT,
     prefix TEXT,
     key TEXT NOT NULL UNIQUE,
-    reference_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    config_id TEXT NOT NULL DEFAULT 'default',
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     refill_interval INTEGER,
     refill_amount INTEGER,
     last_refill_at TIMESTAMPTZ,
@@ -24,4 +23,4 @@ CREATE TABLE IF NOT EXISTS api_keys (
     metadata TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_api_keys_reference_id ON api_keys(reference_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
