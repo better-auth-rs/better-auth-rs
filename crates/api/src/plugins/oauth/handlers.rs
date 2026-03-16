@@ -723,14 +723,15 @@ async fn process_oauth_sign_in(
             return Err("signup disabled".to_string());
         }
 
+        let mut create_user = CreateUser::new()
+            .with_email(user_info.email.to_lowercase())
+            .with_name(user_info.name.as_deref().unwrap_or(&user_info.email))
+            .with_email_verified(user_info.email_verified);
+        create_user.image = user_info.image.clone();
+
         let created_user = ctx
             .database
-            .create_user(
-                CreateUser::new()
-                    .with_email(user_info.email.to_lowercase())
-                    .with_name(user_info.name.as_deref().unwrap_or(&user_info.email))
-                    .with_email_verified(user_info.email_verified),
-            )
+            .create_user(create_user)
             .await
             .map_err(|_| "unable to create user".to_string())?;
 

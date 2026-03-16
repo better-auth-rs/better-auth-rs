@@ -297,9 +297,9 @@ self-contained test plan.
 
 - Phase 2 is self-contained on top of Phases 0 and 1.
 - Phase 3 is self-contained on top of Phases 0, 1, and 2. Completion
-  requires dual-server coverage for the Google/mock-OAuth flows,
-  including callback behavior and the direct id-token sign-in/link
-  branches.
+  requires dual-server coverage for the Google, GitHub, and mock-OAuth
+  flows, including callback behavior and the direct id-token sign-in/link
+  branches where the upstream provider supports them.
 - Phase 4 is self-contained on top of Phases 0 and 1.
 - Phase 5 comes before colder surfaces because organization CRUD,
   membership, and invitation flows already have meaningful local

@@ -176,7 +176,12 @@ export const RAW_DIFF_ALLOWLIST: RawDiffAllowance[] = [
     reason: "PKCE code_challenge is per-run entropy inside the provider redirect URL and is not client-visible",
   },
   {
-    scenario: /unlink account removes the linked google account/i,
+    scenario: /github social sign-in with unverified fallback email does not link existing user/i,
+    path: /responseHeaders\.location/,
+    reason: "PKCE code_challenge is per-run entropy inside the provider redirect URL and is not client-visible",
+  },
+  {
+    scenario: /unlink account removes the linked (google|github) account/i,
     path: /responseHeaders\.location/,
     reason: "PKCE code_challenge is per-run entropy inside the provider redirect URL and is not client-visible",
   },

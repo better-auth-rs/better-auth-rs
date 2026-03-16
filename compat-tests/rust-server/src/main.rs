@@ -79,6 +79,42 @@ fn default_social_profile() -> SocialProfile {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GitHubEmailRecord {
+    email: String,
+    primary: bool,
+    verified: bool,
+    visibility: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GitHubProfile {
+    id: String,
+    login: String,
+    name: Option<String>,
+    email: Option<String>,
+    avatar_url: Option<String>,
+    emails: Vec<GitHubEmailRecord>,
+}
+
+fn default_github_profile() -> GitHubProfile {
+    GitHubProfile {
+        id: "github-account-id".to_string(),
+        login: "github-compat-user".to_string(),
+        name: None,
+        email: None,
+        avatar_url: Some("https://avatars.githubusercontent.com/u/1?v=4".to_string()),
+        emails: vec![GitHubEmailRecord {
+            email: "github@example.com".to_string(),
+            primary: true,
+            verified: true,
+            visibility: Some("private".to_string()),
+        }],
+    }
+}
+
 #[async_trait::async_trait]
 impl SendResetPassword for CompatResetSender {
     async fn send(
@@ -298,6 +334,17 @@ struct SetSocialProfileRequest {
     id_token_valid: Option<bool>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SetGitHubProfileRequest {
+    id: Option<String>,
+    login: Option<String>,
+    name: Option<String>,
+    email: Option<String>,
+    avatar_url: Option<String>,
+    emails: Option<Vec<GitHubEmailRecord>>,
+}
+
 fn parse_rfc3339(value: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
     DateTime::parse_from_rfc3339(value).map(|value| value.with_timezone(&Utc))
 }
@@ -339,6 +386,17 @@ fn mock_oauth_plugin(
                 disable_sign_up: false,
                 override_user_info_on_sign_in: false,
             },
+        )
+        .add_provider(
+            "github",
+            OAuthProvider::github_with_endpoints(
+                "github-client-id",
+                "github-client-secret",
+                &format!("http://127.0.0.1:{port}/oauth/authorize"),
+                &format!("http://127.0.0.1:{port}/__test/github/oauth/token"),
+                &format!("http://127.0.0.1:{port}/__test/github/user"),
+                &format!("http://127.0.0.1:{port}/__test/github/user/emails"),
+            ),
         )
         .add_provider(
             "google",
@@ -397,6 +455,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reset_password_mode = Arc::new(Mutex::new(ResetPasswordMode::Capture));
     let oauth_refresh_mode = Arc::new(Mutex::new(OAuthRefreshMode::Success));
     let social_profile = Arc::new(Mutex::new(default_social_profile()));
+    let github_profile = Arc::new(Mutex::new(default_github_profile()));
     let social_id_token_valid = Arc::new(Mutex::new(true));
 
     let auth = Arc::new(
@@ -449,8 +508,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reset_mode_for_set = reset_password_mode.clone();
     let oauth_mode_for_reset = oauth_refresh_mode.clone();
     let oauth_mode_for_set = oauth_refresh_mode.clone();
+    let oauth_mode_for_token = oauth_refresh_mode.clone();
+    let oauth_mode_for_github_token = oauth_refresh_mode.clone();
     let social_profile_for_reset = social_profile.clone();
     let social_profile_for_set = social_profile.clone();
+    let github_profile_for_reset = github_profile.clone();
+    let github_profile_for_set = github_profile.clone();
+    let github_profile_for_user = github_profile.clone();
+    let github_profile_for_emails = github_profile.clone();
     let social_id_token_valid_for_reset = social_id_token_valid.clone();
     let social_id_token_valid_for_set = social_id_token_valid.clone();
     let auth_for_reset_seed = auth.clone();
@@ -526,6 +591,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let reset_mode = reset_mode_for_reset.clone();
                 let oauth_mode = oauth_mode_for_reset.clone();
                 let social_profile = social_profile_for_reset.clone();
+                let github_profile = github_profile_for_reset.clone();
                 let social_id_token_valid = social_id_token_valid_for_reset.clone();
                 async move {
                     reset_outbox.lock().await.clear();
@@ -534,6 +600,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     *reset_mode.lock().await = ResetPasswordMode::Capture;
                     *oauth_mode.lock().await = OAuthRefreshMode::Success;
                     *social_profile.lock().await = default_social_profile();
+                    *github_profile.lock().await = default_github_profile();
                     *social_id_token_valid.lock().await = true;
                     Json(serde_json::json!({ "status": true }))
                 }
@@ -754,6 +821,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
         )
         .route(
+            "/__test/set-github-profile",
+            post(move |Json(body): Json<SetGitHubProfileRequest>| {
+                let github_profile = github_profile_for_set.clone();
+                async move {
+                    let mut profile = github_profile.lock().await;
+                    if let Some(id) = body.id {
+                        profile.id = id;
+                    }
+                    if let Some(login) = body.login {
+                        profile.login = login;
+                    }
+                    if let Some(name) = body.name {
+                        profile.name = Some(name);
+                    }
+                    if let Some(email) = body.email {
+                        profile.email = Some(email);
+                    }
+                    if let Some(avatar_url) = body.avatar_url {
+                        profile.avatar_url = Some(avatar_url);
+                    }
+                    if let Some(emails) = body.emails {
+                        profile.emails = emails;
+                    }
+                    Json(serde_json::json!({
+                        "status": true,
+                        "profile": &*profile,
+                    }))
+                }
+            }),
+        )
+        .route(
             "/__test/seed-oauth-account",
             post(move |Json(body): Json<SeedOAuthAccountRequest>| {
                 let auth = auth_for_oauth_seed.clone();
@@ -856,6 +954,61 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
         )
         .route(
+            "/__test/github/oauth/token",
+            post(move || {
+                let oauth_mode = oauth_mode_for_github_token.clone();
+                async move {
+                    if *oauth_mode.lock().await == OAuthRefreshMode::Error {
+                        return (
+                            axum::http::StatusCode::BAD_REQUEST,
+                            Json(serde_json::json!({
+                                "error": "invalid_grant",
+                                "error_description": "invalid refresh token",
+                            })),
+                        );
+                    }
+
+                    (
+                        axum::http::StatusCode::OK,
+                        Json(serde_json::json!({
+                            "access_token": "github-access-token",
+                            "refresh_token": "github-refresh-token",
+                            "expires_in": 3600,
+                            "refresh_token_expires_in": 7200,
+                            "scope": "read:user user:email",
+                            "token_type": "bearer",
+                        })),
+                    )
+                }
+            }),
+        )
+        .route(
+            "/__test/github/user",
+            get(move || {
+                let github_profile = github_profile_for_user.clone();
+                async move {
+                    let profile = github_profile.lock().await.clone();
+                    Json(serde_json::json!({
+                        "id": profile.id,
+                        "login": profile.login,
+                        "name": profile.name,
+                        "email": profile.email,
+                        "avatar_url": profile.avatar_url,
+                    }))
+                }
+            }),
+        )
+        .route(
+            "/__test/github/user/emails",
+            get(move || {
+                let github_profile = github_profile_for_emails.clone();
+                async move {
+                    let emails = github_profile.lock().await.emails.clone();
+                    Json(serde_json::json!(emails))
+                }
+            }),
+        )
+        .route(
             "/__test/oauth/authorize",
             get(|Query(query): Query<HashMap<String, String>>| async move {
                 let Some(redirect_uri) = query.get("redirect_uri") else {
@@ -891,7 +1044,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/__test/oauth/token",
             post(move || {
-                let oauth_mode = oauth_refresh_mode.clone();
+                let oauth_mode = oauth_mode_for_token.clone();
                 async move {
                     if *oauth_mode.lock().await == OAuthRefreshMode::Error {
                         return (

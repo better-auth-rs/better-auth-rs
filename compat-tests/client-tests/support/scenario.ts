@@ -4,12 +4,14 @@ import { createAuthClient } from "better-auth/client";
 import { RAW_DIFF_ALLOWLIST } from "./allowlist";
 import { RUST_BASE_URL, TS_BASE_URL, requireHealthy } from "./config";
 import {
+  type GitHubEmailRecord,
   readChangeEmailConfirmation,
   readVerificationEmail,
   removeCredentialAccount,
   resetServerState,
   seedDeleteUserToken,
   seedOAuthAccount,
+  setGitHubProfile,
   seedResetPasswordToken,
   setOAuthRefreshMode,
   setResetPasswordMode,
@@ -54,6 +56,14 @@ type ScenarioServerContext = {
     image?: string | null;
     emailVerified?: boolean;
     idTokenValid?: boolean;
+  }): Promise<unknown>;
+  setGitHubProfile(args: {
+    id?: string;
+    login?: string;
+    name?: string | null;
+    email?: string | null;
+    avatarUrl?: string | null;
+    emails?: GitHubEmailRecord[];
   }): Promise<unknown>;
   seedOAuthAccount(args: {
     email: string;
@@ -205,6 +215,9 @@ async function runScenario(
     },
     setSocialProfile(args) {
       return setSocialProfile(baseURL, args);
+    },
+    setGitHubProfile(args) {
+      return setGitHubProfile(baseURL, args);
     },
     seedOAuthAccount(args) {
       return seedOAuthAccount(baseURL, args);

@@ -127,3 +127,95 @@ compatScenario("link social with idToken adds a google account", async (ctx) => 
     accounts: ctx.snapshot(accounts),
   };
 });
+
+compatScenario("github link social creates an account that listAccounts returns", async (ctx) => {
+  const primary = ctx.actor();
+  const email = ctx.uniqueEmail("phase3-github-link-social");
+  await ctx.setGitHubProfile({
+    id: ctx.uniqueToken("phase3-github-link-id"),
+    login: ctx.uniqueToken("phase3-github-link-login"),
+    emails: [
+      {
+        email,
+        primary: true,
+        verified: true,
+        visibility: "private",
+      },
+    ],
+  });
+
+  const signup = await primary.client.signUp.email({
+    email,
+    password: "password123",
+    name: "Credential User",
+  });
+  const link = await primary.client.linkSocial({
+    provider: "github",
+    callbackURL: "/settings",
+  });
+  const state = extractState(link.data?.url);
+  const callback = await ctx.rawRequest({
+    path: `/api/auth/callback/github?code=compat-code&state=${encodeURIComponent(state)}`,
+    redirect: "manual",
+  });
+  const accounts = await primary.client.listAccounts();
+
+  return {
+    signup: ctx.snapshot(signup),
+    link: {
+      redirect: link.data?.redirect,
+      hasState: Boolean(state),
+    },
+    callback: ctx.snapshot(callback),
+    accounts: ctx.snapshot(accounts),
+  };
+});
+
+compatScenario("github unlink account removes the linked github account", async (ctx) => {
+  const primary = ctx.actor();
+  const email = ctx.uniqueEmail("phase3-github-unlink-social");
+  await ctx.setGitHubProfile({
+    id: ctx.uniqueToken("phase3-github-unlink-id"),
+    login: ctx.uniqueToken("phase3-github-unlink-login"),
+    emails: [
+      {
+        email,
+        primary: true,
+        verified: true,
+        visibility: "private",
+      },
+    ],
+  });
+
+  await primary.client.signUp.email({
+    email,
+    password: "password123",
+    name: "Credential User",
+  });
+  const link = await primary.client.linkSocial({
+    provider: "github",
+    callbackURL: "/settings",
+  });
+  const state = extractState(link.data?.url);
+  await ctx.rawRequest({
+    path: `/api/auth/callback/github?code=compat-code&state=${encodeURIComponent(state)}`,
+    redirect: "manual",
+  });
+
+  const before = await primary.client.listAccounts();
+  const githubAccount = before.data?.find((account) => account.providerId === "github");
+  if (!githubAccount?.accountId) {
+    throw new Error("missing github account after link");
+  }
+  const unlink = await primary.client.unlinkAccount({
+    providerId: "github",
+    accountId: githubAccount.accountId,
+  });
+  const after = await primary.client.listAccounts();
+
+  return {
+    before: ctx.snapshot(before),
+    unlink: ctx.snapshot(unlink),
+    after: ctx.snapshot(after),
+  };
+});

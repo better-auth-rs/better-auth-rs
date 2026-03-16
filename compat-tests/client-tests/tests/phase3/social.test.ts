@@ -126,3 +126,133 @@ compatScenario("social sign-in with idToken returns token and session", async (c
     session: ctx.snapshot(session),
   };
 });
+
+compatScenario("github social sign-in redirects new users to newUserCallbackURL", async (ctx) => {
+  const primary = ctx.actor();
+  const email = ctx.uniqueEmail("phase3-github-social-new-user");
+  await ctx.setGitHubProfile({
+    id: ctx.uniqueToken("phase3-github-id"),
+    login: ctx.uniqueToken("phase3-github-login"),
+    emails: [
+      {
+        email,
+        primary: true,
+        verified: true,
+        visibility: "private",
+      },
+    ],
+  });
+
+  const signIn = await primary.client.signIn.social({
+    provider: "github",
+    callbackURL: "/dashboard",
+    newUserCallbackURL: "/welcome",
+  });
+  const state = extractState(signIn.data?.url);
+  const callback = await ctx.rawRequest({
+    path: `/api/auth/callback/github?code=compat-code&state=${encodeURIComponent(state)}`,
+    redirect: "manual",
+  });
+  const session = await primary.client.getSession();
+
+  return {
+    signIn: {
+      redirect: signIn.data?.redirect,
+      hasState: Boolean(state),
+    },
+    callback: ctx.snapshot(callback),
+    session: ctx.snapshot(session),
+  };
+});
+
+compatScenario("github social sign-in redirects existing users to callbackURL", async (ctx) => {
+  const primary = ctx.actor();
+  const email = ctx.uniqueEmail("phase3-github-social-existing");
+  await ctx.setGitHubProfile({
+    id: ctx.uniqueToken("phase3-github-existing-id"),
+    login: ctx.uniqueToken("phase3-github-existing-login"),
+    emails: [
+      {
+        email,
+        primary: true,
+        verified: true,
+        visibility: "private",
+      },
+    ],
+  });
+
+  const first = await primary.client.signIn.social({
+    provider: "github",
+    callbackURL: "/dashboard",
+    newUserCallbackURL: "/welcome",
+  });
+  const firstState = extractState(first.data?.url);
+  const firstCallback = await ctx.rawRequest({
+    path: `/api/auth/callback/github?code=compat-code&state=${encodeURIComponent(firstState)}`,
+    redirect: "manual",
+  });
+  await primary.client.signOut();
+
+  const second = await primary.client.signIn.social({
+    provider: "github",
+    callbackURL: "/dashboard",
+    newUserCallbackURL: "/welcome",
+  });
+  const secondState = extractState(second.data?.url);
+  const secondCallback = await ctx.rawRequest({
+    path: `/api/auth/callback/github?code=compat-code&state=${encodeURIComponent(secondState)}`,
+    redirect: "manual",
+  });
+  const session = await primary.client.getSession();
+
+  return {
+    firstCallback: ctx.snapshot(firstCallback),
+    secondCallback: ctx.snapshot(secondCallback),
+    session: ctx.snapshot(session),
+  };
+});
+
+compatScenario("github social sign-in with unverified fallback email does not link existing user", async (ctx) => {
+  const primary = ctx.actor();
+  const email = ctx.uniqueEmail("phase3-github-unverified");
+
+  await primary.client.signUp.email({
+    email,
+    password: "password123",
+    name: "Credential User",
+  });
+  await primary.client.signOut();
+
+  await ctx.setGitHubProfile({
+    id: ctx.uniqueToken("phase3-github-unverified-id"),
+    login: ctx.uniqueToken("phase3-github-unverified-login"),
+    emails: [
+      {
+        email,
+        primary: true,
+        verified: false,
+        visibility: "private",
+      },
+    ],
+  });
+
+  const signIn = await primary.client.signIn.social({
+    provider: "github",
+    callbackURL: "/dashboard",
+  });
+  const state = extractState(signIn.data?.url);
+  const callback = await ctx.rawRequest({
+    path: `/api/auth/callback/github?code=compat-code&state=${encodeURIComponent(state)}`,
+    redirect: "manual",
+  });
+  const session = await primary.client.getSession();
+
+  return {
+    signIn: {
+      redirect: signIn.data?.redirect,
+      hasState: Boolean(state),
+    },
+    callback: ctx.snapshot(callback),
+    session: ctx.snapshot(session),
+  };
+});

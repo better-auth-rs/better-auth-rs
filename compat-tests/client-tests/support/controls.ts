@@ -10,6 +10,22 @@ export type SocialProfile = {
   idTokenValid?: boolean;
 };
 
+export type GitHubEmailRecord = {
+  email: string;
+  primary?: boolean;
+  verified?: boolean;
+  visibility?: "public" | "private" | null;
+};
+
+export type GitHubProfile = {
+  id?: string;
+  login?: string;
+  name?: string | null;
+  email?: string | null;
+  avatarUrl?: string | null;
+  emails?: GitHubEmailRecord[];
+};
+
 async function postControl(baseURL: string, path: string, body: unknown) {
   const response = await fetch(`${baseURL}${path}`, {
     method: "POST",
@@ -127,6 +143,10 @@ export async function setOAuthRefreshMode(baseURL: string, mode: OAuthRefreshMod
 
 export async function setSocialProfile(baseURL: string, profile: SocialProfile) {
   return postControl(baseURL, "/__test/set-social-profile", profile);
+}
+
+export async function setGitHubProfile(baseURL: string, profile: GitHubProfile) {
+  return postControl(baseURL, "/__test/set-github-profile", profile);
 }
 
 export async function seedOAuthAccount(

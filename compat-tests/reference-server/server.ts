@@ -55,6 +55,36 @@ const defaultSocialProfile = (): SocialProfile => ({
 });
 let socialProfile = defaultSocialProfile();
 let socialIdTokenValid = true;
+type GitHubEmailRecord = {
+  email: string;
+  primary: boolean;
+  verified: boolean;
+  visibility: "public" | "private" | null;
+};
+type GitHubProfile = {
+  id: string;
+  login: string;
+  name: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  emails: GitHubEmailRecord[];
+};
+const defaultGitHubProfile = (): GitHubProfile => ({
+  id: "github-account-id",
+  login: "github-compat-user",
+  name: null,
+  email: null,
+  avatarUrl: "https://avatars.githubusercontent.com/u/1?v=4",
+  emails: [
+    {
+      email: "github@example.com",
+      primary: true,
+      verified: true,
+      visibility: "private",
+    },
+  ],
+});
+let githubProfile = defaultGitHubProfile();
 const oauthServer = Bun.serve({
   port: 0,
   async fetch(request) {
@@ -136,6 +166,41 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     });
   }
 
+  if (url.origin === "https://github.com" && url.pathname === "/login/oauth/access_token") {
+    if (oauthRefreshMode === "error") {
+      return jsonResponse(
+        {
+          error: "invalid_grant",
+          error_description: "invalid refresh token",
+        },
+        { status: 400 },
+      );
+    }
+
+    return jsonResponse({
+      access_token: "github-access-token",
+      refresh_token: "github-refresh-token",
+      expires_in: 3600,
+      refresh_token_expires_in: 7200,
+      scope: "read:user user:email",
+      token_type: "bearer",
+    });
+  }
+
+  if (url.origin === "https://api.github.com" && url.pathname === "/user") {
+    return jsonResponse({
+      id: githubProfile.id,
+      login: githubProfile.login,
+      name: githubProfile.name,
+      email: githubProfile.email,
+      avatar_url: githubProfile.avatarUrl,
+    });
+  }
+
+  if (url.origin === "https://api.github.com" && url.pathname === "/user/emails") {
+    return jsonResponse(githubProfile.emails);
+  }
+
   return originalFetch(request);
 };
 
@@ -199,6 +264,11 @@ const authOptions = {
     enabled: false,
   },
   socialProviders: {
+    github: {
+      clientId: "github-client-id",
+      clientSecret: "github-client-secret",
+      authorizationEndpoint: `${oauthBaseURL}/oauth/authorize`,
+    },
     google: {
       clientId: "google-client-id",
       clientSecret: "google-client-secret",
@@ -292,6 +362,7 @@ const server = Bun.serve({
         oauthRefreshMode = "success";
         socialProfile = defaultSocialProfile();
         socialIdTokenValid = true;
+        githubProfile = defaultGitHubProfile();
         return jsonResponse({ status: true });
       }
 
@@ -433,6 +504,20 @@ const server = Bun.serve({
           socialIdTokenValid = body.idTokenValid;
         }
         return jsonResponse({ status: true, profile: socialProfile, idTokenValid: socialIdTokenValid });
+      }
+
+      if (url.pathname === "/__test/set-github-profile" && request.method === "POST") {
+        const body = (await readJson(request)) as Partial<GitHubProfile> | null;
+        githubProfile = {
+          ...githubProfile,
+          ...(body?.id ? { id: body.id } : {}),
+          ...(body?.login ? { login: body.login } : {}),
+          ...(body && hasOwn(body, "name") ? { name: body.name ?? null } : {}),
+          ...(body && hasOwn(body, "email") ? { email: body.email ?? null } : {}),
+          ...(body && hasOwn(body, "avatarUrl") ? { avatarUrl: body.avatarUrl ?? null } : {}),
+          ...(Array.isArray(body?.emails) ? { emails: body.emails } : {}),
+        };
+        return jsonResponse({ status: true, profile: githubProfile });
       }
 
       if (url.pathname === "/__test/seed-oauth-account" && request.method === "POST") {

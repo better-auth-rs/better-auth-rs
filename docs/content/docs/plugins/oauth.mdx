@@ -35,7 +35,7 @@ Better Auth RS includes pre-configured providers with correct URLs and user info
 | Provider | Constructor | Default Scopes |
 |----------|------------|----------------|
 | Google | `OAuthProvider::google(client_id, client_secret)` | `openid`, `email`, `profile` |
-| GitHub | `OAuthProvider::github(client_id, client_secret)` | `user:email` |
+| GitHub | `OAuthProvider::github(client_id, client_secret)` | `read:user`, `user:email` |
 | Discord | `OAuthProvider::discord(client_id, client_secret)` | `identify`, `email` |
 
 ## Custom Provider
