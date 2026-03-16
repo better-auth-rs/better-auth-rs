@@ -3,10 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "bun test tests/phase0 tests/phase1 tests/phase2",
+    "test": "bun test tests/phase0 tests/phase1 tests/phase2 tests/phase3",
     "test:phase0": "bun test tests/phase0",
     "test:phase1": "bun test tests/phase1",
-    "test:phase2": "bun test tests/phase2"
+    "test:phase2": "bun test tests/phase2",
+    "test:phase3": "bun test tests/phase3"
   },
   "dependencies": {
     "better-auth": "1.4.19",

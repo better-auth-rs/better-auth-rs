@@ -7,6 +7,20 @@ pub(crate) struct SocialSignInRequest {
     pub provider: String,
     #[serde(rename = "callbackURL")]
     pub callback_url: Option<String>,
+    #[serde(rename = "newUserCallbackURL")]
+    pub new_user_callback_url: Option<String>,
+    #[serde(rename = "errorCallbackURL")]
+    pub error_callback_url: Option<String>,
+    #[serde(rename = "disableRedirect")]
+    pub disable_redirect: Option<bool>,
+    #[serde(rename = "idToken")]
+    pub id_token: Option<OAuthIdTokenRequest>,
+    #[serde(rename = "requestSignUp")]
+    pub request_sign_up: Option<bool>,
+    #[serde(rename = "loginHint")]
+    pub login_hint: Option<String>,
+    #[serde(rename = "additionalData")]
+    pub additional_data: Option<serde_json::Map<String, serde_json::Value>>,
     pub scopes: Option<Vec<String>>,
 }
 
@@ -16,6 +30,30 @@ pub(crate) struct LinkSocialRequest {
     pub provider: String,
     #[serde(rename = "callbackURL")]
     pub callback_url: Option<String>,
+    #[serde(rename = "errorCallbackURL")]
+    pub error_callback_url: Option<String>,
+    #[serde(rename = "disableRedirect")]
+    pub disable_redirect: Option<bool>,
+    #[serde(rename = "idToken")]
+    pub id_token: Option<OAuthIdTokenRequest>,
+    #[serde(rename = "requestSignUp")]
+    pub request_sign_up: Option<bool>,
+    #[serde(rename = "additionalData")]
+    pub additional_data: Option<serde_json::Map<String, serde_json::Value>>,
+    pub scopes: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub(crate) struct OAuthIdTokenRequest {
+    #[validate(length(min = 1, message = "Token is required"))]
+    pub token: String,
+    pub nonce: Option<String>,
+    #[serde(rename = "accessToken")]
+    pub access_token: Option<String>,
+    #[serde(rename = "refreshToken")]
+    pub refresh_token: Option<String>,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: Option<i64>,
     pub scopes: Option<Vec<String>>,
 }
 
@@ -43,14 +81,15 @@ pub(crate) struct RefreshTokenRequest {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct SocialSignInResponse {
-    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
     pub redirect: bool,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct OAuthCallbackResponse<U: Serialize> {
-    pub token: String,
-    pub user: U,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<better_auth_core::User>,
 }
 
 #[derive(Debug, Serialize)]

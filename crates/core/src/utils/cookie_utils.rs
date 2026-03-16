@@ -7,6 +7,32 @@
 use crate::config::AuthConfig;
 use cookie::{Cookie, SameSite as CookieSameSite};
 
+/// Build a `Set-Cookie` header value for an arbitrary cookie using the auth
+/// config's session cookie attributes for consistency.
+pub fn create_cookie(name: &str, value: &str, max_age_seconds: i64, config: &AuthConfig) -> String {
+    let session_config = &config.session;
+    let expires_offset =
+        cookie::time::OffsetDateTime::now_utc() + cookie::time::Duration::seconds(max_age_seconds);
+    let same_site = map_same_site(&session_config.cookie_same_site);
+
+    let mut cookie = Cookie::build((name, value))
+        .path("/")
+        .expires(expires_offset)
+        .max_age(cookie::time::Duration::seconds(max_age_seconds))
+        .secure(session_config.cookie_secure)
+        .http_only(session_config.cookie_http_only)
+        .same_site(same_site);
+
+    if matches!(
+        session_config.cookie_same_site,
+        crate::config::SameSite::None
+    ) {
+        cookie = cookie.secure(true);
+    }
+
+    cookie.build().to_string()
+}
+
 /// Build a `Set-Cookie` header value for a session token using the `cookie`
 /// crate for correct formatting and escaping.
 pub fn create_session_cookie(token: &str, config: &AuthConfig) -> String {

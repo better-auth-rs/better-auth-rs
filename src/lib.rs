@@ -50,11 +50,11 @@ pub use better_auth_core::{
     CreateOrganization, CreatePasskey, CreateSession, CreateUser, CreateVerification, CsrfConfig,
     CsrfMiddleware, DatabaseError, DatabaseHookContext, DatabaseHooks, EmailProvider,
     EndpointRateLimit, HookControl, HttpMethod, Invitation, InvitationStatus, JwtConfig, Member,
-    MemoryCacheAdapter, Middleware, OpenApiBuilder, OpenApiSpec, Organization, Passkey,
-    PasswordConfig, RateLimitConfig, RateLimitMiddleware, RequestHookContext, SameSite, Session,
-    SessionConfig, SessionManager, TwoFactor, UpdateOrganization, UpdatePasskey, UpdateUser,
-    UpdateUserRequest, UpdateUserResponse, User, Verification, core_paths, run_migrations,
-    with_request_hook_context_value,
+    MemoryCacheAdapter, Middleware, OAuthStateStrategy, OpenApiBuilder, OpenApiSpec, Organization,
+    Passkey, PasswordConfig, RateLimitConfig, RateLimitMiddleware, RequestHookContext, SameSite,
+    Session, SessionConfig, SessionManager, TwoFactor, UpdateOrganization, UpdatePasskey,
+    UpdateUser, UpdateUserRequest, UpdateUserResponse, User, Verification, core_paths,
+    run_migrations, with_request_hook_context_value,
 };
 
 // Re-export entity traits

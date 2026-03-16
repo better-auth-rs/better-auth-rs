@@ -13,6 +13,7 @@ import {
   seedResetPasswordToken,
   setOAuthRefreshMode,
   setResetPasswordMode,
+  setSocialProfile,
 } from "./controls";
 import { normalizeClientValue } from "./normalize";
 import { createTracingFetch, type TraceEntry } from "./trace";
@@ -46,6 +47,14 @@ type ScenarioServerContext = {
     expiresAt: string;
   }): Promise<unknown>;
   setOAuthRefreshMode(mode: "success" | "error"): Promise<unknown>;
+  setSocialProfile(args: {
+    sub?: string;
+    email?: string;
+    name?: string;
+    image?: string | null;
+    emailVerified?: boolean;
+    idTokenValid?: boolean;
+  }): Promise<unknown>;
   seedOAuthAccount(args: {
     email: string;
     providerId?: string;
@@ -193,6 +202,9 @@ async function runScenario(
     },
     setOAuthRefreshMode(mode) {
       return setOAuthRefreshMode(baseURL, mode);
+    },
+    setSocialProfile(args) {
+      return setSocialProfile(baseURL, args);
     },
     seedOAuthAccount(args) {
       return seedOAuthAccount(baseURL, args);

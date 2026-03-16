@@ -33,8 +33,8 @@ pub use better_auth_macros::PluginConfig;
 pub use config::{
     AccountConfig, AccountLinkingConfig, AdvancedConfig, AdvancedDatabaseConfig, Argon2Config,
     AuthConfig, CookieAttributes, CookieCacheConfig, CookieCacheStrategy, CookieOverride,
-    CrossSubDomainConfig, IpAddressConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig,
-    core_paths, extract_origin,
+    CrossSubDomainConfig, IpAddressConfig, JwtConfig, OAuthStateStrategy, PasswordConfig, SameSite,
+    SessionConfig, core_paths, extract_origin,
 };
 pub use email::{ConsoleEmailProvider, EmailProvider};
 pub use entity::{

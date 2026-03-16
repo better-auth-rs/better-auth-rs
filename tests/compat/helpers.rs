@@ -123,13 +123,14 @@ fn mock_oauth_plugin() -> OAuthPlugin {
             client_secret: "mock-client-secret".to_string(),
             auth_url: "http://127.0.0.1:3100/__test/oauth/authorize".to_string(),
             token_url: "http://127.0.0.1:3100/__test/oauth/token".to_string(),
-            user_info_url: "http://127.0.0.1:3100/__test/oauth/userinfo".to_string(),
+            user_info_url: Some("http://127.0.0.1:3100/__test/oauth/userinfo".to_string()),
             scopes: vec![
                 "openid".to_string(),
                 "email".to_string(),
                 "profile".to_string(),
             ],
-            map_user_info: |_value| {
+            authorization_params: Vec::new(),
+            map_user_info: Some(|_value| {
                 Ok(OAuthUserInfo {
                     id: "mock-account-id".to_string(),
                     email: "mock@example.com".to_string(),
@@ -137,7 +138,13 @@ fn mock_oauth_plugin() -> OAuthPlugin {
                     image: None,
                     email_verified: true,
                 })
-            },
+            }),
+            get_user_info: None,
+            refresh_access_token: None,
+            verify_id_token: None,
+            disable_implicit_sign_up: false,
+            disable_sign_up: false,
+            override_user_info_on_sign_in: false,
         },
     )
 }

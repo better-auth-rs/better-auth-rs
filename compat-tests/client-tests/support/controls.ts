@@ -1,6 +1,15 @@
 export type ResetPasswordMode = "capture" | "throw";
 export type OAuthRefreshMode = "success" | "error";
 
+export type SocialProfile = {
+  sub?: string;
+  email?: string;
+  name?: string;
+  image?: string | null;
+  emailVerified?: boolean;
+  idTokenValid?: boolean;
+};
+
 async function postControl(baseURL: string, path: string, body: unknown) {
   const response = await fetch(`${baseURL}${path}`, {
     method: "POST",
@@ -114,6 +123,10 @@ export async function removeCredentialAccount(
 
 export async function setOAuthRefreshMode(baseURL: string, mode: OAuthRefreshMode) {
   return postControl(baseURL, "/__test/set-oauth-refresh-mode", { mode });
+}
+
+export async function setSocialProfile(baseURL: string, profile: SocialProfile) {
+  return postControl(baseURL, "/__test/set-social-profile", profile);
 }
 
 export async function seedOAuthAccount(

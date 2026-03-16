@@ -26,6 +26,8 @@ struct UnlinkAccountRequest {
     #[serde(rename = "providerId")]
     #[validate(length(min = 1, message = "Provider ID is required"))]
     provider_id: String,
+    #[serde(rename = "accountId")]
+    account_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -33,7 +35,10 @@ pub(crate) struct AccountResponse {
     id: String,
     #[serde(rename = "accountId")]
     account_id: String,
-    provider: String,
+    #[serde(rename = "providerId")]
+    provider_id: String,
+    #[serde(rename = "userId")]
+    user_id: String,
     #[serde(rename = "createdAt")]
     created_at: String,
     #[serde(rename = "updatedAt")]
@@ -64,7 +69,8 @@ pub(crate) async fn list_accounts_core(
         .map(|acc| AccountResponse {
             id: acc.id().to_string(),
             account_id: acc.account_id().to_string(),
-            provider: acc.provider_id().to_string(),
+            provider_id: acc.provider_id().to_string(),
+            user_id: acc.user_id().to_string(),
             created_at: acc.created_at().to_rfc3339(),
             updated_at: acc.updated_at().to_rfc3339(),
             scopes: acc
@@ -77,7 +83,10 @@ pub(crate) async fn list_accounts_core(
                 })
                 .unwrap_or_default(),
         })
-        .collect();
+        .collect::<Vec<_>>();
+
+    let mut filtered = filtered;
+    filtered.sort_by(|left, right| left.created_at.cmp(&right.created_at));
 
     Ok(filtered)
 }
@@ -85,6 +94,7 @@ pub(crate) async fn list_accounts_core(
 pub(crate) async fn unlink_account_core(
     user: &better_auth_core::User,
     provider_id: &str,
+    account_id: Option<&str>,
     ctx: &AuthContext,
 ) -> AuthResult<StatusResponse> {
     let accounts = ctx.database.get_user_accounts(user.id()).await?;
@@ -97,7 +107,15 @@ pub(crate) async fn unlink_account_core(
     // Count remaining credentials after unlinking
     let remaining_accounts = accounts
         .iter()
-        .filter(|acc| acc.provider_id() != provider_id)
+        .filter(|acc| {
+            if acc.provider_id() != provider_id {
+                return true;
+            }
+            match account_id {
+                Some(account_id) => acc.account_id() != account_id,
+                None => false,
+            }
+        })
         .count();
 
     // Prevent unlinking the last credential (unless allow_unlinking_all is true)
@@ -110,7 +128,15 @@ pub(crate) async fn unlink_account_core(
     // Find and delete the account
     let account_to_remove = accounts
         .iter()
-        .find(|acc| acc.provider_id() == provider_id)
+        .find(|acc| {
+            if acc.provider_id() != provider_id {
+                return false;
+            }
+            match account_id {
+                Some(account_id) => acc.account_id() == account_id,
+                None => true,
+            }
+        })
         .ok_or_else(|| AuthError::not_found("No account found with this provider"))?;
 
     ctx.database.delete_account(account_to_remove.id()).await?;
@@ -145,7 +171,13 @@ impl AccountManagementPlugin {
             Err(resp) => return Ok(resp),
         };
 
-        let response = unlink_account_core(&user, &unlink_req.provider_id, ctx).await?;
+        let response = unlink_account_core(
+            &user,
+            &unlink_req.provider_id,
+            unlink_req.account_id.as_deref(),
+            ctx,
+        )
+        .await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 }
@@ -173,7 +205,8 @@ mod axum_impl {
         ValidatedJson(body): ValidatedJson<UnlinkAccountRequest>,
     ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
-        let response = unlink_account_core(&user, &body.provider_id, &ctx).await?;
+        let response =
+            unlink_account_core(&user, &body.provider_id, body.account_id.as_deref(), &ctx).await?;
         Ok(Json(response))
     }
 

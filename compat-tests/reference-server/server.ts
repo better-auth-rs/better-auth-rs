@@ -39,10 +39,38 @@ const verificationEmailOutbox = new Map<string, { url: string; token: string }>(
 const changeEmailOutbox = new Map<string, { newEmail: string; url: string; token: string }>();
 let resetPasswordMode: "capture" | "throw" = "capture";
 let oauthRefreshMode: "success" | "error" = "success";
+type SocialProfile = {
+  sub: string;
+  email: string;
+  name: string;
+  image: string | null;
+  emailVerified: boolean;
+};
+const defaultSocialProfile = (): SocialProfile => ({
+  sub: "google-account-id",
+  email: "google@example.com",
+  name: "Google Compat User",
+  image: null,
+  emailVerified: true,
+});
+let socialProfile = defaultSocialProfile();
+let socialIdTokenValid = true;
 const oauthServer = Bun.serve({
   port: 0,
   async fetch(request) {
     const url = new URL(request.url);
+
+    if (url.pathname === "/oauth/authorize" && request.method === "GET") {
+      const redirectURI = url.searchParams.get("redirect_uri");
+      const state = url.searchParams.get("state");
+      if (!redirectURI || !state) {
+        return jsonResponse({ message: "redirect_uri and state are required" }, { status: 400 });
+      }
+      const location = new URL(redirectURI);
+      location.searchParams.set("code", "compat-code");
+      location.searchParams.set("state", state);
+      return Response.redirect(location.toString(), 302);
+    }
 
     if (url.pathname === "/oauth/token" && request.method === "POST") {
       if (oauthRefreshMode === "error") {
@@ -58,19 +86,21 @@ const oauthServer = Bun.serve({
       return jsonResponse({
         access_token: "new-access-token",
         refresh_token: "new-refresh-token",
-        id_token: "new-id-token",
+        id_token: "google-id-token",
         expires_in: 3600,
         refresh_token_expires_in: 7200,
         scope: "openid,email,profile",
+        token_type: "Bearer",
       });
     }
 
     if (url.pathname === "/oauth/userinfo") {
       return jsonResponse({
-        sub: "mock-account-id",
-        email: "mock@example.com",
-        name: "Mock OAuth User",
-        email_verified: true,
+        sub: socialProfile.sub,
+        email: socialProfile.email,
+        name: socialProfile.name,
+        picture: socialProfile.image,
+        email_verified: socialProfile.emailVerified,
       });
     }
 
@@ -78,6 +108,36 @@ const oauthServer = Bun.serve({
   },
 });
 const oauthBaseURL = `http://127.0.0.1:${oauthServer.port}`;
+
+const originalFetch = globalThis.fetch.bind(globalThis);
+globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  const request = input instanceof Request ? input : new Request(input, init);
+  const url = new URL(request.url);
+
+  if (url.origin === "https://oauth2.googleapis.com" && url.pathname === "/token") {
+    if (oauthRefreshMode === "error") {
+      return jsonResponse(
+        {
+          error: "invalid_grant",
+          error_description: "invalid refresh token",
+        },
+        { status: 400 },
+      );
+    }
+
+    return jsonResponse({
+      access_token: "google-access-token",
+      refresh_token: "google-refresh-token",
+      id_token: "google-id-token",
+      expires_in: 3600,
+      refresh_token_expires_in: 7200,
+      scope: "openid email profile",
+      token_type: "Bearer",
+    });
+  }
+
+  return originalFetch(request);
+};
 
 const authOptions = {
   baseURL: `http://localhost:${PORT}`,
@@ -138,6 +198,49 @@ const authOptions = {
   rateLimit: {
     enabled: false,
   },
+  socialProviders: {
+    google: {
+      clientId: "google-client-id",
+      clientSecret: "google-client-secret",
+      enabled: true,
+      authorizationEndpoint: `${oauthBaseURL}/oauth/authorize`,
+      async verifyIdToken() {
+        return socialIdTokenValid;
+      },
+      async getUserInfo() {
+        return {
+          user: {
+            id: socialProfile.sub,
+            email: socialProfile.email,
+            name: socialProfile.name,
+            image: socialProfile.image ?? undefined,
+            emailVerified: socialProfile.emailVerified,
+          },
+          data: {
+            sub: socialProfile.sub,
+            email: socialProfile.email,
+            email_verified: socialProfile.emailVerified,
+            name: socialProfile.name,
+            picture: socialProfile.image,
+          },
+        };
+      },
+      async refreshAccessToken() {
+        if (oauthRefreshMode === "error") {
+          throw new Error("invalid refresh token");
+        }
+
+        return {
+          accessToken: "google-access-token",
+          refreshToken: "google-refresh-token",
+          idToken: "google-id-token",
+          accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+          refreshTokenExpiresAt: new Date(Date.now() + 7200_000),
+          scopes: ["openid", "email", "profile"],
+        };
+      },
+    },
+  },
   plugins: [
     genericOAuth({
       config: [
@@ -187,6 +290,8 @@ const server = Bun.serve({
         changeEmailOutbox.clear();
         resetPasswordMode = "capture";
         oauthRefreshMode = "success";
+        socialProfile = defaultSocialProfile();
+        socialIdTokenValid = true;
         return jsonResponse({ status: true });
       }
 
@@ -308,6 +413,26 @@ const server = Bun.serve({
         const body = (await readJson(request)) as { mode?: string } | null;
         oauthRefreshMode = body?.mode === "error" ? "error" : "success";
         return jsonResponse({ status: true, mode: oauthRefreshMode });
+      }
+
+      if (url.pathname === "/__test/set-social-profile" && request.method === "POST") {
+        const body = (await readJson(request)) as Partial<SocialProfile> & {
+          idTokenValid?: boolean;
+        } | null;
+        socialProfile = {
+          ...socialProfile,
+          ...(body?.sub ? { sub: body.sub } : {}),
+          ...(body?.email ? { email: body.email } : {}),
+          ...(body?.name ? { name: body.name } : {}),
+          ...(body && hasOwn(body, "image") ? { image: body.image ?? null } : {}),
+          ...(typeof body?.emailVerified === "boolean"
+            ? { emailVerified: body.emailVerified }
+            : {}),
+        };
+        if (typeof body?.idTokenValid === "boolean") {
+          socialIdTokenValid = body.idTokenValid;
+        }
+        return jsonResponse({ status: true, profile: socialProfile, idTokenValid: socialIdTokenValid });
       }
 
       if (url.pathname === "/__test/seed-oauth-account" && request.method === "POST") {

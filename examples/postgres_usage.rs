@@ -157,10 +157,10 @@ async fn send(
 ) -> better_auth::types::AuthResponse {
     let mut headers = HashMap::new();
     if body.is_some() {
-        headers.insert("content-type".to_string(), "application/json".to_string());
+        _ = headers.insert("content-type".to_string(), "application/json".to_string());
     }
     if let Some(token) = bearer_token {
-        headers.insert("authorization".to_string(), format!("Bearer {}", token));
+        _ = headers.insert("authorization".to_string(), format!("Bearer {}", token));
     }
 
     let request = AuthRequest::from_parts(

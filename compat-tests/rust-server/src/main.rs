@@ -9,7 +9,10 @@ use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, EmailVerificationPlugin, OAuthPlugin,
     PasswordManagementPlugin, SessionManagementPlugin, UserManagementPlugin,
     email_verification::SendVerificationEmail, user_management::SendChangeEmailConfirmation,
-    oauth::{OAuthProvider, OAuthUserInfo},
+    oauth::{
+        OAuthIdTokenVerifier, OAuthProvider, OAuthRefreshTokenHandler, OAuthTokenSet, OAuthUserInfo,
+        OAuthUserInfoHandler, OAuthUserInfoRequest, OAuthUserInfoResponse,
+    },
     password_management::SendResetPassword,
 };
 use better_auth::{
@@ -54,6 +57,26 @@ struct ChangeEmailOutboxRecord {
     new_email: String,
     url: String,
     token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SocialProfile {
+    sub: String,
+    email: String,
+    name: String,
+    image: Option<String>,
+    email_verified: bool,
+}
+
+fn default_social_profile() -> SocialProfile {
+    SocialProfile {
+        sub: "google-account-id".to_string(),
+        email: "google@example.com".to_string(),
+        name: "Google Compat User".to_string(),
+        image: None,
+        email_verified: true,
+    }
 }
 
 #[async_trait::async_trait]
@@ -145,6 +168,74 @@ impl SendChangeEmailConfirmation for CompatChangeEmailSender {
     }
 }
 
+#[derive(Clone)]
+struct CompatGoogleUserInfoHandler {
+    profile: Arc<Mutex<SocialProfile>>,
+}
+
+#[async_trait::async_trait]
+impl OAuthUserInfoHandler for CompatGoogleUserInfoHandler {
+    async fn get_user_info(
+        &self,
+        _request: OAuthUserInfoRequest,
+    ) -> Result<OAuthUserInfoResponse, String> {
+        let profile = self.profile.lock().await.clone();
+        Ok(OAuthUserInfoResponse {
+            user: OAuthUserInfo {
+                id: profile.sub.clone(),
+                email: profile.email.clone(),
+                name: Some(profile.name.clone()),
+                image: profile.image.clone(),
+                email_verified: profile.email_verified,
+            },
+            data: serde_json::json!({
+                "sub": profile.sub,
+                "email": profile.email,
+                "name": profile.name,
+                "picture": profile.image,
+                "email_verified": profile.email_verified,
+            }),
+        })
+    }
+}
+
+#[derive(Clone)]
+struct CompatGoogleIdTokenVerifier {
+    valid: Arc<Mutex<bool>>,
+}
+
+#[async_trait::async_trait]
+impl OAuthIdTokenVerifier for CompatGoogleIdTokenVerifier {
+    async fn verify_id_token(&self, _token: &str, _nonce: Option<&str>) -> Result<bool, String> {
+        Ok(*self.valid.lock().await)
+    }
+}
+
+#[derive(Clone)]
+struct CompatGoogleRefreshHandler {
+    mode: Arc<Mutex<OAuthRefreshMode>>,
+}
+
+#[async_trait::async_trait]
+impl OAuthRefreshTokenHandler for CompatGoogleRefreshHandler {
+    async fn refresh_access_token(&self, _refresh_token: &str) -> Result<OAuthTokenSet, String> {
+        if *self.mode.lock().await == OAuthRefreshMode::Error {
+            return Err("invalid refresh token".to_string());
+        }
+
+        Ok(OAuthTokenSet {
+            token_type: Some("Bearer".to_string()),
+            access_token: Some("google-access-token".to_string()),
+            refresh_token: Some("google-refresh-token".to_string()),
+            access_token_expires_at: Some(Utc::now() + chrono::Duration::hours(1)),
+            refresh_token_expires_at: Some(Utc::now() + chrono::Duration::hours(2)),
+            scopes: vec!["openid".to_string(), "email".to_string(), "profile".to_string()],
+            id_token: Some("google-id-token".to_string()),
+            raw: None,
+        })
+    }
+}
+
 #[derive(Deserialize)]
 struct ResetTokenQuery {
     email: String,
@@ -196,35 +287,91 @@ struct SeedOAuthAccountRequest {
     scope: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SetSocialProfileRequest {
+    sub: Option<String>,
+    email: Option<String>,
+    name: Option<String>,
+    image: Option<String>,
+    email_verified: Option<bool>,
+    id_token_valid: Option<bool>,
+}
+
 fn parse_rfc3339(value: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
     DateTime::parse_from_rfc3339(value).map(|value| value.with_timezone(&Utc))
 }
 
-fn mock_oauth_plugin(port: u16) -> OAuthPlugin {
-    OAuthPlugin::new().add_provider(
-        "mock",
-        OAuthProvider {
-            client_id: "mock-client-id".to_string(),
-            client_secret: "mock-client-secret".to_string(),
-            auth_url: format!("http://127.0.0.1:{port}/__test/oauth/authorize"),
-            token_url: format!("http://127.0.0.1:{port}/__test/oauth/token"),
-            user_info_url: format!("http://127.0.0.1:{port}/__test/oauth/userinfo"),
-            scopes: vec![
-                "openid".to_string(),
-                "email".to_string(),
-                "profile".to_string(),
-            ],
-            map_user_info: |_value| {
-                Ok(OAuthUserInfo {
-                    id: "mock-account-id".to_string(),
-                    email: "mock@example.com".to_string(),
-                    name: Some("Mock OAuth User".to_string()),
-                    image: None,
-                    email_verified: true,
-                })
+fn mock_oauth_plugin(
+    port: u16,
+    social_profile: Arc<Mutex<SocialProfile>>,
+    social_id_token_valid: Arc<Mutex<bool>>,
+    oauth_refresh_mode: Arc<Mutex<OAuthRefreshMode>>,
+) -> OAuthPlugin {
+    OAuthPlugin::new()
+        .add_provider(
+            "mock",
+            OAuthProvider {
+                client_id: "mock-client-id".to_string(),
+                client_secret: "mock-client-secret".to_string(),
+                auth_url: format!("http://127.0.0.1:{port}/__test/oauth/authorize"),
+                token_url: format!("http://127.0.0.1:{port}/__test/oauth/token"),
+                user_info_url: Some(format!("http://127.0.0.1:{port}/__test/oauth/userinfo")),
+                scopes: vec![
+                    "openid".to_string(),
+                    "email".to_string(),
+                    "profile".to_string(),
+                ],
+                authorization_params: Vec::new(),
+                map_user_info: Some(|_value| {
+                    Ok(OAuthUserInfo {
+                        id: "mock-account-id".to_string(),
+                        email: "mock@example.com".to_string(),
+                        name: Some("Mock OAuth User".to_string()),
+                        image: None,
+                        email_verified: true,
+                    })
+                }),
+                get_user_info: None,
+                refresh_access_token: None,
+                verify_id_token: None,
+                disable_implicit_sign_up: false,
+                disable_sign_up: false,
+                override_user_info_on_sign_in: false,
             },
-        },
-    )
+        )
+        .add_provider(
+            "google",
+            OAuthProvider {
+                client_id: "google-client-id".to_string(),
+                client_secret: "google-client-secret".to_string(),
+                auth_url: format!("http://127.0.0.1:{port}/oauth/authorize"),
+                token_url: format!("http://127.0.0.1:{port}/__test/oauth/token"),
+                user_info_url: None,
+                scopes: vec![
+                    "email".to_string(),
+                    "profile".to_string(),
+                    "openid".to_string(),
+                ],
+                authorization_params: vec![(
+                    "include_granted_scopes".to_string(),
+                    "true".to_string(),
+                )],
+                map_user_info: None,
+                get_user_info: Some(Arc::new(CompatGoogleUserInfoHandler {
+                    profile: social_profile,
+                })),
+                refresh_access_token: Some(Arc::new(CompatGoogleRefreshHandler {
+                    mode: oauth_refresh_mode,
+                })),
+                verify_id_token: Some(Arc::new(CompatGoogleIdTokenVerifier {
+                    valid: social_id_token_valid,
+                })),
+                disable_implicit_sign_up: false,
+                disable_sign_up: false,
+                override_user_info_on_sign_in: false,
+            },
+        )
 }
 
 #[tokio::main]
@@ -249,6 +396,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let change_email_outbox = Arc::new(Mutex::new(HashMap::new()));
     let reset_password_mode = Arc::new(Mutex::new(ResetPasswordMode::Capture));
     let oauth_refresh_mode = Arc::new(Mutex::new(OAuthRefreshMode::Success));
+    let social_profile = Arc::new(Mutex::new(default_social_profile()));
+    let social_id_token_valid = Arc::new(Mutex::new(true));
 
     let auth = Arc::new(
         AuthBuilder::new(config)
@@ -278,7 +427,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .delete_user_enabled(true)
                     .require_delete_verification(false),
             )
-            .plugin(mock_oauth_plugin(port))
+            .plugin(mock_oauth_plugin(
+                port,
+                social_profile.clone(),
+                social_id_token_valid.clone(),
+                oauth_refresh_mode.clone(),
+            ))
             .build()
             .await?,
     );
@@ -295,6 +449,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reset_mode_for_set = reset_password_mode.clone();
     let oauth_mode_for_reset = oauth_refresh_mode.clone();
     let oauth_mode_for_set = oauth_refresh_mode.clone();
+    let social_profile_for_reset = social_profile.clone();
+    let social_profile_for_set = social_profile.clone();
+    let social_id_token_valid_for_reset = social_id_token_valid.clone();
+    let social_id_token_valid_for_set = social_id_token_valid.clone();
     let auth_for_reset_seed = auth.clone();
     let auth_for_delete_seed = auth.clone();
     let auth_for_remove_credential = auth.clone();
@@ -367,12 +525,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let change_email_outbox = change_email_outbox_for_reset.clone();
                 let reset_mode = reset_mode_for_reset.clone();
                 let oauth_mode = oauth_mode_for_reset.clone();
+                let social_profile = social_profile_for_reset.clone();
+                let social_id_token_valid = social_id_token_valid_for_reset.clone();
                 async move {
                     reset_outbox.lock().await.clear();
                     verification_outbox.lock().await.clear();
                     change_email_outbox.lock().await.clear();
                     *reset_mode.lock().await = ResetPasswordMode::Capture;
                     *oauth_mode.lock().await = OAuthRefreshMode::Success;
+                    *social_profile.lock().await = default_social_profile();
+                    *social_id_token_valid.lock().await = true;
                     Json(serde_json::json!({ "status": true }))
                 }
             }),
@@ -559,6 +721,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
         )
         .route(
+            "/__test/set-social-profile",
+            post(move |Json(body): Json<SetSocialProfileRequest>| {
+                let social_profile = social_profile_for_set.clone();
+                let social_id_token_valid = social_id_token_valid_for_set.clone();
+                async move {
+                    let mut profile = social_profile.lock().await;
+                    if let Some(sub) = body.sub {
+                        profile.sub = sub;
+                    }
+                    if let Some(email) = body.email {
+                        profile.email = email;
+                    }
+                    if let Some(name) = body.name {
+                        profile.name = name;
+                    }
+                    if body.image.is_some() {
+                        profile.image = body.image;
+                    }
+                    if let Some(email_verified) = body.email_verified {
+                        profile.email_verified = email_verified;
+                    }
+                    if let Some(id_token_valid) = body.id_token_valid {
+                        *social_id_token_valid.lock().await = id_token_valid;
+                    }
+                    Json(serde_json::json!({
+                        "status": true,
+                        "profile": &*profile,
+                        "idTokenValid": *social_id_token_valid.lock().await,
+                    }))
+                }
+            }),
+        )
+        .route(
             "/__test/seed-oauth-account",
             post(move |Json(body): Json<SeedOAuthAccountRequest>| {
                 let auth = auth_for_oauth_seed.clone();
@@ -658,6 +853,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Json(serde_json::json!({ "status": true })),
                     )
                 }
+            }),
+        )
+        .route(
+            "/__test/oauth/authorize",
+            get(|Query(query): Query<HashMap<String, String>>| async move {
+                let Some(redirect_uri) = query.get("redirect_uri") else {
+                    return (
+                        axum::http::StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({ "message": "redirect_uri is required" })),
+                    )
+                        .into_response();
+                };
+                let Some(state) = query.get("state") else {
+                    return (
+                        axum::http::StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({ "message": "state is required" })),
+                    )
+                        .into_response();
+                };
+                let mut url = match url::Url::parse(redirect_uri) {
+                    Ok(url) => url,
+                    Err(error) => {
+                        return (
+                            axum::http::StatusCode::BAD_REQUEST,
+                            Json(serde_json::json!({ "message": error.to_string() })),
+                        )
+                            .into_response();
+                    }
+                };
+                url.query_pairs_mut()
+                    .append_pair("code", "compat-code")
+                    .append_pair("state", state);
+                axum::response::Redirect::to(url.as_ref()).into_response()
             }),
         )
         .route(

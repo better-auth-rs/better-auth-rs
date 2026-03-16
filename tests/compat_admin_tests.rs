@@ -35,7 +35,8 @@ async fn setup_admin(auth: &better_auth::BetterAuth) -> String {
         role: Some("admin".to_string()),
         ..Default::default()
     };
-    auth.database()
+    let _ = auth
+        .database()
         .update_user(user.id(), update)
         .await
         .unwrap();
@@ -53,7 +54,7 @@ async fn test_admin_list_users_returns_users_array() {
     let admin_token = setup_admin(&auth).await;
 
     // Create a second user so we have at least 2
-    signup_user(&auth, "user2@test.com", "password123", "User Two").await;
+    let _ = signup_user(&auth, "user2@test.com", "password123", "User Two").await;
 
     let req = get_with_auth("/admin/list-users", &admin_token);
     let (status, json) = send_request(&auth, req).await;
@@ -83,7 +84,7 @@ async fn test_admin_list_users_pagination() {
 
     // Create extra users
     for i in 0..5 {
-        signup_user(
+        let _ = signup_user(
             &auth,
             &format!("page{}@test.com", i),
             "password123",

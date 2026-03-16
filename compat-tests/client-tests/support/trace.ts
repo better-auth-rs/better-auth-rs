@@ -14,7 +14,7 @@ export type TraceEntry = {
 
 function normalizeTracePath(url: URL) {
   const normalized = new URL(url.toString());
-  for (const key of ["token"]) {
+  for (const key of ["token", "state"]) {
     if (normalized.searchParams.has(key)) {
       normalized.searchParams.set(key, `<${key}>`);
     }
@@ -81,7 +81,24 @@ function pickHeaders(headers: Headers) {
       const normalized = header === "location"
         ? (() => {
             try {
-              const url = new URL(value);
+              const url = new URL(value, "http://compat.local");
+              for (const key of ["token", "state", "code_challenge"]) {
+                if (url.searchParams.has(key)) {
+                  url.searchParams.set(key, `<${key}>`);
+                }
+              }
+              for (const key of ["redirect_uri", "callbackURL", "errorCallbackURL", "newUserCallbackURL"]) {
+                const nested = url.searchParams.get(key);
+                if (!nested) {
+                  continue;
+                }
+                try {
+                  const nestedUrl = new URL(nested);
+                  url.searchParams.set(key, `${nestedUrl.pathname}${nestedUrl.search}${nestedUrl.hash}`);
+                } catch {
+                  // leave relative or invalid values as-is
+                }
+              }
               return `${url.pathname}${url.search}${url.hash}`;
             } catch {
               return value;

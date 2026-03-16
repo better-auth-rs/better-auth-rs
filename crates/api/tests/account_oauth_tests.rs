@@ -200,9 +200,10 @@ fn make_test_provider(mock_url: &str) -> OAuthProvider {
         client_secret: "secret".to_string(),
         auth_url: format!("{}/auth", mock_url),
         token_url: format!("{}/token", mock_url),
-        user_info_url: format!("{}/userinfo", mock_url),
+        user_info_url: Some(format!("{}/userinfo", mock_url)),
         scopes: vec!["email".to_string()],
-        map_user_info: |v| {
+        authorization_params: Vec::new(),
+        map_user_info: Some(|v| {
             Ok(OAuthUserInfo {
                 id: v["sub"].as_str().unwrap_or("mock-user-id-123").to_string(),
                 email: v["email"]
@@ -213,7 +214,13 @@ fn make_test_provider(mock_url: &str) -> OAuthProvider {
                 image: None,
                 email_verified: true,
             })
-        },
+        }),
+        get_user_info: None,
+        refresh_access_token: None,
+        verify_id_token: None,
+        disable_implicit_sign_up: false,
+        disable_sign_up: false,
+        override_user_info_on_sign_in: false,
     }
 }
 
@@ -288,7 +295,14 @@ async fn test_encrypt_oauth_tokens_stored_encrypted_in_db() {
             token_url: provider.token_url,
             user_info_url: provider.user_info_url,
             scopes: provider.scopes,
+            authorization_params: provider.authorization_params,
             map_user_info: provider.map_user_info,
+            get_user_info: provider.get_user_info,
+            refresh_access_token: provider.refresh_access_token,
+            verify_id_token: provider.verify_id_token,
+            disable_implicit_sign_up: provider.disable_implicit_sign_up,
+            disable_sign_up: provider.disable_sign_up,
+            override_user_info_on_sign_in: provider.override_user_info_on_sign_in,
         },
     );
     let oauth_plugin = OAuthPlugin::with_config(oauth_config);
@@ -734,9 +748,16 @@ async fn test_link_social_returns_redirect_url_with_state() {
             client_secret: "secret".to_string(),
             auth_url: "https://github.com/login/oauth/authorize".to_string(),
             token_url: "https://github.com/login/oauth/access_token".to_string(),
-            user_info_url: "https://api.github.com/user".to_string(),
+            user_info_url: Some("https://api.github.com/user".to_string()),
             scopes: vec!["user:email".to_string()],
-            map_user_info: |_| unreachable!(),
+            authorization_params: Vec::new(),
+            map_user_info: Some(|_| unreachable!()),
+            get_user_info: None,
+            refresh_access_token: None,
+            verify_id_token: None,
+            disable_implicit_sign_up: false,
+            disable_sign_up: false,
+            override_user_info_on_sign_in: false,
         },
     );
 

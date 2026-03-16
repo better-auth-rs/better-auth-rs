@@ -910,7 +910,7 @@ async fn test_list_accounts_empty() {
     let body_str = String::from_utf8(response.body).unwrap();
     let accounts: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
     assert_eq!(accounts.len(), 1); // Sign-up creates the credential account.
-    assert_eq!(accounts[0]["provider"], "credential");
+    assert_eq!(accounts[0]["providerId"], "credential");
 }
 
 /// Integration test for list-accounts with an account
@@ -963,7 +963,7 @@ async fn test_list_accounts_with_account() {
     assert_eq!(accounts.len(), 2);
     let google_account = accounts
         .iter()
-        .find(|account| account["provider"] == "google")
+        .find(|account| account["providerId"] == "google")
         .expect("google account should be present");
     assert_eq!(
         google_account["scopes"],

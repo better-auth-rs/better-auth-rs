@@ -129,16 +129,19 @@ cargo test --features axum --test axum_integration_tests                    # fe
 cargo test --test client_compat_tests phase0_client_compat -- --ignored --nocapture
 cargo test --test client_compat_tests phase1_client_compat -- --ignored --nocapture
 cargo test --test client_compat_tests phase2_client_compat -- --ignored --nocapture
+cargo test --test client_compat_tests phase3_client_compat -- --ignored --nocapture
 cargo test --test client_compat_tests full_client_compat -- --ignored --nocapture
-./scripts/alignment-check.sh                   # full alignment pipeline (all 3 layers)
+./scripts/alignment-check.sh                   # full alignment pipeline (all 3 layers, phases 0-3)
 ./scripts/alignment-check.sh --skip-build      # skip cargo build step
 cargo tarpaulin --workspace --lib              # measure function coverage
 cd compat-tests/client-tests && bun test tests/phase0
 cd compat-tests/client-tests && bun test tests/phase1
 cd compat-tests/client-tests && bun test tests/phase2
+cd compat-tests/client-tests && bun test tests/phase3
 bash compat-tests/client-tests/run-against-both.sh phase0
 bash compat-tests/client-tests/run-against-both.sh phase1
 bash compat-tests/client-tests/run-against-both.sh phase2
+bash compat-tests/client-tests/run-against-both.sh phase3
 ```
 
 ### JavaScript tooling
@@ -310,8 +313,9 @@ direct end-to-end coverage for each endpoint in this group.
 `/unlink-account`
 
 Phase 3 is self-contained on top of Phases 0, 1, and 2. Completion
-requires dual-server coverage for the GitHub/mock-OAuth flows in this
-group, including callback behavior.
+requires dual-server coverage for the Google/mock-OAuth flows in this
+group, including callback behavior and the direct id-token sign-in/link
+branches.
 
 **Phase 4 — Machine auth and API-key CRUD:**
 Bearer behavior, `/api-key/create`, `/api-key/list`, `/api-key/get`,

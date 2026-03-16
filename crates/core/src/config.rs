@@ -104,6 +104,14 @@ pub struct AccountConfig {
     pub account_linking: AccountLinkingConfig,
     /// Encrypt OAuth tokens at rest (default: false)
     pub encrypt_oauth_tokens: bool,
+    /// Store account data in an account cookie for OAuth-backed access token flows.
+    pub store_account_cookie: bool,
+    /// Where to persist OAuth state during the authorization flow.
+    pub store_state_strategy: OAuthStateStrategy,
+    /// Skip state-cookie verification during callback processing.
+    ///
+    /// This is security-sensitive and should stay disabled in normal use.
+    pub skip_state_cookie_check: bool,
 }
 
 /// Settings that control how OAuth accounts are linked to existing users.
@@ -117,8 +125,20 @@ pub struct AccountLinkingConfig {
     pub allow_different_emails: bool,
     /// Allow unlinking all accounts (default: false)
     pub allow_unlinking_all: bool,
+    /// Disable implicit linking during sign-in; only explicit link-social may link.
+    pub disable_implicit_linking: bool,
     /// Update user info when a new account is linked (default: false)
     pub update_user_info_on_link: bool,
+}
+
+/// Strategy for persisting OAuth state between the sign-in and callback steps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OAuthStateStrategy {
+    /// Persist state in an encrypted cookie.
+    #[default]
+    Cookie,
+    /// Persist state in the verification store plus a signed state cookie.
+    Database,
 }
 
 /// Session-specific configuration
@@ -254,6 +274,9 @@ impl Default for AccountConfig {
             update_account_on_sign_in: true,
             account_linking: AccountLinkingConfig::default(),
             encrypt_oauth_tokens: false,
+            store_account_cookie: false,
+            store_state_strategy: OAuthStateStrategy::Database,
+            skip_state_cookie_check: false,
         }
     }
 }
@@ -265,6 +288,7 @@ impl Default for AccountLinkingConfig {
             trusted_providers: Vec::new(),
             allow_different_emails: false,
             allow_unlinking_all: false,
+            disable_implicit_linking: false,
             update_user_info_on_link: false,
         }
     }

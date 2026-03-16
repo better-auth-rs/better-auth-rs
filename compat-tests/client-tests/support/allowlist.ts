@@ -160,4 +160,24 @@ export const RAW_DIFF_ALLOWLIST: RawDiffAllowance[] = [
     path: /responseCookies\.better-auth\.session_token\.maxAge/,
     reason: "cookie max-age drift is currently client-inert",
   },
+  {
+    scenario: /social sign-in redirects new users to newUserCallbackURL/i,
+    path: /responseHeaders\.location/,
+    reason: "PKCE code_challenge is per-run entropy inside the provider redirect URL and is not client-visible",
+  },
+  {
+    scenario: /social sign-in redirects existing users to callbackURL/i,
+    path: /responseHeaders\.location/,
+    reason: "PKCE code_challenge is per-run entropy inside the provider redirect URL and is not client-visible",
+  },
+  {
+    scenario: /link social creates an account that listAccounts returns/i,
+    path: /responseHeaders\.location/,
+    reason: "PKCE code_challenge is per-run entropy inside the provider redirect URL and is not client-visible",
+  },
+  {
+    scenario: /unlink account removes the linked google account/i,
+    path: /responseHeaders\.location/,
+    reason: "PKCE code_challenge is per-run entropy inside the provider redirect URL and is not client-visible",
+  },
 ];
