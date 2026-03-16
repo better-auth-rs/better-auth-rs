@@ -272,7 +272,10 @@ A phase is only complete when all of the following are true:
    pinned TS runtime for that phase.
 
 Only completed phases may join the blocking schema-driven baseline.
-Phases 0, 1, and 2 now meet the completion rule. The blocking schema
+Completion status is revocable: if a later audit finds an extra public
+route, a legacy compatibility path, or stale tests that hide the drift,
+the affected phase is incomplete again until the regression and the
+test/reporting drift are removed in the same change. The blocking schema
 baseline still uses the generated `core` profile until the broader
 generated-profile baseline is explicitly promoted in the same change as
 the corresponding test and reporting updates. Broader generated

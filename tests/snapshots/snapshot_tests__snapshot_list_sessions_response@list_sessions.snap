@@ -9,5 +9,5 @@ expression: redact(&body)
   ipAddress: ""
   token: "[session_token]"
   updatedAt: "[timestamp]"
-  userAgent: ~
+  userAgent: ""
   userId: "[uuid]"

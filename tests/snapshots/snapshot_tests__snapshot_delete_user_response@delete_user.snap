@@ -2,5 +2,5 @@
 source: tests/snapshot_tests.rs
 expression: redact(&body)
 ---
-message: User account successfully deleted
+message: User deleted
 success: true

@@ -10,7 +10,7 @@ session:
   ipAddress: ""
   token: "[session_token]"
   updatedAt: "[timestamp]"
-  userAgent: ~
+  userAgent: ""
   userId: "[uuid]"
 user:
   createdAt: "[timestamp]"

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
+use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin, UserManagementPlugin};
 use better_auth::types::{AuthRequest, AuthResponse, HttpMethod};
 use better_auth::{
     AuthBuilder, AuthConfig, AuthContext, AuthPlugin, AuthResult, AuthRoute, run_migrations,
@@ -55,8 +55,7 @@ async fn test_routes_include_plugin_routes() {
     let routes = auth.routes();
 
     // routes() returns Vec<(String, &dyn AuthPlugin)> — tuples of (path, plugin_ref)
-    // Note: core routes (/update-user, /delete-user) are handled by handle_core_request()
-    // and are NOT included in routes(); only plugin-registered routes appear here.
+    // Core routes like /update-user are not included here; plugin-registered routes are.
     let has_plugin_route = routes.iter().any(|(path, _)| path == "/route-test");
     assert!(has_plugin_route, "Expected plugin route /route-test");
 
@@ -74,6 +73,11 @@ async fn test_signup_and_delete_lifecycle() {
         .database(test_database().await)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
+        .plugin(
+            UserManagementPlugin::new()
+                .delete_user_enabled(true)
+                .require_delete_verification(false),
+        )
         .build()
         .await
         .expect("Failed to build auth instance");
@@ -104,10 +108,11 @@ async fn test_signup_and_delete_lifecycle() {
     let token = response_json["token"].as_str().unwrap().to_string();
 
     // Delete the user using the session token
-    let mut delete_request = AuthRequest::new(HttpMethod::Delete, "/delete-user");
+    let mut delete_request = AuthRequest::new(HttpMethod::Post, "/delete-user");
     delete_request
         .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
+    delete_request.body = Some(b"{}".to_vec());
 
     let delete_response = auth
         .handle_request(delete_request)
@@ -116,10 +121,11 @@ async fn test_signup_and_delete_lifecycle() {
     assert_eq!(delete_response.status, 200);
 
     // Verify the session is now invalid (user was deleted)
-    let mut retry_request = AuthRequest::new(HttpMethod::Delete, "/delete-user");
+    let mut retry_request = AuthRequest::new(HttpMethod::Post, "/delete-user");
     retry_request
         .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
+    retry_request.body = Some(b"{}".to_vec());
 
     let retry_response = auth
         .handle_request(retry_request)
