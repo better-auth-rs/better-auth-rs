@@ -132,6 +132,7 @@ mod tests {
         )
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_csrf_allows_same_origin() {
         let mw = CsrfMiddleware::new(CsrfConfig::new(), test_auth_config(vec![]));
@@ -139,6 +140,7 @@ mod tests {
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_csrf_blocks_cross_origin() {
         let mw = CsrfMiddleware::new(CsrfConfig::new(), test_auth_config(vec![]));
@@ -148,6 +150,7 @@ mod tests {
         assert_eq!(resp.unwrap().status, 403);
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_csrf_allows_trusted_origin() {
         let mw = CsrfMiddleware::new(
@@ -158,6 +161,7 @@ mod tests {
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_csrf_allows_glob_trusted_origin() {
         let mw = CsrfMiddleware::new(
@@ -168,6 +172,7 @@ mod tests {
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_csrf_skips_get_requests() {
         let mw = CsrfMiddleware::new(CsrfConfig::new(), test_auth_config(vec![]));
@@ -186,6 +191,7 @@ mod tests {
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_csrf_allows_no_origin_header() {
         let mw = CsrfMiddleware::new(CsrfConfig::new(), test_auth_config(vec![]));
@@ -193,6 +199,7 @@ mod tests {
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_csrf_disabled() {
         let config = CsrfConfig::new().enabled(false);
@@ -201,6 +208,7 @@ mod tests {
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[test]
     fn test_extract_origin() {
         assert_eq!(

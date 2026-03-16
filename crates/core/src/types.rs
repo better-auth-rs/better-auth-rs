@@ -842,6 +842,7 @@ mod tests {
 
     // ── User serialization ──────────────────────────────────────────────
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn user_serializes_camel_case() {
         let user = User {
@@ -872,6 +873,7 @@ mod tests {
         assert!(!json.contains("\"username\""));
     }
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn user_serializes_plugin_fields_when_set() {
         let user = User {
@@ -899,6 +901,7 @@ mod tests {
         assert!(json.contains("\"banReason\":\"spam\""));
     }
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn user_deserializes_camel_case() {
         let json = r#"{
@@ -919,6 +922,7 @@ mod tests {
 
     // ── Session serialization ───────────────────────────────────────────
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn session_serializes_camel_case() {
         let session = Session {
@@ -948,6 +952,7 @@ mod tests {
 
     // ── AuthRequest ─────────────────────────────────────────────────────
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn auth_request_new_defaults() {
         let req = AuthRequest::new(HttpMethod::Get, "/test");
@@ -958,6 +963,7 @@ mod tests {
         assert!(req.virtual_user_id().is_none());
     }
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn auth_request_from_parts() {
         let mut headers = HashMap::new();
@@ -974,6 +980,7 @@ mod tests {
         assert!(req.body.is_some());
     }
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn auth_request_body_as_json_with_body() {
         let req = AuthRequest {
@@ -988,6 +995,7 @@ mod tests {
         assert_eq!(val["name"], "test");
     }
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn auth_request_body_as_json_without_body() {
         let req = AuthRequest::new(HttpMethod::Get, "/test");
@@ -995,6 +1003,7 @@ mod tests {
         assert!(val.is_object());
     }
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn auth_request_virtual_user_id() {
         let mut req = AuthRequest::new(HttpMethod::Get, "/test");
@@ -1005,6 +1014,7 @@ mod tests {
 
     // ── AuthResponse ────────────────────────────────────────────────────
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn auth_response_new() {
         let resp = AuthResponse::new(200);
@@ -1012,6 +1022,7 @@ mod tests {
         assert!(resp.body.is_empty());
     }
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn auth_response_json() {
         let resp = AuthResponse::json(200, &OkResponse { ok: true }).expect("json");
@@ -1024,6 +1035,7 @@ mod tests {
         assert_eq!(body["ok"], true);
     }
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn auth_response_text() {
         let resp = AuthResponse::text(404, "Not found");
@@ -1032,6 +1044,7 @@ mod tests {
         assert_eq!(std::str::from_utf8(&resp.body).unwrap(), "Not found");
     }
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn auth_response_html() {
         let resp = AuthResponse::html(200, "<h1>Hi</h1>");
@@ -1041,6 +1054,7 @@ mod tests {
         );
     }
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn auth_response_with_header() {
         let resp = AuthResponse::new(200).with_header("x-custom", "val");
@@ -1049,6 +1063,7 @@ mod tests {
 
     // ── RequestMeta ─────────────────────────────────────────────────────
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn request_meta_extracts_from_headers() {
         let mut req = AuthRequest::new(HttpMethod::Get, "/test");
@@ -1061,6 +1076,7 @@ mod tests {
         assert_eq!(meta.user_agent.as_deref(), Some("TestAgent"));
     }
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn request_meta_falls_back_to_real_ip() {
         let mut req = AuthRequest::new(HttpMethod::Get, "/test");
@@ -1069,6 +1085,7 @@ mod tests {
         assert_eq!(meta.ip_address.as_deref(), Some("5.6.7.8"));
     }
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn request_meta_none_when_no_headers() {
         let req = AuthRequest::new(HttpMethod::Get, "/test");
@@ -1079,6 +1096,7 @@ mod tests {
 
     // ── CreateUser builder ──────────────────────────────────────────────
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn create_user_builder() {
         let cu = CreateUser::new()
@@ -1100,6 +1118,7 @@ mod tests {
         assert!(cu.metadata.is_some());
     }
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn create_user_default() {
         let cu = CreateUser::default();
@@ -1109,6 +1128,7 @@ mod tests {
 
     // ── is_false helper ─────────────────────────────────────────────────
 
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
     fn is_false_helper() {
         assert!(is_false(&false));

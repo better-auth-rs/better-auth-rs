@@ -285,57 +285,68 @@ mod tests {
 
     // ── status_code ─────────────────────────────────────────────────────
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn bad_request_is_400() {
         assert_eq!(AuthError::bad_request("oops").status_code(), 400);
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn invalid_request_is_400() {
         assert_eq!(AuthError::InvalidRequest("x".into()).status_code(), 400);
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn validation_is_400() {
         assert_eq!(AuthError::validation("x").status_code(), 400);
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn invalid_credentials_is_401() {
         assert_eq!(AuthError::InvalidCredentials.status_code(), 401);
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn unauthenticated_is_401() {
         assert_eq!(AuthError::Unauthenticated.status_code(), 401);
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn session_not_found_is_401() {
         assert_eq!(AuthError::SessionNotFound.status_code(), 401);
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn forbidden_is_403() {
         assert_eq!(AuthError::forbidden("nope").status_code(), 403);
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn unauthorized_is_403() {
         assert_eq!(AuthError::Unauthorized.status_code(), 403);
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn not_found_is_404() {
         assert_eq!(AuthError::not_found("gone").status_code(), 404);
         assert_eq!(AuthError::UserNotFound.status_code(), 404);
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn conflict_is_409() {
         assert_eq!(AuthError::conflict("dup").status_code(), 409);
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn unprocessable_entity_is_422() {
         assert_eq!(
@@ -344,16 +355,19 @@ mod tests {
         );
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn rate_limited_is_429() {
         assert_eq!(AuthError::RateLimited.status_code(), 429);
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn not_implemented_is_501() {
         assert_eq!(AuthError::not_implemented("todo").status_code(), 501);
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn internal_errors_are_500() {
         assert_eq!(AuthError::config("bad").status_code(), 500);
@@ -368,6 +382,7 @@ mod tests {
 
     // ── code_from_message ───────────────────────────────────────────────
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn code_from_message_uppercases_and_replaces_spaces() {
         assert_eq!(
@@ -376,6 +391,7 @@ mod tests {
         );
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn code_from_message_strips_special_chars() {
         assert_eq!(
@@ -384,6 +400,7 @@ mod tests {
         );
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn code_from_message_empty() {
         assert_eq!(AuthError::code_from_message(""), "");
@@ -391,6 +408,7 @@ mod tests {
 
     // ── error_payload ───────────────────────────────────────────────────
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn error_payload_for_client_error() {
         let (status, code, message) = AuthError::bad_request("Missing field").error_payload();
@@ -399,6 +417,7 @@ mod tests {
         assert_eq!(message, "Missing field");
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn error_payload_for_internal_error_hides_details() {
         let (status, _code, message) = AuthError::internal("secret detail").error_payload();
@@ -408,12 +427,14 @@ mod tests {
 
     // ── to_auth_response ────────────────────────────────────────────────
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn to_auth_response_returns_correct_status() {
         let resp = AuthError::bad_request("oops").to_auth_response();
         assert_eq!(resp.status, 400);
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn to_auth_response_body_contains_code_and_message() {
         let resp = AuthError::UserNotFound.to_auth_response();
@@ -426,6 +447,7 @@ mod tests {
 
     // ── constructor helpers ──────────────────────────────────────────────
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn constructor_helpers_produce_correct_variants() {
         // Each helper should produce the expected Display output
@@ -451,12 +473,14 @@ mod tests {
 
     // ── DatabaseError ───────────────────────────────────────────────────
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn database_error_display() {
         let e = DatabaseError::Connection("timeout".into());
         assert_eq!(e.to_string(), "Connection error: timeout");
     }
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn database_error_converts_to_auth_error() {
         let db_err = DatabaseError::Query("bad sql".into());
@@ -466,6 +490,7 @@ mod tests {
 
     // ── Display for fixed-message variants ──────────────────────────────
 
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn fixed_message_variants_display() {
         assert_eq!(

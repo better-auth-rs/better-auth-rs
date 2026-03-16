@@ -703,7 +703,7 @@ mod tests {
             HttpMethod::Post,
             "/get-session",
             Some(&session.token),
-            Some(serde_json::json!({})),
+            Some(b"{}".to_vec()),
         );
         let response = plugin.on_request(&req, &ctx).await.unwrap();
         assert!(response.is_none());

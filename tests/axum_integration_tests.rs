@@ -4,7 +4,7 @@ use axum::{
     body::Body,
     http::{Method, Request, StatusCode},
 };
-use better_auth::handlers::AxumIntegration;
+use better_auth::handlers::{AxumIntegration, CurrentSession, OptionalSession};
 use better_auth::plugins::{
     EmailPasswordPlugin, EmailVerificationPlugin, PasswordManagementPlugin,
     SessionManagementPlugin, UserManagementPlugin, password_management::SendResetPassword,
@@ -26,6 +26,15 @@ async fn test_database() -> DatabaseConnection {
 }
 
 async fn create_test_auth() -> Arc<BetterAuth> {
+    create_test_auth_with_config(
+        AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
+            .base_url("http://localhost:3000")
+            .password_min_length(6),
+    )
+    .await
+}
+
+async fn create_test_auth_with_config(config: AuthConfig) -> Arc<BetterAuth> {
     struct NoopResetSender;
 
     #[async_trait::async_trait]
@@ -39,10 +48,6 @@ async fn create_test_auth() -> Arc<BetterAuth> {
             Ok(())
         }
     }
-
-    let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
-        .base_url("http://localhost:3000")
-        .password_min_length(6);
 
     Arc::new(
         AuthBuilder::new(config)
@@ -75,6 +80,30 @@ fn create_test_router(auth: Arc<BetterAuth>) -> axum::Router {
         // Mount auth routes under /auth prefix
         .nest("/auth", auth_router)
         // Add CORS layer
+        .layer(CorsLayer::permissive())
+        .with_state(auth)
+}
+
+fn create_extractor_test_router(auth: Arc<BetterAuth>) -> axum::Router {
+    use axum::{Json, Router, routing::get};
+
+    async fn current_session_route(session: CurrentSession) -> Json<Value> {
+        Json(json!({
+            "authenticated": true,
+            "userId": session.user.id,
+        }))
+    }
+
+    async fn optional_session_route(session: OptionalSession) -> Json<Value> {
+        Json(json!({
+            "authenticated": session.0.is_some(),
+        }))
+    }
+
+    Router::new()
+        .nest("/auth", auth.clone().axum_router())
+        .route("/current-session", get(current_session_route))
+        .route("/optional-session", get(optional_session_route))
         .layer(CorsLayer::permissive())
         .with_state(auth)
 }
@@ -138,6 +167,98 @@ async fn test_axum_user_signup() {
     assert_eq!(response_data["user"]["email"], "signup@example.com");
     assert_eq!(response_data["user"]["name"], "Signup User");
     assert!(response_data["token"].is_string());
+}
+
+// Rust-specific surface: `AxumIntegration::axum_router` is our public Rust
+// integration API and must not mount extra product routes like `/health`.
+#[tokio::test]
+async fn test_axum_router_does_not_mount_health() {
+    let auth = create_test_auth().await;
+    let router = create_test_router(auth);
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/auth/health")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+// Rust-specific surface: `CurrentSession` is a public Axum extractor re-exported
+// from the Rust library.
+#[tokio::test]
+async fn test_axum_current_session_extractor() {
+    let auth = create_test_auth().await;
+    let router = create_extractor_test_router(auth);
+
+    let (user_data, token) = create_test_user(router.clone()).await;
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/current-session")
+        .header("authorization", format!("Bearer {}", token))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let response_data: Value = serde_json::from_slice(&body_bytes).unwrap();
+
+    assert_eq!(response_data["authenticated"], true);
+    assert_eq!(response_data["userId"], user_data["user"]["id"]);
+}
+
+// Rust-specific surface: `OptionalSession` is a public Axum extractor re-exported
+// from the Rust library.
+#[tokio::test]
+async fn test_axum_optional_session_extractor_without_auth() {
+    let auth = create_test_auth().await;
+    let router = create_extractor_test_router(auth);
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/optional-session")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let response_data: Value = serde_json::from_slice(&body_bytes).unwrap();
+
+    assert_eq!(response_data["authenticated"], false);
+}
+
+// Rust-specific surface: Axum route mounting must honor `disabled_path` when
+// registering routes through `axum_router()`.
+#[tokio::test]
+async fn test_axum_router_respects_disabled_paths() {
+    let auth = create_test_auth_with_config(
+        AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
+            .base_url("http://localhost:3000")
+            .password_min_length(6)
+            .disabled_path("/ok"),
+    )
+    .await;
+    let router = create_test_router(auth);
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/auth/ok")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
 /// Test user signin via Axum

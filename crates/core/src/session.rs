@@ -238,6 +238,7 @@ mod tests {
 
     // ── validate_token_format ───────────────────────────────────────────
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[test]
     fn valid_token_format() {
         let mgr = test_manager();
@@ -245,12 +246,14 @@ mod tests {
         assert!(mgr.validate_token_format(token));
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[test]
     fn invalid_token_no_prefix() {
         let mgr = test_manager();
         assert!(!mgr.validate_token_format("abcdefghijklmnopqrstuvwxyz1234567890"));
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[test]
     fn invalid_token_too_short() {
         let mgr = test_manager();
@@ -259,6 +262,7 @@ mod tests {
 
     // ── extract_session_token ───────────────────────────────────────────
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[test]
     fn extract_from_bearer() {
         let mgr = test_manager();
@@ -269,6 +273,7 @@ mod tests {
         assert_eq!(mgr.extract_session_token(&req), Some("my-token".into()));
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[test]
     fn extract_from_cookie() {
         let mgr = test_manager();
@@ -280,6 +285,7 @@ mod tests {
         assert_eq!(mgr.extract_session_token(&req), Some("tok123".into()));
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[test]
     fn extract_bearer_takes_precedence_over_cookie() {
         let mgr = test_manager();
@@ -294,6 +300,7 @@ mod tests {
         assert_eq!(mgr.extract_session_token(&req), Some("bearer-tok".into()));
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[test]
     fn extract_returns_none_without_auth() {
         let mgr = test_manager();
@@ -301,6 +308,7 @@ mod tests {
         assert_eq!(mgr.extract_session_token(&req), None);
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[test]
     fn extract_skips_empty_cookie_value() {
         let mgr = test_manager();
@@ -313,6 +321,7 @@ mod tests {
 
     // ── is_session_fresh ────────────────────────────────────────────────
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[test]
     fn session_fresh_when_within_window() {
         let mut config = AuthConfig::new("test-secret-min-32-chars-1234567");
@@ -337,6 +346,7 @@ mod tests {
         assert!(mgr.is_session_fresh(&session));
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[test]
     fn session_not_fresh_when_old() {
         let mut config = AuthConfig::new("test-secret-min-32-chars-1234567");
@@ -360,6 +370,7 @@ mod tests {
         assert!(!mgr.is_session_fresh(&session));
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[test]
     fn session_never_fresh_when_no_fresh_age() {
         let mgr = test_manager(); // default: fresh_age = None
@@ -381,6 +392,7 @@ mod tests {
 
     // ── async operations ────────────────────────────────────────────────
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[tokio::test]
     async fn create_and_get_session() {
         let db = test_database().await;
@@ -399,6 +411,7 @@ mod tests {
         assert!(retrieved.is_some());
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[tokio::test]
     async fn create_session_without_metadata_uses_empty_strings() {
         let db = test_database().await;
@@ -414,6 +427,7 @@ mod tests {
         assert_eq!(session.user_agent.as_deref(), Some(""));
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[tokio::test]
     async fn delete_session_removes_it() {
         let db = test_database().await;
@@ -432,6 +446,7 @@ mod tests {
         assert!(retrieved.is_none());
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[tokio::test]
     async fn revoke_session_returns_true_when_found() {
         let db = test_database().await;
@@ -447,6 +462,7 @@ mod tests {
         assert!(result);
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[tokio::test]
     async fn revoke_session_returns_false_when_not_found() {
         let mgr = SessionManager::new(test_config(), test_database().await);
@@ -454,6 +470,7 @@ mod tests {
         assert!(!result);
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[tokio::test]
     async fn list_user_sessions_excludes_expired() {
         let db = test_database().await;
@@ -472,6 +489,7 @@ mod tests {
         assert_eq!(sessions.len(), 2);
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[tokio::test]
     async fn revoke_all_user_sessions() {
         let db = test_database().await;
@@ -492,6 +510,7 @@ mod tests {
         assert!(sessions.is_empty());
     }
 
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[tokio::test]
     async fn revoke_other_sessions_keeps_current() {
         let db = test_database().await;

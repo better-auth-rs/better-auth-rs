@@ -11,6 +11,94 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use better_auth_core::{AuthPlugin, HttpMethod};
 
 // ------------------------------------------------------------------
+// Rust-specific builder/default surface
+// ------------------------------------------------------------------
+
+// Rust-specific surface: `EmailVerificationPlugin` builder methods and
+// `EmailVerificationConfig` are public Rust APIs with no direct TS analogue.
+#[test]
+fn test_default_config() {
+    let config = EmailVerificationConfig::default();
+    assert_eq!(config.verification_token_expiry, Duration::hours(24));
+    assert!(config.send_email_notifications);
+    assert!(!config.require_verification_for_signin);
+    assert!(!config.auto_verify_new_users);
+    assert!(!config.send_on_sign_in);
+    assert!(!config.auto_sign_in_after_verification);
+    assert!(config.send_verification_email.is_none());
+    assert!(config.before_email_verification.is_none());
+    assert!(config.after_email_verification.is_none());
+}
+
+// Rust-specific surface: `EmailVerificationPlugin` builder methods and
+// `EmailVerificationConfig` are public Rust APIs with no direct TS analogue.
+#[test]
+fn test_builder_verification_token_expiry() {
+    let plugin = EmailVerificationPlugin::new().verification_token_expiry(Duration::minutes(30));
+    assert_eq!(
+        plugin.config.verification_token_expiry,
+        Duration::minutes(30)
+    );
+}
+
+// Rust-specific surface: `EmailVerificationPlugin` builder methods and
+// `EmailVerificationConfig` are public Rust APIs with no direct TS analogue.
+#[test]
+fn test_builder_send_on_sign_in() {
+    let plugin = EmailVerificationPlugin::new().send_on_sign_in(true);
+    assert!(plugin.config.send_on_sign_in);
+}
+
+// Rust-specific surface: `EmailVerificationPlugin` builder methods and
+// `EmailVerificationConfig` are public Rust APIs with no direct TS analogue.
+#[test]
+fn test_builder_auto_sign_in_after_verification() {
+    let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(true);
+    assert!(plugin.config.auto_sign_in_after_verification);
+}
+
+// Rust-specific surface: `EmailVerificationPlugin` builder methods and
+// `EmailVerificationConfig` are public Rust APIs with no direct TS analogue.
+#[test]
+fn test_builder_send_email_notifications() {
+    let plugin = EmailVerificationPlugin::new().send_email_notifications(false);
+    assert!(!plugin.config.send_email_notifications);
+}
+
+// Rust-specific surface: `EmailVerificationPlugin` builder methods and
+// `EmailVerificationConfig` are public Rust APIs with no direct TS analogue.
+#[test]
+fn test_builder_require_verification_for_signin() {
+    let plugin = EmailVerificationPlugin::new().require_verification_for_signin(true);
+    assert!(plugin.config.require_verification_for_signin);
+}
+
+// Rust-specific surface: `EmailVerificationPlugin` builder methods and
+// `EmailVerificationConfig` are public Rust APIs with no direct TS analogue.
+#[test]
+fn test_builder_auto_verify_new_users() {
+    let plugin = EmailVerificationPlugin::new().auto_verify_new_users(true);
+    assert!(plugin.config.auto_verify_new_users);
+}
+
+// Rust-specific surface: `EmailVerificationPlugin` builder methods and
+// `EmailVerificationConfig` are public Rust APIs with no direct TS analogue.
+#[test]
+fn test_builder_chaining() {
+    let plugin = EmailVerificationPlugin::new()
+        .verification_token_expiry(Duration::hours(2))
+        .send_on_sign_in(true)
+        .auto_sign_in_after_verification(true)
+        .send_email_notifications(false)
+        .require_verification_for_signin(true);
+    assert_eq!(plugin.config.verification_token_expiry, Duration::hours(2));
+    assert!(plugin.config.send_on_sign_in);
+    assert!(plugin.config.auto_sign_in_after_verification);
+    assert!(!plugin.config.send_email_notifications);
+    assert!(plugin.config.require_verification_for_signin);
+}
+
+// ------------------------------------------------------------------
 // Custom sender
 // ------------------------------------------------------------------
 
@@ -23,12 +111,31 @@ impl SendVerificationEmail for DummySender {
     }
 }
 
-// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
+// Rust-specific surface: `EmailVerificationPlugin::custom_send_verification_email`
+// is a public Rust-only builder API.
 #[test]
 fn test_builder_custom_send_verification_email() {
     let plugin =
         EmailVerificationPlugin::new().custom_send_verification_email(Arc::new(DummySender));
     assert!(plugin.config.send_verification_email.is_some());
+}
+
+// Rust-specific surface: Rust hook builder methods on
+// `EmailVerificationPlugin` have no direct TS analogue.
+#[test]
+fn test_builder_before_email_verification_hook() {
+    let hook: EmailVerificationHook = Arc::new(|_user: &User| Box::pin(async { Ok(()) }));
+    let plugin = EmailVerificationPlugin::new().before_email_verification(hook);
+    assert!(plugin.config.before_email_verification.is_some());
+}
+
+// Rust-specific surface: Rust hook builder methods on
+// `EmailVerificationPlugin` have no direct TS analogue.
+#[test]
+fn test_builder_after_email_verification_hook() {
+    let hook: EmailVerificationHook = Arc::new(|_user: &User| Box::pin(async { Ok(()) }));
+    let plugin = EmailVerificationPlugin::new().after_email_verification(hook);
+    assert!(plugin.config.after_email_verification.is_some());
 }
 
 /// Helper to create a minimal User for unit tests.
@@ -68,7 +175,30 @@ fn jwt_token(
     .unwrap()
 }
 
-// Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
+// Rust-specific surface: helper methods exposing plugin state are public Rust
+// APIs with no direct TS analogue.
+#[test]
+fn test_should_send_on_sign_in() {
+    let plugin = EmailVerificationPlugin::new();
+    assert!(!plugin.should_send_on_sign_in());
+
+    let plugin = EmailVerificationPlugin::new().send_on_sign_in(true);
+    assert!(plugin.should_send_on_sign_in());
+}
+
+// Rust-specific surface: helper methods exposing plugin state are public Rust
+// APIs with no direct TS analogue.
+#[test]
+fn test_is_verification_required() {
+    let plugin = EmailVerificationPlugin::new();
+    assert!(!plugin.is_verification_required());
+
+    let plugin = EmailVerificationPlugin::new().require_verification_for_signin(true);
+    assert!(plugin.is_verification_required());
+}
+
+// Rust-specific surface: helper methods exposing plugin state are public Rust
+// APIs with no direct TS analogue.
 #[tokio::test]
 async fn test_is_user_verified_or_not_required() {
     let plugin = EmailVerificationPlugin::new();

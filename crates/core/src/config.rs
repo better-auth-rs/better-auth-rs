@@ -644,6 +644,7 @@ mod tests {
 
     // ── extract_origin ──────────────────────────────────────────────────
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn extract_origin_with_path() {
         assert_eq!(
@@ -652,6 +653,7 @@ mod tests {
         );
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn extract_origin_without_path() {
         assert_eq!(
@@ -660,6 +662,7 @@ mod tests {
         );
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn extract_origin_with_port() {
         assert_eq!(
@@ -668,6 +671,7 @@ mod tests {
         );
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn extract_origin_no_scheme() {
         assert_eq!(extract_origin("example.com"), None);
@@ -675,12 +679,14 @@ mod tests {
 
     // ── AuthConfig::new ─────────────────────────────────────────────────
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn new_config_sets_secret() {
         let cfg = AuthConfig::new("a]secret-that-is-at-least-32-characters-long");
         assert_eq!(cfg.secret, "a]secret-that-is-at-least-32-characters-long");
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn new_config_uses_defaults() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567");
@@ -692,12 +698,14 @@ mod tests {
 
     // ── Builder methods ─────────────────────────────────────────────────
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn base_url_sets_cookie_secure_for_https() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567").base_url("https://myapp.com");
         assert!(cfg.session.cookie_secure);
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn base_url_clears_cookie_secure_for_http() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
@@ -706,6 +714,7 @@ mod tests {
         assert!(!cfg.session.cookie_secure);
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn builder_chaining() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
@@ -722,6 +731,7 @@ mod tests {
         assert_eq!(cfg.advanced.cookie_prefix, Some("myapp".to_string()));
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn trusted_origin_appends() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
@@ -730,6 +740,7 @@ mod tests {
         assert_eq!(cfg.trusted_origins.len(), 2);
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn trusted_origins_replaces() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
@@ -738,6 +749,7 @@ mod tests {
         assert_eq!(cfg.trusted_origins, vec!["https://new.com"]);
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn disabled_path_appends() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
@@ -746,6 +758,7 @@ mod tests {
         assert_eq!(cfg.disabled_paths.len(), 2);
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn disabled_paths_replaces() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
@@ -756,18 +769,21 @@ mod tests {
 
     // ── is_origin_trusted ───────────────────────────────────────────────
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn is_origin_trusted_matches_base_url() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567").base_url("https://myapp.com");
         assert!(cfg.is_origin_trusted("https://myapp.com"));
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn is_origin_trusted_rejects_unknown() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567").base_url("https://myapp.com");
         assert!(!cfg.is_origin_trusted("https://evil.com"));
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn is_origin_trusted_glob_pattern() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
@@ -778,6 +794,7 @@ mod tests {
 
     // ── is_path_disabled ────────────────────────────────────────────────
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn is_path_disabled_matches() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567").disabled_path("/admin");
@@ -787,18 +804,21 @@ mod tests {
 
     // ── validate ────────────────────────────────────────────────────────
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn validate_rejects_empty_secret() {
         let cfg = AuthConfig::default();
         assert!(cfg.validate().is_err());
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn validate_rejects_short_secret() {
         let cfg = AuthConfig::new("short");
         assert!(cfg.validate().is_err());
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn validate_accepts_valid_secret() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567");
@@ -807,6 +827,7 @@ mod tests {
 
     // ── Defaults ────────────────────────────────────────────────────────
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn session_config_defaults() {
         let s = SessionConfig::default();
@@ -818,6 +839,7 @@ mod tests {
         assert_eq!(s.cookie_same_site, SameSite::Lax);
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn jwt_config_defaults() {
         let j = JwtConfig::default();
@@ -825,6 +847,7 @@ mod tests {
         assert_eq!(j.algorithm, "HS256");
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn password_config_defaults() {
         let p = PasswordConfig::default();
@@ -832,6 +855,7 @@ mod tests {
         assert!(!p.require_uppercase);
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn same_site_display() {
         assert_eq!(SameSite::Strict.to_string(), "Strict");
@@ -839,6 +863,7 @@ mod tests {
         assert_eq!(SameSite::None.to_string(), "None");
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn cookie_cache_config_defaults() {
         let c = CookieCacheConfig::default();
@@ -847,6 +872,7 @@ mod tests {
         assert_eq!(c.strategy, CookieCacheStrategy::Compact);
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn account_config_defaults() {
         let a = AccountConfig::default();
@@ -855,6 +881,7 @@ mod tests {
         assert!(a.account_linking.enabled);
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn core_paths_error_page() {
         let html = core_paths::error_page_html("TEST_ERROR");
@@ -864,6 +891,7 @@ mod tests {
 
     // ── session builder methods ─────────────────────────────────────────
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn session_builder_methods() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
@@ -878,6 +906,7 @@ mod tests {
         assert_eq!(cfg.session.fresh_age, Some(Duration::minutes(5)));
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn session_cookie_cache_builder() {
         let cache = CookieCacheConfig {
@@ -894,6 +923,7 @@ mod tests {
         assert_eq!(cc.strategy, CookieCacheStrategy::Jwt);
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn cross_sub_domain_cookies_builder() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
@@ -903,6 +933,7 @@ mod tests {
         assert_eq!(csd.unwrap().domain, ".example.com");
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn advanced_database_defaults() {
         let d = AdvancedDatabaseConfig::default();
@@ -910,6 +941,7 @@ mod tests {
         assert!(!d.use_number_id);
     }
 
+    // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn ip_address_config_defaults() {
         let ip = IpAddressConfig::default();

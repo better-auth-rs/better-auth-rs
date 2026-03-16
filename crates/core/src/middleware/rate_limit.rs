@@ -187,6 +187,7 @@ mod tests {
         }
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_rate_limit_allows_within_limit() {
         let config = RateLimitConfig::new().default_limit(Duration::from_secs(60), 5);
@@ -198,6 +199,7 @@ mod tests {
         }
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_rate_limit_blocks_over_limit() {
         let config = RateLimitConfig::new().default_limit(Duration::from_secs(60), 3);
@@ -213,6 +215,7 @@ mod tests {
         assert_eq!(resp.unwrap().status, 429);
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_rate_limit_per_client() {
         let config = RateLimitConfig::new().default_limit(Duration::from_secs(60), 2);
@@ -231,6 +234,7 @@ mod tests {
         assert!(mw.before_request(&req_b).await.unwrap().is_none());
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_rate_limit_per_endpoint_override() {
         let config = RateLimitConfig::new()
@@ -245,6 +249,7 @@ mod tests {
         assert!(mw.before_request(&req).await.unwrap().is_some());
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_rate_limit_disabled() {
         let config = RateLimitConfig::new()

@@ -32,7 +32,7 @@ fn collect_rust_files(root: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
-fn is_upstream_anchor_exempt(path: &Path) -> bool {
+fn is_behavior_marker_exempt(path: &Path) -> bool {
     let text = path.to_string_lossy();
     text.ends_with("tests/architecture_guard_tests.rs")
         || text.ends_with("tests/client_compat_tests.rs")
@@ -92,17 +92,23 @@ fn legacy_persistence_symbols_are_gone_from_tracked_sources() {
 }
 
 #[test]
-fn behavior_tests_must_include_upstream_reference_comments() {
+fn behavior_tests_must_include_behavior_source_comments() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut files = Vec::new();
 
-    for relative in ["tests", "src", "crates/api/src", "crates/api/tests"] {
+    for relative in [
+        "tests",
+        "src",
+        "crates/api/src",
+        "crates/api/tests",
+        "crates/core/src",
+    ] {
         collect_rust_files(&root.join(relative), &mut files);
     }
 
     let mut violations = Vec::new();
     for path in files {
-        if is_upstream_anchor_exempt(&path) {
+        if is_behavior_marker_exempt(&path) {
             continue;
         }
 
@@ -114,18 +120,27 @@ fn behavior_tests_must_include_upstream_reference_comments() {
                 continue;
             }
 
-            let mut previous_non_empty = None;
+            let mut has_marker = false;
             for candidate in lines[..index].iter().rev() {
-                if !candidate.trim().is_empty() {
-                    previous_non_empty = Some(candidate.trim());
-                    break;
+                let trimmed = candidate.trim();
+                if trimmed.is_empty() {
+                    if has_marker {
+                        break;
+                    }
+                    continue;
                 }
+                if trimmed.starts_with("// Upstream reference:")
+                    || trimmed.starts_with("// Upstream source:")
+                    || trimmed.starts_with("// Rust-specific surface:")
+                {
+                    has_marker = true;
+                    continue;
+                }
+                if trimmed.starts_with("//") {
+                    continue;
+                }
+                break;
             }
-
-            let has_marker = previous_non_empty.is_some_and(|candidate| {
-                candidate.starts_with("// Upstream reference:")
-                    || candidate.starts_with("// Upstream source:")
-            });
 
             if !has_marker {
                 violations.push(format!("{}:{}", path.display(), index + 1));
@@ -135,7 +150,7 @@ fn behavior_tests_must_include_upstream_reference_comments() {
 
     assert!(
         violations.is_empty(),
-        "behavior tests missing upstream reference comments:\n{}",
+        "behavior tests missing source/surface comments:\n{}",
         violations.join("\n")
     );
 }
@@ -152,7 +167,13 @@ fn stale_test_drift_phrasing_is_gone() {
     ];
     let mut files = Vec::new();
 
-    for relative in ["tests", "src", "crates/api/src", "crates/api/tests"] {
+    for relative in [
+        "tests",
+        "src",
+        "crates/api/src",
+        "crates/api/tests",
+        "crates/core/src",
+    ] {
         collect_rust_files(&root.join(relative), &mut files);
     }
 

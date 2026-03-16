@@ -388,6 +388,7 @@ mod tests {
         ))
     }
 
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
     #[test]
     fn auth_route_constructors() {
         let get = AuthRoute::get("/test", "getTest");
@@ -405,6 +406,7 @@ mod tests {
         assert_eq!(delete.method, HttpMethod::Delete);
     }
 
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
     #[test]
     fn auth_route_new() {
         let route = AuthRoute::new(HttpMethod::Patch, "/patch", "patchIt");
@@ -412,6 +414,7 @@ mod tests {
         assert_eq!(route.path, "/patch");
     }
 
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
     #[test]
     fn auth_context_new() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
@@ -422,6 +425,7 @@ mod tests {
         assert!(ctx.metadata.is_empty());
     }
 
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
     #[test]
     fn auth_context_metadata() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
@@ -434,6 +438,7 @@ mod tests {
         assert!(ctx.get_metadata("missing").is_none());
     }
 
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
     #[test]
     fn auth_context_email_provider_error_when_none() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
@@ -443,6 +448,7 @@ mod tests {
         assert!(ctx.email_provider().is_err());
     }
 
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
     #[test]
     fn auth_state_clones() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
@@ -455,6 +461,7 @@ mod tests {
         assert_eq!(cloned.config.secret, state.config.secret);
     }
 
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
     #[test]
     fn auth_state_to_context() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
@@ -467,6 +474,7 @@ mod tests {
         assert_eq!(ctx2.config.secret, state.config.secret);
     }
 
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
     #[tokio::test]
     async fn auth_context_require_session_unauthenticated() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
@@ -477,6 +485,7 @@ mod tests {
         assert!(result.is_err());
     }
 
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
     #[tokio::test]
     async fn auth_context_require_session_with_valid_session() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
@@ -504,6 +513,7 @@ mod tests {
         assert_eq!(found_user.id(), user.id());
     }
 
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
     #[test]
     fn auth_state_session_cookie() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
@@ -518,6 +528,7 @@ mod tests {
         assert!(cookie.contains("HttpOnly"));
     }
 
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
     #[test]
     fn auth_state_clear_session_cookie() {
         let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));

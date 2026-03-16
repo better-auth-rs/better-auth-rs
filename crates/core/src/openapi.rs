@@ -143,6 +143,7 @@ impl OpenApiSpec {
 mod tests {
     use super::*;
 
+    // Rust-specific surface: `OpenApiBuilder` and `OpenApiSpec` are Rust-specific public APIs for embedded schema generation.
     #[test]
     fn test_builder_core_routes() {
         let spec = OpenApiBuilder::new("Better Auth", "0.1.0")
@@ -162,6 +163,7 @@ mod tests {
         assert_eq!(ok_path["get"].operation_id, "ok");
     }
 
+    // Rust-specific surface: `OpenApiBuilder` and `OpenApiSpec` are Rust-specific public APIs for embedded schema generation.
     #[test]
     fn test_builder_custom_route() {
         let spec = OpenApiBuilder::new("Test", "1.0.0")
@@ -178,6 +180,7 @@ mod tests {
         assert_eq!(path["post"].tags, vec!["email-password"]);
     }
 
+    // Rust-specific surface: `OpenApiBuilder` and `OpenApiSpec` are Rust-specific public APIs for embedded schema generation.
     #[test]
     fn test_spec_to_json() {
         let spec = OpenApiBuilder::new("Test", "1.0.0").core_routes().build();
@@ -187,6 +190,7 @@ mod tests {
         assert!(json.contains("\"/ok\""));
     }
 
+    // Rust-specific surface: `OpenApiBuilder` and `OpenApiSpec` are Rust-specific public APIs for embedded schema generation.
     #[test]
     fn test_spec_to_value() {
         let spec = OpenApiBuilder::new("Test", "1.0.0").core_routes().build();

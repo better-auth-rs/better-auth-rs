@@ -60,6 +60,7 @@ mod tests {
         }
     }
 
+    // Rust-specific surface: Rust email provider helpers are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_console_email_provider_send() {
         let provider = ConsoleEmailProvider;
@@ -69,6 +70,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
+    // Rust-specific surface: Rust email provider helpers are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_mock_email_provider_records_sends() {
         let (provider, sent) = MockEmailProvider::new();
@@ -84,6 +86,7 @@ mod tests {
         assert_eq!(messages[1].0, "c@d.com");
     }
 
+    // Rust-specific surface: Rust email provider helpers are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_trait_object_works() {
         let provider: Box<dyn EmailProvider> = Box::new(ConsoleEmailProvider);
@@ -91,6 +94,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
+    // Rust-specific surface: Rust email provider helpers are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_missing_provider_returns_error() {
         use crate::config::AuthConfig;
