@@ -1,4 +1,4 @@
-//! Field-level tests — camelCase enforcement and response type signatures.
+//! Field-level smoke tests for camelCase enforcement and representative type signatures.
 
 mod compat;
 
@@ -75,8 +75,8 @@ async fn test_all_responses_use_camel_case() {
     );
 }
 
-/// Generate and print type signatures for all core endpoints.
-/// This test always passes but produces documentation for review.
+/// Generate and print representative response type signatures for review.
+/// This is documentation-oriented smoke coverage, not the compatibility gate.
 #[tokio::test]
 async fn test_response_type_signatures() {
     let auth = create_test_auth().await;

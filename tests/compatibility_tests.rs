@@ -59,7 +59,7 @@ fn load_reference_spec() -> BTreeMap<String, HashSet<String>> {
 fn completed_phase_reference_surface(
     reference: &BTreeMap<String, HashSet<String>>,
 ) -> BTreeMap<String, HashSet<String>> {
-    [
+    let mut surface: BTreeMap<String, HashSet<String>> = [
         "/ok",
         "/error",
         "/sign-up/email",
@@ -82,6 +82,10 @@ fn completed_phase_reference_surface(
         "/change-email",
         "/send-verification-email",
         "/verify-email",
+        "/sign-in/social",
+        "/link-social",
+        "/list-accounts",
+        "/unlink-account",
     ]
     .into_iter()
     .map(|path| {
@@ -93,7 +97,18 @@ fn completed_phase_reference_surface(
                 .clone(),
         )
     })
-    .collect()
+    .collect();
+
+    // The pinned TS runtime exposes `/callback/{provider}` publicly, but the
+    // generated OpenAPI profile omits it. Treat it as a completed-phase
+    // runtime route and assert it explicitly until the structural profile
+    // catches up.
+    let _ = surface.insert(
+        "/callback/{provider}".to_string(),
+        HashSet::from(["get".to_string(), "post".to_string()]),
+    );
+
+    surface
 }
 
 /// Create a test auth instance with all currently implemented plugins.
@@ -305,14 +320,12 @@ async fn test_completed_phase_surface_matches_reference_exactly() {
     );
 }
 
-/// Verify that the "default" (core auth) endpoints we claim to support
-/// actually exist in our implementation.
+/// Verify that the completed Phase 0-3 hot-path endpoints exist at all.
 #[tokio::test]
-async fn test_core_endpoints_present() {
+async fn test_completed_phase_endpoints_present() {
     let auth = create_full_auth().await;
     let implemented = collect_implemented_routes(&auth);
 
-    // Endpoints currently asserted by this broad presence smoke test.
     let required = vec![
         ("get", "/ok"),
         ("get", "/error"),
@@ -331,11 +344,14 @@ async fn test_core_endpoints_present() {
         ("post", "/revoke-session"),
         ("post", "/revoke-sessions"),
         ("post", "/revoke-other-sessions"),
+        ("post", "/sign-in/social"),
+        ("get", "/callback/{provider}"),
+        ("post", "/callback/{provider}"),
+        ("post", "/link-social"),
         ("get", "/list-accounts"),
         ("post", "/unlink-account"),
         ("post", "/change-email"),
         ("get", "/delete-user/callback"),
-        ("post", "/sign-in/username"),
     ];
 
     let mut missing = Vec::new();

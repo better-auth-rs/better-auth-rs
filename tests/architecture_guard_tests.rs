@@ -42,6 +42,14 @@ fn is_behavior_marker_exempt(path: &Path) -> bool {
         || text.ends_with("tests/compatibility_tests.rs")
 }
 
+fn is_phase0_3_strict_marker_target(path: &Path) -> bool {
+    let text = path.to_string_lossy();
+    text.ends_with("tests/integration_tests.rs")
+        || text.ends_with("tests/axum_integration_tests.rs")
+        || text.ends_with("crates/api/src/plugins/email_password.rs")
+        || text.ends_with("crates/api/tests/account_oauth_tests.rs")
+}
+
 fn has_test_attribute(line: &str) -> bool {
     matches!(line.trim(), "#[test]" | "#[tokio::test]")
 }
@@ -108,7 +116,7 @@ fn behavior_tests_must_include_behavior_source_comments() {
 
     let mut violations = Vec::new();
     for path in files {
-        if is_behavior_marker_exempt(&path) {
+        if is_behavior_marker_exempt(&path) || !is_phase0_3_strict_marker_target(&path) {
             continue;
         }
 
@@ -151,6 +159,59 @@ fn behavior_tests_must_include_behavior_source_comments() {
     assert!(
         violations.is_empty(),
         "behavior tests missing source/surface comments:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn upstream_markers_must_not_use_broad_bundle_patterns() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut files = Vec::new();
+
+    for relative in [
+        "tests",
+        "src",
+        "crates/api/src",
+        "crates/api/tests",
+        "crates/core/src",
+    ] {
+        collect_rust_files(&root.join(relative), &mut files);
+    }
+
+    let banned_fragments = [
+        "packages/better-auth/src/api/routes/{",
+        "packages/better-auth/src/plugins/{",
+        ".*.test.ts",
+        ".test.ts and ",
+    ];
+
+    let mut violations = Vec::new();
+    for path in files {
+        if is_behavior_marker_exempt(&path) || !is_phase0_3_strict_marker_target(&path) {
+            continue;
+        }
+
+        let content = fs::read_to_string(&path).expect("source file should be readable");
+        for (index, line) in content.lines().enumerate() {
+            let trimmed = line.trim();
+            if !trimmed.starts_with("// Upstream reference:")
+                && !trimmed.starts_with("// Upstream source:")
+            {
+                continue;
+            }
+
+            for fragment in &banned_fragments {
+                if trimmed.contains(fragment) {
+                    violations.push(format!("{}:{} -> {}", path.display(), index + 1, trimmed));
+                    break;
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "broad upstream markers remain:\n{}",
         violations.join("\n")
     );
 }

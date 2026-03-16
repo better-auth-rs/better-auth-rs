@@ -1,4 +1,4 @@
-//! Endpoint validation tests — the main compatibility gate.
+//! Endpoint validation smoke tests for selected schema-covered endpoints.
 //!
 //! These tests exercise each API endpoint and validate responses against the
 //! OpenAPI spec schema.
@@ -13,8 +13,8 @@ use compat::shapes::check_camel_case_fields;
 use compat::validation::{DiffKind, ShapeDiff, json_type_name};
 use compat::validator::{EndpointResult, SpecValidator};
 
-/// Run all spec-driven endpoint validations in a single test.
-/// This is the main compatibility gate.
+/// Run selected spec-driven endpoint validations in a single smoke test.
+/// The hard compatibility gate is the dual-server client-compat harness.
 #[tokio::test]
 async fn test_spec_driven_endpoint_validation() {
     let auth = create_test_auth().await;

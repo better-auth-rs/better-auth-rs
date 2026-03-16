@@ -469,16 +469,22 @@ breaks.
 Rust-only behavior tests must declare their source of truth. Every
 non-compat Rust behavior test must include an immediately preceding
 comment using one of:
-- `// Upstream reference:` for an adapted upstream TS test
+- `// Upstream reference:` for an adapted upstream TS test. When an
+  upstream test exists, cite the exact file and exact nested Vitest case
+  (`describe("...") > it("...")`) instead of a file bundle or test
+  family.
 - `// Upstream source:` for an upstream handler/source branch without a
-  direct TS test
+  direct TS test. Cite the exact source file and the specific handler or
+  branch being mirrored.
 - `// Rust-specific surface:` for a public Rust API or integration that
   has no upstream TS analogue
 
 If a test is neither upstream-grounded nor protecting a Rust-specific
 surface, delete it instead of keeping a Rust-owned oracle. Do not keep
 tests that normalize approved drift, "acceptable deviations", or other
-local-only behavior claims.
+local-only behavior claims. Do not use brace-expansion/glob marker
+bundles such as `packages/.../{a,b}.test.ts` or `*.test.ts` in these
+source-of-truth comments.
 
 ### Git
 
