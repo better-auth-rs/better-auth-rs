@@ -1350,7 +1350,7 @@
         }
       }
     },
-    "/forget-password": {
+    "/request-password-reset": {
       "post": {
         "tags": [
           "Default"

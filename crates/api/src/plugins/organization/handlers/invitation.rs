@@ -1,4 +1,3 @@
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{
     AuthInvitation, AuthMember, AuthOrganization, AuthSession, AuthUser,
 };
@@ -21,13 +20,13 @@ use crate::plugins::organization::types::{
 // Core functions
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn invite_member_core<DB: DatabaseAdapter>(
+pub(crate) async fn invite_member_core(
     body: &InviteMemberRequest,
-    user: &DB::User,
-    session: &DB::Session,
+    user: &better_auth_core::User,
+    session: &better_auth_core::Session,
     config: &OrganizationConfig,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<DB::Invitation> {
+    ctx: &AuthContext,
+) -> AuthResult<better_auth_core::Invitation> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
@@ -104,10 +103,10 @@ pub(crate) async fn invite_member_core<DB: DatabaseAdapter>(
     Ok(invitation)
 }
 
-pub(crate) async fn get_invitation_core<DB: DatabaseAdapter>(
+pub(crate) async fn get_invitation_core(
     query: &GetInvitationQuery,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<GetInvitationResponse<DB::Invitation>> {
+    ctx: &AuthContext,
+) -> AuthResult<GetInvitationResponse<better_auth_core::Invitation>> {
     if query.id.is_empty() {
         return Err(AuthError::bad_request("Missing invitation id"));
     }
@@ -139,16 +138,17 @@ pub(crate) async fn get_invitation_core<DB: DatabaseAdapter>(
     })
 }
 
-pub(crate) async fn list_invitations_core<DB: DatabaseAdapter>(
+pub(crate) async fn list_invitations_core(
     query: &ListInvitationsQuery,
-    user: &DB::User,
-    session: &DB::Session,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<Vec<DB::Invitation>> {
+    user: &better_auth_core::User,
+    session: &better_auth_core::Session,
+    ctx: &AuthContext,
+) -> AuthResult<Vec<better_auth_core::Invitation>> {
     let org_id =
         resolve_organization_id(query.organization_id.as_deref(), None, session, ctx).await?;
 
-    ctx.database
+    let _ = ctx
+        .database
         .get_member(&org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
@@ -158,10 +158,10 @@ pub(crate) async fn list_invitations_core<DB: DatabaseAdapter>(
     Ok(invitations)
 }
 
-pub(crate) async fn list_user_invitations_core<DB: DatabaseAdapter>(
-    user: &DB::User,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<Vec<DB::Invitation>> {
+pub(crate) async fn list_user_invitations_core(
+    user: &better_auth_core::User,
+    ctx: &AuthContext,
+) -> AuthResult<Vec<better_auth_core::Invitation>> {
     let user_email = user
         .email()
         .ok_or_else(|| AuthError::bad_request("User has no email"))?;
@@ -176,13 +176,13 @@ pub(crate) async fn list_user_invitations_core<DB: DatabaseAdapter>(
     Ok(pending)
 }
 
-pub(crate) async fn accept_invitation_core<DB: DatabaseAdapter>(
+pub(crate) async fn accept_invitation_core(
     body: &AcceptInvitationRequest,
-    user: &DB::User,
-    session: &DB::Session,
+    user: &better_auth_core::User,
+    session: &better_auth_core::Session,
     config: &OrganizationConfig,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<AcceptInvitationResponse<DB::Invitation>> {
+    ctx: &AuthContext,
+) -> AuthResult<AcceptInvitationResponse<better_auth_core::Invitation>> {
     let invitation = ctx
         .database
         .get_invitation_by_id(&body.invitation_id)
@@ -226,7 +226,8 @@ pub(crate) async fn accept_invitation_core<DB: DatabaseAdapter>(
         .await?
         .is_some()
     {
-        ctx.database
+        let _ = ctx
+            .database
             .update_invitation_status(invitation.id(), InvitationStatus::Accepted)
             .await?;
         return Err(AuthError::bad_request(
@@ -247,7 +248,8 @@ pub(crate) async fn accept_invitation_core<DB: DatabaseAdapter>(
         .update_invitation_status(invitation.id(), InvitationStatus::Accepted)
         .await?;
 
-    ctx.database
+    let _ = ctx
+        .database
         .update_session_active_organization(session.token(), Some(invitation.organization_id()))
         .await?;
 
@@ -259,10 +261,10 @@ pub(crate) async fn accept_invitation_core<DB: DatabaseAdapter>(
     })
 }
 
-pub(crate) async fn reject_invitation_core<DB: DatabaseAdapter>(
+pub(crate) async fn reject_invitation_core(
     body: &RejectInvitationRequest,
-    user: &DB::User,
-    ctx: &AuthContext<DB>,
+    user: &better_auth_core::User,
+    ctx: &AuthContext,
 ) -> AuthResult<SuccessResponse> {
     let invitation = ctx
         .database
@@ -285,18 +287,19 @@ pub(crate) async fn reject_invitation_core<DB: DatabaseAdapter>(
         )));
     }
 
-    ctx.database
+    let _ = ctx
+        .database
         .update_invitation_status(invitation.id(), InvitationStatus::Rejected)
         .await?;
 
     Ok(SuccessResponse { success: true })
 }
 
-pub(crate) async fn cancel_invitation_core<DB: DatabaseAdapter>(
+pub(crate) async fn cancel_invitation_core(
     body: &CancelInvitationRequest,
-    user: &DB::User,
+    user: &better_auth_core::User,
     config: &OrganizationConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<SuccessResponse> {
     let invitation = ctx
         .database
@@ -328,7 +331,8 @@ pub(crate) async fn cancel_invitation_core<DB: DatabaseAdapter>(
         )));
     }
 
-    ctx.database
+    let _ = ctx
+        .database
         .update_invitation_status(invitation.id(), InvitationStatus::Canceled)
         .await?;
 
@@ -340,9 +344,9 @@ pub(crate) async fn cancel_invitation_core<DB: DatabaseAdapter>(
 // ---------------------------------------------------------------------------
 
 /// Handle invite member request
-pub async fn handle_invite_member<DB: DatabaseAdapter>(
+pub async fn handle_invite_member(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
@@ -355,9 +359,9 @@ pub async fn handle_invite_member<DB: DatabaseAdapter>(
 }
 
 /// Handle get invitation request
-pub async fn handle_get_invitation<DB: DatabaseAdapter>(
+pub async fn handle_get_invitation(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<AuthResponse> {
     let query = parse_query::<GetInvitationQuery>(&req.query);
     let response = get_invitation_core(&query, ctx).await?;
@@ -365,9 +369,9 @@ pub async fn handle_get_invitation<DB: DatabaseAdapter>(
 }
 
 /// Handle list invitations request
-pub async fn handle_list_invitations<DB: DatabaseAdapter>(
+pub async fn handle_list_invitations(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let query = parse_query::<ListInvitationsQuery>(&req.query);
@@ -376,9 +380,9 @@ pub async fn handle_list_invitations<DB: DatabaseAdapter>(
 }
 
 /// Handle list user invitations request
-pub async fn handle_list_user_invitations<DB: DatabaseAdapter>(
+pub async fn handle_list_user_invitations(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
     let pending = list_user_invitations_core(&user, ctx).await?;
@@ -386,9 +390,9 @@ pub async fn handle_list_user_invitations<DB: DatabaseAdapter>(
 }
 
 /// Handle accept invitation request
-pub async fn handle_accept_invitation<DB: DatabaseAdapter>(
+pub async fn handle_accept_invitation(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
@@ -401,9 +405,9 @@ pub async fn handle_accept_invitation<DB: DatabaseAdapter>(
 }
 
 /// Handle reject invitation request
-pub async fn handle_reject_invitation<DB: DatabaseAdapter>(
+pub async fn handle_reject_invitation(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
     let body: RejectInvitationRequest = match better_auth_core::validate_request_body(req) {
@@ -415,9 +419,9 @@ pub async fn handle_reject_invitation<DB: DatabaseAdapter>(
 }
 
 /// Handle cancel invitation request
-pub async fn handle_cancel_invitation<DB: DatabaseAdapter>(
+pub async fn handle_cancel_invitation(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;

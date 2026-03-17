@@ -8,7 +8,7 @@ Database hooks let you run custom logic before and after user and session operat
 ## Setup
 
 ```rust
-use better_auth::hooks::DatabaseHooks;
+use better_auth::hooks::{DatabaseHookContext, DatabaseHooks, HookControl};
 use async_trait::async_trait;
 
 struct AuditHook;
@@ -16,7 +16,9 @@ struct AuditHook;
 #[async_trait]
 impl DatabaseHooks for AuditHook {
     async fn after_create_user(
-        &self, user: &better_auth::types::User
+        &self,
+        user: &better_auth::prelude::User,
+        _ctx: &DatabaseHookContext<'_>,
     ) -> better_auth::error::AuthResult<()> {
         println!("User created: {}", user.email.as_deref().unwrap_or(""));
         Ok(())
@@ -25,7 +27,7 @@ impl DatabaseHooks for AuditHook {
 
 let auth = BetterAuth::new(config)
     .database(database)
-    .hook(AuditHook)
+    .database_hook(AuditHook)
     .build()
     .await?;
 ```
@@ -38,37 +40,80 @@ All methods have default no-op implementations. Override only what you need.
 #[async_trait]
 pub trait DatabaseHooks: Send + Sync {
     // User hooks
-    async fn before_create_user(&self, user: &mut CreateUser) -> AuthResult<()>;
-    async fn after_create_user(&self, user: &User) -> AuthResult<()>;
-    async fn before_update_user(&self, id: &str, update: &mut UpdateUser) -> AuthResult<()>;
-    async fn after_update_user(&self, user: &User) -> AuthResult<()>;
-    async fn before_delete_user(&self, id: &str) -> AuthResult<()>;
-    async fn after_delete_user(&self, id: &str) -> AuthResult<()>;
+    async fn before_create_user(
+        &self,
+        user: &mut CreateUser,
+        ctx: &DatabaseHookContext<'_>,
+    ) -> AuthResult<HookControl>;
+    async fn after_create_user(
+        &self,
+        user: &User,
+        ctx: &DatabaseHookContext<'_>,
+    ) -> AuthResult<()>;
+    async fn before_update_user(
+        &self,
+        id: &str,
+        update: &mut UpdateUser,
+        ctx: &DatabaseHookContext<'_>,
+    ) -> AuthResult<HookControl>;
+    async fn after_update_user(
+        &self,
+        user: &User,
+        ctx: &DatabaseHookContext<'_>,
+    ) -> AuthResult<()>;
+    async fn before_delete_user(
+        &self,
+        user: &User,
+        ctx: &DatabaseHookContext<'_>,
+    ) -> AuthResult<HookControl>;
+    async fn after_delete_user(
+        &self,
+        user: &User,
+        ctx: &DatabaseHookContext<'_>,
+    ) -> AuthResult<()>;
 
     // Session hooks
-    async fn before_create_session(&self, session: &mut CreateSession) -> AuthResult<()>;
-    async fn after_create_session(&self, session: &Session) -> AuthResult<()>;
-    async fn before_delete_session(&self, token: &str) -> AuthResult<()>;
-    async fn after_delete_session(&self, token: &str) -> AuthResult<()>;
+    async fn before_create_session(
+        &self,
+        session: &mut CreateSession,
+        ctx: &DatabaseHookContext<'_>,
+    ) -> AuthResult<HookControl>;
+    async fn after_create_session(
+        &self,
+        session: &Session,
+        ctx: &DatabaseHookContext<'_>,
+    ) -> AuthResult<()>;
+    async fn before_delete_session(
+        &self,
+        session: &Session,
+        ctx: &DatabaseHookContext<'_>,
+    ) -> AuthResult<HookControl>;
+    async fn after_delete_session(
+        &self,
+        session: &Session,
+        ctx: &DatabaseHookContext<'_>,
+    ) -> AuthResult<()>;
 }
 ```
 
 ## Rejecting Operations
 
-Return `Err` from a `before_*` hook to abort the operation:
+Return `HookControl::Cancel` or an error from a `before_*` hook to abort the operation:
 
 ```rust
 #[async_trait]
 impl DatabaseHooks for BlockDisposableEmails {
     async fn before_create_user(
-        &self, user: &mut CreateUser
-    ) -> AuthResult<()> {
+        &self,
+        user: &mut CreateUser,
+        _ctx: &DatabaseHookContext<'_>,
+    ) -> AuthResult<HookControl> {
         if let Some(email) = &user.email {
             if email.ends_with("@disposable.com") {
-                return Err(AuthError::forbidden("Disposable emails not allowed"));
+                return Ok(HookControl::Cancel);
             }
         }
-        Ok(())
+        Ok(HookControl::Continue)
     }
 }
 ```
@@ -81,15 +126,66 @@ impl DatabaseHooks for BlockDisposableEmails {
 #[async_trait]
 impl DatabaseHooks for NormalizeEmail {
     async fn before_create_user(
-        &self, user: &mut CreateUser
-    ) -> AuthResult<()> {
+        &self,
+        user: &mut CreateUser,
+        _ctx: &DatabaseHookContext<'_>,
+    ) -> AuthResult<HookControl> {
         if let Some(email) = &mut user.email {
             *email = email.to_lowercase();
         }
-        Ok(())
+        Ok(HookControl::Continue)
     }
 }
 ```
+
+## Provisioning After Signup
+
+For app-specific side effects such as creating a workspace, seeding records, or
+triggering background jobs, prefer `after_create_user` before reaching for a
+custom database adapter wrapper:
+
+```rust
+use async_trait::async_trait;
+use better_auth::error::AuthResult;
+use better_auth::hooks::{DatabaseHookContext, DatabaseHooks};
+use better_auth::prelude::User;
+use better_auth::store::DatabaseConnection;
+use better_auth::store::sea_orm::{ConnectionTrait, Statement};
+
+#[derive(Clone)]
+struct ProvisionWorkspaceHook {
+    db: DatabaseConnection,
+}
+
+#[async_trait]
+impl DatabaseHooks for ProvisionWorkspaceHook {
+    async fn after_create_user(
+        &self,
+        user: &User,
+        _ctx: &DatabaseHookContext<'_>,
+    ) -> AuthResult<()> {
+        let sql = Statement::from_string(
+            self.db.get_database_backend(),
+            format!(
+                "insert into app_workspaces (user_id, name) values ('{}', 'Default Workspace')",
+                user.id
+            ),
+        );
+        let _ = self.db.execute(sql).await?;
+        Ok(())
+    }
+}
+
+let auth = BetterAuth::new(config)
+    .database(database.clone())
+    .database_hook(ProvisionWorkspaceHook { db: database })
+    .build()
+    .await?;
+```
+
+Use a full adapter wrapper only when you need to replace the persistence
+behavior itself. For most onboarding and provisioning work, hooks are the
+cleaner integration point.
 
 ## Multiple Hooks
 
@@ -98,11 +194,11 @@ Multiple hooks can be registered. They execute in registration order:
 ```rust
 let auth = BetterAuth::new(config)
     .database(database)
-    .hook(AuditHook)
-    .hook(NormalizeEmail)
-    .hook(BlockDisposableEmails)
+    .database_hook(AuditHook)
+    .database_hook(NormalizeEmail)
+    .database_hook(BlockDisposableEmails)
     .build()
     .await?;
 ```
 
-If any `before_*` hook returns an error, subsequent hooks and the operation itself are skipped.
+If any `before_*` hook returns `HookControl::Cancel` or an error, subsequent hooks and the operation itself are skipped.

@@ -125,7 +125,7 @@ pub(crate) struct VerifyErrorBody {
 }
 
 impl ApiKeyView {
-    pub fn from_entity(ak: &impl AuthApiKey) -> Self {
+    pub(crate) fn from_entity(ak: &impl AuthApiKey) -> Self {
         Self {
             id: ak.id().to_string(),
             name: ak.name().map(|s| s.to_string()),

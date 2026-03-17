@@ -1,15 +1,16 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use validator::Validate;
 
-// Request structures for password endpoints
+/// Request body for `POST /request-password-reset`.
 #[derive(Debug, Deserialize, Validate)]
-pub(crate) struct ForgetPasswordRequest {
+pub(crate) struct RequestPasswordResetRequest {
     #[validate(email(message = "Invalid email address"))]
     pub(crate) email: String,
     #[serde(rename = "redirectTo")]
     pub(crate) redirect_to: Option<String>,
 }
 
+/// Request body for `POST /reset-password`.
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct ResetPasswordRequest {
     #[serde(rename = "newPassword")]
@@ -18,13 +19,17 @@ pub(crate) struct ResetPasswordRequest {
     pub(crate) token: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
-pub(crate) struct SetPasswordRequest {
-    #[serde(rename = "newPassword")]
-    #[validate(length(min = 1, message = "New password is required"))]
-    pub(crate) new_password: String,
+/// Query parameters for `POST /reset-password`.
+#[cfg_attr(
+    not(feature = "axum"),
+    expect(dead_code, reason = "used by the axum handler query extractor")
+)]
+#[derive(Debug, Deserialize)]
+pub(crate) struct ResetPasswordQuery {
+    pub(crate) token: Option<String>,
 }
 
+/// Request body for `POST /change-password`.
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct ChangePasswordRequest {
     #[serde(rename = "newPassword")]
@@ -74,21 +79,21 @@ where
     }
 }
 
-// Response structures
+/// Response body for `POST /request-password-reset`.
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct RequestPasswordResetResponse {
+    pub(crate) status: bool,
+    pub(crate) message: String,
+}
+
+/// Response body for `POST /change-password`.
 #[derive(Debug, Serialize)]
 pub(crate) struct ChangePasswordResponse<U: Serialize> {
     pub(crate) token: Option<String>,
     pub(crate) user: U,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub(crate) struct ResetPasswordTokenResponse {
-    pub(crate) token: String,
-}
-
 /// Result of the reset-password-token core function.
-/// Either redirect to a URL or return JSON.
 pub(crate) enum ResetPasswordTokenResult {
     Redirect(String),
-    Json(ResetPasswordTokenResponse),
 }

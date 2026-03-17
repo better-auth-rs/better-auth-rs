@@ -1,9 +1,11 @@
 ---
 title: Email
-description: Email provider configuration for verification, password reset, and OTP.
+description: Email provider configuration for Better Auth email-backed flows.
 ---
 
-Better Auth uses email for verification, password resets, and OTP-based two-factor authentication. You configure an email provider to handle the actual sending.
+Better Auth uses email for verification and OTP-based two-factor authentication.
+Some routes also use explicit plugin callbacks for delivery. You configure an
+email provider to handle the flows that call `EmailProvider` directly.
 
 ## Email Provider Trait
 
@@ -92,13 +94,11 @@ See [Email Verification](/docs/authentication/email-verification) for details.
 
 ### Password Reset
 
-When a user requests a password reset via the `PasswordManagementPlugin`:
+`POST /request-password-reset` does not use `EmailProvider` directly. To enable
+that route, configure `PasswordManagementPlugin::send_reset_password(...)`.
 
-- **Subject**: Password reset request
-- **Content**: Contains a reset URL with a token
-- **Token expiry**: Configurable, typically 1 hour
-
-See [Password Management](/docs/authentication/password-management) for details.
+See [Password Management](/docs/authentication/password-management) for the
+route-specific sender setup.
 
 ### Two-Factor OTP
 

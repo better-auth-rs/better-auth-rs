@@ -21,40 +21,56 @@ pub(crate) struct StatusResponse {
 
 #[cfg(test)]
 pub(crate) mod test_helpers {
-    use better_auth_core::adapters::{MemoryDatabaseAdapter, SessionOps, UserOps};
-    use better_auth_core::config::AuthConfig;
-    use better_auth_core::{
-        AuthContext, AuthRequest, CreateSession, CreateUser, HttpMethod, Session, User,
-    };
-    use chrono::{Duration, Utc};
     use std::collections::HashMap;
     use std::sync::Arc;
+
+    use better_auth_core::config::AuthConfig;
+    use better_auth_core::{
+        AuthContext, AuthRequest, AuthStore, CreateSession, CreateUser, HttpMethod, Session, User,
+        run_migrations, sea_orm::Database,
+    };
+    use chrono::{Duration, Utc};
+
+    pub type TestDatabase = AuthStore;
 
     pub fn create_test_config() -> AuthConfig {
         AuthConfig::new("test-secret-key-at-least-32-chars-long")
     }
 
-    pub fn create_test_context() -> AuthContext<MemoryDatabaseAdapter> {
-        create_test_context_with_config(create_test_config())
+    pub async fn create_test_database() -> Arc<TestDatabase> {
+        let database = Database::connect("sqlite::memory:")
+            .await
+            .expect("sqlite test database should connect");
+        run_migrations(&database)
+            .await
+            .expect("sqlite test migrations should run");
+        Arc::new(AuthStore::new(Arc::new(create_test_config()), database))
     }
 
-    pub fn create_test_context_with_config(
-        config: AuthConfig,
-    ) -> AuthContext<MemoryDatabaseAdapter> {
+    pub async fn create_test_context() -> AuthContext {
+        create_test_context_with_config(create_test_config()).await
+    }
+
+    pub fn create_test_context_blocking() -> AuthContext {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime should build")
+            .block_on(create_test_context())
+    }
+
+    pub async fn create_test_context_with_config(config: AuthConfig) -> AuthContext {
         let config = Arc::new(config);
-        let database = Arc::new(MemoryDatabaseAdapter::new());
+        let database = create_test_database().await;
         AuthContext::new(config, database)
     }
 
-    pub async fn create_user(
-        ctx: &AuthContext<MemoryDatabaseAdapter>,
-        create_user: CreateUser,
-    ) -> User {
+    pub async fn create_user(ctx: &AuthContext, create_user: CreateUser) -> User {
         ctx.database.create_user(create_user).await.unwrap()
     }
 
     pub async fn create_session(
-        ctx: &AuthContext<MemoryDatabaseAdapter>,
+        ctx: &AuthContext,
         user_id: String,
         expires_in: Duration,
     ) -> Session {
@@ -70,7 +86,7 @@ pub(crate) mod test_helpers {
     }
 
     pub async fn create_user_and_session(
-        ctx: &AuthContext<MemoryDatabaseAdapter>,
+        ctx: &AuthContext,
         user_data: CreateUser,
         session_expires_in: Duration,
     ) -> (User, Session) {
@@ -82,8 +98,8 @@ pub(crate) mod test_helpers {
     pub async fn create_test_context_with_user(
         create_user: CreateUser,
         session_expires_in: Duration,
-    ) -> (AuthContext<MemoryDatabaseAdapter>, User, Session) {
-        let ctx = create_test_context();
+    ) -> (AuthContext, User, Session) {
+        let ctx = create_test_context().await;
         let (user, session) = create_user_and_session(&ctx, create_user, session_expires_in).await;
         (ctx, user, session)
     }

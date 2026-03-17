@@ -35,7 +35,8 @@ Session tokens are generated using cryptographically secure random number genera
 ### Cookie Configuration
 
 ```rust
-use better_auth::{AuthConfig, SameSite};
+use better_auth::AuthConfig;
+use better_auth::config::SameSite;
 
 let mut config = AuthConfig::new("secret-key");
 config.session.cookie_secure = true;        // HTTPS only
@@ -64,28 +65,34 @@ let config = AuthConfig::new("secret-key")
 
 ## CSRF Protection
 
-Better Auth includes built-in CSRF protection that validates the `Origin` or `Referer` header on mutating requests (POST, PUT, DELETE, PATCH).
+Better Auth follows the upstream Better Auth web model:
+
+- mutating requests that carry cookies must present a trusted `Origin` or `Referer`
+- `/sign-up/email` and `/sign-in/email` also use Fetch Metadata headers to block cross-site navigation login attacks on first login
+- the frontend SDK works with cookie sessions directly; no custom CSRF token header is required for the standard `better-auth/react` flow
 
 ```rust
-use better_auth::{AuthBuilder, AuthConfig, CsrfConfig};
+use better_auth::middleware::CsrfConfig;
+use better_auth::{AuthConfig, BetterAuth};
 
 let config = AuthConfig::new(secret)
         .trusted_origins(vec!["https://myapp.com".to_string()]);
 
-let auth = AuthBuilder::new(config)
+let auth = BetterAuth::new(config)
     .csrf(CsrfConfig::new().enabled(true))
     .build()
     .await?;
 ```
 
 Requests from untrusted origins receive a `403 Forbidden` response.
+Better Auth also validates callback and redirect targets against `trusted_origins` unless `advanced.disable_origin_check` is enabled.
 
 ## CORS
 
 Properly configured CORS prevents unauthorized cross-origin access:
 
 ```rust
-use better_auth::CorsConfig;
+use better_auth::middleware::CorsConfig;
 
 let auth = BetterAuth::new(config)
     .cors(
@@ -107,7 +114,7 @@ Recommended limits for authentication endpoints:
 | ---------------------- | ----- | ------ |
 | `/sign-in/email`       | 10    | 60s    |
 | `/sign-up/email`       | 5     | 60s    |
-| `/forget-password`     | 3     | 300s   |
+| `/request-password-reset`     | 3     | 300s   |
 | `/two-factor/verify-*` | 5     | 60s    |
 
 ## OAuth Security

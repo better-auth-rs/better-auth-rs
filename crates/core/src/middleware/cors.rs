@@ -201,7 +201,7 @@ impl Middleware for CorsMiddleware {
         }
 
         for (key, value) in self.cors_headers(&origin) {
-            response.headers.insert(key, value);
+            _ = response.headers.insert(key, value);
         }
 
         Ok(response)
@@ -239,6 +239,7 @@ mod tests {
         }
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_cors_preflight_allowed() {
         let config = CorsConfig::new().allowed_origin("http://localhost:5173");
@@ -255,6 +256,7 @@ mod tests {
         );
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_cors_preflight_not_allowed() {
         let config = CorsConfig::new().allowed_origin("http://localhost:5173");
@@ -265,6 +267,7 @@ mod tests {
         assert!(resp.is_none()); // No CORS headers added for disallowed origin
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_cors_adds_headers_after_request() {
         let config = CorsConfig::new().allowed_origin("http://localhost:5173");
@@ -287,6 +290,7 @@ mod tests {
         );
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_cors_no_origin_header() {
         let config = CorsConfig::new().allowed_origin("http://localhost:5173");
@@ -307,6 +311,7 @@ mod tests {
         assert!(!response.headers.contains_key("Access-Control-Allow-Origin"));
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_cors_wildcard() {
         let config = CorsConfig::new()

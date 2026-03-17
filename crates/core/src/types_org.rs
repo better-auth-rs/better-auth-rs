@@ -1,6 +1,45 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
+
+fn serialize_json_option_as_string<S>(
+    value: &Option<serde_json::Value>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match value {
+        Some(inner) => serializer
+            .serialize_some(&serde_json::to_string(inner).map_err(serde::ser::Error::custom)?),
+        None => serializer.serialize_none(),
+    }
+}
+
+fn deserialize_json_option_from_string<'de, D>(
+    deserializer: D,
+) -> Result<Option<serde_json::Value>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum MetadataValue {
+        Json(serde_json::Value),
+        String(String),
+    }
+
+    let value = Option::<MetadataValue>::deserialize(deserializer)?;
+    value
+        .map(|inner| match inner {
+            MetadataValue::Json(value) => Ok(value),
+            MetadataValue::String(value) => match serde_json::from_str(&value) {
+                Ok(parsed) => Ok(parsed),
+                Err(_) => Ok(serde_json::Value::String(value)),
+            },
+        })
+        .transpose()
+}
 
 /// Organization entity - matches OpenAPI schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,7 +48,11 @@ pub struct Organization {
     pub name: String,
     pub slug: String,
     pub logo: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        serialize_with = "serialize_json_option_as_string",
+        deserialize_with = "deserialize_json_option_from_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub metadata: Option<serde_json::Value>,
     #[serde(rename = "createdAt")]
     pub created_at: DateTime<Utc>,

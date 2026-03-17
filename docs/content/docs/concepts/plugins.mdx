@@ -91,7 +91,7 @@ Routes are defined with a method, path, and operation ID (used as the OpenAPI `o
 
 ```rust
 use better_auth::plugin::AuthRoute;
-use better_auth::types::HttpMethod;
+use better_auth::prelude::HttpMethod;
 
 let routes = vec![
     AuthRoute::post("/my-endpoint", "handle_my_endpoint"),
@@ -108,7 +108,7 @@ Plugins receive an `AuthContext` providing access to shared state:
 ```rust
 pub struct AuthContext {
     pub config: Arc<AuthConfig>,
-    pub database: Arc<dyn DatabaseAdapter>,
+    pub database: Arc<AuthStore>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
     pub metadata: HashMap<String, serde_json::Value>,
 }

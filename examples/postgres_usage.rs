@@ -1,9 +1,9 @@
-use better_auth::adapters::SqlxAdapter;
 use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
 };
-use better_auth::types::{AuthRequest, HttpMethod};
-use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
+use better_auth::prelude::{AuthRequest, HttpMethod};
+use better_auth::store::Database;
+use better_auth::{AuthConfig, BetterAuth, run_migrations};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -17,8 +17,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Connecting to database: {}", hide_password(&database_url));
 
-    // Create PostgreSQL adapter
-    let database = SqlxAdapter::new(&database_url).await?;
+    let database = Database::connect(&database_url).await?;
+    run_migrations(&database).await?;
     println!("Database connection established\n");
 
     // Create configuration
@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .password_min_length(8);
 
     // Build authentication system with all Phase 1 plugins
-    let auth = AuthBuilder::new(config)
+    let auth = BetterAuth::new(config)
         .database(database)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(PasswordManagementPlugin::new())
@@ -55,14 +55,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(&signup_body),
         None,
     )
-    .await;
+    .await?;
     println!("Status: {}", response.status);
     let data = parse_body(&response.body);
-    let token = data["token"].as_str().unwrap_or_default().to_string();
+    let token = data
+        .get("token")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
     if let Some(user) = data.get("user") {
-        println!("User: {}", user["email"]);
-        println!("Username: {}", user["username"]);
-        println!("ID: {}", user["id"]);
+        println!(
+            "User: {}",
+            user.get("email")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("<missing>")
+        );
+        println!(
+            "Username: {}",
+            user.get("username")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("<missing>")
+        );
+        println!(
+            "ID: {}",
+            user.get("id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("<missing>")
+        );
     }
     println!();
 
@@ -79,7 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(&signin_body),
         None,
     )
-    .await;
+    .await?;
     println!("Status: {}\n", response.status);
 
     // --- Sign in by username ---
@@ -95,24 +114,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(&signin_body),
         None,
     )
-    .await;
+    .await?;
     println!("Status: {}\n", response.status);
 
     // --- Get session ---
     println!("=== Get session ===");
-    let response = send(&auth, HttpMethod::Get, "/get-session", None, Some(&token)).await;
+    let response = send(&auth, HttpMethod::Get, "/get-session", None, Some(&token)).await?;
     println!("Status: {}", response.status);
     let data = parse_body(&response.body);
-    println!("Session user: {}\n", data["user"]["email"]);
+    println!(
+        "Session user: {}\n",
+        data.get("user")
+            .and_then(|user| user.get("email"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("<missing>")
+    );
 
     // --- List sessions ---
     println!("=== List sessions ===");
-    let response = send(&auth, HttpMethod::Get, "/list-sessions", None, Some(&token)).await;
+    let response = send(&auth, HttpMethod::Get, "/list-sessions", None, Some(&token)).await?;
     println!("Status: {}\n", response.status);
 
     // --- List accounts ---
     println!("=== List accounts ===");
-    let response = send(&auth, HttpMethod::Get, "/list-accounts", None, Some(&token)).await;
+    let response = send(&auth, HttpMethod::Get, "/list-accounts", None, Some(&token)).await?;
     println!("Status: {}\n", response.status);
 
     // --- Duplicate registration (should fail) ---
@@ -124,7 +149,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(&signup_body),
         None,
     )
-    .await;
+    .await?;
     println!("Status: {} (expected error)\n", response.status);
 
     // --- Wrong password (should fail) ---
@@ -140,7 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(&wrong_body),
         None,
     )
-    .await;
+    .await?;
     println!("Status: {} (expected 401)\n", response.status);
 
     println!("PostgreSQL example completed successfully!");
@@ -150,18 +175,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Helper: send a request through the auth handler
 async fn send(
-    auth: &BetterAuth<SqlxAdapter>,
+    auth: &BetterAuth,
     method: HttpMethod,
     path: &str,
     body: Option<&serde_json::Value>,
     bearer_token: Option<&str>,
-) -> better_auth::types::AuthResponse {
+) -> Result<better_auth::prelude::AuthResponse, better_auth::AuthError> {
     let mut headers = HashMap::new();
     if body.is_some() {
-        headers.insert("content-type".to_string(), "application/json".to_string());
+        _ = headers.insert("content-type".to_string(), "application/json".to_string());
     }
     if let Some(token) = bearer_token {
-        headers.insert("authorization".to_string(), format!("Bearer {}", token));
+        _ = headers.insert("authorization".to_string(), format!("Bearer {}", token));
     }
 
     let request = AuthRequest::from_parts(
@@ -172,7 +197,7 @@ async fn send(
         HashMap::new(),
     );
 
-    auth.handle_request(request).await.unwrap()
+    auth.handle_request(request).await
 }
 
 /// Helper: parse JSON body
@@ -182,14 +207,13 @@ fn parse_body(body: &[u8]) -> serde_json::Value {
 
 /// Hide password in database URL for logging output
 fn hide_password(url: &str) -> String {
-    if let Some(at_pos) = url.find('@') {
-        if let Some(colon_pos) = url[..at_pos].rfind(':') {
-            if let Some(slash_pos) = url[..colon_pos].rfind('/') {
-                let before_password = &url[..slash_pos + 1];
-                let after_password = &url[at_pos..];
-                return format!("{}****{}", before_password, after_password);
-            }
-        }
+    if let Some(at_pos) = url.find('@')
+        && let Some(colon_pos) = url[..at_pos].rfind(':')
+        && let Some(slash_pos) = url[..colon_pos].rfind('/')
+    {
+        let before_password = &url[..slash_pos + 1];
+        let after_password = &url[at_pos..];
+        return format!("{}****{}", before_password, after_password);
     }
     url.to_string()
 }

@@ -11,7 +11,6 @@ use argon2::{Argon2, PasswordHasher as Argon2PasswordHasher, PasswordVerifier};
 use async_trait::async_trait;
 use serde::Serialize;
 
-use crate::adapters::DatabaseAdapter;
 use crate::error::{AuthError, AuthResult};
 use crate::plugin::AuthContext;
 use crate::types::UpdateUser;
@@ -92,26 +91,21 @@ pub async fn verify_password(
 /// Validate `password` against both the plugin-level length limits and the
 /// global `PasswordConfig` strength rules.  Performs min-length, max-length,
 /// uppercase, lowercase, digit and special-character checks.
-pub fn validate_password<DB: DatabaseAdapter>(
+pub fn validate_password(
     password: &str,
     min_length: usize,
     max_length: usize,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<()> {
     let config = &ctx.config.password;
 
     if password.len() < min_length {
-        return Err(AuthError::bad_request(format!(
-            "Password must be at least {} characters long",
-            config.min_length
-        )));
+        let _ = config;
+        return Err(AuthError::bad_request("Password too short"));
     }
 
     if password.len() > max_length {
-        return Err(AuthError::bad_request(format!(
-            "Password must be at most {} characters long",
-            max_length
-        )));
+        return Err(AuthError::bad_request("Password too long"));
     }
 
     if config.require_uppercase && !password.chars().any(|c| c.is_uppercase()) {

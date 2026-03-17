@@ -3,10 +3,19 @@
 //! These are pure (non-async) tests that verify shape comparison, camelCase
 //! detection, type-signature extraction, and schema resolution without
 //! spinning up an auth instance.
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "unit tests intentionally use panic-on-failure assertions and direct indexing for compact fixture checks"
+)]
 
 mod compat;
 
-use compat::schema::{extract_success_schema, load_openapi_spec, resolve_object_schema};
+use compat::schema::{
+    OpenApiProfile, extract_success_schema, load_openapi_spec, load_openapi_spec_with_profile,
+    resolve_object_schema,
+};
 use compat::shapes::{check_camel_case_fields, compare_shapes, extract_type_signature};
 
 // ---------------------------------------------------------------------------
@@ -169,5 +178,58 @@ fn test_success_schema_extraction() {
     assert!(
         signin_schema.fields.contains_key("user"),
         "Signin schema should have 'user' field"
+    );
+}
+
+#[test]
+fn test_default_profile_is_core() {
+    let spec = load_openapi_spec();
+    let paths = spec.paths.as_ref().expect("spec must have paths");
+
+    assert!(
+        paths.contains_key("/sign-up/email"),
+        "core profile should include default auth endpoints"
+    );
+    assert!(
+        paths.contains_key("/list-sessions"),
+        "core profile should include session endpoints"
+    );
+    assert!(
+        !paths.contains_key("/admin/list-users"),
+        "default core profile should not include admin endpoints"
+    );
+    assert!(
+        !paths.contains_key("/passkey/generate-register-options"),
+        "default core profile should not include passkey endpoints"
+    );
+}
+
+#[test]
+fn test_aligned_profile_includes_passkey_surface() {
+    let spec = load_openapi_spec_with_profile(OpenApiProfile::AlignedRs);
+    let paths = spec.paths.as_ref().expect("spec must have paths");
+
+    assert!(
+        paths.contains_key("/passkey/generate-register-options"),
+        "aligned-rs profile should include passkey endpoints"
+    );
+    assert!(
+        !paths.contains_key("/admin/list-users"),
+        "aligned-rs profile should not include admin endpoints"
+    );
+}
+
+#[test]
+fn test_all_in_profile_includes_admin_surface() {
+    let spec = load_openapi_spec_with_profile(OpenApiProfile::AllIn);
+    let paths = spec.paths.as_ref().expect("spec must have paths");
+
+    assert!(
+        paths.contains_key("/admin/list-users"),
+        "all-in profile should include admin endpoints"
+    );
+    assert!(
+        paths.contains_key("/passkey/generate-register-options"),
+        "all-in profile should retain aligned-rs endpoints"
     );
 }

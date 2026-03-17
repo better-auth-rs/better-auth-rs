@@ -8,6 +8,7 @@ The `EmailVerificationPlugin` handles sending verification emails and validating
 ## Setup
 
 ```rust
+use chrono::Duration;
 use better_auth::plugins::EmailVerificationPlugin;
 use better_auth::email::ConsoleEmailProvider;
 
@@ -16,7 +17,7 @@ let auth = BetterAuth::new(config)
     .email_provider(ConsoleEmailProvider) // Required for sending emails
     .plugin(
         EmailVerificationPlugin::new()
-            .verification_token_expiry_hours(24)
+            .verification_token_expiry(Duration::hours(24))
             .auto_verify_new_users(false)
     )
     .build()
@@ -29,7 +30,7 @@ An [email provider](/docs/concepts/configuration) must be configured for this pl
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `verification_token_expiry_hours` | `i64` | `24` | Hours before token expires |
+| `verification_token_expiry` | `chrono::Duration` | `Duration::hours(24)` | How long verification tokens stay valid |
 | `send_email_notifications` | `bool` | `true` | Actually send the email |
 | `require_verification_for_signin` | `bool` | `false` | Block sign-in for unverified emails |
 | `auto_verify_new_users` | `bool` | `false` | Auto-verify on sign-up |

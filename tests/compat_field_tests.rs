@@ -1,4 +1,8 @@
-//! Field-level tests — camelCase enforcement and response type signatures.
+//! Field-level smoke tests for camelCase enforcement and representative type signatures.
+#![allow(
+    clippy::indexing_slicing,
+    reason = "field-level compatibility tests use direct JSON indexing for concise response shape assertions"
+)]
 
 mod compat;
 
@@ -19,7 +23,7 @@ async fn test_all_responses_use_camel_case() {
         vec![("POST /sign-up/email", signup_body.clone())];
 
     // Endpoints that require auth
-    let auth_endpoints: Vec<(&str, better_auth::types::AuthRequest)> = vec![
+    let auth_endpoints: Vec<(&str, better_auth::prelude::AuthRequest)> = vec![
         ("GET /get-session", get_with_auth("/get-session", &token)),
         (
             "GET /list-sessions",
@@ -75,8 +79,8 @@ async fn test_all_responses_use_camel_case() {
     );
 }
 
-/// Generate and print type signatures for all core endpoints.
-/// This test always passes but produces documentation for review.
+/// Generate and print representative response type signatures for review.
+/// This is documentation-oriented smoke coverage, not the compatibility gate.
 #[tokio::test]
 async fn test_response_type_signatures() {
     let auth = create_test_auth().await;

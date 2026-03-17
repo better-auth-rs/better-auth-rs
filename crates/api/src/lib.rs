@@ -2,6 +2,15 @@
 //!
 //! Plugin implementations for the Better Auth authentication framework.
 
+#![cfg_attr(
+    test,
+    allow(
+        unused_results,
+        unreachable_pub,
+        reason = "test code intentionally discards setup return values and exposes helpers broadly"
+    )
+)]
+
 pub mod plugins;
 
 pub use plugins::account_management::AccountManagementPlugin;

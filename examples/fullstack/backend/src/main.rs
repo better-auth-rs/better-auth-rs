@@ -1,8 +1,9 @@
 use axum::{Json, Router, response::IntoResponse, routing::get};
-use better_auth::adapters::MemoryDatabaseAdapter;
-use better_auth::handlers::axum::{AxumIntegration, CurrentSession, OptionalSession};
+use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
+use better_auth::middleware::CsrfConfig;
 use better_auth::plugins::{EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin};
-use better_auth::{AuthBuilder, AuthConfig, CsrfConfig};
+use better_auth::store::Database;
+use better_auth::{run_migrations, AuthConfig, BetterAuth};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use axum::http::HeaderName;
@@ -36,10 +37,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .base_url(&backend_url)
         .password_min_length(8);
 
-    let database = MemoryDatabaseAdapter::new();
+    let database_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "sqlite://better-auth-fullstack.db?mode=rwc".to_string());
+    let database = Database::connect(&database_url).await?;
+    run_migrations(&database).await?;
 
     let auth = Arc::new(
-        AuthBuilder::new(config)
+        BetterAuth::new(config)
             .csrf(CsrfConfig::new().enabled(true))
             .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
@@ -106,7 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Protected route - requires a valid session
-async fn get_me(session: CurrentSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
+async fn get_me(session: CurrentSession) -> impl IntoResponse {
     Json(serde_json::json!({
         "user": {
             "id": session.user.id,
@@ -118,7 +122,7 @@ async fn get_me(session: CurrentSession<MemoryDatabaseAdapter>) -> impl IntoResp
 }
 
 /// Public route - optionally shows user info
-async fn public_route(session: OptionalSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
+async fn public_route(session: OptionalSession) -> impl IntoResponse {
     let user_info = session.0.map(|s| {
         serde_json::json!({
             "id": s.user.id,

@@ -1,11 +1,12 @@
 use axum::{Json, Router, response::IntoResponse, routing::get};
-use better_auth::adapters::MemoryDatabaseAdapter;
-use better_auth::handlers::{AxumIntegration, CurrentSession, OptionalSession};
+use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
 use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, OrganizationPlugin, PasswordManagementPlugin,
     SessionManagementPlugin,
 };
-use better_auth::{AuthBuilder, AuthConfig, AuthUser, BetterAuth};
+use better_auth::prelude::AuthUser;
+use better_auth::store::Database;
+use better_auth::{AuthConfig, BetterAuth, run_migrations};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
@@ -24,12 +25,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("📋 Configuration created");
 
-    // Create database adapter (use in-memory for this example)
-    let database = MemoryDatabaseAdapter::new();
+    let database_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "sqlite://better-auth-axum.db?mode=rwc".to_string());
+    let database = Database::connect(&database_url).await?;
+    run_migrations(&database).await?;
 
     // Build the authentication system
     let auth = Arc::new(
-        AuthBuilder::new(config)
+        BetterAuth::new(config)
             .database(database)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
@@ -60,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("     POST /auth/revoke-sessions      - Revoke all user sessions");
     println!("     POST /auth/revoke-other-sessions - Revoke all except current");
     println!("   Password Management:");
-    println!("     POST /auth/forget-password      - Request password reset");
+    println!("     POST /auth/request-password-reset      - Request password reset");
     println!("     POST /auth/reset-password       - Reset password with token");
     println!("     GET  /auth/reset-password/{{token}} - Validate reset token");
     println!("     POST /auth/change-password      - Change password (auth)");
@@ -110,7 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn create_app_router(auth: Arc<BetterAuth<MemoryDatabaseAdapter>>) -> Router {
+async fn create_app_router(auth: Arc<BetterAuth>) -> Router {
     let auth_router = auth.clone().axum_router();
 
     Router::new()
@@ -125,7 +128,7 @@ async fn create_app_router(auth: Arc<BetterAuth<MemoryDatabaseAdapter>>) -> Rout
 // ---------------------------------------------------------------------------
 // Protected route — uses CurrentSession extractor (returns 401 automatically)
 // ---------------------------------------------------------------------------
-async fn get_user_profile(session: CurrentSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
+async fn get_user_profile(session: CurrentSession) -> impl IntoResponse {
     Json(serde_json::json!({
         "id": session.user.id(),
         "email": session.user.email(),
@@ -134,7 +137,7 @@ async fn get_user_profile(session: CurrentSession<MemoryDatabaseAdapter>) -> imp
     }))
 }
 
-async fn protected_route(session: CurrentSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
+async fn protected_route(session: CurrentSession) -> impl IntoResponse {
     Json(serde_json::json!({
         "message": "This is a protected route",
         "user_id": session.user.id(),
@@ -144,7 +147,7 @@ async fn protected_route(session: CurrentSession<MemoryDatabaseAdapter>) -> impl
 // ---------------------------------------------------------------------------
 // Public route — uses OptionalSession to optionally show user info
 // ---------------------------------------------------------------------------
-async fn public_route(session: OptionalSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
+async fn public_route(session: OptionalSession) -> impl IntoResponse {
     let user_info = session.0.map(|s| {
         serde_json::json!({
             "id": s.user.id(),

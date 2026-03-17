@@ -1,4 +1,3 @@
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::AuthUser;
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse};
@@ -82,11 +81,11 @@ better_auth_core::impl_auth_plugin! {
 
 impl AdminPlugin {
     /// Authenticate the caller and verify they have the admin role.
-    async fn require_admin<DB: DatabaseAdapter>(
+    async fn require_admin(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<(DB::User, DB::Session)> {
+        ctx: &AuthContext,
+    ) -> AuthResult<(better_auth_core::User, better_auth_core::Session)> {
         let (user, session) = ctx.require_session(req).await?;
 
         let user_role = user.role().unwrap_or("user");
@@ -99,10 +98,10 @@ impl AdminPlugin {
         Ok((user, session))
     }
 
-    async fn handle_set_role<DB: DatabaseAdapter>(
+    async fn handle_set_role(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: SetRoleRequest = match better_auth_core::validate_request_body(req) {
@@ -113,10 +112,10 @@ impl AdminPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_create_user<DB: DatabaseAdapter>(
+    async fn handle_create_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: CreateUserRequest = match better_auth_core::validate_request_body(req) {
@@ -127,10 +126,10 @@ impl AdminPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_list_users<DB: DatabaseAdapter>(
+    async fn handle_list_users(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let query = ListUsersQueryParams {
@@ -149,10 +148,10 @@ impl AdminPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_list_user_sessions<DB: DatabaseAdapter>(
+    async fn handle_list_user_sessions(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
@@ -163,10 +162,10 @@ impl AdminPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_ban_user<DB: DatabaseAdapter>(
+    async fn handle_ban_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: BanUserRequest = match better_auth_core::validate_request_body(req) {
@@ -177,10 +176,10 @@ impl AdminPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_unban_user<DB: DatabaseAdapter>(
+    async fn handle_unban_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
@@ -191,10 +190,10 @@ impl AdminPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_impersonate_user<DB: DatabaseAdapter>(
+    async fn handle_impersonate_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
@@ -213,10 +212,10 @@ impl AdminPlugin {
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
-    async fn handle_stop_impersonating<DB: DatabaseAdapter>(
+    async fn handle_stop_impersonating(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let session_manager = ctx.session_manager();
         let token = session_manager
@@ -238,10 +237,10 @@ impl AdminPlugin {
         Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
     }
 
-    async fn handle_revoke_user_session<DB: DatabaseAdapter>(
+    async fn handle_revoke_user_session(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: RevokeSessionRequest = match better_auth_core::validate_request_body(req) {
@@ -252,10 +251,10 @@ impl AdminPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_revoke_user_sessions<DB: DatabaseAdapter>(
+    async fn handle_revoke_user_sessions(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
@@ -266,10 +265,10 @@ impl AdminPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_remove_user<DB: DatabaseAdapter>(
+    async fn handle_remove_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: UserIdRequest = match better_auth_core::validate_request_body(req) {
@@ -280,10 +279,10 @@ impl AdminPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_set_user_password<DB: DatabaseAdapter>(
+    async fn handle_set_user_password(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (_admin_user, _admin_session) = self.require_admin(req, ctx).await?;
         let body: SetUserPasswordRequest = match better_auth_core::validate_request_body(req) {
@@ -294,17 +293,17 @@ impl AdminPlugin {
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
-    async fn handle_has_permission<DB: DatabaseAdapter>(
+    async fn handle_has_permission(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: HasPermissionRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = has_permission_core::<DB>(&body, &user, &self.config).await?;
+        let response = has_permission_core(&body, &user, &self.config)?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 }
@@ -329,78 +328,78 @@ mod axum_impl {
         config: AdminConfig,
     }
 
-    async fn handle_set_role<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        AdminSession { .. }: AdminSession<DB>,
+    async fn handle_set_role(
+        State(state): State<AuthState>,
+        Extension(_ps): Extension<Arc<PluginState>>,
+        AdminSession { .. }: AdminSession,
         ValidatedJson(body): ValidatedJson<SetRoleRequest>,
-    ) -> Result<Json<UserResponse<DB::User>>, AuthError> {
+    ) -> Result<Json<UserResponse<better_auth_core::User>>, AuthError> {
         let ctx = state.to_context();
         let response = set_role_core(&body, &ctx).await?;
         Ok(Json(response))
     }
 
-    async fn handle_create_user<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_create_user(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AdminSession { .. }: AdminSession<DB>,
+        AdminSession { .. }: AdminSession,
         ValidatedJson(body): ValidatedJson<CreateUserRequest>,
-    ) -> Result<Json<UserResponse<DB::User>>, AuthError> {
+    ) -> Result<Json<UserResponse<better_auth_core::User>>, AuthError> {
         let ctx = state.to_context();
         let response = create_user_core(&body, &ps.config, &ctx).await?;
         Ok(Json(response))
     }
 
-    async fn handle_list_users<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_list_users(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AdminSession { .. }: AdminSession<DB>,
+        AdminSession { .. }: AdminSession,
         Query(query): Query<ListUsersQueryParams>,
-    ) -> Result<Json<ListUsersResponse<DB::User>>, AuthError> {
+    ) -> Result<Json<ListUsersResponse<better_auth_core::User>>, AuthError> {
         let ctx = state.to_context();
         let response = list_users_core(&query, &ps.config, &ctx).await?;
         Ok(Json(response))
     }
 
-    async fn handle_list_user_sessions<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        AdminSession { .. }: AdminSession<DB>,
+    async fn handle_list_user_sessions(
+        State(state): State<AuthState>,
+        AdminSession { .. }: AdminSession,
         ValidatedJson(body): ValidatedJson<UserIdRequest>,
-    ) -> Result<Json<ListSessionsResponse<DB::Session>>, AuthError> {
+    ) -> Result<Json<ListSessionsResponse<better_auth_core::Session>>, AuthError> {
         let ctx = state.to_context();
         let response = list_user_sessions_core(&body, &ctx).await?;
         Ok(Json(response))
     }
 
-    async fn handle_ban_user<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_ban_user(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        AdminSession { user, .. }: AdminSession<DB>,
+        AdminSession { user, .. }: AdminSession,
         ValidatedJson(body): ValidatedJson<BanUserRequest>,
-    ) -> Result<Json<UserResponse<DB::User>>, AuthError> {
+    ) -> Result<Json<UserResponse<better_auth_core::User>>, AuthError> {
         let ctx = state.to_context();
         let response = ban_user_core(&body, user.id(), &ps.config, &ctx).await?;
         Ok(Json(response))
     }
 
-    async fn handle_unban_user<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        AdminSession { .. }: AdminSession<DB>,
+    async fn handle_unban_user(
+        State(state): State<AuthState>,
+        AdminSession { .. }: AdminSession,
         ValidatedJson(body): ValidatedJson<UserIdRequest>,
-    ) -> Result<Json<UserResponse<DB::User>>, AuthError> {
+    ) -> Result<Json<UserResponse<better_auth_core::User>>, AuthError> {
         let ctx = state.to_context();
         let response = unban_user_core(&body, &ctx).await?;
         Ok(Json(response))
     }
 
-    async fn handle_impersonate_user<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        AdminSession { user, .. }: AdminSession<DB>,
+    async fn handle_impersonate_user(
+        State(state): State<AuthState>,
+        AdminSession { user, .. }: AdminSession,
         ValidatedJson(body): ValidatedJson<UserIdRequest>,
     ) -> Result<
         (
             [(header::HeaderName, String); 1],
-            Json<SessionUserResponse<DB::Session, DB::User>>,
+            Json<SessionUserResponse<better_auth_core::Session, better_auth_core::User>>,
         ),
         AuthError,
     > {
@@ -410,13 +409,13 @@ mod axum_impl {
         Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
-    async fn handle_stop_impersonating<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { session, .. }: CurrentSession<DB>,
+    async fn handle_stop_impersonating(
+        State(state): State<AuthState>,
+        CurrentSession { session, .. }: CurrentSession,
     ) -> Result<
         (
             [(header::HeaderName, String); 1],
-            Json<SessionUserResponse<DB::Session, DB::User>>,
+            Json<SessionUserResponse<better_auth_core::Session, better_auth_core::User>>,
         ),
         AuthError,
     > {
@@ -428,9 +427,9 @@ mod axum_impl {
         Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
 
-    async fn handle_revoke_user_session<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        AdminSession { .. }: AdminSession<DB>,
+    async fn handle_revoke_user_session(
+        State(state): State<AuthState>,
+        AdminSession { .. }: AdminSession,
         ValidatedJson(body): ValidatedJson<RevokeSessionRequest>,
     ) -> Result<Json<SuccessResponse>, AuthError> {
         let ctx = state.to_context();
@@ -438,9 +437,9 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_revoke_user_sessions<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        AdminSession { .. }: AdminSession<DB>,
+    async fn handle_revoke_user_sessions(
+        State(state): State<AuthState>,
+        AdminSession { .. }: AdminSession,
         ValidatedJson(body): ValidatedJson<UserIdRequest>,
     ) -> Result<Json<SuccessResponse>, AuthError> {
         let ctx = state.to_context();
@@ -448,9 +447,9 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_remove_user<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        AdminSession { user, .. }: AdminSession<DB>,
+    async fn handle_remove_user(
+        State(state): State<AuthState>,
+        AdminSession { user, .. }: AdminSession,
         ValidatedJson(body): ValidatedJson<UserIdRequest>,
     ) -> Result<Json<SuccessResponse>, AuthError> {
         let ctx = state.to_context();
@@ -458,9 +457,9 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_set_user_password<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        AdminSession { .. }: AdminSession<DB>,
+    async fn handle_set_user_password(
+        State(state): State<AuthState>,
+        AdminSession { .. }: AdminSession,
         ValidatedJson(body): ValidatedJson<SetUserPasswordRequest>,
     ) -> Result<Json<StatusResponse>, AuthError> {
         let ctx = state.to_context();
@@ -468,59 +467,47 @@ mod axum_impl {
         Ok(Json(response))
     }
 
-    async fn handle_has_permission<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_has_permission(
+        State(_state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
+        CurrentSession { user, .. }: CurrentSession,
         ValidatedJson(body): ValidatedJson<HasPermissionRequest>,
     ) -> Result<Json<PermissionResponse>, AuthError> {
-        let response = has_permission_core::<DB>(&body, &user, &ps.config).await?;
+        let response = has_permission_core(&body, &user, &ps.config)?;
         Ok(Json(response))
     }
 
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for AdminPlugin {
+    impl better_auth_core::AxumPlugin for AdminPlugin {
         fn name(&self) -> &'static str {
             "admin"
         }
 
-        fn router(&self) -> axum::Router<AuthState<DB>> {
+        fn router(&self) -> axum::Router<AuthState> {
             use axum::routing::{get, post};
 
             let plugin_state = Arc::new(PluginState {
                 config: self.config.clone(),
             });
             axum::Router::new()
-                .route("/admin/set-role", post(handle_set_role::<DB>))
-                .route("/admin/create-user", post(handle_create_user::<DB>))
-                .route("/admin/list-users", get(handle_list_users::<DB>))
-                .route(
-                    "/admin/list-user-sessions",
-                    post(handle_list_user_sessions::<DB>),
-                )
-                .route("/admin/ban-user", post(handle_ban_user::<DB>))
-                .route("/admin/unban-user", post(handle_unban_user::<DB>))
-                .route(
-                    "/admin/impersonate-user",
-                    post(handle_impersonate_user::<DB>),
-                )
-                .route(
-                    "/admin/stop-impersonating",
-                    post(handle_stop_impersonating::<DB>),
-                )
+                .route("/admin/set-role", post(handle_set_role))
+                .route("/admin/create-user", post(handle_create_user))
+                .route("/admin/list-users", get(handle_list_users))
+                .route("/admin/list-user-sessions", post(handle_list_user_sessions))
+                .route("/admin/ban-user", post(handle_ban_user))
+                .route("/admin/unban-user", post(handle_unban_user))
+                .route("/admin/impersonate-user", post(handle_impersonate_user))
+                .route("/admin/stop-impersonating", post(handle_stop_impersonating))
                 .route(
                     "/admin/revoke-user-session",
-                    post(handle_revoke_user_session::<DB>),
+                    post(handle_revoke_user_session),
                 )
                 .route(
                     "/admin/revoke-user-sessions",
-                    post(handle_revoke_user_sessions::<DB>),
+                    post(handle_revoke_user_sessions),
                 )
-                .route("/admin/remove-user", post(handle_remove_user::<DB>))
-                .route(
-                    "/admin/set-user-password",
-                    post(handle_set_user_password::<DB>),
-                )
-                .route("/admin/has-permission", post(handle_has_permission::<DB>))
+                .route("/admin/remove-user", post(handle_remove_user))
+                .route("/admin/set-user-password", post(handle_set_user_password))
+                .route("/admin/has-permission", post(handle_has_permission))
                 .layer(Extension(plugin_state))
                 .layer(Extension(AdminRole(self.config.admin_role.clone())))
         }

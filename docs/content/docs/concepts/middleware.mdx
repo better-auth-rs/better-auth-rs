@@ -10,12 +10,13 @@ Better Auth includes middleware that runs before and after every request. Enable
 Validates the `Origin` or `Referer` header against the configured base URL on mutating requests (POST, PUT, DELETE, PATCH).
 
 ```rust
-use better_auth::{AuthBuilder, AuthConfig, CsrfConfig};
+use better_auth::middleware::CsrfConfig;
+use better_auth::{AuthConfig, BetterAuth};
 
 let config = AuthConfig::new(secret)
         .trusted_origins(vec!["https://myapp.com".to_string()]);
 
-let auth = AuthBuilder::new(config)
+let auth = BetterAuth::new(config)
     .csrf(CsrfConfig::new().enabled(true))
     .build()
     .await?;
@@ -33,7 +34,7 @@ Returns `403 Forbidden` when the origin is not trusted.
 Limits requests per client per time window.
 
 ```rust
-use better_auth::RateLimitConfig;
+use better_auth::middleware::RateLimitConfig;
 use std::time::Duration;
 
 let auth = BetterAuth::new(config)
@@ -70,7 +71,7 @@ When rate limited, returns `429`:
 Adds Cross-Origin Resource Sharing headers and handles preflight `OPTIONS` requests.
 
 ```rust
-use better_auth::CorsConfig;
+use better_auth::middleware::CorsConfig;
 
 let auth = BetterAuth::new(config)
     .cors(

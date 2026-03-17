@@ -1,6 +1,5 @@
 use super::*;
 use crate::plugins::test_helpers;
-use better_auth_core::adapters::{AccountOps, MemoryDatabaseAdapter, SessionOps, UserOps};
 use better_auth_core::entity::{AuthAccount, AuthSession};
 use better_auth_core::{AuthPlugin, HttpMethod};
 use better_auth_core::{CreateSession, CreateUser, Session, User};
@@ -8,14 +7,8 @@ use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-async fn create_admin_context() -> (
-    AuthContext<MemoryDatabaseAdapter>,
-    User,
-    Session,
-    User,
-    Session,
-) {
-    let ctx = test_helpers::create_test_context();
+async fn create_admin_context() -> (AuthContext, User, Session, User, Session) {
+    let ctx = test_helpers::create_test_context().await;
 
     // Create admin user
     let admin = test_helpers::create_user(
@@ -71,6 +64,7 @@ fn json_body(resp: &AuthResponse) -> serde_json::Value {
 // Basic auth / access control
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_set_role() {
     let (ctx, _admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -92,6 +86,7 @@ async fn test_set_role() {
     assert_eq!(body["user"]["role"], "moderator");
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_non_admin_rejected() {
     let (ctx, _admin, _admin_session, _user, user_session) = create_admin_context().await;
@@ -111,6 +106,7 @@ async fn test_non_admin_rejected() {
     assert!(result.is_err());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_unauthenticated_rejected() {
     let (ctx, _admin, _admin_session, user, _user_session) = create_admin_context().await;
@@ -130,12 +126,13 @@ async fn test_unauthenticated_rejected() {
     assert!(result.is_err());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_custom_admin_role() {
     let config = Arc::new(better_auth_core::AuthConfig::new(
         "test-secret-key-at-least-32-chars-long",
     ));
-    let database = Arc::new(MemoryDatabaseAdapter::new());
+    let database = test_helpers::create_test_database().await;
     let ctx = AuthContext::new(config, database.clone());
 
     // Create superadmin user with custom role
@@ -189,6 +186,7 @@ async fn test_custom_admin_role() {
     assert_eq!(body["user"]["role"], "moderator");
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_non_admin_path_returns_none() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -210,6 +208,7 @@ async fn test_non_admin_path_returns_none() {
 // Create user
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_create_user() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -234,6 +233,7 @@ async fn test_create_user() {
     assert_eq!(body["user"]["role"], "user");
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_create_user_with_custom_role() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -257,6 +257,7 @@ async fn test_create_user_with_custom_role() {
     assert_eq!(body["user"]["role"], "moderator");
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_create_user_creates_credential_account() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -285,6 +286,7 @@ async fn test_create_user_creates_credential_account() {
     assert!(accounts[0].password().is_some());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_create_user_duplicate_email_rejected() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -306,6 +308,7 @@ async fn test_create_user_duplicate_email_rejected() {
     assert!(result.is_err());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_create_user_default_role_config() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -332,6 +335,7 @@ async fn test_create_user_default_role_config() {
 // List users
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_list_users() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -351,6 +355,7 @@ async fn test_list_users() {
     assert_eq!(body["users"].as_array().unwrap().len(), 2);
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_list_users_pagination() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -377,6 +382,7 @@ async fn test_list_users_pagination() {
     assert_eq!(body["offset"], 0);
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_list_users_respects_max_page_limit() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -406,6 +412,7 @@ async fn test_list_users_respects_max_page_limit() {
 // List user sessions
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_list_user_sessions() {
     let (ctx, _admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -427,6 +434,7 @@ async fn test_list_user_sessions() {
     assert_eq!(sessions.len(), 1);
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_list_user_sessions_nonexistent_user() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -449,6 +457,7 @@ async fn test_list_user_sessions_nonexistent_user() {
 // Ban / Unban
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_ban_unban_user() {
     let (ctx, _admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -483,9 +492,15 @@ async fn test_ban_unban_user() {
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
     assert_eq!(resp.status, 200);
     let body = json_body(&resp);
-    assert_eq!(body["user"]["banned"], false);
+    // After unbanning, `banned` is either false or absent (skip_serializing_if)
+    assert!(
+        body["user"]["banned"] == false || body["user"]["banned"].is_null(),
+        "expected banned to be false or absent, got {:?}",
+        body["user"]["banned"]
+    );
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_cannot_ban_self() {
     let (ctx, admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -505,6 +520,7 @@ async fn test_cannot_ban_self() {
 }
 
 /// Verifies the bug fix: unbanning clears ban_reason and ban_expires in the adapter.
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_unban_clears_ban_reason_and_expires() {
     let (ctx, _admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -542,7 +558,12 @@ async fn test_unban_clears_ban_reason_and_expires() {
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
     assert_eq!(resp.status, 200);
     let body = json_body(&resp);
-    assert_eq!(body["user"]["banned"], false);
+    // After unbanning, `banned` is either false or absent (skip_serializing_if)
+    assert!(
+        body["user"]["banned"] == false || body["user"]["banned"].is_null(),
+        "expected banned to be false or absent, got {:?}",
+        body["user"]["banned"]
+    );
 
     // Verify ban_reason and ban_expires are cleared by checking the DB directly
     let updated_user = ctx
@@ -556,6 +577,7 @@ async fn test_unban_clears_ban_reason_and_expires() {
     assert!(updated_user.ban_expires.is_none());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_ban_with_expiry() {
     let (ctx, _admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -578,6 +600,7 @@ async fn test_ban_with_expiry() {
     assert!(!body["user"]["banExpires"].is_null());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_ban_revokes_user_sessions() {
     let (ctx, _admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -606,6 +629,7 @@ async fn test_ban_revokes_user_sessions() {
     assert!(sessions.is_empty());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_cannot_ban_admin_by_default() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -636,6 +660,7 @@ async fn test_cannot_ban_admin_by_default() {
     assert!(result.is_err());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_allow_ban_admin_config() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -672,6 +697,7 @@ async fn test_allow_ban_admin_config() {
 // Impersonation
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_impersonate_and_stop() {
     let (ctx, _admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -695,6 +721,7 @@ async fn test_impersonate_and_stop() {
 }
 
 /// Verifies the impersonation session has the impersonated_by field set.
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_impersonate_session_has_impersonated_by() {
     let (ctx, admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -724,6 +751,7 @@ async fn test_impersonate_session_has_impersonated_by() {
 }
 
 /// Verifies the bug fix: stop-impersonating creates a new admin session.
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_stop_impersonating_creates_admin_session() {
     let (ctx, admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -776,6 +804,7 @@ async fn test_stop_impersonating_creates_admin_session() {
     assert!(old_session.is_none());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_stop_impersonating_non_impersonation_session_rejected() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -793,6 +822,7 @@ async fn test_stop_impersonating_non_impersonation_session_rejected() {
     assert!(result.is_err());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_cannot_impersonate_self() {
     let (ctx, admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -811,6 +841,7 @@ async fn test_cannot_impersonate_self() {
     assert!(result.is_err());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_impersonate_nonexistent_user_rejected() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -829,6 +860,7 @@ async fn test_impersonate_nonexistent_user_rejected() {
     assert!(result.is_err());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_impersonate_response_has_set_cookie() {
     let (ctx, _admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -855,6 +887,7 @@ async fn test_impersonate_response_has_set_cookie() {
 // Session management
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_revoke_user_sessions() {
     let (ctx, _admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -879,6 +912,7 @@ async fn test_revoke_user_sessions() {
     assert!(sessions.is_empty());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_revoke_specific_session() {
     let (ctx, _admin, admin_session, _user, user_session) = create_admin_context().await;
@@ -907,6 +941,7 @@ async fn test_revoke_specific_session() {
 // Remove user
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_remove_user() {
     let (ctx, _admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -931,6 +966,7 @@ async fn test_remove_user() {
     assert!(deleted.is_none());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_cannot_remove_self() {
     let (ctx, admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -949,6 +985,7 @@ async fn test_cannot_remove_self() {
     assert!(result.is_err());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_remove_user_cleans_up_sessions_and_accounts() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -994,6 +1031,7 @@ async fn test_remove_user_cleans_up_sessions_and_accounts() {
     assert!(accounts.is_empty());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_remove_nonexistent_user() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -1016,6 +1054,7 @@ async fn test_remove_nonexistent_user() {
 // Set user password
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_set_user_password() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -1054,6 +1093,7 @@ async fn test_set_user_password() {
 }
 
 /// Verifies the bug fix: set-user-password also updates the credential account password.
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_set_user_password_updates_account() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -1099,6 +1139,7 @@ async fn test_set_user_password_updates_account() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_set_user_password_too_short() {
     let (ctx, _admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -1118,6 +1159,7 @@ async fn test_set_user_password_too_short() {
     assert!(result.is_err());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_set_password_nonexistent_user() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -1141,6 +1183,7 @@ async fn test_set_password_nonexistent_user() {
 // Permissions
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_has_permission_admin() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -1161,6 +1204,7 @@ async fn test_has_permission_admin() {
     assert_eq!(body["success"], true);
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_has_permission_non_admin() {
     let (ctx, _admin, _admin_session, _user, user_session) = create_admin_context().await;
@@ -1186,6 +1230,7 @@ async fn test_has_permission_non_admin() {
 // Set role edge cases
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_set_role_nonexistent_user() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
@@ -1205,6 +1250,7 @@ async fn test_set_role_nonexistent_user() {
     assert!(result.is_err());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_set_role_persists_in_database() {
     let (ctx, _admin, admin_session, user, _user_session) = create_admin_context().await;
@@ -1236,18 +1282,17 @@ async fn test_set_role_persists_in_database() {
 // Plugin name / routes
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_plugin_name() {
     let plugin = AdminPlugin::new();
-    assert_eq!(
-        <AdminPlugin as AuthPlugin<MemoryDatabaseAdapter>>::name(&plugin),
-        "admin"
-    );
+    assert_eq!(<AdminPlugin as AuthPlugin>::name(&plugin), "admin");
 }
 
+// Upstream reference: packages/better-auth/src/plugins/admin/admin.test.ts :: describe("Admin plugin") and packages/better-auth/src/plugins/admin/routes.ts; adapted to the Rust admin plugin handlers.
 #[tokio::test]
 async fn test_plugin_routes_count() {
     let plugin = AdminPlugin::new();
-    let routes = <AdminPlugin as AuthPlugin<MemoryDatabaseAdapter>>::routes(&plugin);
+    let routes = <AdminPlugin as AuthPlugin>::routes(&plugin);
     assert_eq!(routes.len(), 13, "admin plugin should register 13 routes");
 }

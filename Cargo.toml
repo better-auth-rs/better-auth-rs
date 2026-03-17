@@ -6,10 +6,13 @@ edition = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 
+[lints]
+workspace = true
+
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/api", "crates/derive"]
-exclude = ["examples/sqlx-custom-entities", "examples/sea-orm-migration", "examples/fullstack/backend"]
+members = ["crates/core", "crates/api"]
+exclude = ["examples/sqlx-custom-entities", "examples/fullstack/backend", "compat-tests/rust-server"]
 
 [workspace.package]
 version = "0.9.0"
@@ -21,20 +24,11 @@ repository = "https://github.com/better-auth-rs/better-auth-rs"
 # Sub-crates
 better-auth-core = { version = "0.9.0", path = "crates/core" }
 better-auth-api = { version = "0.9.0", path = "crates/api" }
-better-auth-derive = { version = "0.9.0", path = "crates/derive" }
+better-auth-macros = { version = "0.9.0", path = "crates/derive", package = "better-auth-macros" }
 
 # Asynchronous runtime
 tokio = { version = "1.0", features = ["full"] }
 async-trait = "0.1"
-
-# SQL
-sqlx = { version = "0.8", features = [
-    "runtime-tokio-rustls",
-    "postgres",
-    "chrono",
-    "uuid",
-    "json",
-] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -88,9 +82,7 @@ syn = { version = "2", features = ["full"] }
 
 [features]
 default = []
-axum = ["dep:axum", "dep:tower", "dep:url"]
-derive = ["better-auth-core/derive"]
-sqlx-postgres = ["dep:sqlx", "better-auth-core/sqlx-postgres"]
+axum = ["dep:axum", "dep:tower", "dep:url", "better-auth-core/axum", "better-auth-api/axum"]
 redis-cache = ["dep:redis"]
 
 [dependencies]
@@ -128,9 +120,6 @@ axum = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 
-# Database (optional)
-sqlx = { workspace = true, optional = true }
-
 # Cache (optional)
 redis = { workspace = true, optional = true }
 
@@ -140,7 +129,6 @@ serde_yaml = "0.9"
 tower-http = { version = "0.6", features = ["cors"] }
 tracing-subscriber = { workspace = true }
 oas3 = { version = "0.20.1", features = ["yaml-spec"] }
-insta = { version = "1.46.3", features = ["yaml"] }
 proptest = "1.10.0"
 reqwest = { workspace = true }
 
@@ -150,11 +138,6 @@ required-features = ["axum"]
 
 [[example]]
 name = "postgres_usage"
-required-features = ["sqlx-postgres"]
-
-[[example]]
-name = "custom_entities"
-required-features = ["derive"]
 
 [[bin]]
 name = "sync_better_auth_openapi"
@@ -163,6 +146,30 @@ path = "scripts/sync_better_auth_openapi.rs"
 [[bin]]
 name = "openapi_alignment_report"
 path = "scripts/openapi_alignment_report.rs"
+
+[workspace.lints.clippy]
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+unreachable = "warn"
+indexing_slicing = "warn"
+panic_in_result_fn = "warn"
+undocumented_unsafe_blocks = "warn"
+missing_safety_doc = "warn"
+await_holding_lock = "warn"
+await_holding_refcell_ref = "warn"
+unused_async = "warn"
+multiple_unsafe_ops_per_block = "warn"
+unnecessary_safety_comment = "warn"
+
+[workspace.lints.rust]
+unfulfilled_lint_expectations = "warn"
+unreachable_pub = "warn"
+unused_results = "warn"
 
 [profile.release]
 opt-level = 3

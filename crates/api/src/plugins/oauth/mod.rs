@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 
 use better_auth_core::AuthResult;
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
@@ -11,9 +10,14 @@ use better_auth_core::plugin::{AuthState, AxumPlugin};
 pub mod encryption;
 mod handlers;
 mod providers;
+mod state;
 mod types;
 
-pub use providers::{OAuthConfig, OAuthProvider, OAuthStateStrategy, OAuthUserInfo};
+pub use providers::{
+    OAuthCallbackUserName, OAuthCallbackUserPayload, OAuthConfig, OAuthIdTokenVerifier,
+    OAuthProvider, OAuthRefreshTokenHandler, OAuthTokenSet, OAuthUserInfo, OAuthUserInfoHandler,
+    OAuthUserInfoRequest, OAuthUserInfoResponse,
+};
 
 pub struct OAuthPlugin {
     config: OAuthConfig,
@@ -31,7 +35,7 @@ impl OAuthPlugin {
     }
 
     pub fn add_provider(mut self, name: &str, provider: OAuthProvider) -> Self {
-        self.config.providers.insert(name.to_string(), provider);
+        let _ = self.config.providers.insert(name.to_string(), provider);
         self
     }
 }
@@ -43,7 +47,7 @@ impl Default for OAuthPlugin {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for OAuthPlugin {
+impl AuthPlugin for OAuthPlugin {
     fn name(&self) -> &'static str {
         "oauth"
     }
@@ -52,6 +56,7 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for OAuthPlugin {
         vec![
             AuthRoute::post("/sign-in/social", "social_sign_in"),
             AuthRoute::get("/callback/{provider}", "oauth_callback"),
+            AuthRoute::post("/callback/{provider}", "oauth_callback_post"),
             AuthRoute::post("/link-social", "link_social"),
             AuthRoute::post("/get-access-token", "get_access_token"),
             AuthRoute::post("/refresh-token", "refresh_token"),
@@ -61,13 +66,13 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for OAuthPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/sign-in/social") => Ok(Some(
                 handlers::handle_social_sign_in(&self.config, req, ctx).await?,
             )),
-            (HttpMethod::Get, path) if path_matches_callback(path) => {
+            (HttpMethod::Get | HttpMethod::Post, path) if path_matches_callback(path) => {
                 let provider = extract_provider_from_callback(path);
                 Ok(Some(
                     handlers::handle_callback(&self.config, &provider, req, ctx).await?,
@@ -108,95 +113,73 @@ mod axum_impl {
     use super::*;
     use std::sync::Arc;
 
-    use axum::Json;
-    use axum::extract::{Extension, Path, Query, State};
-    use axum::http::header;
-    use axum::response::IntoResponse;
+    use axum::extract::{Extension, Path, State};
     use better_auth_core::error::AuthError;
-    use better_auth_core::extractors::{CurrentSession, ValidatedJson};
-
-    use super::handlers::{
-        callback_core, get_access_token_core, link_social_core, refresh_token_core,
-        social_sign_in_core,
-    };
-    use super::types::{
-        AccessTokenResponse, GetAccessTokenRequest, LinkSocialRequest, RefreshTokenRequest,
-        RefreshTokenResponse, SocialSignInRequest, SocialSignInResponse,
-    };
-
-    #[derive(serde::Deserialize)]
-    struct CallbackQuery {
-        code: String,
-        state: String,
-    }
+    use better_auth_core::extractors::{AuthRequestExt, AxumAuthResponse};
 
     #[derive(Clone)]
     struct PluginState {
         config: OAuthConfig,
     }
 
-    async fn handle_social_sign_in<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_social_sign_in(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        ValidatedJson(body): ValidatedJson<SocialSignInRequest>,
-    ) -> Result<Json<SocialSignInResponse>, AuthError> {
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, AuthError> {
         let ctx = state.to_context();
-        let result = social_sign_in_core(&body, &ps.config, &ctx).await?;
-        Ok(Json(result))
+        let response = handlers::handle_social_sign_in(&ps.config, &req, &ctx).await?;
+        Ok(AxumAuthResponse(response))
     }
 
-    async fn handle_callback<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_callback(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
         Path(provider): Path<String>,
-        Query(params): Query<CallbackQuery>,
-    ) -> Result<impl IntoResponse, AuthError> {
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, AuthError> {
         let ctx = state.to_context();
-        let (response, token) =
-            callback_core(&params.code, &params.state, &provider, &ps.config, &ctx).await?;
-        let cookie = state.session_cookie(&token);
-        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
+        let response = handlers::handle_callback(&ps.config, &provider, &req, &ctx).await?;
+        Ok(AxumAuthResponse(response))
     }
 
-    async fn handle_link_social<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_link_social(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { session, .. }: CurrentSession<DB>,
-        ValidatedJson(body): ValidatedJson<LinkSocialRequest>,
-    ) -> Result<Json<SocialSignInResponse>, AuthError> {
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, AuthError> {
         let ctx = state.to_context();
-        let result = link_social_core(&body, &session, &ps.config, &ctx).await?;
-        Ok(Json(result))
+        let response = handlers::handle_link_social(&ps.config, &req, &ctx).await?;
+        Ok(AxumAuthResponse(response))
     }
 
-    async fn handle_get_access_token<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { session, .. }: CurrentSession<DB>,
-        ValidatedJson(body): ValidatedJson<GetAccessTokenRequest>,
-    ) -> Result<Json<AccessTokenResponse>, AuthError> {
-        let ctx = state.to_context();
-        let result = get_access_token_core(&body, &session, &ctx).await?;
-        Ok(Json(result))
-    }
-
-    async fn handle_refresh_token<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_get_access_token(
+        State(state): State<AuthState>,
         Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { session, .. }: CurrentSession<DB>,
-        ValidatedJson(body): ValidatedJson<RefreshTokenRequest>,
-    ) -> Result<Json<RefreshTokenResponse>, AuthError> {
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, AuthError> {
         let ctx = state.to_context();
-        let result = refresh_token_core(&body, &session, &ps.config, &ctx).await?;
-        Ok(Json(result))
+        let response = handlers::handle_get_access_token(&ps.config, &req, &ctx).await?;
+        Ok(AxumAuthResponse(response))
+    }
+
+    async fn handle_refresh_token(
+        State(state): State<AuthState>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        AuthRequestExt(req): AuthRequestExt,
+    ) -> Result<AxumAuthResponse, AuthError> {
+        let ctx = state.to_context();
+        let response = handlers::handle_refresh_token(&ps.config, &req, &ctx).await?;
+        Ok(AxumAuthResponse(response))
     }
 
     #[async_trait]
-    impl<DB: DatabaseAdapter> AxumPlugin<DB> for OAuthPlugin {
+    impl AxumPlugin for OAuthPlugin {
         fn name(&self) -> &'static str {
             "oauth"
         }
 
-        fn router(&self) -> axum::Router<AuthState<DB>> {
+        fn router(&self) -> axum::Router<AuthState> {
             use axum::routing::{get, post};
 
             let plugin_state = Arc::new(PluginState {
@@ -204,11 +187,14 @@ mod axum_impl {
             });
 
             axum::Router::new()
-                .route("/sign-in/social", post(handle_social_sign_in::<DB>))
-                .route("/callback/:provider", get(handle_callback::<DB>))
-                .route("/link-social", post(handle_link_social::<DB>))
-                .route("/get-access-token", post(handle_get_access_token::<DB>))
-                .route("/refresh-token", post(handle_refresh_token::<DB>))
+                .route("/sign-in/social", post(handle_social_sign_in))
+                .route(
+                    "/callback/:provider",
+                    get(handle_callback).post(handle_callback),
+                )
+                .route("/link-social", post(handle_link_social))
+                .route("/get-access-token", post(handle_get_access_token))
+                .route("/refresh-token", post(handle_refresh_token))
                 .layer(Extension(plugin_state))
         }
     }

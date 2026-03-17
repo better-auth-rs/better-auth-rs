@@ -1,4 +1,3 @@
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthMember, AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
@@ -16,10 +15,10 @@ use crate::plugins::organization::types::{
 // Core functions
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn get_active_member_core<DB: DatabaseAdapter>(
-    user: &DB::User,
-    session: &DB::Session,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn get_active_member_core(
+    user: &better_auth_core::User,
+    session: &better_auth_core::Session,
+    ctx: &AuthContext,
 ) -> AuthResult<MemberResponse> {
     let org_id = session
         .active_organization_id()
@@ -34,11 +33,11 @@ pub(crate) async fn get_active_member_core<DB: DatabaseAdapter>(
     Ok(MemberResponse::from_member_and_user(&member, user))
 }
 
-pub(crate) async fn list_members_core<DB: DatabaseAdapter>(
+pub(crate) async fn list_members_core(
     query: &ListMembersQuery,
-    user: &DB::User,
-    session: &DB::Session,
-    ctx: &AuthContext<DB>,
+    user: &better_auth_core::User,
+    session: &better_auth_core::Session,
+    ctx: &AuthContext,
 ) -> AuthResult<ListMembersResponse> {
     let org_id = resolve_organization_id(
         query.organization_id.as_deref(),
@@ -48,7 +47,8 @@ pub(crate) async fn list_members_core<DB: DatabaseAdapter>(
     )
     .await?;
 
-    ctx.database
+    let _ = ctx
+        .database
         .get_member(&org_id, user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
@@ -71,12 +71,12 @@ pub(crate) async fn list_members_core<DB: DatabaseAdapter>(
     Ok(ListMembersResponse { members, total })
 }
 
-pub(crate) async fn remove_member_core<DB: DatabaseAdapter>(
+pub(crate) async fn remove_member_core(
     body: &RemoveMemberRequest,
-    user: &DB::User,
-    session: &DB::Session,
+    user: &better_auth_core::User,
+    session: &better_auth_core::Session,
     config: &OrganizationConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<RemovedMemberResponse> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
@@ -171,12 +171,12 @@ pub(crate) async fn remove_member_core<DB: DatabaseAdapter>(
     Ok(response)
 }
 
-pub(crate) async fn update_member_role_core<DB: DatabaseAdapter>(
+pub(crate) async fn update_member_role_core(
     body: &UpdateMemberRoleRequest,
-    user: &DB::User,
-    session: &DB::Session,
+    user: &better_auth_core::User,
+    session: &better_auth_core::Session,
     config: &OrganizationConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<MemberWrappedResponse> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
@@ -243,9 +243,9 @@ pub(crate) async fn update_member_role_core<DB: DatabaseAdapter>(
 // ---------------------------------------------------------------------------
 
 /// Handle get active member request
-pub async fn handle_get_active_member<DB: DatabaseAdapter>(
+pub async fn handle_get_active_member(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let response = get_active_member_core(&user, &session, ctx).await?;
@@ -253,10 +253,7 @@ pub async fn handle_get_active_member<DB: DatabaseAdapter>(
 }
 
 /// Handle list members request
-pub async fn handle_list_members<DB: DatabaseAdapter>(
-    req: &AuthRequest,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<AuthResponse> {
+pub async fn handle_list_members(req: &AuthRequest, ctx: &AuthContext) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let query = parse_query::<ListMembersQuery>(&req.query);
     let response = list_members_core(&query, &user, &session, ctx).await?;
@@ -264,9 +261,9 @@ pub async fn handle_list_members<DB: DatabaseAdapter>(
 }
 
 /// Handle remove member request
-pub async fn handle_remove_member<DB: DatabaseAdapter>(
+pub async fn handle_remove_member(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
@@ -279,9 +276,9 @@ pub async fn handle_remove_member<DB: DatabaseAdapter>(
 }
 
 /// Handle update member role request
-pub async fn handle_update_member_role<DB: DatabaseAdapter>(
+pub async fn handle_update_member_role(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;

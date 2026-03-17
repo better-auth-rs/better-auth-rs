@@ -8,10 +8,10 @@ This guide walks through a minimal working example: configure auth, sign up a us
 ## Setup
 
 ```rust
-use better_auth::{BetterAuth, AuthConfig};
+use better_auth::{run_migrations, BetterAuth, AuthConfig};
+use better_auth::store::Database;
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
-use better_auth::adapters::MemoryDatabaseAdapter;
-use better_auth::types::{AuthRequest, HttpMethod};
+use better_auth::prelude::{AuthRequest, HttpMethod};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -20,10 +20,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
         .base_url("http://localhost:3000")
         .password_min_length(8);
+    let database = Database::connect("sqlite::memory:").await?;
+    run_migrations(&database).await?;
 
     // 2. Build
     let auth = BetterAuth::new(config)
-        .database(MemoryDatabaseAdapter::new())
+        .database(database)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .build()

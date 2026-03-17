@@ -1,14 +1,14 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use validator::Validate;
+use validator::{Validate, ValidateEmail};
 
-use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::entity::{AuthSession, AuthUser};
+use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
-    AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod, PASSWORD_HASH_KEY,
+    AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, CreateVerification,
+    HttpMethod, RequestMeta,
 };
 
 use super::email_verification::EmailVerificationPlugin;
@@ -56,7 +56,7 @@ impl std::fmt::Debug for EmailPasswordConfig {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[allow(dead_code)]
+#[expect(dead_code, reason = "fields deserialized from request body")]
 pub(crate) struct SignUpRequest {
     #[validate(length(min = 1, message = "Name is required"))]
     name: String,
@@ -72,7 +72,7 @@ pub(crate) struct SignUpRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[allow(dead_code)]
+#[expect(dead_code, reason = "fields deserialized from request body")]
 pub(crate) struct SignInRequest {
     #[validate(email(message = "Invalid email address"))]
     email: String,
@@ -85,7 +85,7 @@ pub(crate) struct SignInRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[allow(dead_code)]
+#[expect(dead_code, reason = "fields deserialized from request body")]
 pub(crate) struct SignInUsernameRequest {
     #[validate(length(min = 1, message = "Username is required"))]
     username: String,
@@ -105,6 +105,7 @@ pub(crate) struct SignUpResponse<U: Serialize> {
 pub(crate) struct SignInResponse<U: Serialize> {
     redirect: bool,
     token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     url: Option<String>,
     user: U,
 }
@@ -124,7 +125,10 @@ pub(crate) enum SignInCoreResult<U: Serialize> {
 }
 
 impl EmailPasswordPlugin {
-    #[allow(clippy::new_without_default)]
+    #[expect(
+        clippy::new_without_default,
+        reason = "plugin construction is intentionally explicit"
+    )]
     pub fn new() -> Self {
         Self {
             config: EmailPasswordConfig::default(),
@@ -176,17 +180,18 @@ impl EmailPasswordPlugin {
         self
     }
 
-    async fn handle_sign_up<DB: DatabaseAdapter>(
+    async fn handle_sign_up(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let signup_req: SignUpRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
-        let (response, session_token) = sign_up_core(&signup_req, &self.config, ctx).await?;
+        let meta = RequestMeta::from_request(req);
+        let (response, session_token) = sign_up_core(&signup_req, &self.config, &meta, ctx).await?;
 
         if let Some(token) = session_token {
             let cookie_header = create_session_cookie(&token, &ctx.config);
@@ -196,20 +201,29 @@ impl EmailPasswordPlugin {
         }
     }
 
-    async fn handle_sign_in<DB: DatabaseAdapter>(
+    async fn handle_sign_in(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
+        if let Ok(raw_body) = req.body_as_json::<serde_json::Value>()
+            && let Some(email) = raw_body.get("email").and_then(|value| value.as_str())
+            && !email.validate_email()
+        {
+            return Err(AuthError::bad_request("Invalid email"));
+        }
+
         let signin_req: SignInRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
+        let meta = RequestMeta::from_request(req);
         match sign_in_core(
             &signin_req,
             &self.config,
             self.email_verification.as_deref(),
+            &meta,
             ctx,
         )
         .await?
@@ -224,20 +238,22 @@ impl EmailPasswordPlugin {
         }
     }
 
-    async fn handle_sign_in_username<DB: DatabaseAdapter>(
+    async fn handle_sign_in_username(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<AuthResponse> {
         let signin_req: SignInUsernameRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
+        let meta = RequestMeta::from_request(req);
         match sign_in_username_core(
             &signin_req,
             &self.config,
             self.email_verification.as_deref(),
+            &meta,
             ctx,
         )
         .await?
@@ -261,11 +277,12 @@ impl EmailPasswordPlugin {
 ///
 /// Returns `(response, Option<session_token>)`. The session token is present
 /// only when `auto_sign_in` is true.
-pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
+pub(crate) async fn sign_up_core(
     body: &SignUpRequest,
     config: &EmailPasswordConfig,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(SignUpResponse<DB::User>, Option<String>)> {
+    meta: &RequestMeta,
+    ctx: &AuthContext,
+) -> AuthResult<(SignUpResponse<better_auth_core::User>, Option<String>)> {
     if !config.enable_signup {
         return Err(AuthError::forbidden("User registration is not enabled"));
     }
@@ -279,21 +296,15 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
 
     // Check if user already exists
     if ctx.database.get_user_by_email(&body.email).await?.is_some() {
-        return Err(AuthError::conflict("A user with this email already exists"));
+        // TS returns 422 UNPROCESSABLE_ENTITY for duplicate email
+        return Err(AuthError::UnprocessableEntity(
+            "User already exists. Use another email.".to_string(),
+        ));
     }
 
     // Hash password
     let password_hash =
         password_utils::hash_password(config.password_hasher.as_ref(), &body.password).await?;
-
-    let metadata = {
-        let mut m = serde_json::Map::new();
-        m.insert(
-            PASSWORD_HASH_KEY.to_string(),
-            serde_json::Value::String(password_hash),
-        );
-        serde_json::Value::Object(m)
-    };
 
     let mut create_user = CreateUser::new()
         .with_email(&body.email)
@@ -304,46 +315,97 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
     if let Some(ref display_username) = body.display_username {
         create_user.display_username = Some(display_username.clone());
     }
-    create_user.metadata = Some(metadata);
+    let auto_sign_in = config.auto_sign_in;
+    let expires_in = ctx.config.session.expires_in;
+    let ip_address = meta.ip_address.clone();
+    let user_agent = meta.user_agent.clone();
+    let database = ctx.database.clone();
+    let transaction_database = database.clone();
 
-    let user = ctx.database.create_user(create_user).await?;
+    database
+        .transaction(move |tx| {
+            let database = transaction_database.clone();
+            Box::pin(async move {
+                let user: better_auth_core::User =
+                    database.create_user_in_tx(tx, create_user).await?;
 
-    if config.auto_sign_in {
-        let session = ctx
-            .session_manager()
-            .create_session(&user, None, None)
-            .await?;
-        let token = session.token().to_string();
+                let _ = database
+                    .create_account_in_tx(
+                        tx,
+                        CreateAccount {
+                            user_id: user.id().to_string(),
+                            account_id: user.id().to_string(),
+                            provider_id: "credential".to_string(),
+                            access_token: None,
+                            refresh_token: None,
+                            id_token: None,
+                            access_token_expires_at: None,
+                            refresh_token_expires_at: None,
+                            scope: None,
+                            password: Some(password_hash.clone()),
+                        },
+                    )
+                    .await?;
 
-        let response = SignUpResponse {
-            token: Some(token.clone()),
-            user,
-        };
-        Ok((response, Some(token)))
-    } else {
-        let response = SignUpResponse { token: None, user };
-        Ok((response, None))
-    }
+                if auto_sign_in {
+                    let session: better_auth_core::Session = database
+                        .create_session_in_tx(
+                            tx,
+                            CreateSession {
+                                user_id: user.id().to_string(),
+                                expires_at: chrono::Utc::now() + expires_in,
+                                ip_address,
+                                user_agent,
+                                impersonated_by: None,
+                                active_organization_id: None,
+                            },
+                        )
+                        .await?;
+                    let token = session.token().to_string();
+
+                    Ok((
+                        SignUpResponse {
+                            token: Some(token.clone()),
+                            user,
+                        },
+                        Some(token),
+                    ))
+                } else {
+                    Ok((SignUpResponse { token: None, user }, None))
+                }
+            })
+        })
+        .await
 }
 
 /// Shared sign-in logic after user lookup: verify password, check 2FA, create session.
-async fn sign_in_with_user_core<DB: DatabaseAdapter>(
-    user: DB::User,
+async fn sign_in_with_user_core(
+    user: better_auth_core::User,
     password: &str,
     config: &EmailPasswordConfig,
     email_verification: Option<&EmailVerificationPlugin>,
     callback_url: Option<&str>,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<SignInCoreResult<DB::User>> {
+    meta: &RequestMeta,
+    ctx: &AuthContext,
+) -> AuthResult<SignInCoreResult<better_auth_core::User>> {
     // Verify password
-    let stored_hash = user.password_hash().ok_or(AuthError::InvalidCredentials)?;
+    let stored_hash = ctx
+        .database
+        .get_user_accounts(user.id())
+        .await?
+        .into_iter()
+        .find(|account| account.provider_id() == "credential" && account.password().is_some())
+        .and_then(|account| account.password().map(str::to_string))
+        .ok_or(AuthError::InvalidCredentials)?;
 
-    password_utils::verify_password(config.password_hasher.as_ref(), password, stored_hash).await?;
+    password_utils::verify_password(config.password_hasher.as_ref(), password, &stored_hash)
+        .await?;
 
     // Check if 2FA is enabled
     if user.two_factor_enabled() {
         let pending_token = format!("2fa_{}", uuid::Uuid::new_v4());
-        ctx.database
+        let _ = ctx
+            .database
             .create_verification(CreateVerification {
                 identifier: format!("2fa_pending:{}", pending_token),
                 value: user.id().to_string(),
@@ -370,10 +432,9 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
         );
     }
 
-    // Create session
     let session = ctx
         .session_manager()
-        .create_session(&user, None, None)
+        .create_session(&user, meta.ip_address.clone(), meta.user_agent.clone())
         .await?;
     let token = session.token().to_string();
 
@@ -387,12 +448,13 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
 }
 
 /// Core sign-in by email.
-pub(crate) async fn sign_in_core<DB: DatabaseAdapter>(
+pub(crate) async fn sign_in_core(
     body: &SignInRequest,
     config: &EmailPasswordConfig,
     email_verification: Option<&EmailVerificationPlugin>,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<SignInCoreResult<DB::User>> {
+    meta: &RequestMeta,
+    ctx: &AuthContext,
+) -> AuthResult<SignInCoreResult<better_auth_core::User>> {
     let user = ctx
         .database
         .get_user_by_email(&body.email)
@@ -405,25 +467,36 @@ pub(crate) async fn sign_in_core<DB: DatabaseAdapter>(
         config,
         email_verification,
         body.callback_url.as_deref(),
+        meta,
         ctx,
     )
     .await
 }
 
 /// Core sign-in by username.
-pub(crate) async fn sign_in_username_core<DB: DatabaseAdapter>(
+pub(crate) async fn sign_in_username_core(
     body: &SignInUsernameRequest,
     config: &EmailPasswordConfig,
     email_verification: Option<&EmailVerificationPlugin>,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<SignInCoreResult<DB::User>> {
+    meta: &RequestMeta,
+    ctx: &AuthContext,
+) -> AuthResult<SignInCoreResult<better_auth_core::User>> {
     let user = ctx
         .database
         .get_user_by_username(&body.username)
         .await?
         .ok_or(AuthError::InvalidCredentials)?;
 
-    sign_in_with_user_core(user, &body.password, config, email_verification, None, ctx).await
+    sign_in_with_user_core(
+        user,
+        &body.password,
+        config,
+        email_verification,
+        None,
+        meta,
+        ctx,
+    )
+    .await
 }
 
 impl Default for EmailPasswordConfig {
@@ -440,7 +513,7 @@ impl Default for EmailPasswordConfig {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailPasswordPlugin {
+impl AuthPlugin for EmailPasswordPlugin {
     fn name(&self) -> &'static str {
         "email-password"
     }
@@ -461,7 +534,7 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailPasswordPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/sign-up/email") if self.config.enable_signup => {
@@ -475,7 +548,11 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailPasswordPlugin {
         }
     }
 
-    async fn on_user_created(&self, user: &DB::User, _ctx: &AuthContext<DB>) -> AuthResult<()> {
+    async fn on_user_created(
+        &self,
+        user: &better_auth_core::User,
+        _ctx: &AuthContext,
+    ) -> AuthResult<()> {
         if self.config.require_email_verification
             && !user.email_verified()
             && let Some(email) = user.email()
@@ -501,13 +578,16 @@ mod axum_impl {
     /// Option<Arc<EmailVerificationPlugin>>).
     type SharedPlugin = Arc<EmailPasswordPlugin>;
 
-    async fn handle_sign_up<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_sign_up(
+        State(state): State<AuthState>,
         Extension(plugin): Extension<SharedPlugin>,
         ValidatedJson(body): ValidatedJson<SignUpRequest>,
     ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
-        let (response, session_token) = sign_up_core(&body, &plugin.config, &ctx).await?;
+        // Axum handlers do not yet extract IP/UA from the axum request.
+        // When needed, add `HeaderMap` extractor and build RequestMeta from it.
+        let meta = RequestMeta::default();
+        let (response, session_token) = sign_up_core(&body, &plugin.config, &meta, &ctx).await?;
 
         if let Some(token) = session_token {
             let cookie = state.session_cookie(&token);
@@ -518,9 +598,9 @@ mod axum_impl {
     }
 
     /// Helper to convert a `SignInCoreResult` into an axum response.
-    fn sign_in_result_to_response<DB: DatabaseAdapter>(
-        result: SignInCoreResult<DB::User>,
-        state: &AuthState<DB>,
+    fn sign_in_result_to_response(
+        result: SignInCoreResult<better_auth_core::User>,
+        state: &AuthState,
     ) -> axum::response::Response {
         match result {
             SignInCoreResult::Success(response, token) => {
@@ -531,45 +611,49 @@ mod axum_impl {
         }
     }
 
-    async fn handle_sign_in<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_sign_in(
+        State(state): State<AuthState>,
         Extension(plugin): Extension<SharedPlugin>,
         ValidatedJson(body): ValidatedJson<SignInRequest>,
     ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
+        let meta = RequestMeta::default();
         let result = sign_in_core(
             &body,
             &plugin.config,
             plugin.email_verification.as_deref(),
+            &meta,
             &ctx,
         )
         .await?;
-        Ok(sign_in_result_to_response::<DB>(result, &state))
+        Ok(sign_in_result_to_response(result, &state))
     }
 
-    async fn handle_sign_in_username<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+    async fn handle_sign_in_username(
+        State(state): State<AuthState>,
         Extension(plugin): Extension<SharedPlugin>,
         ValidatedJson(body): ValidatedJson<SignInUsernameRequest>,
     ) -> Result<axum::response::Response, AuthError> {
         let ctx = state.to_context();
+        let meta = RequestMeta::default();
         let result = sign_in_username_core(
             &body,
             &plugin.config,
             plugin.email_verification.as_deref(),
+            &meta,
             &ctx,
         )
         .await?;
-        Ok(sign_in_result_to_response::<DB>(result, &state))
+        Ok(sign_in_result_to_response(result, &state))
     }
 
     #[async_trait::async_trait]
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for EmailPasswordPlugin {
+    impl better_auth_core::AxumPlugin for EmailPasswordPlugin {
         fn name(&self) -> &'static str {
             "email-password"
         }
 
-        fn router(&self) -> axum::Router<AuthState<DB>> {
+        fn router(&self) -> axum::Router<AuthState> {
             use axum::routing::post;
 
             let shared: SharedPlugin = Arc::new(EmailPasswordPlugin {
@@ -578,16 +662,16 @@ mod axum_impl {
             });
 
             axum::Router::new()
-                .route("/sign-up/email", post(handle_sign_up::<DB>))
-                .route("/sign-in/email", post(handle_sign_in::<DB>))
-                .route("/sign-in/username", post(handle_sign_in_username::<DB>))
+                .route("/sign-up/email", post(handle_sign_up))
+                .route("/sign-in/email", post(handle_sign_in))
+                .route("/sign-in/username", post(handle_sign_in_username))
                 .layer(Extension(shared))
         }
 
         async fn on_user_created(
             &self,
-            user: &DB::User,
-            _ctx: &better_auth_core::AuthContext<DB>,
+            user: &better_auth_core::User,
+            _ctx: &better_auth_core::AuthContext,
         ) -> better_auth_core::AuthResult<()> {
             if self.config.require_email_verification
                 && !user.email_verified()
@@ -604,15 +688,14 @@ mod axum_impl {
 mod tests {
     use super::*;
     use better_auth_core::AuthContext;
-    use better_auth_core::adapters::{MemoryDatabaseAdapter, UserOps};
     use better_auth_core::config::AuthConfig;
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    fn create_test_context() -> AuthContext<MemoryDatabaseAdapter> {
+    async fn create_test_context() -> AuthContext {
         let config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
         let config = Arc::new(config);
-        let database = Arc::new(MemoryDatabaseAdapter::new());
+        let database = crate::plugins::test_helpers::create_test_database().await;
         AuthContext::new(config, database)
     }
 
@@ -631,10 +714,11 @@ mod tests {
         )
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/sign-up.test.ts :: describe("sign-up with custom fields") and packages/better-auth/src/api/routes/sign-in.test.ts :: describe("sign-in"); adapted to the Rust email-password plugin behavior.
     #[tokio::test]
     async fn test_auto_sign_in_false_returns_no_session() {
         let plugin = EmailPasswordPlugin::new().auto_sign_in(false);
-        let ctx = create_test_context();
+        let ctx = create_test_context().await;
 
         let req = create_signup_request("auto@example.com", "Password123!");
         let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
@@ -657,10 +741,11 @@ mod tests {
         assert!(body["user"]["id"].is_string());
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/sign-up.test.ts :: describe("sign-up with custom fields") and packages/better-auth/src/api/routes/sign-in.test.ts :: describe("sign-in"); adapted to the Rust email-password plugin behavior.
     #[tokio::test]
     async fn test_auto_sign_in_true_returns_session() {
         let plugin = EmailPasswordPlugin::new(); // default auto_sign_in=true
-        let ctx = create_test_context();
+        let ctx = create_test_context().await;
 
         let req = create_signup_request("autotrue@example.com", "Password123!");
         let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
@@ -681,10 +766,11 @@ mod tests {
         );
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/sign-up.test.ts :: describe("sign-up with custom fields") and packages/better-auth/src/api/routes/sign-in.test.ts :: describe("sign-in"); adapted to the Rust email-password plugin behavior.
     #[tokio::test]
     async fn test_password_max_length_rejection() {
         let plugin = EmailPasswordPlugin::new().password_max_length(128);
-        let ctx = create_test_context();
+        let ctx = create_test_context().await;
 
         // Password of exactly 129 chars should be rejected
         let long_password = format!("A1!{}", "a".repeat(126)); // 129 chars total
@@ -699,6 +785,7 @@ mod tests {
         assert_eq!(response.status, 200);
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/sign-up.test.ts :: describe("sign-up with custom fields") and packages/better-auth/src/api/routes/sign-in.test.ts :: describe("sign-in"); adapted to the Rust email-password plugin behavior.
     #[tokio::test]
     async fn test_custom_password_hasher() {
         /// A simple test hasher that prefixes the password with "hashed:"
@@ -716,7 +803,7 @@ mod tests {
 
         let hasher: Arc<dyn PasswordHasher> = Arc::new(TestHasher);
         let plugin = EmailPasswordPlugin::new().password_hasher(hasher);
-        let ctx = create_test_context();
+        let ctx = create_test_context().await;
 
         // Sign up with custom hasher
         let req = create_signup_request("hasher@example.com", "Password123!");
@@ -730,12 +817,15 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let stored_hash = user
-            .metadata
-            .get(PASSWORD_HASH_KEY)
+        let stored_hash = ctx
+            .database
+            .get_user_accounts(user.id())
+            .await
             .unwrap()
-            .as_str()
-            .unwrap();
+            .into_iter()
+            .find(|account| account.provider_id() == "credential")
+            .and_then(|account| account.password().map(str::to_string))
+            .expect("credential account should store hashed password");
         assert_eq!(stored_hash, "hashed:Password123!");
 
         // Sign in should work with the custom hasher

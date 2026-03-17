@@ -35,7 +35,7 @@ Controls session token behavior and cookie settings.
 | `expires_in` | `Duration` | 7 days |
 | `update_age` | `Option<Duration>` | `Some(1 day)` |
 | `fresh_age` | `Duration` | 1 day |
-| `cookie_name` | `String` | `"better-auth.session-token"` |
+| `cookie_name` | `String` | `"better-auth.session_token"` |
 | `cookie_secure` | `bool` | `true` |
 | `cookie_http_only` | `bool` | `true` |
 | `cookie_same_site` | `SameSite` | `Lax` |
@@ -84,7 +84,8 @@ Controls the Argon2 password hashing parameters.
 
 ## Email Provider
 
-An email provider is required for password reset and email verification flows. Configure it on the builder:
+An email provider configures the global email backend used by Better Auth flows
+that call `EmailProvider` directly. Configure it on the builder:
 
 ```rust
 use better_auth::email::ConsoleEmailProvider;
@@ -94,6 +95,10 @@ let auth = BetterAuth::new(config)
     .build()
     .await?;
 ```
+
+For password reset specifically, `POST /request-password-reset` is enabled by
+`PasswordManagementPlugin::send_reset_password(...)`, not by `EmailProvider`
+alone.
 
 See [Email Verification](/docs/authentication/email-verification) for implementing a custom provider.
 

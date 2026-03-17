@@ -1,8 +1,16 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::ops::Index;
 use uuid::Uuid;
 use validator::Validate;
+
+use crate::utils::email::normalize_user_email;
+
+/// Helper for `#[serde(skip_serializing_if = "is_false")]`
+fn is_false(v: &bool) -> bool {
+    !(*v)
+}
 
 // Re-export organization types
 pub use super::types_org::{
@@ -11,6 +19,11 @@ pub use super::types_org::{
 };
 
 /// Core user type - matches OpenAPI schema
+///
+/// Plugin-added fields (username, role, banned, twoFactorEnabled, etc.) are
+/// omitted from serialization when at their default values, matching TS
+/// behavior where these fields only appear when the corresponding plugin is
+/// enabled.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct User {
     pub id: String,
@@ -23,16 +36,20 @@ pub struct User {
     pub created_at: DateTime<Utc>,
     #[serde(rename = "updatedAt")]
     pub updated_at: DateTime<Utc>,
+    // Plugin-added fields — skip when at default values to match TS core behavior
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub username: Option<String>,
-    #[serde(rename = "displayUsername")]
+    #[serde(rename = "displayUsername", skip_serializing_if = "Option::is_none")]
     pub display_username: Option<String>,
-    #[serde(rename = "twoFactorEnabled")]
+    #[serde(rename = "twoFactorEnabled", skip_serializing_if = "is_false", default)]
     pub two_factor_enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    #[serde(skip_serializing_if = "is_false", default)]
     pub banned: bool,
-    #[serde(rename = "banReason")]
+    #[serde(rename = "banReason", skip_serializing_if = "Option::is_none")]
     pub ban_reason: Option<String>,
-    #[serde(rename = "banExpires")]
+    #[serde(rename = "banExpires", skip_serializing_if = "Option::is_none")]
     pub ban_expires: Option<DateTime<Utc>>,
     // Keep metadata for internal use but don't serialize
     #[serde(skip)]
@@ -56,9 +73,13 @@ pub struct Session {
     pub user_agent: Option<String>,
     #[serde(rename = "userId")]
     pub user_id: String,
-    #[serde(rename = "impersonatedBy")]
+    // Plugin-added fields — skip when at default values to match TS core behavior
+    #[serde(rename = "impersonatedBy", skip_serializing_if = "Option::is_none")]
     pub impersonated_by: Option<String>,
-    #[serde(rename = "activeOrganizationId")]
+    #[serde(
+        rename = "activeOrganizationId",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub active_organization_id: Option<String>,
     // Keep active field for internal use but don't serialize
     #[serde(skip)]
@@ -205,12 +226,141 @@ pub struct AuthRequest {
     pub(crate) virtual_user_id: Option<String>,
 }
 
+/// Metadata extracted from an incoming request for session creation.
+///
+/// Centralizes extraction of IP address and user-agent so that core
+/// functions do not need the full [`AuthRequest`].
+#[derive(Debug, Clone, Default)]
+pub struct RequestMeta {
+    pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
+}
+
+impl RequestMeta {
+    /// Extract metadata from an [`AuthRequest`]'s headers.
+    ///
+    /// IP address is read from `x-forwarded-for` (preferred), falling back
+    /// to `x-real-ip`. User-agent is read from the `user-agent` header.
+    pub fn from_request(req: &AuthRequest) -> Self {
+        Self {
+            ip_address: req
+                .headers
+                .get("x-forwarded-for")
+                .or_else(|| req.headers.get("x-real-ip"))
+                .cloned()
+                .filter(|value| !value.is_empty()),
+            user_agent: req.headers.get("user-agent").cloned(),
+        }
+    }
+}
+
 /// Authentication response wrapper
 #[derive(Debug, Clone)]
 pub struct AuthResponse {
     pub status: u16,
-    pub headers: HashMap<String, String>,
+    pub headers: Headers,
     pub body: Vec<u8>,
+}
+
+/// Response headers preserving repeated header names such as `Set-Cookie`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Headers(Vec<(String, String)>);
+
+impl Headers {
+    /// Create an empty header collection.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Insert a header, replacing any existing values for the same name.
+    pub fn insert(&mut self, name: impl Into<String>, value: impl Into<String>) -> Option<String> {
+        let name = name.into();
+        let value = value.into();
+        let mut previous = None;
+
+        self.0.retain(|(existing_name, existing_value)| {
+            if existing_name.eq_ignore_ascii_case(&name) {
+                previous = Some(existing_value.clone());
+                false
+            } else {
+                true
+            }
+        });
+
+        self.0.push((name, value));
+        previous
+    }
+
+    /// Append a header without removing existing values of the same name.
+    pub fn append(&mut self, name: impl Into<String>, value: impl Into<String>) {
+        self.0.push((name.into(), value.into()));
+    }
+
+    /// Get the last value stored for a header name.
+    pub fn get(&self, name: &str) -> Option<&String> {
+        self.0.iter().rev().find_map(|(existing_name, value)| {
+            existing_name.eq_ignore_ascii_case(name).then_some(value)
+        })
+    }
+
+    /// Iterate over all values stored for a header name.
+    pub fn get_all<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a String> + 'a {
+        self.0.iter().filter_map(move |(existing_name, value)| {
+            existing_name.eq_ignore_ascii_case(name).then_some(value)
+        })
+    }
+
+    /// Check whether a header name exists.
+    pub fn contains_key(&self, name: &str) -> bool {
+        self.get(name).is_some()
+    }
+
+    /// Return whether the collection is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Iterate over stored header pairs in insertion order.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
+        self.0.iter().map(|(name, value)| (name, value))
+    }
+}
+
+impl<'a> IntoIterator for &'a Headers {
+    type Item = (&'a String, &'a String);
+    type IntoIter = std::iter::Map<
+        std::slice::Iter<'a, (String, String)>,
+        fn(&(String, String)) -> (&String, &String),
+    >;
+
+    fn into_iter(self) -> Self::IntoIter {
+        fn map_pair((name, value): &(String, String)) -> (&String, &String) {
+            (name, value)
+        }
+
+        self.0.iter().map(map_pair)
+    }
+}
+
+impl IntoIterator for Headers {
+    type Item = (String, String);
+    type IntoIter = std::vec::IntoIter<(String, String)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl Index<&str> for Headers {
+    type Output = String;
+
+    #[expect(
+        clippy::expect_used,
+        reason = "Index must panic on missing headers to satisfy the trait contract"
+    )]
+    fn index(&self, index: &str) -> &Self::Output {
+        self.get(index).expect("header not found")
+    }
 }
 
 /// User creation data
@@ -400,7 +550,7 @@ impl CreateUser {
     }
 
     pub fn with_email(mut self, email: impl Into<String>) -> Self {
-        self.email = Some(email.into());
+        self.email = Some(normalize_user_email(&email.into()));
         self
     }
 
@@ -515,15 +665,15 @@ impl AuthResponse {
     pub fn new(status: u16) -> Self {
         Self {
             status,
-            headers: HashMap::new(),
+            headers: Headers::new(),
             body: Vec::new(),
         }
     }
 
     pub fn json<T: Serialize>(status: u16, data: &T) -> Result<Self, serde_json::Error> {
         let body = serde_json::to_vec(data)?;
-        let mut headers = HashMap::new();
-        headers.insert("content-type".to_string(), "application/json".to_string());
+        let mut headers = Headers::new();
+        _ = headers.insert("content-type".to_string(), "application/json".to_string());
 
         Ok(Self {
             status,
@@ -534,8 +684,23 @@ impl AuthResponse {
 
     pub fn text(status: u16, text: impl Into<String>) -> Self {
         let body = text.into().into_bytes();
-        let mut headers = HashMap::new();
-        headers.insert("content-type".to_string(), "text/plain".to_string());
+        let mut headers = Headers::new();
+        _ = headers.insert("content-type".to_string(), "text/plain".to_string());
+
+        Self {
+            status,
+            headers,
+            body,
+        }
+    }
+
+    pub fn html(status: u16, html: impl Into<String>) -> Self {
+        let body = html.into().into_bytes();
+        let mut headers = Headers::new();
+        _ = headers.insert(
+            "content-type".to_string(),
+            "text/html; charset=utf-8".to_string(),
+        );
 
         Self {
             status,
@@ -545,7 +710,16 @@ impl AuthResponse {
     }
 
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
-        self.headers.insert(name.into(), value.into());
+        _ = self.headers.insert(name.into(), value.into());
+        self
+    }
+
+    pub fn with_appended_header(
+        mut self,
+        name: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
+        self.headers.append(name.into(), value.into());
         self
     }
 }
@@ -617,6 +791,14 @@ pub struct ErrorMessageResponse {
     pub message: String,
 }
 
+/// Error body `{ code: String, message: String }` matching the TS better-auth
+/// error response shape.
+#[derive(Debug, Serialize)]
+pub struct ErrorCodeMessageResponse {
+    pub code: String,
+    pub message: String,
+}
+
 /// Middleware error response `{ code: String, message: String }`.
 #[derive(Debug, Serialize)]
 pub struct CodeMessageResponse {
@@ -654,4 +836,304 @@ pub struct ListUsersParams {
     pub filter_field: Option<String>,
     pub filter_value: Option<String>,
     pub filter_operator: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── User serialization ──────────────────────────────────────────────
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn user_serializes_camel_case() {
+        let user = User {
+            id: "u1".into(),
+            name: Some("Test".into()),
+            email: Some("test@test.com".into()),
+            email_verified: true,
+            image: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            username: None,
+            display_username: None,
+            two_factor_enabled: false,
+            role: None,
+            banned: false,
+            ban_reason: None,
+            ban_expires: None,
+            metadata: serde_json::Value::Null,
+        };
+        let json = serde_json::to_string(&user).expect("serialize");
+        assert!(json.contains("\"emailVerified\""));
+        assert!(json.contains("\"createdAt\""));
+        assert!(json.contains("\"updatedAt\""));
+        // Plugin fields at default should be omitted
+        assert!(!json.contains("\"twoFactorEnabled\""));
+        assert!(!json.contains("\"banned\""));
+        assert!(!json.contains("\"role\""));
+        assert!(!json.contains("\"username\""));
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn user_serializes_plugin_fields_when_set() {
+        let user = User {
+            id: "u1".into(),
+            name: None,
+            email: None,
+            email_verified: false,
+            image: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            username: Some("testuser".into()),
+            display_username: None,
+            two_factor_enabled: true,
+            role: Some("admin".into()),
+            banned: true,
+            ban_reason: Some("spam".into()),
+            ban_expires: None,
+            metadata: serde_json::Value::Null,
+        };
+        let json = serde_json::to_string(&user).expect("serialize");
+        assert!(json.contains("\"twoFactorEnabled\":true"));
+        assert!(json.contains("\"banned\":true"));
+        assert!(json.contains("\"role\":\"admin\""));
+        assert!(json.contains("\"username\":\"testuser\""));
+        assert!(json.contains("\"banReason\":\"spam\""));
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn user_deserializes_camel_case() {
+        let json = r#"{
+            "id": "u1",
+            "name": "Test",
+            "email": "test@test.com",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": "2024-01-01T00:00:00Z",
+            "updatedAt": "2024-01-01T00:00:00Z"
+        }"#;
+        let user: User = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(user.id, "u1");
+        assert!(user.email_verified);
+        assert!(!user.two_factor_enabled); // default
+        assert!(!user.banned); // default
+    }
+
+    // ── Session serialization ───────────────────────────────────────────
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn session_serializes_camel_case() {
+        let session = Session {
+            id: "s1".into(),
+            expires_at: Utc::now(),
+            token: "tok".into(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            ip_address: Some("1.2.3.4".into()),
+            user_agent: Some("test".into()),
+            user_id: "u1".into(),
+            impersonated_by: None,
+            active_organization_id: None,
+            active: true,
+        };
+        let json = serde_json::to_string(&session).expect("serialize");
+        assert!(json.contains("\"expiresAt\""));
+        assert!(json.contains("\"userId\""));
+        assert!(json.contains("\"ipAddress\""));
+        assert!(json.contains("\"userAgent\""));
+        // active is #[serde(skip)] — should not appear
+        assert!(!json.contains("\"active\""));
+        // Plugin fields at None should be omitted
+        assert!(!json.contains("\"impersonatedBy\""));
+        assert!(!json.contains("\"activeOrganizationId\""));
+    }
+
+    // ── AuthRequest ─────────────────────────────────────────────────────
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_request_new_defaults() {
+        let req = AuthRequest::new(HttpMethod::Get, "/test");
+        assert_eq!(req.method(), &HttpMethod::Get);
+        assert_eq!(req.path(), "/test");
+        assert!(req.headers.is_empty());
+        assert!(req.body.is_none());
+        assert!(req.virtual_user_id().is_none());
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_request_from_parts() {
+        let mut headers = HashMap::new();
+        let _ = headers.insert("host".to_string(), "localhost".to_string());
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/login".into(),
+            headers,
+            Some(b"{}".to_vec()),
+            HashMap::new(),
+        );
+        assert_eq!(req.method(), &HttpMethod::Post);
+        assert_eq!(req.header("host"), Some(&"localhost".to_string()));
+        assert!(req.body.is_some());
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_request_body_as_json_with_body() {
+        let req = AuthRequest {
+            method: HttpMethod::Post,
+            path: "/test".into(),
+            headers: HashMap::new(),
+            body: Some(br#"{"name":"test"}"#.to_vec()),
+            query: HashMap::new(),
+            virtual_user_id: None,
+        };
+        let val: serde_json::Value = req.body_as_json().expect("parse");
+        assert_eq!(val["name"], "test");
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_request_body_as_json_without_body() {
+        let req = AuthRequest::new(HttpMethod::Get, "/test");
+        let val: serde_json::Value = req.body_as_json().expect("parse empty");
+        assert!(val.is_object());
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_request_virtual_user_id() {
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        assert!(req.virtual_user_id().is_none());
+        req.set_virtual_user_id("user-123".into());
+        assert_eq!(req.virtual_user_id(), Some("user-123"));
+    }
+
+    // ── AuthResponse ────────────────────────────────────────────────────
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_response_new() {
+        let resp = AuthResponse::new(200);
+        assert_eq!(resp.status, 200);
+        assert!(resp.body.is_empty());
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_response_json() {
+        let resp = AuthResponse::json(200, &OkResponse { ok: true }).expect("json");
+        assert_eq!(resp.status, 200);
+        assert_eq!(
+            resp.headers.get("content-type").unwrap(),
+            "application/json"
+        );
+        let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+        assert_eq!(body["ok"], true);
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_response_text() {
+        let resp = AuthResponse::text(404, "Not found");
+        assert_eq!(resp.status, 404);
+        assert_eq!(resp.headers.get("content-type").unwrap(), "text/plain");
+        assert_eq!(std::str::from_utf8(&resp.body).unwrap(), "Not found");
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_response_html() {
+        let resp = AuthResponse::html(200, "<h1>Hi</h1>");
+        assert_eq!(
+            resp.headers.get("content-type").unwrap(),
+            "text/html; charset=utf-8"
+        );
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_response_with_header() {
+        let resp = AuthResponse::new(200).with_header("x-custom", "val");
+        assert_eq!(resp.headers.get("x-custom").unwrap(), "val");
+    }
+
+    // ── RequestMeta ─────────────────────────────────────────────────────
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn request_meta_extracts_from_headers() {
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        let _ = req
+            .headers
+            .insert("x-forwarded-for".into(), "1.2.3.4".into());
+        let _ = req.headers.insert("user-agent".into(), "TestAgent".into());
+        let meta = RequestMeta::from_request(&req);
+        assert_eq!(meta.ip_address.as_deref(), Some("1.2.3.4"));
+        assert_eq!(meta.user_agent.as_deref(), Some("TestAgent"));
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn request_meta_falls_back_to_real_ip() {
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        let _ = req.headers.insert("x-real-ip".into(), "5.6.7.8".into());
+        let meta = RequestMeta::from_request(&req);
+        assert_eq!(meta.ip_address.as_deref(), Some("5.6.7.8"));
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn request_meta_none_when_no_headers() {
+        let req = AuthRequest::new(HttpMethod::Get, "/test");
+        let meta = RequestMeta::from_request(&req);
+        assert!(meta.ip_address.is_none());
+        assert!(meta.user_agent.is_none());
+    }
+
+    // ── CreateUser builder ──────────────────────────────────────────────
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn create_user_builder() {
+        let cu = CreateUser::new()
+            .with_email("Test@Example.COM")
+            .with_name("Test")
+            .with_password("pass123")
+            .with_email_verified(true)
+            .with_username("testuser")
+            .with_role("admin")
+            .with_metadata(serde_json::json!({"key": "val"}));
+
+        assert!(cu.id.is_some()); // auto-generated UUID
+        assert_eq!(cu.email.as_deref(), Some("test@example.com"));
+        assert_eq!(cu.name.as_deref(), Some("Test"));
+        assert_eq!(cu.password.as_deref(), Some("pass123"));
+        assert_eq!(cu.email_verified, Some(true));
+        assert_eq!(cu.username.as_deref(), Some("testuser"));
+        assert_eq!(cu.role.as_deref(), Some("admin"));
+        assert!(cu.metadata.is_some());
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn create_user_default() {
+        let cu = CreateUser::default();
+        assert!(cu.id.is_some());
+        assert!(cu.email.is_none());
+    }
+
+    // ── is_false helper ─────────────────────────────────────────────────
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn is_false_helper() {
+        assert!(is_false(&false));
+        assert!(!is_false(&true));
+    }
 }

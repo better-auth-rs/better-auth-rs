@@ -6,6 +6,9 @@ license = { workspace = true }
 description = "Core abstractions for better-auth: traits, types, config, error handling"
 repository = { workspace = true }
 
+[lints]
+workspace = true
+
 [dependencies]
 # Asynchronous runtime
 tokio = { workspace = true }
@@ -38,21 +41,17 @@ rand = { workspace = true }
 base64 = { workspace = true }
 jsonwebtoken = { workspace = true }
 
-# Database (optional)
-sqlx = { workspace = true, optional = true }
-
 # Cache (optional)
 redis = { workspace = true, optional = true }
 
-# Derive macros (optional)
-better-auth-derive = { workspace = true, optional = true }
+better-auth-macros = { workspace = true }
 axum = { workspace = true, optional = true }
-url = { workspace = true, optional = true }
+url = { workspace = true }
 tracing.workspace = true
+sea-orm = { version = "2.0.0-rc.37", features = ["runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite", "macros", "with-chrono", "with-json", "with-uuid"] }
+sea-orm-migration = { version = "2.0.0-rc.37", features = ["runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite"] }
 
 [features]
 default = []
-derive = ["dep:better-auth-derive"]
-sqlx-postgres = ["dep:sqlx"]
 redis-cache = ["dep:redis"]
-axum = ["dep:axum", "dep:url"]
+axum = ["dep:axum"]
