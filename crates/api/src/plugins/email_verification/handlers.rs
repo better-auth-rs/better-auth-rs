@@ -91,14 +91,25 @@ fn redirect_url(callback_url: &str, error: Option<&str>) -> String {
     }
 }
 
-pub(super) async fn verify_email_core(
+pub(super) async fn verify_email_core<U, S>(
     query: &VerifyEmailQuery,
-    current_session: Option<(better_auth_core::User, better_auth_core::Session)>,
+    current_session: Option<(U, S)>,
     config: &EmailVerificationConfig,
     ip_address: Option<String>,
     user_agent: Option<String>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<VerifyEmailResult> {
+) -> AuthResult<VerifyEmailResult>
+where
+    U: AuthUser,
+    S: AuthSession,
+{
+    let current_session = current_session.map(|(user, session)| {
+        (
+            better_auth_core::User::from(&user),
+            better_auth_core::Session::from(&session),
+        )
+    });
+
     let claims = match decode_email_verification_token(&ctx.config.secret, &query.token) {
         Ok(claims) => claims,
         Err(AuthError::Jwt(error)) => {

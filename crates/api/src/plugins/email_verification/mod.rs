@@ -153,10 +153,7 @@ impl EmailVerificationPlugin {
 
         let ip_address = req.headers.get("x-forwarded-for").cloned();
         let user_agent = req.headers.get("user-agent").cloned();
-        let current_session =
-            ctx.require_session(req).await.ok().map(|(user, session)| {
-                (User::from(&user), better_auth_core::Session::from(&session))
-            });
+        let current_session = ctx.require_session(req).await.ok();
 
         match verify_email_core(
             &query,
