@@ -6,7 +6,8 @@ use std::sync::Arc;
 
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse};
-use better_auth_core::{AuthUser, User};
+use better_auth_core::wire::UserView;
+use better_auth_core::AuthUser;
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
@@ -28,14 +29,14 @@ use types::*;
 /// callback overrides the default `EmailProvider`-based sending.
 #[async_trait]
 pub trait SendVerificationEmail: Send + Sync {
-    async fn send(&self, user: &User, url: &str, token: &str) -> AuthResult<()>;
+    async fn send(&self, user: &UserView, url: &str, token: &str) -> AuthResult<()>;
 }
 
 /// Shorthand for the async hook closure type used by
 /// [`EmailVerificationConfig::before_email_verification`] and
 /// [`EmailVerificationConfig::after_email_verification`].
 pub type EmailVerificationHook =
-    Arc<dyn Fn(&User) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>;
+    Arc<dyn Fn(&UserView) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>;
 
 /// Email verification plugin for handling email verification flows
 pub struct EmailVerificationPlugin {
@@ -222,7 +223,7 @@ impl EmailVerificationPlugin {
 
         // Use custom sender if configured, otherwise fall back to EmailProvider
         if let Some(ref custom_sender) = self.config.send_verification_email {
-            let user = User::from(user);
+            let user = UserView::from(user);
             custom_sender
                 .send(&user, &verification_url, &verification_token)
                 .await?;

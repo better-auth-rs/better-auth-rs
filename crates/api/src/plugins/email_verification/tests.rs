@@ -3,6 +3,7 @@ use super::*;
 use crate::plugins::test_helpers;
 use async_trait::async_trait;
 use better_auth_core::{AuthResult, CreateUser, UpdateUser};
+use better_auth_core::wire::UserView;
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -106,7 +107,7 @@ struct DummySender;
 
 #[async_trait]
 impl SendVerificationEmail for DummySender {
-    async fn send(&self, _user: &User, _url: &str, _token: &str) -> AuthResult<()> {
+    async fn send(&self, _user: &UserView, _url: &str, _token: &str) -> AuthResult<()> {
         Ok(())
     }
 }
@@ -124,7 +125,7 @@ fn test_builder_custom_send_verification_email() {
 // `EmailVerificationPlugin` have no direct TS analogue.
 #[test]
 fn test_builder_before_email_verification_hook() {
-    let hook: EmailVerificationHook = Arc::new(|_user: &User| Box::pin(async { Ok(()) }));
+    let hook: EmailVerificationHook = Arc::new(|_user: &UserView| Box::pin(async { Ok(()) }));
     let plugin = EmailVerificationPlugin::new().before_email_verification(hook);
     assert!(plugin.config.before_email_verification.is_some());
 }
@@ -133,14 +134,14 @@ fn test_builder_before_email_verification_hook() {
 // `EmailVerificationPlugin` have no direct TS analogue.
 #[test]
 fn test_builder_after_email_verification_hook() {
-    let hook: EmailVerificationHook = Arc::new(|_user: &User| Box::pin(async { Ok(()) }));
+    let hook: EmailVerificationHook = Arc::new(|_user: &UserView| Box::pin(async { Ok(()) }));
     let plugin = EmailVerificationPlugin::new().after_email_verification(hook);
     assert!(plugin.config.after_email_verification.is_some());
 }
 
-/// Helper to create a minimal User for unit tests.
-fn make_test_user(email: &str, verified: bool) -> User {
-    User {
+/// Helper to create a minimal wire user view for unit tests.
+fn make_test_user(email: &str, verified: bool) -> UserView {
+    UserView {
         id: "test-id".into(),
         name: Some("Test".into()),
         email: Some(email.into()),
@@ -222,7 +223,7 @@ async fn test_is_user_verified_or_not_required() {
 // Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
 #[test]
 fn test_to_user_preserves_fields() {
-    let user = User {
+    let user = UserView {
         id: "test-id".into(),
         name: Some("Test User".into()),
         email: Some("test@example.com".into()),
@@ -239,7 +240,7 @@ fn test_to_user_preserves_fields() {
         ban_expires: None,
         metadata: serde_json::Value::Null,
     };
-    let converted = User::from(&user);
+    let converted = UserView::from(&user);
     assert_eq!(converted.id, "test-id");
     assert_eq!(converted.name.as_deref(), Some("Test User"));
     assert_eq!(converted.email.as_deref(), Some("test@example.com"));
@@ -365,7 +366,7 @@ async fn test_send_verification_on_sign_in_creates_token() {
     struct CountingSender(Arc<AtomicU32>);
     #[async_trait]
     impl SendVerificationEmail for CountingSender {
-        async fn send(&self, _user: &User, _url: &str, _token: &str) -> AuthResult<()> {
+        async fn send(&self, _user: &UserView, _url: &str, _token: &str) -> AuthResult<()> {
             self.0.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
@@ -408,7 +409,7 @@ async fn test_on_user_created_custom_sender_fires_without_notifications() {
     struct CountingSender(Arc<AtomicU32>);
     #[async_trait]
     impl SendVerificationEmail for CountingSender {
-        async fn send(&self, _user: &User, _url: &str, _token: &str) -> AuthResult<()> {
+        async fn send(&self, _user: &UserView, _url: &str, _token: &str) -> AuthResult<()> {
             self.0.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
@@ -444,7 +445,7 @@ async fn test_on_user_created_verified_user_skips_email() {
     struct CountingSender(Arc<AtomicU32>);
     #[async_trait]
     impl SendVerificationEmail for CountingSender {
-        async fn send(&self, _user: &User, _url: &str, _token: &str) -> AuthResult<()> {
+        async fn send(&self, _user: &UserView, _url: &str, _token: &str) -> AuthResult<()> {
             self.0.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
@@ -533,14 +534,14 @@ async fn test_verify_email_calls_before_and_after_hooks() {
     let bc = before_count.clone();
     let ac = after_count.clone();
 
-    let before_hook: EmailVerificationHook = Arc::new(move |_user: &User| {
+    let before_hook: EmailVerificationHook = Arc::new(move |_user: &UserView| {
         let c = bc.clone();
         Box::pin(async move {
             c.fetch_add(1, Ordering::Relaxed);
             Ok(())
         })
     });
-    let after_hook: EmailVerificationHook = Arc::new(move |_user: &User| {
+    let after_hook: EmailVerificationHook = Arc::new(move |_user: &UserView| {
         let c = ac.clone();
         Box::pin(async move {
             c.fetch_add(1, Ordering::Relaxed);
@@ -581,7 +582,7 @@ async fn test_verify_email_calls_before_and_after_hooks() {
 async fn test_change_email_verification_after_hook_observes_updated_user() {
     let captured = Arc::new(std::sync::Mutex::new(Vec::<(Option<String>, bool)>::new()));
     let hook_state = captured.clone();
-    let after_hook: EmailVerificationHook = Arc::new(move |user: &User| {
+    let after_hook: EmailVerificationHook = Arc::new(move |user: &UserView| {
         let hook_state = hook_state.clone();
         let email = user.email.clone();
         let verified = user.email_verified;
@@ -637,7 +638,7 @@ async fn test_change_email_verification_after_hook_observes_updated_user() {
 async fn test_change_email_verification_does_not_fire_after_hook_when_update_fails() {
     let after_count = Arc::new(AtomicU32::new(0));
     let counter = after_count.clone();
-    let after_hook: EmailVerificationHook = Arc::new(move |_user: &User| {
+    let after_hook: EmailVerificationHook = Arc::new(move |_user: &UserView| {
         let counter = counter.clone();
         Box::pin(async move {
             counter.fetch_add(1, Ordering::Relaxed);
@@ -700,7 +701,7 @@ async fn test_change_email_verification_does_not_fire_after_hook_when_update_fai
 #[tokio::test]
 async fn test_verify_email_before_hook_error_aborts() {
     let before_hook: EmailVerificationHook =
-        Arc::new(|_user: &User| Box::pin(async { Err(AuthError::forbidden("hook rejected")) }));
+        Arc::new(|_user: &UserView| Box::pin(async { Err(AuthError::forbidden("hook rejected")) }));
 
     let plugin = EmailVerificationPlugin::new().before_email_verification(before_hook);
 
@@ -746,7 +747,7 @@ async fn test_verify_email_auto_sign_in_creates_session() {
     struct CapturingSender(Arc<std::sync::Mutex<String>>);
     #[async_trait]
     impl SendVerificationEmail for CapturingSender {
-        async fn send(&self, _user: &User, _url: &str, token: &str) -> AuthResult<()> {
+        async fn send(&self, _user: &UserView, _url: &str, token: &str) -> AuthResult<()> {
             *self.0.lock().unwrap() = token.to_string();
             Ok(())
         }
@@ -1035,7 +1036,7 @@ async fn test_send_verification_email_user_not_found() {
     struct NoopSender;
     #[async_trait]
     impl SendVerificationEmail for NoopSender {
-        async fn send(&self, _user: &User, _url: &str, _token: &str) -> AuthResult<()> {
+        async fn send(&self, _user: &UserView, _url: &str, _token: &str) -> AuthResult<()> {
             Ok(())
         }
     }

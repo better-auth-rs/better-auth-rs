@@ -2,6 +2,7 @@ use jsonwebtoken::errors::ErrorKind;
 
 use better_auth_core::{AuthContext, AuthError, AuthResult, UpdateUser};
 use better_auth_core::{AuthSession, AuthUser};
+use better_auth_core::wire::{SessionView, UserView};
 
 use super::token::{create_email_verification_token, decode_email_verification_token};
 use super::types::*;
@@ -43,7 +44,7 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
                 None,
             )?;
             let url = verification_url(&ctx.config.base_url, &token, body.callback_url.as_deref());
-            let user = better_auth_core::User::from(user);
+            let user = UserView::from(user);
             if let Some(ref sender) = config.send_verification_email {
                 sender.send(&user, &url, &token).await?;
             }
@@ -73,7 +74,7 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
                 None,
             )?;
             let url = verification_url(&ctx.config.base_url, &token, body.callback_url.as_deref());
-            let user = better_auth_core::User::from(&user);
+            let user = UserView::from(&user);
             if let Some(ref sender) = config.send_verification_email {
                 sender.send(&user, &url, &token).await?;
             }
@@ -103,12 +104,8 @@ where
     U: AuthUser,
     S: AuthSession,
 {
-    let current_session = current_session.map(|(user, session)| {
-        (
-            better_auth_core::User::from(&user),
-            better_auth_core::Session::from(&session),
-        )
-    });
+    let current_session = current_session
+        .map(|(user, session)| (UserView::from(&user), SessionView::from(&session)));
 
     let claims = match decode_email_verification_token(&ctx.config.secret, &query.token) {
         Ok(claims) => claims,
@@ -174,7 +171,7 @@ where
                     query.callback_url.as_deref(),
                 );
                 if let Some(ref sender) = config.send_verification_email {
-                    let mut updated_user = better_auth_core::User::from(&user);
+                    let mut updated_user = UserView::from(&user);
                     updated_user.email = Some(update_to.to_string());
                     sender.send(&updated_user, &url, &new_token).await?;
                 }
@@ -192,18 +189,14 @@ where
                 });
             }
             Some("change-email-verification") => {
-                let (session_user, session): (better_auth_core::User, better_auth_core::Session) =
-                    match current_session {
+                let (_session_user, session): (UserView, SessionView) = match current_session {
                         Some((user, session)) => (user, session),
                         None => {
                             let session = ctx
                                 .session_manager()
                                 .create_session(&user, ip_address, user_agent)
                                 .await?;
-                            (
-                                better_auth_core::User::from(&user),
-                                better_auth_core::Session::from(&session),
-                            )
+                            (UserView::from(&user), SessionView::from(&session))
                         }
                     };
 
@@ -220,15 +213,9 @@ where
                     .await?;
 
                 if let Some(ref hook) = config.after_email_verification {
-                    let hook_user = better_auth_core::User::from(&updated_user);
+                    let hook_user = UserView::from(&updated_user);
                     hook(&hook_user).await?;
                 }
-
-                let _session_user = better_auth_core::User {
-                    email: Some(update_to.to_string()),
-                    email_verified: true,
-                    ..session_user
-                };
 
                 if let Some(callback_url) = query.callback_url.as_deref() {
                     return Ok(VerifyEmailResult::Redirect {
@@ -270,7 +257,7 @@ where
                     query.callback_url.as_deref(),
                 );
                 if let Some(ref sender) = config.send_verification_email {
-                    let wire_user = better_auth_core::User::from(&updated_user);
+                    let wire_user = UserView::from(&updated_user);
                     sender.send(&wire_user, &url, &new_token).await?;
                 }
 
@@ -307,7 +294,7 @@ where
     }
 
     if let Some(ref hook) = config.before_email_verification {
-        let hook_user = better_auth_core::User::from(&user);
+        let hook_user = UserView::from(&user);
         hook(&hook_user).await?;
     }
 
@@ -323,7 +310,7 @@ where
         .await?;
 
     if let Some(ref hook) = config.after_email_verification {
-        let hook_user = better_auth_core::User::from(&updated_user);
+        let hook_user = UserView::from(&updated_user);
         hook(&hook_user).await?;
     }
 
