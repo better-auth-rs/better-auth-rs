@@ -26,8 +26,8 @@ pub mod schema;
 pub mod session;
 pub mod store;
 pub mod types;
+mod types_org;
 mod types_plugin;
-pub mod types_org;
 pub mod utils;
 pub mod wire;
 
@@ -74,7 +74,10 @@ pub use types::{
     UpdateUserRequest, UpdateUserResponse, ValidationErrorResponse,
 };
 pub use utils::password::{PasswordHasher, hash_password, verify_password};
-pub use wire::{AccountView, SessionView, UserView, VerificationView};
+pub use wire::{
+    AccountView, ApiKeyView, InvitationView, OrganizationView, PasskeyView, SessionView, UserView,
+    VerificationView,
+};
 
 #[doc(hidden)]
 pub use crate as __private_core;

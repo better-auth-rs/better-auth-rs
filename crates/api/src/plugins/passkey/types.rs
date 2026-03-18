@@ -1,4 +1,4 @@
-use better_auth_core::entity::AuthPasskey;
+pub(crate) use better_auth_core::wire::PasskeyView;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -34,44 +34,6 @@ pub(crate) struct UpdatePasskeyRequest {
 }
 
 // -- Response helpers --
-
-#[derive(Debug, Serialize)]
-pub(crate) struct PasskeyView {
-    id: String,
-    name: String,
-    #[serde(rename = "credentialID")]
-    credential_id: String,
-    #[serde(rename = "userId")]
-    user_id: String,
-    #[serde(rename = "publicKey")]
-    public_key: String,
-    counter: u64,
-    #[serde(rename = "deviceType")]
-    device_type: String,
-    #[serde(rename = "backedUp")]
-    backed_up: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    transports: Option<String>,
-    #[serde(rename = "createdAt")]
-    created_at: String,
-}
-
-impl PasskeyView {
-    pub(super) fn from_entity(pk: &impl AuthPasskey) -> Self {
-        Self {
-            id: pk.id().to_string(),
-            name: pk.name().to_string(),
-            credential_id: pk.credential_id().to_string(),
-            user_id: pk.user_id().to_string(),
-            public_key: pk.public_key().to_string(),
-            counter: pk.counter(),
-            device_type: pk.device_type().to_string(),
-            backed_up: pk.backed_up(),
-            transports: pk.transports().map(|s| s.to_string()),
-            created_at: pk.created_at().to_rfc3339(),
-        }
-    }
-}
 
 #[derive(Debug, Serialize)]
 pub(crate) struct SessionUserResponse<U: Serialize, S: Serialize> {

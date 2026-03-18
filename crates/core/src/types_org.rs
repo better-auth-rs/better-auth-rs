@@ -76,29 +76,6 @@ pub struct Member {
     pub created_at: DateTime<Utc>,
 }
 
-/// Member with user details (for API responses)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemberWithUser {
-    pub id: String,
-    #[serde(rename = "organizationId")]
-    pub organization_id: String,
-    #[serde(rename = "userId")]
-    pub user_id: String,
-    pub role: String,
-    #[serde(rename = "createdAt")]
-    pub created_at: DateTime<Utc>,
-    pub user: MemberUser,
-}
-
-/// Minimal user info for member responses
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemberUser {
-    pub id: String,
-    pub email: Option<String>,
-    pub name: Option<String>,
-    pub image: Option<String>,
-}
-
 /// Invitation status
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -250,15 +227,6 @@ impl CreateInvitation {
             expires_at,
         }
     }
-}
-
-/// Full organization with members and invitations
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FullOrganization {
-    #[serde(flatten)]
-    pub organization: Organization,
-    pub members: Vec<MemberWithUser>,
-    pub invitations: Vec<Invitation>,
 }
 
 impl<T: AuthOrganization> From<&T> for Organization {

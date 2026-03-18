@@ -9,8 +9,8 @@ use crate::utils::email::normalize_user_email;
 
 // Re-export organization types
 pub use super::types_org::{
-    CreateInvitation, CreateMember, CreateOrganization, FullOrganization, Invitation,
-    InvitationStatus, Member, MemberUser, MemberWithUser, Organization, UpdateOrganization,
+    CreateInvitation, CreateMember, CreateOrganization, Invitation, InvitationStatus, Member,
+    Organization, UpdateOrganization,
 };
 pub use super::types_plugin::{
     ApiKey, CreateApiKey, CreatePasskey, CreateTwoFactor, Passkey, TwoFactor, UpdateApiKey,

@@ -1,12 +1,17 @@
-//! Wire-facing response view models.
+//! Concrete auth types for API responses and framework callbacks.
 //!
-//! These types exist to decouple JSON response shapes from internal runtime
-//! models and app-owned SeaORM entities.
+//! These types decouple JSON response shapes from app-owned SeaORM entities.
+//! Each view implements its corresponding `Auth*` entity trait, allowing it
+//! to be used in trait-generic framework code (hooks, helpers).
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
-use crate::entity::{AuthAccount, AuthSession, AuthUser, AuthVerification};
+use crate::entity::{
+    AuthAccount, AuthApiKey, AuthInvitation, AuthOrganization, AuthPasskey, AuthSession, AuthUser,
+    AuthVerification,
+};
+use crate::types::InvitationStatus;
 
 fn is_false(value: &bool) -> bool {
     !(*value)
@@ -330,6 +335,194 @@ impl AuthVerification for VerificationView {
     }
     fn updated_at(&self) -> DateTime<Utc> {
         self.updated_at
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Plugin entity views
+// ---------------------------------------------------------------------------
+
+fn serialize_json_option_as_string<S>(
+    value: &Option<serde_json::Value>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match value {
+        Some(inner) => serializer
+            .serialize_some(&serde_json::to_string(inner).map_err(serde::ser::Error::custom)?),
+        None => serializer.serialize_none(),
+    }
+}
+
+/// Public organization response shape.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OrganizationView {
+    pub id: String,
+    pub name: String,
+    pub slug: String,
+    pub logo: Option<String>,
+    #[serde(
+        serialize_with = "serialize_json_option_as_string",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub metadata: Option<serde_json::Value>,
+    #[serde(rename = "createdAt")]
+    pub created_at: DateTime<Utc>,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: DateTime<Utc>,
+}
+
+impl<T: AuthOrganization> From<&T> for OrganizationView {
+    fn from(org: &T) -> Self {
+        Self {
+            id: org.id().to_owned(),
+            name: org.name().to_owned(),
+            slug: org.slug().to_owned(),
+            logo: org.logo().map(str::to_owned),
+            metadata: org.metadata().cloned(),
+            created_at: org.created_at(),
+            updated_at: org.updated_at(),
+        }
+    }
+}
+
+/// Public invitation response shape.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InvitationView {
+    pub id: String,
+    #[serde(rename = "organizationId")]
+    pub organization_id: String,
+    pub email: String,
+    pub role: String,
+    pub status: InvitationStatus,
+    #[serde(rename = "inviterId")]
+    pub inviter_id: String,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: DateTime<Utc>,
+    #[serde(rename = "createdAt")]
+    pub created_at: DateTime<Utc>,
+}
+
+impl<T: AuthInvitation> From<&T> for InvitationView {
+    fn from(inv: &T) -> Self {
+        Self {
+            id: inv.id().to_owned(),
+            organization_id: inv.organization_id().to_owned(),
+            email: inv.email().to_owned(),
+            role: inv.role().to_owned(),
+            status: inv.status().clone(),
+            inviter_id: inv.inviter_id().to_owned(),
+            expires_at: inv.expires_at(),
+            created_at: inv.created_at(),
+        }
+    }
+}
+
+/// Public passkey response shape.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PasskeyView {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "credentialID")]
+    pub credential_id: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
+    #[serde(rename = "publicKey")]
+    pub public_key: String,
+    pub counter: u64,
+    #[serde(rename = "deviceType")]
+    pub device_type: String,
+    #[serde(rename = "backedUp")]
+    pub backed_up: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transports: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+}
+
+impl<T: AuthPasskey> From<&T> for PasskeyView {
+    fn from(pk: &T) -> Self {
+        Self {
+            id: pk.id().to_owned(),
+            name: pk.name().to_owned(),
+            credential_id: pk.credential_id().to_owned(),
+            user_id: pk.user_id().to_owned(),
+            public_key: pk.public_key().to_owned(),
+            counter: pk.counter(),
+            device_type: pk.device_type().to_owned(),
+            backed_up: pk.backed_up(),
+            transports: pk.transports().map(str::to_owned),
+            created_at: pk.created_at().to_rfc3339(),
+        }
+    }
+}
+
+/// Public API key response shape.
+///
+/// Intentionally omits `key_hash` — the hashed key value is never returned
+/// over the wire (matches upstream TS behavior).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ApiKeyView {
+    pub id: String,
+    pub name: Option<String>,
+    pub start: Option<String>,
+    pub prefix: Option<String>,
+    #[serde(rename = "userId")]
+    pub user_id: String,
+    #[serde(rename = "refillInterval")]
+    pub refill_interval: Option<i64>,
+    #[serde(rename = "refillAmount")]
+    pub refill_amount: Option<i64>,
+    #[serde(rename = "lastRefillAt")]
+    pub last_refill_at: Option<String>,
+    pub enabled: bool,
+    #[serde(rename = "rateLimitEnabled")]
+    pub rate_limit_enabled: bool,
+    #[serde(rename = "rateLimitTimeWindow")]
+    pub rate_limit_time_window: Option<i64>,
+    #[serde(rename = "rateLimitMax")]
+    pub rate_limit_max: Option<i64>,
+    #[serde(rename = "requestCount")]
+    pub request_count: Option<i64>,
+    pub remaining: Option<i64>,
+    #[serde(rename = "lastRequest")]
+    pub last_request: Option<String>,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+    pub permissions: Option<serde_json::Value>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+impl<T: AuthApiKey> From<&T> for ApiKeyView {
+    fn from(ak: &T) -> Self {
+        Self {
+            id: ak.id().to_owned(),
+            name: ak.name().map(str::to_owned),
+            start: ak.start().map(str::to_owned),
+            prefix: ak.prefix().map(str::to_owned),
+            user_id: ak.user_id().to_owned(),
+            refill_interval: ak.refill_interval(),
+            refill_amount: ak.refill_amount(),
+            last_refill_at: ak.last_refill_at().map(str::to_owned),
+            enabled: ak.enabled(),
+            rate_limit_enabled: ak.rate_limit_enabled(),
+            rate_limit_time_window: ak.rate_limit_time_window(),
+            rate_limit_max: ak.rate_limit_max(),
+            request_count: ak.request_count(),
+            remaining: ak.remaining(),
+            last_request: ak.last_request().map(str::to_owned),
+            expires_at: ak.expires_at().map(str::to_owned),
+            created_at: ak.created_at().to_owned(),
+            updated_at: ak.updated_at().to_owned(),
+            permissions: ak.permissions().and_then(|s| serde_json::from_str(s).ok()),
+            metadata: ak.metadata().and_then(|s| serde_json::from_str(s).ok()),
+        }
     }
 }
 

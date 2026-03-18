@@ -152,7 +152,7 @@ pub(crate) async fn create_key_core(
 
     Ok(CreateKeyResponse {
         key: full_key,
-        api_key: ApiKeyView::from_entity(&api_key),
+        api_key: ApiKeyView::from(&api_key),
     })
 }
 
@@ -164,7 +164,7 @@ pub(crate) async fn get_key_core(
 ) -> AuthResult<ApiKeyView> {
     let api_key = helpers::get_owned_api_key(ctx, id, user_id).await?;
     plugin.maybe_delete_expired(ctx).await;
-    Ok(ApiKeyView::from_entity(&api_key))
+    Ok(ApiKeyView::from(&api_key))
 }
 
 pub(crate) async fn list_keys_core(
@@ -173,7 +173,7 @@ pub(crate) async fn list_keys_core(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<ApiKeyView>> {
     let keys = ctx.database.list_api_keys_by_user(user_id).await?;
-    let views: Vec<ApiKeyView> = keys.iter().map(ApiKeyView::from_entity).collect();
+    let views: Vec<ApiKeyView> = keys.iter().map(ApiKeyView::from).collect();
     plugin.maybe_delete_expired(ctx).await;
     Ok(views)
 }
@@ -239,7 +239,7 @@ pub(crate) async fn update_key_core(
 
     plugin.maybe_delete_expired(ctx).await;
 
-    Ok(ApiKeyView::from_entity(&updated))
+    Ok(ApiKeyView::from(&updated))
 }
 
 pub(crate) async fn delete_key_core(

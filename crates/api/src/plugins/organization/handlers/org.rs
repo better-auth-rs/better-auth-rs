@@ -13,7 +13,7 @@ use better_auth_core::plugin::AuthContext;
 use better_auth_core::types::{
     AuthRequest, AuthResponse, CreateMember, CreateOrganization, UpdateOrganization,
 };
-use better_auth_core::wire::SessionView;
+use better_auth_core::wire::{InvitationView, OrganizationView, SessionView};
 
 // ---------------------------------------------------------------------------
 // Core functions
@@ -24,7 +24,7 @@ pub(crate) async fn create_organization_core(
     user: &impl AuthUser,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<CreateOrganizationResponse<better_auth_core::Organization, MemberResponse>> {
+) -> AuthResult<CreateOrganizationResponse<OrganizationView, MemberResponse>> {
     if !config.allow_user_to_create_organization {
         return Err(AuthError::forbidden("Organization creation is not allowed"));
     }
@@ -68,7 +68,7 @@ pub(crate) async fn create_organization_core(
     let member_response = MemberResponse::from_member_and_user(&member, user);
 
     Ok(CreateOrganizationResponse {
-        organization,
+        organization: OrganizationView::from(&organization),
         members: vec![member_response],
     })
 }
@@ -79,7 +79,7 @@ pub(crate) async fn update_organization_core(
     session: &impl AuthSession,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<better_auth_core::Organization> {
+) -> AuthResult<OrganizationView> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
@@ -119,7 +119,7 @@ pub(crate) async fn update_organization_core(
         .update_organization(&org_id, update_data)
         .await?;
 
-    Ok(updated)
+    Ok(OrganizationView::from(&updated))
 }
 
 pub(crate) async fn delete_organization_core(
@@ -159,9 +159,9 @@ pub(crate) async fn delete_organization_core(
 pub(crate) async fn list_organizations_core(
     user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<Vec<better_auth_core::Organization>> {
+) -> AuthResult<Vec<OrganizationView>> {
     let organizations = ctx.database.list_user_organizations(user.id()).await?;
-    Ok(organizations)
+    Ok(organizations.iter().map(OrganizationView::from).collect())
 }
 
 pub(crate) async fn get_full_organization_core(
@@ -169,9 +169,7 @@ pub(crate) async fn get_full_organization_core(
     user: &impl AuthUser,
     session: &impl AuthSession,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<
-    FullOrganizationResponse<better_auth_core::Organization, better_auth_core::Invitation>,
-> {
+) -> AuthResult<FullOrganizationResponse<OrganizationView, InvitationView>> {
     let org_id = resolve_organization_id(
         query.organization_id.as_deref(),
         query.organization_slug.as_deref(),
@@ -204,9 +202,9 @@ pub(crate) async fn get_full_organization_core(
     let invitations = ctx.database.list_organization_invitations(&org_id).await?;
 
     Ok(FullOrganizationResponse {
-        organization,
+        organization: OrganizationView::from(&organization),
         members,
-        invitations,
+        invitations: invitations.iter().map(InvitationView::from).collect(),
     })
 }
 

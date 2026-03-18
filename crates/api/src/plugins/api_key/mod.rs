@@ -690,7 +690,7 @@ impl ApiKeyPlugin {
         // Throttled cleanup
         self.maybe_delete_expired(ctx).await;
 
-        Ok(ApiKeyView::from_entity(&updated))
+        Ok(ApiKeyView::from(&updated))
     }
 
     /// Check rate limiting for an API key using the `governor` crate.

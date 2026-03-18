@@ -4,7 +4,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use rand::RngCore;
 
 use better_auth_core::entity::{AuthPasskey, AuthSession, AuthUser};
-use better_auth_core::wire::{SessionView, UserView};
+use better_auth_core::wire::{PasskeyView, SessionView, UserView};
 use better_auth_core::{AuthContext, CreatePasskey, CreateVerification};
 use better_auth_core::{AuthError, AuthResult};
 
@@ -12,7 +12,7 @@ use crate::plugins::StatusResponse;
 
 use super::PasskeyConfig;
 use super::types::{
-    DeletePasskeyRequest, PasskeyResponse, PasskeyView, SessionUserResponse, UpdatePasskeyRequest,
+    DeletePasskeyRequest, PasskeyResponse, SessionUserResponse, UpdatePasskeyRequest,
     VerifyAuthenticationRequest, VerifyRegistrationRequest,
 };
 
@@ -268,7 +268,7 @@ pub(crate) async fn verify_registration_core(
         })
         .await?;
 
-    Ok(PasskeyView::from_entity(&passkey))
+    Ok(PasskeyView::from(&passkey))
 }
 
 pub(crate) async fn generate_authenticate_options_core<U: AuthUser>(
@@ -396,7 +396,7 @@ pub(crate) async fn list_user_passkeys_core(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<PasskeyView>> {
     let passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
-    Ok(passkeys.iter().map(PasskeyView::from_entity).collect())
+    Ok(passkeys.iter().map(PasskeyView::from).collect())
 }
 
 pub(crate) async fn delete_passkey_core(
@@ -442,6 +442,6 @@ pub(crate) async fn update_passkey_core(
         .await?;
 
     Ok(PasskeyResponse {
-        passkey: PasskeyView::from_entity(&updated),
+        passkey: PasskeyView::from(&updated),
     })
 }

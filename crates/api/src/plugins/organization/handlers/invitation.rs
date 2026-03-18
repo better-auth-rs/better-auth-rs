@@ -6,6 +6,7 @@ use better_auth_core::plugin::AuthContext;
 use better_auth_core::types::{
     AuthRequest, AuthResponse, CreateInvitation, CreateMember, InvitationStatus,
 };
+use better_auth_core::wire::InvitationView;
 
 use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::OrganizationConfig;
@@ -26,7 +27,7 @@ pub(crate) async fn invite_member_core(
     session: &impl AuthSession,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<better_auth_core::Invitation> {
+) -> AuthResult<InvitationView> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
@@ -84,7 +85,7 @@ pub(crate) async fn invite_member_core(
         .get_pending_invitation(&org_id, &body.email)
         .await?
     {
-        return Ok(existing);
+        return Ok(InvitationView::from(&existing));
     }
 
     let expires_at =
@@ -100,13 +101,13 @@ pub(crate) async fn invite_member_core(
 
     let invitation = ctx.database.create_invitation(invitation_data).await?;
 
-    Ok(invitation)
+    Ok(InvitationView::from(&invitation))
 }
 
 pub(crate) async fn get_invitation_core(
     query: &GetInvitationQuery,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<GetInvitationResponse<better_auth_core::Invitation>> {
+) -> AuthResult<GetInvitationResponse<InvitationView>> {
     if query.id.is_empty() {
         return Err(AuthError::bad_request("Missing invitation id"));
     }
@@ -131,7 +132,7 @@ pub(crate) async fn get_invitation_core(
         };
 
     Ok(GetInvitationResponse {
-        invitation,
+        invitation: InvitationView::from(&invitation),
         organization_name: organization.name().to_string(),
         organization_slug: organization.slug().to_string(),
         inviter_email,
@@ -143,7 +144,7 @@ pub(crate) async fn list_invitations_core(
     user: &impl AuthUser,
     session: &impl AuthSession,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<Vec<better_auth_core::Invitation>> {
+) -> AuthResult<Vec<InvitationView>> {
     let org_id =
         resolve_organization_id(query.organization_id.as_deref(), None, session, ctx).await?;
 
@@ -155,13 +156,13 @@ pub(crate) async fn list_invitations_core(
 
     let invitations = ctx.database.list_organization_invitations(&org_id).await?;
 
-    Ok(invitations)
+    Ok(invitations.iter().map(InvitationView::from).collect())
 }
 
 pub(crate) async fn list_user_invitations_core(
     user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<Vec<better_auth_core::Invitation>> {
+) -> AuthResult<Vec<InvitationView>> {
     let user_email = user
         .email()
         .ok_or_else(|| AuthError::bad_request("User has no email"))?;
@@ -169,8 +170,9 @@ pub(crate) async fn list_user_invitations_core(
     let all_invitations = ctx.database.list_user_invitations(user_email).await?;
 
     let pending: Vec<_> = all_invitations
-        .into_iter()
+        .iter()
         .filter(|i| i.is_pending() && !i.is_expired())
+        .map(InvitationView::from)
         .collect();
 
     Ok(pending)
@@ -182,7 +184,7 @@ pub(crate) async fn accept_invitation_core(
     session: &impl AuthSession,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<AcceptInvitationResponse<better_auth_core::Invitation>> {
+) -> AuthResult<AcceptInvitationResponse<InvitationView>> {
     let invitation = ctx
         .database
         .get_invitation_by_id(&body.invitation_id)
@@ -256,7 +258,7 @@ pub(crate) async fn accept_invitation_core(
     let member_response = MemberResponse::from_member_and_user(&member, user);
 
     Ok(AcceptInvitationResponse {
-        invitation: updated_invitation,
+        invitation: InvitationView::from(&updated_invitation),
         member: member_response,
     })
 }
