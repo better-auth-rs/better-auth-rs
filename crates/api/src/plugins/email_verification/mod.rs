@@ -101,7 +101,7 @@ better_auth_core::impl_auth_plugin! {
                 && !user.email_verified()
                 && let Some(email) = user.email()
                 && let Err(e) = self
-                    .send_verification_email_for_user(&User::from(user), email, None, ctx)
+                    .send_verification_email_for_user(user, email, None, ctx)
                     .await
             {
                 tracing::warn!(
@@ -130,11 +130,7 @@ impl EmailVerificationPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let current_user = ctx
-            .require_session(req)
-            .await
-            .ok()
-            .map(|(user, _)| User::from(&user));
+        let current_user = ctx.require_session(req).await.ok().map(|(user, _)| user);
         let response =
             send_verification_email_core(&body, current_user.as_ref(), &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
@@ -207,7 +203,7 @@ impl EmailVerificationPlugin {
     /// taken.
     async fn send_verification_email_for_user(
         &self,
-        user: &better_auth_core::User,
+        user: &impl AuthUser,
         email: &str,
         callback_url: Option<&str>,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
@@ -278,8 +274,7 @@ impl EmailVerificationPlugin {
         }
 
         if let Some(email) = user.email() {
-            let user = User::from(user);
-            self.send_verification_email_for_user(&user, email, callback_url, ctx)
+            self.send_verification_email_for_user(user, email, callback_url, ctx)
                 .await?;
         }
 

@@ -15,9 +15,9 @@ fn verification_url(base_url: &str, token: &str, callback_url: Option<&str>) -> 
     )
 }
 
-pub(super) async fn send_verification_email_core(
+pub(super) async fn send_verification_email_core<U: AuthUser>(
     body: &SendVerificationEmailRequest,
-    current_user: Option<&better_auth_core::User>,
+    current_user: Option<&U>,
     config: &EmailVerificationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
