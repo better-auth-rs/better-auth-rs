@@ -7,6 +7,7 @@ use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{
     AuthRequest, AuthResponse, CreateTwoFactor, CreateVerification, UpdateUser,
 };
+use better_auth_core::wire::{SessionView, UserView};
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
@@ -305,10 +306,10 @@ async fn generate_backup_codes_core(
 // -- Session / auth helpers --
 
 /// Extract the user_id from a `2fa_xxx` pending verification token.
-async fn get_pending_2fa_user(
+async fn get_pending_2fa_user<S: better_auth_core::AuthSchema>(
     req: &AuthRequest,
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(better_auth_core::User, String)> {
+    ctx: &AuthContext<S>,
+) -> AuthResult<(S::User, String)> {
     let token = req
         .headers
         .get("authorization")
@@ -337,22 +338,19 @@ async fn get_pending_2fa_user(
         .await?
         .ok_or(AuthError::UserNotFound)?;
 
-    Ok((
-        better_auth_core::User::from(&user),
-        verification.id().to_string(),
-    ))
+    Ok((user, verification.id().to_string()))
 }
 
 // -- Core functions (pending-2fa) --
 
-/// Returns `(VerifyTotpResponse<better_auth_core::User>, session_token)`.
+/// Returns `(VerifyTotpResponse<UserView>, session_token)`.
 async fn verify_totp_core(
     body: &VerifyTotpRequest,
     user: &impl AuthUser,
     verification_id: &str,
     config: &TwoFactorConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(VerifyTotpResponse<better_auth_core::User>, String)> {
+) -> AuthResult<(VerifyTotpResponse<UserView>, String)> {
     let two_factor = ctx
         .database
         .get_two_factor_by_user_id(user.id())
@@ -387,7 +385,7 @@ async fn verify_totp_core(
     let response = VerifyTotpResponse {
         status: true,
         token: token.clone(),
-        user: better_auth_core::User::from(user),
+        user: UserView::from(user),
     };
     Ok((response, token))
 }
@@ -424,13 +422,13 @@ async fn send_otp_core(
     Ok(StatusResponse { status: true })
 }
 
-/// Returns `(VerifyTotpResponse<better_auth_core::User>, session_token)`.
+/// Returns `(VerifyTotpResponse<UserView>, session_token)`.
 async fn verify_otp_core(
     body: &VerifyOtpRequest,
     user: &impl AuthUser,
     verification_id: &str,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(VerifyTotpResponse<better_auth_core::User>, String)> {
+) -> AuthResult<(VerifyTotpResponse<UserView>, String)> {
     // Look up the OTP verification
     let otp_identifier = format!("2fa_otp:{}", user.id());
     let otp_verification = ctx
@@ -463,21 +461,18 @@ async fn verify_otp_core(
     let response = VerifyTotpResponse {
         status: true,
         token: token.clone(),
-        user: better_auth_core::User::from(user),
+        user: UserView::from(user),
     };
     Ok((response, token))
 }
 
-/// Returns `(VerifyBackupCodeResponse<better_auth_core::User, better_auth_core::Session>, session_token)`.
+/// Returns `(VerifyBackupCodeResponse<UserView, SessionView>, session_token)`.
 async fn verify_backup_code_core(
     body: &VerifyBackupCodeRequest,
     user: &impl AuthUser,
     verification_id: &str,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(
-    VerifyBackupCodeResponse<better_auth_core::User, better_auth_core::Session>,
-    String,
-)> {
+) -> AuthResult<(VerifyBackupCodeResponse<UserView, SessionView>, String)> {
     let two_factor = ctx
         .database
         .get_two_factor_by_user_id(user.id())
@@ -529,8 +524,8 @@ async fn verify_backup_code_core(
 
     let token = session.token().to_string();
     let response = VerifyBackupCodeResponse {
-        user: better_auth_core::User::from(user),
-        session: better_auth_core::Session::from(&session),
+        user: UserView::from(user),
+        session: SessionView::from(&session),
     };
     Ok((response, token))
 }
