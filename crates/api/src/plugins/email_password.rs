@@ -14,6 +14,7 @@ use better_auth_core::{
 use super::email_verification::EmailVerificationPlugin;
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
+use better_auth_core::wire::UserView;
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
     config: EmailPasswordConfig,
@@ -282,7 +283,7 @@ pub(crate) async fn sign_up_core(
     config: &EmailPasswordConfig,
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(SignUpResponse<better_auth_core::User>, Option<String>)> {
+) -> AuthResult<(SignUpResponse<UserView>, Option<String>)> {
     if !config.enable_signup {
         return Err(AuthError::forbidden("User registration is not enabled"));
     }
@@ -365,7 +366,7 @@ pub(crate) async fn sign_up_core(
                     Ok((
                         SignUpResponse {
                             token: Some(token.clone()),
-                            user: better_auth_core::User::from(&user),
+                            user: UserView::from(&user),
                         },
                         Some(token),
                     ))
@@ -373,7 +374,7 @@ pub(crate) async fn sign_up_core(
                     Ok((
                         SignUpResponse {
                             token: None,
-                            user: better_auth_core::User::from(&user),
+                            user: UserView::from(&user),
                         },
                         None,
                     ))
@@ -392,7 +393,7 @@ async fn sign_in_with_user_core(
     callback_url: Option<&str>,
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<SignInCoreResult<better_auth_core::User>> {
+) -> AuthResult<SignInCoreResult<UserView>> {
     // Verify password
     let stored_hash = ctx
         .database
@@ -428,7 +429,7 @@ async fn sign_in_with_user_core(
     // Send verification email on sign-in if configured
     if let Some(ev) = email_verification
         && let Err(e) = ev
-            .send_verification_on_sign_in(&better_auth_core::User::from(&user), callback_url, ctx)
+            .send_verification_on_sign_in(&user, callback_url, ctx)
             .await
     {
         tracing::warn!(
@@ -447,7 +448,7 @@ async fn sign_in_with_user_core(
         redirect: false,
         token: token.clone(),
         url: None,
-        user: better_auth_core::User::from(&user),
+        user: UserView::from(&user),
     };
     Ok(SignInCoreResult::Success(response, token))
 }
@@ -459,7 +460,7 @@ pub(crate) async fn sign_in_core(
     email_verification: Option<&EmailVerificationPlugin>,
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<SignInCoreResult<better_auth_core::User>> {
+) -> AuthResult<SignInCoreResult<UserView>> {
     let user = ctx
         .database
         .get_user_by_email(&body.email)
@@ -485,7 +486,7 @@ pub(crate) async fn sign_in_username_core(
     email_verification: Option<&EmailVerificationPlugin>,
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<SignInCoreResult<better_auth_core::User>> {
+) -> AuthResult<SignInCoreResult<UserView>> {
     let user = ctx
         .database
         .get_user_by_username(&body.username)
