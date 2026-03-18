@@ -6,6 +6,7 @@ use rand::RngCore;
 use better_auth_core::entity::{AuthPasskey, AuthSession, AuthUser};
 use better_auth_core::{AuthContext, CreatePasskey, CreateVerification};
 use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::wire::{SessionView, UserView};
 
 use crate::plugins::StatusResponse;
 
@@ -330,7 +331,7 @@ pub(crate) async fn verify_authentication_core(
     user_agent: Option<String>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(
-    SessionUserResponse<better_auth_core::User, better_auth_core::Session>,
+    SessionUserResponse<UserView, SessionView>,
     String,
 )> {
     ensure_insecure_verification_enabled(config)?;
@@ -387,8 +388,8 @@ pub(crate) async fn verify_authentication_core(
 
     let token = session.token().to_string();
     let response = SessionUserResponse {
-        session: better_auth_core::Session::from(&session),
-        user: better_auth_core::User::from(&user),
+        session: SessionView::from(&session),
+        user: UserView::from(&user),
     };
     Ok((response, token))
 }
