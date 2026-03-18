@@ -16,3 +16,4 @@ pub use better_auth_core::types::{
     UpdateOrganization, UpdatePasskey, UpdateUser, UpdateUserRequest, UpdateUserResponse, User,
     Verification,
 };
+pub use better_auth_core::wire::{AccountView, SessionView, UserView, VerificationView};

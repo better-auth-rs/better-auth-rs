@@ -29,6 +29,7 @@ pub mod types;
 pub mod types_impls;
 pub mod types_org;
 pub mod utils;
+pub mod wire;
 
 // Re-export commonly used items
 pub use better_auth_macros::{AuthEntity, AuthSchema, PluginConfig};
@@ -73,6 +74,7 @@ pub use types::{
     UpdateUser, UpdateUserRequest, UpdateUserResponse, User, ValidationErrorResponse, Verification,
 };
 pub use utils::password::{PasswordHasher, hash_password, verify_password};
+pub use wire::{AccountView, SessionView, UserView, VerificationView};
 
 #[doc(hidden)]
 pub use crate as __private_core;

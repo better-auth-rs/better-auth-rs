@@ -50,6 +50,7 @@ pub mod plugins;
 pub mod prelude;
 pub mod schema;
 pub mod store;
+pub mod wire;
 
 pub use better_auth_core::{
     AuthAccountModel, AuthConfig, AuthEntity, AuthError, AuthResult, AuthSchema, AuthSessionModel,
