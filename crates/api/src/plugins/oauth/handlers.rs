@@ -31,10 +31,10 @@ use super::types::{
 // ---------------------------------------------------------------------------
 
 /// Authenticate the current request and return the validated session.
-async fn require_session(
+async fn require_session<S: better_auth_core::AuthSchema>(
     req: &AuthRequest,
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> Result<better_auth_core::Session, AuthError> {
+    ctx: &AuthContext<S>,
+) -> Result<S::Session, AuthError> {
     let session_manager = ctx.session_manager();
     let token = session_manager
         .extract_session_token(req)
@@ -42,7 +42,6 @@ async fn require_session(
     session_manager
         .get_session(&token)
         .await?
-        .map(|session| better_auth_core::Session::from(&session))
         .ok_or(AuthError::Unauthenticated)
 }
 
