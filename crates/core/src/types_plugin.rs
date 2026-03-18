@@ -1,166 +1,159 @@
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
-use crate::entity::{
-    AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey, AuthTwoFactor,
-};
+use crate::entity::{AuthApiKey, AuthPasskey, AuthTwoFactor};
 use crate::store::sea_orm::entities;
-
-use super::types::{ApiKey, Passkey, TwoFactor};
-use super::types_org::{Invitation, InvitationStatus, Member, Organization};
 
 fn to_rfc3339(value: DateTime<Utc>) -> String {
     value.to_rfc3339()
 }
 
-impl<T: AuthOrganization> From<&T> for Organization {
-    fn from(organization: &T) -> Self {
-        Self {
-            id: organization.id().to_owned(),
-            name: organization.name().to_owned(),
-            slug: organization.slug().to_owned(),
-            logo: organization.logo().map(str::to_owned),
-            metadata: organization.metadata().cloned(),
-            created_at: organization.created_at(),
-            updated_at: organization.updated_at(),
-        }
-    }
+/// Two-factor authentication response shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TwoFactor {
+    pub id: String,
+    pub secret: String,
+    #[serde(rename = "backupCodes")]
+    pub backup_codes: Option<String>,
+    #[serde(rename = "userId")]
+    pub user_id: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: DateTime<Utc>,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: DateTime<Utc>,
 }
 
-impl From<&entities::organization::Model> for Organization {
-    fn from(model: &entities::organization::Model) -> Self {
-        Self {
-            id: model.id.clone(),
-            name: model.name.clone(),
-            slug: model.slug.clone(),
-            logo: model.logo.clone(),
-            metadata: Some(model.metadata.clone()),
-            created_at: model.created_at,
-            updated_at: model.updated_at,
-        }
-    }
+/// Two-factor authentication creation data.
+#[derive(Debug, Clone)]
+pub struct CreateTwoFactor {
+    pub user_id: String,
+    pub secret: String,
+    pub backup_codes: Option<String>,
 }
 
-impl AuthOrganization for Organization {
-    fn id(&self) -> &str {
-        &self.id
-    }
-    fn name(&self) -> &str {
-        &self.name
-    }
-    fn slug(&self) -> &str {
-        &self.slug
-    }
-    fn logo(&self) -> Option<&str> {
-        self.logo.as_deref()
-    }
-    fn metadata(&self) -> Option<&serde_json::Value> {
-        self.metadata.as_ref()
-    }
-    fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
-    }
-    fn updated_at(&self) -> DateTime<Utc> {
-        self.updated_at
-    }
+/// Passkey response shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Passkey {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "publicKey")]
+    pub public_key: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
+    #[serde(rename = "credentialID")]
+    pub credential_id: String,
+    pub counter: u64,
+    #[serde(rename = "deviceType")]
+    pub device_type: String,
+    #[serde(rename = "backedUp")]
+    pub backed_up: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transports: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: DateTime<Utc>,
 }
 
-impl AuthMember for Member {
-    fn id(&self) -> &str {
-        &self.id
-    }
-    fn organization_id(&self) -> &str {
-        &self.organization_id
-    }
-    fn user_id(&self) -> &str {
-        &self.user_id
-    }
-    fn role(&self) -> &str {
-        &self.role
-    }
-    fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
-    }
+/// Input for creating a new passkey.
+#[derive(Debug, Clone)]
+pub struct CreatePasskey {
+    pub user_id: String,
+    pub name: String,
+    pub credential_id: String,
+    pub public_key: String,
+    pub counter: u64,
+    pub device_type: String,
+    pub backed_up: bool,
+    pub transports: Option<String>,
 }
 
-impl<T: AuthMember> From<&T> for Member {
-    fn from(member: &T) -> Self {
-        Self {
-            id: member.id().to_owned(),
-            organization_id: member.organization_id().to_owned(),
-            user_id: member.user_id().to_owned(),
-            role: member.role().to_owned(),
-            created_at: member.created_at(),
-        }
-    }
+/// Input for updating a passkey.
+#[derive(Debug, Clone)]
+pub struct UpdatePasskey {
+    pub name: Option<String>,
 }
 
-impl From<&entities::member::Model> for Member {
-    fn from(model: &entities::member::Model) -> Self {
-        Self {
-            id: model.id.clone(),
-            organization_id: model.organization_id.clone(),
-            user_id: model.user_id.clone(),
-            role: model.role.clone(),
-            created_at: model.created_at,
-        }
-    }
+/// API key response shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiKey {
+    pub id: String,
+    pub name: Option<String>,
+    pub start: Option<String>,
+    pub prefix: Option<String>,
+    /// SHA-256 hash of the key (column name: `key` in SQL)
+    #[serde(rename = "key")]
+    pub key_hash: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
+    #[serde(rename = "refillInterval")]
+    pub refill_interval: Option<i64>,
+    #[serde(rename = "refillAmount")]
+    pub refill_amount: Option<i64>,
+    #[serde(rename = "lastRefillAt")]
+    pub last_refill_at: Option<String>,
+    pub enabled: bool,
+    #[serde(rename = "rateLimitEnabled")]
+    pub rate_limit_enabled: bool,
+    #[serde(rename = "rateLimitTimeWindow")]
+    pub rate_limit_time_window: Option<i64>,
+    #[serde(rename = "rateLimitMax")]
+    pub rate_limit_max: Option<i64>,
+    #[serde(rename = "requestCount")]
+    pub request_count: Option<i64>,
+    pub remaining: Option<i64>,
+    #[serde(rename = "lastRequest")]
+    pub last_request: Option<String>,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+    pub permissions: Option<String>,
+    pub metadata: Option<String>,
 }
 
-impl AuthInvitation for Invitation {
-    fn id(&self) -> &str {
-        &self.id
-    }
-    fn organization_id(&self) -> &str {
-        &self.organization_id
-    }
-    fn email(&self) -> &str {
-        &self.email
-    }
-    fn role(&self) -> &str {
-        &self.role
-    }
-    fn status(&self) -> &InvitationStatus {
-        &self.status
-    }
-    fn inviter_id(&self) -> &str {
-        &self.inviter_id
-    }
-    fn expires_at(&self) -> DateTime<Utc> {
-        self.expires_at
-    }
-    fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
-    }
+/// API key creation data.
+#[derive(Debug, Clone)]
+pub struct CreateApiKey {
+    pub user_id: String,
+    pub name: Option<String>,
+    pub prefix: Option<String>,
+    pub key_hash: String,
+    pub start: Option<String>,
+    pub expires_at: Option<String>,
+    pub remaining: Option<i64>,
+    pub rate_limit_enabled: bool,
+    pub rate_limit_time_window: Option<i64>,
+    pub rate_limit_max: Option<i64>,
+    pub refill_interval: Option<i64>,
+    pub refill_amount: Option<i64>,
+    pub permissions: Option<String>,
+    pub metadata: Option<String>,
+    pub enabled: bool,
 }
 
-impl<T: AuthInvitation> From<&T> for Invitation {
-    fn from(invitation: &T) -> Self {
-        Self {
-            id: invitation.id().to_owned(),
-            organization_id: invitation.organization_id().to_owned(),
-            email: invitation.email().to_owned(),
-            role: invitation.role().to_owned(),
-            status: invitation.status().clone(),
-            inviter_id: invitation.inviter_id().to_owned(),
-            expires_at: invitation.expires_at(),
-            created_at: invitation.created_at(),
-        }
-    }
-}
-
-impl From<&entities::invitation::Model> for Invitation {
-    fn from(model: &entities::invitation::Model) -> Self {
-        Self {
-            id: model.id.clone(),
-            organization_id: model.organization_id.clone(),
-            email: model.email.clone(),
-            role: model.role.clone(),
-            status: InvitationStatus::from(model.status.clone()),
-            inviter_id: model.inviter_id.clone(),
-            expires_at: model.expires_at,
-            created_at: model.created_at,
-        }
-    }
+/// API key update data.
+#[derive(Debug, Clone, Default)]
+pub struct UpdateApiKey {
+    pub name: Option<String>,
+    pub enabled: Option<bool>,
+    pub remaining: Option<i64>,
+    pub rate_limit_enabled: Option<bool>,
+    pub rate_limit_time_window: Option<i64>,
+    pub rate_limit_max: Option<i64>,
+    pub refill_interval: Option<i64>,
+    pub refill_amount: Option<i64>,
+    pub permissions: Option<String>,
+    pub metadata: Option<String>,
+    /// Update the expiration time. `Some(Some("..."))` sets a new value,
+    /// `Some(None)` clears it, `None` leaves it unchanged.
+    pub expires_at: Option<Option<String>>,
+    /// Last request timestamp (updated during verify).
+    pub last_request: Option<Option<String>>,
+    /// Request count within the current rate-limit window.
+    pub request_count: Option<i64>,
+    /// Last refill timestamp (updated during verify).
+    pub last_refill_at: Option<Option<String>>,
 }
 
 impl AuthTwoFactor for TwoFactor {

@@ -2,6 +2,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
 
+use crate::entity::{AuthInvitation, AuthMember, AuthOrganization};
+use crate::store::sea_orm::entities;
+
 fn serialize_json_option_as_string<S>(
     value: &Option<serde_json::Value>,
     serializer: S,
@@ -256,4 +259,155 @@ pub struct FullOrganization {
     pub organization: Organization,
     pub members: Vec<MemberWithUser>,
     pub invitations: Vec<Invitation>,
+}
+
+impl<T: AuthOrganization> From<&T> for Organization {
+    fn from(organization: &T) -> Self {
+        Self {
+            id: organization.id().to_owned(),
+            name: organization.name().to_owned(),
+            slug: organization.slug().to_owned(),
+            logo: organization.logo().map(str::to_owned),
+            metadata: organization.metadata().cloned(),
+            created_at: organization.created_at(),
+            updated_at: organization.updated_at(),
+        }
+    }
+}
+
+impl From<&entities::organization::Model> for Organization {
+    fn from(model: &entities::organization::Model) -> Self {
+        Self {
+            id: model.id.clone(),
+            name: model.name.clone(),
+            slug: model.slug.clone(),
+            logo: model.logo.clone(),
+            metadata: Some(model.metadata.clone()),
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+        }
+    }
+}
+
+impl AuthOrganization for Organization {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn slug(&self) -> &str {
+        &self.slug
+    }
+    fn logo(&self) -> Option<&str> {
+        self.logo.as_deref()
+    }
+    fn metadata(&self) -> Option<&serde_json::Value> {
+        self.metadata.as_ref()
+    }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
+}
+
+impl AuthMember for Member {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn organization_id(&self) -> &str {
+        &self.organization_id
+    }
+    fn user_id(&self) -> &str {
+        &self.user_id
+    }
+    fn role(&self) -> &str {
+        &self.role
+    }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+}
+
+impl<T: AuthMember> From<&T> for Member {
+    fn from(member: &T) -> Self {
+        Self {
+            id: member.id().to_owned(),
+            organization_id: member.organization_id().to_owned(),
+            user_id: member.user_id().to_owned(),
+            role: member.role().to_owned(),
+            created_at: member.created_at(),
+        }
+    }
+}
+
+impl From<&entities::member::Model> for Member {
+    fn from(model: &entities::member::Model) -> Self {
+        Self {
+            id: model.id.clone(),
+            organization_id: model.organization_id.clone(),
+            user_id: model.user_id.clone(),
+            role: model.role.clone(),
+            created_at: model.created_at,
+        }
+    }
+}
+
+impl AuthInvitation for Invitation {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn organization_id(&self) -> &str {
+        &self.organization_id
+    }
+    fn email(&self) -> &str {
+        &self.email
+    }
+    fn role(&self) -> &str {
+        &self.role
+    }
+    fn status(&self) -> &InvitationStatus {
+        &self.status
+    }
+    fn inviter_id(&self) -> &str {
+        &self.inviter_id
+    }
+    fn expires_at(&self) -> DateTime<Utc> {
+        self.expires_at
+    }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+}
+
+impl<T: AuthInvitation> From<&T> for Invitation {
+    fn from(invitation: &T) -> Self {
+        Self {
+            id: invitation.id().to_owned(),
+            organization_id: invitation.organization_id().to_owned(),
+            email: invitation.email().to_owned(),
+            role: invitation.role().to_owned(),
+            status: invitation.status().clone(),
+            inviter_id: invitation.inviter_id().to_owned(),
+            expires_at: invitation.expires_at(),
+            created_at: invitation.created_at(),
+        }
+    }
+}
+
+impl From<&entities::invitation::Model> for Invitation {
+    fn from(model: &entities::invitation::Model) -> Self {
+        Self {
+            id: model.id.clone(),
+            organization_id: model.organization_id.clone(),
+            email: model.email.clone(),
+            role: model.role.clone(),
+            status: InvitationStatus::from(model.status.clone()),
+            inviter_id: model.inviter_id.clone(),
+            expires_at: model.expires_at,
+            created_at: model.created_at,
+        }
+    }
 }

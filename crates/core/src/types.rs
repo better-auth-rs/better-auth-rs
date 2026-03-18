@@ -12,62 +12,10 @@ pub use super::types_org::{
     CreateInvitation, CreateMember, CreateOrganization, FullOrganization, Invitation,
     InvitationStatus, Member, MemberUser, MemberWithUser, Organization, UpdateOrganization,
 };
-
-/// Two-factor authentication - matches OpenAPI schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TwoFactor {
-    pub id: String,
-    pub secret: String,
-    #[serde(rename = "backupCodes")]
-    pub backup_codes: Option<String>,
-    #[serde(rename = "userId")]
-    pub user_id: String,
-    #[serde(rename = "createdAt")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: DateTime<Utc>,
-}
-
-/// Passkey authentication - matches OpenAPI schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Passkey {
-    pub id: String,
-    pub name: String,
-    #[serde(rename = "publicKey")]
-    pub public_key: String,
-    #[serde(rename = "userId")]
-    pub user_id: String,
-    #[serde(rename = "credentialID")]
-    pub credential_id: String,
-    pub counter: u64,
-    #[serde(rename = "deviceType")]
-    pub device_type: String,
-    #[serde(rename = "backedUp")]
-    pub backed_up: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transports: Option<String>,
-    #[serde(rename = "createdAt")]
-    pub created_at: DateTime<Utc>,
-}
-
-/// Input for creating a new passkey
-#[derive(Debug, Clone)]
-pub struct CreatePasskey {
-    pub user_id: String,
-    pub name: String,
-    pub credential_id: String,
-    pub public_key: String,
-    pub counter: u64,
-    pub device_type: String,
-    pub backed_up: bool,
-    pub transports: Option<String>,
-}
-
-/// Input for updating a passkey
-#[derive(Debug, Clone)]
-pub struct UpdatePasskey {
-    pub name: Option<String>,
-}
+pub use super::types_plugin::{
+    ApiKey, CreateApiKey, CreatePasskey, CreateTwoFactor, Passkey, TwoFactor, UpdateApiKey,
+    UpdatePasskey,
+};
 
 /// HTTP method enumeration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -316,98 +264,6 @@ pub struct UpdateAccount {
     pub refresh_token_expires_at: Option<DateTime<Utc>>,
     pub scope: Option<String>,
     pub password: Option<String>,
-}
-
-/// Two-factor authentication creation data
-#[derive(Debug, Clone)]
-pub struct CreateTwoFactor {
-    pub user_id: String,
-    pub secret: String,
-    pub backup_codes: Option<String>,
-}
-
-/// API key - matches OpenAPI schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApiKey {
-    pub id: String,
-    pub name: Option<String>,
-    pub start: Option<String>,
-    pub prefix: Option<String>,
-    /// SHA-256 hash of the key (column name: `key` in SQL)
-    #[serde(rename = "key")]
-    pub key_hash: String,
-    #[serde(rename = "userId")]
-    pub user_id: String,
-    #[serde(rename = "refillInterval")]
-    pub refill_interval: Option<i64>,
-    #[serde(rename = "refillAmount")]
-    pub refill_amount: Option<i64>,
-    #[serde(rename = "lastRefillAt")]
-    pub last_refill_at: Option<String>,
-    pub enabled: bool,
-    #[serde(rename = "rateLimitEnabled")]
-    pub rate_limit_enabled: bool,
-    #[serde(rename = "rateLimitTimeWindow")]
-    pub rate_limit_time_window: Option<i64>,
-    #[serde(rename = "rateLimitMax")]
-    pub rate_limit_max: Option<i64>,
-    #[serde(rename = "requestCount")]
-    pub request_count: Option<i64>,
-    pub remaining: Option<i64>,
-    #[serde(rename = "lastRequest")]
-    pub last_request: Option<String>,
-    #[serde(rename = "expiresAt")]
-    pub expires_at: Option<String>,
-    #[serde(rename = "createdAt")]
-    pub created_at: String,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: String,
-    pub permissions: Option<String>,
-    pub metadata: Option<String>,
-}
-
-/// API key creation data
-#[derive(Debug, Clone)]
-pub struct CreateApiKey {
-    pub user_id: String,
-    pub name: Option<String>,
-    pub prefix: Option<String>,
-    pub key_hash: String,
-    pub start: Option<String>,
-    pub expires_at: Option<String>,
-    pub remaining: Option<i64>,
-    pub rate_limit_enabled: bool,
-    pub rate_limit_time_window: Option<i64>,
-    pub rate_limit_max: Option<i64>,
-    pub refill_interval: Option<i64>,
-    pub refill_amount: Option<i64>,
-    pub permissions: Option<String>,
-    pub metadata: Option<String>,
-    pub enabled: bool,
-}
-
-/// API key update data
-#[derive(Debug, Clone, Default)]
-pub struct UpdateApiKey {
-    pub name: Option<String>,
-    pub enabled: Option<bool>,
-    pub remaining: Option<i64>,
-    pub rate_limit_enabled: Option<bool>,
-    pub rate_limit_time_window: Option<i64>,
-    pub rate_limit_max: Option<i64>,
-    pub refill_interval: Option<i64>,
-    pub refill_amount: Option<i64>,
-    pub permissions: Option<String>,
-    pub metadata: Option<String>,
-    /// Update the expiration time. `Some(Some("..."))` sets a new value,
-    /// `Some(None)` clears it, `None` leaves it unchanged.
-    pub expires_at: Option<Option<String>>,
-    /// Last request timestamp (updated during verify).
-    pub last_request: Option<Option<String>>,
-    /// Request count within the current rate-limit window.
-    pub request_count: Option<i64>,
-    /// Last refill timestamp (updated during verify).
-    pub last_refill_at: Option<Option<String>>,
 }
 
 /// Verification token creation data

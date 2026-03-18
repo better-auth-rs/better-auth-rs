@@ -26,7 +26,7 @@ pub mod schema;
 pub mod session;
 pub mod store;
 pub mod types;
-pub mod types_impls;
+mod types_plugin;
 pub mod types_org;
 pub mod utils;
 pub mod wire;
