@@ -7,6 +7,7 @@ use better_auth_core::{
     AuthAccount, AuthContext, AuthError, AuthResult, AuthSession, AuthUser, AuthVerification,
     CreateAccount, RequestMeta, UpdateAccount, extract_origin,
 };
+use better_auth_core::wire::UserView;
 
 use crate::plugins::helpers::{get_credential_account, get_credential_password_hash};
 
@@ -218,7 +219,7 @@ pub(crate) async fn change_password_core(
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(
-    ChangePasswordResponse<better_auth_core::User>,
+    ChangePasswordResponse<UserView>,
     Option<String>,
 )> {
     if config.require_current_password {
@@ -276,7 +277,7 @@ pub(crate) async fn change_password_core(
             .database
             .get_user_by_id(user.id())
             .await?
-            .map(|user| better_auth_core::User::from(&user))
+            .map(|user| UserView::from(&user))
             .ok_or(AuthError::UserNotFound)?,
     };
 
