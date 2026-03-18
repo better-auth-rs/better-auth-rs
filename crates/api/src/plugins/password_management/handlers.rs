@@ -300,6 +300,29 @@ pub(crate) async fn set_password_core<DB: DatabaseAdapter>(
     Ok(StatusResponse { status: true })
 }
 
+pub(crate) async fn verify_password_core<DB: DatabaseAdapter>(
+    body: &VerifyPasswordRequest,
+    user: &DB::User,
+    config: &PasswordManagementConfig,
+    _ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    let stored_hash = match user.password_hash() {
+        Some(hash) => hash,
+        None => return Ok(StatusResponse { status: false }),
+    };
+
+    match password_utils::verify_password(
+        config.password_hasher.as_ref(),
+        &body.password,
+        stored_hash,
+    )
+    .await
+    {
+        Ok(()) => Ok(StatusResponse { status: true }),
+        Err(_) => Ok(StatusResponse { status: false }),
+    }
+}
+
 /// Shared helper: find a user by reset token value.
 pub(super) async fn find_user_by_reset_token<DB: DatabaseAdapter>(
     token: &str,

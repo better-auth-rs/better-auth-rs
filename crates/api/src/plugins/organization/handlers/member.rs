@@ -8,8 +8,9 @@ use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::OrganizationConfig;
 use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
 use crate::plugins::organization::types::{
-    ListMembersQuery, ListMembersResponse, MemberResponse, MemberWrappedResponse,
-    RemoveMemberRequest, RemovedMemberInfo, RemovedMemberResponse, UpdateMemberRoleRequest,
+    ActiveMemberRoleResponse, ListMembersQuery, ListMembersResponse, MemberResponse,
+    MemberWrappedResponse, RemoveMemberRequest, RemovedMemberInfo, RemovedMemberResponse,
+    UpdateMemberRoleRequest,
 };
 
 // ---------------------------------------------------------------------------
@@ -32,6 +33,26 @@ pub(crate) async fn get_active_member_core<DB: DatabaseAdapter>(
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
     Ok(MemberResponse::from_member_and_user(&member, user))
+}
+
+pub(crate) async fn get_active_member_role_core<DB: DatabaseAdapter>(
+    user: &DB::User,
+    session: &DB::Session,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<ActiveMemberRoleResponse> {
+    let org_id = session
+        .active_organization_id()
+        .ok_or_else(|| AuthError::bad_request("No active organization"))?;
+
+    let member = ctx
+        .database
+        .get_member(org_id, user.id())
+        .await?
+        .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
+
+    Ok(ActiveMemberRoleResponse {
+        role: member.role().to_string(),
+    })
 }
 
 pub(crate) async fn list_members_core<DB: DatabaseAdapter>(
@@ -241,6 +262,16 @@ pub(crate) async fn update_member_role_core<DB: DatabaseAdapter>(
 // ---------------------------------------------------------------------------
 // Old handlers (rewritten to call core)
 // ---------------------------------------------------------------------------
+
+/// Handle get active member role request
+pub async fn handle_get_active_member_role<DB: DatabaseAdapter>(
+    req: &AuthRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<AuthResponse> {
+    let (user, session) = require_session(req, ctx).await?;
+    let response = get_active_member_role_core(&user, &session, ctx).await?;
+    Ok(AuthResponse::json(200, &response)?)
+}
 
 /// Handle get active member request
 pub async fn handle_get_active_member<DB: DatabaseAdapter>(

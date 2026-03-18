@@ -65,7 +65,7 @@ jobs:
             pkg.type = 'module';
             require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
           "
-          npm install "better-auth@$TARGET" "@better-auth/passkey@$TARGET" js-yaml --silent
+          npm install "better-auth@$TARGET" "@better-auth/passkey@$TARGET" "@better-auth/api-key@$TARGET" js-yaml --silent
 
           cp "$GITHUB_WORKSPACE/scripts/generate-openapi-matrix.mjs" .
           node generate-openapi-matrix.mjs --profile aligned-rs --output spec.json

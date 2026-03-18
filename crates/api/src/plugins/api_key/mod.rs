@@ -815,7 +815,7 @@ better_auth_core::impl_auth_plugin! {
             // Look up the user
             let user = ctx
                 .database
-                .get_user_by_id(&view.user_id)
+                .get_user_by_id(&view.reference_id)
                 .await?
                 .ok_or_else(|| api_key_error(ApiKeyErrorCode::InvalidUserIdFromApiKey))?;
 
@@ -830,7 +830,7 @@ better_auth_core::impl_auth_plugin! {
                     "session": {
                         "id": view.id,
                         "token": raw_key,
-                        "userId": view.user_id,
+                        "userId": view.reference_id,
                     }
                 });
                 return Ok(Some(BeforeRequestAction::Respond(AuthResponse::json(
@@ -841,7 +841,7 @@ better_auth_core::impl_auth_plugin! {
 
             // For all other routes, inject the session
             Ok(Some(BeforeRequestAction::InjectSession {
-                user_id: view.user_id,
+                user_id: view.reference_id,
                 session_token: raw_key,
             }))
         }

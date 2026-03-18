@@ -73,8 +73,10 @@ pub(crate) struct ApiKeyView {
     pub name: Option<String>,
     pub start: Option<String>,
     pub prefix: Option<String>,
-    #[serde(rename = "userId")]
-    pub user_id: String,
+    #[serde(rename = "referenceId")]
+    pub reference_id: String,
+    #[serde(rename = "configId")]
+    pub config_id: String,
     #[serde(rename = "refillInterval")]
     pub refill_interval: Option<i64>,
     #[serde(rename = "refillAmount")]
@@ -131,7 +133,8 @@ impl ApiKeyView {
             name: ak.name().map(|s| s.to_string()),
             start: ak.start().map(|s| s.to_string()),
             prefix: ak.prefix().map(|s| s.to_string()),
-            user_id: ak.user_id().to_string(),
+            reference_id: ak.reference_id().to_string(),
+            config_id: ak.config_id().to_string(),
             refill_interval: ak.refill_interval(),
             refill_amount: ak.refill_amount(),
             last_refill_at: ak.last_refill_at().map(|s| s.to_string()),

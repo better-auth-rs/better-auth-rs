@@ -304,9 +304,9 @@ async fn test_axum_sign_out() {
     assert_eq!(response_data["success"], true);
 }
 
-/// Test forget password via Axum
+/// Test request password reset via Axum
 #[tokio::test]
-async fn test_axum_forget_password() {
+async fn test_axum_request_password_reset() {
     let auth = create_test_auth().await;
     let router = create_test_router(auth);
 
@@ -319,7 +319,7 @@ async fn test_axum_forget_password() {
 
     let request = Request::builder()
         .method(Method::POST)
-        .uri("/auth/forget-password")
+        .uri("/auth/request-password-reset")
         .header("content-type", "application/json")
         .body(Body::from(forget_data.to_string()))
         .unwrap();

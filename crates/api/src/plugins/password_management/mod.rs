@@ -103,11 +103,12 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
 
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::post("/forget-password", "forget_password"),
+            AuthRoute::post("/request-password-reset", "request_password_reset"),
             AuthRoute::post("/reset-password", "reset_password"),
             AuthRoute::get("/reset-password/{token}", "reset_password_token"),
             AuthRoute::post("/change-password", "change_password"),
             AuthRoute::post("/set-password", "set_password"),
+            AuthRoute::post("/verify-password", "verify_password"),
         ]
     }
 
@@ -117,7 +118,7 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
-            (HttpMethod::Post, "/forget-password") => {
+            (HttpMethod::Post, "/request-password-reset") => {
                 Ok(Some(self.handle_forget_password(req, ctx).await?))
             }
             (HttpMethod::Post, "/reset-password") => {
@@ -128,6 +129,9 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
             }
             (HttpMethod::Post, "/set-password") => {
                 Ok(Some(self.handle_set_password(req, ctx).await?))
+            }
+            (HttpMethod::Post, "/verify-password") => {
+                Ok(Some(self.handle_verify_password(req, ctx).await?))
             }
             (HttpMethod::Get, path) if path.starts_with("/reset-password/") => {
                 let token = &path[16..]; // Remove "/reset-password/" prefix
@@ -215,6 +219,26 @@ impl PasswordManagementPlugin {
             .ok_or(AuthError::Unauthenticated)?;
 
         let response = set_password_core(&body, &user, &self.config, ctx).await?;
+        Ok(AuthResponse::json(200, &response)?)
+    }
+
+    async fn handle_verify_password<DB: DatabaseAdapter>(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<AuthResponse> {
+        let body: VerifyPasswordRequest = match better_auth_core::validate_request_body(req) {
+            Ok(v) => v,
+            Err(resp) => return Ok(resp),
+        };
+
+        // Get current user from session
+        let user = self
+            .get_current_user(req, ctx)
+            .await?
+            .ok_or(AuthError::Unauthenticated)?;
+
+        let response = verify_password_core(&body, &user, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -368,6 +392,17 @@ mod axum_impl {
         Ok(Json(response))
     }
 
+    async fn handle_verify_password<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        Extension(ps): Extension<Arc<PluginState>>,
+        CurrentSession { user, .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<VerifyPasswordRequest>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
+        let ctx = state.to_context();
+        let response = verify_password_core(&body, &user, &ps.config, &ctx).await?;
+        Ok(Json(response))
+    }
+
     impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for PasswordManagementPlugin {
         fn name(&self) -> &'static str {
             "password-management"
@@ -381,7 +416,7 @@ mod axum_impl {
             });
 
             axum::Router::new()
-                .route("/forget-password", post(handle_forget_password::<DB>))
+                .route("/request-password-reset", post(handle_forget_password::<DB>))
                 .route("/reset-password", post(handle_reset_password::<DB>))
                 .route(
                     "/reset-password/:token",
@@ -389,6 +424,7 @@ mod axum_impl {
                 )
                 .route("/change-password", post(handle_change_password::<DB>))
                 .route("/set-password", post(handle_set_password::<DB>))
+                .route("/verify-password", post(handle_verify_password::<DB>))
                 .layer(Extension(plugin_state))
         }
     }

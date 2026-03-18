@@ -324,7 +324,8 @@ impl MemoryApiKey for ApiKey {
             start: input.start.clone(),
             prefix: input.prefix.clone(),
             key_hash: input.key_hash.clone(),
-            user_id: input.user_id.clone(),
+            reference_id: input.reference_id.clone(),
+            config_id: input.config_id.clone().unwrap_or_else(|| "default".to_string()),
             refill_interval: input.refill_interval,
             refill_amount: input.refill_amount,
             last_refill_at: None,
@@ -402,6 +403,7 @@ impl MemoryPasskey for Passkey {
             device_type: input.device_type.clone(),
             backed_up: input.backed_up,
             transports: input.transports.clone(),
+            aaguid: input.aaguid.clone(),
             created_at: now,
         }
     }

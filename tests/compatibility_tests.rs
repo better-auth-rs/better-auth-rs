@@ -218,7 +218,7 @@ async fn test_core_endpoints_present() {
         ("post", "/sign-out"),
         ("post", "/update-user"),
         ("post", "/delete-user"),
-        ("post", "/forget-password"),
+        ("post", "/request-password-reset"),
         ("post", "/reset-password"),
         ("post", "/change-password"),
         ("post", "/set-password"),

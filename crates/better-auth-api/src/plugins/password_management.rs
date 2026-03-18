@@ -132,7 +132,7 @@ impl AuthPlugin for PasswordManagementPlugin {
     
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::post("/forget-password", "forget_password"),
+            AuthRoute::post("/request-password-reset", "forget_password"),
             AuthRoute::post("/reset-password", "reset_password"),
             AuthRoute::get("/reset-password/{token}", "reset_password_token"),
             AuthRoute::post("/change-password", "change_password"),
@@ -148,7 +148,7 @@ impl AuthPlugin for PasswordManagementPlugin {
     
     async fn on_request(&self, req: &AuthRequest, ctx: &AuthContext) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
-            (HttpMethod::Post, "/forget-password") => {
+            (HttpMethod::Post, "/request-password-reset") => {
                 Ok(Some(self.handle_forget_password(req, ctx).await?))
             },
             (HttpMethod::Post, "/reset-password") => {
@@ -628,18 +628,18 @@ mod tests {
     }
     
     #[tokio::test]
-    async fn test_forget_password_success() {
+    async fn test_request_password_reset_success() {
         let plugin = PasswordManagementPlugin::new();
         let (ctx, _user, _session) = create_test_context_with_user().await;
-        
+
         let body = serde_json::json!({
             "email": "test@example.com",
             "redirectTo": "http://localhost:3000/reset"
         });
-        
+
         let req = create_auth_request(
             HttpMethod::Post,
-            "/forget-password",
+            "/request-password-reset",
             None,
             Some(body.to_string().into_bytes())
         );
@@ -653,17 +653,17 @@ mod tests {
     }
     
     #[tokio::test]
-    async fn test_forget_password_unknown_email() {
+    async fn test_request_password_reset_unknown_email() {
         let plugin = PasswordManagementPlugin::new();
         let (ctx, _user, _session) = create_test_context_with_user().await;
-        
+
         let body = serde_json::json!({
             "email": "unknown@example.com"
         });
-        
+
         let req = create_auth_request(
             HttpMethod::Post,
-            "/forget-password",
+            "/request-password-reset",
             None,
             Some(body.to_string().into_bytes())
         );
@@ -1090,7 +1090,7 @@ mod tests {
         let routes = plugin.routes();
         
         assert_eq!(routes.len(), 4);
-        assert!(routes.iter().any(|r| r.path == "/forget-password" && r.method == HttpMethod::Post));
+        assert!(routes.iter().any(|r| r.path == "/request-password-reset" && r.method == HttpMethod::Post));
         assert!(routes.iter().any(|r| r.path == "/reset-password" && r.method == HttpMethod::Post));
         assert!(routes.iter().any(|r| r.path == "/reset-password/{token}" && r.method == HttpMethod::Get));
         assert!(routes.iter().any(|r| r.path == "/change-password" && r.method == HttpMethod::Post));
@@ -1101,11 +1101,11 @@ mod tests {
         let plugin = PasswordManagementPlugin::new();
         let (ctx, _user, session) = create_test_context_with_user().await;
         
-        // Test forget password
+        // Test request password reset
         let body = serde_json::json!({"email": "test@example.com"});
         let req = create_auth_request(
             HttpMethod::Post,
-            "/forget-password",
+            "/request-password-reset",
             None,
             Some(body.to_string().into_bytes())
         );

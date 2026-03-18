@@ -264,14 +264,14 @@ async fn test_list_sessions_response_shape() {
     );
 }
 
-/// Spec: POST /forget-password => { status: bool }
+/// Spec: POST /request-password-reset => { status: bool }
 #[tokio::test]
-async fn test_forget_password_response_shape() {
+async fn test_request_password_reset_response_shape() {
     let auth = create_test_auth().await;
     signup_user(&auth, "fp@example.com", "password123", "FP User").await;
 
     let req = post_json(
-        "/forget-password",
+        "/request-password-reset",
         serde_json::json!({
             "email": "fp@example.com",
         }),
@@ -279,7 +279,7 @@ async fn test_forget_password_response_shape() {
     let resp = auth
         .handle_request(req)
         .await
-        .expect("forget-password request failed");
+        .expect("request-password-reset request failed");
     assert_eq!(resp.status, 200);
 
     let json: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
@@ -583,9 +583,9 @@ async fn test_api_key_create_response_shape() {
     // Must have standard fields
     assert!(json["id"].is_string(), "id must be a string");
     assert!(
-        json["userId"].is_string(),
-        "userId must be a string, got: {:?}",
-        json["userId"]
+        json["referenceId"].is_string(),
+        "referenceId must be a string, got: {:?}",
+        json["referenceId"]
     );
     assert_eq!(json["name"], "shape-test-key");
     assert!(json["enabled"].is_boolean(), "enabled must be a boolean");
@@ -638,7 +638,7 @@ async fn test_api_key_get_response_shape() {
 
     assert!(json["id"].is_string(), "id must be a string");
     assert_eq!(json["name"], "get-shape-key");
-    assert!(json["userId"].is_string(), "userId must be a string");
+    assert!(json["referenceId"].is_string(), "referenceId must be a string");
     assert!(json["enabled"].is_boolean(), "enabled must be a boolean");
     assert!(json["createdAt"].is_string(), "createdAt must be a string");
     assert!(json["updatedAt"].is_string(), "updatedAt must be a string");
@@ -674,7 +674,7 @@ async fn test_api_key_list_response_shape() {
 
     for item in arr {
         assert!(item["id"].is_string(), "item.id must be a string");
-        assert!(item["userId"].is_string(), "item.userId must be a string");
+        assert!(item["referenceId"].is_string(), "item.referenceId must be a string");
         assert!(
             item["enabled"].is_boolean(),
             "item.enabled must be a boolean"

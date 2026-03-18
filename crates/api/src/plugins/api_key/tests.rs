@@ -254,7 +254,7 @@ async fn test_list_returns_only_user_keys() {
     let list_body = json_body(&list_response);
     let list = list_body.as_array().unwrap();
     assert_eq!(list.len(), 1);
-    assert_eq!(list[0]["userId"].as_str().unwrap(), user1.id);
+    assert_eq!(list[0]["referenceId"].as_str().unwrap(), user1.id);
     assert!(list[0].get("key").is_none());
     assert!(list[0].get("key_hash").is_none());
 }
@@ -879,7 +879,7 @@ async fn test_virtual_session_on_get_session() {
             assert_eq!(body["user"]["email"], "test@example.com");
             // Should contain session-like data
             assert!(body["session"]["id"].is_string());
-            assert_eq!(body["session"]["userId"], user.id);
+            assert_eq!(body["session"]["referenceId"], user.id);
         }
         BeforeRequestAction::InjectSession { .. } => {
             panic!("Expected Respond for /get-session, got InjectSession");

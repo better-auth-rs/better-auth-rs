@@ -74,6 +74,12 @@ where
     }
 }
 
+#[derive(Debug, Deserialize, Validate)]
+pub(crate) struct VerifyPasswordRequest {
+    #[validate(length(min = 1, message = "Password is required"))]
+    pub(crate) password: String,
+}
+
 // Response structures
 #[derive(Debug, Serialize)]
 pub(crate) struct ChangePasswordResponse<U: Serialize> {

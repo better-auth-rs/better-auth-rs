@@ -288,8 +288,11 @@ impl AuthApiKey for ApiKey {
     fn key_hash(&self) -> &str {
         &self.key_hash
     }
-    fn user_id(&self) -> &str {
-        &self.user_id
+    fn reference_id(&self) -> &str {
+        &self.reference_id
+    }
+    fn config_id(&self) -> &str {
+        &self.config_id
     }
     fn refill_interval(&self) -> Option<i64> {
         self.refill_interval
@@ -378,6 +381,9 @@ impl AuthPasskey for Passkey {
     }
     fn transports(&self) -> Option<&str> {
         self.transports.as_deref()
+    }
+    fn aaguid(&self) -> Option<&str> {
+        self.aaguid.as_deref()
     }
     fn created_at(&self) -> DateTime<Utc> {
         self.created_at
@@ -543,6 +549,7 @@ mod postgres_impls {
                 device_type: row.try_get("device_type")?,
                 backed_up: row.try_get("backed_up")?,
                 transports: row.try_get("transports")?,
+                aaguid: row.try_get("aaguid")?,
                 created_at: row.try_get("created_at")?,
             })
         }
@@ -564,7 +571,8 @@ mod postgres_impls {
                 start: row.try_get("start")?,
                 prefix: row.try_get("prefix")?,
                 key_hash: row.try_get("key")?,
-                user_id: row.try_get("user_id")?,
+                reference_id: row.try_get("reference_id")?,
+                config_id: row.try_get("config_id")?,
                 refill_interval: row.try_get("refill_interval")?,
                 refill_amount: row.try_get("refill_amount")?,
                 last_refill_at: last_refill_at.map(|dt| dt.to_rfc3339()),

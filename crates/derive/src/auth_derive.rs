@@ -244,5 +244,6 @@ pub(crate) const AUTH_PASSKEY_GETTERS: &[(&str, ReturnKind)] = &[
     ("device_type", RefStr),
     ("backed_up", Bool),
     ("transports", OptionRefStr),
+    ("aaguid", OptionRefStr),
     ("created_at", DateTime),
 ];

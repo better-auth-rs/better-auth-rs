@@ -22,6 +22,7 @@ use better_auth_core::types::{
 pub(crate) async fn create_organization_core<DB: DatabaseAdapter>(
     body: &CreateOrganizationRequest,
     user: &DB::User,
+    session: &DB::Session,
     config: &OrganizationConfig,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<CreateOrganizationResponse<DB::Organization, MemberResponse>> {
@@ -29,8 +30,30 @@ pub(crate) async fn create_organization_core<DB: DatabaseAdapter>(
         return Err(AuthError::forbidden("Organization creation is not allowed"));
     }
 
+    // Determine the owner: only admins may override via userId.
+    let delegated = body.user_id.is_some();
+    let owner_user = if let Some(ref target_id) = body.user_id {
+        // Only admins may create organizations on behalf of another user.
+        if user.role().unwrap_or("user") != "admin" {
+            return Err(AuthError::forbidden(
+                "Only admins can create organizations for other users",
+            ));
+        }
+        // Validate the target user exists before we create anything.
+        ctx.database
+            .get_user_by_id(target_id)
+            .await?
+            .ok_or_else(|| AuthError::bad_request("Specified userId not found"))?
+    } else {
+        ctx.database
+            .get_user_by_id(user.id())
+            .await?
+            .ok_or_else(|| AuthError::not_found("User not found"))?
+    };
+    let owner_id = owner_user.id().to_owned();
+
     if let Some(limit) = config.organization_limit {
-        let user_orgs = ctx.database.list_user_organizations(user.id()).await?;
+        let user_orgs = ctx.database.list_user_organizations(&owner_id).await?;
         if user_orgs.len() >= limit {
             return Err(AuthError::bad_request(format!(
                 "Organization limit of {} reached",
@@ -60,12 +83,24 @@ pub(crate) async fn create_organization_core<DB: DatabaseAdapter>(
 
     let member_data = CreateMember {
         organization_id: organization.id().to_string(),
-        user_id: user.id().to_string(),
+        user_id: owner_id,
         role: config.creator_role.clone(),
     };
 
     let member = ctx.database.create_member(member_data).await?;
-    let member_response = MemberResponse::from_member_and_user(&member, user);
+    let member_response = MemberResponse::from_member_and_user(&member, &owner_user);
+
+    // Only update the caller's active organization when they are the owner.
+    // In delegated (admin) creates the caller is not a member, so updating
+    // their session would point to an org they can't access.
+    if !delegated && !body.keep_current_active_organization.unwrap_or(false) {
+        ctx.database
+            .update_session_active_organization(
+                session.token(),
+                Some(organization.id()),
+            )
+            .await?;
+    }
 
     Ok(CreateOrganizationResponse {
         organization,
@@ -100,7 +135,7 @@ pub(crate) async fn update_organization_core<DB: DatabaseAdapter>(
         ));
     }
 
-    if let Some(ref new_slug) = body.slug
+    if let Some(ref new_slug) = body.data.slug
         && let Some(existing) = ctx.database.get_organization_by_slug(new_slug).await?
         && existing.id() != org_id
     {
@@ -108,10 +143,10 @@ pub(crate) async fn update_organization_core<DB: DatabaseAdapter>(
     }
 
     let update_data = UpdateOrganization {
-        name: body.name.clone(),
-        slug: body.slug.clone(),
-        logo: body.logo.clone(),
-        metadata: body.metadata.clone(),
+        name: body.data.name.clone(),
+        slug: body.data.slug.clone(),
+        logo: body.data.logo.clone(),
+        metadata: body.data.metadata.clone(),
     };
 
     let updated = ctx
@@ -225,7 +260,7 @@ pub(crate) async fn set_active_organization_core<DB: DatabaseAdapter>(
     user: &DB::User,
     session: &DB::Session,
     ctx: &AuthContext<DB>,
-) -> AuthResult<DB::Session> {
+) -> AuthResult<Option<DB::Organization>> {
     let org_id = if body.organization_id.is_some() || body.organization_slug.is_some() {
         Some(
             resolve_organization_id(
@@ -247,12 +282,21 @@ pub(crate) async fn set_active_organization_core<DB: DatabaseAdapter>(
             .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
     }
 
-    let updated_session = ctx
-        .database
+    ctx.database
         .update_session_active_organization(session.token(), org_id.as_deref())
         .await?;
 
-    Ok(updated_session)
+    // Return the organization (or null if unsetting)
+    if let Some(ref oid) = org_id {
+        let organization = ctx
+            .database
+            .get_organization_by_id(oid)
+            .await?
+            .ok_or_else(|| AuthError::not_found("Organization not found"))?;
+        Ok(Some(organization))
+    } else {
+        Ok(None)
+    }
 }
 
 pub(crate) async fn leave_organization_core<DB: DatabaseAdapter>(
@@ -305,12 +349,12 @@ pub async fn handle_create_organization<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let (user, _session) = require_session(req, ctx).await?;
+    let (user, session) = require_session(req, ctx).await?;
     let body: CreateOrganizationRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-    let response = create_organization_core(&body, &user, config, ctx).await?;
+    let response = create_organization_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
 
@@ -389,8 +433,8 @@ pub async fn handle_set_active_organization<DB: DatabaseAdapter>(
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-    let updated_session = set_active_organization_core(&body, &user, &session, ctx).await?;
-    Ok(AuthResponse::json(200, &updated_session)?)
+    let organization = set_active_organization_core(&body, &user, &session, ctx).await?;
+    Ok(AuthResponse::json(200, &organization)?)
 }
 
 /// Handle leave organization request

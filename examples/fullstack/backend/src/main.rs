@@ -92,7 +92,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  GET  /api/auth/list-sessions    - List all sessions");
     println!("  POST /api/auth/revoke-session   - Revoke a session");
     println!("  POST /api/auth/revoke-other-sessions - Revoke other sessions");
+    println!("  POST /api/auth/update-session   - Update current session");
+    println!("  POST /api/auth/request-password-reset - Request password reset");
+    println!("  POST /api/auth/reset-password   - Reset password with token");
     println!("  POST /api/auth/change-password  - Change password");
+    println!("  POST /api/auth/set-password     - Set password for OAuth users");
+    println!("  POST /api/auth/verify-password  - Verify current password");
+    println!("  POST /api/auth/is-username-available - Check username availability");
     println!("  GET  /api/auth/ok               - Health check");
     println!();
     println!("App endpoints:");

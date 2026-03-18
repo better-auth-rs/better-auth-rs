@@ -155,16 +155,16 @@ async fn test_unauthorized_session_access() {
     assert_eq!(status, 401);
 }
 
-/// Integration test for forget-password endpoint
+/// Integration test for request-password-reset endpoint
 #[tokio::test]
-async fn test_forget_password_integration() {
+async fn test_request_password_reset_integration() {
     let auth = create_test_auth_memory().await;
     let (_user_id, _session_token) = create_test_user_and_session(auth.clone()).await;
 
     let (status, response_data) = send_request(
         &auth,
         post_json(
-            "/forget-password",
+            "/request-password-reset",
             serde_json::json!({
                 "email": "integration@test.com",
                 "redirectTo": "http://localhost:3000/reset"
@@ -1804,6 +1804,20 @@ async fn test_api_key_get() {
     // key_hash should NOT be in the response
     assert!(data.get("keyHash").is_none());
     assert!(data.get("key_hash").is_none());
+    // 1.5.5: referenceId replaces userId, configId defaults to "default"
+    assert!(
+        data["referenceId"].is_string(),
+        "response must include referenceId"
+    );
+    assert_eq!(
+        data["configId"].as_str().unwrap(),
+        "default",
+        "configId should default to 'default'"
+    );
+    assert!(
+        data.get("userId").is_none(),
+        "userId should no longer be present (renamed to referenceId)"
+    );
 }
 
 /// Integration test: list API keys

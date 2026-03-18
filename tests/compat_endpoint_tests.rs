@@ -118,21 +118,21 @@ async fn test_spec_driven_endpoint_validation() {
     .await;
     validator.validate_endpoint("/sign-out", "post", status, &body);
 
-    // --- POST /forget-password ---
+    // --- POST /request-password-reset ---
     // Sign up a fresh user for password tests
     let (pw_token, _) = signup_user(&auth, "pw@example.com", "password123", "PW User").await;
 
     let (status, body) = send_request(
         &auth,
         post_json(
-            "/forget-password",
+            "/request-password-reset",
             serde_json::json!({
                 "email": "pw@example.com",
             }),
         ),
     )
     .await;
-    validator.validate_endpoint("/forget-password", "post", status, &body);
+    validator.validate_endpoint("/request-password-reset", "post", status, &body);
 
     // --- POST /change-password ---
     let (status, body) = send_request(

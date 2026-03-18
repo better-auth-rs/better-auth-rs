@@ -40,7 +40,7 @@ pub async fn get_owned_api_key<DB: DatabaseAdapter>(
         .await?
         .ok_or_else(|| AuthError::not_found("API key not found"))?;
 
-    if api_key.user_id() != user_id {
+    if api_key.reference_id() != user_id {
         return Err(AuthError::not_found("API key not found"));
     }
 

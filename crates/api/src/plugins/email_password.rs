@@ -11,6 +11,7 @@ use better_auth_core::{
     AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod, PASSWORD_HASH_KEY,
 };
 
+use super::StatusResponse;
 use super::email_verification::EmailVerificationPlugin;
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
@@ -69,6 +70,9 @@ pub(crate) struct SignUpRequest {
     display_username: Option<String>,
     #[serde(rename = "callbackURL")]
     callback_url: Option<String>,
+    image: Option<String>,
+    #[serde(rename = "rememberMe")]
+    remember_me: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -93,6 +97,14 @@ pub(crate) struct SignInUsernameRequest {
     password: String,
     #[serde(rename = "rememberMe")]
     remember_me: Option<bool>,
+    #[serde(rename = "callbackURL")]
+    callback_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub(crate) struct IsUsernameAvailableRequest {
+    #[validate(length(min = 1, message = "Username is required"))]
+    username: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -176,6 +188,23 @@ impl EmailPasswordPlugin {
         self
     }
 
+    async fn handle_is_username_available<DB: DatabaseAdapter>(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<DB>,
+    ) -> AuthResult<AuthResponse> {
+        // Require authentication
+        let (_user, _session) = ctx.require_session(req).await?;
+
+        let body: IsUsernameAvailableRequest = match better_auth_core::validate_request_body(req) {
+            Ok(v) => v,
+            Err(resp) => return Ok(resp),
+        };
+
+        let response = is_username_available_core(&body, ctx).await?;
+        Ok(AuthResponse::json(200, &response)?)
+    }
+
     async fn handle_sign_up<DB: DatabaseAdapter>(
         &self,
         req: &AuthRequest,
@@ -257,6 +286,17 @@ impl EmailPasswordPlugin {
 // Core functions — framework-agnostic business logic
 // ---------------------------------------------------------------------------
 
+/// Core is-username-available logic.
+pub(crate) async fn is_username_available_core<DB: DatabaseAdapter>(
+    body: &IsUsernameAvailableRequest,
+    ctx: &AuthContext<DB>,
+) -> AuthResult<StatusResponse> {
+    let existing = ctx.database.get_user_by_username(&body.username).await?;
+    Ok(StatusResponse {
+        status: existing.is_none(),
+    })
+}
+
 /// Core sign-up logic.
 ///
 /// Returns `(response, Option<session_token>)`. The session token is present
@@ -305,6 +345,9 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
         create_user.display_username = Some(display_username.clone());
     }
     create_user.metadata = Some(metadata);
+    if let Some(ref image) = body.image {
+        create_user.image = Some(image.clone());
+    }
 
     let user = ctx.database.create_user(create_user).await?;
 
@@ -423,7 +466,7 @@ pub(crate) async fn sign_in_username_core<DB: DatabaseAdapter>(
         .await?
         .ok_or(AuthError::InvalidCredentials)?;
 
-    sign_in_with_user_core(user, &body.password, config, email_verification, None, ctx).await
+    sign_in_with_user_core(user, &body.password, config, email_verification, body.callback_url.as_deref(), ctx).await
 }
 
 impl Default for EmailPasswordConfig {
@@ -449,6 +492,7 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailPasswordPlugin {
         let mut routes = vec![
             AuthRoute::post("/sign-in/email", "sign_in_email"),
             AuthRoute::post("/sign-in/username", "sign_in_username"),
+            AuthRoute::post("/is-username-available", "is_username_available"),
         ];
 
         if self.config.enable_signup {
@@ -470,6 +514,9 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailPasswordPlugin {
             (HttpMethod::Post, "/sign-in/email") => Ok(Some(self.handle_sign_in(req, ctx).await?)),
             (HttpMethod::Post, "/sign-in/username") => {
                 Ok(Some(self.handle_sign_in_username(req, ctx).await?))
+            }
+            (HttpMethod::Post, "/is-username-available") => {
+                Ok(Some(self.handle_is_username_available(req, ctx).await?))
             }
             _ => Ok(None),
         }
@@ -495,7 +542,7 @@ mod axum_impl {
     use axum::extract::{Extension, State};
     use axum::http::header;
     use axum::response::IntoResponse;
-    use better_auth_core::{AuthState, ValidatedJson};
+    use better_auth_core::{AuthState, CurrentSession, ValidatedJson};
 
     /// Shared plugin state wrapping the full plugin (non-Clone due to
     /// Option<Arc<EmailVerificationPlugin>>).
@@ -563,6 +610,16 @@ mod axum_impl {
         Ok(sign_in_result_to_response::<DB>(result, &state))
     }
 
+    async fn handle_is_username_available<DB: DatabaseAdapter>(
+        State(state): State<AuthState<DB>>,
+        CurrentSession { .. }: CurrentSession<DB>,
+        ValidatedJson(body): ValidatedJson<IsUsernameAvailableRequest>,
+    ) -> Result<Json<StatusResponse>, AuthError> {
+        let ctx = state.to_context();
+        let response = is_username_available_core(&body, &ctx).await?;
+        Ok(Json(response))
+    }
+
     #[async_trait::async_trait]
     impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for EmailPasswordPlugin {
         fn name(&self) -> &'static str {
@@ -581,6 +638,10 @@ mod axum_impl {
                 .route("/sign-up/email", post(handle_sign_up::<DB>))
                 .route("/sign-in/email", post(handle_sign_in::<DB>))
                 .route("/sign-in/username", post(handle_sign_in_username::<DB>))
+                .route(
+                    "/is-username-available",
+                    post(handle_is_username_available::<DB>),
+                )
                 .layer(Extension(shared))
         }
 

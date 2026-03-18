@@ -157,6 +157,7 @@ async fn test_verify_authentication_checks_type_origin_and_prevents_replay() {
             device_type: "singleDevice".to_string(),
             backed_up: false,
             transports: None,
+            aaguid: None,
         })
         .await
         .unwrap();
@@ -392,6 +393,7 @@ async fn test_generate_authenticate_options_with_auth_includes_credentials() {
             device_type: "singleDevice".to_string(),
             backed_up: false,
             transports: Some("[\"usb\"]".to_string()),
+            aaguid: None,
         })
         .await
         .unwrap();
@@ -449,6 +451,7 @@ async fn test_list_user_passkeys() {
             device_type: "singleDevice".to_string(),
             backed_up: false,
             transports: None,
+            aaguid: None,
         })
         .await
         .unwrap();
@@ -507,6 +510,7 @@ async fn test_delete_passkey_success() {
             device_type: "singleDevice".to_string(),
             backed_up: false,
             transports: None,
+            aaguid: None,
         })
         .await
         .unwrap();
@@ -560,6 +564,7 @@ async fn test_delete_passkey_non_owner_rejected() {
             device_type: "singleDevice".to_string(),
             backed_up: false,
             transports: None,
+            aaguid: None,
         })
         .await
         .unwrap();
@@ -602,6 +607,7 @@ async fn test_update_passkey_success() {
             device_type: "singleDevice".to_string(),
             backed_up: false,
             transports: None,
+            aaguid: None,
         })
         .await
         .unwrap();
@@ -662,6 +668,7 @@ async fn test_update_passkey_non_owner_rejected() {
             device_type: "singleDevice".to_string(),
             backed_up: false,
             transports: None,
+            aaguid: None,
         })
         .await
         .unwrap();
@@ -789,6 +796,7 @@ async fn test_memory_passkey_list_is_sorted_by_created_at_desc() {
             device_type: "singleDevice".to_string(),
             backed_up: false,
             transports: None,
+            aaguid: None,
         })
         .await
         .unwrap();
@@ -806,6 +814,7 @@ async fn test_memory_passkey_list_is_sorted_by_created_at_desc() {
             device_type: "singleDevice".to_string(),
             backed_up: false,
             transports: None,
+            aaguid: None,
         })
         .await
         .unwrap();

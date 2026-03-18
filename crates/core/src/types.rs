@@ -140,6 +140,8 @@ pub struct Passkey {
     pub backed_up: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transports: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aaguid: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
 }
@@ -155,6 +157,7 @@ pub struct CreatePasskey {
     pub device_type: String,
     pub backed_up: bool,
     pub transports: Option<String>,
+    pub aaguid: Option<String>,
 }
 
 /// Input for updating a passkey
@@ -301,8 +304,10 @@ pub struct ApiKey {
     /// SHA-256 hash of the key (column name: `key` in SQL)
     #[serde(rename = "key")]
     pub key_hash: String,
-    #[serde(rename = "userId")]
-    pub user_id: String,
+    #[serde(rename = "referenceId")]
+    pub reference_id: String,
+    #[serde(rename = "configId")]
+    pub config_id: String,
     #[serde(rename = "refillInterval")]
     pub refill_interval: Option<i64>,
     #[serde(rename = "refillAmount")]
@@ -334,7 +339,8 @@ pub struct ApiKey {
 /// API key creation data
 #[derive(Debug, Clone)]
 pub struct CreateApiKey {
-    pub user_id: String,
+    pub reference_id: String,
+    pub config_id: Option<String>,
     pub name: Option<String>,
     pub prefix: Option<String>,
     pub key_hash: String,
