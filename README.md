@@ -23,7 +23,7 @@ The most comprehensive authentication framework for Rust. Inspired by [Better Au
 
 ```toml
 [dependencies]
-better-auth = { version = "0.9", features = ["axum"] }
+better-auth = { version = "0.10", features = ["axum"] }
 ```
 
 ```rust,ignore

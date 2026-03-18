@@ -15,16 +15,16 @@ members = ["crates/core", "crates/api"]
 exclude = ["examples/sqlx-custom-entities", "examples/fullstack/backend", "compat-tests/rust-server"]
 
 [workspace.package]
-version = "0.9.0"
+version = "0.10.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/better-auth-rs/better-auth-rs"
 
 [workspace.dependencies]
 # Sub-crates
-better-auth-core = { version = "0.9.0", path = "crates/core" }
-better-auth-api = { version = "0.9.0", path = "crates/api" }
-better-auth-macros = { version = "0.9.0", path = "crates/derive", package = "better-auth-macros" }
+better-auth-core = { version = "0.10.0", path = "crates/core" }
+better-auth-api = { version = "0.10.0", path = "crates/api" }
+better-auth-macros = { version = "0.10.0", path = "crates/derive", package = "better-auth-macros" }
 
 # Asynchronous runtime
 tokio = { version = "1.0", features = ["full"] }
