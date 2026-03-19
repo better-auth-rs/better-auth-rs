@@ -14,17 +14,17 @@
 mod compat;
 
 use std::collections::{BTreeMap, HashSet};
+use std::sync::Arc;
 
 use better_auth::{
     AuthBuilder, AuthConfig, BetterAuth,
     plugins::EmailPasswordPlugin,
     prelude::{AuthRequest, HttpMethod},
-    store::sea_orm::{Database, DatabaseConnection},
 };
+use better_auth_seaorm::{Database, DatabaseConnection, SeaOrmStore};
 use serde_json::Value;
 
-type TestSchema =
-    better_auth::__private_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
+type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -123,11 +123,9 @@ fn completed_phase_reference_surface(
 /// Create a test auth instance with all currently implemented plugins.
 async fn test_database() -> DatabaseConnection {
     let database = Database::connect("sqlite::memory:").await.unwrap();
-    better_auth::__private_core::store::sea_orm::__private_test_support::migrator::run_migrations(
-        &database,
-    )
-    .await
-    .unwrap();
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
+        .await
+        .unwrap();
     database
 }
 
@@ -136,8 +134,10 @@ async fn create_full_auth() -> BetterAuth<TestSchema> {
         .base_url("http://localhost:3000")
         .password_min_length(8);
 
+    let store = SeaOrmStore::<TestSchema>::new(Arc::new(config.clone()), test_database().await);
+
     AuthBuilder::<TestSchema>::new(config)
-        .database(test_database().await)
+        .store(store)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(better_auth::plugins::SessionManagementPlugin::new())
         .plugin(better_auth::plugins::PasswordManagementPlugin::new())

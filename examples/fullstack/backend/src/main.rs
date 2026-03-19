@@ -3,8 +3,8 @@ use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalS
 use better_auth::middleware::CsrfConfig;
 use better_auth::plugins::{EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin};
 use better_auth::prelude::AuthUser;
-use better_auth::store::Database;
 use better_auth::{AuthConfig, BetterAuth};
+use better_auth_seaorm::{Database, SeaOrmStore};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use axum::http::HeaderName;
@@ -44,11 +44,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|_| "sqlite://better-auth-fullstack.db?mode=rwc".to_string());
     let database = Database::connect(&database_url).await?;
     auth_schema::run_app_migrations(&database).await?;
+    let store = SeaOrmStore::<auth_schema::AppAuthSchema>::new(Arc::new(config.clone()), database.clone());
 
     let auth = Arc::new(
         BetterAuth::<auth_schema::AppAuthSchema>::new(config)
             .csrf(CsrfConfig::new().enabled(true))
-            .database(database.clone())
+            .store(store)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new())

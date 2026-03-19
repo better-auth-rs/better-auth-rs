@@ -19,18 +19,18 @@ async fn store_create_user_normalizes_email_and_lookup_matches_any_case() {
     let mut create_user = CreateUser::new().with_name("Mixed Case");
     create_user.email = Some("Mixed.Case@Test.com".to_string());
 
-    let user = auth.database().create_user(create_user).await.unwrap();
+    let user = auth.store().create_user(create_user).await.unwrap();
 
     assert_eq!(user.email.as_deref(), Some("mixed.case@test.com"));
 
     let lower = auth
-        .database()
+        .store()
         .get_user_by_email("mixed.case@test.com")
         .await
         .unwrap()
         .expect("lowercase lookup should find the user");
     let upper = auth
-        .database()
+        .store()
         .get_user_by_email("MIXED.CASE@TEST.COM")
         .await
         .unwrap()
@@ -48,10 +48,10 @@ async fn store_update_user_normalizes_email_before_persisting() {
     let mut create_user = CreateUser::new().with_name("Original");
     create_user.email = Some("original@test.com".to_string());
 
-    let user = auth.database().create_user(create_user).await.unwrap();
+    let user = auth.store().create_user(create_user).await.unwrap();
 
     let updated = auth
-        .database()
+        .store()
         .update_user(
             &user.id,
             UpdateUser {
@@ -65,7 +65,7 @@ async fn store_update_user_normalizes_email_before_persisting() {
     assert_eq!(updated.email.as_deref(), Some("updated.case@test.com"));
 
     let fetched = auth
-        .database()
+        .store()
         .get_user_by_email("UPDATED.CASE@TEST.COM")
         .await
         .unwrap()

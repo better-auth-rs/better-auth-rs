@@ -216,26 +216,11 @@ impl<S: AuthSchema> SessionManager<S> {
 mod tests {
     use super::*;
     use crate::entity::AuthSession;
+    use crate::test_store::{BundledSchema, test_config, test_database};
     use crate::types::AuthRequest;
     use crate::types::HttpMethod;
     use crate::wire::SessionView;
-    use better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
-    use better_auth_seaorm::{Database, SeaOrmStore};
     use chrono::Duration;
-
-    fn test_config() -> Arc<AuthConfig> {
-        Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"))
-    }
-
-    async fn test_database() -> Arc<dyn crate::store::AuthStore<BundledSchema>> {
-        let database = Database::connect("sqlite::memory:")
-            .await
-            .expect("sqlite test database should connect");
-        better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
-            .await
-            .expect("sqlite test migrations should run");
-        Arc::new(SeaOrmStore::<BundledSchema>::new(test_config(), database))
-    }
 
     fn test_manager() -> SessionManager<BundledSchema> {
         let runtime = tokio::runtime::Runtime::new().expect("runtime should build");

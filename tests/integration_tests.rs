@@ -13,13 +13,12 @@
 mod compat;
 
 use better_auth::BetterAuth;
-use better_auth::store::sea_orm::Database;
-use better_auth_core::{AuthStore, entity::AuthUser};
+use better_auth_core::entity::AuthUser;
+use better_auth_core::store::UserStore;
 use compat::helpers::*;
 use std::sync::Arc;
 
-type TestSchema =
-    better_auth::__private_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
+type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
 /// Helper to create test BetterAuth instance with memory database
 async fn create_test_auth_memory() -> Arc<BetterAuth<TestSchema>> {
@@ -45,7 +44,7 @@ async fn create_test_user_and_session(auth: Arc<BetterAuth<TestSchema>>) -> (Str
 }
 
 async fn user_id_from_email(auth: &Arc<BetterAuth<TestSchema>>, email: &str) -> String {
-    auth.database()
+    auth.store()
         .get_user_by_email(email)
         .await
         .unwrap()
@@ -124,11 +123,7 @@ async fn test_revoke_session_integration() {
         active_organization_id: None,
     };
 
-    let session2 = auth
-        .database()
-        .create_session(create_session)
-        .await
-        .unwrap();
+    let session2 = auth.store().create_session(create_session).await.unwrap();
 
     use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
@@ -226,7 +221,7 @@ async fn test_reset_password_integration() {
         value: user_id_from_email(&auth, "integration@test.com").await,
         expires_at: Utc::now() + Duration::hours(24),
     };
-    auth.database()
+    auth.store()
         .create_verification(create_verification)
         .await
         .unwrap();
@@ -330,7 +325,7 @@ async fn test_reset_password_token_integration() {
         value: user_id_from_email(&auth, "integration@test.com").await,
         expires_at: Utc::now() + Duration::hours(24),
     };
-    auth.database()
+    auth.store()
         .create_verification(create_verification)
         .await
         .unwrap();
@@ -457,7 +452,7 @@ async fn test_set_password_public_route_absent_for_social_user() {
     let create_user = CreateUser::new()
         .with_email("social@test.com")
         .with_name("Social User");
-    let user = auth.database().create_user(create_user).await.unwrap();
+    let user = auth.store().create_user(create_user).await.unwrap();
 
     let create_session = CreateSession {
         user_id: user.id.clone(),
@@ -467,11 +462,7 @@ async fn test_set_password_public_route_absent_for_social_user() {
         impersonated_by: None,
         active_organization_id: None,
     };
-    let session = auth
-        .database()
-        .create_session(create_session)
-        .await
-        .unwrap();
+    let session = auth.store().create_session(create_session).await.unwrap();
 
     let mut headers = HashMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
@@ -578,11 +569,7 @@ async fn test_revoke_other_sessions_integration() {
         impersonated_by: None,
         active_organization_id: None,
     };
-    let session2 = auth
-        .database()
-        .create_session(create_session)
-        .await
-        .unwrap();
+    let session2 = auth.store().create_session(create_session).await.unwrap();
 
     let mut headers = HashMap::new();
     headers.insert(
@@ -602,11 +589,11 @@ async fn test_revoke_other_sessions_integration() {
     assert_eq!(response.status, 200);
 
     // The current session should still be valid
-    let s1 = auth.database().get_session(&session_token1).await.unwrap();
+    let s1 = auth.store().get_session(&session_token1).await.unwrap();
     assert!(s1.is_some());
 
     // The other session should be revoked
-    let s2 = auth.database().get_session(&session2.token).await.unwrap();
+    let s2 = auth.store().get_session(&session2.token).await.unwrap();
     assert!(s2.is_none());
 }
 
@@ -757,7 +744,7 @@ async fn test_change_email_duplicate() {
     let create_user = CreateUser::new()
         .with_email("existing@test.com")
         .with_name("Existing User");
-    auth.database().create_user(create_user).await.unwrap();
+    auth.store().create_user(create_user).await.unwrap();
 
     let mut headers = HashMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
@@ -824,7 +811,7 @@ async fn test_delete_user_callback_success() {
         value: user_id.clone(),
         expires_at: Utc::now() + Duration::hours(24),
     };
-    auth.database()
+    auth.store()
         .create_verification(create_verification)
         .await
         .unwrap();
@@ -855,7 +842,7 @@ async fn test_delete_user_callback_success() {
     assert_eq!(data["success"], true);
 
     // Verify user is deleted
-    let user = auth.database().get_user_by_id(&user_id).await.unwrap();
+    let user = auth.store().get_user_by_id(&user_id).await.unwrap();
     assert!(user.is_none());
 }
 
@@ -947,10 +934,7 @@ async fn test_list_accounts_with_account() {
         scope: Some("email profile".to_string()),
         password: None,
     };
-    auth.database()
-        .create_account(create_account)
-        .await
-        .unwrap();
+    auth.store().create_account(create_account).await.unwrap();
 
     let mut headers = HashMap::new();
     headers.insert(
@@ -1009,10 +993,7 @@ async fn test_unlink_account_success() {
             scope: None,
             password: None,
         };
-        auth.database()
-            .create_account(create_account)
-            .await
-            .unwrap();
+        auth.store().create_account(create_account).await.unwrap();
     }
 
     let mut headers = HashMap::new();
@@ -1038,7 +1019,7 @@ async fn test_unlink_account_success() {
     assert_eq!(response.status, 200);
 
     // Verify only the remaining social account and the credential account remain.
-    let accounts = auth.database().get_user_accounts(&user_id).await.unwrap();
+    let accounts = auth.store().get_user_accounts(&user_id).await.unwrap();
     assert_eq!(accounts.len(), 2);
     assert!(
         accounts
@@ -1066,7 +1047,7 @@ async fn test_unlink_last_account_fails() {
     let create_user = CreateUser::new()
         .with_email("social-only@test.com")
         .with_name("Social Only");
-    let user = auth.database().create_user(create_user).await.unwrap();
+    let user = auth.store().create_user(create_user).await.unwrap();
 
     let create_session = CreateSession {
         user_id: user.id.clone(),
@@ -1076,11 +1057,7 @@ async fn test_unlink_last_account_fails() {
         impersonated_by: None,
         active_organization_id: None,
     };
-    let session = auth
-        .database()
-        .create_session(create_session)
-        .await
-        .unwrap();
+    let session = auth.store().create_session(create_session).await.unwrap();
 
     // Add one account
     let create_account = CreateAccount {
@@ -1095,10 +1072,7 @@ async fn test_unlink_last_account_fails() {
         scope: None,
         password: None,
     };
-    auth.database()
-        .create_account(create_account)
-        .await
-        .unwrap();
+    auth.store().create_account(create_account).await.unwrap();
 
     let mut headers = HashMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
@@ -1302,14 +1276,14 @@ async fn test_axum_duplicate_email() {
 
 mod postgres_tests {
     use super::*;
-    use better_auth::store::sea_orm::Database;
+    use better_auth_seaorm::{Database, SeaOrmStore};
     use std::env;
 
     /// Helper to create test BetterAuth instance with PostgreSQL
     async fn create_test_auth_postgres() -> Option<Arc<BetterAuth<TestSchema>>> {
         let database_url = env::var("TEST_DATABASE_URL").ok()?;
         let database = Database::connect(&database_url).await.ok()?;
-        better_auth::__private_core::store::sea_orm::__private_test_support::migrator::run_migrations(&database)
+        better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
             .await
             .ok()?;
 
@@ -1317,8 +1291,9 @@ mod postgres_tests {
             .base_url("http://localhost:3000")
             .password_min_length(6);
 
+        let store = SeaOrmStore::<TestSchema>::new(Arc::new(config.clone()), database);
         let auth = BetterAuth::<TestSchema>::new(config)
-            .database(database)
+            .store(store)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .build()
             .await
@@ -1457,7 +1432,7 @@ mod postgres_tests {
         };
 
         // Create a user and session directly via database
-        let database = auth.database();
+        let database = auth.store();
         let session_manager = auth.session_manager();
 
         let create_user = better_auth::prelude::CreateUser::new()
@@ -2277,13 +2252,12 @@ async fn test_api_key_get_nonexistent() {
 #[tokio::test]
 async fn test_get_user_by_username_adapter() {
     use better_auth::prelude::CreateUser;
+    use better_auth_seaorm::{Database, SeaOrmStore};
     let database = Database::connect("sqlite::memory:").await.unwrap();
-    better_auth::__private_core::store::sea_orm::__private_test_support::migrator::run_migrations(
-        &database,
-    )
-    .await
-    .unwrap();
-    let db = AuthStore::<TestSchema>::new(
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
+        .await
+        .unwrap();
+    let db = SeaOrmStore::<TestSchema>::new(
         Arc::new(better_auth::AuthConfig::new(
             "test-secret-key-that-is-at-least-32-characters-long",
         )),

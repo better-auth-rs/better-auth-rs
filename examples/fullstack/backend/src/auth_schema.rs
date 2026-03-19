@@ -1,8 +1,8 @@
-use better_auth::store::sea_orm;
-use better_auth::store::sea_orm::entity::prelude::*;
-use better_auth::store::sea_orm::{ConnectionTrait, Schema};
-use better_auth::store::DatabaseConnection;
-use better_auth::{AuthEntity, AuthSchema};
+use better_auth::AuthSchema;
+use better_auth_seaorm::sea_orm;
+use better_auth_seaorm::sea_orm::entity::prelude::*;
+use better_auth_seaorm::sea_orm::{ConnectionTrait, Schema};
+use better_auth_seaorm::{AuthEntity, DatabaseConnection};
 
 mod user {
     use super::*;

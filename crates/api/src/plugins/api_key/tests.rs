@@ -5,8 +5,7 @@ use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-type TestSchema =
-    better_auth_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
+type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
 async fn create_test_context_with_user() -> (AuthContext<TestSchema>, UserView, SessionView) {
     let config = Arc::new(better_auth_core::AuthConfig::new(

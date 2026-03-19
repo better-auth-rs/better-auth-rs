@@ -9,16 +9,15 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use better_auth::error::{AuthResult, DatabaseError};
-use better_auth::hooks::{DatabaseHookContext, DatabaseHooks, HookControl};
-use better_auth::plugin::{AuthContext, AuthInitContext, AuthPlugin, AuthRoute};
+use better_auth::plugin::{AuthContext, AuthPlugin};
 use better_auth::plugins::EmailPasswordPlugin;
 use better_auth::prelude::{AuthRequest, AuthResponse, AuthUser, CreateUser, HttpMethod};
-use better_auth::store::sea_orm::sea_query::{Alias, ColumnDef, Expr, ExprTrait, Query, Table};
-use better_auth::store::sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use better_auth::{AuthBuilder, AuthConfig};
+use better_auth_seaorm::sea_orm::sea_query::{Alias, ColumnDef, Expr, ExprTrait, Query, Table};
+use better_auth_seaorm::sea_orm::{ConnectionTrait, Database, DatabaseConnection};
+use better_auth_seaorm::{HookControl, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore};
 
-type TestSchema =
-    better_auth::__private_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
+type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
 fn test_config() -> AuthConfig {
     AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
@@ -29,12 +28,14 @@ async fn test_database() -> DatabaseConnection {
     let database = Database::connect("sqlite::memory:")
         .await
         .expect("sqlite test database should connect");
-    better_auth::__private_core::store::sea_orm::__private_test_support::migrator::run_migrations(
-        &database,
-    )
-    .await
-    .expect("sqlite test migrations should run");
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
+        .await
+        .expect("sqlite test migrations should run");
     database
+}
+
+async fn test_store(config: &AuthConfig) -> SeaOrmStore<TestSchema> {
+    SeaOrmStore::<TestSchema>::new(Arc::new(config.clone()), test_database().await)
 }
 
 fn signup_request(email: &str) -> AuthRequest {
@@ -89,11 +90,11 @@ struct OrderingHook {
 }
 
 #[async_trait]
-impl DatabaseHooks<TestSchema> for OrderingHook {
+impl SeaOrmHooks<TestSchema> for OrderingHook {
     async fn before_create_user(
         &self,
         _user: &mut CreateUser,
-        _ctx: &DatabaseHookContext<'_>,
+        _ctx: &SeaOrmHookContext<'_>,
     ) -> AuthResult<HookControl> {
         self.events
             .lock()
@@ -103,48 +104,17 @@ impl DatabaseHooks<TestSchema> for OrderingHook {
     }
 }
 
-struct HookRegistrationPlugin {
-    events: Arc<Mutex<Vec<&'static str>>>,
-}
-
-#[async_trait]
-impl AuthPlugin<TestSchema> for HookRegistrationPlugin {
-    fn name(&self) -> &'static str {
-        "hook-registration"
-    }
-
-    fn routes(&self) -> Vec<AuthRoute> {
-        Vec::new()
-    }
-
-    async fn on_init(&self, ctx: &mut AuthInitContext<TestSchema>) -> AuthResult<()> {
-        ctx.register_database_hook(OrderingHook {
-            label: "plugin",
-            events: self.events.clone(),
-        });
-        Ok(())
-    }
-
-    async fn on_request(
-        &self,
-        _req: &AuthRequest,
-        _ctx: &AuthContext<TestSchema>,
-    ) -> AuthResult<Option<AuthResponse>> {
-        Ok(None)
-    }
-}
-
 #[derive(Clone)]
 struct RequestContextHook {
     seen: Arc<Mutex<Vec<(bool, String)>>>,
 }
 
 #[async_trait]
-impl DatabaseHooks<TestSchema> for RequestContextHook {
+impl SeaOrmHooks<TestSchema> for RequestContextHook {
     async fn before_create_user(
         &self,
         _user: &mut CreateUser,
-        ctx: &DatabaseHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_>,
     ) -> AuthResult<HookControl> {
         let entry = (
             ctx.request.is_some(),
@@ -171,7 +141,7 @@ impl ProvisioningService {
     async fn provision(
         &self,
         user: &impl AuthUser,
-        ctx: &DatabaseHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_>,
     ) -> Result<(), DatabaseError> {
         let statement = Query::insert()
             .into_table(Alias::new("app_workspaces"))
@@ -202,11 +172,11 @@ struct OnboardingHook {
 }
 
 #[async_trait]
-impl DatabaseHooks<TestSchema> for OnboardingHook {
+impl SeaOrmHooks<TestSchema> for OnboardingHook {
     async fn after_create_user(
         &self,
         user: &<TestSchema as better_auth_core::AuthSchema>::User,
-        ctx: &DatabaseHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_>,
     ) -> AuthResult<()> {
         self.service
             .provision(user, ctx)
@@ -221,11 +191,11 @@ struct DeleteCaptureHook {
 }
 
 #[async_trait]
-impl DatabaseHooks<TestSchema> for DeleteCaptureHook {
+impl SeaOrmHooks<TestSchema> for DeleteCaptureHook {
     async fn before_delete_user(
         &self,
         user: &<TestSchema as better_auth_core::AuthSchema>::User,
-        _ctx: &DatabaseHookContext<'_>,
+        _ctx: &SeaOrmHookContext<'_>,
     ) -> AuthResult<HookControl> {
         self.emails
             .lock()
@@ -239,21 +209,25 @@ impl DatabaseHooks<TestSchema> for DeleteCaptureHook {
 #[tokio::test]
 async fn plugin_database_hooks_run_before_builder_hooks() {
     let events = Arc::new(Mutex::new(Vec::new()));
-    let auth = AuthBuilder::<TestSchema>::new(test_config())
-        .database(test_database().await)
-        .plugin(HookRegistrationPlugin {
+    let config = test_config();
+    let store = test_store(&config)
+        .await
+        .hook(OrderingHook {
+            label: "plugin",
             events: events.clone(),
         })
-        .database_hook(OrderingHook {
+        .hook(OrderingHook {
             label: "builder",
             events: events.clone(),
-        })
+        });
+    let auth = AuthBuilder::<TestSchema>::new(config)
+        .store(store)
         .build()
         .await
         .expect("auth should build");
 
     let _ = auth
-        .database()
+        .store()
         .create_user(
             CreateUser::new()
                 .with_email("ordering@example.com")
@@ -272,9 +246,12 @@ async fn plugin_database_hooks_run_before_builder_hooks() {
 #[tokio::test]
 async fn request_context_is_present_for_requests_and_absent_for_direct_store_calls() {
     let seen = Arc::new(Mutex::new(Vec::new()));
-    let auth = AuthBuilder::<TestSchema>::new(test_config())
-        .database(test_database().await)
-        .database_hook(RequestContextHook { seen: seen.clone() })
+    let config = test_config();
+    let store = test_store(&config)
+        .await
+        .hook(RequestContextHook { seen: seen.clone() });
+    let auth = AuthBuilder::<TestSchema>::new(config)
+        .store(store)
         .plugin(EmailPasswordPlugin::new())
         .build()
         .await
@@ -287,7 +264,7 @@ async fn request_context_is_present_for_requests_and_absent_for_direct_store_cal
     assert_eq!(response.status, 200);
 
     let _ = auth
-        .database()
+        .store()
         .create_user(
             CreateUser::new()
                 .with_email("direct-store@example.com")
@@ -312,14 +289,17 @@ async fn onboarding_hook_can_provision_app_data_with_the_shared_transaction() {
     create_app_workspace_table(&database).await;
 
     let tx_seen = Arc::new(AtomicBool::new(false));
-    let auth = AuthBuilder::<TestSchema>::new(test_config())
-        .database(database.clone())
-        .database_hook(OnboardingHook {
+    let config = test_config();
+    let store = SeaOrmStore::<TestSchema>::new(Arc::new(config.clone()), database.clone()).hook(
+        OnboardingHook {
             service: ProvisioningService {
                 db: database.clone(),
                 tx_seen: tx_seen.clone(),
             },
-        })
+        },
+    );
+    let auth = AuthBuilder::<TestSchema>::new(config)
+        .store(store)
         .plugin(EmailPasswordPlugin::new())
         .build()
         .await
@@ -345,17 +325,18 @@ async fn onboarding_hook_can_provision_app_data_with_the_shared_transaction() {
 #[tokio::test]
 async fn delete_hooks_receive_the_loaded_user_entity() {
     let emails = Arc::new(Mutex::new(Vec::new()));
-    let auth = AuthBuilder::<TestSchema>::new(test_config())
-        .database(test_database().await)
-        .database_hook(DeleteCaptureHook {
-            emails: emails.clone(),
-        })
+    let config = test_config();
+    let store = test_store(&config).await.hook(DeleteCaptureHook {
+        emails: emails.clone(),
+    });
+    let auth = AuthBuilder::<TestSchema>::new(config)
+        .store(store)
         .build()
         .await
         .expect("auth should build");
 
     let user = auth
-        .database()
+        .store()
         .create_user(
             CreateUser::new()
                 .with_email("delete-capture@example.com")
@@ -364,8 +345,8 @@ async fn delete_hooks_receive_the_loaded_user_entity() {
         .await
         .expect("user should be created");
 
-    auth.database()
-        .delete_user(user.id())
+    auth.store()
+        .delete_user(&user.id())
         .await
         .expect("user should be deleted");
 

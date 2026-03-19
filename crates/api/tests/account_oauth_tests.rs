@@ -8,12 +8,14 @@
 use std::sync::{Arc, Once};
 
 use async_trait::async_trait;
-use better_auth_core::AuthStore;
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
+use better_auth_core::store::AuthStore;
 use better_auth_core::{
     AccountConfig, AccountLinkingConfig, AuthConfig, AuthContext, AuthPlugin, AuthRequest,
-    CreateAccount, CreateUser, CreateVerification, HttpMethod, SessionManager, sea_orm::Database,
+    CreateAccount, CreateUser, CreateVerification, HttpMethod, SessionManager,
 };
+use better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema as TestSchema;
+use better_auth_seaorm::{Database, SeaOrmStore};
 
 use better_auth_api::AccountManagementPlugin;
 use better_auth_api::OAuthPlugin;
@@ -106,7 +108,7 @@ fn test_config_with_account_cookie() -> AuthConfig {
 
 /// Helper: create a user + OAuth account + session, returning (user_id, session_token).
 async fn setup_user_with_account(
-    db: &Arc<AuthStore<TestSchema>>,
+    db: &Arc<dyn AuthStore<TestSchema>>,
     config: &Arc<AuthConfig>,
     email: &str,
     provider: &str,
@@ -151,12 +153,12 @@ async fn setup_user_with_account(
     (user_id, token)
 }
 
-async fn create_test_database() -> Arc<AuthStore<TestSchema>> {
+async fn create_test_database() -> Arc<dyn AuthStore<TestSchema>> {
     let database = Database::connect("sqlite::memory:").await.unwrap();
-    better_auth_core::store::sea_orm::__private_test_support::migrator::run_migrations(&database)
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
         .await
         .unwrap();
-    Arc::new(AuthStore::<TestSchema>::new(
+    Arc::new(SeaOrmStore::<TestSchema>::new(
         Arc::new(test_config()),
         database,
     ))
@@ -184,7 +186,7 @@ impl OAuthRefreshTokenHandler for RotatingRefreshHandler {
 #[derive(Serialize)]
 struct TestAccountCookieClaims<'a> {
     #[serde(rename = "id", skip_serializing_if = "Option::is_none")]
-    id: Option<&'a str>,
+    id: Option<String>,
     #[serde(rename = "providerId")]
     provider_id: &'a str,
     #[serde(rename = "accountId")]
@@ -221,7 +223,7 @@ fn encode_account_cookie(
     encode(
         &Header::default(),
         &TestAccountCookieClaims {
-            id: Some(account.id()),
+            id: Some(account.id().to_string()),
             provider_id: account.provider_id(),
             account_id: account.account_id(),
             access_token,
@@ -1135,7 +1137,7 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
                 .unwrap()
                 .expect("User should have been created");
 
-            let accounts = db.get_user_accounts(user.id()).await.unwrap();
+            let accounts = db.get_user_accounts(&user.id()).await.unwrap();
             assert_eq!(accounts.len(), 1);
 
             let stored_access = accounts[0].access_token().unwrap();
@@ -1164,5 +1166,3 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
         Ok(None) => panic!("Expected a response"),
     }
 }
-type TestSchema =
-    better_auth_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;

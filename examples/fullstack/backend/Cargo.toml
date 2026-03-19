@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 better-auth = { path = "../../..", features = ["axum"] }
+better-auth-seaorm = { path = "../../../crates/seaorm" }
 tokio = { version = "1", features = ["full"] }
 axum = "0.8"
 serde = { version = "1", features = ["derive"] }

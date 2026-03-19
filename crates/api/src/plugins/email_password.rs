@@ -567,7 +567,7 @@ mod tests {
     use std::sync::Arc;
 
     type TestSchema =
-        better_auth_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
+        better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
     async fn create_test_context() -> AuthContext<TestSchema> {
         let config = AuthConfig::new("test-secret-key-at-least-32-chars-long");

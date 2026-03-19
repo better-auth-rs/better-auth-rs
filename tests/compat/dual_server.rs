@@ -17,8 +17,7 @@ use super::helpers::{
     get_with_auth, post_json, take_reset_password_token, unique_email,
 };
 
-type TestSchema =
-    better_auth::__private_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
+type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 type TestAuth = BetterAuth<TestSchema>;
 
 pub const REFERENCE_PORT: u16 = 3100;
@@ -459,7 +458,7 @@ pub async fn seed_rust_reset_password_token(
     expires_at: DateTime<Utc>,
 ) {
     let user_id = auth
-        .database()
+        .store()
         .get_user_by_email(email)
         .await
         .unwrap_or_else(|error| panic!("user lookup should succeed: {error}"))
@@ -468,7 +467,7 @@ pub async fn seed_rust_reset_password_token(
         .to_string();
 
     let _ = auth
-        .database()
+        .store()
         .create_verification(CreateVerification {
             identifier: format!("reset-password:{token}"),
             value: user_id,
@@ -493,7 +492,7 @@ pub async fn seed_rust_oauth_account(auth: &TestAuth, user_id: &str, seed: &OAut
         .unwrap_or_else(|error| panic!("refresh token expiry should parse: {error}"));
 
     let _ = auth
-        .database()
+        .store()
         .create_account(CreateAccount {
             user_id: user_id.to_string(),
             account_id: seed.account_id.clone(),

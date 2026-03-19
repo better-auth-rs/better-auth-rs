@@ -17,7 +17,8 @@ use better_auth::plugins::{
     password_management::SendResetPassword,
 };
 use better_auth::wire::UserView;
-use better_auth::{AuthBuilder, AuthConfig, BetterAuth, store::sea_orm::Database};
+use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
+use better_auth_seaorm::{Database, SeaOrmStore};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -26,7 +27,7 @@ use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
 type TestSchema =
-    better_auth::__private_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
+    better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ResetPasswordMode {
@@ -449,7 +450,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .password_min_length(8);
 
     let database = Database::connect("sqlite::memory:").await?;
-    better_auth::__private_core::store::sea_orm::__private_test_support::migrator::run_migrations(
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(
         &database,
     )
     .await?;
@@ -463,9 +464,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let github_profile = Arc::new(Mutex::new(default_github_profile()));
     let social_id_token_valid = Arc::new(Mutex::new(true));
 
+    let store = SeaOrmStore::<TestSchema>::new(Arc::new(config.clone()), database);
     let auth = Arc::new(
         AuthBuilder::<TestSchema>::new(config)
-            .database(database)
+            .store(store)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(AccountManagementPlugin::new())
@@ -630,7 +632,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             post(move |Json(body): Json<SeedResetPasswordRequest>| {
                 let auth = auth_for_reset_seed.clone();
                 async move {
-                    let user = match auth.database().get_user_by_email(&body.email).await {
+                    let user = match auth.store().get_user_by_email(&body.email).await {
                         Ok(Some(user)) => user,
                         Ok(None) => {
                             return (
@@ -656,7 +658,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     };
 
-                    if let Err(error) = auth.database().create_verification(CreateVerification {
+                    if let Err(error) = auth.store().create_verification(CreateVerification {
                         identifier: format!("reset-password:{}", body.token),
                         value: user.id.to_string(),
                         expires_at,
@@ -681,7 +683,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             post(move |Json(body): Json<SeedDeleteUserTokenRequest>| {
                 let auth = auth_for_delete_seed.clone();
                 async move {
-                    let user = match auth.database().get_user_by_email(&body.email).await {
+                    let user = match auth.store().get_user_by_email(&body.email).await {
                         Ok(Some(user)) => user,
                         Ok(None) => {
                             return (
@@ -707,7 +709,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     };
 
-                    if let Err(error) = auth.database().create_verification(CreateVerification {
+                    if let Err(error) = auth.store().create_verification(CreateVerification {
                         identifier: format!("delete-account-{}", body.token),
                         value: user.id.to_string(),
                         expires_at,
@@ -732,7 +734,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             post(move |Json(body): Json<RemoveCredentialAccountRequest>| {
                 let auth = auth_for_remove_credential.clone();
                 async move {
-                    let user = match auth.database().get_user_by_email(&body.email).await {
+                    let user = match auth.store().get_user_by_email(&body.email).await {
                         Ok(Some(user)) => user,
                         Ok(None) => {
                             return (
@@ -748,7 +750,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     };
 
-                    let accounts = match auth.database().get_user_accounts(&user.id.to_string()).await
+                    let accounts = match auth.store().get_user_accounts(&user.id.to_string()).await
                     {
                         Ok(accounts) => accounts,
                         Err(error) => {
@@ -761,7 +763,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     for account in accounts {
                         if account.provider_id() == "credential" {
-                            if let Err(error) = auth.database().delete_account(account.id()).await
+                            if let Err(error) = auth.store().delete_account(&account.id()).await
                             {
                                 return (
                                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -861,7 +863,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             post(move |Json(body): Json<SeedOAuthAccountRequest>| {
                 let auth = auth_for_oauth_seed.clone();
                 async move {
-                    let user = match auth.database().get_user_by_email(&body.email).await {
+                    let user = match auth.store().get_user_by_email(&body.email).await {
                         Ok(Some(user)) => user,
                         Ok(None) => {
                             return (
@@ -909,7 +911,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     };
 
-                    let accounts = match auth.database().get_user_accounts(&user.id.to_string()).await
+                    let accounts = match auth.store().get_user_accounts(&user.id.to_string()).await
                     {
                         Ok(accounts) => accounts,
                         Err(error) => {
@@ -922,7 +924,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     for account in accounts {
                         if account.provider_id() == provider_id && account.account_id() == account_id
                         {
-                            if let Err(error) = auth.database().delete_account(account.id()).await {
+                            if let Err(error) = auth.store().delete_account(&account.id()).await {
                                 return (
                                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                                     Json(serde_json::json!({ "message": error.to_string() })),
@@ -931,7 +933,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
 
-                    if let Err(error) = auth.database().create_account(CreateAccount {
+                    if let Err(error) = auth.store().create_account(CreateAccount {
                         user_id: user.id.to_string(),
                         account_id,
                         provider_id,

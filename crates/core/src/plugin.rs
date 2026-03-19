@@ -314,21 +314,7 @@ impl<S: AuthSchema> AuthContext<S> {
 mod tests {
     use super::*;
     use crate::entity::AuthUser;
-    use better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
-    use better_auth_seaorm::{Database, SeaOrmStore};
-
-    async fn test_database() -> Arc<dyn crate::store::AuthStore<BundledSchema>> {
-        let database = Database::connect("sqlite::memory:")
-            .await
-            .expect("sqlite test database should connect");
-        better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
-            .await
-            .expect("sqlite test migrations should run");
-        Arc::new(SeaOrmStore::<BundledSchema>::new(
-            Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567")),
-            database,
-        ))
-    }
+    use crate::test_store::{BundledSchema, test_database};
 
     // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
     #[test]

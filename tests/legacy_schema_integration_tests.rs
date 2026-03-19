@@ -5,6 +5,7 @@
 )]
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHasher};
@@ -15,13 +16,13 @@ use better_auth::prelude::{
     AuthAccount, AuthRequest, AuthSession, AuthUser, AuthVerification, CreateAccount,
     CreateSession, CreateUser, CreateVerification, HttpMethod, UpdateAccount, UpdateUser,
 };
-use better_auth::store::sea_orm;
-use better_auth::store::sea_orm::entity::prelude::*;
-use better_auth::store::sea_orm::{ActiveValue::NotSet, ActiveValue::Set, ConnectionTrait, Schema};
-use better_auth::store::{Database, DatabaseConnection};
-use better_auth::{
-    AuthAccountModel, AuthConfig, AuthError, AuthResult, AuthSchema, AuthSessionModel,
-    AuthUserModel, AuthVerificationModel, BetterAuth,
+use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
+use better_auth_seaorm::sea_orm;
+use better_auth_seaorm::sea_orm::entity::prelude::*;
+use better_auth_seaorm::sea_orm::{ActiveValue::NotSet, ActiveValue::Set, ConnectionTrait, Schema};
+use better_auth_seaorm::{
+    AuthAccountModel, AuthSessionModel, AuthUserModel, AuthVerificationModel, Database,
+    DatabaseConnection, SeaOrmStore,
 };
 use chrono::{DateTime, Utc};
 use rand::rngs::OsRng;
@@ -624,8 +625,10 @@ fn test_config() -> AuthConfig {
 }
 
 async fn create_auth() -> BetterAuth<LegacySchema> {
-    BetterAuth::<LegacySchema>::new(test_config())
-        .database(test_database().await)
+    let config = test_config();
+    let store = SeaOrmStore::<LegacySchema>::new(Arc::new(config.clone()), test_database().await);
+    BetterAuth::<LegacySchema>::new(config)
+        .store(store)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .plugin(PasswordManagementPlugin::new())
@@ -735,7 +738,7 @@ async fn legacy_numeric_schema_signup_flow_uses_numeric_ids_and_defaults() {
         .to_string();
 
     let stored_user = auth
-        .database()
+        .store()
         .get_user_by_email("new@example.com")
         .await
         .expect("lookup should succeed")
@@ -768,9 +771,19 @@ async fn legacy_numeric_schema_signup_flow_uses_numeric_ids_and_defaults() {
 
 #[tokio::test]
 async fn legacy_numeric_schema_existing_user_can_sign_in() {
-    let auth = create_auth().await;
-    let database = auth.database().connection().clone();
+    let database = test_database().await;
     let legacy_user_id = seed_legacy_user(&database).await;
+    let config = test_config();
+    let store = SeaOrmStore::<LegacySchema>::new(Arc::new(config.clone()), database);
+    let auth = BetterAuth::<LegacySchema>::new(config)
+        .store(store)
+        .plugin(EmailPasswordPlugin::new().enable_signup(true))
+        .plugin(SessionManagementPlugin::new())
+        .plugin(PasswordManagementPlugin::new())
+        .plugin(AccountManagementPlugin::new())
+        .build()
+        .await
+        .expect("legacy auth should build");
 
     let signin = request(
         HttpMethod::Post,
@@ -811,7 +824,7 @@ async fn legacy_numeric_schema_store_verifications_use_public_string_ids() {
     let auth = create_auth().await;
 
     let verification = auth
-        .database()
+        .store()
         .create_verification(CreateVerification {
             identifier: "verify:legacy".to_string(),
             value: "token-123".to_string(),
@@ -823,19 +836,19 @@ async fn legacy_numeric_schema_store_verifications_use_public_string_ids() {
     assert!(!verification.id().is_empty());
 
     let loaded = auth
-        .database()
+        .store()
         .get_verification_by_identifier("verify:legacy")
         .await
         .expect("lookup should succeed");
     assert!(loaded.is_some());
 
-    auth.database()
-        .delete_verification(verification.id())
+    auth.store()
+        .delete_verification(&verification.id())
         .await
         .expect("delete should succeed");
 
     let loaded = auth
-        .database()
+        .store()
         .get_verification_by_identifier("verify:legacy")
         .await
         .expect("lookup should succeed");

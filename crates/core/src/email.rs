@@ -97,19 +97,11 @@ mod tests {
     // Rust-specific surface: Rust email provider helpers are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_missing_provider_returns_error() {
-        use crate::config::AuthConfig;
         use crate::plugin::AuthContext;
-        use better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
-        use better_auth_seaorm::{Database, SeaOrmStore};
+        use crate::test_store::{BundledSchema, test_config, test_database};
 
-        let config = Arc::new(AuthConfig::new("test-secret-key-at-least-32-chars-long"));
-        let database = Database::connect("sqlite::memory:")
-            .await
-            .expect("sqlite test database should connect");
-        better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
-            .await
-            .expect("sqlite test migrations should run");
-        let database = Arc::new(SeaOrmStore::<BundledSchema>::new(config.clone(), database));
+        let config = test_config();
+        let database = test_database().await;
         let ctx = AuthContext::new(config, database);
 
         let result = ctx.email_provider();

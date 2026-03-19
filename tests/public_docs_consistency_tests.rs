@@ -50,7 +50,9 @@ fn docs_use_current_minor_version_and_canonical_paths() {
     for text in [&readme, &quick_start, &axum] {
         assert!(!text.contains("better_auth::handlers"));
         assert!(!text.contains("better_auth::types"));
-        assert!(text.contains("better_auth::store::Database"));
+        assert!(text.contains("better_auth_seaorm"));
+        assert!(text.contains("Database"));
+        assert!(text.contains("SeaOrmStore"));
         assert!(!text.contains("better_auth::store::sea_orm::Database"));
     }
 }

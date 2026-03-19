@@ -58,6 +58,7 @@ jsonwebtoken.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true }
+better-auth-seaorm = { workspace = true }
 
 [features]
 default = []

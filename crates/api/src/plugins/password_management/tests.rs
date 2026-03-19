@@ -8,8 +8,7 @@ use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-type TestSchema =
-    better_auth_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
+type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
 const PASSWORD_RESET_SUCCESS_MESSAGE: &str =
     "If this email exists in our system, check your email for the reset link";
@@ -626,7 +625,7 @@ async fn test_password_hashing_and_verification() {
 async fn test_plugin_routes() {
     let plugin = PasswordManagementPlugin::new();
     let routes = AuthPlugin::<
-        better_auth_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema,
+        better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema,
     >::routes(&plugin);
 
     assert_eq!(routes.len(), 4);

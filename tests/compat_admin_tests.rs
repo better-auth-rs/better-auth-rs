@@ -24,8 +24,7 @@ use serde_json::json;
 // Helper: create an admin user and return the admin token
 // ---------------------------------------------------------------------------
 
-type TestSchema =
-    better_auth::__private_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
+type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
 async fn setup_admin(auth: &better_auth::BetterAuth<TestSchema>) -> String {
     // Sign up a regular user first
@@ -33,7 +32,7 @@ async fn setup_admin(auth: &better_auth::BetterAuth<TestSchema>) -> String {
 
     // Promote the user to admin using the database directly
     let user = auth
-        .database()
+        .store()
         .get_user_by_email("admin@test.com")
         .await
         .unwrap()
@@ -44,11 +43,7 @@ async fn setup_admin(auth: &better_auth::BetterAuth<TestSchema>) -> String {
         role: Some("admin".to_string()),
         ..Default::default()
     };
-    let _ = auth
-        .database()
-        .update_user(user.id(), update)
-        .await
-        .unwrap();
+    let _ = auth.store().update_user(&user.id(), update).await.unwrap();
 
     token
 }
@@ -220,7 +215,7 @@ async fn test_admin_remove_user_success() {
     assert!(json["success"].as_bool().unwrap());
 
     // Verify user is actually gone
-    let user = auth.database().get_user_by_id(user_id).await.unwrap();
+    let user = auth.store().get_user_by_id(user_id).await.unwrap();
     assert!(user.is_none(), "user should be deleted");
 }
 

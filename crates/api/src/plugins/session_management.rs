@@ -586,7 +586,7 @@ mod tests {
     async fn test_plugin_routes() {
         let plugin = SessionManagementPlugin::new();
         let routes = AuthPlugin::<
-            better_auth_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema,
+            better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema,
         >::routes(&plugin);
 
         assert_eq!(routes.len(), 6);

@@ -11,8 +11,8 @@ use better_auth::plugins::{
     SessionManagementPlugin, UserManagementPlugin, password_management::SendResetPassword,
 };
 use better_auth::prelude::AuthUser;
-use better_auth::store::sea_orm::{Database, DatabaseConnection};
 use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
+use better_auth_seaorm::{Database, DatabaseConnection, SeaOrmStore};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tower::ServiceExt; // for oneshot
@@ -30,17 +30,14 @@ impl FromRef<AppState> for Arc<BetterAuth<TestSchema>> {
     }
 }
 
-type TestSchema =
-    better_auth::__private_core::store::sea_orm::__private_test_support::bundled_schema::BundledSchema;
+type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
 /// Helper to create test BetterAuth instance with all plugins
 async fn test_database() -> DatabaseConnection {
     let database = Database::connect("sqlite::memory:").await.unwrap();
-    better_auth::__private_core::store::sea_orm::__private_test_support::migrator::run_migrations(
-        &database,
-    )
-    .await
-    .unwrap();
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
+        .await
+        .unwrap();
     database
 }
 
@@ -68,9 +65,10 @@ async fn create_test_auth_with_config(config: AuthConfig) -> Arc<BetterAuth<Test
         }
     }
 
+    let store = SeaOrmStore::<TestSchema>::new(Arc::new(config.clone()), test_database().await);
     Arc::new(
         AuthBuilder::<TestSchema>::new(config)
-            .database(test_database().await)
+            .store(store)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender)))

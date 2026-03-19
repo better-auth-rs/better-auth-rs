@@ -499,6 +499,7 @@ dependencies = [
  "axum",
  "base64",
  "better-auth-core",
+ "better-auth-seaorm",
  "bon",
  "chrono",
  "cookie",
