@@ -578,6 +578,7 @@ dependencies = [
 name = "better-auth-seaorm-macros"
 version = "0.10.0"
 dependencies = [
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
