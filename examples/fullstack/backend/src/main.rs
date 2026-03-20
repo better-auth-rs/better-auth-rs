@@ -4,7 +4,7 @@ use better_auth::middleware::CsrfConfig;
 use better_auth::plugins::{EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin};
 use better_auth::prelude::AuthUser;
 use better_auth::{AuthConfig, BetterAuth};
-use better_auth_seaorm::{Database, SeaOrmStore};
+use better_auth::seaorm::{Database, SeaOrmStore};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use axum::http::HeaderName;

@@ -7,13 +7,13 @@
 //! ```rust,ignore
 //! use better_auth::{AuthConfig, AuthSchema, BetterAuth};
 //! use better_auth::plugins::EmailPasswordPlugin;
-//! use better_auth_seaorm::{Database, SeaOrmStore};
+//! use better_auth::seaorm::{Database, SeaOrmStore};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let config = AuthConfig::new("your-secret-key-that-is-at-least-32-chars");
 //!     let database = Database::connect("sqlite::memory:").await?;
-//!     let store = SeaOrmStore::<AppAuthSchema>::new(config.clone().into(), database);
+//!     let store = SeaOrmStore::<AppAuthSchema>::new(config.clone(), database);
 //!
 //!     let auth = BetterAuth::<AppAuthSchema>::new(config)
 //!         .store(store)
@@ -50,6 +50,8 @@ pub mod plugin;
 pub mod plugins;
 pub mod prelude;
 pub mod schema;
+#[cfg(feature = "seaorm2")]
+pub mod seaorm;
 pub mod store;
 pub mod wire;
 

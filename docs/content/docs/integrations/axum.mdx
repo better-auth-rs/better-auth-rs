@@ -11,7 +11,7 @@ The canonical end-to-end example lives in [`examples/axum_server.rs`](../../../.
 
 ```toml title="Cargo.toml"
 [dependencies]
-better-auth = { version = "0.10", features = ["axum"] }
+better-auth = { version = "0.10", features = ["axum", "seaorm2"] }
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 ```
@@ -28,7 +28,7 @@ use better_auth::plugins::{
 };
 use better_auth::integrations::axum::AxumIntegration;
 use axum::Router;
-use better_auth_seaorm::{Database, SeaOrmStore};
+use better_auth::seaorm::{Database, SeaOrmStore};
 use std::sync::Arc;
 
 #[tokio::main]
@@ -74,7 +74,7 @@ use better_auth::{AuthConfig, BetterAuth};
 use better_auth::integrations::axum::{AxumIntegration, CurrentSession};
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
 use better_auth::prelude::AuthUser;
-use better_auth_seaorm::{Database, DatabaseConnection, SeaOrmStore};
+use better_auth::seaorm::{Database, DatabaseConnection, SeaOrmStore};
 use std::sync::Arc;
 
 #[derive(Clone)]

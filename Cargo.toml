@@ -84,12 +84,14 @@ syn = { version = "2", features = ["full"] }
 [features]
 default = []
 axum = ["dep:axum", "dep:tower", "dep:url", "better-auth-core/axum", "better-auth-api/axum"]
+seaorm2 = ["dep:better-auth-seaorm"]
 redis-cache = ["dep:redis"]
 
 [dependencies]
 # Core crates
 better-auth-core = { workspace = true }
 better-auth-api = { workspace = true }
+better-auth-seaorm = { workspace = true, optional = true }
 
 # Asynchronous runtime
 tokio = { workspace = true }
@@ -136,10 +138,11 @@ reqwest = { workspace = true }
 
 [[example]]
 name = "axum_server"
-required-features = ["axum"]
+required-features = ["axum", "seaorm2"]
 
 [[example]]
 name = "postgres_usage"
+required-features = ["seaorm2"]
 
 [[bin]]
 name = "sync_better_auth_openapi"

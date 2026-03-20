@@ -459,6 +459,7 @@ dependencies = [
  "base64",
  "better-auth-api",
  "better-auth-core",
+ "better-auth-seaorm",
  "chrono",
  "clap",
  "jsonwebtoken",
@@ -558,6 +559,7 @@ dependencies = [
 name = "better-auth-seaorm-macros"
 version = "0.10.0"
 dependencies = [
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -1186,7 +1188,6 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "better-auth",
- "better-auth-seaorm",
  "chrono",
  "serde",
  "serde_json",

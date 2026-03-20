@@ -23,15 +23,14 @@ The most comprehensive authentication framework for Rust. Inspired by [Better Au
 
 ```toml
 [dependencies]
-better-auth = { version = "0.10", features = ["axum"] }
+better-auth = { version = "0.10", features = ["axum", "seaorm2"] }
 ```
 
 ```rust,ignore
 use better_auth::{AuthConfig, AuthSchema, BetterAuth};
 use better_auth::plugins::EmailPasswordPlugin;
-use better_auth_seaorm::{AuthEntity, Database, SeaOrmStore};
-use better_auth_seaorm::sea_orm::entity::prelude::*;
-use std::sync::Arc;
+use better_auth::seaorm::{AuthEntity, Database, SeaOrmStore};
+use better_auth::seaorm::sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, AuthEntity)]
 #[auth(role = "user")]

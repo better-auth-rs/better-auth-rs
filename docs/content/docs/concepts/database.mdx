@@ -4,21 +4,22 @@ description: SeaORM-backed database integration for Better Auth.
 ---
 
 Better Auth uses your application's SeaORM entities and `DatabaseConnection`
-for auth persistence through the companion `better-auth-seaorm` crate.
+for auth persistence through the `seaorm2` feature on `better-auth`.
 
 The supported public path is:
 
-1. Define auth entities in your app with `#[derive(AuthEntity)]` from `better-auth-seaorm`.
-2. Register them in an app schema with `#[derive(AuthSchema)]`.
-3. Manage auth migrations in your own SeaORM migrator.
-4. Build a `SeaOrmStore` from the shared `DatabaseConnection` and pass it to `BetterAuth::<YourSchema>::new(config).store(...)`.
+1. Enable the `seaorm2` feature on `better-auth`.
+2. Define auth entities in your app with `#[derive(AuthEntity)]` from `better_auth::seaorm`.
+3. Register them in an app schema with `#[derive(AuthSchema)]`.
+4. Manage auth migrations in your own SeaORM migrator.
+5. Build a `SeaOrmStore` from the shared `DatabaseConnection` and pass it to `BetterAuth::<YourSchema>::new(config).store(...)`.
 
 ## Setup
 
 ```rust,ignore
 use better_auth::{AuthConfig, AuthSchema, BetterAuth};
 use better_auth::plugins::EmailPasswordPlugin;
-use better_auth_seaorm::{AuthEntity, Database, DatabaseConnection, SeaOrmStore};
+use better_auth::seaorm::{AuthEntity, Database, DatabaseConnection, SeaOrmStore};
 use std::sync::Arc;
 
 #[tokio::main]

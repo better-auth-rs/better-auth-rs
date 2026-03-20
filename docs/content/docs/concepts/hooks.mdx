@@ -13,7 +13,7 @@ These examples assume you've already defined `AppAuthSchema` and a `database: Da
 use std::sync::Arc;
 use async_trait::async_trait;
 use better_auth::AuthSchema;
-use better_auth_seaorm::{HookControl, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore};
+use better_auth::seaorm::{HookControl, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore};
 
 struct AuditHook;
 
@@ -145,8 +145,8 @@ For app-specific side effects such as creating a workspace or seeding related re
 ```rust
 use async_trait::async_trait;
 use better_auth::AuthSchema;
-use better_auth_seaorm::sea_orm::{ConnectionTrait, Statement};
-use better_auth_seaorm::{DatabaseConnection, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore};
+use better_auth::seaorm::sea_orm::{ConnectionTrait, Statement};
+use better_auth::seaorm::{DatabaseConnection, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore};
 
 #[derive(Clone)]
 struct ProvisionWorkspaceHook {

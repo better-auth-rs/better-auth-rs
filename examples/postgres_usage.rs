@@ -10,14 +10,16 @@ use better_auth::prelude::{
     AuthAccount, AuthRequest, AuthResponse, AuthSession, AuthUser, AuthVerification, CreateAccount,
     CreateSession, CreateUser, CreateVerification, HttpMethod, UpdateAccount, UpdateUser,
 };
-use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
-use better_auth_seaorm::sea_orm;
-use better_auth_seaorm::sea_orm::entity::prelude::*;
-use better_auth_seaorm::sea_orm::{ActiveValue::NotSet, ActiveValue::Set, ConnectionTrait, Schema};
-use better_auth_seaorm::{
+use better_auth::seaorm::sea_orm;
+use better_auth::seaorm::sea_orm::entity::prelude::*;
+use better_auth::seaorm::sea_orm::{
+    ActiveValue::NotSet, ActiveValue::Set, ConnectionTrait, Schema,
+};
+use better_auth::seaorm::{
     Database, DatabaseConnection, SeaOrmAccountModel, SeaOrmSessionModel, SeaOrmStore,
     SeaOrmUserModel, SeaOrmVerificationModel,
 };
+use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
 use chrono::{DateTime, Utc};
 use rand::rngs::OsRng;
 use serde_json::json;
