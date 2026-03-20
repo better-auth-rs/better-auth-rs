@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use chrono::Duration;
 use std::sync::Arc;
 
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::AuthUser;
+use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
@@ -52,7 +52,7 @@ impl UserInfo {
 /// Custom callback for sending change-email confirmation emails.
 ///
 /// If set on [`ChangeEmailConfig`], this callback is invoked instead of the
-/// default [`EmailProvider`]. This allows callers to customise the email
+/// default [`EmailProvider`](better_auth_core::EmailProvider). This allows callers to customise the email
 /// subject, template, and delivery mechanism.
 #[async_trait]
 pub trait SendChangeEmailConfirmation: Send + Sync {
@@ -231,18 +231,61 @@ impl Default for UserManagementPlugin {
     }
 }
 
+fn append_clear_session_cookies(
+    response: &mut AuthResponse,
+    config: &better_auth_core::AuthConfig,
+) {
+    response.headers.append(
+        "Set-Cookie",
+        better_auth_core::utils::cookie_utils::create_clear_session_cookie(config),
+    );
+    response.headers.append(
+        "Set-Cookie",
+        better_auth_core::utils::cookie_utils::create_clear_cookie(
+            &related_cookie_name(config, "session_data"),
+            config,
+        ),
+    );
+    response.headers.append(
+        "Set-Cookie",
+        better_auth_core::utils::cookie_utils::create_clear_cookie(
+            &related_cookie_name(config, "dont_remember"),
+            config,
+        ),
+    );
+    if config.account.store_account_cookie {
+        response.headers.append(
+            "Set-Cookie",
+            better_auth_core::utils::cookie_utils::create_clear_cookie(
+                &related_cookie_name(config, "account_data"),
+                config,
+            ),
+        );
+    }
+}
+
+fn related_cookie_name(config: &better_auth_core::AuthConfig, suffix: &str) -> String {
+    config
+        .session
+        .cookie_name
+        .strip_suffix("session_token")
+        .map(|prefix| format!("{prefix}{suffix}"))
+        .unwrap_or_else(|| format!("better-auth.{suffix}"))
+}
+
 // ---------------------------------------------------------------------------
 // Route handlers (delegate to core functions)
 // ---------------------------------------------------------------------------
 
 impl UserManagementPlugin {
     /// `POST /change-email`
-    async fn handle_change_email<DB: DatabaseAdapter>(
+    async fn handle_change_email(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
+        let user = UserView::from(&user);
         let body: ChangeEmailRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
@@ -251,43 +294,57 @@ impl UserManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    /// `GET /change-email/verify`
-    async fn handle_change_email_verify<DB: DatabaseAdapter>(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<AuthResponse> {
-        let token = req
-            .query
-            .get("token")
-            .ok_or_else(|| AuthError::bad_request("Verification token is required"))?;
-        let response = change_email_verify_core(token, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
-    }
-
     /// `POST /delete-user`
-    async fn handle_delete_user<DB: DatabaseAdapter>(
+    async fn handle_delete_user(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
-        let response = delete_user_core(&user, &self.config, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        let (user, session) = ctx.require_session(req).await?;
+        let user = UserView::from(&user);
+        let session = SessionView::from(&session);
+        let body: DeleteUserRequest = match better_auth_core::validate_request_body(req) {
+            Ok(v) => v,
+            Err(resp) => return Ok(resp),
+        };
+        let response = delete_user_core(&body, &user, &session, &self.config, ctx).await?;
+        let mut response = AuthResponse::json(200, &response)?;
+        append_clear_session_cookies(&mut response, &ctx.config);
+        Ok(response)
     }
 
-    /// `GET /delete-user/verify`
-    async fn handle_delete_user_verify<DB: DatabaseAdapter>(
+    /// `GET /delete-user/callback`
+    async fn handle_delete_user_callback(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let token = req
-            .query
-            .get("token")
-            .ok_or_else(|| AuthError::bad_request("Verification token is required"))?;
-        let response = delete_user_verify_core(token, &self.config, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        let (user, _) = ctx
+            .require_session(req)
+            .await
+            .map_err(|_| AuthError::not_found("Failed to get user info"))?;
+        let user = UserView::from(&user);
+        let query: TokenQuery = serde_json::from_value(serde_json::json!({
+            "token": req.query.get("token").cloned(),
+            "callbackURL": req.query.get("callbackURL").cloned(),
+        }))
+        .map_err(|_| AuthError::bad_request("Verification token is required"))?;
+        let response = delete_user_callback_core(&query.token, &user, &self.config, ctx).await?;
+        if let Some(callback_url) = query.callback_url {
+            let mut headers = better_auth_core::Headers::new();
+            _ = headers.insert("Location".to_string(), callback_url);
+            let mut response = AuthResponse {
+                status: 302,
+                headers,
+                body: Vec::new(),
+            };
+            append_clear_session_cookies(&mut response, &ctx.config);
+            return Ok(response);
+        }
+
+        let mut response = AuthResponse::json(200, &response)?;
+        append_clear_session_cookies(&mut response, &ctx.config);
+        Ok(response)
     }
 }
 
@@ -296,7 +353,7 @@ impl UserManagementPlugin {
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for UserManagementPlugin {
+impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for UserManagementPlugin {
     fn name(&self) -> &'static str {
         "user-management"
     }
@@ -305,14 +362,13 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for UserManagementPlugin {
         let mut routes = Vec::new();
         if self.config.change_email.enabled {
             routes.push(AuthRoute::post("/change-email", "change_email"));
-            routes.push(AuthRoute::get(
-                "/change-email/verify",
-                "change_email_verify",
-            ));
         }
         if self.config.delete_user.enabled {
             routes.push(AuthRoute::post("/delete-user", "delete_user"));
-            routes.push(AuthRoute::get("/delete-user/verify", "delete_user_verify"));
+            routes.push(AuthRoute::get(
+                "/delete-user/callback",
+                "delete_user_callback",
+            ));
         }
         routes
     }
@@ -320,122 +376,21 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for UserManagementPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             // -- change email --
             (HttpMethod::Post, "/change-email") if self.config.change_email.enabled => {
                 Ok(Some(self.handle_change_email(req, ctx).await?))
             }
-            (HttpMethod::Get, "/change-email/verify") if self.config.change_email.enabled => {
-                Ok(Some(self.handle_change_email_verify(req, ctx).await?))
-            }
             // -- delete user --
             (HttpMethod::Post, "/delete-user") if self.config.delete_user.enabled => {
                 Ok(Some(self.handle_delete_user(req, ctx).await?))
             }
-            (HttpMethod::Get, "/delete-user/verify") if self.config.delete_user.enabled => {
-                Ok(Some(self.handle_delete_user_verify(req, ctx).await?))
+            (HttpMethod::Get, "/delete-user/callback") if self.config.delete_user.enabled => {
+                Ok(Some(self.handle_delete_user_callback(req, ctx).await?))
             }
             _ => Ok(None),
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Axum plugin
-// ---------------------------------------------------------------------------
-
-#[cfg(feature = "axum")]
-mod axum_impl {
-    use super::*;
-    use std::sync::Arc;
-
-    use axum::Json;
-    use axum::extract::{Extension, Query, State};
-    use better_auth_core::{
-        AuthError, AuthState, CurrentSession, SuccessMessageResponse, ValidatedJson,
-    };
-
-    #[derive(Clone)]
-    struct PluginState {
-        config: UserManagementConfig,
-    }
-
-    async fn handle_change_email<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-        ValidatedJson(body): ValidatedJson<ChangeEmailRequest>,
-    ) -> Result<Json<StatusMessageResponse>, AuthError> {
-        if !ps.config.change_email.enabled {
-            return Err(AuthError::not_found("Not found"));
-        }
-        let ctx = state.to_context();
-        let response = change_email_core(&body, &user, &ps.config, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    async fn handle_change_email_verify<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        Query(query): Query<TokenQuery>,
-    ) -> Result<Json<StatusMessageResponse>, AuthError> {
-        if !ps.config.change_email.enabled {
-            return Err(AuthError::not_found("Not found"));
-        }
-        let ctx = state.to_context();
-        let response = change_email_verify_core(&query.token, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    async fn handle_delete_user<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-    ) -> Result<Json<SuccessMessageResponse>, AuthError> {
-        if !ps.config.delete_user.enabled {
-            return Err(AuthError::not_found("Not found"));
-        }
-        let ctx = state.to_context();
-        let response = delete_user_core(&user, &ps.config, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    async fn handle_delete_user_verify<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        Query(query): Query<TokenQuery>,
-    ) -> Result<Json<SuccessMessageResponse>, AuthError> {
-        if !ps.config.delete_user.enabled {
-            return Err(AuthError::not_found("Not found"));
-        }
-        let ctx = state.to_context();
-        let response = delete_user_verify_core(&query.token, &ps.config, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for UserManagementPlugin {
-        fn name(&self) -> &'static str {
-            "user-management"
-        }
-
-        fn router(&self) -> axum::Router<AuthState<DB>> {
-            use axum::routing::{get, post};
-
-            let plugin_state = Arc::new(PluginState {
-                config: self.config.clone(),
-            });
-
-            axum::Router::new()
-                .route("/change-email", post(handle_change_email::<DB>))
-                .route(
-                    "/change-email/verify",
-                    get(handle_change_email_verify::<DB>),
-                )
-                .route("/delete-user", post(handle_delete_user::<DB>))
-                .route("/delete-user/verify", get(handle_delete_user_verify::<DB>))
-                .layer(Extension(plugin_state))
         }
     }
 }

@@ -7,11 +7,13 @@ The `SessionManagementPlugin` provides endpoints for querying, listing, and revo
 
 ## Setup
 
+These examples assume you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
 use better_auth::plugins::SessionManagementPlugin;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(SessionManagementPlugin::new())
     .build()
     .await?;
@@ -34,7 +36,7 @@ Authorization: Bearer session_abc123...
 ```
 
 ```http
-Cookie: better-auth.session-token=session_abc123...
+Cookie: better-auth.session_token=session_abc123...
 ```
 
 The cookie name is configurable via `SessionConfig::cookie_name`.
@@ -154,12 +156,11 @@ Revokes all sessions except the current one:
 With the `axum` feature, use the `CurrentSession` extractor to access the authenticated user directly in your handler — no manual token parsing needed:
 
 ```rust
-use better_auth::handlers::CurrentSession;
-use better_auth::adapters::MemoryDatabaseAdapter;
-use better_auth::AuthUser;
+use better_auth::integrations::axum::CurrentSession;
+use better_auth::prelude::{AuthSession, AuthUser};
 use axum::{Json, response::IntoResponse};
 
-async fn profile(session: CurrentSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
+async fn profile(session: CurrentSession<AppAuthSchema>) -> impl IntoResponse {
     Json(serde_json::json!({
         "user_id": session.user.id(),
         "session_token": session.session.token(),
@@ -174,12 +175,13 @@ Use `OptionalSession` for routes that should work for both authenticated and ano
 Session behavior is configured via `AuthConfig`:
 
 ```rust
-use better_auth::{AuthConfig, SameSite};
+use better_auth::AuthConfig;
+use better_auth::config::SameSite;
 use std::time::Duration;
 
 let mut config = AuthConfig::new("secret...");
 config.session.expires_in = Duration::hours(24 * 7);        // 7 days
-config.session.cookie_name = "better-auth.session-token".to_string();
+config.session.cookie_name = "better-auth.session_token".to_string();
 config.session.cookie_secure = true;                         // HTTPS only
 config.session.cookie_http_only = true;                      // Block JavaScript access
 config.session.cookie_same_site = SameSite::Lax;             // CSRF protection
@@ -188,7 +190,7 @@ config.session.cookie_same_site = SameSite::Lax;             // CSRF protection
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `session.expires_in` | `Duration` | `7 days` | Session lifetime |
-| `session.cookie_name` | `String` | `better-auth.session-token` | Cookie name |
+| `session.cookie_name` | `String` | `better-auth.session_token` | Cookie name |
 | `session.cookie_secure` | `bool` | `true` | HTTPS-only cookie |
 | `session.cookie_http_only` | `bool` | `true` | Prevent JavaScript access |
 | `session.cookie_same_site` | `SameSite` | `Lax` | SameSite cookie policy |

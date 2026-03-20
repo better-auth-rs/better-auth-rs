@@ -1,0 +1,25 @@
+[package]
+name = "better-auth-seaorm"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "SeaORM integration for better-auth"
+repository = { workspace = true }
+
+[lints]
+workspace = true
+
+[dependencies]
+better-auth-core = { workspace = true }
+better-auth-seaorm-macros = { version = "0.10.0", path = "../seaorm-macros" }
+
+async-trait = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+sea-orm = { version = "2.0.0-rc.37", features = ["runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite", "macros", "with-chrono", "with-json", "with-uuid"] }
+sea-orm-migration = { version = "2.0.0-rc.37", features = ["runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite"] }

@@ -29,7 +29,8 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --workspace --lib -- -D warnings
+      - run: cargo clippy --workspace -- -D warnings
+      - run: cargo clippy --workspace --features axum -- -D warnings
 
   test:
     name: Test
@@ -38,79 +39,25 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: oven-sh/setup-bun@v2
+      - name: Install reference server dependencies
+        run: bun install --frozen-lockfile
+        working-directory: compat-tests/reference-server
+      - name: Install client compatibility dependencies
+        run: bun install --frozen-lockfile
+        working-directory: compat-tests/client-tests
       - name: Run library unit tests
         run: cargo test --workspace --lib
-      - name: Run integration tests
-        run: |
-          cargo test --test compatibility_tests
-          cargo test --test integration_tests
-          cargo test --test derive_tests
-          cargo test --test axum_integration_tests
-          cargo test --test phase0_tests
-          cargo test --test meta_trait_tests
+      - name: Run alignment checks
+        run: ./scripts/alignment-check.sh --skip-build
 
-  test-all-features:
-    name: Test (All Features)
+  doc:
+    name: Documentation
     runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: "-D warnings"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Run library unit tests (all features)
-        run: cargo test --workspace --lib --all-features
-      - name: Run integration tests (all features)
-        run: |
-          cargo test --test compatibility_tests --all-features
-          cargo test --test integration_tests --all-features
-          cargo test --test derive_tests --all-features
-          cargo test --test axum_integration_tests --all-features
-          cargo test --test phase0_tests --all-features
-          cargo test --test meta_trait_tests --all-features
-
-  compat:
-    name: Compatibility Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Run spec-driven compatibility tests
-        run: |
-          cargo test --test compat_endpoint_tests -- --nocapture
-          cargo test --test compat_field_tests -- --nocapture
-          cargo test --test compat_coverage_tests -- --nocapture
-          cargo test --test compat_consistency_tests -- --nocapture
-          cargo test --test compat_unit_tests -- --nocapture
-          cargo test --test compat_admin_tests -- --nocapture
-          cargo test --test compat_organization_tests -- --nocapture
-          cargo test --test compat_passkey_tests -- --nocapture
-
-  p2-tests:
-    name: P2 Tests (Snapshot, Property, Dual-Server)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install reference server dependencies
-        run: npm ci
-        working-directory: compat-tests/reference-server
-      - name: Run snapshot tests
-        run: cargo test --test snapshot_tests -- --nocapture
-      - name: Run property tests
-        run: cargo test --test property_tests -- --nocapture
-      - name: Run dual-server comparison tests
-        run: cargo test --test dual_server_tests -- --nocapture
-
-  standalone-examples:
-    name: Check Standalone Examples
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo check --manifest-path examples/sqlx-custom-entities/Cargo.toml
-      - run: cargo check --manifest-path examples/sea-orm-migration/Cargo.toml
+      - run: cargo doc --workspace --no-deps

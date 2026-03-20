@@ -241,7 +241,7 @@ fn write_generator_script(js_workdir: &Path) -> Result<PathBuf, DynError> {
     let generator_dir = js_workdir.join(".tmp");
     fs::create_dir_all(&generator_dir)?;
     let generator_path = generator_dir.join("generate-openapi-matrix.mjs");
-    fs::copy(source, &generator_path)?;
+    _ = fs::copy(source, &generator_path)?;
     Ok(generator_path)
 }
 
@@ -266,9 +266,9 @@ fn run_checked(program: &str, args: &[&str], cwd: Option<&Path>) -> Result<(), D
     eprintln!("$ {} {}", program, display_args(args));
 
     let mut command = Command::new(program);
-    command.args(args);
+    _ = command.args(args);
     if let Some(dir) = cwd {
-        command.current_dir(dir);
+        _ = command.current_dir(dir);
     }
 
     let status = command

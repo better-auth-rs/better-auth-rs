@@ -3,11 +3,12 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use better_auth_core::AuthSession;
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
-use better_auth_core::{AuthSession, DatabaseAdapter};
 
+use better_auth_core::RequestMeta;
 use better_auth_core::utils::password::PasswordHasher;
 
 use super::StatusResponse;
@@ -27,9 +28,9 @@ pub type OnPasswordResetCallback =
 
 /// Trait for sending password reset emails.
 ///
-/// When set in `PasswordManagementConfig`, this overrides the default
-/// `EmailProvider`-based reset email sending. The user is provided as a
-/// serialized `serde_json::Value` since `AuthUser` is not object-safe.
+/// This callback powers `POST /request-password-reset` and is required to
+/// enable that route. The user is provided as a serialized `serde_json::Value`
+/// since `AuthUser` is not object-safe.
 #[async_trait]
 pub trait SendResetPassword: Send + Sync {
     /// Send a password reset notification.
@@ -54,10 +55,11 @@ pub struct PasswordManagementConfig {
     pub require_current_password: bool,
     #[config(default = true)]
     pub send_email_notifications: bool,
-    /// When true, all existing sessions are revoked on password reset (default: true).
-    #[config(default = true)]
+    /// When true, all existing sessions are revoked on password reset (default: false).
+    #[config(default = false)]
     pub revoke_sessions_on_password_reset: bool,
-    /// Custom password reset email sender. When set, overrides the default `EmailProvider`.
+    /// Password reset email sender for `POST /request-password-reset`.
+    /// This route is disabled when no sender is configured.
     #[config(default = None)]
     pub send_reset_password: Option<Arc<dyn SendResetPassword>>,
     /// Callback invoked after a password is successfully reset.
@@ -96,29 +98,28 @@ impl std::fmt::Debug for PasswordManagementConfig {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
+impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for PasswordManagementPlugin {
     fn name(&self) -> &'static str {
         "password-management"
     }
 
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::post("/forget-password", "forget_password"),
+            AuthRoute::post("/request-password-reset", "request_password_reset"),
             AuthRoute::post("/reset-password", "reset_password"),
             AuthRoute::get("/reset-password/{token}", "reset_password_token"),
             AuthRoute::post("/change-password", "change_password"),
-            AuthRoute::post("/set-password", "set_password"),
         ]
     }
 
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
-            (HttpMethod::Post, "/forget-password") => {
-                Ok(Some(self.handle_forget_password(req, ctx).await?))
+            (HttpMethod::Post, "/request-password-reset") => {
+                Ok(Some(self.handle_request_password_reset(req, ctx).await?))
             }
             (HttpMethod::Post, "/reset-password") => {
                 Ok(Some(self.handle_reset_password(req, ctx).await?))
@@ -126,11 +127,8 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
             (HttpMethod::Post, "/change-password") => {
                 Ok(Some(self.handle_change_password(req, ctx).await?))
             }
-            (HttpMethod::Post, "/set-password") => {
-                Ok(Some(self.handle_set_password(req, ctx).await?))
-            }
             (HttpMethod::Get, path) if path.starts_with("/reset-password/") => {
-                let token = &path[16..]; // Remove "/reset-password/" prefix
+                let token = path.get(16..).unwrap_or(""); // Remove "/reset-password/" prefix
                 Ok(Some(
                     self.handle_reset_password_token(token, req, ctx).await?,
                 ))
@@ -142,36 +140,39 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for PasswordManagementPlugin {
 
 // Implementation methods outside the trait
 impl PasswordManagementPlugin {
-    async fn handle_forget_password<DB: DatabaseAdapter>(
+    async fn handle_request_password_reset(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body: ForgetPasswordRequest = match better_auth_core::validate_request_body(req) {
+        let body: RequestPasswordResetRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = forget_password_core(&body, &self.config, ctx).await?;
+        let response = request_password_reset_core(&body, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_reset_password<DB: DatabaseAdapter>(
+    async fn handle_reset_password(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body: ResetPasswordRequest = match better_auth_core::validate_request_body(req) {
+        let mut body: ResetPasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
+        if body.token.is_none() {
+            body.token = req.query.get("token").cloned();
+        }
         let response = reset_password_core(&body, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_change_password<DB: DatabaseAdapter>(
+    async fn handle_change_password(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let body: ChangePasswordRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
@@ -183,8 +184,10 @@ impl PasswordManagementPlugin {
             .get_current_user(req, ctx)
             .await?
             .ok_or(AuthError::Unauthenticated)?;
+        let meta = RequestMeta::from_request(req);
 
-        let (response, new_token) = change_password_core(&body, &user, &self.config, ctx).await?;
+        let (response, new_token) =
+            change_password_core(&body, &user, &self.config, &meta, ctx).await?;
 
         let auth_response = AuthResponse::json(200, &response)?;
 
@@ -198,60 +201,40 @@ impl PasswordManagementPlugin {
         }
     }
 
-    async fn handle_set_password<DB: DatabaseAdapter>(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<AuthResponse> {
-        let body: SetPasswordRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
-
-        // Authenticate user
-        let user = self
-            .get_current_user(req, ctx)
-            .await?
-            .ok_or(AuthError::Unauthenticated)?;
-
-        let response = set_password_core(&body, &user, &self.config, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
-    }
-
-    async fn handle_reset_password_token<DB: DatabaseAdapter>(
+    async fn handle_reset_password_token(
         &self,
         token: &str,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let query = ResetPasswordTokenQuery {
             callback_url: req.query.get("callbackURL").cloned(),
         };
         match reset_password_token_core(token, &query, ctx).await? {
             ResetPasswordTokenResult::Redirect(url) => {
-                let mut headers = std::collections::HashMap::new();
-                headers.insert("Location".to_string(), url);
+                let mut headers = better_auth_core::Headers::new();
+                let _ = headers.insert("Location".to_string(), url);
+                let _ = headers.insert("content-type".to_string(), "application/json".to_string());
                 Ok(AuthResponse {
                     status: 302,
                     headers,
                     body: Vec::new(),
                 })
             }
-            ResetPasswordTokenResult::Json(data) => Ok(AuthResponse::json(200, &data)?),
         }
     }
 
-    async fn get_current_user<DB: DatabaseAdapter>(
+    async fn get_current_user<S: better_auth_core::AuthSchema>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<Option<DB::User>> {
+        ctx: &AuthContext<S>,
+    ) -> AuthResult<Option<S::User>> {
         let session_manager = ctx.session_manager();
 
         if let Some(token) = session_manager.extract_session_token(req)
             && let Some(session) = session_manager.get_session(&token).await?
         {
-            return ctx.database.get_user_by_id(session.user_id()).await;
+            return ctx.database.get_user_by_id(&session.user_id()).await;
         }
 
         Ok(None)
@@ -260,10 +243,10 @@ impl PasswordManagementPlugin {
 
 #[cfg(test)]
 impl PasswordManagementPlugin {
-    fn validate_password<DB: DatabaseAdapter>(
+    fn validate_password(
         &self,
         password: &str,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<()> {
         better_auth_core::utils::password::validate_password(
             password,
@@ -288,108 +271,5 @@ impl PasswordManagementPlugin {
             hash,
         )
         .await
-    }
-}
-
-#[cfg(feature = "axum")]
-mod axum_impl {
-    use super::*;
-    use std::sync::Arc;
-
-    use axum::extract::{Extension, Path, Query, State};
-    use axum::response::IntoResponse;
-    use axum::{Json, http::header};
-    use better_auth_core::{AuthState, CurrentSession, ValidatedJson};
-
-    #[derive(Clone)]
-    struct PluginState {
-        config: PasswordManagementConfig,
-    }
-
-    async fn handle_forget_password<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        ValidatedJson(body): ValidatedJson<ForgetPasswordRequest>,
-    ) -> Result<Json<StatusResponse>, AuthError> {
-        let ctx = state.to_context();
-        let response = forget_password_core(&body, &ps.config, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    async fn handle_reset_password<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        ValidatedJson(body): ValidatedJson<ResetPasswordRequest>,
-    ) -> Result<Json<StatusResponse>, AuthError> {
-        let ctx = state.to_context();
-        let response = reset_password_core(&body, &ps.config, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    async fn handle_reset_password_token<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Path(token): Path<String>,
-        Query(query): Query<ResetPasswordTokenQuery>,
-    ) -> Result<axum::response::Response, AuthError> {
-        let ctx = state.to_context();
-        match reset_password_token_core(&token, &query, &ctx).await? {
-            ResetPasswordTokenResult::Redirect(url) => {
-                Ok(axum::response::Redirect::to(&url).into_response())
-            }
-            ResetPasswordTokenResult::Json(data) => Ok(Json(data).into_response()),
-        }
-    }
-
-    async fn handle_change_password<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-        ValidatedJson(body): ValidatedJson<ChangePasswordRequest>,
-    ) -> Result<axum::response::Response, AuthError> {
-        let ctx = state.to_context();
-        let (response, new_token) = change_password_core(&body, &user, &ps.config, &ctx).await?;
-
-        if let Some(ref token) = new_token {
-            let cookie = state.session_cookie(token);
-            Ok(([(header::SET_COOKIE, cookie)], Json(response)).into_response())
-        } else {
-            Ok(Json(response).into_response())
-        }
-    }
-
-    async fn handle_set_password<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-        ValidatedJson(body): ValidatedJson<SetPasswordRequest>,
-    ) -> Result<Json<StatusResponse>, AuthError> {
-        let ctx = state.to_context();
-        let response = set_password_core(&body, &user, &ps.config, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for PasswordManagementPlugin {
-        fn name(&self) -> &'static str {
-            "password-management"
-        }
-
-        fn router(&self) -> axum::Router<AuthState<DB>> {
-            use axum::routing::{get, post};
-
-            let plugin_state = Arc::new(PluginState {
-                config: self.config.clone(),
-            });
-
-            axum::Router::new()
-                .route("/forget-password", post(handle_forget_password::<DB>))
-                .route("/reset-password", post(handle_reset_password::<DB>))
-                .route(
-                    "/reset-password/:token",
-                    get(handle_reset_password_token::<DB>),
-                )
-                .route("/change-password", post(handle_change_password::<DB>))
-                .route("/set-password", post(handle_set_password::<DB>))
-                .layer(Extension(plugin_state))
-        }
     }
 }

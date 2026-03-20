@@ -1,19 +1,20 @@
 use chrono::Utc;
 use std::sync::Arc;
 
-use crate::adapters::DatabaseAdapter;
 use crate::config::AuthConfig;
 use crate::entity::{AuthSession, AuthUser};
 use crate::error::AuthResult;
+use crate::schema::AuthSchema;
+use crate::store::AuthStore;
 use crate::types::CreateSession;
 
 /// Session manager handles session creation, validation, and cleanup
-pub struct SessionManager<DB: DatabaseAdapter> {
+pub struct SessionManager<S: AuthSchema> {
     config: Arc<AuthConfig>,
-    database: Arc<DB>,
+    database: Arc<dyn AuthStore<S>>,
 }
 
-impl<DB: DatabaseAdapter> Clone for SessionManager<DB> {
+impl<S: AuthSchema> Clone for SessionManager<S> {
     fn clone(&self) -> Self {
         Self {
             config: self.config.clone(),
@@ -22,8 +23,8 @@ impl<DB: DatabaseAdapter> Clone for SessionManager<DB> {
     }
 }
 
-impl<DB: DatabaseAdapter> SessionManager<DB> {
-    pub fn new(config: Arc<AuthConfig>, database: Arc<DB>) -> Self {
+impl<S: AuthSchema> SessionManager<S> {
+    pub fn new(config: Arc<AuthConfig>, database: Arc<dyn AuthStore<S>>) -> Self {
         Self { config, database }
     }
 
@@ -33,7 +34,7 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
         user: &impl AuthUser,
         ip_address: Option<String>,
         user_agent: Option<String>,
-    ) -> AuthResult<DB::Session> {
+    ) -> AuthResult<S::Session> {
         let expires_at = Utc::now() + self.config.session.expires_in;
 
         let create_session = CreateSession {
@@ -50,7 +51,7 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
     }
 
     /// Get session by token
-    pub async fn get_session(&self, token: &str) -> AuthResult<Option<DB::Session>> {
+    pub async fn get_session(&self, token: &str) -> AuthResult<Option<S::Session>> {
         let session = self.database.get_session(token).await?;
 
         // Check if session exists and is not expired
@@ -70,7 +71,7 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
                         // Only refresh if the session was last updated more than
                         // `update_age` ago.
                         let updated = session.updated_at();
-                        Utc::now() - updated >= age
+                        Utc::now().signed_duration_since(updated) >= age
                     }
                     // No update_age set → refresh on every access.
                     None => true,
@@ -96,18 +97,21 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
     }
 
     /// Delete all sessions for a user
-    pub async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
-        self.database.delete_user_sessions(user_id).await?;
+    pub async fn delete_user_sessions(&self, user_id: impl AsRef<str>) -> AuthResult<()> {
+        self.database.delete_user_sessions(user_id.as_ref()).await?;
         Ok(())
     }
 
     /// Get all active sessions for a user
-    pub async fn list_user_sessions(&self, user_id: &str) -> AuthResult<Vec<DB::Session>> {
-        let sessions = self.database.get_user_sessions(user_id).await?;
+    pub async fn list_user_sessions(
+        &self,
+        user_id: impl AsRef<str>,
+    ) -> AuthResult<Vec<S::Session>> {
+        let sessions = self.database.get_user_sessions(user_id.as_ref()).await?;
         let now = Utc::now();
 
         // Filter out expired sessions
-        let active_sessions: Vec<DB::Session> = sessions
+        let active_sessions = sessions
             .into_iter()
             .filter(|session| session.expires_at() > now && session.active())
             .collect();
@@ -129,8 +133,9 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
     }
 
     /// Revoke all sessions for a user
-    pub async fn revoke_all_user_sessions(&self, user_id: &str) -> AuthResult<usize> {
+    pub async fn revoke_all_user_sessions(&self, user_id: impl AsRef<str>) -> AuthResult<usize> {
         // Get count of sessions before deletion for return value
+        let user_id = user_id.as_ref();
         let sessions = self.list_user_sessions(user_id).await?;
         let count = sessions.len();
 
@@ -141,7 +146,7 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
     /// Revoke all sessions for a user except the current one
     pub async fn revoke_other_user_sessions(
         &self,
-        user_id: &str,
+        user_id: impl AsRef<str>,
         current_token: &str,
     ) -> AuthResult<usize> {
         let sessions = self.list_user_sessions(user_id).await?;
@@ -204,5 +209,321 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
         }
 
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::AuthSession;
+    use crate::test_store::{BundledSchema, test_config, test_database};
+    use crate::types::AuthRequest;
+    use crate::types::HttpMethod;
+    use crate::wire::SessionView;
+    use chrono::Duration;
+
+    fn test_manager() -> SessionManager<BundledSchema> {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        SessionManager::new(test_config(), runtime.block_on(test_database()))
+    }
+
+    // ── validate_token_format ───────────────────────────────────────────
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[test]
+    fn valid_token_format() {
+        let mgr = test_manager();
+        let token = "session_abcdefghijklmnopqrstuvwxyz1234567890";
+        assert!(mgr.validate_token_format(token));
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[test]
+    fn invalid_token_no_prefix() {
+        let mgr = test_manager();
+        assert!(!mgr.validate_token_format("abcdefghijklmnopqrstuvwxyz1234567890"));
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[test]
+    fn invalid_token_too_short() {
+        let mgr = test_manager();
+        assert!(!mgr.validate_token_format("session_short"));
+    }
+
+    // ── extract_session_token ───────────────────────────────────────────
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[test]
+    fn extract_from_bearer() {
+        let mgr = test_manager();
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        let _ = req
+            .headers
+            .insert("authorization".into(), "Bearer my-token".into());
+        assert_eq!(mgr.extract_session_token(&req), Some("my-token".into()));
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[test]
+    fn extract_from_cookie() {
+        let mgr = test_manager();
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        let _ = req.headers.insert(
+            "cookie".into(),
+            "better-auth.session_token=tok123; other=val".into(),
+        );
+        assert_eq!(mgr.extract_session_token(&req), Some("tok123".into()));
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[test]
+    fn extract_bearer_takes_precedence_over_cookie() {
+        let mgr = test_manager();
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        let _ = req
+            .headers
+            .insert("authorization".into(), "Bearer bearer-tok".into());
+        let _ = req.headers.insert(
+            "cookie".into(),
+            "better-auth.session_token=cookie-tok".into(),
+        );
+        assert_eq!(mgr.extract_session_token(&req), Some("bearer-tok".into()));
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[test]
+    fn extract_returns_none_without_auth() {
+        let mgr = test_manager();
+        let req = AuthRequest::new(HttpMethod::Get, "/test");
+        assert_eq!(mgr.extract_session_token(&req), None);
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[test]
+    fn extract_skips_empty_cookie_value() {
+        let mgr = test_manager();
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        let _ = req
+            .headers
+            .insert("cookie".into(), "better-auth.session_token=".into());
+        assert_eq!(mgr.extract_session_token(&req), None);
+    }
+
+    // ── is_session_fresh ────────────────────────────────────────────────
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[test]
+    fn session_fresh_when_within_window() {
+        let mut config = AuthConfig::new("test-secret-min-32-chars-1234567");
+        config.session.fresh_age = Some(Duration::minutes(10));
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let mgr = SessionManager::new(Arc::new(config), runtime.block_on(test_database()));
+
+        // A session created "now" is fresh within a 10-minute window.
+        let session = SessionView {
+            id: "s1".into(),
+            expires_at: Utc::now() + Duration::hours(1),
+            token: "tok".into(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            ip_address: None,
+            user_agent: None,
+            user_id: "u1".into(),
+            impersonated_by: None,
+            active_organization_id: None,
+            active: true,
+        };
+        assert!(mgr.is_session_fresh(&session));
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[test]
+    fn session_not_fresh_when_old() {
+        let mut config = AuthConfig::new("test-secret-min-32-chars-1234567");
+        config.session.fresh_age = Some(Duration::minutes(10));
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let mgr = SessionManager::new(Arc::new(config), runtime.block_on(test_database()));
+
+        let session = SessionView {
+            id: "s1".into(),
+            expires_at: Utc::now() + Duration::hours(1),
+            token: "tok".into(),
+            created_at: Utc::now() - Duration::minutes(20),
+            updated_at: Utc::now(),
+            ip_address: None,
+            user_agent: None,
+            user_id: "u1".into(),
+            impersonated_by: None,
+            active_organization_id: None,
+            active: true,
+        };
+        assert!(!mgr.is_session_fresh(&session));
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[test]
+    fn session_never_fresh_when_no_fresh_age() {
+        let mgr = test_manager(); // default: fresh_age = None
+        let session = SessionView {
+            id: "s1".into(),
+            expires_at: Utc::now() + Duration::hours(1),
+            token: "tok".into(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            ip_address: None,
+            user_agent: None,
+            user_id: "u1".into(),
+            impersonated_by: None,
+            active_organization_id: None,
+            active: true,
+        };
+        assert!(!mgr.is_session_fresh(&session));
+    }
+
+    // ── async operations ────────────────────────────────────────────────
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[tokio::test]
+    async fn create_and_get_session() {
+        let db = test_database().await;
+        let mgr = SessionManager::new(test_config(), db.clone());
+
+        // Create a user first
+        let user = db
+            .create_user(crate::types::CreateUser::new().with_email("test@test.com"))
+            .await
+            .unwrap();
+
+        let session = mgr.create_session(&user, None, None).await.unwrap();
+        let token = session.token().to_string();
+
+        let retrieved = mgr.get_session(&token).await.unwrap();
+        assert!(retrieved.is_some());
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[tokio::test]
+    async fn create_session_without_metadata_uses_empty_strings() {
+        let db = test_database().await;
+        let mgr = SessionManager::new(test_config(), db.clone());
+
+        let user = db
+            .create_user(crate::types::CreateUser::new().with_email("test@test.com"))
+            .await
+            .unwrap();
+
+        let session = mgr.create_session(&user, None, None).await.unwrap();
+        assert_eq!(session.ip_address.as_deref(), Some(""));
+        assert_eq!(session.user_agent.as_deref(), Some(""));
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[tokio::test]
+    async fn delete_session_removes_it() {
+        let db = test_database().await;
+        let mgr = SessionManager::new(test_config(), db.clone());
+
+        let user = db
+            .create_user(crate::types::CreateUser::new().with_email("test@test.com"))
+            .await
+            .unwrap();
+
+        let session = mgr.create_session(&user, None, None).await.unwrap();
+        let token = session.token().to_string();
+
+        mgr.delete_session(&token).await.unwrap();
+        let retrieved = mgr.get_session(&token).await.unwrap();
+        assert!(retrieved.is_none());
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[tokio::test]
+    async fn revoke_session_returns_true_when_found() {
+        let db = test_database().await;
+        let mgr = SessionManager::new(test_config(), db.clone());
+
+        let user = db
+            .create_user(crate::types::CreateUser::new().with_email("test@test.com"))
+            .await
+            .unwrap();
+
+        let session = mgr.create_session(&user, None, None).await.unwrap();
+        let result = mgr.revoke_session(session.token()).await.unwrap();
+        assert!(result);
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[tokio::test]
+    async fn revoke_session_returns_false_when_not_found() {
+        let mgr = SessionManager::new(test_config(), test_database().await);
+        let result = mgr.revoke_session("nonexistent-token").await.unwrap();
+        assert!(!result);
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[tokio::test]
+    async fn list_user_sessions_excludes_expired() {
+        let db = test_database().await;
+        let mgr = SessionManager::new(test_config(), db.clone());
+
+        let user = db
+            .create_user(crate::types::CreateUser::new().with_email("test@test.com"))
+            .await
+            .unwrap();
+
+        // Create two sessions
+        let _ = mgr.create_session(&user, None, None).await.unwrap();
+        let _ = mgr.create_session(&user, None, None).await.unwrap();
+
+        let sessions = mgr.list_user_sessions(user.id()).await.unwrap();
+        assert_eq!(sessions.len(), 2);
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[tokio::test]
+    async fn revoke_all_user_sessions() {
+        let db = test_database().await;
+        let mgr = SessionManager::new(test_config(), db.clone());
+
+        let user = db
+            .create_user(crate::types::CreateUser::new().with_email("test@test.com"))
+            .await
+            .unwrap();
+
+        let _ = mgr.create_session(&user, None, None).await.unwrap();
+        let _ = mgr.create_session(&user, None, None).await.unwrap();
+
+        let count = mgr.revoke_all_user_sessions(user.id()).await.unwrap();
+        assert_eq!(count, 2);
+
+        let sessions = mgr.list_user_sessions(user.id()).await.unwrap();
+        assert!(sessions.is_empty());
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[tokio::test]
+    async fn revoke_other_sessions_keeps_current() {
+        let db = test_database().await;
+        let mgr = SessionManager::new(test_config(), db.clone());
+
+        let user = db
+            .create_user(crate::types::CreateUser::new().with_email("test@test.com"))
+            .await
+            .unwrap();
+
+        let current = mgr.create_session(&user, None, None).await.unwrap();
+        let _ = mgr.create_session(&user, None, None).await.unwrap();
+        let _ = mgr.create_session(&user, None, None).await.unwrap();
+
+        let count = mgr
+            .revoke_other_user_sessions(user.id(), current.token())
+            .await
+            .unwrap();
+        assert_eq!(count, 2);
+
+        let remaining = mgr.list_user_sessions(user.id()).await.unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].token(), current.token());
     }
 }

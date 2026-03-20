@@ -9,13 +9,16 @@ Better Auth includes middleware that runs before and after every request. Enable
 
 Validates the `Origin` or `Referer` header against the configured base URL on mutating requests (POST, PUT, DELETE, PATCH).
 
+These examples assume you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
-use better_auth::{AuthBuilder, AuthConfig, CsrfConfig};
+use better_auth::middleware::CsrfConfig;
+use better_auth::{AuthConfig, BetterAuth};
 
 let config = AuthConfig::new(secret)
         .trusted_origins(vec!["https://myapp.com".to_string()]);
 
-let auth = AuthBuilder::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .csrf(CsrfConfig::new().enabled(true))
     .build()
     .await?;
@@ -33,10 +36,10 @@ Returns `403 Forbidden` when the origin is not trusted.
 Limits requests per client per time window.
 
 ```rust
-use better_auth::RateLimitConfig;
+use better_auth::middleware::RateLimitConfig;
 use std::time::Duration;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .rate_limit(
         RateLimitConfig::new()
             .default_limit(Duration::from_secs(60), 100)
@@ -70,9 +73,9 @@ When rate limited, returns `429`:
 Adds Cross-Origin Resource Sharing headers and handles preflight `OPTIONS` requests.
 
 ```rust
-use better_auth::CorsConfig;
+use better_auth::middleware::CorsConfig;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .cors(
         CorsConfig::new()
             .allowed_origin("https://myapp.com")
@@ -100,7 +103,7 @@ Rejects requests with bodies exceeding a size limit.
 ```rust
 use better_auth::BodyLimitConfig;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .body_limit(BodyLimitConfig::new().max_bytes(512 * 1024))
     .build()
     .await?;

@@ -7,11 +7,13 @@ The `TwoFactorPlugin` adds two-factor authentication (2FA) to your application. 
 
 ## Setup
 
+These examples assume you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
 use better_auth::plugins::TwoFactorPlugin;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(TwoFactorPlugin::new())
     .build()
     .await?;
@@ -22,8 +24,8 @@ let auth = BetterAuth::new(config)
 ```rust
 use better_auth::plugins::two_factor::TwoFactorConfig;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(
         TwoFactorPlugin::new().with_config(TwoFactorConfig {
             issuer: "My App".to_string(),

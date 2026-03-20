@@ -1,18 +1,26 @@
 //! Route coverage analysis — compares spec endpoints against implementation.
 
+#![allow(
+    unused_results,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "test code discards set insertion results while building coverage fixtures"
+)]
+
 mod compat;
 
 use std::collections::{BTreeMap, HashSet};
 
-use better_auth::types::HttpMethod;
+use better_auth::prelude::HttpMethod;
 
 use compat::helpers::*;
-use compat::schema::load_openapi_spec;
+use compat::schema::{OpenApiProfile, load_openapi_spec_with_profile};
 
 /// Analyze which endpoints from the reference spec are implemented.
 #[tokio::test]
 async fn test_route_coverage_analysis() {
-    let spec = load_openapi_spec();
+    let spec = load_openapi_spec_with_profile(OpenApiProfile::AllIn);
     let auth = create_test_auth().await;
 
     // Collect reference endpoints from the typed spec
@@ -51,7 +59,6 @@ async fn test_route_coverage_analysis() {
         ("/reference/openapi.json", "get"),
         ("/update-user", "post"),
         ("/delete-user", "post"),
-        ("/delete-user", "delete"),
         ("/change-email", "post"),
         ("/delete-user/callback", "get"),
     ] {

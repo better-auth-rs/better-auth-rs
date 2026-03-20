@@ -1,8 +1,8 @@
 use chrono::{Duration, Utc};
 
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
-use better_auth_core::{AuthContext, AuthError, AuthResult, ListUsersParams, PASSWORD_HASH_KEY};
+use better_auth_core::wire::{SessionView, UserView};
+use better_auth_core::{AuthContext, AuthError, AuthResult, ListUsersParams};
 use better_auth_core::{CreateAccount, CreateSession, UpdateUser};
 
 use crate::plugins::StatusResponse;
@@ -14,10 +14,10 @@ use super::types::*;
 // Core functions -- framework-agnostic business logic
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn set_role_core<DB: DatabaseAdapter>(
+pub(crate) async fn set_role_core(
     body: &SetRoleRequest,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<UserResponse<DB::User>> {
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<UserResponse<UserView>> {
     let _target = ctx
         .database
         .get_user_by_id(&body.user_id)
@@ -30,46 +30,29 @@ pub(crate) async fn set_role_core<DB: DatabaseAdapter>(
     };
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
-    Ok(UserResponse { user: updated_user })
+    Ok(UserResponse {
+        user: UserView::from(&updated_user),
+    })
 }
 
-pub(crate) async fn create_user_core<DB: DatabaseAdapter>(
+pub(crate) async fn create_user_core(
     body: &CreateUserRequest,
     config: &AdminConfig,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<UserResponse<DB::User>> {
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<UserResponse<UserView>> {
     if ctx.database.get_user_by_email(&body.email).await?.is_some() {
         return Err(AuthError::conflict("A user with this email already exists"));
     }
-
-    if body.password.len() < ctx.config.password.min_length {
-        return Err(AuthError::bad_request(format!(
-            "Password must be at least {} characters long",
-            ctx.config.password.min_length
-        )));
-    }
-
-    let password_hash = better_auth_core::hash_password(None, &body.password).await?;
 
     let role = body
         .role
         .clone()
         .unwrap_or_else(|| config.default_user_role.clone());
 
-    let metadata_value = body.data.clone().unwrap_or(serde_json::json!({}));
-    let metadata = if let serde_json::Value::Object(mut obj) = metadata_value {
-        obj.insert(
-            PASSWORD_HASH_KEY.to_string(),
-            serde_json::json!(password_hash),
-        );
+    let metadata = if let Some(serde_json::Value::Object(obj)) = body.data.clone() {
         serde_json::Value::Object(obj)
     } else {
-        let mut obj = serde_json::Map::new();
-        obj.insert(
-            PASSWORD_HASH_KEY.to_string(),
-            serde_json::json!(password_hash),
-        );
-        serde_json::Value::Object(obj)
+        serde_json::json!({})
     };
 
     let create_user = better_auth_core::CreateUser::new()
@@ -81,29 +64,39 @@ pub(crate) async fn create_user_core<DB: DatabaseAdapter>(
 
     let user = ctx.database.create_user(create_user).await?;
 
-    ctx.database
-        .create_account(CreateAccount {
-            user_id: user.id().to_string(),
-            account_id: user.id().to_string(),
-            provider_id: "credential".to_string(),
-            access_token: None,
-            refresh_token: None,
-            id_token: None,
-            access_token_expires_at: None,
-            refresh_token_expires_at: None,
-            scope: None,
-            password: Some(password_hash),
-        })
-        .await?;
+    if let Some(password) = body
+        .password
+        .as_deref()
+        .filter(|password| !password.is_empty())
+    {
+        let password_hash = better_auth_core::hash_password(None, password).await?;
+        let _ = ctx
+            .database
+            .create_account(CreateAccount {
+                user_id: user.id().to_string(),
+                account_id: user.id().to_string(),
+                provider_id: "credential".to_string(),
+                access_token: None,
+                refresh_token: None,
+                id_token: None,
+                access_token_expires_at: None,
+                refresh_token_expires_at: None,
+                scope: None,
+                password: Some(password_hash),
+            })
+            .await?;
+    }
 
-    Ok(UserResponse { user })
+    Ok(UserResponse {
+        user: UserView::from(&user),
+    })
 }
 
-pub(crate) async fn list_users_core<DB: DatabaseAdapter>(
+pub(crate) async fn list_users_core(
     query: &ListUsersQueryParams,
     config: &AdminConfig,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<ListUsersResponse<DB::User>> {
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<ListUsersResponse<UserView>> {
     let limit = query
         .limit
         .unwrap_or(config.default_page_limit)
@@ -125,17 +118,17 @@ pub(crate) async fn list_users_core<DB: DatabaseAdapter>(
 
     let (users, total) = ctx.database.list_users(params).await?;
     Ok(ListUsersResponse {
-        users,
+        users: users.iter().map(UserView::from).collect(),
         total,
         limit,
         offset,
     })
 }
 
-pub(crate) async fn list_user_sessions_core<DB: DatabaseAdapter>(
+pub(crate) async fn list_user_sessions_core(
     body: &UserIdRequest,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<ListSessionsResponse<DB::Session>> {
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<ListSessionsResponse<SessionView>> {
     let _target = ctx
         .database
         .get_user_by_id(&body.user_id)
@@ -144,16 +137,18 @@ pub(crate) async fn list_user_sessions_core<DB: DatabaseAdapter>(
 
     let session_manager = ctx.session_manager();
     let sessions = session_manager.list_user_sessions(&body.user_id).await?;
-    Ok(ListSessionsResponse { sessions })
+    Ok(ListSessionsResponse {
+        sessions: sessions.iter().map(SessionView::from).collect(),
+    })
 }
 
-pub(crate) async fn ban_user_core<DB: DatabaseAdapter>(
+pub(crate) async fn ban_user_core(
     body: &BanUserRequest,
-    admin_user_id: &str,
+    admin_user_id: impl AsRef<str>,
     config: &AdminConfig,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<UserResponse<DB::User>> {
-    if body.user_id == admin_user_id {
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<UserResponse<UserView>> {
+    if body.user_id == admin_user_id.as_ref() {
         return Err(AuthError::bad_request("You cannot ban yourself"));
     }
 
@@ -181,17 +176,20 @@ pub(crate) async fn ban_user_core<DB: DatabaseAdapter>(
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
 
-    ctx.session_manager()
+    let _ = ctx
+        .session_manager()
         .revoke_all_user_sessions(&body.user_id)
         .await?;
 
-    Ok(UserResponse { user: updated_user })
+    Ok(UserResponse {
+        user: UserView::from(&updated_user),
+    })
 }
 
-pub(crate) async fn unban_user_core<DB: DatabaseAdapter>(
+pub(crate) async fn unban_user_core(
     body: &UserIdRequest,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<UserResponse<DB::User>> {
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<UserResponse<UserView>> {
     let _target = ctx
         .database
         .get_user_by_id(&body.user_id)
@@ -206,17 +204,19 @@ pub(crate) async fn unban_user_core<DB: DatabaseAdapter>(
     };
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
-    Ok(UserResponse { user: updated_user })
+    Ok(UserResponse {
+        user: UserView::from(&updated_user),
+    })
 }
 
-pub(crate) async fn impersonate_user_core<DB: DatabaseAdapter>(
+pub(crate) async fn impersonate_user_core(
     body: &UserIdRequest,
-    admin_user_id: &str,
+    admin_user_id: impl AsRef<str>,
     ip_address: Option<&str>,
     user_agent: Option<&str>,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(SessionUserResponse<DB::Session, DB::User>, String)> {
-    if body.user_id == admin_user_id {
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<(SessionUserResponse<SessionView, UserView>, String)> {
+    if body.user_id == admin_user_id.as_ref() {
         return Err(AuthError::bad_request("Cannot impersonate yourself"));
     }
 
@@ -232,27 +232,27 @@ pub(crate) async fn impersonate_user_core<DB: DatabaseAdapter>(
         expires_at,
         ip_address: ip_address.map(|s| s.to_string()),
         user_agent: user_agent.map(|s| s.to_string()),
-        impersonated_by: Some(admin_user_id.to_string()),
+        impersonated_by: Some(admin_user_id.as_ref().to_string()),
         active_organization_id: None,
     };
 
     let session = ctx.database.create_session(create_session).await?;
     let token = session.token().to_string();
     let response = SessionUserResponse {
-        session,
-        user: target,
+        session: SessionView::from(&session),
+        user: UserView::from(&target),
     };
 
     Ok((response, token))
 }
 
-pub(crate) async fn stop_impersonating_core<DB: DatabaseAdapter>(
-    session: &DB::Session,
+pub(crate) async fn stop_impersonating_core(
+    session: &impl AuthSession,
     session_token: &str,
     ip_address: Option<&str>,
     user_agent: Option<&str>,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(SessionUserResponse<DB::Session, DB::User>, String)> {
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<(SessionUserResponse<SessionView, UserView>, String)> {
     let admin_id = session
         .impersonated_by()
         .ok_or_else(|| AuthError::bad_request("Current session is not an impersonation session"))?
@@ -279,16 +279,16 @@ pub(crate) async fn stop_impersonating_core<DB: DatabaseAdapter>(
     let admin_session = ctx.database.create_session(create_session).await?;
     let token = admin_session.token().to_string();
     let response = SessionUserResponse {
-        session: admin_session,
-        user: admin_user,
+        session: SessionView::from(&admin_session),
+        user: UserView::from(&admin_user),
     };
 
     Ok((response, token))
 }
 
-pub(crate) async fn revoke_user_session_core<DB: DatabaseAdapter>(
+pub(crate) async fn revoke_user_session_core(
     body: &RevokeSessionRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
     ctx.session_manager()
         .delete_session(&body.session_token)
@@ -296,9 +296,9 @@ pub(crate) async fn revoke_user_session_core<DB: DatabaseAdapter>(
     Ok(SuccessResponse { success: true })
 }
 
-pub(crate) async fn revoke_user_sessions_core<DB: DatabaseAdapter>(
+pub(crate) async fn revoke_user_sessions_core(
     body: &UserIdRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
     let _target = ctx
         .database
@@ -306,19 +306,20 @@ pub(crate) async fn revoke_user_sessions_core<DB: DatabaseAdapter>(
         .await?
         .ok_or_else(|| AuthError::not_found("User not found"))?;
 
-    ctx.session_manager()
+    let _ = ctx
+        .session_manager()
         .revoke_all_user_sessions(&body.user_id)
         .await?;
 
     Ok(SuccessResponse { success: true })
 }
 
-pub(crate) async fn remove_user_core<DB: DatabaseAdapter>(
+pub(crate) async fn remove_user_core(
     body: &UserIdRequest,
-    admin_user_id: &str,
-    ctx: &AuthContext<DB>,
+    admin_user_id: impl AsRef<str>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
-    if body.user_id == admin_user_id {
+    if body.user_id == admin_user_id.as_ref() {
         return Err(AuthError::bad_request("You cannot remove yourself"));
     }
 
@@ -332,16 +333,16 @@ pub(crate) async fn remove_user_core<DB: DatabaseAdapter>(
 
     let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
     for account in &accounts {
-        ctx.database.delete_account(account.id()).await?;
+        ctx.database.delete_account(&account.id()).await?;
     }
 
     ctx.database.delete_user(&body.user_id).await?;
     Ok(SuccessResponse { success: true })
 }
 
-pub(crate) async fn set_user_password_core<DB: DatabaseAdapter>(
+pub(crate) async fn set_user_password_core(
     body: &SetUserPasswordRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     if body.new_password.len() < ctx.config.password.min_length {
         return Err(AuthError::bad_request(format!(
@@ -350,71 +351,29 @@ pub(crate) async fn set_user_password_core<DB: DatabaseAdapter>(
         )));
     }
 
-    let user = ctx
-        .database
-        .get_user_by_id(&body.user_id)
-        .await?
-        .ok_or_else(|| AuthError::not_found("User not found"))?;
-
     let password_hash = better_auth_core::hash_password(None, &body.new_password).await?;
 
-    let mut metadata = user.metadata().clone();
-    if let Some(obj) = metadata.as_object_mut() {
-        obj.insert(
-            PASSWORD_HASH_KEY.to_string(),
-            serde_json::json!(password_hash),
-        );
-    } else {
-        return Err(AuthError::bad_request(
-            "User metadata must be a JSON object to store password hash",
-        ));
-    }
-
-    let update = UpdateUser {
-        metadata: Some(metadata),
-        ..Default::default()
-    };
-    ctx.database.update_user(&body.user_id, update).await?;
-
     let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
-    let has_credential = accounts.iter().any(|a| a.provider_id() == "credential");
-
-    if has_credential {
-        for account in &accounts {
-            if account.provider_id() == "credential" {
-                let account_update = better_auth_core::UpdateAccount {
-                    password: Some(password_hash.clone()),
-                    ..Default::default()
-                };
-                ctx.database
-                    .update_account(account.id(), account_update)
-                    .await?;
-                break;
-            }
-        }
-    } else {
-        ctx.database
-            .create_account(CreateAccount {
-                user_id: body.user_id.clone(),
-                account_id: body.user_id.clone(),
-                provider_id: "credential".to_string(),
-                access_token: None,
-                refresh_token: None,
-                id_token: None,
-                access_token_expires_at: None,
-                refresh_token_expires_at: None,
-                scope: None,
-                password: Some(password_hash.clone()),
-            })
+    if let Some(account) = accounts
+        .iter()
+        .find(|account| account.provider_id() == "credential")
+    {
+        let account_update = better_auth_core::UpdateAccount {
+            password: Some(password_hash),
+            ..Default::default()
+        };
+        let _ = ctx
+            .database
+            .update_account(&account.id(), account_update)
             .await?;
     }
 
     Ok(StatusResponse { status: true })
 }
 
-pub(crate) async fn has_permission_core<DB: DatabaseAdapter>(
+pub(crate) fn has_permission_core(
     body: &HasPermissionRequest,
-    user: &DB::User,
+    user: &impl AuthUser,
     config: &AdminConfig,
 ) -> AuthResult<PermissionResponse> {
     let _permissions = body.permissions.clone().or(body.permission.clone());

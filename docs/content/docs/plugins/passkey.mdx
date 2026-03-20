@@ -7,11 +7,13 @@ The `PasskeyPlugin` enables passwordless authentication using the WebAuthn stand
 
 ## Setup
 
+This example assumes you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
 use better_auth::plugins::PasskeyPlugin;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(
         PasskeyPlugin::new()
             .rp_id("example.com")

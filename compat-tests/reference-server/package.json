@@ -5,10 +5,10 @@
   "type": "module",
   "description": "Reference better-auth (TS) server for compatibility testing against better-auth-rs",
   "scripts": {
-    "start": "node server.mjs"
+    "start": "bun run server.ts"
   },
   "dependencies": {
-    "better-auth": "1.4.19",
-    "better-sqlite3": "^12.0.0"
+    "@better-auth/passkey": "1.4.19",
+    "better-auth": "1.4.19"
   }
 }

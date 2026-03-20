@@ -6,7 +6,6 @@ pub use invitation::*;
 pub use member::*;
 pub use org::*;
 
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthMember, AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
@@ -17,28 +16,19 @@ use super::rbac::{Action, Resource, has_permission_any};
 use super::types::{HasPermissionRequest, HasPermissionResponse};
 
 /// Helper function to require authenticated session
-pub(crate) async fn require_session<DB: DatabaseAdapter>(
+pub(crate) async fn require_session<S: better_auth_core::AuthSchema>(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(DB::User, DB::Session)> {
-    let session_manager = ctx.session_manager();
-
-    if let Some(token) = session_manager.extract_session_token(req)
-        && let Some(session) = session_manager.get_session(&token).await?
-        && let Some(user) = ctx.database.get_user_by_id(session.user_id()).await?
-    {
-        return Ok((user, session));
-    }
-
-    Err(AuthError::Unauthenticated)
+    ctx: &AuthContext<S>,
+) -> AuthResult<(S::User, S::Session)> {
+    ctx.require_session(req).await
 }
 
 /// Helper function to get organization ID from request or session
-pub(crate) async fn resolve_organization_id<DB: DatabaseAdapter>(
+pub(crate) async fn resolve_organization_id(
     org_id: Option<&str>,
     org_slug: Option<&str>,
-    session: &DB::Session,
-    ctx: &AuthContext<DB>,
+    session: &impl AuthSession,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<String> {
     if let Some(id) = org_id {
         return Ok(id.to_string());
@@ -62,19 +52,19 @@ pub(crate) async fn resolve_organization_id<DB: DatabaseAdapter>(
 // Core function
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn has_permission_core<DB: DatabaseAdapter>(
+pub(crate) async fn has_permission_core(
     body: &HasPermissionRequest,
-    user: &DB::User,
-    session: &DB::Session,
+    user: &impl AuthUser,
+    session: &impl AuthSession,
     config: &OrganizationConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<HasPermissionResponse> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
     let member = ctx
         .database
-        .get_member(&org_id, user.id())
+        .get_member(&org_id, &user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -124,9 +114,9 @@ pub(crate) async fn has_permission_core<DB: DatabaseAdapter>(
 // ---------------------------------------------------------------------------
 
 /// Handle has-permission request
-pub async fn handle_has_permission<DB: DatabaseAdapter>(
+pub async fn handle_has_permission(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;

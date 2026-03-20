@@ -9,7 +9,7 @@ struct FieldInfo {
     skip: bool,
 }
 
-pub fn derive_plugin_config(input: &DeriveInput) -> TokenStream {
+pub(crate) fn derive_plugin_config(input: &DeriveInput) -> TokenStream {
     let plugin_name = parse_plugin_name(input);
     let config_name = &input.ident;
 
@@ -93,6 +93,8 @@ pub fn derive_plugin_config(input: &DeriveInput) -> TokenStream {
     }
 }
 
+#[expect(clippy::expect_used, reason = "proc-macro error reporting")]
+#[expect(clippy::panic, reason = "proc-macro error reporting")]
 fn parse_plugin_name(input: &DeriveInput) -> Ident {
     for attr in &input.attrs {
         if attr.path().is_ident("plugin") {
@@ -112,6 +114,10 @@ fn parse_plugin_name(input: &DeriveInput) -> Ident {
     panic!("missing #[plugin(name = \"...\")] attribute");
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "proc-macro error reporting: named fields always have idents"
+)]
 fn parse_field_info(field: &syn::Field) -> Result<FieldInfo, syn::Error> {
     let ident = field.ident.clone().unwrap();
     let ty = field.ty.clone();

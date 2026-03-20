@@ -21,7 +21,7 @@ description: Complete reference for all configuration fields and defaults.
 | `expires_in` | `Duration` | 7 days | Session token lifetime |
 | `update_age` | `Option<Duration>` | `Some(1 day)` | Refresh session expiry when last update exceeds this duration. `None` disables refresh entirely |
 | `fresh_age` | `Duration` | 1 day | Window after creation in which a session is considered "fresh" for sensitive operations |
-| `cookie_name` | `String` | `"better-auth.session-token"` | Session cookie name |
+| `cookie_name` | `String` | `"better-auth.session_token"` | Session cookie name |
 | `cookie_secure` | `bool` | `true` | Secure cookie flag |
 | `cookie_http_only` | `bool` | `true` | HttpOnly cookie flag |
 | `cookie_same_site` | `SameSite` | `Lax` | SameSite cookie policy |
@@ -66,7 +66,14 @@ description: Complete reference for all configuration fields and defaults.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | `bool` | `true` | Enable CSRF checks |
+| `enabled` | `bool` | `true` | Enable request-origin CSRF checks and callback/redirect target validation |
+
+## AdvancedConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `disable_csrf_check` | `bool` | `false` | Disable request-origin and Fetch Metadata CSRF protections |
+| `disable_origin_check` | `bool` | `false` | Skip callback / redirect target origin validation |
 
 ## RateLimitConfig
 
@@ -136,7 +143,7 @@ description: Complete reference for all configuration fields and defaults.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `verification_token_expiry_hours` | `i64` | `24` | Token validity |
+| `verification_token_expiry` | `chrono::Duration` | `Duration::hours(24)` | Token validity |
 | `send_email_notifications` | `bool` | `true` | Send verification emails |
 | `require_verification_for_signin` | `bool` | `false` | Block unverified sign-in |
 | `auto_verify_new_users` | `bool` | `false` | Auto-send on sign-up |

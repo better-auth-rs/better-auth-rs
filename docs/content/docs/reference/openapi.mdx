@@ -17,9 +17,11 @@ GET /auth/reference/openapi.json
 
 Generate the spec without a web server:
 
+This example assumes you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(EmailPasswordPlugin::new())
     .build()
     .await?;

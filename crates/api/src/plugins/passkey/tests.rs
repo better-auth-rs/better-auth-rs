@@ -2,7 +2,6 @@ use super::*;
 use crate::plugins::test_helpers;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use better_auth_core::adapters::{PasskeyOps, UserOps, VerificationOps};
 use better_auth_core::entity::AuthPasskey;
 use better_auth_core::{CreatePasskey, CreateUser, CreateVerification, HttpMethod};
 use chrono::{Duration, Utc};
@@ -16,6 +15,7 @@ fn encoded_client_data(challenge: &str, client_type: &str, origin: &str) -> Stri
     URL_SAFE_NO_PAD.encode(serde_json::to_vec(&client_data).unwrap())
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_verify_registration_requires_insecure_opt_in() {
     let plugin = PasskeyPlugin::new();
@@ -50,6 +50,7 @@ async fn test_verify_registration_requires_insecure_opt_in() {
     assert_eq!(err.status_code(), 501);
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_verify_registration_consumes_exact_challenge_once() {
     let plugin = PasskeyPlugin::new().allow_insecure_unverified_assertion(true);
@@ -135,6 +136,7 @@ async fn test_verify_registration_consumes_exact_challenge_once() {
     assert_eq!(passkeys.len(), 1);
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_verify_authentication_checks_type_origin_and_prevents_replay() {
     let plugin = PasskeyPlugin::new().allow_insecure_unverified_assertion(true);
@@ -270,6 +272,7 @@ async fn test_verify_authentication_checks_type_origin_and_prevents_replay() {
     assert_eq!(passkey.counter(), 1);
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_generate_register_options_returns_challenge_and_stores_verification() {
     let plugin = PasskeyPlugin::new();
@@ -313,6 +316,7 @@ async fn test_generate_register_options_returns_challenge_and_stores_verificatio
     assert!(verification.is_some());
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_generate_register_options_unauthenticated() {
     let plugin = PasskeyPlugin::new();
@@ -338,6 +342,7 @@ async fn test_generate_register_options_unauthenticated() {
     assert_eq!(err.status_code(), 401);
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_generate_authenticate_options_returns_challenge() {
     let plugin = PasskeyPlugin::new();
@@ -370,6 +375,7 @@ async fn test_generate_authenticate_options_returns_challenge() {
     assert_eq!(body["allowCredentials"].as_array().unwrap().len(), 0);
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_generate_authenticate_options_with_auth_includes_credentials() {
     let plugin = PasskeyPlugin::new();
@@ -415,6 +421,7 @@ async fn test_generate_authenticate_options_with_auth_includes_credentials() {
     assert_eq!(allow[0]["id"], "cred-gen-auth-1");
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_list_user_passkeys() {
     let plugin = PasskeyPlugin::new();
@@ -461,6 +468,7 @@ async fn test_list_user_passkeys() {
     assert_eq!(body[0]["credentialID"], "cred-list-1");
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_list_user_passkeys_unauthenticated() {
     let plugin = PasskeyPlugin::new();
@@ -485,6 +493,7 @@ async fn test_list_user_passkeys_unauthenticated() {
     assert_eq!(err.status_code(), 401);
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_delete_passkey_success() {
     let plugin = PasskeyPlugin::new();
@@ -527,6 +536,7 @@ async fn test_delete_passkey_success() {
     assert!(result.is_none());
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_delete_passkey_non_owner_rejected() {
     let plugin = PasskeyPlugin::new();
@@ -580,6 +590,7 @@ async fn test_delete_passkey_non_owner_rejected() {
     assert!(result.is_some());
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_update_passkey_success() {
     let plugin = PasskeyPlugin::new();
@@ -630,6 +641,7 @@ async fn test_update_passkey_success() {
     assert_eq!(updated.name(), "New Name");
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_update_passkey_non_owner_rejected() {
     let plugin = PasskeyPlugin::new();
@@ -687,6 +699,7 @@ async fn test_update_passkey_non_owner_rejected() {
     assert_eq!(unchanged.name(), "Other's Key");
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_expired_challenge_rejected() {
     let plugin = PasskeyPlugin::new().allow_insecure_unverified_assertion(true);
@@ -734,6 +747,7 @@ async fn test_expired_challenge_rejected() {
     assert_eq!(err.status_code(), 400);
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_verify_authentication_requires_insecure_opt_in() {
     let plugin = PasskeyPlugin::new(); // default: insecure=false
@@ -768,6 +782,7 @@ async fn test_verify_authentication_requires_insecure_opt_in() {
     assert_eq!(err.status_code(), 501);
 }
 
+// Upstream source: packages/passkey/src/passkey.test.ts and packages/passkey/src/routes.ts; adapted to the Rust passkey plugin behavior.
 #[tokio::test]
 async fn test_memory_passkey_list_is_sorted_by_created_at_desc() {
     let (ctx, user, _session) = test_helpers::create_test_context_with_user(

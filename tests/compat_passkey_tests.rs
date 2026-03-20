@@ -4,17 +4,22 @@
 //! against the OpenAPI spec. Note: WebAuthn flows require browser interaction,
 //! so we validate response shapes for the options-generation endpoints and
 //! error shapes for verification endpoints (which need real attestation data).
+#![allow(
+    clippy::indexing_slicing,
+    reason = "passkey contract tests use direct JSON indexing for concise response assertions"
+)]
 
 mod compat;
 
 use compat::helpers::*;
+use compat::schema::OpenApiProfile;
 use compat::validator::SpecValidator;
 
 /// Test passkey registration and authentication option generation endpoints.
 #[tokio::test]
 async fn test_passkey_option_generation_endpoints() {
     let auth = create_test_auth().await;
-    let mut validator = SpecValidator::new();
+    let mut validator = SpecValidator::with_profile(OpenApiProfile::AlignedRs);
 
     // Sign up a user
     let (token, _) = signup_user(&auth, "passkey@example.com", "password123", "PK User").await;
@@ -157,7 +162,7 @@ async fn test_passkey_verification_endpoints() {
 #[tokio::test]
 async fn test_passkey_management_endpoints() {
     let auth = create_test_auth().await;
-    let mut validator = SpecValidator::new();
+    let mut validator = SpecValidator::with_profile(OpenApiProfile::AlignedRs);
 
     let (token, _) = signup_user(&auth, "pk_mgmt@example.com", "password123", "PK Mgmt").await;
 

@@ -1,15 +1,17 @@
 use super::*;
-use better_auth_core::adapters::{ApiKeyOps, MemoryDatabaseAdapter, SessionOps, UserOps};
-use better_auth_core::{AuthPlugin, CreateSession, CreateUser, HttpMethod, Session, User};
+use better_auth_core::wire::{SessionView, UserView};
+use better_auth_core::{AuthContext, AuthPlugin, CreateSession, CreateUser, HttpMethod};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>, User, Session) {
+type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
+
+async fn create_test_context_with_user() -> (AuthContext<TestSchema>, UserView, SessionView) {
     let config = Arc::new(better_auth_core::AuthConfig::new(
         "test-secret-key-at-least-32-chars-long",
     ));
-    let database = Arc::new(MemoryDatabaseAdapter::new());
+    let database = crate::plugins::test_helpers::create_test_database().await;
     let ctx = AuthContext::new(config, database.clone());
 
     let user = database
@@ -20,10 +22,11 @@ async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>,
         )
         .await
         .unwrap();
+    let wire_user = UserView::from(&user);
 
     let session = database
         .create_session(CreateSession {
-            user_id: user.id.clone(),
+            user_id: user.id().to_string(),
             expires_at: Utc::now() + Duration::hours(24),
             ip_address: Some("127.0.0.1".to_string()),
             user_agent: Some("test-agent".to_string()),
@@ -32,14 +35,15 @@ async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>,
         })
         .await
         .unwrap();
+    let wire_session = SessionView::from(&session);
 
-    (ctx, user, session)
+    (ctx, wire_user, wire_session)
 }
 
 async fn create_user_with_session(
-    ctx: &AuthContext<MemoryDatabaseAdapter>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     email: &str,
-) -> (User, Session) {
+) -> (UserView, SessionView) {
     let user = ctx
         .database
         .create_user(
@@ -49,11 +53,12 @@ async fn create_user_with_session(
         )
         .await
         .unwrap();
+    let wire_user = UserView::from(&user);
 
     let session = ctx
         .database
         .create_session(CreateSession {
-            user_id: user.id.clone(),
+            user_id: user.id().to_string(),
             expires_at: Utc::now() + Duration::hours(24),
             ip_address: None,
             user_agent: None,
@@ -62,8 +67,9 @@ async fn create_user_with_session(
         })
         .await
         .unwrap();
+    let wire_session = SessionView::from(&session);
 
-    (user, session)
+    (wire_user, wire_session)
 }
 
 fn create_auth_request(
@@ -93,7 +99,7 @@ fn json_body(response: &AuthResponse) -> serde_json::Value {
 
 async fn create_key_and_get_id(
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<MemoryDatabaseAdapter>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     token: &str,
     name: &str,
 ) -> String {
@@ -112,7 +118,7 @@ async fn create_key_and_get_id(
 /// Helper: create a key and return (id, raw_key)
 async fn create_key_and_get_raw(
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<MemoryDatabaseAdapter>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     token: &str,
     body: serde_json::Value,
 ) -> (String, String) {
@@ -136,6 +142,7 @@ async fn create_key_and_get_raw(
 // Existing tests (kept)
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_create_and_get_do_not_expose_hash() {
     let plugin = ApiKeyPlugin::builder().prefix("ba_".to_string()).build();
@@ -175,6 +182,7 @@ async fn test_create_and_get_do_not_expose_hash() {
     assert!(get_body.get("key_hash").is_none());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_create_rejects_invalid_expires_in() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -192,6 +200,7 @@ async fn test_create_rejects_invalid_expires_in() {
     assert!(response.is_err() || response.unwrap().status != 200);
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_get_update_delete_return_404_for_non_owner() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -232,6 +241,7 @@ async fn test_get_update_delete_return_404_for_non_owner() {
     assert_eq!(delete_err.status_code(), 404);
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_list_returns_only_user_keys() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -259,6 +269,7 @@ async fn test_list_returns_only_user_keys() {
     assert!(list[0].get("key_hash").is_none());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_owner_can_delete_key() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -283,6 +294,7 @@ async fn test_owner_can_delete_key() {
 // New tests: verify, rate-limit, remaining/refill, delete expired, config
 // -----------------------------------------------------------------------
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_verify_valid_key() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -310,6 +322,7 @@ async fn test_verify_valid_key() {
     assert!(body["key"].is_object());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_verify_invalid_key() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -329,6 +342,7 @@ async fn test_verify_invalid_key() {
     assert!(body["error"].is_object());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_verify_disabled_key() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -362,6 +376,7 @@ async fn test_verify_disabled_key() {
     assert_eq!(body["error"]["code"], "KEY_DISABLED");
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_verify_expired_key() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -400,6 +415,7 @@ async fn test_verify_expired_key() {
     assert!(deleted.is_none());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_verify_remaining_consumption() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -449,6 +465,7 @@ async fn test_verify_remaining_consumption() {
     assert_eq!(body3["error"]["code"], "USAGE_EXCEEDED");
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_verify_rate_limiting() {
     let plugin = ApiKeyPlugin::builder()
@@ -506,6 +523,7 @@ async fn test_verify_rate_limiting() {
     assert_eq!(b3["error"]["code"], "RATE_LIMITED");
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_delete_all_expired() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -560,6 +578,7 @@ async fn test_delete_all_expired() {
     assert_eq!(remaining_keys.len(), 1);
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_verify_permissions() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -605,6 +624,7 @@ async fn test_verify_permissions() {
     assert_eq!(json_body(&r2)["valid"], false);
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_config_validation_prefix_length() {
     let plugin = ApiKeyPlugin::builder()
@@ -636,6 +656,7 @@ async fn test_config_validation_prefix_length() {
     assert!(err2.to_string().contains("prefix length"));
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_config_require_name() {
     let plugin = ApiKeyPlugin::builder().require_name(true).build();
@@ -653,6 +674,7 @@ async fn test_config_require_name() {
     assert!(err.to_string().contains("name is required"));
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_config_metadata_disabled() {
     let plugin = ApiKeyPlugin::builder().build(); // enable_metadata defaults to false
@@ -669,6 +691,7 @@ async fn test_config_metadata_disabled() {
     assert!(err.to_string().contains("Metadata is disabled"));
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_config_metadata_enabled() {
     let plugin = ApiKeyPlugin::builder().enable_metadata(true).build();
@@ -687,6 +710,7 @@ async fn test_config_metadata_enabled() {
     assert_eq!(body["metadata"]["env"], "prod");
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_update_with_expires_in() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -709,6 +733,7 @@ async fn test_update_with_expires_in() {
     assert!(body["expiresAt"].is_string());
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_on_request_dispatches_verify() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -735,6 +760,7 @@ async fn test_on_request_dispatches_verify() {
     assert_eq!(body["valid"], true);
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_on_request_dispatches_delete_all_expired() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -753,6 +779,7 @@ async fn test_on_request_dispatches_delete_all_expired() {
     assert_eq!(body["deleted"], 0);
 }
 
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_refill_logic() {
     // Ensure refillInterval + refillAmount require each other
@@ -778,6 +805,7 @@ async fn test_refill_logic() {
 // =======================================================================
 
 // 1. Virtual session: before_request injects session without DB writes
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_virtual_session_creates_no_db_session() {
     let plugin = ApiKeyPlugin::builder()
@@ -842,6 +870,7 @@ async fn test_virtual_session_creates_no_db_session() {
 }
 
 // 2. Virtual session on /get-session: synthetic response
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_virtual_session_on_get_session() {
     let plugin = ApiKeyPlugin::builder()
@@ -888,6 +917,7 @@ async fn test_virtual_session_on_get_session() {
 }
 
 // 3. Rate limiting: create key with rateLimitMax=2, 3rd call fails
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_rate_limiting_third_call_fails() {
     let plugin = ApiKeyPlugin::builder()
@@ -946,6 +976,7 @@ async fn test_rate_limiting_third_call_fails() {
 }
 
 // 4. Remaining consumption: remaining=2, no refill, 3rd fails
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_remaining_consumption_no_refill() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -997,6 +1028,7 @@ async fn test_remaining_consumption_no_refill() {
 // 5. Refill logic: remaining=1, refillInterval=100ms, refillAmount=10,
 //    verify once -> remaining=0, wait 150ms, verify -> refill to 10 then
 //    decrement to 9.
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_refill_resets_remaining_after_interval() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -1049,6 +1081,7 @@ async fn test_refill_resets_remaining_after_interval() {
 
 // 6. Permissions: key with {"admin": ["read"]}, verify with
 //    {"admin": ["write"]} should fail
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_permissions_mismatch_fails() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -1097,6 +1130,7 @@ async fn test_permissions_mismatch_fails() {
 // 7. Concurrent rate limiting: send 5 sequential verify requests with
 //    rateLimitMax=2, only first 2 succeed (sequential proves logic is
 //    correct; true concurrency race conditions are documented above).
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_concurrent_rate_limiting() {
     let plugin = ApiKeyPlugin::builder()
@@ -1152,9 +1186,9 @@ async fn test_concurrent_rate_limiting() {
     assert_eq!(fail_count, 3, "3 out of 5 should be rate-limited");
 }
 
-// 8. Database compatibility: test delete_expired_api_keys on memory
-//    adapter (the SQL fix is in the SqlxAdapter; memory adapter tests
-//    prove the trait contract works).
+// 8. Database compatibility: test delete_expired_api_keys through the
+//    in-repo auth store implementation.
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_delete_expired_api_keys_memory_adapter() {
     let (ctx, _user, session) = create_test_context_with_user().await;
@@ -1199,6 +1233,7 @@ async fn test_delete_expired_api_keys_memory_adapter() {
 }
 
 // 9. Delete expired with auth: unauthenticated call should fail
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_delete_expired_without_auth_returns_error() {
     let plugin = ApiKeyPlugin::builder().build();
@@ -1220,6 +1255,7 @@ async fn test_delete_expired_without_auth_returns_error() {
 }
 
 // 10. before_request returns None when enableSessionForAPIKeys is false
+// Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]
 async fn test_before_request_disabled_returns_none() {
     let plugin = ApiKeyPlugin::builder().build(); // enable_session_for_api_keys defaults to false

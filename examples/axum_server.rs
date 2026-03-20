@@ -1,159 +1,230 @@
-use axum::{Json, Router, response::IntoResponse, routing::get};
-use better_auth::adapters::MemoryDatabaseAdapter;
-use better_auth::handlers::{AxumIntegration, CurrentSession, OptionalSession};
-use better_auth::plugins::{
-    AccountManagementPlugin, EmailPasswordPlugin, OrganizationPlugin, PasswordManagementPlugin,
-    SessionManagementPlugin,
-};
-use better_auth::{AuthBuilder, AuthConfig, AuthUser, BetterAuth};
+use axum::extract::{FromRef, State};
+use axum::{Json as AxumJson, Router, response::IntoResponse, routing::get};
+use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
+use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
+use better_auth::prelude::AuthUser;
+use better_auth::seaorm::sea_orm;
+use better_auth::seaorm::sea_orm::entity::prelude::*;
+use better_auth::seaorm::sea_orm::{ConnectionTrait, Schema};
+use better_auth::seaorm::{AuthEntity, Database, DatabaseConnection, SeaOrmStore};
+use better_auth::{AuthConfig, AuthSchema, BetterAuth};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 
+mod user {
+    use super::*;
+
+    #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, AuthEntity)]
+    #[auth(role = "user")]
+    #[sea_orm(table_name = "users")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub name: Option<String>,
+        pub email: Option<String>,
+        pub email_verified: bool,
+        pub image: Option<String>,
+        pub username: Option<String>,
+        pub display_username: Option<String>,
+        pub two_factor_enabled: bool,
+        pub role: Option<String>,
+        pub banned: bool,
+        pub ban_reason: Option<String>,
+        pub ban_expires: Option<DateTimeUtc>,
+        pub metadata: Json,
+        pub created_at: DateTimeUtc,
+        pub updated_at: DateTimeUtc,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+mod session {
+    use super::*;
+
+    #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, AuthEntity)]
+    #[auth(role = "session")]
+    #[sea_orm(table_name = "sessions")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub expires_at: DateTimeUtc,
+        pub token: String,
+        pub created_at: DateTimeUtc,
+        pub updated_at: DateTimeUtc,
+        pub ip_address: Option<String>,
+        pub user_agent: Option<String>,
+        pub user_id: String,
+        pub impersonated_by: Option<String>,
+        pub active_organization_id: Option<String>,
+        pub active: bool,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+mod account {
+    use super::*;
+
+    #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, AuthEntity)]
+    #[auth(role = "account")]
+    #[sea_orm(table_name = "accounts")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub account_id: String,
+        pub provider_id: String,
+        pub user_id: String,
+        pub access_token: Option<String>,
+        pub refresh_token: Option<String>,
+        pub id_token: Option<String>,
+        pub access_token_expires_at: Option<DateTimeUtc>,
+        pub refresh_token_expires_at: Option<DateTimeUtc>,
+        pub scope: Option<String>,
+        pub password: Option<String>,
+        pub created_at: DateTimeUtc,
+        pub updated_at: DateTimeUtc,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+mod verification {
+    use super::*;
+
+    #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, AuthEntity)]
+    #[auth(role = "verification")]
+    #[sea_orm(table_name = "verifications")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub identifier: String,
+        pub value: String,
+        pub expires_at: DateTimeUtc,
+        pub created_at: DateTimeUtc,
+        pub updated_at: DateTimeUtc,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+pub struct AppAuthSchema;
+
+impl AuthSchema for AppAuthSchema {
+    type User = crate::user::Model;
+    type Session = crate::session::Model;
+    type Account = crate::account::Model;
+    type Verification = crate::verification::Model;
+}
+
+#[derive(Clone)]
+struct AppState {
+    auth: Arc<BetterAuth<AppAuthSchema>>,
+    db: DatabaseConnection,
+    app_name: &'static str,
+}
+
+impl FromRef<AppState> for Arc<BetterAuth<AppAuthSchema>> {
+    fn from_ref(state: &AppState) -> Self {
+        state.auth.clone()
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing for better logging
     tracing_subscriber::fmt::init();
 
-    println!("🚀 Starting Better Auth Axum Server");
-
-    // Create configuration
     let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
         .base_url("http://localhost:8080")
-        .password_min_length(6);
+        .password_min_length(8);
 
-    println!("📋 Configuration created");
+    let database_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "sqlite://better-auth-axum.db?mode=rwc".to_string());
+    let database = Database::connect(&database_url).await?;
+    run_app_migrations(&database).await?;
+    let store = SeaOrmStore::<AppAuthSchema>::new(config.clone(), database.clone());
 
-    // Create database adapter (use in-memory for this example)
-    let database = MemoryDatabaseAdapter::new();
-
-    // Build the authentication system
     let auth = Arc::new(
-        AuthBuilder::new(config)
-            .database(database)
+        BetterAuth::<AppAuthSchema>::new(config)
+            .store(store)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
-            .plugin(PasswordManagementPlugin::new())
-            .plugin(AccountManagementPlugin::new())
-            .plugin(OrganizationPlugin::new())
             .build()
             .await?,
     );
 
-    println!("🔐 BetterAuth instance created");
-    println!("📝 Registered plugins: {:?}", auth.plugin_names());
+    let state = AppState {
+        auth: auth.clone(),
+        db: database,
+        app_name: "axum-example",
+    };
 
-    // Create the main application router
-    let app = create_app_router(auth).await;
+    let app = Router::new()
+        .route("/api/profile", get(get_user_profile))
+        .route("/api/public", get(public_route))
+        .nest("/auth", auth.axum_router_with_state::<AppState>())
+        .layer(CorsLayer::permissive())
+        .with_state(state);
 
-    println!("🌐 Starting server on http://localhost:8080");
-    println!("📖 Available endpoints:");
-    println!("   Authentication:");
-    println!("     POST /auth/sign-up/email       - Sign up with email/password");
-    println!("     POST /auth/sign-in/email       - Sign in with email/password");
-    println!("     POST /auth/sign-in/username     - Sign in with username/password");
-    println!("   Session Management:");
-    println!("     GET  /auth/get-session          - Get current session info");
-    println!("     POST /auth/sign-out             - Sign out current session");
-    println!("     GET  /auth/list-sessions        - List all user sessions");
-    println!("     POST /auth/revoke-session       - Revoke specific session");
-    println!("     POST /auth/revoke-sessions      - Revoke all user sessions");
-    println!("     POST /auth/revoke-other-sessions - Revoke all except current");
-    println!("   Password Management:");
-    println!("     POST /auth/forget-password      - Request password reset");
-    println!("     POST /auth/reset-password       - Reset password with token");
-    println!("     GET  /auth/reset-password/{{token}} - Validate reset token");
-    println!("     POST /auth/change-password      - Change password (auth)");
-    println!("     POST /auth/set-password         - Set password for OAuth users (auth)");
-    println!("   Email Verification:");
-    println!("     POST /auth/send-verification-email - Send verification email (auth)");
-    println!("     GET  /auth/verify-email         - Verify email with token");
-    println!("   User Management:");
-    println!("     POST /auth/update-user          - Update user profile (auth)");
-    println!("     POST /auth/delete-user          - Delete user account (auth)");
-    println!("     POST /auth/change-email         - Change email address (auth)");
-    println!("     GET  /auth/delete-user/callback - Confirm deletion via token");
-    println!("   Account Management:");
-    println!("     GET  /auth/list-accounts        - List linked accounts (auth)");
-    println!("     POST /auth/unlink-account       - Unlink an account (auth)");
-    println!("   Organization:");
-    println!("     POST /auth/organization/create           - Create organization (auth)");
-    println!("     POST /auth/organization/update           - Update organization (auth)");
-    println!("     POST /auth/organization/delete           - Delete organization (auth)");
-    println!("     GET  /auth/organization/list             - List organizations (auth)");
-    println!("     GET  /auth/organization/get-full-organization - Get full org (auth)");
-    println!("     POST /auth/organization/set-active       - Set active org (auth)");
-    println!("     POST /auth/organization/leave            - Leave organization (auth)");
-    println!("     POST /auth/organization/check-slug       - Check slug availability (auth)");
-    println!("   Organization Members:");
-    println!("     GET  /auth/organization/get-active-member  - Get active member (auth)");
-    println!("     GET  /auth/organization/list-members       - List members (auth)");
-    println!("     POST /auth/organization/remove-member      - Remove member (auth)");
-    println!("     POST /auth/organization/update-member-role - Update role (auth)");
-    println!("   Organization Invitations:");
-    println!("     POST /auth/organization/invite-member      - Invite member (auth)");
-    println!("     GET  /auth/organization/get-invitation     - Get invitation (auth)");
-    println!("     GET  /auth/organization/list-invitations   - List invitations (auth)");
-    println!("     POST /auth/organization/accept-invitation  - Accept invitation (auth)");
-    println!("     POST /auth/organization/reject-invitation  - Reject invitation (auth)");
-    println!("     POST /auth/organization/cancel-invitation  - Cancel invitation (auth)");
-    println!("     POST /auth/organization/has-permission     - Check permission (auth)");
-    println!("   Other:");
-    println!("     GET  /auth/ok                   - Health check");
-    println!("     GET  /api/profile               - Protected API route");
-    println!("     GET  /api/public                - Public API route");
-
-    // Start the server
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
     axum::serve(listener, app).await?;
-
     Ok(())
 }
 
-async fn create_app_router(auth: Arc<BetterAuth<MemoryDatabaseAdapter>>) -> Router {
-    let auth_router = auth.clone().axum_router();
-
-    Router::new()
-        .route("/api/profile", get(get_user_profile))
-        .route("/api/protected", get(protected_route))
-        .route("/api/public", get(public_route))
-        .nest("/auth", auth_router)
-        .layer(CorsLayer::permissive())
-        .with_state(auth)
+async fn run_app_migrations(database: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
+    let schema = Schema::new(database.get_database_backend());
+    for statement in [
+        schema
+            .create_table_from_entity(user::Entity)
+            .if_not_exists()
+            .to_owned(),
+        schema
+            .create_table_from_entity(session::Entity)
+            .if_not_exists()
+            .to_owned(),
+        schema
+            .create_table_from_entity(account::Entity)
+            .if_not_exists()
+            .to_owned(),
+        schema
+            .create_table_from_entity(verification::Entity)
+            .if_not_exists()
+            .to_owned(),
+    ] {
+        let _ = database.execute(&statement).await?;
+    }
+    Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Protected route — uses CurrentSession extractor (returns 401 automatically)
-// ---------------------------------------------------------------------------
-async fn get_user_profile(session: CurrentSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
-    Json(serde_json::json!({
+async fn get_user_profile(session: CurrentSession<AppAuthSchema>) -> impl IntoResponse {
+    AxumJson(serde_json::json!({
         "id": session.user.id(),
         "email": session.user.email(),
         "name": session.user.name(),
-        "created_at": session.user.created_at().to_rfc3339(),
     }))
 }
 
-async fn protected_route(session: CurrentSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
-    Json(serde_json::json!({
-        "message": "This is a protected route",
-        "user_id": session.user.id(),
-    }))
-}
-
-// ---------------------------------------------------------------------------
-// Public route — uses OptionalSession to optionally show user info
-// ---------------------------------------------------------------------------
-async fn public_route(session: OptionalSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
-    let user_info = session.0.map(|s| {
-        serde_json::json!({
-            "id": s.user.id(),
-            "email": s.user.email(),
-        })
-    });
-
-    Json(serde_json::json!({
-        "message": "This is a public route",
-        "user": user_info,
+async fn public_route(
+    session: OptionalSession<AppAuthSchema>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let database_backend = format!("{:?}", state.db.get_database_backend());
+    AxumJson(serde_json::json!({
+        "app": state.app_name,
+        "authenticated": session.0.is_some(),
+        "databaseBackend": database_backend,
     }))
 }

@@ -44,11 +44,10 @@ For interactive API documentation with request/response schemas, see the [OpenAP
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/forget-password` | No | Request password reset email |
+| POST | `/request-password-reset` | No | Request password reset email |
 | POST | `/reset-password` | No | Reset password with token |
 | GET | `/reset-password/{token}` | No | Validate a reset token |
 | POST | `/change-password` | Yes | Change password (requires current) |
-| POST | `/set-password` | Yes | Set password for OAuth-only users |
 
 ## Email Verification (EmailVerificationPlugin)
 
@@ -159,6 +158,6 @@ For interactive API documentation with request/response schemas, see the [OpenAP
 Authenticated endpoints require a session token sent as:
 
 - **Bearer token**: `Authorization: Bearer session_abc123...`
-- **Cookie**: `Cookie: better-auth.session-token=session_abc123...`
+- **Cookie**: `Cookie: better-auth.session_token=session_abc123...`
 
 **Admin** endpoints additionally require the user to have the admin role (configurable, default: `"admin"`).

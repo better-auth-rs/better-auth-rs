@@ -7,11 +7,13 @@ The `AdminPlugin` provides administrative endpoints for user management. All end
 
 ## Setup
 
+These examples assume you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
 use better_auth::plugins::AdminPlugin;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(AdminPlugin::new())
     .build()
     .await?;
@@ -22,8 +24,8 @@ let auth = BetterAuth::new(config)
 ```rust
 use better_auth::plugins::admin::AdminConfig;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(
         AdminPlugin::new()
             .admin_role("admin")
@@ -57,6 +59,8 @@ The Admin plugin exposes 13 endpoints. All require admin role authentication. Fo
 | `/admin/set-role` | POST | Set a user's role |
 | `/admin/set-user-password` | POST | Reset a user's password |
 | `/admin/remove-user` | POST | Permanently delete a user |
+
+`/admin/create-user` creates a credential account only when a non-empty password is provided. Omitting the password creates a passwordless user, matching the upstream TypeScript behavior.
 
 ### Ban Management
 

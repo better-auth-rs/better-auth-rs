@@ -1,94 +1,184 @@
 ---
-title: Database Hooks
-description: Intercept database operations with lifecycle hooks.
+title: SeaORM Hooks
+description: Intercept SeaORM-backed auth operations with lifecycle hooks.
 ---
 
-Database hooks let you run custom logic before and after user and session operations. Use them for logging, validation, side effects, or rejecting operations.
+SeaORM hooks let you run custom logic before and after auth writes. Use them for validation, auditing, provisioning, or rejecting operations while keeping the public auth runtime separate from your persistence integration.
 
 ## Setup
 
+These examples assume you've already defined `AppAuthSchema` and a `database: DatabaseConnection`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
-use better_auth::hooks::DatabaseHooks;
+use std::sync::Arc;
 use async_trait::async_trait;
+use better_auth::AuthSchema;
+use better_auth::seaorm::{HookControl, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore};
 
 struct AuditHook;
 
 #[async_trait]
-impl DatabaseHooks for AuditHook {
+impl SeaOrmHooks<AppAuthSchema> for AuditHook {
     async fn after_create_user(
-        &self, user: &better_auth::types::User
-    ) -> better_auth::error::AuthResult<()> {
-        println!("User created: {}", user.email.as_deref().unwrap_or(""));
+        &self,
+        user: &<AppAuthSchema as AuthSchema>::User,
+        _ctx: &SeaOrmHookContext<'_>,
+    ) -> better_auth::AuthResult<()> {
+        println!("User created: {:?}", user.email());
         Ok(())
     }
 }
 
-let auth = BetterAuth::new(config)
-    .database(database)
-    .hook(AuditHook)
+let store = SeaOrmStore::<AppAuthSchema>::new(config.clone(), database)
+    .hook(AuditHook);
+
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .build()
     .await?;
 ```
 
-## The DatabaseHooks Trait
+## The `SeaOrmHooks` Trait
 
 All methods have default no-op implementations. Override only what you need.
 
 ```rust
 #[async_trait]
-pub trait DatabaseHooks: Send + Sync {
-    // User hooks
-    async fn before_create_user(&self, user: &mut CreateUser) -> AuthResult<()>;
-    async fn after_create_user(&self, user: &User) -> AuthResult<()>;
-    async fn before_update_user(&self, id: &str, update: &mut UpdateUser) -> AuthResult<()>;
-    async fn after_update_user(&self, user: &User) -> AuthResult<()>;
-    async fn before_delete_user(&self, id: &str) -> AuthResult<()>;
-    async fn after_delete_user(&self, id: &str) -> AuthResult<()>;
+pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
+    async fn before_create_user(
+        &self,
+        user: &mut CreateUser,
+        ctx: &SeaOrmHookContext<'_>,
+    ) -> AuthResult<HookControl>;
 
-    // Session hooks
-    async fn before_create_session(&self, session: &mut CreateSession) -> AuthResult<()>;
-    async fn after_create_session(&self, session: &Session) -> AuthResult<()>;
-    async fn before_delete_session(&self, token: &str) -> AuthResult<()>;
-    async fn after_delete_session(&self, token: &str) -> AuthResult<()>;
+    async fn after_create_user(
+        &self,
+        user: &S::User,
+        ctx: &SeaOrmHookContext<'_>,
+    ) -> AuthResult<()>;
+
+    async fn before_update_user(
+        &self,
+        id: &str,
+        update: &mut UpdateUser,
+        ctx: &SeaOrmHookContext<'_>,
+    ) -> AuthResult<HookControl>;
+
+    async fn after_update_user(
+        &self,
+        user: &S::User,
+        ctx: &SeaOrmHookContext<'_>,
+    ) -> AuthResult<()>;
+
+    async fn before_delete_user(
+        &self,
+        user: &S::User,
+        ctx: &SeaOrmHookContext<'_>,
+    ) -> AuthResult<HookControl>;
+
+    async fn after_delete_user(
+        &self,
+        user: &S::User,
+        ctx: &SeaOrmHookContext<'_>,
+    ) -> AuthResult<()>;
+
+    async fn before_create_session(
+        &self,
+        session: &mut CreateSession,
+        ctx: &SeaOrmHookContext<'_>,
+    ) -> AuthResult<HookControl>;
+
+    async fn after_create_session(
+        &self,
+        session: &S::Session,
+        ctx: &SeaOrmHookContext<'_>,
+    ) -> AuthResult<()>;
 }
 ```
 
 ## Rejecting Operations
 
-Return `Err` from a `before_*` hook to abort the operation:
+Return `HookControl::Cancel` or an error from a `before_*` hook to abort the operation:
 
 ```rust
 #[async_trait]
-impl DatabaseHooks for BlockDisposableEmails {
+impl SeaOrmHooks<AppAuthSchema> for BlockDisposableEmails {
     async fn before_create_user(
-        &self, user: &mut CreateUser
-    ) -> AuthResult<()> {
+        &self,
+        user: &mut CreateUser,
+        _ctx: &SeaOrmHookContext<'_>,
+    ) -> AuthResult<HookControl> {
         if let Some(email) = &user.email {
             if email.ends_with("@disposable.com") {
-                return Err(AuthError::forbidden("Disposable emails not allowed"));
+                return Ok(HookControl::Cancel);
             }
         }
-        Ok(())
+        Ok(HookControl::Continue)
     }
 }
 ```
 
 ## Modifying Data
 
-`before_*` hooks receive mutable references, so you can modify the data before it's persisted:
+`before_*` hooks receive mutable references, so you can normalize or enrich values before they are persisted:
 
 ```rust
 #[async_trait]
-impl DatabaseHooks for NormalizeEmail {
+impl SeaOrmHooks<AppAuthSchema> for NormalizeEmail {
     async fn before_create_user(
-        &self, user: &mut CreateUser
-    ) -> AuthResult<()> {
+        &self,
+        user: &mut CreateUser,
+        _ctx: &SeaOrmHookContext<'_>,
+    ) -> AuthResult<HookControl> {
         if let Some(email) = &mut user.email {
             *email = email.to_lowercase();
         }
+        Ok(HookControl::Continue)
+    }
+}
+```
+
+## Provisioning After Signup
+
+For app-specific side effects such as creating a workspace or seeding related records, prefer `after_create_user`:
+
+```rust
+use async_trait::async_trait;
+use better_auth::AuthSchema;
+use better_auth::seaorm::sea_orm::{ConnectionTrait, Statement};
+use better_auth::seaorm::{DatabaseConnection, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore};
+
+#[derive(Clone)]
+struct ProvisionWorkspaceHook {
+    db: DatabaseConnection,
+}
+
+#[async_trait]
+impl SeaOrmHooks<AppAuthSchema> for ProvisionWorkspaceHook {
+    async fn after_create_user(
+        &self,
+        user: &<AppAuthSchema as AuthSchema>::User,
+        _ctx: &SeaOrmHookContext<'_>,
+    ) -> better_auth::AuthResult<()> {
+        let sql = Statement::from_string(
+            self.db.get_database_backend(),
+            format!(
+                "insert into app_workspaces (user_id, name) values ('{}', 'Default Workspace')",
+                user.id()
+            ),
+        );
+        let _ = self.db.execute(sql).await?;
         Ok(())
     }
 }
+
+let store = SeaOrmStore::<AppAuthSchema>::new(config.clone(), database.clone())
+    .hook(ProvisionWorkspaceHook { db: database });
+
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
+    .build()
+    .await?;
 ```
 
 ## Multiple Hooks
@@ -96,13 +186,15 @@ impl DatabaseHooks for NormalizeEmail {
 Multiple hooks can be registered. They execute in registration order:
 
 ```rust
-let auth = BetterAuth::new(config)
-    .database(database)
+let store = SeaOrmStore::<AppAuthSchema>::new(config.clone(), database)
     .hook(AuditHook)
     .hook(NormalizeEmail)
-    .hook(BlockDisposableEmails)
+    .hook(BlockDisposableEmails);
+
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .build()
     .await?;
 ```
 
-If any `before_*` hook returns an error, subsequent hooks and the operation itself are skipped.
+If any `before_*` hook returns `HookControl::Cancel` or an error, subsequent hooks and the write itself are skipped.

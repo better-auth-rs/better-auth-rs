@@ -3,74 +3,79 @@
 //! Core abstractions for the Better Auth authentication framework.
 //! Contains traits, types, configuration, and error handling.
 
-pub mod adapters;
+#![cfg_attr(
+    test,
+    allow(
+        unused_results,
+        unreachable_pub,
+        reason = "test code intentionally discards setup return values and exposes helpers broadly"
+    )
+)]
+
+extern crate self as better_auth;
+
 pub mod config;
 pub mod email;
 pub mod entity;
 pub mod error;
-pub mod extractors;
 pub mod hooks;
 pub mod middleware;
 pub mod openapi;
 pub mod plugin;
+pub mod schema;
 pub mod session;
+pub mod store;
+#[cfg(test)]
+pub(crate) mod test_store;
 pub mod types;
-pub mod types_impls;
-pub mod types_org;
+mod types_org;
+mod types_plugin;
 pub mod utils;
-
-// Re-export derive macros when the `derive` feature is enabled
-#[cfg(feature = "derive")]
-pub use better_auth_derive::*;
+pub mod wire;
 
 // Re-export commonly used items
-pub use adapters::{
-    AccountOps, ApiKeyOps, CacheAdapter, DatabaseAdapter, InvitationOps, MemberOps, MemoryAccount,
-    MemoryApiKey, MemoryCacheAdapter, MemoryDatabaseAdapter, MemoryInvitation, MemoryMember,
-    MemoryOrganization, MemoryPasskey, MemorySession, MemoryTwoFactor, MemoryUser,
-    MemoryVerification, OrganizationOps, PasskeyOps, SessionOps, TwoFactorOps, UserOps,
-    VerificationOps,
-};
-#[cfg(feature = "sqlx-postgres")]
-pub use adapters::{SqlxAdapter, SqlxEntity};
+pub use better_auth_macros::{AuthSchema, PluginConfig};
 pub use config::{
     AccountConfig, AccountLinkingConfig, AdvancedConfig, AdvancedDatabaseConfig, Argon2Config,
     AuthConfig, CookieAttributes, CookieCacheConfig, CookieCacheStrategy, CookieOverride,
-    CrossSubDomainConfig, IpAddressConfig, JwtConfig, PasswordConfig, SameSite, SessionConfig,
-    core_paths, extract_origin,
+    CrossSubDomainConfig, IpAddressConfig, JwtConfig, OAuthStateStrategy, PasswordConfig, SameSite,
+    SessionConfig, core_paths, extract_origin,
 };
 pub use email::{ConsoleEmailProvider, EmailProvider};
 pub use entity::{
-    AuthAccount, AuthAccountMeta, AuthApiKey, AuthApiKeyMeta, AuthInvitation, AuthInvitationMeta,
-    AuthMember, AuthMemberMeta, AuthOrganization, AuthOrganizationMeta, AuthPasskey,
-    AuthPasskeyMeta, AuthSession, AuthSessionMeta, AuthTwoFactor, AuthTwoFactorMeta, AuthUser,
-    AuthUserMeta, AuthVerification, AuthVerificationMeta, MemberUserView, PASSWORD_HASH_KEY,
+    AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,
+    AuthSession, AuthTwoFactor, AuthUser, AuthVerification, MemberUserView,
 };
 pub use error::{
     AuthError, AuthResult, DatabaseError, validate_request_body, validation_error_response,
 };
-#[cfg(feature = "axum")]
-pub use extractors::{
-    AdminRole, AdminSession, AuthRequestExt, AxumAuthResponse, CurrentSession, OptionalSession,
-    Pending2faToken, ValidatedJson,
-};
-pub use hooks::{DatabaseHooks, HookedDatabaseAdapter};
+pub use hooks::{RequestHookContext, with_request_hook_context, with_request_hook_context_value};
 pub use middleware::{
     BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig, CsrfMiddleware,
     EndpointRateLimit, Middleware, RateLimitConfig, RateLimitMiddleware,
 };
 pub use openapi::{OpenApiBuilder, OpenApiInfo, OpenApiOperation, OpenApiResponse, OpenApiSpec};
-#[cfg(feature = "axum")]
-pub use plugin::AxumPlugin;
-pub use plugin::{AuthContext, AuthPlugin, AuthRoute, AuthState, BeforeRequestAction};
+pub use plugin::{AuthContext, AuthInitContext, AuthPlugin, AuthRoute, BeforeRequestAction};
+pub use schema::AuthSchema;
 pub use session::SessionManager;
+pub use store::{AuthStore, AuthTransaction, CacheAdapter, MemoryCacheAdapter, transaction};
 pub use types::{
-    Account, ApiKey, AuthRequest, AuthResponse, CodeMessageResponse, CreateAccount, CreateApiKey,
+    ApiKey, AuthRequest, AuthResponse, CodeMessageResponse, CreateAccount, CreateApiKey,
     CreateInvitation, CreateMember, CreateOrganization, CreatePasskey, CreateSession,
-    CreateTwoFactor, CreateUser, CreateVerification, ErrorMessageResponse, HealthCheckResponse,
-    HttpMethod, Invitation, InvitationStatus, ListUsersParams, OkResponse, Passkey,
-    RateLimitErrorResponse, Session, StatusMessageResponse, StatusResponse, SuccessMessageResponse,
-    SuccessResponse, TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdatePasskey,
-    UpdateUser, UpdateUserRequest, UpdateUserResponse, User, ValidationErrorResponse, Verification,
+    CreateTwoFactor, CreateUser, CreateVerification, ErrorCodeMessageResponse,
+    ErrorMessageResponse, Headers, HealthCheckResponse, HttpMethod, Invitation, InvitationStatus,
+    ListUsersParams, Member, OkResponse, Organization, Passkey, RateLimitErrorResponse,
+    RequestMeta, StatusMessageResponse, StatusResponse, SuccessMessageResponse, SuccessResponse,
+    TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdatePasskey, UpdateUser,
+    UpdateUserRequest, UpdateUserResponse, ValidationErrorResponse,
 };
 pub use utils::password::{PasswordHasher, hash_password, verify_password};
+#[doc(hidden)]
+pub use uuid;
+pub use wire::{
+    AccountView, ApiKeyView, InvitationView, OrganizationView, PasskeyView, SessionView, UserView,
+    VerificationView,
+};
+
+#[doc(hidden)]
+pub use crate as __private_core;

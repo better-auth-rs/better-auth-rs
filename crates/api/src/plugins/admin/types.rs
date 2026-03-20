@@ -18,8 +18,7 @@ pub(crate) struct SetRoleRequest {
 pub(crate) struct CreateUserRequest {
     #[validate(email(message = "Invalid email address"))]
     pub email: String,
-    #[validate(length(min = 1, message = "Password is required"))]
-    pub password: String,
+    pub password: Option<String>,
     #[validate(length(min = 1, message = "Name is required"))]
     pub name: String,
     pub role: Option<String>,

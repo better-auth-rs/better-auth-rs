@@ -7,11 +7,13 @@ The `OrganizationPlugin` provides multi-tenancy support with organizations, memb
 
 ## Setup
 
+These examples assume you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
 use better_auth::plugins::OrganizationPlugin;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(OrganizationPlugin::new())
     .build()
     .await?;
@@ -22,8 +24,8 @@ let auth = BetterAuth::new(config)
 ```rust
 use better_auth::plugins::organization::OrganizationConfig;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(
         OrganizationPlugin::new()
             .allow_user_to_create_organization(true)
@@ -77,8 +79,8 @@ let config = OrganizationConfig {
     ..Default::default()
 };
 
-let auth = BetterAuth::new(auth_config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(auth_config)
+    .store(store)
     .plugin(OrganizationPlugin::with_config(config))
     .build()
     .await?;

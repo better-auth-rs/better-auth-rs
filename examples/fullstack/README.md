@@ -43,8 +43,9 @@ cd backend
 cargo run
 ```
 
-The Axum server starts on **http://localhost:3001**. It uses an in-memory
-database so no external database is needed.
+The Axum server starts on **http://localhost:3001**. It uses a local SQLite
+database file (`better-auth-fullstack.db`) by default, so no external database
+server is needed.
 
 ### 2. Start the frontend
 
@@ -73,6 +74,7 @@ The backend configuration is in `backend/src/main.rs`. Key settings:
 |---------|---------|-------------|
 | `base_url` | `http://localhost:3001` | Backend URL |
 | `password_min_length` | `8` | Minimum password length |
+| `trusted_origins` | `http://localhost:3000` | Frontend origin allowed by CSRF/origin checks |
 | Auth route prefix | `/api/auth` | Matches better-auth's default `basePath` |
 
 ### Frontend

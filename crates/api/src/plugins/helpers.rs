@@ -2,8 +2,7 @@
 //!
 //! Extracted to avoid duplicating common patterns across plugins (DRY).
 
-use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::entity::AuthApiKey;
+use better_auth_core::entity::{AuthAccount, AuthApiKey, AuthUser};
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 
 /// Convert an `expiresIn` value (milliseconds from now) into an RFC 3339
@@ -29,20 +28,51 @@ pub fn expires_in_to_at(expires_in_ms: Option<i64>) -> AuthResult<Option<String>
 /// Returns `AuthError::not_found` if the key does not exist or belongs to
 /// another user.  This pattern was duplicated in `handle_get`, `handle_update`,
 /// and `handle_delete`.
-pub async fn get_owned_api_key<DB: DatabaseAdapter>(
-    ctx: &AuthContext<DB>,
+pub async fn get_owned_api_key(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     key_id: &str,
-    user_id: &str,
-) -> AuthResult<DB::ApiKey> {
+    user_id: impl AsRef<str>,
+) -> AuthResult<better_auth_core::ApiKey> {
     let api_key = ctx
         .database
         .get_api_key_by_id(key_id)
         .await?
         .ok_or_else(|| AuthError::not_found("API key not found"))?;
 
-    if api_key.user_id() != user_id {
+    if api_key.user_id().as_ref() != user_id.as_ref() {
         return Err(AuthError::not_found("API key not found"));
     }
 
     Ok(api_key)
+}
+
+/// Fetch the user's credential account, if present.
+pub async fn get_credential_account<S: better_auth_core::AuthSchema>(
+    ctx: &AuthContext<S>,
+    user_id: impl AsRef<str>,
+) -> AuthResult<Option<S::Account>> {
+    Ok(ctx
+        .database
+        .get_user_accounts(user_id.as_ref())
+        .await?
+        .into_iter()
+        .find(|account| account.provider_id() == "credential"))
+}
+
+/// Resolve the user's stored password hash from the credential account.
+pub async fn get_credential_password_hash(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    user: &impl AuthUser,
+) -> AuthResult<Option<String>> {
+    Ok(get_credential_account(ctx, user.id())
+        .await?
+        .and_then(|account| account.password().map(str::to_string)))
+}
+
+/// Whether the user currently has a password set.
+pub async fn user_has_password(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    user: &impl AuthUser,
+) -> AuthResult<bool> {
+    Ok(get_credential_password_hash(ctx, user).await?.is_some())
 }

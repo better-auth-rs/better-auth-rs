@@ -1,13 +1,17 @@
 use axum::{Json, Router, response::IntoResponse, routing::get};
-use better_auth::adapters::MemoryDatabaseAdapter;
-use better_auth::handlers::axum::{AxumIntegration, CurrentSession, OptionalSession};
+use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
+use better_auth::middleware::CsrfConfig;
 use better_auth::plugins::{EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin};
-use better_auth::{AuthBuilder, AuthConfig, CsrfConfig};
+use better_auth::prelude::AuthUser;
+use better_auth::{AuthConfig, BetterAuth};
+use better_auth::seaorm::{Database, SeaOrmStore};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use axum::http::HeaderName;
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
+
+mod auth_schema;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -36,12 +40,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .base_url(&backend_url)
         .password_min_length(8);
 
-    let database = MemoryDatabaseAdapter::new();
+    let database_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "sqlite://better-auth-fullstack.db?mode=rwc".to_string());
+    let database = Database::connect(&database_url).await?;
+    auth_schema::run_app_migrations(&database).await?;
+    let store = SeaOrmStore::<auth_schema::AppAuthSchema>::new(config.clone(), database.clone());
 
     let auth = Arc::new(
-        AuthBuilder::new(config)
+        BetterAuth::<auth_schema::AppAuthSchema>::new(config)
             .csrf(CsrfConfig::new().enabled(true))
-            .database(database)
+            .store(store)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
             .plugin(PasswordManagementPlugin::new())
@@ -106,23 +114,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Protected route - requires a valid session
-async fn get_me(session: CurrentSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
+async fn get_me(session: CurrentSession<auth_schema::AppAuthSchema>) -> impl IntoResponse {
     Json(serde_json::json!({
         "user": {
-            "id": session.user.id,
-            "email": session.user.email,
-            "name": session.user.name,
-            "createdAt": session.user.created_at.to_rfc3339(),
+            "id": session.user.id(),
+            "email": session.user.email(),
+            "name": session.user.name(),
+            "createdAt": session.user.created_at().to_rfc3339(),
         }
     }))
 }
 
 /// Public route - optionally shows user info
-async fn public_route(session: OptionalSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
+async fn public_route(session: OptionalSession<auth_schema::AppAuthSchema>) -> impl IntoResponse {
     let user_info = session.0.map(|s| {
         serde_json::json!({
-            "id": s.user.id,
-            "email": s.user.email,
+            "id": s.user.id(),
+            "email": s.user.email(),
         })
     });
 

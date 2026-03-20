@@ -1350,7 +1350,7 @@
         }
       }
     },
-    "/forget-password": {
+    "/request-password-reset": {
       "post": {
         "tags": [
           "Default"
@@ -4579,7 +4579,7 @@
                   },
                   "password": {
                     "type": "string",
-                    "description": "The password of the user"
+                    "description": "The password of the user. If not provided, the user will be created without a credential account."
                   },
                   "rememberMe": {
                     "type": "string",
@@ -7342,7 +7342,7 @@
                   },
                   "password": {
                     "type": "string",
-                    "description": "The password of the user"
+                    "description": "The password of the user. If not provided, the user will be created without a credential account."
                   },
                   "name": {
                     "type": "string",
@@ -7357,7 +7357,6 @@
                 },
                 "required": [
                   "email",
-                  "password",
                   "name"
                 ]
               }

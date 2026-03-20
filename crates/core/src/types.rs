@@ -1,167 +1,20 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
+use std::ops::Index;
 use validator::Validate;
+
+use crate::utils::email::normalize_user_email;
 
 // Re-export organization types
 pub use super::types_org::{
-    CreateInvitation, CreateMember, CreateOrganization, FullOrganization, Invitation,
-    InvitationStatus, Member, MemberUser, MemberWithUser, Organization, UpdateOrganization,
+    CreateInvitation, CreateMember, CreateOrganization, Invitation, InvitationStatus, Member,
+    Organization, UpdateOrganization,
 };
-
-/// Core user type - matches OpenAPI schema
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct User {
-    pub id: String,
-    pub name: Option<String>,
-    pub email: Option<String>,
-    #[serde(rename = "emailVerified")]
-    pub email_verified: bool,
-    pub image: Option<String>,
-    #[serde(rename = "createdAt")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: DateTime<Utc>,
-    pub username: Option<String>,
-    #[serde(rename = "displayUsername")]
-    pub display_username: Option<String>,
-    #[serde(rename = "twoFactorEnabled")]
-    pub two_factor_enabled: bool,
-    pub role: Option<String>,
-    pub banned: bool,
-    #[serde(rename = "banReason")]
-    pub ban_reason: Option<String>,
-    #[serde(rename = "banExpires")]
-    pub ban_expires: Option<DateTime<Utc>>,
-    // Keep metadata for internal use but don't serialize
-    #[serde(skip)]
-    pub metadata: serde_json::Value,
-}
-
-/// Session information - matches OpenAPI schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Session {
-    pub id: String,
-    #[serde(rename = "expiresAt")]
-    pub expires_at: DateTime<Utc>,
-    pub token: String,
-    #[serde(rename = "createdAt")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: DateTime<Utc>,
-    #[serde(rename = "ipAddress")]
-    pub ip_address: Option<String>,
-    #[serde(rename = "userAgent")]
-    pub user_agent: Option<String>,
-    #[serde(rename = "userId")]
-    pub user_id: String,
-    #[serde(rename = "impersonatedBy")]
-    pub impersonated_by: Option<String>,
-    #[serde(rename = "activeOrganizationId")]
-    pub active_organization_id: Option<String>,
-    // Keep active field for internal use but don't serialize
-    #[serde(skip)]
-    pub active: bool,
-}
-
-/// Account linking (for OAuth providers) - matches OpenAPI schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Account {
-    pub id: String,
-    #[serde(rename = "accountId")]
-    pub account_id: String,
-    #[serde(rename = "providerId")]
-    pub provider_id: String,
-    #[serde(rename = "userId")]
-    pub user_id: String,
-    #[serde(rename = "accessToken")]
-    pub access_token: Option<String>,
-    #[serde(rename = "refreshToken")]
-    pub refresh_token: Option<String>,
-    #[serde(rename = "idToken")]
-    pub id_token: Option<String>,
-    #[serde(rename = "accessTokenExpiresAt")]
-    pub access_token_expires_at: Option<DateTime<Utc>>,
-    #[serde(rename = "refreshTokenExpiresAt")]
-    pub refresh_token_expires_at: Option<DateTime<Utc>>,
-    pub scope: Option<String>,
-    pub password: Option<String>,
-    #[serde(rename = "createdAt")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: DateTime<Utc>,
-}
-
-/// Verification token - matches OpenAPI schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Verification {
-    pub id: String,
-    pub identifier: String,
-    pub value: String,
-    #[serde(rename = "expiresAt")]
-    pub expires_at: DateTime<Utc>,
-    #[serde(rename = "createdAt")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: DateTime<Utc>,
-}
-
-/// Two-factor authentication - matches OpenAPI schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TwoFactor {
-    pub id: String,
-    pub secret: String,
-    #[serde(rename = "backupCodes")]
-    pub backup_codes: Option<String>,
-    #[serde(rename = "userId")]
-    pub user_id: String,
-    #[serde(rename = "createdAt")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: DateTime<Utc>,
-}
-
-/// Passkey authentication - matches OpenAPI schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Passkey {
-    pub id: String,
-    pub name: String,
-    #[serde(rename = "publicKey")]
-    pub public_key: String,
-    #[serde(rename = "userId")]
-    pub user_id: String,
-    #[serde(rename = "credentialID")]
-    pub credential_id: String,
-    pub counter: u64,
-    #[serde(rename = "deviceType")]
-    pub device_type: String,
-    #[serde(rename = "backedUp")]
-    pub backed_up: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transports: Option<String>,
-    #[serde(rename = "createdAt")]
-    pub created_at: DateTime<Utc>,
-}
-
-/// Input for creating a new passkey
-#[derive(Debug, Clone)]
-pub struct CreatePasskey {
-    pub user_id: String,
-    pub name: String,
-    pub credential_id: String,
-    pub public_key: String,
-    pub counter: u64,
-    pub device_type: String,
-    pub backed_up: bool,
-    pub transports: Option<String>,
-}
-
-/// Input for updating a passkey
-#[derive(Debug, Clone)]
-pub struct UpdatePasskey {
-    pub name: Option<String>,
-}
+pub use super::types_plugin::{
+    ApiKey, CreateApiKey, CreatePasskey, CreateTwoFactor, Passkey, TwoFactor, UpdateApiKey,
+    UpdatePasskey,
+};
 
 /// HTTP method enumeration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -205,12 +58,141 @@ pub struct AuthRequest {
     pub(crate) virtual_user_id: Option<String>,
 }
 
+/// Metadata extracted from an incoming request for session creation.
+///
+/// Centralizes extraction of IP address and user-agent so that core
+/// functions do not need the full [`AuthRequest`].
+#[derive(Debug, Clone, Default)]
+pub struct RequestMeta {
+    pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
+}
+
+impl RequestMeta {
+    /// Extract metadata from an [`AuthRequest`]'s headers.
+    ///
+    /// IP address is read from `x-forwarded-for` (preferred), falling back
+    /// to `x-real-ip`. User-agent is read from the `user-agent` header.
+    pub fn from_request(req: &AuthRequest) -> Self {
+        Self {
+            ip_address: req
+                .headers
+                .get("x-forwarded-for")
+                .or_else(|| req.headers.get("x-real-ip"))
+                .cloned()
+                .filter(|value| !value.is_empty()),
+            user_agent: req.headers.get("user-agent").cloned(),
+        }
+    }
+}
+
 /// Authentication response wrapper
 #[derive(Debug, Clone)]
 pub struct AuthResponse {
     pub status: u16,
-    pub headers: HashMap<String, String>,
+    pub headers: Headers,
     pub body: Vec<u8>,
+}
+
+/// Response headers preserving repeated header names such as `Set-Cookie`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Headers(Vec<(String, String)>);
+
+impl Headers {
+    /// Create an empty header collection.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Insert a header, replacing any existing values for the same name.
+    pub fn insert(&mut self, name: impl Into<String>, value: impl Into<String>) -> Option<String> {
+        let name = name.into();
+        let value = value.into();
+        let mut previous = None;
+
+        self.0.retain(|(existing_name, existing_value)| {
+            if existing_name.eq_ignore_ascii_case(&name) {
+                previous = Some(existing_value.clone());
+                false
+            } else {
+                true
+            }
+        });
+
+        self.0.push((name, value));
+        previous
+    }
+
+    /// Append a header without removing existing values of the same name.
+    pub fn append(&mut self, name: impl Into<String>, value: impl Into<String>) {
+        self.0.push((name.into(), value.into()));
+    }
+
+    /// Get the last value stored for a header name.
+    pub fn get(&self, name: &str) -> Option<&String> {
+        self.0.iter().rev().find_map(|(existing_name, value)| {
+            existing_name.eq_ignore_ascii_case(name).then_some(value)
+        })
+    }
+
+    /// Iterate over all values stored for a header name.
+    pub fn get_all<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a String> + 'a {
+        self.0.iter().filter_map(move |(existing_name, value)| {
+            existing_name.eq_ignore_ascii_case(name).then_some(value)
+        })
+    }
+
+    /// Check whether a header name exists.
+    pub fn contains_key(&self, name: &str) -> bool {
+        self.get(name).is_some()
+    }
+
+    /// Return whether the collection is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Iterate over stored header pairs in insertion order.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
+        self.0.iter().map(|(name, value)| (name, value))
+    }
+}
+
+impl<'a> IntoIterator for &'a Headers {
+    type Item = (&'a String, &'a String);
+    type IntoIter = std::iter::Map<
+        std::slice::Iter<'a, (String, String)>,
+        fn(&(String, String)) -> (&String, &String),
+    >;
+
+    fn into_iter(self) -> Self::IntoIter {
+        fn map_pair((name, value): &(String, String)) -> (&String, &String) {
+            (name, value)
+        }
+
+        self.0.iter().map(map_pair)
+    }
+}
+
+impl IntoIterator for Headers {
+    type Item = (String, String);
+    type IntoIter = std::vec::IntoIter<(String, String)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl Index<&str> for Headers {
+    type Output = String;
+
+    #[expect(
+        clippy::expect_used,
+        reason = "Index must panic on missing headers to satisfy the trait contract"
+    )]
+    fn index(&self, index: &str) -> &Self::Output {
+        self.get(index).expect("header not found")
+    }
 }
 
 /// User creation data
@@ -221,7 +203,6 @@ pub struct CreateUser {
     pub name: Option<String>,
     pub image: Option<String>,
     pub email_verified: Option<bool>,
-    pub password: Option<String>,
     pub username: Option<String>,
     pub display_username: Option<String>,
     pub role: Option<String>,
@@ -283,98 +264,6 @@ pub struct UpdateAccount {
     pub password: Option<String>,
 }
 
-/// Two-factor authentication creation data
-#[derive(Debug, Clone)]
-pub struct CreateTwoFactor {
-    pub user_id: String,
-    pub secret: String,
-    pub backup_codes: Option<String>,
-}
-
-/// API key - matches OpenAPI schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApiKey {
-    pub id: String,
-    pub name: Option<String>,
-    pub start: Option<String>,
-    pub prefix: Option<String>,
-    /// SHA-256 hash of the key (column name: `key` in SQL)
-    #[serde(rename = "key")]
-    pub key_hash: String,
-    #[serde(rename = "userId")]
-    pub user_id: String,
-    #[serde(rename = "refillInterval")]
-    pub refill_interval: Option<i64>,
-    #[serde(rename = "refillAmount")]
-    pub refill_amount: Option<i64>,
-    #[serde(rename = "lastRefillAt")]
-    pub last_refill_at: Option<String>,
-    pub enabled: bool,
-    #[serde(rename = "rateLimitEnabled")]
-    pub rate_limit_enabled: bool,
-    #[serde(rename = "rateLimitTimeWindow")]
-    pub rate_limit_time_window: Option<i64>,
-    #[serde(rename = "rateLimitMax")]
-    pub rate_limit_max: Option<i64>,
-    #[serde(rename = "requestCount")]
-    pub request_count: Option<i64>,
-    pub remaining: Option<i64>,
-    #[serde(rename = "lastRequest")]
-    pub last_request: Option<String>,
-    #[serde(rename = "expiresAt")]
-    pub expires_at: Option<String>,
-    #[serde(rename = "createdAt")]
-    pub created_at: String,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: String,
-    pub permissions: Option<String>,
-    pub metadata: Option<String>,
-}
-
-/// API key creation data
-#[derive(Debug, Clone)]
-pub struct CreateApiKey {
-    pub user_id: String,
-    pub name: Option<String>,
-    pub prefix: Option<String>,
-    pub key_hash: String,
-    pub start: Option<String>,
-    pub expires_at: Option<String>,
-    pub remaining: Option<i64>,
-    pub rate_limit_enabled: bool,
-    pub rate_limit_time_window: Option<i64>,
-    pub rate_limit_max: Option<i64>,
-    pub refill_interval: Option<i64>,
-    pub refill_amount: Option<i64>,
-    pub permissions: Option<String>,
-    pub metadata: Option<String>,
-    pub enabled: bool,
-}
-
-/// API key update data
-#[derive(Debug, Clone, Default)]
-pub struct UpdateApiKey {
-    pub name: Option<String>,
-    pub enabled: Option<bool>,
-    pub remaining: Option<i64>,
-    pub rate_limit_enabled: Option<bool>,
-    pub rate_limit_time_window: Option<i64>,
-    pub rate_limit_max: Option<i64>,
-    pub refill_interval: Option<i64>,
-    pub refill_amount: Option<i64>,
-    pub permissions: Option<String>,
-    pub metadata: Option<String>,
-    /// Update the expiration time. `Some(Some("..."))` sets a new value,
-    /// `Some(None)` clears it, `None` leaves it unchanged.
-    pub expires_at: Option<Option<String>>,
-    /// Last request timestamp (updated during verify).
-    pub last_request: Option<Option<String>>,
-    /// Request count within the current rate-limit window.
-    pub request_count: Option<i64>,
-    /// Last refill timestamp (updated during verify).
-    pub last_refill_at: Option<Option<String>>,
-}
-
 /// Verification token creation data
 #[derive(Debug, Clone)]
 pub struct CreateVerification {
@@ -386,12 +275,11 @@ pub struct CreateVerification {
 impl CreateUser {
     pub fn new() -> Self {
         Self {
-            id: Some(Uuid::new_v4().to_string()),
+            id: None,
             email: None,
             name: None,
             image: None,
             email_verified: None,
-            password: None,
             username: None,
             display_username: None,
             role: None,
@@ -400,7 +288,7 @@ impl CreateUser {
     }
 
     pub fn with_email(mut self, email: impl Into<String>) -> Self {
-        self.email = Some(email.into());
+        self.email = Some(normalize_user_email(&email.into()));
         self
     }
 
@@ -411,11 +299,6 @@ impl CreateUser {
 
     pub fn with_email_verified(mut self, verified: bool) -> Self {
         self.email_verified = Some(verified);
-        self
-    }
-
-    pub fn with_password(mut self, password: impl Into<String>) -> Self {
-        self.password = Some(password.into());
         self
     }
 
@@ -515,15 +398,15 @@ impl AuthResponse {
     pub fn new(status: u16) -> Self {
         Self {
             status,
-            headers: HashMap::new(),
+            headers: Headers::new(),
             body: Vec::new(),
         }
     }
 
     pub fn json<T: Serialize>(status: u16, data: &T) -> Result<Self, serde_json::Error> {
         let body = serde_json::to_vec(data)?;
-        let mut headers = HashMap::new();
-        headers.insert("content-type".to_string(), "application/json".to_string());
+        let mut headers = Headers::new();
+        _ = headers.insert("content-type".to_string(), "application/json".to_string());
 
         Ok(Self {
             status,
@@ -534,8 +417,23 @@ impl AuthResponse {
 
     pub fn text(status: u16, text: impl Into<String>) -> Self {
         let body = text.into().into_bytes();
-        let mut headers = HashMap::new();
-        headers.insert("content-type".to_string(), "text/plain".to_string());
+        let mut headers = Headers::new();
+        _ = headers.insert("content-type".to_string(), "text/plain".to_string());
+
+        Self {
+            status,
+            headers,
+            body,
+        }
+    }
+
+    pub fn html(status: u16, html: impl Into<String>) -> Self {
+        let body = html.into().into_bytes();
+        let mut headers = Headers::new();
+        _ = headers.insert(
+            "content-type".to_string(),
+            "text/html; charset=utf-8".to_string(),
+        );
 
         Self {
             status,
@@ -545,7 +443,16 @@ impl AuthResponse {
     }
 
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
-        self.headers.insert(name.into(), value.into());
+        _ = self.headers.insert(name.into(), value.into());
+        self
+    }
+
+    pub fn with_appended_header(
+        mut self,
+        name: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
+        self.headers.append(name.into(), value.into());
         self
     }
 }
@@ -617,6 +524,14 @@ pub struct ErrorMessageResponse {
     pub message: String,
 }
 
+/// Error body `{ code: String, message: String }` matching the TS better-auth
+/// error response shape.
+#[derive(Debug, Serialize)]
+pub struct ErrorCodeMessageResponse {
+    pub code: String,
+    pub message: String,
+}
+
 /// Middleware error response `{ code: String, message: String }`.
 #[derive(Debug, Serialize)]
 pub struct CodeMessageResponse {
@@ -654,4 +569,185 @@ pub struct ListUsersParams {
     pub filter_field: Option<String>,
     pub filter_value: Option<String>,
     pub filter_operator: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── AuthRequest ─────────────────────────────────────────────────────
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_request_new_defaults() {
+        let req = AuthRequest::new(HttpMethod::Get, "/test");
+        assert_eq!(req.method(), &HttpMethod::Get);
+        assert_eq!(req.path(), "/test");
+        assert!(req.headers.is_empty());
+        assert!(req.body.is_none());
+        assert!(req.virtual_user_id().is_none());
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_request_from_parts() {
+        let mut headers = HashMap::new();
+        let _ = headers.insert("host".to_string(), "localhost".to_string());
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/login".into(),
+            headers,
+            Some(b"{}".to_vec()),
+            HashMap::new(),
+        );
+        assert_eq!(req.method(), &HttpMethod::Post);
+        assert_eq!(req.header("host"), Some(&"localhost".to_string()));
+        assert!(req.body.is_some());
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_request_body_as_json_with_body() {
+        let req = AuthRequest {
+            method: HttpMethod::Post,
+            path: "/test".into(),
+            headers: HashMap::new(),
+            body: Some(br#"{"name":"test"}"#.to_vec()),
+            query: HashMap::new(),
+            virtual_user_id: None,
+        };
+        let val: serde_json::Value = req.body_as_json().expect("parse");
+        assert_eq!(val["name"], "test");
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_request_body_as_json_without_body() {
+        let req = AuthRequest::new(HttpMethod::Get, "/test");
+        let val: serde_json::Value = req.body_as_json().expect("parse empty");
+        assert!(val.is_object());
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_request_virtual_user_id() {
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        assert!(req.virtual_user_id().is_none());
+        req.set_virtual_user_id("user-123".into());
+        assert_eq!(req.virtual_user_id(), Some("user-123"));
+    }
+
+    // ── AuthResponse ────────────────────────────────────────────────────
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_response_new() {
+        let resp = AuthResponse::new(200);
+        assert_eq!(resp.status, 200);
+        assert!(resp.body.is_empty());
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_response_json() {
+        let resp = AuthResponse::json(200, &OkResponse { ok: true }).expect("json");
+        assert_eq!(resp.status, 200);
+        assert_eq!(
+            resp.headers.get("content-type").unwrap(),
+            "application/json"
+        );
+        let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+        assert_eq!(body["ok"], true);
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_response_text() {
+        let resp = AuthResponse::text(404, "Not found");
+        assert_eq!(resp.status, 404);
+        assert_eq!(resp.headers.get("content-type").unwrap(), "text/plain");
+        assert_eq!(std::str::from_utf8(&resp.body).unwrap(), "Not found");
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_response_html() {
+        let resp = AuthResponse::html(200, "<h1>Hi</h1>");
+        assert_eq!(
+            resp.headers.get("content-type").unwrap(),
+            "text/html; charset=utf-8"
+        );
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn auth_response_with_header() {
+        let resp = AuthResponse::new(200).with_header("x-custom", "val");
+        assert_eq!(resp.headers.get("x-custom").unwrap(), "val");
+    }
+
+    // ── RequestMeta ─────────────────────────────────────────────────────
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn request_meta_extracts_from_headers() {
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        let _ = req
+            .headers
+            .insert("x-forwarded-for".into(), "1.2.3.4".into());
+        let _ = req.headers.insert("user-agent".into(), "TestAgent".into());
+        let meta = RequestMeta::from_request(&req);
+        assert_eq!(meta.ip_address.as_deref(), Some("1.2.3.4"));
+        assert_eq!(meta.user_agent.as_deref(), Some("TestAgent"));
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn request_meta_falls_back_to_real_ip() {
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        let _ = req.headers.insert("x-real-ip".into(), "5.6.7.8".into());
+        let meta = RequestMeta::from_request(&req);
+        assert_eq!(meta.ip_address.as_deref(), Some("5.6.7.8"));
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn request_meta_none_when_no_headers() {
+        let req = AuthRequest::new(HttpMethod::Get, "/test");
+        let meta = RequestMeta::from_request(&req);
+        assert!(meta.ip_address.is_none());
+        assert!(meta.user_agent.is_none());
+    }
+
+    // ── CreateUser builder ──────────────────────────────────────────────
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn create_user_builder() {
+        let cu = CreateUser::new()
+            .with_email("Test@Example.COM")
+            .with_name("Test")
+            .with_email_verified(true)
+            .with_username("testuser")
+            .with_role("admin")
+            .with_metadata(serde_json::json!({"key": "val"}));
+
+        assert!(cu.id.is_none()); // ID generation is delegated to the model/store path
+        assert_eq!(cu.email.as_deref(), Some("test@example.com"));
+        assert_eq!(cu.name.as_deref(), Some("Test"));
+        assert_eq!(cu.email_verified, Some(true));
+        assert_eq!(cu.username.as_deref(), Some("testuser"));
+        assert_eq!(cu.role.as_deref(), Some("admin"));
+        assert!(cu.metadata.is_some());
+    }
+
+    // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
+    #[test]
+    fn create_user_default() {
+        let cu = CreateUser::default();
+        assert!(cu.id.is_none());
+        assert!(cu.email.is_none());
+    }
+
+    // ── is_false helper ─────────────────────────────────────────────────
 }

@@ -5,14 +5,17 @@ description: Get up and running with Better Auth in minutes.
 
 This guide walks through a minimal working example: configure auth, sign up a user, sign in, and use a session token.
 
+For a complete app-owned SeaORM schema setup, start with the [Axum Integration](/docs/integrations/axum) guide or the canonical [`examples/axum_server.rs`](../../../../examples/axum_server.rs) example. The snippet below assumes that `AppAuthSchema` has already been defined there.
+
 ## Setup
 
-```rust
-use better_auth::{BetterAuth, AuthConfig};
+```rust,ignore
+use better_auth::{AuthConfig, BetterAuth};
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
-use better_auth::adapters::MemoryDatabaseAdapter;
-use better_auth::types::{AuthRequest, HttpMethod};
+use better_auth::prelude::{AuthRequest, HttpMethod};
+use better_auth::seaorm::{Database, SeaOrmStore};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,10 +23,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
         .base_url("http://localhost:3000")
         .password_min_length(8);
+    let database = Database::connect("sqlite::memory:").await?;
+    let store = SeaOrmStore::<AppAuthSchema>::new(config.clone(), database);
 
     // 2. Build
-    let auth = BetterAuth::new(config)
-        .database(MemoryDatabaseAdapter::new())
+    let auth = BetterAuth::<AppAuthSchema>::new(config)
+        .store(store)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .build()

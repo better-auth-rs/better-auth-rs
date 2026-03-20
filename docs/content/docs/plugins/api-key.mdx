@@ -7,11 +7,13 @@ The `ApiKeyPlugin` provides API key management with support for rate limiting, u
 
 ## Setup
 
+These examples assume you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
 use better_auth::plugins::ApiKeyPlugin;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(ApiKeyPlugin::new())
     .build()
     .await?;
@@ -22,8 +24,8 @@ let auth = BetterAuth::new(config)
 ```rust
 use better_auth::plugins::api_key::ApiKeyConfig;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(
         ApiKeyPlugin::new()
             .key_length(32)

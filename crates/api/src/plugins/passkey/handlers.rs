@@ -3,8 +3,8 @@ use base64::engine::general_purpose::STANDARD;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use rand::RngCore;
 
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthPasskey, AuthSession, AuthUser};
+use better_auth_core::wire::{PasskeyView, SessionView, UserView};
 use better_auth_core::{AuthContext, CreatePasskey, CreateVerification};
 use better_auth_core::{AuthError, AuthResult};
 
@@ -12,7 +12,7 @@ use crate::plugins::StatusResponse;
 
 use super::PasskeyConfig;
 use super::types::{
-    DeletePasskeyRequest, PasskeyResponse, PasskeyView, SessionUserResponse, UpdatePasskeyRequest,
+    DeletePasskeyRequest, PasskeyResponse, SessionUserResponse, UpdatePasskeyRequest,
     VerifyAuthenticationRequest, VerifyRegistrationRequest,
 };
 
@@ -103,18 +103,19 @@ pub(super) fn validate_client_data(
 // Core functions
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn generate_register_options_core<DB: DatabaseAdapter>(
-    user: &DB::User,
+pub(crate) async fn generate_register_options_core(
+    user: &impl AuthUser,
     authenticator_attachment: Option<&str>,
     config: &PasskeyConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<serde_json::Value> {
     let challenge = generate_challenge();
 
     // Store challenge as a verification token
     let identifier = format!("passkey_reg:{}", user.id());
     let expires_at = chrono::Utc::now() + chrono::Duration::seconds(config.challenge_ttl_secs);
-    ctx.database
+    let _ = ctx
+        .database
         .create_verification(CreateVerification {
             identifier: identifier.clone(),
             value: challenge.clone(),
@@ -123,7 +124,7 @@ pub(crate) async fn generate_register_options_core<DB: DatabaseAdapter>(
         .await?;
 
     // Build excludeCredentials from existing passkeys
-    let existing_passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
+    let existing_passkeys = ctx.database.list_passkeys_by_user(&user.id()).await?;
     let exclude_credentials: Vec<serde_json::Value> = existing_passkeys
         .iter()
         .map(|pk| {
@@ -133,8 +134,9 @@ pub(crate) async fn generate_register_options_core<DB: DatabaseAdapter>(
             });
             if let Some(transports) = pk.transports()
                 && let Ok(t) = serde_json::from_str::<Vec<String>>(transports)
+                && let Some(obj) = cred.as_object_mut()
             {
-                cred["transports"] = serde_json::json!(t);
+                let _ = obj.insert("transports".to_string(), serde_json::json!(t));
             }
             cred
         })
@@ -178,11 +180,11 @@ pub(crate) async fn generate_register_options_core<DB: DatabaseAdapter>(
     Ok(options)
 }
 
-pub(crate) async fn verify_registration_core<DB: DatabaseAdapter>(
+pub(crate) async fn verify_registration_core(
     body: &VerifyRegistrationRequest,
-    user: &DB::User,
+    user: &impl AuthUser,
     config: &PasskeyConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<PasskeyView> {
     ensure_insecure_verification_enabled(config)?;
 
@@ -191,7 +193,8 @@ pub(crate) async fn verify_registration_core<DB: DatabaseAdapter>(
 
     // Atomically consume the challenge (single-use)
     let identifier = format!("passkey_reg:{}", user.id());
-    ctx.database
+    let _ = ctx
+        .database
         .consume_verification(&identifier, &challenge)
         .await?
         .ok_or_else(|| {
@@ -265,19 +268,19 @@ pub(crate) async fn verify_registration_core<DB: DatabaseAdapter>(
         })
         .await?;
 
-    Ok(PasskeyView::from_entity(&passkey))
+    Ok(PasskeyView::from(&passkey))
 }
 
-pub(crate) async fn generate_authenticate_options_core<DB: DatabaseAdapter>(
-    maybe_user: Option<&DB::User>,
+pub(crate) async fn generate_authenticate_options_core<U: AuthUser>(
+    maybe_user: Option<&U>,
     config: &PasskeyConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<serde_json::Value> {
     let challenge = generate_challenge();
 
     // If user is provided, build allowCredentials from their passkeys
     let allow_credentials: Vec<serde_json::Value> = if let Some(user) = maybe_user {
-        let passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
+        let passkeys = ctx.database.list_passkeys_by_user(&user.id()).await?;
         passkeys
             .iter()
             .map(|pk| {
@@ -287,8 +290,9 @@ pub(crate) async fn generate_authenticate_options_core<DB: DatabaseAdapter>(
                 });
                 if let Some(transports) = pk.transports()
                     && let Ok(t) = serde_json::from_str::<Vec<String>>(transports)
+                    && let Some(obj) = cred.as_object_mut()
                 {
-                    cred["transports"] = serde_json::json!(t);
+                    let _ = obj.insert("transports".to_string(), serde_json::json!(t));
                 }
                 cred
             })
@@ -300,7 +304,8 @@ pub(crate) async fn generate_authenticate_options_core<DB: DatabaseAdapter>(
     // Store challenge with the challenge itself as part of the identifier
     let identifier = format!("passkey_auth:{}", challenge);
     let expires_at = chrono::Utc::now() + chrono::Duration::seconds(config.challenge_ttl_secs);
-    ctx.database
+    let _ = ctx
+        .database
         .create_verification(CreateVerification {
             identifier,
             value: challenge.clone(),
@@ -319,13 +324,13 @@ pub(crate) async fn generate_authenticate_options_core<DB: DatabaseAdapter>(
     Ok(options)
 }
 
-pub(crate) async fn verify_authentication_core<DB: DatabaseAdapter>(
+pub(crate) async fn verify_authentication_core(
     body: &VerifyAuthenticationRequest,
     config: &PasskeyConfig,
     ip_address: Option<String>,
     user_agent: Option<String>,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(SessionUserResponse<DB::User, DB::Session>, String)> {
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<(SessionUserResponse<UserView, SessionView>, String)> {
     ensure_insecure_verification_enabled(config)?;
 
     let resp = &body.response;
@@ -342,7 +347,8 @@ pub(crate) async fn verify_authentication_core<DB: DatabaseAdapter>(
 
     // Atomically consume challenge so it cannot be replayed.
     let identifier = format!("passkey_auth:{}", challenge);
-    ctx.database
+    let _ = ctx
+        .database
         .consume_verification(&identifier, &challenge)
         .await?
         .ok_or_else(|| AuthError::bad_request("Invalid or expired authentication challenge"))?;
@@ -357,7 +363,7 @@ pub(crate) async fn verify_authentication_core<DB: DatabaseAdapter>(
     // Look up the user
     let user = ctx
         .database
-        .get_user_by_id(passkey.user_id())
+        .get_user_by_id(&passkey.user_id())
         .await?
         .ok_or(AuthError::UserNotFound)?;
 
@@ -366,8 +372,9 @@ pub(crate) async fn verify_authentication_core<DB: DatabaseAdapter>(
         .counter()
         .checked_add(1)
         .ok_or_else(|| AuthError::internal("Passkey counter overflow"))?;
-    ctx.database
-        .update_passkey_counter(passkey.id(), new_counter)
+    let _ = ctx
+        .database
+        .update_passkey_counter(&passkey.id(), new_counter)
         .await?;
 
     // Create a session
@@ -377,22 +384,25 @@ pub(crate) async fn verify_authentication_core<DB: DatabaseAdapter>(
         .await?;
 
     let token = session.token().to_string();
-    let response = SessionUserResponse { session, user };
+    let response = SessionUserResponse {
+        session: SessionView::from(&session),
+        user: UserView::from(&user),
+    };
     Ok((response, token))
 }
 
-pub(crate) async fn list_user_passkeys_core<DB: DatabaseAdapter>(
-    user: &DB::User,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn list_user_passkeys_core(
+    user: &impl AuthUser,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<PasskeyView>> {
-    let passkeys = ctx.database.list_passkeys_by_user(user.id()).await?;
-    Ok(passkeys.iter().map(PasskeyView::from_entity).collect())
+    let passkeys = ctx.database.list_passkeys_by_user(&user.id()).await?;
+    Ok(passkeys.iter().map(PasskeyView::from).collect())
 }
 
-pub(crate) async fn delete_passkey_core<DB: DatabaseAdapter>(
+pub(crate) async fn delete_passkey_core(
     body: &DeletePasskeyRequest,
-    user: &DB::User,
-    ctx: &AuthContext<DB>,
+    user: &impl AuthUser,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     // Verify ownership
     let passkey = ctx
@@ -410,10 +420,10 @@ pub(crate) async fn delete_passkey_core<DB: DatabaseAdapter>(
     Ok(StatusResponse { status: true })
 }
 
-pub(crate) async fn update_passkey_core<DB: DatabaseAdapter>(
+pub(crate) async fn update_passkey_core(
     body: &UpdatePasskeyRequest,
-    user: &DB::User,
-    ctx: &AuthContext<DB>,
+    user: &impl AuthUser,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<PasskeyResponse> {
     // Verify ownership
     let passkey = ctx
@@ -432,6 +442,6 @@ pub(crate) async fn update_passkey_core<DB: DatabaseAdapter>(
         .await?;
 
     Ok(PasskeyResponse {
-        passkey: PasskeyView::from_entity(&updated),
+        passkey: PasskeyView::from(&updated),
     })
 }

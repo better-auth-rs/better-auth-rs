@@ -77,7 +77,9 @@ changelog_path = "./CHANGELOG.md"
 changelog_include = [
   "better-auth-core",
   "better-auth-api",
-  "better-auth-derive",
+  "better-auth-macros",
+  "better-auth-seaorm",
+  "better-auth-seaorm-macros",
 ]
 git_tag_name = "v{{ version }}"
 git_tag_enable = true
@@ -98,5 +100,13 @@ name = "better-auth-api"
 version_group = "workspace"
 
 [[package]]
-name = "better-auth-derive"
+name = "better-auth-macros"
+version_group = "workspace"
+
+[[package]]
+name = "better-auth-seaorm"
+version_group = "workspace"
+
+[[package]]
+name = "better-auth-seaorm-macros"
 version_group = "workspace"

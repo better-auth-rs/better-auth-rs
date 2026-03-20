@@ -1,4 +1,3 @@
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::entity::{AuthMember, AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
@@ -16,10 +15,10 @@ use crate::plugins::organization::types::{
 // Core functions
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn get_active_member_core<DB: DatabaseAdapter>(
-    user: &DB::User,
-    session: &DB::Session,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn get_active_member_core(
+    user: &impl AuthUser,
+    session: &impl AuthSession,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<MemberResponse> {
     let org_id = session
         .active_organization_id()
@@ -27,18 +26,18 @@ pub(crate) async fn get_active_member_core<DB: DatabaseAdapter>(
 
     let member = ctx
         .database
-        .get_member(org_id, user.id())
+        .get_member(org_id, &user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
     Ok(MemberResponse::from_member_and_user(&member, user))
 }
 
-pub(crate) async fn list_members_core<DB: DatabaseAdapter>(
+pub(crate) async fn list_members_core(
     query: &ListMembersQuery,
-    user: &DB::User,
-    session: &DB::Session,
-    ctx: &AuthContext<DB>,
+    user: &impl AuthUser,
+    session: &impl AuthSession,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ListMembersResponse> {
     let org_id = resolve_organization_id(
         query.organization_id.as_deref(),
@@ -48,8 +47,9 @@ pub(crate) async fn list_members_core<DB: DatabaseAdapter>(
     )
     .await?;
 
-    ctx.database
-        .get_member(&org_id, user.id())
+    let _ = ctx
+        .database
+        .get_member(&org_id, &user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -63,7 +63,7 @@ pub(crate) async fn list_members_core<DB: DatabaseAdapter>(
 
     let mut members = Vec::with_capacity(members_page.len());
     for member in &members_page {
-        if let Some(user_info) = ctx.database.get_user_by_id(member.user_id()).await? {
+        if let Some(user_info) = ctx.database.get_user_by_id(&member.user_id()).await? {
             members.push(MemberResponse::from_member_and_user(member, &user_info));
         }
     }
@@ -71,19 +71,19 @@ pub(crate) async fn list_members_core<DB: DatabaseAdapter>(
     Ok(ListMembersResponse { members, total })
 }
 
-pub(crate) async fn remove_member_core<DB: DatabaseAdapter>(
+pub(crate) async fn remove_member_core(
     body: &RemoveMemberRequest,
-    user: &DB::User,
-    session: &DB::Session,
+    user: &impl AuthUser,
+    session: &impl AuthSession,
     config: &OrganizationConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<RemovedMemberResponse> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
     let requester_member = ctx
         .database
-        .get_member(&org_id, user.id())
+        .get_member(&org_id, &user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -111,7 +111,7 @@ pub(crate) async fn remove_member_core<DB: DatabaseAdapter>(
             .ok_or_else(|| AuthError::not_found("User not found"))?;
         let target = ctx
             .database
-            .get_member(&org_id, target_user.id())
+            .get_member(&org_id, &target_user.id())
             .await?
             .ok_or_else(|| AuthError::not_found("Member not found"))?;
         target_member_id = target.id().to_string();
@@ -171,19 +171,19 @@ pub(crate) async fn remove_member_core<DB: DatabaseAdapter>(
     Ok(response)
 }
 
-pub(crate) async fn update_member_role_core<DB: DatabaseAdapter>(
+pub(crate) async fn update_member_role_core(
     body: &UpdateMemberRoleRequest,
-    user: &DB::User,
-    session: &DB::Session,
+    user: &impl AuthUser,
+    session: &impl AuthSession,
     config: &OrganizationConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<MemberWrappedResponse> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
     let requester_member = ctx
         .database
-        .get_member(&org_id, user.id())
+        .get_member(&org_id, &user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -229,7 +229,7 @@ pub(crate) async fn update_member_role_core<DB: DatabaseAdapter>(
 
     let user_info = ctx
         .database
-        .get_user_by_id(updated.user_id())
+        .get_user_by_id(&updated.user_id())
         .await?
         .ok_or_else(|| AuthError::internal("User not found for updated member"))?;
 
@@ -243,9 +243,9 @@ pub(crate) async fn update_member_role_core<DB: DatabaseAdapter>(
 // ---------------------------------------------------------------------------
 
 /// Handle get active member request
-pub async fn handle_get_active_member<DB: DatabaseAdapter>(
+pub async fn handle_get_active_member(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let response = get_active_member_core(&user, &session, ctx).await?;
@@ -253,9 +253,9 @@ pub async fn handle_get_active_member<DB: DatabaseAdapter>(
 }
 
 /// Handle list members request
-pub async fn handle_list_members<DB: DatabaseAdapter>(
+pub async fn handle_list_members(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let query = parse_query::<ListMembersQuery>(&req.query);
@@ -264,9 +264,9 @@ pub async fn handle_list_members<DB: DatabaseAdapter>(
 }
 
 /// Handle remove member request
-pub async fn handle_remove_member<DB: DatabaseAdapter>(
+pub async fn handle_remove_member(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
@@ -279,9 +279,9 @@ pub async fn handle_remove_member<DB: DatabaseAdapter>(
 }
 
 /// Handle update member role request
-pub async fn handle_update_member_role<DB: DatabaseAdapter>(
+pub async fn handle_update_member_role(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;

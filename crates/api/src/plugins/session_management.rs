@@ -2,12 +2,12 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use better_auth_core::adapters::DatabaseAdapter;
+use better_auth_core::config::AuthConfig;
 use better_auth_core::entity::{AuthSession, AuthUser};
+use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 
-use better_auth_core::utils::cookie_utils::create_clear_session_cookie;
-use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::AuthResult;
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
 use super::StatusResponse;
@@ -43,7 +43,7 @@ struct GetSessionResponse<S: Serialize, U: Serialize> {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for SessionManagementPlugin {
+impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for SessionManagementPlugin {
     fn name(&self) -> &'static str {
         "session-management"
     }
@@ -51,7 +51,6 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for SessionManagementPlugin {
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
             AuthRoute::get("/get-session", "get_session"),
-            AuthRoute::post("/get-session", "get_session_post"),
             AuthRoute::post("/sign-out", "sign_out"),
             AuthRoute::get("/list-sessions", "list_sessions"),
             AuthRoute::post("/revoke-session", "revoke_session"),
@@ -63,12 +62,10 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for SessionManagementPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
-            (HttpMethod::Get | HttpMethod::Post, "/get-session") => {
-                Ok(Some(self.handle_get_session(req, ctx).await?))
-            }
+            (HttpMethod::Get, "/get-session") => Ok(Some(self.handle_get_session(req, ctx).await?)),
             (HttpMethod::Post, "/sign-out") => Ok(Some(self.handle_sign_out(req, ctx).await?)),
             (HttpMethod::Get, "/list-sessions") if self.config.enable_session_listing => {
                 Ok(Some(self.handle_list_sessions(req, ctx).await?))
@@ -93,54 +90,50 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for SessionManagementPlugin {
 // Core functions — framework-agnostic business logic
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn sign_out_core<DB: DatabaseAdapter>(
-    session: &DB::Session,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn sign_out_core(
+    session: &impl AuthSession,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
     ctx.database.delete_session(session.token()).await?;
     Ok(SuccessResponse { success: true })
 }
 
-pub(crate) async fn list_sessions_core<DB: DatabaseAdapter>(
-    user_id: &str,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<Vec<DB::Session>> {
-    ctx.database.get_user_sessions(user_id).await
+pub(crate) async fn list_sessions_core(
+    user_id: impl AsRef<str>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<Vec<SessionView>> {
+    let sessions = ctx.session_manager().list_user_sessions(user_id).await?;
+    Ok(sessions.iter().map(SessionView::from).collect())
 }
 
-pub(crate) async fn revoke_session_core<DB: DatabaseAdapter>(
-    user: &DB::User,
+pub(crate) async fn revoke_session_core(
+    user: &impl AuthUser,
     token: &str,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
-    // Verify the session belongs to the current user before revoking
     let session_manager = ctx.session_manager();
     if let Some(session_to_revoke) = session_manager.get_session(token).await?
-        && session_to_revoke.user_id() != user.id()
+        && session_to_revoke.user_id() == user.id()
     {
-        return Err(AuthError::forbidden(
-            "Cannot revoke session that belongs to another user",
-        ));
+        ctx.database.delete_session(token).await?;
     }
-
-    ctx.database.delete_session(token).await?;
     Ok(StatusResponse { status: true })
 }
 
-pub(crate) async fn revoke_sessions_core<DB: DatabaseAdapter>(
-    user_id: &str,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn revoke_sessions_core(
+    user_id: impl AsRef<str>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
-    ctx.database.delete_user_sessions(user_id).await?;
+    ctx.database.delete_user_sessions(user_id.as_ref()).await?;
     Ok(StatusResponse { status: true })
 }
 
-pub(crate) async fn revoke_other_sessions_core<DB: DatabaseAdapter>(
-    user_id: &str,
-    current_session: &DB::Session,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn revoke_other_sessions_core(
+    user_id: impl AsRef<str>,
+    current_session: &impl AuthSession,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
-    let all_sessions: Vec<DB::Session> = ctx.database.get_user_sessions(user_id).await?;
+    let all_sessions = ctx.session_manager().list_user_sessions(user_id).await?;
     for session in all_sessions {
         if session.token() != current_session.token() {
             ctx.database.delete_session(session.token()).await?;
@@ -154,41 +147,54 @@ pub(crate) async fn revoke_other_sessions_core<DB: DatabaseAdapter>(
 // ---------------------------------------------------------------------------
 
 impl SessionManagementPlugin {
-    async fn handle_get_session<DB: DatabaseAdapter>(
+    async fn handle_get_session(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, session) = ctx.require_session(req).await?;
-        let response = GetSessionResponse { session, user };
-        Ok(AuthResponse::json(200, &response)?)
+        // Returns 200 with null body when unauthenticated (never an error status).
+        match ctx.require_session(req).await {
+            Ok((user, session)) => {
+                let response = GetSessionResponse {
+                    session: SessionView::from(&session),
+                    user: UserView::from(&user),
+                };
+                Ok(AuthResponse::json(200, &response)?)
+            }
+            Err(_) => Ok(AuthResponse::json(200, &serde_json::Value::Null)?),
+        }
     }
 
-    async fn handle_sign_out<DB: DatabaseAdapter>(
+    async fn handle_sign_out(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (_user, session) = ctx.require_session(req).await?;
-        let response = sign_out_core(&session, ctx).await?;
-        let clear_cookie = create_clear_session_cookie(&ctx.config);
-        Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", clear_cookie))
+        if let Ok((_user, session)) = ctx.require_session(req).await {
+            let _ = sign_out_core(&session, ctx).await;
+        }
+
+        let mut response = AuthResponse::json(200, &SuccessResponse { success: true })?;
+        for cookie in sign_out_cookies(&ctx.config) {
+            response.headers.append("Set-Cookie", cookie);
+        }
+        Ok(response)
     }
 
-    async fn handle_list_sessions<DB: DatabaseAdapter>(
+    async fn handle_list_sessions(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
         let sessions = list_sessions_core(user.id(), ctx).await?;
         Ok(AuthResponse::json(200, &sessions)?)
     }
 
-    async fn handle_revoke_session<DB: DatabaseAdapter>(
+    async fn handle_revoke_session(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
 
@@ -201,20 +207,20 @@ impl SessionManagementPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_revoke_sessions<DB: DatabaseAdapter>(
+    async fn handle_revoke_sessions(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
         let response = revoke_sessions_core(user.id(), ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_revoke_other_sessions<DB: DatabaseAdapter>(
+    async fn handle_revoke_other_sessions(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, current_session) = ctx.require_session(req).await?;
         let response = revoke_other_sessions_core(user.id(), &current_session, ctx).await?;
@@ -222,128 +228,48 @@ impl SessionManagementPlugin {
     }
 }
 
-#[cfg(feature = "axum")]
-mod axum_impl {
-    use super::*;
-    use std::sync::Arc;
+fn related_cookie_name(config: &AuthConfig, suffix: &str) -> String {
+    config
+        .session
+        .cookie_name
+        .strip_suffix("session_token")
+        .map(|prefix| format!("{}{}", prefix, suffix))
+        .unwrap_or_else(|| format!("better-auth.{}", suffix))
+}
 
-    use axum::Json;
-    use axum::extract::{Extension, State};
-    use axum::http::header;
-    use better_auth_core::{AuthState, CurrentSession, ValidatedJson};
+fn sign_out_cookies(config: &AuthConfig) -> Vec<String> {
+    let mut cookies = vec![
+        better_auth_core::utils::cookie_utils::create_clear_session_cookie(config),
+        better_auth_core::utils::cookie_utils::create_clear_cookie(
+            &related_cookie_name(config, "session_data"),
+            config,
+        ),
+        better_auth_core::utils::cookie_utils::create_clear_cookie(
+            &related_cookie_name(config, "dont_remember"),
+            config,
+        ),
+    ];
 
-    #[derive(Clone)]
-    struct PluginState {
-        config: SessionManagementConfig,
+    if config.account.store_account_cookie {
+        cookies.push(better_auth_core::utils::cookie_utils::create_clear_cookie(
+            &related_cookie_name(config, "account_data"),
+            config,
+        ));
     }
 
-    // get_session is trivially simple: just construct the response directly.
-    async fn handle_get_session<DB: DatabaseAdapter>(
-        CurrentSession { user, session }: CurrentSession<DB>,
-    ) -> Result<Json<GetSessionResponse<DB::Session, DB::User>>, AuthError> {
-        Ok(Json(GetSessionResponse { session, user }))
-    }
-
-    async fn handle_sign_out<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        CurrentSession { session, .. }: CurrentSession<DB>,
-    ) -> Result<([(header::HeaderName, String); 1], Json<SuccessResponse>), AuthError> {
-        let ctx = state.to_context();
-        let response = sign_out_core(&session, &ctx).await?;
-        let cookie = state.clear_session_cookie();
-        Ok(([(header::SET_COOKIE, cookie)], Json(response)))
-    }
-
-    async fn handle_list_sessions<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-    ) -> Result<Json<Vec<DB::Session>>, AuthError> {
-        if !ps.config.enable_session_listing {
-            return Err(AuthError::not_found("Not found"));
-        }
-        let ctx = state.to_context();
-        let sessions = list_sessions_core(user.id(), &ctx).await?;
-        Ok(Json(sessions))
-    }
-
-    async fn handle_revoke_session<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-        ValidatedJson(body): ValidatedJson<RevokeSessionRequest>,
-    ) -> Result<Json<StatusResponse>, AuthError> {
-        if !ps.config.enable_session_revocation {
-            return Err(AuthError::not_found("Not found"));
-        }
-        let ctx = state.to_context();
-        let response = revoke_session_core(&user, &body.token, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    async fn handle_revoke_sessions<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-    ) -> Result<Json<StatusResponse>, AuthError> {
-        if !ps.config.enable_session_revocation {
-            return Err(AuthError::not_found("Not found"));
-        }
-        let ctx = state.to_context();
-        let response = revoke_sessions_core(user.id(), &ctx).await?;
-        Ok(Json(response))
-    }
-
-    async fn handle_revoke_other_sessions<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
-        CurrentSession { user, session }: CurrentSession<DB>,
-    ) -> Result<Json<StatusResponse>, AuthError> {
-        if !ps.config.enable_session_revocation {
-            return Err(AuthError::not_found("Not found"));
-        }
-        let ctx = state.to_context();
-        let response = revoke_other_sessions_core(user.id(), &session, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for SessionManagementPlugin {
-        fn name(&self) -> &'static str {
-            "session-management"
-        }
-
-        fn router(&self) -> axum::Router<AuthState<DB>> {
-            use axum::routing::{get, post};
-
-            let plugin_state = Arc::new(PluginState {
-                config: self.config.clone(),
-            });
-            axum::Router::new()
-                .route(
-                    "/get-session",
-                    get(handle_get_session::<DB>).post(handle_get_session::<DB>),
-                )
-                .route("/sign-out", post(handle_sign_out::<DB>))
-                .route("/list-sessions", get(handle_list_sessions::<DB>))
-                .route("/revoke-session", post(handle_revoke_session::<DB>))
-                .route("/revoke-sessions", post(handle_revoke_sessions::<DB>))
-                .route(
-                    "/revoke-other-sessions",
-                    post(handle_revoke_other_sessions::<DB>),
-                )
-                .layer(Extension(plugin_state))
-        }
-    }
+    cookies
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::plugins::test_helpers;
-    use better_auth_core::adapters::{MemoryDatabaseAdapter, SessionOps, UserOps};
-    use better_auth_core::{CreateSession, CreateUser, Session};
+    use better_auth_core::config::AccountConfig;
+    use better_auth_core::wire::SessionView;
+    use better_auth_core::{CreateSession, CreateUser};
     use chrono::{Duration, Utc};
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_get_session_success() {
         let plugin = SessionManagementPlugin::new();
@@ -379,8 +305,10 @@ mod tests {
         );
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_get_session_unauthorized() {
+        // /get-session returns 200 with null body when unauthenticated.
         let plugin = SessionManagementPlugin::new();
         let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
             CreateUser::new()
@@ -392,10 +320,13 @@ mod tests {
 
         let req =
             test_helpers::create_auth_request_no_query(HttpMethod::Get, "/get-session", None, None);
-        let err = plugin.handle_get_session(&req, &ctx).await.unwrap_err();
-        assert_eq!(err.status_code(), 401);
+        let response = plugin.handle_get_session(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+        let body: serde_json::Value = serde_json::from_slice(&response.body).expect("valid JSON");
+        assert!(body.is_null());
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_sign_out_success() {
         let plugin = SessionManagementPlugin::new();
@@ -425,6 +356,71 @@ mod tests {
         assert!(session_check.is_none());
     }
 
+    #[tokio::test]
+    async fn test_sign_out_clears_account_cookie_when_enabled() {
+        let plugin = SessionManagementPlugin::new();
+        let config = test_helpers::create_test_config().account(AccountConfig {
+            store_account_cookie: true,
+            ..Default::default()
+        });
+        let ctx = test_helpers::create_test_context_with_config(config).await;
+        let (_user, session) = test_helpers::create_user_and_session(
+            &ctx,
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
+            Duration::hours(24),
+        )
+        .await;
+
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Post,
+            "/sign-out",
+            Some(&session.token),
+            Some(b"{}".to_vec()),
+        );
+        let response = plugin.handle_sign_out(&req, &ctx).await.unwrap();
+
+        let account_cookie_name = format!("{}=", related_cookie_name(&ctx.config, "account_data"));
+        assert!(
+            response
+                .headers
+                .get_all("Set-Cookie")
+                .any(|cookie| cookie.starts_with(&account_cookie_name)),
+            "sign-out should clear the account_data cookie when store_account_cookie is enabled"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sign_out_does_not_emit_account_cookie_when_disabled() {
+        let plugin = SessionManagementPlugin::new();
+        let (ctx, _user, session) = test_helpers::create_test_context_with_user(
+            CreateUser::new()
+                .with_email("test@example.com")
+                .with_name("Test User"),
+            Duration::hours(24),
+        )
+        .await;
+
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Post,
+            "/sign-out",
+            Some(&session.token),
+            Some(b"{}".to_vec()),
+        );
+        let response = plugin.handle_sign_out(&req, &ctx).await.unwrap();
+
+        let account_cookie_name = format!("{}=", related_cookie_name(&ctx.config, "account_data"));
+        assert!(
+            !response
+                .headers
+                .get_all("Set-Cookie")
+                .any(|cookie| cookie.starts_with(&account_cookie_name)),
+            "sign-out should not emit account_data clearing cookies when store_account_cookie is disabled"
+        );
+    }
+
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_list_sessions_success() {
         let plugin = SessionManagementPlugin::new();
@@ -457,10 +453,11 @@ mod tests {
         assert_eq!(response.status, 200);
 
         let body_str = String::from_utf8(response.body).unwrap();
-        let sessions: Vec<Session> = serde_json::from_str(&body_str).unwrap();
+        let sessions: Vec<SessionView> = serde_json::from_str(&body_str).unwrap();
         assert_eq!(sessions.len(), 2);
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_revoke_session_success() {
         let plugin = SessionManagementPlugin::new();
@@ -500,6 +497,7 @@ mod tests {
         assert!(session1_check.is_some());
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_revoke_session_forbidden_different_user() {
         let plugin = SessionManagementPlugin::new();
@@ -534,10 +532,20 @@ mod tests {
             Some(body.to_string().into_bytes()),
         );
 
-        let err = plugin.handle_revoke_session(&req, &ctx).await.unwrap_err();
-        assert_eq!(err.status_code(), 403);
+        let response = plugin.handle_revoke_session(&req, &ctx).await.unwrap();
+        assert_eq!(response.status, 200);
+
+        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(body["status"], true);
+
+        let still_exists = ctx.database.get_session(&session2.token).await.unwrap();
+        assert!(
+            still_exists.is_some(),
+            "other user's session must not be revoked"
+        );
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_revoke_sessions_success() {
         let plugin = SessionManagementPlugin::new();
@@ -573,16 +581,24 @@ mod tests {
         assert_eq!(user_sessions.len(), 0);
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_plugin_routes() {
         let plugin = SessionManagementPlugin::new();
-        let routes = AuthPlugin::<MemoryDatabaseAdapter>::routes(&plugin);
+        let routes = AuthPlugin::<
+            better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema,
+        >::routes(&plugin);
 
-        assert_eq!(routes.len(), 7);
+        assert_eq!(routes.len(), 6);
         assert!(
             routes
                 .iter()
                 .any(|r| r.path == "/get-session" && r.method == HttpMethod::Get)
+        );
+        assert!(
+            !routes
+                .iter()
+                .any(|r| r.path == "/get-session" && r.method == HttpMethod::Post)
         );
         assert!(
             routes
@@ -606,6 +622,7 @@ mod tests {
         );
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_plugin_on_request_routing() {
         let plugin = SessionManagementPlugin::new();
@@ -628,6 +645,15 @@ mod tests {
         assert!(response.is_some());
         assert_eq!(response.unwrap().status, 200);
 
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Post,
+            "/get-session",
+            Some(&session.token),
+            Some(b"{}".to_vec()),
+        );
+        let response = plugin.on_request(&req, &ctx).await.unwrap();
+        assert!(response.is_none());
+
         // Test invalid route
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Get,
@@ -639,6 +665,7 @@ mod tests {
         assert!(response.is_none());
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_configuration() {
         let plugin = SessionManagementPlugin::new()

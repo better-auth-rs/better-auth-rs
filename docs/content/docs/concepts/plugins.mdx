@@ -32,9 +32,11 @@ Better Auth uses a plugin system to compose authentication features. Each plugin
 
 Plugins are added via the builder:
 
+These examples assume you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(EmailPasswordPlugin::new().enable_signup(true))
     .plugin(SessionManagementPlugin::new())
     .plugin(PasswordManagementPlugin::new())
@@ -91,7 +93,7 @@ Routes are defined with a method, path, and operation ID (used as the OpenAPI `o
 
 ```rust
 use better_auth::plugin::AuthRoute;
-use better_auth::types::HttpMethod;
+use better_auth::prelude::HttpMethod;
 
 let routes = vec![
     AuthRoute::post("/my-endpoint", "handle_my_endpoint"),
@@ -108,7 +110,7 @@ Plugins receive an `AuthContext` providing access to shared state:
 ```rust
 pub struct AuthContext {
     pub config: Arc<AuthConfig>,
-    pub database: Arc<dyn DatabaseAdapter>,
+    pub database: Arc<AuthStore>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
     pub metadata: HashMap<String, serde_json::Value>,
 }
