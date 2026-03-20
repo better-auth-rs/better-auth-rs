@@ -29,15 +29,17 @@ fn resolve_roots() -> (TokenStream, TokenStream) {
         );
     }
 
-    let seaorm_root = found_crate_tokens("better-auth-seaorm").unwrap_or_else(|| {
-        syn::Error::new(
-            Span::call_site(),
-            "could not resolve better-auth or better-auth-seaorm",
-        )
-        .to_compile_error()
-    });
-    let core_root = quote!(#seaorm_root::__private_core);
-    (seaorm_root, core_root)
+    match crate_name("better-auth-seaorm") {
+        Ok(FoundCrate::Itself) => (quote!(crate), quote!(crate::__private_core)),
+        _ => (
+            syn::Error::new(
+                Span::call_site(),
+                "AuthEntity must be used through better_auth::seaorm with the `seaorm2` feature enabled",
+            )
+            .to_compile_error(),
+            quote!(::core::compile_error!("unreachable")),
+        ),
+    }
 }
 
 pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
