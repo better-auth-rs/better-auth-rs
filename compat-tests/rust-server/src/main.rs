@@ -17,7 +17,7 @@ use better_auth::plugins::{
     password_management::SendResetPassword,
 };
 use better_auth::wire::UserView;
-use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
+use better_auth::{AuthBuilder, AuthConfig};
 use better_auth_seaorm::{Database, SeaOrmStore};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
