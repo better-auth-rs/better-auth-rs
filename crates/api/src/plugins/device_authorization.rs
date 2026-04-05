@@ -187,16 +187,12 @@ async fn poll_device_token_core<DB: DatabaseAdapter>(
         .ok_or_else(|| AuthError::bad_request("invalid_grant"))?;
 
     let verification_id = verification.id().to_string();
-    let mut stored: StoredVerification = serde_json::from_str(verification.value())?;
-    let now = Utc::now();
-
-    if stored.data.expires_at < now {
-        ctx.database.delete_verification(&verification_id).await?;
-        return Err(AuthError::bad_request("expired_token"));
-    }
+    let raw_value = verification.value().to_string();
+    let mut stored: StoredVerification = serde_json::from_str(&raw_value)?;
 
     match stored.data.status {
         DeviceStatus::Pending => {
+            let now = Utc::now();
             if let Some(last) = stored.data.last_polled_at
                 && (now - last).num_seconds() < stored.data.interval
             {
@@ -211,6 +207,16 @@ async fn poll_device_token_core<DB: DatabaseAdapter>(
         }
         DeviceStatus::Denied => Err(AuthError::bad_request("access_denied")),
         DeviceStatus::Approved => {
+            // Atomically consume to prevent double-redemption from concurrent polls
+            if ctx
+                .database
+                .consume_verification(&identifier, &raw_value)
+                .await?
+                .is_none()
+            {
+                return Err(AuthError::bad_request("invalid_grant"));
+            }
+
             let user_id =
                 stored.data.user_id.clone().ok_or_else(|| {
                     AuthError::internal("Device authorization missing approved user")
@@ -226,8 +232,6 @@ async fn poll_device_token_core<DB: DatabaseAdapter>(
                 .session_manager()
                 .create_session(&user, None, None)
                 .await?;
-
-            ctx.database.delete_verification(&verification_id).await?;
 
             Ok(DeviceTokenResponse {
                 access_token: session.token().to_string(),
@@ -249,11 +253,6 @@ async fn approve_device_core<DB: DatabaseAdapter>(
 
     let verification_id = verification.id().to_string();
     let mut stored: StoredVerification = serde_json::from_str(verification.value())?;
-
-    if stored.data.expires_at < Utc::now() {
-        ctx.database.delete_verification(&verification_id).await?;
-        return Err(AuthError::bad_request("expired_token"));
-    }
 
     stored.data.status = DeviceStatus::Approved;
     stored.data.user_id = Some(user.id().to_string());
@@ -287,11 +286,6 @@ async fn deny_device_core<DB: DatabaseAdapter>(
 
     let verification_id = verification.id().to_string();
     let mut stored: StoredVerification = serde_json::from_str(verification.value())?;
-
-    if stored.data.expires_at < Utc::now() {
-        ctx.database.delete_verification(&verification_id).await?;
-        return Err(AuthError::bad_request("expired_token"));
-    }
 
     stored.data.status = DeviceStatus::Denied;
 
