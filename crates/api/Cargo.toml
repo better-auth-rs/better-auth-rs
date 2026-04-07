@@ -56,5 +56,7 @@ axum = { workspace = true, optional = true }
 tokio = { workspace = true }
 
 [features]
-default = []
+default = ["native-tls"]
+native-tls = ["reqwest/default-tls"]
+rustls = ["reqwest/rustls-tls"]
 axum = ["dep:axum", "better-auth-core/axum"]
