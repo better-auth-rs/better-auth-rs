@@ -44,6 +44,9 @@ pub enum AuthError {
     RateLimited,
 
     #[error("{0}")]
+    PayloadTooLarge(String),
+
+    #[error("{0}")]
     NotImplemented(String),
 
     #[error("Configuration error: {0}")]
@@ -82,6 +85,8 @@ impl AuthError {
             Self::UserNotFound | Self::NotFound(_) => 404,
             // 409
             Self::Conflict(_) => 409,
+            // 413
+            Self::PayloadTooLarge(_) => 413,
             // 429
             Self::RateLimited => 429,
             // 501
@@ -138,6 +143,10 @@ impl AuthError {
 
     pub fn not_implemented(message: impl Into<String>) -> Self {
         Self::NotImplemented(message.into())
+    }
+
+    pub fn payload_too_large(message: impl Into<String>) -> Self {
+        Self::PayloadTooLarge(message.into())
     }
 
     pub fn plugin(plugin: &str, message: impl Into<String>) -> Self {

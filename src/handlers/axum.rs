@@ -201,7 +201,10 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
     // Convert body. Bound the read size to avoid memory exhaustion via a
     // malicious client sending an unbounded chunked body. 1 MiB matches the
     // upstream TS Better Auth default and comfortably covers OAuth/JWT
-    // payloads plus reasonable user metadata.
+    // payloads plus reasonable user metadata. When the cap is hit,
+    // `axum::body::to_bytes` returns an error — surface it as 413 rather
+    // than silently truncating to an empty body (which would then be
+    // reported downstream as a misleading "invalid JSON" 400).
     const MAX_BODY_BYTES: usize = 1024 * 1024;
     let body_bytes = match axum::body::to_bytes(body, MAX_BODY_BYTES).await {
         Ok(bytes) => {
@@ -211,7 +214,12 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
                 Some(bytes.to_vec())
             }
         }
-        Err(_) => None,
+        Err(err) => {
+            return Err(AuthError::payload_too_large(format!(
+                "Request body exceeds the {}-byte limit: {err}",
+                MAX_BODY_BYTES
+            )));
+        }
     };
 
     Ok(AuthRequest::from_parts(
