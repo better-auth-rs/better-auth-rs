@@ -317,6 +317,7 @@ dependencies = [
  "cookie",
  "glob-match",
  "http-body-util",
+ "idna",
  "jsonwebtoken",
  "rand 0.8.5",
  "redis",

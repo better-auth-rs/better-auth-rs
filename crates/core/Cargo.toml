@@ -49,6 +49,7 @@ better-auth-derive = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 http-body-util = { version = "0.1", optional = true }
 url = { workspace = true }
+idna = "1"
 tracing.workspace = true
 
 [features]

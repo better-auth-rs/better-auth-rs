@@ -720,19 +720,47 @@ fn extract_pattern_origin(pattern: &str) -> String {
     let Some(scheme_end) = pattern.find("://") else {
         return String::new();
     };
-    let scheme = &pattern[..scheme_end];
+    let scheme = pattern[..scheme_end].to_ascii_lowercase();
     let rest = &pattern[scheme_end + 3..];
     let host_end = rest.find('/').unwrap_or(rest.len());
     let authority = &rest[..host_end];
 
-    // Strip default ports for http/https to match `extract_origin`.
-    let authority = match scheme {
-        "http" => authority.strip_suffix(":80").unwrap_or(authority),
-        "https" => authority.strip_suffix(":443").unwrap_or(authority),
-        _ => authority,
+    // Split host from port so IDN normalisation only runs on the host.
+    let (host, port_suffix) = match authority.rfind(':') {
+        Some(idx)
+            if authority[idx + 1..]
+                .chars()
+                .all(|c| c.is_ascii_digit() || c == '*') =>
+        {
+            (&authority[..idx], &authority[idx..])
+        }
+        _ => (authority, ""),
     };
 
-    format!("{}://{}", scheme, authority)
+    // IDN-canonicalise each label that does not contain a glob wildcard
+    // so `https://*.bücher.example` matches callbacks that
+    // `url::Url::parse` normalises to `https://shop.xn--bcher-kva.example`.
+    // Labels that contain `*` / `**` stay raw, otherwise we would break
+    // the glob. Purely ASCII labels pass through unchanged.
+    let canonical_host: String = host
+        .split('.')
+        .map(|label| {
+            if label.contains('*') || label.is_ascii() {
+                label.to_ascii_lowercase()
+            } else {
+                idna::domain_to_ascii(label).unwrap_or_else(|_| label.to_ascii_lowercase())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(".");
+
+    // Strip default ports for http/https to match `extract_origin`.
+    let port_suffix = match (scheme.as_str(), port_suffix) {
+        ("http", ":80") | ("https", ":443") => "",
+        _ => port_suffix,
+    };
+
+    format!("{}://{}{}", scheme, canonical_host, port_suffix)
 }
 
 /// Detect attacker-controlled authority smuggling in a redirect target.
@@ -926,6 +954,25 @@ mod tests {
         // But well-formed http(s) and relative paths still pass.
         assert!(cfg.is_redirect_target_trusted("/dashboard"));
         assert!(cfg.is_redirect_target_trusted("https://evil.com/cb"));
+    }
+
+    #[test]
+    fn trusted_origins_wildcard_idn_matches_punycode_callback() {
+        // A wildcard pattern with a Unicode label should still match a
+        // callback origin that `url::Url::parse` canonicalises to
+        // punycode. Wildcard labels themselves are preserved verbatim.
+        let cfg = config_with(vec!["https://*.bücher.example"]);
+        assert!(cfg.is_origin_trusted("https://shop.xn--bcher-kva.example"));
+        assert!(cfg.is_redirect_target_trusted("https://shop.xn--bcher-kva.example/path"));
+    }
+
+    #[test]
+    fn trusted_origins_pattern_lowercases_scheme_and_host() {
+        // `url::Url::origin()` lowercases scheme + host; patterns typed
+        // with mixed case should still match.
+        let cfg = config_with(vec!["HTTPS://APP.Example.COM"]);
+        assert!(cfg.is_origin_trusted("https://app.example.com"));
+        assert!(cfg.is_redirect_target_trusted("https://app.example.com/x"));
     }
 
     #[test]
