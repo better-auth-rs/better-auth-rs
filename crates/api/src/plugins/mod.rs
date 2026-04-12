@@ -47,6 +47,17 @@ pub(crate) mod test_helpers {
         AuthContext::new(config, database)
     }
 
+    /// Test context whose `trusted_origins` accepts the given absolute
+    /// origins. Use in tests that exercise `is_redirect_target_trusted`
+    /// happy-path handling for callbackURLs under a custom origin.
+    pub fn create_test_context_with_trusted_origins(
+        origins: &[&str],
+    ) -> AuthContext<MemoryDatabaseAdapter> {
+        let mut config = create_test_config();
+        config.trusted_origins = origins.iter().map(|s| (*s).to_string()).collect();
+        create_test_context_with_config(config)
+    }
+
     pub async fn create_user(
         ctx: &AuthContext<MemoryDatabaseAdapter>,
         create_user: CreateUser,

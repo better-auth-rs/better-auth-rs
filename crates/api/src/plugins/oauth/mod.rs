@@ -11,6 +11,8 @@ use better_auth_core::plugin::{AuthState, AxumPlugin};
 pub mod encryption;
 mod handlers;
 mod providers;
+#[cfg(test)]
+mod tests;
 mod types;
 
 pub use providers::{OAuthConfig, OAuthProvider, OAuthStateStrategy, OAuthUserInfo};

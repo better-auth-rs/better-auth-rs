@@ -84,6 +84,111 @@ async fn test_forget_password_success() {
 }
 
 #[tokio::test]
+async fn test_forget_password_untrusted_redirect_to_falls_back_to_base_url() {
+    // A custom sender captures the reset URL embedded in the email.
+    use std::sync::Mutex;
+
+    struct UrlCapture {
+        captured: Arc<Mutex<Option<String>>>,
+    }
+
+    #[async_trait::async_trait]
+    impl SendResetPassword for UrlCapture {
+        async fn send(
+            &self,
+            _user: &serde_json::Value,
+            url: &str,
+            _token: &str,
+        ) -> AuthResult<()> {
+            *self.captured.lock().unwrap() = Some(url.to_string());
+            Ok(())
+        }
+    }
+
+    let captured: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+    let sender: Arc<dyn SendResetPassword> = Arc::new(UrlCapture {
+        captured: captured.clone(),
+    });
+
+    let plugin = PasswordManagementPlugin::new().send_reset_password(sender);
+    let (ctx, _user, _session) = create_test_context_with_user().await;
+
+    let body = serde_json::json!({
+        "email": "test@example.com",
+        "redirectTo": "https://evil.example.com/reset"
+    });
+    let req = test_helpers::create_auth_request_no_query(
+        HttpMethod::Post,
+        "/forget-password",
+        None,
+        Some(body.to_string().into_bytes()),
+    );
+
+    let response = plugin.handle_forget_password(&req, &ctx).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let captured_url = captured.lock().unwrap().clone().expect("sender invoked");
+    // Untrusted redirect_to falls back to server base_url — never
+    // embedded in the email, never leaking the reset token off-origin.
+    assert!(captured_url.starts_with("http://localhost:3000/reset-password?token="));
+    assert!(!captured_url.contains("evil.example.com"));
+}
+
+#[tokio::test]
+async fn test_forget_password_rejects_hostname_prefix_attack() {
+    // `base_url.starts_with("https://app.com")` used to let
+    // `"https://app.com.evil.com/x"` through — fixing that is the main
+    // point of upgrading the half-baked `starts_with` check to
+    // `is_redirect_target_trusted`.
+    use std::sync::Mutex;
+
+    struct UrlCapture {
+        captured: Arc<Mutex<Option<String>>>,
+    }
+
+    #[async_trait::async_trait]
+    impl SendResetPassword for UrlCapture {
+        async fn send(
+            &self,
+            _user: &serde_json::Value,
+            url: &str,
+            _token: &str,
+        ) -> AuthResult<()> {
+            *self.captured.lock().unwrap() = Some(url.to_string());
+            Ok(())
+        }
+    }
+
+    let captured: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+    let sender: Arc<dyn SendResetPassword> = Arc::new(UrlCapture {
+        captured: captured.clone(),
+    });
+
+    let plugin = PasswordManagementPlugin::new().send_reset_password(sender);
+    let (ctx, _user, _session) = create_test_context_with_user().await;
+
+    // `http://localhost:3000.evil.com/...` looks "prefix-identical" to
+    // `http://localhost:3000` but the origin is `localhost:3000.evil.com`.
+    let body = serde_json::json!({
+        "email": "test@example.com",
+        "redirectTo": "http://localhost:3000.evil.com/reset"
+    });
+    let req = test_helpers::create_auth_request_no_query(
+        HttpMethod::Post,
+        "/forget-password",
+        None,
+        Some(body.to_string().into_bytes()),
+    );
+
+    let response = plugin.handle_forget_password(&req, &ctx).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let captured_url = captured.lock().unwrap().clone().expect("sender invoked");
+    assert!(!captured_url.contains("evil.com"));
+    assert!(captured_url.starts_with("http://localhost:3000/reset-password"));
+}
+
+#[tokio::test]
 async fn test_forget_password_unknown_email() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, _user, _session) = create_test_context_with_user().await;
@@ -529,6 +634,78 @@ async fn test_reset_password_token_rejects_untrusted_callback_url() {
         .await
         .unwrap_err();
     assert_eq!(err.status_code(), 400);
+}
+
+#[tokio::test]
+async fn test_reset_password_token_valid_with_untrusted_callback_returns_json() {
+    // Valid token + untrusted callback must NOT 302 to evil.com — that
+    // would exfiltrate the reset token. Falls through to JSON response.
+    let plugin = PasswordManagementPlugin::new();
+    let (ctx, user, _session) = create_test_context_with_user().await;
+    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+
+    let mut query = HashMap::new();
+    query.insert(
+        "callbackURL".to_string(),
+        "https://evil.example.com/steal".to_string(),
+    );
+    let req = AuthRequest::from_parts(
+        HttpMethod::Get,
+        "/reset-password/token".to_string(),
+        HashMap::new(),
+        None,
+        query,
+    );
+
+    let response = plugin
+        .handle_reset_password_token(&reset_token, &req, &ctx)
+        .await
+        .unwrap();
+    assert_eq!(response.status, 200);
+    assert!(
+        !response
+            .headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("Location"))
+    );
+    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    assert_eq!(body["token"], reset_token);
+}
+
+#[tokio::test]
+async fn test_reset_password_token_invalid_with_trusted_callback_redirects_with_error() {
+    // Invalid token + trusted callback should 302 to the callback with
+    // ?error=INVALID_TOKEN — confirms the error-redirect branch still
+    // works after the callback-URL trust gate.
+    let plugin = PasswordManagementPlugin::new();
+    let (ctx, _user, _session) = create_test_context_with_user().await;
+
+    let mut query = HashMap::new();
+    query.insert(
+        "callbackURL".to_string(),
+        "http://localhost:3000/reset".to_string(),
+    );
+    let req = AuthRequest::from_parts(
+        HttpMethod::Get,
+        "/reset-password/token".to_string(),
+        HashMap::new(),
+        None,
+        query,
+    );
+
+    let response = plugin
+        .handle_reset_password_token("bogus_token", &req, &ctx)
+        .await
+        .unwrap();
+    assert_eq!(response.status, 302);
+    let location = response
+        .headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("Location"))
+        .map(|(_, v)| v.clone())
+        .expect("Location header");
+    assert!(location.contains("http://localhost:3000/reset"));
+    assert!(location.contains("error=INVALID_TOKEN"));
 }
 
 #[tokio::test]

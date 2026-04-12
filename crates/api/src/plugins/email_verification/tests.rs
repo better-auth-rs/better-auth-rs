@@ -723,9 +723,7 @@ async fn test_verify_email_no_auto_sign_in_no_session() {
 async fn test_verify_email_auto_sign_in_redirect_includes_cookie() {
     let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(true);
 
-    let mut config = test_helpers::create_test_config();
-    config.trusted_origins = vec!["https://myapp.com".to_string()];
-    let ctx = test_helpers::create_test_context_with_config(config);
+    let ctx = test_helpers::create_test_context_with_trusted_origins(&["https://myapp.com"]);
     let _user = ctx
         .database
         .create_user(
@@ -767,9 +765,7 @@ async fn test_verify_email_auto_sign_in_redirect_includes_cookie() {
 async fn test_verify_email_redirect_without_auto_sign_in_no_cookie() {
     let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(false);
 
-    let mut config = test_helpers::create_test_config();
-    config.trusted_origins = vec!["https://myapp.com".to_string()];
-    let ctx = test_helpers::create_test_context_with_config(config);
+    let ctx = test_helpers::create_test_context_with_trusted_origins(&["https://myapp.com"]);
     let _user = ctx
         .database
         .create_user(
@@ -838,9 +834,12 @@ async fn test_verify_email_rejects_untrusted_callback_url() {
         test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
     let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
 
-    // Untrusted callback must not become a server-issued Location.
-    assert_ne!(response.status, 302);
+    // Untrusted callback must fall through to the JSON response, not
+    // become a server-issued Location.
+    assert_eq!(response.status, 200);
     assert!(!response.headers.contains_key("Location"));
+    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    assert_eq!(body["status"], true);
 }
 
 // ------------------------------------------------------------------
