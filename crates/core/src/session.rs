@@ -51,39 +51,42 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
 
     /// Get session by token
     pub async fn get_session(&self, token: &str) -> AuthResult<Option<DB::Session>> {
-        let session = self.database.get_session(token).await?;
+        let mut session = self.database.get_session(token).await?;
 
-        // Check if session exists and is not expired
-        if let Some(ref session) = session {
+        let should_refresh = if let Some(ref s) = session {
             let now = Utc::now();
 
-            if session.expires_at() < now || !session.active() {
+            if s.expires_at() < now || !s.active() {
                 // Session expired or inactive - delete it
                 self.database.delete_session(token).await?;
                 return Ok(None);
             }
 
-            // Update session if configured to do so
             if !self.config.session.disable_session_refresh {
-                let should_refresh = match self.config.session.update_age {
+                match self.config.session.update_age {
                     Some(age) => {
                         // Only refresh if the session was last updated more than
                         // `update_age` ago.
-                        let updated = session.updated_at();
+                        let updated = s.updated_at();
                         Utc::now() - updated >= age
                     }
                     // No update_age set → refresh on every access.
                     None => true,
-                };
-
-                if should_refresh {
-                    let new_expires_at = Utc::now() + self.config.session.expires_in;
-                    let _ = self
-                        .database
-                        .update_session_expiry(token, new_expires_at)
-                        .await;
                 }
+            } else {
+                false
             }
+        } else {
+            false
+        };
+
+        if should_refresh {
+            let new_expires_at = Utc::now() + self.config.session.expires_in;
+            self.database
+                .update_session_expiry(token, new_expires_at)
+                .await?;
+            // Re-read so the returned session reflects the persisted expiry.
+            session = self.database.get_session(token).await?;
         }
 
         Ok(session)
@@ -204,5 +207,101 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
         }
 
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::{MemoryDatabaseAdapter, SessionOps, UserOps};
+    use crate::config::SessionConfig;
+    use crate::types::{CreateUser, User};
+    use chrono::Duration;
+
+    fn test_config(session: SessionConfig) -> Arc<AuthConfig> {
+        Arc::new(AuthConfig {
+            session,
+            ..AuthConfig::default()
+        })
+    }
+
+    async fn setup() -> (Arc<MemoryDatabaseAdapter>, User) {
+        let db = Arc::new(MemoryDatabaseAdapter::new());
+        let user = db
+            .create_user(CreateUser {
+                email: Some("test@example.com".into()),
+                name: Some("Test User".into()),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        (db, user)
+    }
+
+    #[tokio::test]
+    async fn refresh_updates_returned_session_expires_at() {
+        let (db, user) = setup().await;
+        let config = test_config(SessionConfig {
+            expires_in: Duration::hours(1),
+            update_age: None,
+            ..SessionConfig::default()
+        });
+        let mgr = SessionManager::new(config, db.clone());
+
+        let initial = mgr.create_session(&user, None, None).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+
+        let refreshed = mgr.get_session(initial.token()).await.unwrap().unwrap();
+        assert!(refreshed.expires_at() > initial.expires_at());
+    }
+
+    #[tokio::test]
+    async fn refresh_is_throttled_by_update_age() {
+        let (db, user) = setup().await;
+        let config = test_config(SessionConfig {
+            expires_in: Duration::hours(1),
+            update_age: Some(Duration::hours(1)),
+            ..SessionConfig::default()
+        });
+        let mgr = SessionManager::new(config, db.clone());
+
+        let initial = mgr.create_session(&user, None, None).await.unwrap();
+        let observed = mgr.get_session(initial.token()).await.unwrap().unwrap();
+        assert_eq!(observed.expires_at(), initial.expires_at());
+    }
+
+    #[tokio::test]
+    async fn refresh_skipped_when_disabled() {
+        let (db, user) = setup().await;
+        let config = test_config(SessionConfig {
+            expires_in: Duration::hours(1),
+            update_age: None,
+            disable_session_refresh: true,
+            ..SessionConfig::default()
+        });
+        let mgr = SessionManager::new(config, db.clone());
+
+        let initial = mgr.create_session(&user, None, None).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+
+        let observed = mgr.get_session(initial.token()).await.unwrap().unwrap();
+        assert_eq!(observed.expires_at(), initial.expires_at());
+    }
+
+    #[tokio::test]
+    async fn expired_session_is_removed_and_returns_none() {
+        let (db, user) = setup().await;
+        let config = test_config(SessionConfig::default());
+        let mgr = SessionManager::new(config, db.clone());
+
+        let created = mgr.create_session(&user, None, None).await.unwrap();
+        db.update_session_expiry(created.token(), Utc::now() - Duration::seconds(1))
+            .await
+            .unwrap();
+
+        let result = mgr.get_session(created.token()).await.unwrap();
+        assert!(result.is_none());
+        let still_there = db.get_session(created.token()).await.unwrap();
+        assert!(still_there.is_none());
     }
 }
