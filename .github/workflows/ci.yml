@@ -52,20 +52,25 @@ jobs:
   test-all-features:
     name: Test (All Features)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tls: [native-tls, rustls]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Run library unit tests (all features)
-        run: cargo test --workspace --lib --all-features
-      - name: Run integration tests (all features)
+      - name: Run library unit tests (${{ matrix.tls }} + all non-TLS features)
+        run: cargo test --workspace --lib --no-default-features --features "${{ matrix.tls }},axum,derive,sqlx-postgres,redis-cache"
+      - name: Run integration tests (${{ matrix.tls }} + all non-TLS features)
         run: |
-          cargo test --test compatibility_tests --all-features
-          cargo test --test integration_tests --all-features
-          cargo test --test derive_tests --all-features
-          cargo test --test axum_integration_tests --all-features
-          cargo test --test phase0_tests --all-features
-          cargo test --test meta_trait_tests --all-features
+          FEATURES="${{ matrix.tls }},axum,derive,sqlx-postgres,redis-cache"
+          cargo test --test compatibility_tests --no-default-features --features "$FEATURES"
+          cargo test --test integration_tests --no-default-features --features "$FEATURES"
+          cargo test --test derive_tests --no-default-features --features "$FEATURES"
+          cargo test --test axum_integration_tests --no-default-features --features "$FEATURES"
+          cargo test --test phase0_tests --no-default-features --features "$FEATURES"
+          cargo test --test meta_trait_tests --no-default-features --features "$FEATURES"
 
   compat:
     name: Compatibility Tests

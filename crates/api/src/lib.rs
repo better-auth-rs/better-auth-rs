@@ -5,8 +5,9 @@
 #[cfg(all(feature = "native-tls", feature = "rustls"))]
 compile_error!(
     "features `native-tls` and `rustls` are mutually exclusive. \
-     Disable default features and enable only one: \
-     `default-features = false, features = [\"rustls\"]`."
+     Enable exactly one of them: \
+     for `native-tls` (default), remove the `rustls` feature; \
+     for `rustls`, set `default-features = false, features = [\"rustls\"]`."
 );
 
 #[cfg(not(any(feature = "native-tls", feature = "rustls")))]
