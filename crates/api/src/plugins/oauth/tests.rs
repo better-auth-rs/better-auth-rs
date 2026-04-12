@@ -32,7 +32,9 @@ async fn sign_in_social_rejects_untrusted_callback_url() {
 }
 
 #[tokio::test]
-async fn sign_in_social_allows_relative_callback_url() {
+async fn sign_in_social_rejects_relative_callback_url() {
+    // OAuth `redirect_uri` must be absolute; a relative path would pass
+    // any general redirect trust check but fail at token exchange.
     let oauth = test_oauth_config_with_google();
     let ctx = test_helpers::create_test_context();
 
@@ -42,9 +44,8 @@ async fn sign_in_social_allows_relative_callback_url() {
         scopes: None,
     };
 
-    let response = social_sign_in_core(&body, &oauth, &ctx).await.unwrap();
-    assert!(response.redirect);
-    assert!(response.url.starts_with("https://accounts.google.com/"));
+    let err = social_sign_in_core(&body, &oauth, &ctx).await.unwrap_err();
+    assert_eq!(err.status_code(), 400);
 }
 
 #[tokio::test]

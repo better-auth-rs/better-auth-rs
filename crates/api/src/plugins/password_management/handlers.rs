@@ -21,14 +21,18 @@ pub(crate) async fn forget_password_core<DB: DatabaseAdapter>(
     // Resolve the effective redirect_to BEFORE any DB work — keeps the
     // "don't reveal whether the email exists" guarantee (whatever we do
     // must be identical for real and unknown emails) while also avoiding
-    // a wasted verification-token write when redirect_to is untrusted.
+    // a wasted verification-token write when redirect_to is unusable.
+    //
+    // The reset URL is embedded in an outgoing email `href`, so
+    // redirect_to must be an absolute http(s) URL on a trusted origin;
+    // relative paths don't resolve in a mail client.
     let trusted_redirect = body.redirect_to.as_deref().and_then(|url| {
-        if ctx.config.is_redirect_target_trusted(url) {
+        if ctx.config.is_absolute_trusted_callback_url(url) {
             Some(url)
         } else {
             tracing::warn!(
                 redirect_to = %url,
-                "Ignoring untrusted redirect_to"
+                "Ignoring untrusted or non-absolute redirect_to"
             );
             None
         }

@@ -272,13 +272,14 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
 
     // Validate callbackURL even though sign-up does not currently use it:
     // the request type accepts the field, so we must not let a caller
-    // think an untrusted value was accepted. Keeps the security contract
-    // stable if we ever wire sign-up into send_verification_email.
+    // think an untrusted value was accepted. Require an absolute URL so
+    // the contract matches `send_verification_email` / `/sign-in/email`
+    // when sign-up eventually wires this through.
     if let Some(ref url) = body.callback_url
-        && !ctx.config.is_redirect_target_trusted(url)
+        && !ctx.config.is_absolute_trusted_callback_url(url)
     {
         return Err(AuthError::bad_request(
-            "callbackURL is not a trusted origin",
+            "callbackURL must be an absolute http(s) URL on a trusted origin",
         ));
     }
 
@@ -347,15 +348,16 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
     callback_url: Option<&str>,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<SignInCoreResult<DB::User>> {
-    // If the caller supplied a callbackURL it may end up embedded in a
-    // verification email (via `send_verification_on_sign_in`). Reject
-    // untrusted targets before doing any DB work or emitting mail — the
-    // same policy as `/send-verification-email` and `/change-email`.
+    // Defence in depth: `sign_in_core` already validated the callback,
+    // but helper functions called directly (`sign_in_username_core`
+    // passes `None`) must still honour the same contract. Require an
+    // absolute http(s) URL on a trusted origin so any future caller
+    // that plumbs a raw request value through can't regress.
     if let Some(url) = callback_url
-        && !ctx.config.is_redirect_target_trusted(url)
+        && !ctx.config.is_absolute_trusted_callback_url(url)
     {
         return Err(AuthError::bad_request(
-            "callbackURL is not a trusted origin",
+            "callbackURL must be an absolute http(s) URL on a trusted origin",
         ));
     }
 
@@ -420,12 +422,14 @@ pub(crate) async fn sign_in_core<DB: DatabaseAdapter>(
     // Validate callbackURL BEFORE the user lookup so that "unknown user"
     // and "untrusted callback" return the same 400 regardless of whether
     // the email exists — prevents the enumeration oracle that would
-    // otherwise differ 401 vs 400.
+    // otherwise differ 401 vs 400. The callback ends up in a
+    // verification-email `href` when the user is unverified, so require
+    // an absolute URL.
     if let Some(ref url) = body.callback_url
-        && !ctx.config.is_redirect_target_trusted(url)
+        && !ctx.config.is_absolute_trusted_callback_url(url)
     {
         return Err(AuthError::bad_request(
-            "callbackURL is not a trusted origin",
+            "callbackURL must be an absolute http(s) URL on a trusted origin",
         ));
     }
 

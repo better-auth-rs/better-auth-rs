@@ -138,16 +138,19 @@ pub(crate) async fn social_sign_in_core<DB: DatabaseAdapter>(
 ) -> AuthResult<SocialSignInResponse> {
     let provider_name = &body.provider;
 
+    // OAuth providers require `redirect_uri` to be an absolute URI; a
+    // relative callback would pass a looser trust check but fail at
+    // token exchange, leaving an orphaned OAuth state row behind.
     if let Some(ref url) = body.callback_url
-        && !ctx.config.is_redirect_target_trusted(url)
+        && !ctx.config.is_absolute_trusted_callback_url(url)
     {
         tracing::warn!(
             callback_url = %url,
             provider = %provider_name,
-            "Rejected untrusted callbackURL on /sign-in/social"
+            "Rejected callbackURL on /sign-in/social (must be absolute http(s) URL on a trusted origin)"
         );
         return Err(AuthError::bad_request(
-            "callbackURL is not a trusted origin",
+            "callbackURL must be an absolute http(s) URL on a trusted origin",
         ));
     }
 
@@ -181,15 +184,15 @@ pub(crate) async fn link_social_core<DB: DatabaseAdapter>(
     let provider_name = &body.provider;
 
     if let Some(ref url) = body.callback_url
-        && !ctx.config.is_redirect_target_trusted(url)
+        && !ctx.config.is_absolute_trusted_callback_url(url)
     {
         tracing::warn!(
             callback_url = %url,
             provider = %provider_name,
-            "Rejected untrusted callbackURL on /link-social"
+            "Rejected callbackURL on /link-social (must be absolute http(s) URL on a trusted origin)"
         );
         return Err(AuthError::bad_request(
-            "callbackURL is not a trusted origin",
+            "callbackURL must be an absolute http(s) URL on a trusted origin",
         ));
     }
 

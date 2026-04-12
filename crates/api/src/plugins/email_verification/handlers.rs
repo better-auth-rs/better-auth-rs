@@ -14,14 +14,18 @@ pub(super) async fn send_verification_email_core<DB: DatabaseAdapter>(
     config: &EmailVerificationConfig,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<StatusResponse> {
-    // Validate callbackURL before any DB work or user enumeration: keeps
+    // Validate callbackURL before any DB work or user enumeration. Keeps
     // the response uniform across unknown/verified/valid emails when the
     // supplied callback is untrusted, and avoids wasted writes.
+    //
+    // The callback is embedded in the outgoing email `href`, so require
+    // an absolute http(s) URL — a relative path can't be resolved by
+    // a mail client and would produce a dead link.
     if let Some(ref callback_url) = body.callback_url
-        && !ctx.config.is_redirect_target_trusted(callback_url)
+        && !ctx.config.is_absolute_trusted_callback_url(callback_url)
     {
         return Err(AuthError::bad_request(
-            "callbackURL is not a trusted origin",
+            "callbackURL must be an absolute http(s) URL on a trusted origin",
         ));
     }
 

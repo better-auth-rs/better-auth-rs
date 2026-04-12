@@ -640,6 +640,25 @@ impl AuthConfig {
         }
     }
 
+    /// Stricter variant of [`is_redirect_target_trusted`] that requires
+    /// an absolute `http`/`https` URL. Use this for `callbackURL` values
+    /// that are **embedded in an email body** or **forwarded to an OAuth
+    /// provider as `redirect_uri`** — in both contexts a relative path
+    /// produces a broken link (mail clients have no base URL to resolve
+    /// against; OAuth spec requires absolute URIs).
+    ///
+    /// For server-issued `Location` redirects (GET handlers reached via
+    /// email link clicks), relative paths are fine; use the less strict
+    /// [`is_redirect_target_trusted`] there.
+    pub fn is_absolute_trusted_callback_url(&self, target: &str) -> bool {
+        if !self.is_redirect_target_trusted(target) {
+            return false;
+        }
+        // `extract_origin` returns `Some(_)` only for well-formed http/https
+        // absolute URLs; relative paths return `None`.
+        extract_origin(target).is_some()
+    }
+
     pub fn validate(&self) -> Result<(), AuthError> {
         if self.secret.is_empty() {
             return Err(AuthError::config("Secret key cannot be empty"));
@@ -994,6 +1013,27 @@ mod tests {
         let cfg = config_with(vec!["https://bücher.example"]);
         assert!(cfg.is_origin_trusted("https://xn--bcher-kva.example"));
         assert!(cfg.is_redirect_target_trusted("https://xn--bcher-kva.example/book"));
+    }
+
+    #[test]
+    fn absolute_trusted_callback_url_rejects_relative_paths() {
+        // Relative paths are fine for server-issued 302 Location headers
+        // but break when embedded in an email body (mail clients have no
+        // base URL) or forwarded to an OAuth provider as `redirect_uri`
+        // (spec requires absolute). The stricter helper must reject
+        // them even when the origin check would otherwise accept.
+        let cfg = config_with(vec!["https://admin.example.com"]);
+        // Still accepted by the looser redirect helper…
+        assert!(cfg.is_redirect_target_trusted("/dashboard"));
+        // …but not by the email / OAuth helper.
+        assert!(!cfg.is_absolute_trusted_callback_url("/dashboard"));
+        assert!(!cfg.is_absolute_trusted_callback_url("/reset?token=x"));
+        // Absolute trusted URL passes both.
+        assert!(cfg.is_absolute_trusted_callback_url("https://admin.example.com/cb"));
+        // Absolute untrusted URL rejected by both.
+        assert!(!cfg.is_absolute_trusted_callback_url("https://evil.com/cb"));
+        // Non-http schemes rejected by both.
+        assert!(!cfg.is_absolute_trusted_callback_url("javascript:alert(1)"));
     }
 
     #[test]
