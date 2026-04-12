@@ -582,6 +582,36 @@ impl AuthConfig {
     pub fn is_path_disabled(&self, path: &str) -> bool {
         self.disabled_paths.iter().any(|disabled| disabled == path)
     }
+
+    /// Check whether `target` is safe to use as the value of a server-issued
+    /// redirect (302 `Location`) or an absolute link embedded in an outgoing
+    /// email. Safe targets are:
+    ///
+    /// - any value when `advanced.disable_origin_check` is enabled;
+    /// - relative paths starting with `/` (but not protocol-relative `//...`);
+    /// - absolute URLs whose origin matches [`base_url`](Self::base_url) or a
+    ///   [`trusted_origins`](Self::trusted_origins) pattern.
+    ///
+    /// Prevents open-redirect via user-supplied `callbackURL` / `redirectTo`.
+    pub fn is_redirect_target_trusted(&self, target: &str) -> bool {
+        if self.advanced.disable_origin_check {
+            return true;
+        }
+        // Protocol-relative URLs (//evil.com/...) must never be treated as
+        // same-origin; the browser resolves them against the current origin's
+        // scheme but the host is attacker-controlled.
+        if target.starts_with("//") {
+            return false;
+        }
+        if target.starts_with('/') {
+            return true;
+        }
+        match extract_origin(target) {
+            Some(origin) => self.is_origin_trusted(&origin),
+            None => false,
+        }
+    }
+
     pub fn validate(&self) -> Result<(), AuthError> {
         if self.secret.is_empty() {
             return Err(AuthError::config("Secret key cannot be empty"));
@@ -618,4 +648,64 @@ pub fn extract_origin(url: &str) -> Option<String> {
     let host_end = rest.find('/').unwrap_or(rest.len());
     let origin = format!("{}{}", &url[..scheme_end + 3], &rest[..host_end]);
     Some(origin)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config_with(trusted: Vec<&str>) -> AuthConfig {
+        AuthConfig {
+            base_url: "https://app.example.com".into(),
+            trusted_origins: trusted.into_iter().map(String::from).collect(),
+            ..AuthConfig::default()
+        }
+    }
+
+    #[test]
+    fn redirect_target_allows_relative_path() {
+        let cfg = config_with(vec![]);
+        assert!(cfg.is_redirect_target_trusted("/dashboard"));
+        assert!(cfg.is_redirect_target_trusted("/reset-password?token=abc"));
+    }
+
+    #[test]
+    fn redirect_target_rejects_protocol_relative() {
+        let cfg = config_with(vec![]);
+        assert!(!cfg.is_redirect_target_trusted("//evil.com/x"));
+        assert!(!cfg.is_redirect_target_trusted("//evil.com"));
+    }
+
+    #[test]
+    fn redirect_target_allows_base_url_origin() {
+        let cfg = config_with(vec![]);
+        assert!(cfg.is_redirect_target_trusted("https://app.example.com/dashboard"));
+    }
+
+    #[test]
+    fn redirect_target_allows_trusted_origin() {
+        let cfg = config_with(vec!["https://admin.example.com"]);
+        assert!(cfg.is_redirect_target_trusted("https://admin.example.com/callback"));
+    }
+
+    #[test]
+    fn redirect_target_rejects_untrusted_origin() {
+        let cfg = config_with(vec!["https://admin.example.com"]);
+        assert!(!cfg.is_redirect_target_trusted("https://evil.com/cb"));
+    }
+
+    #[test]
+    fn redirect_target_rejects_unparseable_absolute() {
+        let cfg = config_with(vec![]);
+        assert!(!cfg.is_redirect_target_trusted("javascript:alert(1)"));
+        assert!(!cfg.is_redirect_target_trusted("data:text/html,x"));
+    }
+
+    #[test]
+    fn redirect_target_bypass_when_disable_origin_check() {
+        let mut cfg = config_with(vec![]);
+        cfg.advanced.disable_origin_check = true;
+        assert!(cfg.is_redirect_target_trusted("https://evil.com/cb"));
+        assert!(cfg.is_redirect_target_trusted("//evil.com"));
+    }
 }
