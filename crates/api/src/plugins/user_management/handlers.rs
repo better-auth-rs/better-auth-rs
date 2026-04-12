@@ -85,6 +85,14 @@ pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
     config: &UserManagementConfig,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<StatusMessageResponse> {
+    if let Some(ref url) = body.callback_url
+        && !ctx.config.is_redirect_target_trusted(url)
+    {
+        return Err(AuthError::bad_request(
+            "callbackURL is not a trusted origin",
+        ));
+    }
+
     // Prevent changing to the same email
     if user.email().map(|e| e == body.new_email).unwrap_or(false) {
         return Err(AuthError::bad_request(

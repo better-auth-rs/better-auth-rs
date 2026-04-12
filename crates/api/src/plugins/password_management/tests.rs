@@ -505,6 +505,33 @@ async fn test_reset_password_token_endpoint_invalid_token() {
 }
 
 #[tokio::test]
+async fn test_reset_password_token_rejects_untrusted_callback_url() {
+    // Untrusted callbackURL on an invalid token must not redirect to the
+    // attacker origin; it falls through to the 400 path.
+    let plugin = PasswordManagementPlugin::new();
+    let (ctx, _user, _session) = create_test_context_with_user().await;
+
+    let mut query = HashMap::new();
+    query.insert(
+        "callbackURL".to_string(),
+        "https://evil.example.com/steal".to_string(),
+    );
+    let req = AuthRequest::from_parts(
+        HttpMethod::Get,
+        "/reset-password/token".to_string(),
+        HashMap::new(),
+        None,
+        query,
+    );
+
+    let err = plugin
+        .handle_reset_password_token("invalid_token", &req, &ctx)
+        .await
+        .unwrap_err();
+    assert_eq!(err.status_code(), 400);
+}
+
+#[tokio::test]
 async fn test_password_validation() {
     let plugin = PasswordManagementPlugin::new();
     let mut config = AuthConfig::new("test-secret");

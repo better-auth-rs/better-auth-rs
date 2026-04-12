@@ -36,6 +36,14 @@ pub(super) async fn send_verification_email_core<DB: DatabaseAdapter>(
         expires_at,
     };
 
+    if let Some(ref callback_url) = body.callback_url
+        && !ctx.config.is_redirect_target_trusted(callback_url)
+    {
+        return Err(AuthError::bad_request(
+            "callbackURL is not a trusted origin",
+        ));
+    }
+
     ctx.database
         .create_verification(create_verification)
         .await?;
@@ -143,13 +151,21 @@ pub(super) async fn verify_email_core<DB: DatabaseAdapter>(
         None
     };
 
-    // If callback URL is provided, redirect
+    // If callback URL is provided and trusted, redirect. Untrusted callbacks
+    // fall through to the JSON branch to avoid reflecting an attacker-chosen
+    // origin into a server-issued Location header (open redirect).
     if let Some(ref callback_url) = query.callback_url {
-        let redirect_url = format!("{}?verified=true", callback_url);
-        return Ok(VerifyEmailResult::Redirect {
-            url: redirect_url,
-            session_token: session_info.map(|(_, t)| t),
-        });
+        if ctx.config.is_redirect_target_trusted(callback_url) {
+            let redirect_url = format!("{}?verified=true", callback_url);
+            return Ok(VerifyEmailResult::Redirect {
+                url: redirect_url,
+                session_token: session_info.map(|(_, t)| t),
+            });
+        }
+        tracing::warn!(
+            callback_url = %callback_url,
+            "Ignoring untrusted callbackURL on /verify-email"
+        );
     }
 
     // Return JSON

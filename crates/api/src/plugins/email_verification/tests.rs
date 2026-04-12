@@ -723,7 +723,9 @@ async fn test_verify_email_no_auto_sign_in_no_session() {
 async fn test_verify_email_auto_sign_in_redirect_includes_cookie() {
     let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(true);
 
-    let ctx = test_helpers::create_test_context();
+    let mut config = test_helpers::create_test_config();
+    config.trusted_origins = vec!["https://myapp.com".to_string()];
+    let ctx = test_helpers::create_test_context_with_config(config);
     let _user = ctx
         .database
         .create_user(
@@ -765,7 +767,9 @@ async fn test_verify_email_auto_sign_in_redirect_includes_cookie() {
 async fn test_verify_email_redirect_without_auto_sign_in_no_cookie() {
     let plugin = EmailVerificationPlugin::new().auto_sign_in_after_verification(false);
 
-    let ctx = test_helpers::create_test_context();
+    let mut config = test_helpers::create_test_config();
+    config.trusted_origins = vec!["https://myapp.com".to_string()];
+    let ctx = test_helpers::create_test_context_with_config(config);
     let _user = ctx
         .database
         .create_user(
@@ -798,6 +802,45 @@ async fn test_verify_email_redirect_without_auto_sign_in_no_cookie() {
 
     assert_eq!(response.status, 302);
     assert!(!response.headers.contains_key("Set-Cookie"));
+}
+
+#[tokio::test]
+async fn test_verify_email_rejects_untrusted_callback_url() {
+    let plugin = EmailVerificationPlugin::new();
+    let ctx = test_helpers::create_test_context();
+    let _user = ctx
+        .database
+        .create_user(
+            CreateUser::new()
+                .with_email("untrusted-cb@test.com")
+                .with_name("U"),
+        )
+        .await
+        .unwrap();
+
+    let token_value = format!("verify_{}", Uuid::new_v4());
+    ctx.database
+        .create_verification(CreateVerification {
+            identifier: "untrusted-cb@test.com".to_string(),
+            value: token_value.clone(),
+            expires_at: Utc::now() + Duration::hours(1),
+        })
+        .await
+        .unwrap();
+
+    let mut query = HashMap::new();
+    query.insert("token".to_string(), token_value);
+    query.insert(
+        "callbackURL".to_string(),
+        "https://evil.example.com/pwned".to_string(),
+    );
+    let req =
+        test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
+    let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
+
+    // Untrusted callback must not become a server-issued Location.
+    assert_ne!(response.status, 302);
+    assert!(!response.headers.contains_key("Location"));
 }
 
 // ------------------------------------------------------------------
@@ -913,6 +956,40 @@ async fn test_send_verification_email_already_verified_returns_error() {
         .unwrap();
 
     let body = serde_json::json!({ "email": "verified@test.com" });
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    let req = AuthRequest::from_parts(
+        HttpMethod::Post,
+        "/send-verification-email".to_string(),
+        headers,
+        Some(body.to_string().into_bytes()),
+        HashMap::new(),
+    );
+    let err = plugin
+        .handle_send_verification_email(&req, &ctx)
+        .await
+        .unwrap_err();
+    assert_eq!(err.status_code(), 400);
+}
+
+#[tokio::test]
+async fn test_send_verification_email_rejects_untrusted_callback_url() {
+    let plugin = EmailVerificationPlugin::new();
+    let ctx = test_helpers::create_test_context();
+    let _user = ctx
+        .database
+        .create_user(
+            CreateUser::new()
+                .with_email("sve-cb@test.com")
+                .with_name("S"),
+        )
+        .await
+        .unwrap();
+
+    let body = serde_json::json!({
+        "email": "sve-cb@test.com",
+        "callbackURL": "https://evil.example.com/grab",
+    });
     let mut headers = HashMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
     let req = AuthRequest::from_parts(

@@ -42,14 +42,12 @@ pub(crate) async fn forget_password_core<DB: DatabaseAdapter>(
         .create_verification(create_verification)
         .await?;
 
-    // Build reset URL — only allow redirect_to when it shares the same
-    // origin as the configured base_url to prevent open-redirect /
-    // token-exfiltration attacks.
+    // Build reset URL — only allow redirect_to that is a trusted redirect
+    // target to prevent open-redirect / token-exfiltration attacks.
     let reset_url = if let Some(redirect_to) = &body.redirect_to {
-        if redirect_to.starts_with('/') || redirect_to.starts_with(&ctx.config.base_url) {
+        if ctx.config.is_redirect_target_trusted(redirect_to) {
             format!("{}?token={}", redirect_to, reset_token)
         } else {
-            // Untrusted origin — fall back to server-side base URL.
             tracing::warn!(
                 redirect_to = %redirect_to,
                 "Ignoring untrusted redirect_to"
@@ -174,26 +172,38 @@ pub(crate) async fn reset_password_token_core<DB: DatabaseAdapter>(
     query: &ResetPasswordTokenQuery,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<ResetPasswordTokenResult> {
+    // Only use the supplied callbackURL if it is a trusted redirect target —
+    // otherwise it becomes an open-redirect vector that also leaks the reset
+    // token into an attacker-controlled origin.
+    let callback_url = match query.callback_url.as_deref() {
+        Some(url) if ctx.config.is_redirect_target_trusted(url) => Some(url),
+        Some(url) => {
+            tracing::warn!(
+                callback_url = %url,
+                "Ignoring untrusted callbackURL on /reset-password/:token"
+            );
+            None
+        }
+        None => None,
+    };
+
     // Validate the reset token exists and is not expired
     match find_user_by_reset_token(token, ctx).await? {
         Some((_user, _verification)) => {}
         None => {
-            // Redirect to callback URL with error if provided
-            if let Some(callback_url) = &query.callback_url {
-                let redirect_url = format!("{}?error=INVALID_TOKEN", callback_url);
+            if let Some(cb) = callback_url {
+                let redirect_url = format!("{}?error=INVALID_TOKEN", cb);
                 return Ok(ResetPasswordTokenResult::Redirect(redirect_url));
             }
             return Err(AuthError::bad_request("Invalid or expired reset token"));
         }
     };
 
-    // If callback URL is provided, redirect with valid token
-    if let Some(callback_url) = &query.callback_url {
-        let redirect_url = format!("{}?token={}", callback_url, token);
+    if let Some(cb) = callback_url {
+        let redirect_url = format!("{}?token={}", cb, token);
         return Ok(ResetPasswordTokenResult::Redirect(redirect_url));
     }
 
-    // Otherwise return the token directly
     Ok(ResetPasswordTokenResult::Json(ResetPasswordTokenResponse {
         token: token.to_string(),
     }))

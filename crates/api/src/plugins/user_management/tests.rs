@@ -60,6 +60,34 @@ async fn test_change_email_same_email() {
 }
 
 #[tokio::test]
+async fn test_change_email_rejects_untrusted_callback_url() {
+    let plugin = UserManagementPlugin::new().change_email_enabled(true);
+    let (ctx, _user, session) = test_helpers::create_test_context_with_user(
+        CreateUser::new()
+            .with_email("test@example.com")
+            .with_name("Test User")
+            .with_email_verified(true),
+        Duration::hours(24),
+    )
+    .await;
+
+    let body = serde_json::json!({
+        "newEmail": "new@example.com",
+        "callbackURL": "https://evil.example.com/steal",
+    });
+    let req = test_helpers::create_auth_request(
+        HttpMethod::Post,
+        "/change-email",
+        Some(&session.token),
+        Some(body.to_string().into_bytes()),
+        HashMap::new(),
+    );
+
+    let err = plugin.handle_change_email(&req, &ctx).await.unwrap_err();
+    assert_eq!(err.status_code(), 400);
+}
+
+#[tokio::test]
 async fn test_change_email_unauthenticated() {
     let plugin = UserManagementPlugin::new().change_email_enabled(true);
     let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
