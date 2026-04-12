@@ -270,6 +270,18 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
         return Err(AuthError::forbidden("User registration is not enabled"));
     }
 
+    // Validate callbackURL even though sign-up does not currently use it:
+    // the request type accepts the field, so we must not let a caller
+    // think an untrusted value was accepted. Keeps the security contract
+    // stable if we ever wire sign-up into send_verification_email.
+    if let Some(ref url) = body.callback_url
+        && !ctx.config.is_redirect_target_trusted(url)
+    {
+        return Err(AuthError::bad_request(
+            "callbackURL is not a trusted origin",
+        ));
+    }
+
     password_utils::validate_password(
         &body.password,
         config.password_min_length,
@@ -335,6 +347,18 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
     callback_url: Option<&str>,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<SignInCoreResult<DB::User>> {
+    // If the caller supplied a callbackURL it may end up embedded in a
+    // verification email (via `send_verification_on_sign_in`). Reject
+    // untrusted targets before doing any DB work or emitting mail — the
+    // same policy as `/send-verification-email` and `/change-email`.
+    if let Some(url) = callback_url
+        && !ctx.config.is_redirect_target_trusted(url)
+    {
+        return Err(AuthError::bad_request(
+            "callbackURL is not a trusted origin",
+        ));
+    }
+
     // Verify password
     let stored_hash = user.password_hash().ok_or(AuthError::InvalidCredentials)?;
 
