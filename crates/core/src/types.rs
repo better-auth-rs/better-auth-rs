@@ -86,6 +86,7 @@ pub struct Account {
     #[serde(rename = "refreshTokenExpiresAt")]
     pub refresh_token_expires_at: Option<DateTime<Utc>>,
     pub scope: Option<String>,
+    #[serde(skip_serializing, default)]
     pub password: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
@@ -654,4 +655,53 @@ pub struct ListUsersParams {
     pub filter_field: Option<String>,
     pub filter_value: Option<String>,
     pub filter_operator: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn account_password_is_never_serialized() {
+        let account = Account {
+            id: "a".into(),
+            account_id: "b".into(),
+            provider_id: "credential".into(),
+            user_id: "u".into(),
+            access_token: None,
+            refresh_token: None,
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: None,
+            password: Some("argon2$v=19$m=19456,t=2,p=1$xxxx".into()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let json = serde_json::to_value(&account).unwrap();
+        assert!(
+            json.get("password").is_none(),
+            "password must never appear in serialized Account JSON; got: {json}"
+        );
+    }
+
+    #[test]
+    fn account_deserializes_without_password_field() {
+        let json = serde_json::json!({
+            "id": "a",
+            "accountId": "b",
+            "providerId": "google",
+            "userId": "u",
+            "accessToken": null,
+            "refreshToken": null,
+            "idToken": null,
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "createdAt": "2025-01-01T00:00:00Z",
+            "updatedAt": "2025-01-01T00:00:00Z",
+        });
+        let account: Account = serde_json::from_value(json).unwrap();
+        assert!(account.password.is_none());
+    }
 }
