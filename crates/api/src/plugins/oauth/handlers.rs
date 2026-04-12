@@ -126,6 +126,14 @@ pub(crate) async fn social_sign_in_core<DB: DatabaseAdapter>(
 ) -> AuthResult<SocialSignInResponse> {
     let provider_name = &body.provider;
 
+    if let Some(ref url) = body.callback_url
+        && !ctx.config.is_redirect_target_trusted(url)
+    {
+        return Err(AuthError::bad_request(
+            "callbackURL is not a trusted origin",
+        ));
+    }
+
     let callback_url = body
         .callback_url
         .clone()
@@ -149,6 +157,14 @@ pub(crate) async fn link_social_core<DB: DatabaseAdapter>(
     ctx: &AuthContext<DB>,
 ) -> AuthResult<SocialSignInResponse> {
     let provider_name = &body.provider;
+
+    if let Some(ref url) = body.callback_url
+        && !ctx.config.is_redirect_target_trusted(url)
+    {
+        return Err(AuthError::bad_request(
+            "callbackURL is not a trusted origin",
+        ));
+    }
 
     let callback_url = body
         .callback_url
