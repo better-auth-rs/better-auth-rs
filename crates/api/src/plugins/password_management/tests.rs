@@ -94,12 +94,7 @@ async fn test_forget_password_untrusted_redirect_to_falls_back_to_base_url() {
 
     #[async_trait::async_trait]
     impl SendResetPassword for UrlCapture {
-        async fn send(
-            &self,
-            _user: &serde_json::Value,
-            url: &str,
-            _token: &str,
-        ) -> AuthResult<()> {
+        async fn send(&self, _user: &serde_json::Value, url: &str, _token: &str) -> AuthResult<()> {
             *self.captured.lock().unwrap() = Some(url.to_string());
             Ok(())
         }
@@ -148,12 +143,7 @@ async fn test_forget_password_rejects_hostname_prefix_attack() {
 
     #[async_trait::async_trait]
     impl SendResetPassword for UrlCapture {
-        async fn send(
-            &self,
-            _user: &serde_json::Value,
-            url: &str,
-            _token: &str,
-        ) -> AuthResult<()> {
+        async fn send(&self, _user: &serde_json::Value, url: &str, _token: &str) -> AuthResult<()> {
             *self.captured.lock().unwrap() = Some(url.to_string());
             Ok(())
         }

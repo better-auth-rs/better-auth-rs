@@ -45,18 +45,22 @@ All notable changes to this project will be documented in this file.
 ### Behavior change (breaking for some deployments)
 
 - `POST /sign-in/social`, `POST /link-social`, `POST /sign-in/email`,
-  `POST /sign-up/email`, `POST /change-email`, `POST /send-verification-email`,
-  and `POST /forget-password` now return `400 Bad Request` when
-  `callbackURL` / `redirectTo` is set to an origin that is not listed in
+  `POST /sign-up/email`, `POST /change-email`, and
+  `POST /send-verification-email` now return `400 Bad Request` when
+  `callbackURL` is set to an origin that is not listed in
   `trusted_origins` and is not same-origin with `base_url`. This is
   stricter than upstream TypeScript `better-auth@1.4.19` for the OAuth
   flows. Deployments that rely on cross-origin callbacks must add the
   callback origin to `AuthConfig::trusted_origins` or set
   `advanced.disable_origin_check = true`.
-- `GET /verify-email` and `GET /reset-password/:token` silently ignore
-  an untrusted callback and fall through to their JSON responses (these
-  endpoints are reached by email-link clicks, so a hard 400 would strand
-  users who have already consumed a one-shot token).
+- `POST /forget-password`, `GET /verify-email`, and
+  `GET /reset-password/:token` silently ignore an untrusted
+  `callbackURL` / `redirectTo` and fall back to a server-side URL
+  (`/forget-password` builds the reset email against `base_url`; the
+  GET endpoints fall through to their JSON responses). These endpoints
+  are reached via email-link clicks and/or sign-in enumeration-safety
+  paths — a hard 400 would either strand users or reveal email
+  existence, so we log a `tracing::warn!` and accept the request.
 
 ## [0.9.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.8.0...v0.9.0) - 2026-03-11
 

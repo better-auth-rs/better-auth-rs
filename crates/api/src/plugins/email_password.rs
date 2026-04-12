@@ -840,7 +840,10 @@ mod tests {
             "Password123!",
             "https://evil.example.com/cb",
         );
-        let err_existing = plugin.handle_sign_in(&bad_for_existing, &ctx).await.unwrap_err();
+        let err_existing = plugin
+            .handle_sign_in(&bad_for_existing, &ctx)
+            .await
+            .unwrap_err();
         assert_eq!(err_existing.status_code(), 400);
 
         let bad_for_missing = create_signin_request_with_callback(
@@ -848,7 +851,10 @@ mod tests {
             "Password123!",
             "https://evil.example.com/cb",
         );
-        let err_missing = plugin.handle_sign_in(&bad_for_missing, &ctx).await.unwrap_err();
+        let err_missing = plugin
+            .handle_sign_in(&bad_for_missing, &ctx)
+            .await
+            .unwrap_err();
         assert_eq!(err_missing.status_code(), 400);
         assert_eq!(err_existing.to_string(), err_missing.to_string());
     }
