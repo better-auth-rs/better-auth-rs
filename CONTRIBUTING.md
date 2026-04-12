@@ -44,7 +44,7 @@ Install the TypeScript reference server used by the compatibility
 harness:
 
 ```bash
-cd compat-tests/reference-server && bun install
+cd compat-tests/reference-server && npm install
 ```
 
 A local checkout of https://github.com/better-auth/better-auth is
