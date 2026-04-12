@@ -57,8 +57,16 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
             let now = Utc::now();
 
             if s.expires_at() < now || !s.active() {
-                // Session expired or inactive - delete it
-                self.database.delete_session(token).await?;
+                // Session expired or inactive — best-effort cleanup. A DB
+                // hiccup here shouldn't turn "your session is expired" into
+                // a 500; the row will be caught by the next access or the
+                // periodic `cleanup_expired_sessions` sweep.
+                if let Err(err) = self.database.delete_session(token).await {
+                    tracing::warn!(
+                        error = %err,
+                        "Failed to delete expired session; will be retried later"
+                    );
+                }
                 return Ok(None);
             }
 
@@ -89,11 +97,23 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
             {
                 Ok(()) => {
                     // Re-read so the returned session reflects the new expiry.
-                    // If the row was concurrently revoked (re-read returns None),
-                    // keep the pre-refresh session rather than pretending the
-                    // caller has no session mid-request.
-                    if let Some(refreshed) = self.database.get_session(token).await? {
-                        session = Some(refreshed);
+                    // Both failure modes fall back to the pre-refresh session:
+                    // a concurrent revoke (re-read returns None) shouldn't log
+                    // the user out mid-request, and a second DB hiccup
+                    // shouldn't turn a successful refresh into a 500.
+                    match self.database.get_session(token).await {
+                        Ok(Some(refreshed)) => session = Some(refreshed),
+                        Ok(None) => {
+                            tracing::warn!(
+                                "Session re-read after refresh returned None (concurrent revoke?); returning pre-refresh value"
+                            );
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                error = %err,
+                                "Session re-read after refresh failed; returning pre-refresh value"
+                            );
+                        }
                     }
                 }
                 Err(err) => {
