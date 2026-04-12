@@ -82,11 +82,31 @@ impl<DB: DatabaseAdapter> SessionManager<DB> {
 
         if should_refresh {
             let new_expires_at = Utc::now() + self.config.session.expires_in;
-            self.database
+            match self
+                .database
                 .update_session_expiry(token, new_expires_at)
-                .await?;
-            // Re-read so the returned session reflects the persisted expiry.
-            session = self.database.get_session(token).await?;
+                .await
+            {
+                Ok(()) => {
+                    // Re-read so the returned session reflects the new expiry.
+                    // If the row was concurrently revoked (re-read returns None),
+                    // keep the pre-refresh session rather than pretending the
+                    // caller has no session mid-request.
+                    if let Some(refreshed) = self.database.get_session(token).await? {
+                        session = Some(refreshed);
+                    }
+                }
+                Err(err) => {
+                    // Transient write failure (connection reset, contention,
+                    // etc.) must not fail the whole request. Keep the
+                    // pre-refresh session — auth still works, the refresh
+                    // window will be retried on the next call.
+                    tracing::warn!(
+                        error = %err,
+                        "Failed to refresh session expiry; returning pre-refresh session"
+                    );
+                }
+            }
         }
 
         Ok(session)
