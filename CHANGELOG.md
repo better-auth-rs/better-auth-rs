@@ -6,12 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- `SessionManager::get_session` no longer silently discards
-  `update_session_expiry` failures; the updated `expires_at` is reflected
-  on the returned session so downstream code never observes a stale value.
-  Transient write errors and concurrent revocations both fall back to the
-  pre-refresh session with a `tracing::warn!`, so auth continues to work
-  across DB hiccups instead of surfacing a 500.
+- `SessionManager::get_session` previously discarded
+  `update_session_expiry` failures with `let _ = ...` and returned the
+  pre-refresh session, so callers observed a stale `expires_at` and real
+  DB errors were invisible. On the happy path the returned session now
+  reflects the persisted expiry. Transient write errors, re-read
+  failures, and concurrent revocations all emit a `tracing::warn!` and
+  fall back to the pre-refresh session instead of 500-ing the request.
 
 ### Behavior change
 
@@ -20,7 +21,8 @@ All notable changes to this project will be documented in this file.
   Requests that declare `Content-Length` above the cap are rejected with
   `413 Payload Too Large` before any bytes are buffered. Transport
   failures during the read (malformed chunked framing, broken
-  connection, etc.) continue to surface as `400 Bad Request`.
+  connection, etc.) now surface as `400 Bad Request` with the underlying
+  error captured via `tracing::warn!` for operators.
 
 ## [0.9.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.8.0...v0.9.0) - 2026-03-11
 
