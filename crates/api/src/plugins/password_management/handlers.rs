@@ -18,6 +18,22 @@ pub(crate) async fn forget_password_core<DB: DatabaseAdapter>(
     config: &PasswordManagementConfig,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<StatusResponse> {
+    // Resolve the effective redirect_to BEFORE any DB work — keeps the
+    // "don't reveal whether the email exists" guarantee (whatever we do
+    // must be identical for real and unknown emails) while also avoiding
+    // a wasted verification-token write when redirect_to is untrusted.
+    let trusted_redirect = body.redirect_to.as_deref().and_then(|url| {
+        if ctx.config.is_redirect_target_trusted(url) {
+            Some(url)
+        } else {
+            tracing::warn!(
+                redirect_to = %url,
+                "Ignoring untrusted redirect_to"
+            );
+            None
+        }
+    });
+
     // Check if user exists
     let user = match ctx.database.get_user_by_email(&body.email).await? {
         Some(user) => user,
@@ -42,28 +58,14 @@ pub(crate) async fn forget_password_core<DB: DatabaseAdapter>(
         .create_verification(create_verification)
         .await?;
 
-    // Build reset URL — only allow redirect_to that is a trusted redirect
-    // target to prevent open-redirect / token-exfiltration attacks.
-    let reset_url = if let Some(redirect_to) = &body.redirect_to {
-        if ctx.config.is_redirect_target_trusted(redirect_to) {
-            format!("{}?token={}", redirect_to, reset_token)
-        } else {
-            // Untrusted origin — fall back to server-side base URL so the
-            // reset email still reaches a valid endpoint.
-            tracing::warn!(
-                redirect_to = %redirect_to,
-                "Ignoring untrusted redirect_to"
-            );
-            format!(
-                "{}/reset-password?token={}",
-                ctx.config.base_url, reset_token
-            )
-        }
-    } else {
-        format!(
+    // Build reset URL. Untrusted `redirect_to` was already filtered to
+    // `None`, so this branch only ever reflects a value we have checked.
+    let reset_url = match trusted_redirect {
+        Some(redirect_to) => format!("{}?token={}", redirect_to, reset_token),
+        None => format!(
             "{}/reset-password?token={}",
             ctx.config.base_url, reset_token
-        )
+        ),
     };
 
     if config.send_email_notifications {

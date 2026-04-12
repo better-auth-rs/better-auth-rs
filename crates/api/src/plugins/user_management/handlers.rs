@@ -85,6 +85,19 @@ pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
     config: &UserManagementConfig,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<StatusMessageResponse> {
+    // Validate callbackURL up front. Even the `update_without_verification`
+    // branch does this: if a caller supplies `callbackURL`, the API
+    // contract is that we act on it — silently ignoring an untrusted
+    // value lets the next refactor accidentally wire it into an email
+    // without anyone realising validation was skipped.
+    if let Some(ref url) = body.callback_url
+        && !ctx.config.is_redirect_target_trusted(url)
+    {
+        return Err(AuthError::bad_request(
+            "callbackURL is not a trusted origin",
+        ));
+    }
+
     // Prevent changing to the same email
     if user.email().map(|e| e == body.new_email).unwrap_or(false) {
         return Err(AuthError::bad_request(
@@ -105,9 +118,6 @@ pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
     }
 
     // If update_without_verification is true, update the email immediately.
-    // In this branch the supplied callbackURL is never used, so we don't
-    // validate it — rejecting an untrusted callback here would 400 clients
-    // who legitimately rely on the immediate-update flow.
     if config.change_email.update_without_verification {
         let update_user = UpdateUser {
             email: Some(body.new_email.clone()),
@@ -122,8 +132,10 @@ pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
         });
     }
 
-    // The verification flow embeds callbackURL in the outgoing email, so
-    // it must be a trusted redirect target before we generate any token.
+    // Defence in depth: this check is already covered at the top of the
+    // function, but keep it adjacent to the `create_verification_token`
+    // call so future splits of this function can't silently drop the
+    // guard. The helper is idempotent on valid input.
     if let Some(ref url) = body.callback_url
         && !ctx.config.is_redirect_target_trusted(url)
     {

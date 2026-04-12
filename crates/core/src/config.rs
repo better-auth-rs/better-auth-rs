@@ -563,7 +563,10 @@ impl AuthConfig {
     ///    extracting the origin portion from the pattern).
     ///
     /// Glob patterns are supported — `*` matches any characters except `/`,
-    /// `**` matches any characters including `/`.
+    /// `**` matches any characters including `/`. Patterns containing `*`
+    /// are parsed using naive string splitting rather than the strict
+    /// WHATWG URL parser so that `http://localhost:*` and `*://app.com`
+    /// keep working.
     pub fn is_origin_trusted(&self, origin: &str) -> bool {
         // Check base_url origin
         if let Some(base_origin) = extract_origin(&self.base_url)
@@ -573,7 +576,7 @@ impl AuthConfig {
         }
         // Check trusted_origins patterns
         self.trusted_origins.iter().any(|pattern| {
-            let pattern_origin = extract_origin(pattern).unwrap_or_default();
+            let pattern_origin = extract_pattern_origin(pattern);
             glob_match::glob_match(&pattern_origin, origin)
         })
     }
@@ -601,6 +604,16 @@ impl AuthConfig {
     /// rejected. Prevents open-redirect via user-supplied `callbackURL`
     /// / `redirectTo`.
     pub fn is_redirect_target_trusted(&self, target: &str) -> bool {
+        // Reject control characters (CR/LF, NUL, TAB, etc.) and the
+        // double-quote character outright. Any of them would let the
+        // caller break out of the Location header or the surrounding
+        // email-HTML `href="..."` attribute once this value is
+        // interpolated by a downstream `format!`. WHATWG URL parsers
+        // strip most of these silently but our callers treat the string
+        // as opaque, so the guard must live here.
+        if target.chars().any(|c| c.is_control() || c == '"') {
+            return false;
+        }
         // Authority smuggling must NEVER be accepted, even under
         // `disable_origin_check`. That flag is an opt-out of same-origin
         // checks, not a licence to let the caller pick the host.
@@ -669,6 +682,22 @@ pub fn extract_origin(url: &str) -> Option<String> {
         ::url::Origin::Tuple(..) => Some(parsed.origin().ascii_serialization()),
         ::url::Origin::Opaque(_) => None,
     }
+}
+
+/// Naïve origin extractor used only for matching `trusted_origins`
+/// patterns. Unlike [`extract_origin`] this does not invoke a strict URL
+/// parser, so glob patterns with non-RFC characters (`*`, wildcard
+/// ports) survive. For any value an operator is likely to configure —
+/// `https://*.example.com`, `http://localhost:*`, `*://app.com` — we
+/// return the `"scheme://authority"` prefix unchanged and let
+/// `glob_match` do the final comparison.
+fn extract_pattern_origin(pattern: &str) -> String {
+    let Some(scheme_end) = pattern.find("://") else {
+        return String::new();
+    };
+    let rest = &pattern[scheme_end + 3..];
+    let host_end = rest.find('/').unwrap_or(rest.len());
+    format!("{}{}", &pattern[..scheme_end + 3], &rest[..host_end])
 }
 
 /// Detect attacker-controlled authority smuggling in a redirect target.
@@ -815,5 +844,35 @@ mod tests {
         assert!(cfg.is_redirect_target_trusted("https://admin.example.com:8443/x"));
         // Different port → not the same origin.
         assert!(!cfg.is_redirect_target_trusted("https://admin.example.com/x"));
+    }
+
+    #[test]
+    fn redirect_target_rejects_control_chars_and_quotes() {
+        // CR/LF would split a Location header; `"` would break out of
+        // an `href="..."` attribute in the rendered email.
+        let cfg = config_with(vec![]);
+        assert!(!cfg.is_redirect_target_trusted("/path\r\nEvil-Header: x"));
+        assert!(!cfg.is_redirect_target_trusted("/path\nEvil: x"));
+        assert!(!cfg.is_redirect_target_trusted("/path\"><script>"));
+        assert!(!cfg.is_redirect_target_trusted("/path\u{0000}null"));
+        assert!(!cfg.is_redirect_target_trusted("https://app.example.com/x\r\n"));
+    }
+
+    #[test]
+    fn trusted_origins_supports_port_and_scheme_globs() {
+        // Regression for switching extract_origin to url::Url::parse —
+        // `http://localhost:*` and similar wildcard patterns must stay
+        // usable. Strict URL parsing would reject them.
+        let cfg = config_with(vec![
+            "http://localhost:*",
+            "https://*.example.com",
+            "*://api.staging.test",
+        ]);
+        assert!(cfg.is_origin_trusted("http://localhost:3000"));
+        assert!(cfg.is_origin_trusted("http://localhost:8080"));
+        assert!(cfg.is_origin_trusted("https://app.example.com"));
+        assert!(cfg.is_origin_trusted("http://api.staging.test"));
+        assert!(cfg.is_origin_trusted("https://api.staging.test"));
+        assert!(!cfg.is_origin_trusted("http://localhost.evil.com"));
     }
 }
