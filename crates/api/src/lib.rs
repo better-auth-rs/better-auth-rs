@@ -2,6 +2,19 @@
 //!
 //! Plugin implementations for the Better Auth authentication framework.
 
+#[cfg(all(feature = "native-tls", feature = "rustls"))]
+compile_error!(
+    "features `native-tls` and `rustls` are mutually exclusive. \
+     Disable default features and enable only one: \
+     `default-features = false, features = [\"rustls\"]`."
+);
+
+#[cfg(not(any(feature = "native-tls", feature = "rustls")))]
+compile_error!(
+    "one of the TLS backends must be enabled: \
+     enable either the `native-tls` (default) or `rustls` feature."
+);
+
 pub mod plugins;
 
 pub use plugins::account_management::AccountManagementPlugin;
