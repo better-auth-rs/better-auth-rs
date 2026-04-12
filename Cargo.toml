@@ -90,7 +90,7 @@ syn = { version = "2", features = ["full"] }
 default = ["native-tls"]
 native-tls = ["better-auth-api/native-tls"]
 rustls = ["better-auth-api/rustls"]
-axum = ["dep:axum", "dep:tower", "dep:url"]
+axum = ["dep:axum", "dep:tower", "dep:url", "better-auth-core/axum"]
 derive = ["better-auth-core/derive"]
 sqlx-postgres = ["dep:sqlx", "better-auth-core/sqlx-postgres"]
 redis-cache = ["dep:redis"]

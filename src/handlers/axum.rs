@@ -146,7 +146,17 @@ fn create_plugin_handler<DB: DatabaseAdapter>() -> impl Fn(
 > + Clone {
     |State(auth): State<Arc<BetterAuth<DB>>>, req: Request| {
         Box::pin(async move {
-            let max_bytes = auth.body_limit_config().max_bytes;
+            // `enabled = false` on the configured body limit means the
+            // caller has opted out of body-size enforcement entirely —
+            // honour that by using `usize::MAX`, the same posture the
+            // handler had before the 1 MiB cap was introduced. When
+            // enabled, use the configured ceiling.
+            let limit_cfg = auth.body_limit_config();
+            let max_bytes = if limit_cfg.enabled {
+                limit_cfg.max_bytes
+            } else {
+                usize::MAX
+            };
             match convert_axum_request(req, max_bytes).await {
                 Ok(auth_req) => match auth.handle_request(auth_req).await {
                     Ok(auth_response) => convert_auth_response(auth_response),
