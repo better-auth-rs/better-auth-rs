@@ -621,7 +621,13 @@ impl AuthConfig {
             return false;
         }
         if self.advanced.disable_origin_check {
-            return true;
+            // Even with origin checks disabled, reject non-http(s) URLs.
+            // `javascript:`, `data:`, `file:`, and other schemes would
+            // execute in the caller's browser / expose local files if
+            // reflected into a Location header. Relative paths and
+            // well-formed http/https URLs are allowed; `extract_origin`
+            // already filters the unsafe schemes.
+            return target.starts_with('/') || extract_origin(target).is_some();
         }
         if target.starts_with('/') {
             return true;
@@ -698,6 +704,19 @@ pub fn extract_origin(url: &str) -> Option<String> {
 /// which is `https://admin.example.com` — `url::Url::origin()` omits
 /// default ports per the WHATWG URL spec.
 fn extract_pattern_origin(pattern: &str) -> String {
+    // When the pattern is a well-formed absolute URL with no glob
+    // wildcards, round-trip it through `extract_origin` so the result
+    // uses exactly the same normalisation (punycode host, lower-case
+    // scheme, omitted default port) as the runtime origin comparisons
+    // produced by `url::Url::parse`. Otherwise (bare hostnames, glob
+    // wildcards like `http://localhost:*`, non-http schemes, …) fall
+    // back to a naïve scheme://authority split so wildcards survive.
+    if !pattern.contains('*')
+        && let Some(canonical) = extract_origin(pattern)
+    {
+        return canonical;
+    }
+
     let Some(scheme_end) = pattern.find("://") else {
         return String::new();
     };
@@ -890,6 +909,33 @@ mod tests {
         assert!(cfg.is_origin_trusted("http://legacy.example.com"));
         assert!(cfg.is_redirect_target_trusted("https://admin.example.com/cb"));
         assert!(cfg.is_redirect_target_trusted("http://legacy.example.com/cb"));
+    }
+
+    #[test]
+    fn redirect_target_bypass_still_rejects_dangerous_schemes() {
+        // `disable_origin_check = true` opts out of origin comparison
+        // but MUST NOT open the gate to `javascript:`, `data:`,
+        // `file:`, or other non-http schemes — the rustdoc promises
+        // those are always rejected.
+        let mut cfg = config_with(vec![]);
+        cfg.advanced.disable_origin_check = true;
+        assert!(!cfg.is_redirect_target_trusted("javascript:alert(1)"));
+        assert!(!cfg.is_redirect_target_trusted("data:text/html,<script>x</script>"));
+        assert!(!cfg.is_redirect_target_trusted("file:///etc/passwd"));
+        assert!(!cfg.is_redirect_target_trusted("ftp://example.com/"));
+        // But well-formed http(s) and relative paths still pass.
+        assert!(cfg.is_redirect_target_trusted("/dashboard"));
+        assert!(cfg.is_redirect_target_trusted("https://evil.com/cb"));
+    }
+
+    #[test]
+    fn trusted_origins_punycode_idn_matches_punycode_callback() {
+        // `url::Url` converts IDN hosts to punycode. A pattern that
+        // spells the domain in Unicode should still match a callback
+        // URL that the parser normalises to `xn--...`.
+        let cfg = config_with(vec!["https://bücher.example"]);
+        assert!(cfg.is_origin_trusted("https://xn--bcher-kva.example"));
+        assert!(cfg.is_redirect_target_trusted("https://xn--bcher-kva.example/book"));
     }
 
     #[test]
