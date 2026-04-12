@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [0.10.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.9.0...v0.10.0) - 2026-04-12
+
+### Bug Fixes
+
+- fix device authorization race condition and cleanup ([#63](https://github.com/better-auth-rs/better-auth-rs/pull/63))
+
+- enforce mutual exclusion of TLS backend features ([#68](https://github.com/better-auth-rs/better-auth-rs/pull/68))
+
+- propagate session refresh errors and bound axum body reads ([#69](https://github.com/better-auth-rs/better-auth-rs/pull/69))
+
+
+### Features
+
+- add device authorization grant plugin ([#61](https://github.com/better-auth-rs/better-auth-rs/pull/61))
+
+- add TLS backend feature flags for reqwest ([#66](https://github.com/better-auth-rs/better-auth-rs/pull/66))
+
 
 ### Fixed
 
