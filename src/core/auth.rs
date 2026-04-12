@@ -28,6 +28,11 @@ pub struct BetterAuth<DB: DatabaseAdapter> {
     database: Arc<DB>,
     session_manager: SessionManager<DB>,
     context: AuthContext<DB>,
+    /// Kept on the built instance so the axum entry handler can bound
+    /// `to_bytes` at the caller-configured limit instead of a hard-coded
+    /// 1 MiB (which would otherwise override the user's
+    /// `AuthBuilder::body_limit(...)` choice).
+    body_limit_config: BodyLimitConfig,
 }
 
 /// Initial builder for configuring BetterAuth.
@@ -196,10 +201,9 @@ impl<DB: DatabaseAdapter> TypedAuthBuilder<DB> {
         }
 
         // Build middleware chain (order matters: body limit → rate limit → CSRF → CORS → custom)
+        let body_limit_config = self.body_limit_config.unwrap_or_default();
         let mut middlewares: Vec<Box<dyn Middleware>> = vec![
-            Box::new(BodyLimitMiddleware::new(
-                self.body_limit_config.unwrap_or_default(),
-            )),
+            Box::new(BodyLimitMiddleware::new(body_limit_config.clone())),
             Box::new(RateLimitMiddleware::new(
                 self.rate_limit_config.unwrap_or_default(),
             )),
@@ -219,6 +223,7 @@ impl<DB: DatabaseAdapter> TypedAuthBuilder<DB> {
             database,
             session_manager,
             context,
+            body_limit_config,
         })
     }
 }
@@ -329,6 +334,14 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
     /// Get the configuration.
     pub fn config(&self) -> &AuthConfig {
         &self.config
+    }
+
+    /// Get the body-limit configuration; the axum entry handler uses
+    /// this to cap `to_bytes` at the same ceiling the user configured on
+    /// `AuthBuilder::body_limit`, rather than overriding it with a
+    /// hard-coded value.
+    pub fn body_limit_config(&self) -> &BodyLimitConfig {
+        &self.body_limit_config
     }
 
     /// Get the database adapter.

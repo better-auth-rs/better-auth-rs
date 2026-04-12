@@ -3,6 +3,24 @@
 //! Provides type-safe request extraction that eliminates boilerplate
 //! in plugin handler functions.
 
+/// Returns `true` when an `axum::Error` from `axum::body::to_bytes` was
+/// caused by the read exceeding the size limit. Used by both the root
+/// axum handler and the `AuthRequestExt` extractor to distinguish 413
+/// Payload Too Large from 400 Bad Request (transport errors, malformed
+/// chunked framing, client disconnect).
+#[cfg(feature = "axum")]
+pub fn is_body_length_limit_error(err: &axum::Error) -> bool {
+    use std::error::Error;
+    let mut source: Option<&(dyn Error + 'static)> = err.source();
+    while let Some(e) = source {
+        if e.is::<http_body_util::LengthLimitError>() {
+            return true;
+        }
+        source = e.source();
+    }
+    false
+}
+
 #[cfg(feature = "axum")]
 mod axum_impl {
     use axum::{
@@ -187,28 +205,38 @@ mod axum_impl {
                 }
             }
 
-            // 1 MiB cap matches the root axum handler (`src/handlers/axum.rs`)
-            // and upstream TS better-auth. If Content-Length declares an
-            // oversize body, reject with 413 before buffering any of it.
-            const MAX_BODY_BYTES: usize = 1024 * 1024;
+            // The body cap in this extractor matches the root axum handler
+            // default (`DEFAULT_MAX_BODY_BYTES`). If `Content-Length`
+            // declares an oversize body, reject with 413 before buffering
+            // any of it. A `LengthLimitError` surfaced by `to_bytes`
+            // during the read also maps to 413; other transport-level
+            // errors (malformed chunked framing, client disconnect) map
+            // to 400.
             if let Some(len) = parts
                 .headers
                 .get(axum::http::header::CONTENT_LENGTH)
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.parse::<usize>().ok())
-                && len > MAX_BODY_BYTES
+                && len > crate::config::DEFAULT_MAX_BODY_BYTES
             {
                 return Err(AuthError::payload_too_large(format!(
                     "Request body exceeds the {}-byte limit",
-                    MAX_BODY_BYTES
+                    crate::config::DEFAULT_MAX_BODY_BYTES
                 )));
             }
 
-            let body_bytes = axum::body::to_bytes(body, MAX_BODY_BYTES)
+            let body_bytes = axum::body::to_bytes(body, crate::config::DEFAULT_MAX_BODY_BYTES)
                 .await
                 .map_err(|e| {
-                    tracing::warn!(error = %e, "Failed to read request body");
-                    AuthError::bad_request("Failed to read request body")
+                    if super::is_body_length_limit_error(&e) {
+                        AuthError::payload_too_large(format!(
+                            "Request body exceeds the {}-byte limit",
+                            crate::config::DEFAULT_MAX_BODY_BYTES
+                        ))
+                    } else {
+                        tracing::warn!(error = %e, "Failed to read request body");
+                        AuthError::bad_request("Failed to read request body")
+                    }
                 })?;
 
             let body_opt = if body_bytes.is_empty() {

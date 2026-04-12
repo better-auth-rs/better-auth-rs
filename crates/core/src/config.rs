@@ -597,6 +597,15 @@ impl AuthConfig {
     }
 }
 
+/// Default hard cap for request body reads.
+///
+/// Applied by the root-crate axum entry handler and by
+/// `AuthRequestExt::from_request` when no explicit limit is configured,
+/// so chunked bodies cannot exhaust memory before `BodyLimitMiddleware`
+/// runs. Matches the `BodyLimitConfig::default().max_bytes` value and
+/// upstream TypeScript `better-auth@1.4.19`.
+pub const DEFAULT_MAX_BODY_BYTES: usize = 1024 * 1024;
+
 /// Extract the origin (scheme + host + port) from a URL string.
 ///
 /// For example, `"https://example.com/path"` → `"https://example.com"`.
