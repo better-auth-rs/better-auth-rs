@@ -48,6 +48,8 @@ pub(crate) async fn forget_password_core<DB: DatabaseAdapter>(
         if ctx.config.is_redirect_target_trusted(redirect_to) {
             format!("{}?token={}", redirect_to, reset_token)
         } else {
+            // Untrusted origin — fall back to server-side base URL so the
+            // reset email still reaches a valid endpoint.
             tracing::warn!(
                 redirect_to = %redirect_to,
                 "Ignoring untrusted redirect_to"

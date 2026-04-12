@@ -119,6 +119,18 @@ fn build_authorization_url(
 // Core functions
 // ---------------------------------------------------------------------------
 
+/// Initiate a social sign-in flow for an anonymous user.
+///
+/// # Errors
+///
+/// Returns `400 Bad Request` when `body.callback_url` is set and is not a
+/// trusted redirect target (see
+/// [`AuthConfig::is_redirect_target_trusted`]). This is stricter than the
+/// upstream TypeScript `better-auth@1.4.19`, which forwards the raw value
+/// to the OAuth provider. Deployments that rely on a cross-origin OAuth
+/// callback must list the callback origin in
+/// [`AuthConfig::trusted_origins`] or set
+/// `advanced.disable_origin_check = true`.
 pub(crate) async fn social_sign_in_core<DB: DatabaseAdapter>(
     body: &SocialSignInRequest,
     config: &OAuthConfig,
@@ -129,6 +141,11 @@ pub(crate) async fn social_sign_in_core<DB: DatabaseAdapter>(
     if let Some(ref url) = body.callback_url
         && !ctx.config.is_redirect_target_trusted(url)
     {
+        tracing::warn!(
+            callback_url = %url,
+            provider = %provider_name,
+            "Rejected untrusted callbackURL on /sign-in/social"
+        );
         return Err(AuthError::bad_request(
             "callbackURL is not a trusted origin",
         ));
@@ -150,6 +167,11 @@ pub(crate) async fn social_sign_in_core<DB: DatabaseAdapter>(
     .await
 }
 
+/// Link a social account to the currently signed-in user.
+///
+/// Rejects untrusted `body.callback_url` in the same way as
+/// [`social_sign_in_core`]; see its docs for the policy and the deviation
+/// from upstream TypeScript `better-auth`.
 pub(crate) async fn link_social_core<DB: DatabaseAdapter>(
     body: &LinkSocialRequest,
     session: &DB::Session,
@@ -161,6 +183,11 @@ pub(crate) async fn link_social_core<DB: DatabaseAdapter>(
     if let Some(ref url) = body.callback_url
         && !ctx.config.is_redirect_target_trusted(url)
     {
+        tracing::warn!(
+            callback_url = %url,
+            provider = %provider_name,
+            "Rejected untrusted callbackURL on /link-social"
+        );
         return Err(AuthError::bad_request(
             "callbackURL is not a trusted origin",
         ));
