@@ -132,18 +132,6 @@ pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
         });
     }
 
-    // Defence in depth: this check is already covered at the top of the
-    // function, but keep it adjacent to the `create_verification_token`
-    // call so future splits of this function can't silently drop the
-    // guard. The helper is idempotent on valid input.
-    if let Some(ref url) = body.callback_url
-        && !ctx.config.is_redirect_target_trusted(url)
-    {
-        return Err(AuthError::bad_request(
-            "callbackURL is not a trusted origin",
-        ));
-    }
-
     // Create verification token
     let identifier = format!("change_email:{}:{}", user.id(), body.new_email);
     let expires_at = Utc::now() + Duration::hours(24);

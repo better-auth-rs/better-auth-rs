@@ -563,10 +563,12 @@ impl AuthConfig {
     ///    extracting the origin portion from the pattern).
     ///
     /// Glob patterns are supported — `*` matches any characters except `/`,
-    /// `**` matches any characters including `/`. Patterns containing `*`
-    /// are parsed using naive string splitting rather than the strict
-    /// WHATWG URL parser so that `http://localhost:*` and `*://app.com`
-    /// keep working.
+    /// `**` matches any characters including `/`. Non-wildcard patterns
+    /// are parsed with the strict WHATWG URL parser so scheme, host, and
+    /// default port match exactly what runtime callback URLs normalise
+    /// to. Wildcard patterns fall back to naïve scheme/authority
+    /// splitting so `http://localhost:*` and `*://app.com` still work;
+    /// their non-wildcard host labels are still IDN-canonicalised.
     pub fn is_origin_trusted(&self, origin: &str) -> bool {
         // Check base_url origin
         if let Some(base_origin) = extract_origin(&self.base_url)
@@ -791,6 +793,15 @@ fn is_authority_smuggling(target: &str) -> bool {
     {
         return true;
     }
+    // Percent-encoded `/` and `\` in the authority-start position let a
+    // double-decoding proxy (some nginx configurations, some CDNs) see
+    // `//evil.com` or `/\evil.com` after the first decode pass while
+    // the Rust-side string still looks like a harmless path. Defence in
+    // depth: reject the encoded forms too.
+    let encoded_bypass = ["/%2f", "/%2F", "/%5c", "/%5C", "%2f", "%2F", "%5c", "%5C"];
+    if encoded_bypass.iter().any(|p| trimmed.starts_with(p)) {
+        return true;
+    }
     false
 }
 
@@ -983,6 +994,20 @@ mod tests {
         let cfg = config_with(vec!["https://bücher.example"]);
         assert!(cfg.is_origin_trusted("https://xn--bcher-kva.example"));
         assert!(cfg.is_redirect_target_trusted("https://xn--bcher-kva.example/book"));
+    }
+
+    #[test]
+    fn redirect_target_rejects_percent_encoded_authority_bypass() {
+        // Double-decoding proxies can turn `/%2Fevil.com` into
+        // `//evil.com` before the next hop sees it; reject the
+        // percent-encoded forms so the extra decode pass can't
+        // rehydrate an authority smuggler.
+        let cfg = config_with(vec![]);
+        assert!(!cfg.is_redirect_target_trusted("/%2Fevil.com"));
+        assert!(!cfg.is_redirect_target_trusted("/%2fevil.com"));
+        assert!(!cfg.is_redirect_target_trusted("/%5Cevil.com"));
+        assert!(!cfg.is_redirect_target_trusted("/%5cevil.com"));
+        assert!(!cfg.is_redirect_target_trusted("%2Fevil.com"));
     }
 
     #[test]
