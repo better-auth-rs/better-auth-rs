@@ -587,21 +587,28 @@ impl AuthConfig {
     /// redirect (302 `Location`) or an absolute link embedded in an outgoing
     /// email. Safe targets are:
     ///
-    /// - any value when `advanced.disable_origin_check` is enabled;
-    /// - relative paths starting with `/` (but not protocol-relative `//...`);
-    /// - absolute URLs whose origin matches [`base_url`](Self::base_url) or a
-    ///   [`trusted_origins`](Self::trusted_origins) pattern.
+    /// - a relative path starting with `/` whose second character is not
+    ///   `/` or `\` (authority smuggling — `//evil.com`, `/\evil.com` —
+    ///   is rejected even when the caller opts out of origin checks;
+    ///   browsers normalise `\` to `/` in the authority component);
+    /// - an absolute `http`/`https` URL whose origin matches
+    ///   [`base_url`](Self::base_url) or a
+    ///   [`trusted_origins`](Self::trusted_origins) pattern;
+    /// - any path/URL when `advanced.disable_origin_check` is set, with
+    ///   the authority-smuggling exception above.
     ///
-    /// Prevents open-redirect via user-supplied `callbackURL` / `redirectTo`.
+    /// Other schemes (`javascript:`, `data:`, `file:`, …) are always
+    /// rejected. Prevents open-redirect via user-supplied `callbackURL`
+    /// / `redirectTo`.
     pub fn is_redirect_target_trusted(&self, target: &str) -> bool {
+        // Authority smuggling must NEVER be accepted, even under
+        // `disable_origin_check`. That flag is an opt-out of same-origin
+        // checks, not a licence to let the caller pick the host.
+        if is_authority_smuggling(target) {
+            return false;
+        }
         if self.advanced.disable_origin_check {
             return true;
-        }
-        // Protocol-relative URLs (//evil.com/...) must never be treated as
-        // same-origin; the browser resolves them against the current origin's
-        // scheme but the host is attacker-controlled.
-        if target.starts_with("//") {
-            return false;
         }
         if target.starts_with('/') {
             return true;
@@ -640,14 +647,56 @@ pub const DEFAULT_MAX_BODY_BYTES: usize = 1024 * 1024;
 ///
 /// For example, `"https://example.com/path"` → `"https://example.com"`.
 ///
-/// This is used by [`AuthConfig::is_origin_trusted`] and the CSRF middleware
-/// so that origin comparison is centralised in one place.
+/// Uses the WHATWG URL parser so query strings, fragments, and userinfo
+/// are stripped correctly (the hand-rolled version this replaced returned
+/// `"https://app.example.com?foo=bar"` for `"https://app.example.com?foo=bar"`,
+/// and kept userinfo, which let an `app.example.com@evil.com` authority
+/// masquerade as an app-origin URL in string comparisons).
+///
+/// Only `http` and `https` origins are returned; opaque or unusual schemes
+/// (`javascript:`, `data:`, `file:`) return `None` so they cannot sneak
+/// through the origin-comparison path.
+///
+/// This is used by [`AuthConfig::is_origin_trusted`],
+/// [`AuthConfig::is_redirect_target_trusted`], and the CSRF middleware so
+/// that origin comparison is centralised in one place.
 pub fn extract_origin(url: &str) -> Option<String> {
-    let scheme_end = url.find("://")?;
-    let rest = &url[scheme_end + 3..];
-    let host_end = rest.find('/').unwrap_or(rest.len());
-    let origin = format!("{}{}", &url[..scheme_end + 3], &rest[..host_end]);
-    Some(origin)
+    let parsed = ::url::Url::parse(url).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return None;
+    }
+    match parsed.origin() {
+        ::url::Origin::Tuple(..) => Some(parsed.origin().ascii_serialization()),
+        ::url::Origin::Opaque(_) => None,
+    }
+}
+
+/// Detect attacker-controlled authority smuggling in a redirect target.
+///
+/// Returns `true` for:
+/// - protocol-relative URLs (`//evil.com/x`) — browser resolves against
+///   the current origin's scheme but the host is caller-controlled;
+/// - `/\evil.com` and similar backslash bypasses — Chrome, Safari, and
+///   Edge follow WHATWG authority-state parsing and normalise `\` to `/`.
+///
+/// Used by [`AuthConfig::is_redirect_target_trusted`] to reject these
+/// forms even when origin checks are otherwise disabled.
+fn is_authority_smuggling(target: &str) -> bool {
+    let trimmed = target.trim_start_matches(|c: char| c.is_whitespace());
+    if trimmed.starts_with("//") || trimmed.starts_with(r"\\") {
+        return true;
+    }
+    if let Some(rest) = trimmed.strip_prefix('/')
+        && (rest.starts_with('/') || rest.starts_with('\\'))
+    {
+        return true;
+    }
+    if let Some(rest) = trimmed.strip_prefix('\\')
+        && (rest.starts_with('/') || rest.starts_with('\\'))
+    {
+        return true;
+    }
+    false
 }
 
 #[cfg(test)]
@@ -702,10 +751,69 @@ mod tests {
     }
 
     #[test]
-    fn redirect_target_bypass_when_disable_origin_check() {
+    fn redirect_target_bypass_does_not_cover_authority_smuggling() {
+        // `disable_origin_check` is an opt-out of same-origin checks, NOT
+        // a licence for the caller to pick the host. Protocol-relative
+        // and backslash-bypass forms must still be rejected.
         let mut cfg = config_with(vec![]);
         cfg.advanced.disable_origin_check = true;
         assert!(cfg.is_redirect_target_trusted("https://evil.com/cb"));
-        assert!(cfg.is_redirect_target_trusted("//evil.com"));
+        assert!(cfg.is_redirect_target_trusted("/dashboard"));
+        assert!(!cfg.is_redirect_target_trusted("//evil.com"));
+        assert!(!cfg.is_redirect_target_trusted("/\\evil.com"));
+        assert!(!cfg.is_redirect_target_trusted("\\\\evil.com"));
+    }
+
+    #[test]
+    fn redirect_target_rejects_backslash_authority_bypass() {
+        // Browsers (Chrome, Safari, Edge) normalise `\` to `/` in the
+        // authority component, so `Location: /\evil.com` navigates to
+        // `//evil.com`. Must be rejected.
+        let cfg = config_with(vec![]);
+        assert!(!cfg.is_redirect_target_trusted("/\\evil.com"));
+        assert!(!cfg.is_redirect_target_trusted("/\\\\evil.com"));
+        assert!(!cfg.is_redirect_target_trusted("\\evil.com"));
+        assert!(!cfg.is_redirect_target_trusted("\\\\evil.com"));
+        assert!(!cfg.is_redirect_target_trusted("\\/evil.com"));
+        // Whitespace-padded variants browsers may strip.
+        assert!(!cfg.is_redirect_target_trusted("  //evil.com"));
+        assert!(!cfg.is_redirect_target_trusted("\t/\\evil.com"));
+    }
+
+    #[test]
+    fn redirect_target_strips_userinfo_when_comparing_origin() {
+        // `app.example.com@evil.com` — the real host is `evil.com`; the
+        // old hand-rolled parser kept the whole string as the "origin"
+        // and would silently compare against `https://app.example.com`.
+        let cfg = config_with(vec![]);
+        assert!(!cfg.is_redirect_target_trusted("https://app.example.com@evil.com/x"));
+    }
+
+    #[test]
+    fn redirect_target_allows_same_origin_with_query_and_fragment() {
+        // The old hand-rolled `extract_origin` returned the whole URL for
+        // these inputs, so legitimate same-origin URLs with `?` or `#`
+        // were silently rejected. url::Url::parse fixes this.
+        let cfg = config_with(vec![]);
+        assert!(cfg.is_redirect_target_trusted("https://app.example.com?retry=1"));
+        assert!(cfg.is_redirect_target_trusted("https://app.example.com#/route"));
+        assert!(cfg.is_redirect_target_trusted("https://app.example.com/path?x=1#y"));
+    }
+
+    #[test]
+    fn redirect_target_rejects_non_http_schemes() {
+        let cfg = config_with(vec![]);
+        assert!(!cfg.is_redirect_target_trusted("javascript:alert(1)"));
+        assert!(!cfg.is_redirect_target_trusted("data:text/html,x"));
+        assert!(!cfg.is_redirect_target_trusted("file:///etc/passwd"));
+        assert!(!cfg.is_redirect_target_trusted("ftp://example.com/"));
+    }
+
+    #[test]
+    fn redirect_target_preserves_non_default_port_in_origin_match() {
+        let cfg = config_with(vec!["https://admin.example.com:8443"]);
+        assert!(cfg.is_redirect_target_trusted("https://admin.example.com:8443/x"));
+        // Different port → not the same origin.
+        assert!(!cfg.is_redirect_target_trusted("https://admin.example.com/x"));
     }
 }
