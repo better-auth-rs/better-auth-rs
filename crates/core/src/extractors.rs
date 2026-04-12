@@ -187,9 +187,29 @@ mod axum_impl {
                 }
             }
 
-            let body_bytes = axum::body::to_bytes(body, usize::MAX)
+            // 1 MiB cap matches the root axum handler (`src/handlers/axum.rs`)
+            // and upstream TS better-auth. If Content-Length declares an
+            // oversize body, reject with 413 before buffering any of it.
+            const MAX_BODY_BYTES: usize = 1024 * 1024;
+            if let Some(len) = parts
+                .headers
+                .get(axum::http::header::CONTENT_LENGTH)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse::<usize>().ok())
+                && len > MAX_BODY_BYTES
+            {
+                return Err(AuthError::payload_too_large(format!(
+                    "Request body exceeds the {}-byte limit",
+                    MAX_BODY_BYTES
+                )));
+            }
+
+            let body_bytes = axum::body::to_bytes(body, MAX_BODY_BYTES)
                 .await
-                .map_err(|e| AuthError::bad_request(format!("Failed to read body: {}", e)))?;
+                .map_err(|e| {
+                    tracing::warn!(error = %e, "Failed to read request body");
+                    AuthError::bad_request("Failed to read request body")
+                })?;
 
             let body_opt = if body_bytes.is_empty() {
                 None

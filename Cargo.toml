@@ -136,6 +136,9 @@ sqlx = { workspace = true, optional = true }
 # Cache (optional)
 redis = { workspace = true, optional = true }
 
+# Observability
+tracing = { workspace = true }
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
 serde_yaml = "0.9"

@@ -198,14 +198,29 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
         }
     }
 
-    // Convert body. Bound the read size to avoid memory exhaustion via a
-    // malicious client sending an unbounded chunked body. 1 MiB matches the
-    // upstream TS Better Auth default and comfortably covers OAuth/JWT
-    // payloads plus reasonable user metadata. When the cap is hit,
-    // `axum::body::to_bytes` returns an error — surface it as 413 rather
-    // than silently truncating to an empty body (which would then be
-    // reported downstream as a misleading "invalid JSON" 400).
+    // Bound the body read at 1 MiB to avoid memory exhaustion via a
+    // malicious client sending an unbounded chunked body. Matches upstream
+    // TS better-auth and the `AuthRequestExt` extractor in
+    // `crates/core/src/extractors.rs`.
+    //
+    // Two paths:
+    // - Content-Length declared > limit → 413 before reading anything.
+    // - `to_bytes` error during the read → 400 rather than 413, because
+    //   the error may be malformed chunked framing, disconnect, etc.;
+    //   conflating those with oversize lies to monitoring.
     const MAX_BODY_BYTES: usize = 1024 * 1024;
+    if let Some(len) = parts
+        .headers
+        .get(axum::http::header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<usize>().ok())
+        && len > MAX_BODY_BYTES
+    {
+        return Err(AuthError::payload_too_large(format!(
+            "Request body exceeds the {}-byte limit",
+            MAX_BODY_BYTES
+        )));
+    }
     let body_bytes = match axum::body::to_bytes(body, MAX_BODY_BYTES).await {
         Ok(bytes) => {
             if bytes.is_empty() {
@@ -215,10 +230,8 @@ async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
             }
         }
         Err(err) => {
-            return Err(AuthError::payload_too_large(format!(
-                "Request body exceeds the {}-byte limit: {err}",
-                MAX_BODY_BYTES
-            )));
+            tracing::warn!(error = %err, "Failed to read request body");
+            return Err(AuthError::bad_request("Failed to read request body"));
         }
     };
 
