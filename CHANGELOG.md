@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+### Fixed
+
+- `SessionManager::get_session` no longer silently discards
+  `update_session_expiry` failures; the updated `expires_at` is reflected
+  on the returned session so downstream code never observes a stale value.
+  Transient write errors and concurrent revocations both fall back to the
+  pre-refresh session with a `tracing::warn!`, so auth continues to work
+  across DB hiccups instead of surfacing a 500.
+
+### Behavior change
+
+- The axum entry handler and the `AuthRequestExt` extractor now cap
+  request body reads at 1 MiB (matches upstream TS `better-auth@1.4.19`).
+  Requests that declare `Content-Length` above the cap are rejected with
+  `413 Payload Too Large` before any bytes are buffered. Transport
+  failures during the read (malformed chunked framing, broken
+  connection, etc.) continue to surface as `400 Bad Request`.
+
 ## [0.9.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.8.0...v0.9.0) - 2026-03-11
 
 ### Bug Fixes
