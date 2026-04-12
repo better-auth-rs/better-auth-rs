@@ -691,13 +691,29 @@ pub fn extract_origin(url: &str) -> Option<String> {
 /// `https://*.example.com`, `http://localhost:*`, `*://app.com` — we
 /// return the `"scheme://authority"` prefix unchanged and let
 /// `glob_match` do the final comparison.
+///
+/// Default ports (`:80` for `http`, `:443` for `https`) are stripped so
+/// that a pattern like `https://admin.example.com:443` still matches the
+/// origin produced by `extract_origin("https://admin.example.com/x")`,
+/// which is `https://admin.example.com` — `url::Url::origin()` omits
+/// default ports per the WHATWG URL spec.
 fn extract_pattern_origin(pattern: &str) -> String {
     let Some(scheme_end) = pattern.find("://") else {
         return String::new();
     };
+    let scheme = &pattern[..scheme_end];
     let rest = &pattern[scheme_end + 3..];
     let host_end = rest.find('/').unwrap_or(rest.len());
-    format!("{}{}", &pattern[..scheme_end + 3], &rest[..host_end])
+    let authority = &rest[..host_end];
+
+    // Strip default ports for http/https to match `extract_origin`.
+    let authority = match scheme {
+        "http" => authority.strip_suffix(":80").unwrap_or(authority),
+        "https" => authority.strip_suffix(":443").unwrap_or(authority),
+        _ => authority,
+    };
+
+    format!("{}://{}", scheme, authority)
 }
 
 /// Detect attacker-controlled authority smuggling in a redirect target.
@@ -712,15 +728,18 @@ fn extract_pattern_origin(pattern: &str) -> String {
 /// forms even when origin checks are otherwise disabled.
 fn is_authority_smuggling(target: &str) -> bool {
     let trimmed = target.trim_start_matches(|c: char| c.is_whitespace());
-    if trimmed.starts_with("//") || trimmed.starts_with(r"\\") {
+    // Any leading backslash is suspect. Browsers normalise `\` to `/` in
+    // the authority state, so `\evil.com`, `\\evil.com`, and `\/evil.com`
+    // all resolve to different attacker-controllable targets depending on
+    // the surrounding context. Reject the whole class up-front rather
+    // than enumerating every two-character combination.
+    if trimmed.starts_with('\\') {
+        return true;
+    }
+    if trimmed.starts_with("//") {
         return true;
     }
     if let Some(rest) = trimmed.strip_prefix('/')
-        && (rest.starts_with('/') || rest.starts_with('\\'))
-    {
-        return true;
-    }
-    if let Some(rest) = trimmed.strip_prefix('\\')
         && (rest.starts_with('/') || rest.starts_with('\\'))
     {
         return true;
@@ -856,6 +875,33 @@ mod tests {
         assert!(!cfg.is_redirect_target_trusted("/path\"><script>"));
         assert!(!cfg.is_redirect_target_trusted("/path\u{0000}null"));
         assert!(!cfg.is_redirect_target_trusted("https://app.example.com/x\r\n"));
+    }
+
+    #[test]
+    fn trusted_origins_with_explicit_default_ports_still_match() {
+        // `url::Url::origin` strips `:443` / `:80`; `extract_pattern_origin`
+        // now does the same so a `trusted_origins` entry that spells out
+        // the default port still matches callbacks that don't.
+        let cfg = config_with(vec![
+            "https://admin.example.com:443",
+            "http://legacy.example.com:80",
+        ]);
+        assert!(cfg.is_origin_trusted("https://admin.example.com"));
+        assert!(cfg.is_origin_trusted("http://legacy.example.com"));
+        assert!(cfg.is_redirect_target_trusted("https://admin.example.com/cb"));
+        assert!(cfg.is_redirect_target_trusted("http://legacy.example.com/cb"));
+    }
+
+    #[test]
+    fn redirect_target_rejects_bare_backslash_under_disable_origin_check() {
+        // `\evil.com` is normalised by browsers to path-start + "/evil.com"
+        // — same-origin in practice, but the authority-smuggling guard's
+        // documented contract ("even under disable_origin_check, the
+        // caller cannot pick the host") must hold.
+        let mut cfg = config_with(vec![]);
+        cfg.advanced.disable_origin_check = true;
+        assert!(!cfg.is_redirect_target_trusted("\\evil.com"));
+        assert!(!cfg.is_redirect_target_trusted("  \\evil.com"));
     }
 
     #[test]
