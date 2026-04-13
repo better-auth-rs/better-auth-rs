@@ -6,8 +6,9 @@
 //!
 //! ## How it works
 //!
-//! 1. The test harness **automatically starts** the reference Node.js server
-//!    (`compat-tests/reference-server/server.mjs`) as a child process.
+//! 1. The test harness **automatically starts** the reference Bun server
+//!    (`compat-tests/reference-server/server.ts` via `bun run`) as a child
+//!    process.
 //! 2. It waits for the `/__health` endpoint to respond (up to 10 seconds).
 //! 3. Each test sends the same request to both servers and compares the JSON
 //!    response *shape* (field names + value types, not values).
@@ -18,7 +19,7 @@
 //! The reference server dependencies must be installed before running:
 //!
 //! ```bash
-//! cd compat-tests/reference-server && npm install
+//! cd compat-tests/reference-server && bun install
 //! ```
 //!
 //! If `node_modules` is missing, all tests are skipped with a diagnostic
@@ -64,21 +65,24 @@ async fn reference_server_available() -> bool {
 
 /// Try to start the reference server as a child process.
 /// Returns `Some(child)` on success.
+///
+/// The reference server is a Bun/TypeScript `server.ts`; the legacy
+/// Node entrypoint (`server.mjs`) was removed when the rewrite
+/// switched to `bun:sqlite`.
 fn try_start_reference_server() -> Option<std::process::Child> {
     let server_dir = std::path::Path::new("compat-tests/reference-server");
 
-    // Check if node_modules exists
     if !server_dir.join("node_modules").exists() {
         eprintln!(
             "[dual-server] node_modules not found in {}, skipping. Run:\n\
-             cd compat-tests/reference-server && npm install",
+             cd compat-tests/reference-server && bun install",
             server_dir.display()
         );
         return None;
     }
 
-    let child = std::process::Command::new("node")
-        .arg("server.mjs")
+    let child = std::process::Command::new("bun")
+        .args(["run", "server.ts"])
         .current_dir(server_dir)
         .env("PORT", REFERENCE_PORT.to_string())
         .stdout(std::process::Stdio::piped())

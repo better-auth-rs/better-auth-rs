@@ -363,6 +363,23 @@ const server = Bun.serve({
         socialProfile = defaultSocialProfile();
         socialIdTokenValid = true;
         githubProfile = defaultGitHubProfile();
+
+        // Wipe every better-auth managed table so scenario N+1 does not
+        // see rows from scenario N. Without this, `signUp` for an email
+        // that a previous test already registered fails with
+        // `USER_ALREADY_EXISTS` and downstream checks flake based on
+        // execution order.
+        const tables = database
+          .query<{ name: string }, []>(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+          )
+          .all();
+        database.exec("PRAGMA foreign_keys = OFF");
+        for (const { name } of tables) {
+          database.exec(`DELETE FROM "${name}"`);
+        }
+        database.exec("PRAGMA foreign_keys = ON");
+
         return jsonResponse({ status: true });
       }
 

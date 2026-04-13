@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Run the bun-based client-compat scenarios against the already-running
+# TS reference server (port 3100) and Rust server (port 3200).
+#
+# Usage:
+#   ./run-against-both.sh                # all phases
+#   ./run-against-both.sh phase0         # single phase
+#
+# Prereq: both servers must be started separately. The cargo-driven
+# wrapper (`cargo test --test client_compat_tests`) that used to live
+# here will return in a later PR alongside the Rust-side harness
+# binary; until then, drive the scenarios directly with `bun test`.
+
 phase="all"
 
 for arg in "$@"; do
@@ -11,12 +23,11 @@ for arg in "$@"; do
   esac
 done
 
-case "$phase" in
-  phase0) test_name="phase0_client_compat" ;;
-  phase1) test_name="phase1_client_compat" ;;
-  phase2) test_name="phase2_client_compat" ;;
-  phase3) test_name="phase3_client_compat" ;;
-  all) test_name="full_client_compat" ;;
-esac
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$script_dir"
 
-cargo test --test client_compat_tests "$test_name" -- --ignored --nocapture
+if [ "$phase" = "all" ]; then
+  exec bun test
+else
+  exec bun test "tests/$phase"
+fi
