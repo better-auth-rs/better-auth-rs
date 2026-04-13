@@ -97,11 +97,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
+          bun-version: latest
       - name: Install reference server dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
         working-directory: compat-tests/reference-server
       - name: Run snapshot tests
         run: cargo test --test snapshot_tests -- --nocapture
