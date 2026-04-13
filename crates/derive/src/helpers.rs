@@ -13,6 +13,13 @@ pub(crate) enum ReturnKind {
     /// Used for primary-key (`id`) and foreign-key (`user_id`, `organization_id`,
     /// `inviter_id`) getters so that app-owned entities with non-string IDs
     /// (e.g. `Uuid`, `i64`) can override the getter to return `Cow::Owned`.
+    ///
+    /// **The derive only handles the `String`-backed default.** A custom
+    /// entity whose ID/FK field is anything other than `String` (or another
+    /// `Deref<Target = str>` type) cannot use `#[derive(AuthUser)]` on that
+    /// field — the generated body `Cow::Borrowed(&self.field)` will fail to
+    /// type-check. Implement `AuthUser` (etc.) manually for those entities,
+    /// returning `Cow::Owned(self.field.to_string())` or equivalent.
     CowStr,
     /// `fn x(&self) -> Option<&str>` — field is `Option<String>`
     OptionRefStr,
