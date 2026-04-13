@@ -642,3 +642,176 @@ impl MemberUserView {
 
 use serde::Deserialize;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Session, User};
+    use crate::types_org::{InvitationStatus, Member, Organization};
+    use chrono::Utc;
+
+    fn sample_user() -> User {
+        User {
+            id: "user-123".into(),
+            name: Some("Alice".into()),
+            email: Some("alice@example.com".into()),
+            email_verified: true,
+            image: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            username: None,
+            display_username: None,
+            two_factor_enabled: false,
+            role: None,
+            banned: false,
+            ban_reason: None,
+            ban_expires: None,
+            metadata: serde_json::Value::Null,
+        }
+    }
+
+    #[test]
+    fn bundled_user_id_is_borrowed() {
+        let user = sample_user();
+        let id = user.id();
+        // Bundled [`User`] stores its id as a `String`, so the `AuthUser::id()`
+        // accessor should hand out a zero-copy `Cow::Borrowed` slice.
+        match id {
+            Cow::Borrowed(s) => assert_eq!(s, "user-123"),
+            Cow::Owned(_) => panic!("bundled User.id() must return Cow::Borrowed"),
+        }
+    }
+
+    #[test]
+    fn bundled_session_implements_auth_session() {
+        let session = Session {
+            id: "sess-1".into(),
+            expires_at: Utc::now(),
+            token: "tok".into(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            ip_address: Some("127.0.0.1".into()),
+            user_agent: Some("ua".into()),
+            user_id: "user-123".into(),
+            impersonated_by: None,
+            active_organization_id: None,
+            active: true,
+        };
+
+        // Access every `AuthSession` method once to ensure the trait bounds
+        // are satisfied and the bundled impl compiles with the new `Cow`
+        // signatures.
+        assert_eq!(session.id(), Cow::Borrowed("sess-1"));
+        assert_eq!(session.user_id(), Cow::Borrowed("user-123"));
+        assert_eq!(session.token(), "tok");
+        assert_eq!(session.ip_address(), Some("127.0.0.1"));
+        assert_eq!(session.user_agent(), Some("ua"));
+        assert!(session.active());
+        assert!(session.impersonated_by().is_none());
+        assert!(session.active_organization_id().is_none());
+    }
+
+    #[test]
+    fn bundled_member_ids_are_all_cow() {
+        let member = Member {
+            id: "mem-1".into(),
+            organization_id: "org-1".into(),
+            user_id: "user-123".into(),
+            role: "owner".into(),
+            created_at: Utc::now(),
+        };
+
+        assert_eq!(member.id(), Cow::Borrowed("mem-1"));
+        assert_eq!(member.organization_id(), Cow::Borrowed("org-1"));
+        assert_eq!(member.user_id(), Cow::Borrowed("user-123"));
+        assert_eq!(member.role(), "owner");
+    }
+
+    #[test]
+    fn bundled_organization_metadata_respects_option() {
+        let org = Organization {
+            id: "org-1".into(),
+            name: "Acme".into(),
+            slug: "acme".into(),
+            logo: None,
+            metadata: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        assert_eq!(org.id(), Cow::Borrowed("org-1"));
+        assert!(org.metadata().is_none());
+    }
+
+    // ── Meta trait default names ──────────────────────────────────────────
+
+    #[test]
+    fn auth_user_meta_default_table_name() {
+        assert_eq!(<User as AuthUserMeta>::table(), "users");
+        assert_eq!(<User as AuthUserMeta>::col_id(), "id");
+        assert_eq!(<User as AuthUserMeta>::col_email(), "email");
+        assert_eq!(
+            <User as AuthUserMeta>::col_email_verified(),
+            "email_verified"
+        );
+    }
+
+    #[test]
+    fn auth_session_meta_default_names() {
+        assert_eq!(<Session as AuthSessionMeta>::table(), "sessions");
+        assert_eq!(<Session as AuthSessionMeta>::col_user_id(), "user_id");
+        assert_eq!(
+            <Session as AuthSessionMeta>::col_active_organization_id(),
+            "active_organization_id"
+        );
+    }
+
+    #[test]
+    fn auth_member_meta_default_names() {
+        assert_eq!(<Member as AuthMemberMeta>::table(), "member");
+        assert_eq!(
+            <Member as AuthMemberMeta>::col_organization_id(),
+            "organization_id"
+        );
+    }
+
+    // ── Invitation default helpers ────────────────────────────────────────
+
+    #[test]
+    fn invitation_is_pending_and_is_expired_defaults() {
+        use crate::types_org::Invitation;
+        let past = Utc::now() - chrono::Duration::days(1);
+        let future = Utc::now() + chrono::Duration::days(1);
+
+        let pending_valid = Invitation {
+            id: "inv-1".into(),
+            organization_id: "org-1".into(),
+            email: "b@example.com".into(),
+            role: "member".into(),
+            status: InvitationStatus::Pending,
+            inviter_id: "user-123".into(),
+            expires_at: future,
+            created_at: Utc::now(),
+        };
+        assert!(pending_valid.is_pending());
+        assert!(!pending_valid.is_expired());
+
+        let accepted = Invitation {
+            status: InvitationStatus::Accepted,
+            expires_at: past,
+            ..pending_valid.clone()
+        };
+        assert!(!accepted.is_pending());
+        assert!(accepted.is_expired());
+    }
+
+    // ── Member user view projection ───────────────────────────────────────
+
+    #[test]
+    fn member_user_view_projects_auth_user_fields() {
+        let user = sample_user();
+        let view = MemberUserView::from_user(&user);
+        assert_eq!(view.id, "user-123");
+        assert_eq!(view.email.as_deref(), Some("alice@example.com"));
+        assert_eq!(view.name.as_deref(), Some("Alice"));
+        assert_eq!(view.image, None);
+    }
+}
