@@ -22,6 +22,18 @@
 //! impl AuthUserMeta for MyUser {}   // uses default column names
 //! impl AuthSessionMeta for MySession {}
 //! ```
+//!
+//! ## Primary / foreign key returns
+//!
+//! Primary-key (`id()`) and foreign-key (e.g. `user_id()`, `organization_id()`,
+//! `inviter_id()`) accessors return [`Cow<'_, str>`](std::borrow::Cow). This
+//! allows implementors to either borrow an owned `String` field
+//! ([`Cow::Borrowed`]) or render a non-string identifier
+//! (e.g. [`uuid::Uuid`](https://docs.rs/uuid), `i64`) into an owned string
+//! ([`Cow::Owned`]) on the fly without changing the trait. All other fields
+//! continue to return plain `&str`.
+
+use std::borrow::Cow;
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -36,7 +48,7 @@ pub const PASSWORD_HASH_KEY: &str = "password_hash";
 /// The framework reads user fields through these getters. Custom types
 /// must provide all framework fields and may have additional fields.
 pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    fn id(&self) -> &str;
+    fn id(&self) -> Cow<'_, str>;
     fn email(&self) -> Option<&str>;
     fn name(&self) -> Option<&str>;
     fn email_verified(&self) -> bool;
@@ -62,14 +74,14 @@ pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static 
 
 /// Trait representing a session entity.
 pub trait AuthSession: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    fn id(&self) -> &str;
+    fn id(&self) -> Cow<'_, str>;
     fn expires_at(&self) -> DateTime<Utc>;
     fn token(&self) -> &str;
     fn created_at(&self) -> DateTime<Utc>;
     fn updated_at(&self) -> DateTime<Utc>;
     fn ip_address(&self) -> Option<&str>;
     fn user_agent(&self) -> Option<&str>;
-    fn user_id(&self) -> &str;
+    fn user_id(&self) -> Cow<'_, str>;
     fn impersonated_by(&self) -> Option<&str>;
     fn active_organization_id(&self) -> Option<&str>;
     fn active(&self) -> bool;
@@ -77,10 +89,10 @@ pub trait AuthSession: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
 
 /// Trait representing an account entity (OAuth provider linking).
 pub trait AuthAccount: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    fn id(&self) -> &str;
+    fn id(&self) -> Cow<'_, str>;
     fn account_id(&self) -> &str;
     fn provider_id(&self) -> &str;
-    fn user_id(&self) -> &str;
+    fn user_id(&self) -> Cow<'_, str>;
     fn access_token(&self) -> Option<&str>;
     fn refresh_token(&self) -> Option<&str>;
     fn id_token(&self) -> Option<&str>;
@@ -94,7 +106,7 @@ pub trait AuthAccount: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
 
 /// Trait representing an organization entity.
 pub trait AuthOrganization: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    fn id(&self) -> &str;
+    fn id(&self) -> Cow<'_, str>;
     fn name(&self) -> &str;
     fn slug(&self) -> &str;
     fn logo(&self) -> Option<&str>;
@@ -105,21 +117,21 @@ pub trait AuthOrganization: Clone + Send + Sync + Serialize + std::fmt::Debug + 
 
 /// Trait representing an organization member entity.
 pub trait AuthMember: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    fn id(&self) -> &str;
-    fn organization_id(&self) -> &str;
-    fn user_id(&self) -> &str;
+    fn id(&self) -> Cow<'_, str>;
+    fn organization_id(&self) -> Cow<'_, str>;
+    fn user_id(&self) -> Cow<'_, str>;
     fn role(&self) -> &str;
     fn created_at(&self) -> DateTime<Utc>;
 }
 
 /// Trait representing an invitation entity.
 pub trait AuthInvitation: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    fn id(&self) -> &str;
-    fn organization_id(&self) -> &str;
+    fn id(&self) -> Cow<'_, str>;
+    fn organization_id(&self) -> Cow<'_, str>;
     fn email(&self) -> &str;
     fn role(&self) -> &str;
     fn status(&self) -> &InvitationStatus;
-    fn inviter_id(&self) -> &str;
+    fn inviter_id(&self) -> Cow<'_, str>;
     fn expires_at(&self) -> DateTime<Utc>;
     fn created_at(&self) -> DateTime<Utc>;
 
@@ -136,7 +148,7 @@ pub trait AuthInvitation: Clone + Send + Sync + Serialize + std::fmt::Debug + 's
 
 /// Trait representing a verification token entity.
 pub trait AuthVerification: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    fn id(&self) -> &str;
+    fn id(&self) -> Cow<'_, str>;
     fn identifier(&self) -> &str;
     fn value(&self) -> &str;
     fn expires_at(&self) -> DateTime<Utc>;
@@ -146,22 +158,22 @@ pub trait AuthVerification: Clone + Send + Sync + Serialize + std::fmt::Debug + 
 
 /// Trait representing a two-factor authentication entity.
 pub trait AuthTwoFactor: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    fn id(&self) -> &str;
+    fn id(&self) -> Cow<'_, str>;
     fn secret(&self) -> &str;
     fn backup_codes(&self) -> Option<&str>;
-    fn user_id(&self) -> &str;
+    fn user_id(&self) -> Cow<'_, str>;
     fn created_at(&self) -> DateTime<Utc>;
     fn updated_at(&self) -> DateTime<Utc>;
 }
 
 /// Trait representing an API key entity.
 pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    fn id(&self) -> &str;
+    fn id(&self) -> Cow<'_, str>;
     fn name(&self) -> Option<&str>;
     fn start(&self) -> Option<&str>;
     fn prefix(&self) -> Option<&str>;
     fn key_hash(&self) -> &str;
-    fn user_id(&self) -> &str;
+    fn user_id(&self) -> Cow<'_, str>;
     fn refill_interval(&self) -> Option<i64>;
     fn refill_amount(&self) -> Option<i64>;
     fn last_refill_at(&self) -> Option<&str>;
@@ -181,10 +193,10 @@ pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stati
 
 /// Trait representing a passkey entity.
 pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    fn id(&self) -> &str;
+    fn id(&self) -> Cow<'_, str>;
     fn name(&self) -> &str;
     fn public_key(&self) -> &str;
-    fn user_id(&self) -> &str;
+    fn user_id(&self) -> Cow<'_, str>;
     fn credential_id(&self) -> &str;
     fn counter(&self) -> u64;
     fn device_type(&self) -> &str;
@@ -629,3 +641,4 @@ impl MemberUserView {
 }
 
 use serde::Deserialize;
+

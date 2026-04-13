@@ -125,7 +125,7 @@ pub(crate) async fn change_email_core<DB: DatabaseAdapter>(
             email_verified: Some(false),
             ..Default::default()
         };
-        ctx.database.update_user(user.id(), update_user).await?;
+        ctx.database.update_user(&user.id(), update_user).await?;
 
         return Ok(StatusMessageResponse {
             status: true,
@@ -186,7 +186,7 @@ pub(crate) async fn change_email_verify_core<DB: DatabaseAdapter>(
         .ok_or_else(|| AuthError::bad_request("Invalid or expired verification token"))?;
 
     if verification.expires_at() < Utc::now() {
-        ctx.database.delete_verification(verification.id()).await?;
+        ctx.database.delete_verification(&verification.id()).await?;
         return Err(AuthError::bad_request("Verification token has expired"));
     }
 
@@ -221,7 +221,7 @@ pub(crate) async fn change_email_verify_core<DB: DatabaseAdapter>(
         ..Default::default()
     };
 
-    ctx.database.update_user(user.id(), update_user).await?;
+    ctx.database.update_user(&user.id(), update_user).await?;
 
     // Consume the verification token
     ctx.database.delete_verification(&verification_id).await?;
@@ -296,7 +296,7 @@ pub(crate) async fn delete_user_verify_core<DB: DatabaseAdapter>(
         .ok_or_else(|| AuthError::bad_request("Invalid or expired verification token"))?;
 
     if verification.expires_at() < Utc::now() {
-        ctx.database.delete_verification(verification.id()).await?;
+        ctx.database.delete_verification(&verification.id()).await?;
         return Err(AuthError::bad_request("Verification token has expired"));
     }
 
@@ -342,17 +342,17 @@ async fn perform_user_deletion<DB: DatabaseAdapter>(
     }
 
     // Delete all sessions
-    ctx.database.delete_user_sessions(user.id()).await?;
+    ctx.database.delete_user_sessions(&user.id()).await?;
 
     // Delete all linked accounts
-    let accounts = ctx.database.get_user_accounts(user.id()).await?;
+    let accounts = ctx.database.get_user_accounts(&user.id()).await?;
     for account in &accounts {
         use better_auth_core::entity::AuthAccount;
-        ctx.database.delete_account(account.id()).await?;
+        ctx.database.delete_account(&account.id()).await?;
     }
 
     // Delete the user record
-    ctx.database.delete_user(user.id()).await?;
+    ctx.database.delete_user(&user.id()).await?;
 
     // after_delete hook (non-fatal)
     if let Some(ref hook) = config.delete_user.after_delete

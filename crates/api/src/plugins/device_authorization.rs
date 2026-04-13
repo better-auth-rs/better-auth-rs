@@ -264,7 +264,7 @@ async fn approve_device_core<DB: DatabaseAdapter>(
         .await?
     {
         ctx.database
-            .delete_verification(device_verification.id())
+            .delete_verification(&device_verification.id())
             .await?;
     }
 
@@ -296,7 +296,7 @@ async fn deny_device_core<DB: DatabaseAdapter>(
         .await?
     {
         ctx.database
-            .delete_verification(device_verification.id())
+            .delete_verification(&device_verification.id())
             .await?;
     }
 

@@ -135,10 +135,10 @@ pub(super) async fn verify_email_core<DB: DatabaseAdapter>(
         ..Default::default()
     };
 
-    let updated_user = ctx.database.update_user(user.id(), update_user).await?;
+    let updated_user = ctx.database.update_user(&user.id(), update_user).await?;
 
     // Delete the used verification token
-    ctx.database.delete_verification(verification.id()).await?;
+    ctx.database.delete_verification(&verification.id()).await?;
 
     // Run after_email_verification hook
     if let Some(ref hook) = config.after_email_verification {

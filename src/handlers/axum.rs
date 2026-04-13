@@ -404,7 +404,7 @@ impl<DB: DatabaseAdapter> FromRequestParts<Arc<BetterAuth<DB>>> for CurrentSessi
 
         let user = state
             .database()
-            .get_user_by_id(session.user_id())
+            .get_user_by_id(&session.user_id())
             .await
             .map_err(convert_auth_error)?
             .ok_or_else(|| convert_auth_error(AuthError::UserNotFound))?;

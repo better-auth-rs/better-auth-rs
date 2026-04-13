@@ -36,7 +36,7 @@ async fn setup_admin(auth: &better_auth::BetterAuth<better_auth::MemoryDatabaseA
         ..Default::default()
     };
     auth.database()
-        .update_user(user.id(), update)
+        .update_user(&user.id(), update)
         .await
         .unwrap();
 

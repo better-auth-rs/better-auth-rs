@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use chrono::{DateTime, Utc};
 
 use crate::entity::{
@@ -16,7 +18,7 @@ use super::types_org::{Invitation, InvitationStatus, Member, Organization};
 impl<T: AuthUser> From<&T> for User {
     fn from(u: &T) -> Self {
         Self {
-            id: u.id().to_owned(),
+            id: u.id().into_owned(),
             name: u.name().map(str::to_owned),
             email: u.email().map(str::to_owned),
             email_verified: u.email_verified(),
@@ -36,8 +38,8 @@ impl<T: AuthUser> From<&T> for User {
 }
 
 impl AuthUser for User {
-    fn id(&self) -> &str {
-        &self.id
+    fn id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.id)
     }
     fn email(&self) -> Option<&str> {
         self.email.as_deref()
@@ -84,8 +86,8 @@ impl AuthUser for User {
 }
 
 impl AuthSession for Session {
-    fn id(&self) -> &str {
-        &self.id
+    fn id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.id)
     }
     fn expires_at(&self) -> DateTime<Utc> {
         self.expires_at
@@ -105,8 +107,8 @@ impl AuthSession for Session {
     fn user_agent(&self) -> Option<&str> {
         self.user_agent.as_deref()
     }
-    fn user_id(&self) -> &str {
-        &self.user_id
+    fn user_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.user_id)
     }
     fn impersonated_by(&self) -> Option<&str> {
         self.impersonated_by.as_deref()
@@ -120,8 +122,8 @@ impl AuthSession for Session {
 }
 
 impl AuthAccount for Account {
-    fn id(&self) -> &str {
-        &self.id
+    fn id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.id)
     }
     fn account_id(&self) -> &str {
         &self.account_id
@@ -129,8 +131,8 @@ impl AuthAccount for Account {
     fn provider_id(&self) -> &str {
         &self.provider_id
     }
-    fn user_id(&self) -> &str {
-        &self.user_id
+    fn user_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.user_id)
     }
     fn access_token(&self) -> Option<&str> {
         self.access_token.as_deref()
@@ -162,8 +164,8 @@ impl AuthAccount for Account {
 }
 
 impl AuthOrganization for Organization {
-    fn id(&self) -> &str {
-        &self.id
+    fn id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.id)
     }
     fn name(&self) -> &str {
         &self.name
@@ -186,14 +188,14 @@ impl AuthOrganization for Organization {
 }
 
 impl AuthMember for Member {
-    fn id(&self) -> &str {
-        &self.id
+    fn id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.id)
     }
-    fn organization_id(&self) -> &str {
-        &self.organization_id
+    fn organization_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.organization_id)
     }
-    fn user_id(&self) -> &str {
-        &self.user_id
+    fn user_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.user_id)
     }
     fn role(&self) -> &str {
         &self.role
@@ -204,11 +206,11 @@ impl AuthMember for Member {
 }
 
 impl AuthInvitation for Invitation {
-    fn id(&self) -> &str {
-        &self.id
+    fn id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.id)
     }
-    fn organization_id(&self) -> &str {
-        &self.organization_id
+    fn organization_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.organization_id)
     }
     fn email(&self) -> &str {
         &self.email
@@ -219,8 +221,8 @@ impl AuthInvitation for Invitation {
     fn status(&self) -> &InvitationStatus {
         &self.status
     }
-    fn inviter_id(&self) -> &str {
-        &self.inviter_id
+    fn inviter_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.inviter_id)
     }
     fn expires_at(&self) -> DateTime<Utc> {
         self.expires_at
@@ -231,8 +233,8 @@ impl AuthInvitation for Invitation {
 }
 
 impl AuthVerification for Verification {
-    fn id(&self) -> &str {
-        &self.id
+    fn id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.id)
     }
     fn identifier(&self) -> &str {
         &self.identifier
@@ -252,8 +254,8 @@ impl AuthVerification for Verification {
 }
 
 impl AuthTwoFactor for TwoFactor {
-    fn id(&self) -> &str {
-        &self.id
+    fn id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.id)
     }
     fn secret(&self) -> &str {
         &self.secret
@@ -261,8 +263,8 @@ impl AuthTwoFactor for TwoFactor {
     fn backup_codes(&self) -> Option<&str> {
         self.backup_codes.as_deref()
     }
-    fn user_id(&self) -> &str {
-        &self.user_id
+    fn user_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.user_id)
     }
     fn created_at(&self) -> DateTime<Utc> {
         self.created_at
@@ -273,8 +275,8 @@ impl AuthTwoFactor for TwoFactor {
 }
 
 impl AuthApiKey for ApiKey {
-    fn id(&self) -> &str {
-        &self.id
+    fn id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.id)
     }
     fn name(&self) -> Option<&str> {
         self.name.as_deref()
@@ -288,8 +290,8 @@ impl AuthApiKey for ApiKey {
     fn key_hash(&self) -> &str {
         &self.key_hash
     }
-    fn user_id(&self) -> &str {
-        &self.user_id
+    fn user_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.user_id)
     }
     fn refill_interval(&self) -> Option<i64> {
         self.refill_interval
@@ -352,8 +354,8 @@ impl AuthApiKeyMeta for ApiKey {}
 impl AuthPasskeyMeta for Passkey {}
 
 impl AuthPasskey for Passkey {
-    fn id(&self) -> &str {
-        &self.id
+    fn id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.id)
     }
     fn name(&self) -> &str {
         &self.name
@@ -361,8 +363,8 @@ impl AuthPasskey for Passkey {
     fn public_key(&self) -> &str {
         &self.public_key
     }
-    fn user_id(&self) -> &str {
-        &self.user_id
+    fn user_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.user_id)
     }
     fn credential_id(&self) -> &str {
         &self.credential_id

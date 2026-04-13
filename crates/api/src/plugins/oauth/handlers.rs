@@ -207,7 +207,7 @@ pub(crate) async fn link_social_core<DB: DatabaseAdapter>(
         provider_name,
         &callback_url,
         body.scopes.as_deref(),
-        Some(session.user_id()),
+        Some(&session.user_id()),
     )
     .await
 }
@@ -217,7 +217,7 @@ pub(crate) async fn get_access_token_core<DB: DatabaseAdapter>(
     session: &DB::Session,
     ctx: &AuthContext<DB>,
 ) -> AuthResult<AccessTokenResponse> {
-    let accounts = ctx.database.get_user_accounts(session.user_id()).await?;
+    let accounts = ctx.database.get_user_accounts(&session.user_id()).await?;
     let account = find_account_for_provider(&accounts, &body.provider_id)?;
 
     let encrypt = ctx.config.account.encrypt_oauth_tokens;
@@ -243,7 +243,7 @@ pub(crate) async fn refresh_token_core<DB: DatabaseAdapter>(
         .get(provider_name)
         .ok_or_else(|| AuthError::bad_request(format!("Unknown provider: {}", provider_name)))?;
 
-    let accounts = ctx.database.get_user_accounts(session.user_id()).await?;
+    let accounts = ctx.database.get_user_accounts(&session.user_id()).await?;
     let account = find_account_for_provider(&accounts, provider_name)?;
 
     let encrypt = ctx.config.account.encrypt_oauth_tokens;
@@ -300,7 +300,7 @@ pub(crate) async fn refresh_token_core<DB: DatabaseAdapter>(
     )?;
     ctx.database
         .update_account(
-            account.id(),
+            &account.id(),
             UpdateAccount {
                 access_token: tokens.access_token,
                 refresh_token: tokens.refresh_token,
@@ -430,7 +430,7 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
     let scopes = payload["scopes"].as_str().map(String::from);
 
     // Delete the verification now that we've used it
-    ctx.database.delete_verification(verification.id()).await?;
+    ctx.database.delete_verification(&verification.id()).await?;
 
     let provider = config
         .providers
@@ -566,7 +566,7 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
             )?;
             ctx.database
                 .update_account(
-                    existing_account.id(),
+                    &existing_account.id(),
                     UpdateAccount {
                         access_token: tokens.access_token,
                         refresh_token: tokens.refresh_token,
@@ -582,7 +582,7 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
         // Get the associated user
         let user = ctx
             .database
-            .get_user_by_id(existing_account.user_id())
+            .get_user_by_id(&existing_account.user_id())
             .await?
             .ok_or(AuthError::UserNotFound)?;
 
@@ -617,10 +617,12 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
                 if let Some(image) = &user_info.image {
                     update.image = Some(image.clone());
                 }
-                ctx.database.update_user(existing_user.id(), update).await?;
+                ctx.database
+                    .update_user(&existing_user.id(), update)
+                    .await?;
                 // Re-fetch the user to get updated fields
                 ctx.database
-                    .get_user_by_id(existing_user.id())
+                    .get_user_by_id(&existing_user.id())
                     .await?
                     .ok_or(AuthError::UserNotFound)?
             } else {

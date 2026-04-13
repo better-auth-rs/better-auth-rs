@@ -106,7 +106,7 @@ mod axum_impl {
 
             let user = state
                 .database
-                .get_user_by_id(session.user_id())
+                .get_user_by_id(&session.user_id())
                 .await?
                 .ok_or(AuthError::UserNotFound)?;
 

@@ -181,7 +181,7 @@ impl SessionManagementPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
-        let sessions = list_sessions_core(user.id(), ctx).await?;
+        let sessions = list_sessions_core(&user.id(), ctx).await?;
         Ok(AuthResponse::json(200, &sessions)?)
     }
 
@@ -207,7 +207,7 @@ impl SessionManagementPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_session(req).await?;
-        let response = revoke_sessions_core(user.id(), ctx).await?;
+        let response = revoke_sessions_core(&user.id(), ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -217,7 +217,7 @@ impl SessionManagementPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, current_session) = ctx.require_session(req).await?;
-        let response = revoke_other_sessions_core(user.id(), &current_session, ctx).await?;
+        let response = revoke_other_sessions_core(&user.id(), &current_session, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 }
@@ -263,7 +263,7 @@ mod axum_impl {
             return Err(AuthError::not_found("Not found"));
         }
         let ctx = state.to_context();
-        let sessions = list_sessions_core(user.id(), &ctx).await?;
+        let sessions = list_sessions_core(&user.id(), &ctx).await?;
         Ok(Json(sessions))
     }
 
@@ -290,7 +290,7 @@ mod axum_impl {
             return Err(AuthError::not_found("Not found"));
         }
         let ctx = state.to_context();
-        let response = revoke_sessions_core(user.id(), &ctx).await?;
+        let response = revoke_sessions_core(&user.id(), &ctx).await?;
         Ok(Json(response))
     }
 
@@ -303,7 +303,7 @@ mod axum_impl {
             return Err(AuthError::not_found("Not found"));
         }
         let ctx = state.to_context();
-        let response = revoke_other_sessions_core(user.id(), &session, &ctx).await?;
+        let response = revoke_other_sessions_core(&user.id(), &session, &ctx).await?;
         Ok(Json(response))
     }
 

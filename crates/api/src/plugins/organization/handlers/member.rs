@@ -27,7 +27,7 @@ pub(crate) async fn get_active_member_core<DB: DatabaseAdapter>(
 
     let member = ctx
         .database
-        .get_member(org_id, user.id())
+        .get_member(org_id, &user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -49,7 +49,7 @@ pub(crate) async fn list_members_core<DB: DatabaseAdapter>(
     .await?;
 
     ctx.database
-        .get_member(&org_id, user.id())
+        .get_member(&org_id, &user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -63,7 +63,7 @@ pub(crate) async fn list_members_core<DB: DatabaseAdapter>(
 
     let mut members = Vec::with_capacity(members_page.len());
     for member in &members_page {
-        if let Some(user_info) = ctx.database.get_user_by_id(member.user_id()).await? {
+        if let Some(user_info) = ctx.database.get_user_by_id(&member.user_id()).await? {
             members.push(MemberResponse::from_member_and_user(member, &user_info));
         }
     }
@@ -83,7 +83,7 @@ pub(crate) async fn remove_member_core<DB: DatabaseAdapter>(
 
     let requester_member = ctx
         .database
-        .get_member(&org_id, user.id())
+        .get_member(&org_id, &user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -111,7 +111,7 @@ pub(crate) async fn remove_member_core<DB: DatabaseAdapter>(
             .ok_or_else(|| AuthError::not_found("User not found"))?;
         let target = ctx
             .database
-            .get_member(&org_id, target_user.id())
+            .get_member(&org_id, &target_user.id())
             .await?
             .ok_or_else(|| AuthError::not_found("Member not found"))?;
         target_member_id = target.id().to_string();
@@ -183,7 +183,7 @@ pub(crate) async fn update_member_role_core<DB: DatabaseAdapter>(
 
     let requester_member = ctx
         .database
-        .get_member(&org_id, user.id())
+        .get_member(&org_id, &user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -229,7 +229,7 @@ pub(crate) async fn update_member_role_core<DB: DatabaseAdapter>(
 
     let user_info = ctx
         .database
-        .get_user_by_id(updated.user_id())
+        .get_user_by_id(&updated.user_id())
         .await?
         .ok_or_else(|| AuthError::internal("User not found for updated member"))?;
 

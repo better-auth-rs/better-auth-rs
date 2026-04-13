@@ -173,7 +173,7 @@ impl AdminPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = ban_user_core(&body, admin_user.id(), &self.config, ctx).await?;
+        let response = ban_user_core(&body, &admin_user.id(), &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -203,7 +203,7 @@ impl AdminPlugin {
         };
         let (response, token) = impersonate_user_core(
             &body,
-            admin_user.id(),
+            &admin_user.id(),
             req.headers.get("x-forwarded-for").map(|s| s.as_str()),
             req.headers.get("user-agent").map(|s| s.as_str()),
             ctx,
@@ -276,7 +276,7 @@ impl AdminPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = remove_user_core(&body, admin_user.id(), ctx).await?;
+        let response = remove_user_core(&body, &admin_user.id(), ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -331,7 +331,7 @@ mod axum_impl {
 
     async fn handle_set_role<DB: DatabaseAdapter>(
         State(state): State<AuthState<DB>>,
-        Extension(ps): Extension<Arc<PluginState>>,
+        Extension(_ps): Extension<Arc<PluginState>>,
         AdminSession { .. }: AdminSession<DB>,
         ValidatedJson(body): ValidatedJson<SetRoleRequest>,
     ) -> Result<Json<UserResponse<DB::User>>, AuthError> {
@@ -379,7 +379,7 @@ mod axum_impl {
         ValidatedJson(body): ValidatedJson<BanUserRequest>,
     ) -> Result<Json<UserResponse<DB::User>>, AuthError> {
         let ctx = state.to_context();
-        let response = ban_user_core(&body, user.id(), &ps.config, &ctx).await?;
+        let response = ban_user_core(&body, &user.id(), &ps.config, &ctx).await?;
         Ok(Json(response))
     }
 
@@ -405,7 +405,7 @@ mod axum_impl {
         AuthError,
     > {
         let ctx = state.to_context();
-        let (response, token) = impersonate_user_core(&body, user.id(), None, None, &ctx).await?;
+        let (response, token) = impersonate_user_core(&body, &user.id(), None, None, &ctx).await?;
         let cookie = state.session_cookie(&token);
         Ok(([(header::SET_COOKIE, cookie)], Json(response)))
     }
@@ -454,7 +454,7 @@ mod axum_impl {
         ValidatedJson(body): ValidatedJson<UserIdRequest>,
     ) -> Result<Json<SuccessResponse>, AuthError> {
         let ctx = state.to_context();
-        let response = remove_user_core(&body, user.id(), &ctx).await?;
+        let response = remove_user_core(&body, &user.id(), &ctx).await?;
         Ok(Json(response))
     }
 
@@ -469,7 +469,7 @@ mod axum_impl {
     }
 
     async fn handle_has_permission<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
+        State(_state): State<AuthState<DB>>,
         Extension(ps): Extension<Arc<PluginState>>,
         CurrentSession { user, .. }: CurrentSession<DB>,
         ValidatedJson(body): ValidatedJson<HasPermissionRequest>,

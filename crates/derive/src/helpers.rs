@@ -8,6 +8,12 @@ use syn::DeriveInput;
 pub(crate) enum ReturnKind {
     /// `fn x(&self) -> &str` — field is `String`
     RefStr,
+    /// `fn x(&self) -> Cow<'_, str>` — field is `String`; returns `Cow::Borrowed`
+    ///
+    /// Used for primary-key (`id`) and foreign-key (`user_id`, `organization_id`,
+    /// `inviter_id`) getters so that app-owned entities with non-string IDs
+    /// (e.g. `Uuid`, `i64`) can override the getter to return `Cow::Owned`.
+    CowStr,
     /// `fn x(&self) -> Option<&str>` — field is `Option<String>`
     OptionRefStr,
     /// `fn x(&self) -> bool` — field is `bool`
@@ -200,6 +206,10 @@ pub(crate) fn gen_getter_tokens(
 ) -> (TokenStream2, TokenStream2) {
     match kind {
         RefStr => (quote! { &str }, quote! { &self.#field_ident }),
+        CowStr => (
+            quote! { ::std::borrow::Cow<'_, str> },
+            quote! { ::std::borrow::Cow::Borrowed(&self.#field_ident) },
+        ),
         OptionRefStr => (
             quote! { ::core::option::Option<&str> },
             quote! { self.#field_ident.as_deref() },

@@ -449,7 +449,7 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
         };
 
         self.database
-            .update_user(current_user.id(), update_user)
+            .update_user(&current_user.id(), update_user)
             .await?;
 
         Ok(AuthResponse::json(
@@ -463,9 +463,9 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
         let current_user = self.extract_current_user(req).await?;
 
         self.database
-            .delete_user_sessions(current_user.id())
+            .delete_user_sessions(&current_user.id())
             .await?;
-        self.database.delete_user(current_user.id()).await?;
+        self.database.delete_user(&current_user.id()).await?;
 
         let response = SuccessMessageResponse {
             success: true,
@@ -512,7 +512,7 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
         };
 
         self.database
-            .update_user(current_user.id(), update_user)
+            .update_user(&current_user.id(), update_user)
             .await?;
 
         Ok(AuthResponse::json(
@@ -543,11 +543,13 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
 
         let accounts = self.database.get_user_accounts(user_id).await?;
         for account in accounts {
-            self.database.delete_account(account.id()).await?;
+            self.database.delete_account(&account.id()).await?;
         }
 
         self.database.delete_user(user_id).await?;
-        self.database.delete_verification(verification.id()).await?;
+        self.database
+            .delete_verification(&verification.id())
+            .await?;
 
         let response = SuccessMessageResponse {
             success: true,
@@ -586,7 +588,7 @@ impl<DB: DatabaseAdapter> BetterAuth<DB> {
 
         let user = self
             .database
-            .get_user_by_id(session.user_id())
+            .get_user_by_id(&session.user_id())
             .await?
             .ok_or(AuthError::UserNotFound)?;
 

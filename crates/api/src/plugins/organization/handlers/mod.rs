@@ -25,7 +25,7 @@ pub(crate) async fn require_session<DB: DatabaseAdapter>(
 
     if let Some(token) = session_manager.extract_session_token(req)
         && let Some(session) = session_manager.get_session(&token).await?
-        && let Some(user) = ctx.database.get_user_by_id(session.user_id()).await?
+        && let Some(user) = ctx.database.get_user_by_id(&session.user_id()).await?
     {
         return Ok((user, session));
     }
@@ -74,7 +74,7 @@ pub(crate) async fn has_permission_core<DB: DatabaseAdapter>(
 
     let member = ctx
         .database
-        .get_member(&org_id, user.id())
+        .get_member(&org_id, &user.id())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 

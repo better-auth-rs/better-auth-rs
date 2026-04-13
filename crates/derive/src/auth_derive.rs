@@ -140,7 +140,7 @@ pub(crate) fn derive_meta_trait(
 }
 
 pub(crate) const AUTH_USER_GETTERS: &[(&str, ReturnKind)] = &[
-    ("id", RefStr),
+    ("id", CowStr),
     ("email", OptionRefStr),
     ("name", OptionRefStr),
     ("email_verified", Bool),
@@ -158,24 +158,24 @@ pub(crate) const AUTH_USER_GETTERS: &[(&str, ReturnKind)] = &[
 ];
 
 pub(crate) const AUTH_SESSION_GETTERS: &[(&str, ReturnKind)] = &[
-    ("id", RefStr),
+    ("id", CowStr),
     ("expires_at", DateTime),
     ("token", RefStr),
     ("created_at", DateTime),
     ("updated_at", DateTime),
     ("ip_address", OptionRefStr),
     ("user_agent", OptionRefStr),
-    ("user_id", RefStr),
+    ("user_id", CowStr),
     ("impersonated_by", OptionRefStr),
     ("active_organization_id", OptionRefStr),
     ("active", Bool),
 ];
 
 pub(crate) const AUTH_ACCOUNT_GETTERS: &[(&str, ReturnKind)] = &[
-    ("id", RefStr),
+    ("id", CowStr),
     ("account_id", RefStr),
     ("provider_id", RefStr),
-    ("user_id", RefStr),
+    ("user_id", CowStr),
     ("access_token", OptionRefStr),
     ("refresh_token", OptionRefStr),
     ("id_token", OptionRefStr),
@@ -188,7 +188,7 @@ pub(crate) const AUTH_ACCOUNT_GETTERS: &[(&str, ReturnKind)] = &[
 ];
 
 pub(crate) const AUTH_ORGANIZATION_GETTERS: &[(&str, ReturnKind)] = &[
-    ("id", RefStr),
+    ("id", CowStr),
     ("name", RefStr),
     ("slug", RefStr),
     ("logo", OptionRefStr),
@@ -198,26 +198,26 @@ pub(crate) const AUTH_ORGANIZATION_GETTERS: &[(&str, ReturnKind)] = &[
 ];
 
 pub(crate) const AUTH_MEMBER_GETTERS: &[(&str, ReturnKind)] = &[
-    ("id", RefStr),
-    ("organization_id", RefStr),
-    ("user_id", RefStr),
+    ("id", CowStr),
+    ("organization_id", CowStr),
+    ("user_id", CowStr),
     ("role", RefStr),
     ("created_at", DateTime),
 ];
 
 pub(crate) const AUTH_INVITATION_GETTERS: &[(&str, ReturnKind)] = &[
-    ("id", RefStr),
-    ("organization_id", RefStr),
+    ("id", CowStr),
+    ("organization_id", CowStr),
     ("email", RefStr),
     ("role", RefStr),
     ("status", RefStatus),
-    ("inviter_id", RefStr),
+    ("inviter_id", CowStr),
     ("expires_at", DateTime),
     ("created_at", DateTime),
 ];
 
 pub(crate) const AUTH_VERIFICATION_GETTERS: &[(&str, ReturnKind)] = &[
-    ("id", RefStr),
+    ("id", CowStr),
     ("identifier", RefStr),
     ("value", RefStr),
     ("expires_at", DateTime),
@@ -226,19 +226,19 @@ pub(crate) const AUTH_VERIFICATION_GETTERS: &[(&str, ReturnKind)] = &[
 ];
 
 pub(crate) const AUTH_TWO_FACTOR_GETTERS: &[(&str, ReturnKind)] = &[
-    ("id", RefStr),
+    ("id", CowStr),
     ("secret", RefStr),
     ("backup_codes", OptionRefStr),
-    ("user_id", RefStr),
+    ("user_id", CowStr),
     ("created_at", DateTime),
     ("updated_at", DateTime),
 ];
 
 pub(crate) const AUTH_PASSKEY_GETTERS: &[(&str, ReturnKind)] = &[
-    ("id", RefStr),
+    ("id", CowStr),
     ("name", RefStr),
     ("public_key", RefStr),
-    ("user_id", RefStr),
+    ("user_id", CowStr),
     ("credential_id", RefStr),
     ("counter", U64),
     ("device_type", RefStr),

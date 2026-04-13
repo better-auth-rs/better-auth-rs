@@ -141,15 +141,15 @@ pub(crate) async fn reset_password_core<DB: DatabaseAdapter>(
     metadata[PASSWORD_HASH_KEY] = serde_json::Value::String(password_hash);
 
     ctx.database
-        .update_user(user.id(), password_utils::update_user_metadata(metadata))
+        .update_user(&user.id(), password_utils::update_user_metadata(metadata))
         .await?;
 
     // Delete the used verification token
-    ctx.database.delete_verification(verification.id()).await?;
+    ctx.database.delete_verification(&verification.id()).await?;
 
     // Revoke all existing sessions for security (when configured)
     if config.revoke_sessions_on_password_reset {
-        ctx.database.delete_user_sessions(user.id()).await?;
+        ctx.database.delete_user_sessions(&user.id()).await?;
     }
 
     // Call on_password_reset callback if configured.
@@ -257,13 +257,13 @@ pub(crate) async fn change_password_core<DB: DatabaseAdapter>(
 
     let updated_user = ctx
         .database
-        .update_user(user.id(), password_utils::update_user_metadata(metadata))
+        .update_user(&user.id(), password_utils::update_user_metadata(metadata))
         .await?;
 
     // Handle session revocation
     let new_token = if body.revoke_other_sessions == Some(true) {
         // Revoke all sessions except current one
-        ctx.database.delete_user_sessions(user.id()).await?;
+        ctx.database.delete_user_sessions(&user.id()).await?;
 
         // Create new session
         let session = ctx
@@ -312,7 +312,7 @@ pub(crate) async fn set_password_core<DB: DatabaseAdapter>(
     metadata[PASSWORD_HASH_KEY] = serde_json::Value::String(password_hash);
 
     ctx.database
-        .update_user(user.id(), password_utils::update_user_metadata(metadata))
+        .update_user(&user.id(), password_utils::update_user_metadata(metadata))
         .await?;
 
     Ok(StatusResponse { status: true })

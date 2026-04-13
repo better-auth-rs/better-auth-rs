@@ -711,7 +711,7 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
                 .unwrap()
                 .expect("User should have been created");
 
-            let accounts = db.get_user_accounts(user.id()).await.unwrap();
+            let accounts = db.get_user_accounts(&user.id()).await.unwrap();
             assert_eq!(accounts.len(), 1);
 
             let stored_access = accounts[0].access_token().unwrap();

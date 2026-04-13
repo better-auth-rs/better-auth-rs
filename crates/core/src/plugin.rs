@@ -245,7 +245,7 @@ impl<DB: DatabaseAdapter> AuthContext<DB> {
 
         if let Some(token) = session_manager.extract_session_token(req)
             && let Some(session) = session_manager.get_session(&token).await?
-            && let Some(user) = self.database.get_user_by_id(session.user_id()).await?
+            && let Some(user) = self.database.get_user_by_id(&session.user_id()).await?
         {
             return Ok((user, session));
         }

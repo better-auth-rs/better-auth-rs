@@ -486,7 +486,7 @@ impl ApiKeyPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = create_key_core(&body, user.id(), self, ctx).await?;
+        let response = create_key_core(&body, &user.id(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -500,7 +500,7 @@ impl ApiKeyPlugin {
             .query
             .get("id")
             .ok_or_else(|| AuthError::bad_request("Query parameter 'id' is required"))?;
-        let response = get_key_core(id, user.id(), self, ctx).await?;
+        let response = get_key_core(id, &user.id(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -510,7 +510,7 @@ impl ApiKeyPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-        let response = list_keys_core(user.id(), self, ctx).await?;
+        let response = list_keys_core(&user.id(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -524,7 +524,7 @@ impl ApiKeyPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = update_key_core(&body, user.id(), self, ctx).await?;
+        let response = update_key_core(&body, &user.id(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -538,7 +538,7 @@ impl ApiKeyPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = delete_key_core(&body, user.id(), self, ctx).await?;
+        let response = delete_key_core(&body, &user.id(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -598,11 +598,11 @@ impl ApiKeyPlugin {
             && chrono::Utc::now() > expires_at
         {
             // Delete expired key and evict its cached rate limiter
-            let _ = ctx.database.delete_api_key(api_key.id()).await;
+            let _ = ctx.database.delete_api_key(&api_key.id()).await;
             self.rate_limiters
                 .lock()
                 .expect("rate_limiters mutex poisoned")
-                .remove(api_key.id());
+                .remove(api_key.id().as_ref());
             return Err(ApiKeyValidationError::new(ApiKeyErrorCode::KeyExpired));
         }
 
@@ -626,11 +626,11 @@ impl ApiKeyPlugin {
             && api_key.refill_amount().is_none()
         {
             // Usage exhausted, no refill configured -- delete key and evict cache
-            let _ = ctx.database.delete_api_key(api_key.id()).await;
+            let _ = ctx.database.delete_api_key(&api_key.id()).await;
             self.rate_limiters
                 .lock()
                 .expect("rate_limiters mutex poisoned")
-                .remove(api_key.id());
+                .remove(api_key.id().as_ref());
             return Err(ApiKeyValidationError::new(ApiKeyErrorCode::UsageExceeded));
         }
 
@@ -676,7 +676,7 @@ impl ApiKeyPlugin {
 
         let updated = ctx
             .database
-            .update_api_key(api_key.id(), update)
+            .update_api_key(&api_key.id(), update)
             .await
             .map_err(|_| ApiKeyValidationError::new(ApiKeyErrorCode::FailedToUpdateApiKey))?;
 
@@ -763,7 +763,7 @@ impl ApiKeyPlugin {
         ctx: &AuthContext<DB>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-        let response = delete_all_expired_core(user.id(), self, ctx).await?;
+        let response = delete_all_expired_core(&user.id(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 }
@@ -876,7 +876,7 @@ mod axum_impl {
         ValidatedJson(body): ValidatedJson<CreateKeyRequest>,
     ) -> Result<Json<CreateKeyResponse>, AuthError> {
         let ctx = state.to_context();
-        let response = create_key_core(&body, user.id(), &plugin, &ctx).await?;
+        let response = create_key_core(&body, &user.id(), &plugin, &ctx).await?;
         Ok(Json(response))
     }
 
@@ -887,7 +887,7 @@ mod axum_impl {
         Query(query): Query<GetKeyQuery>,
     ) -> Result<Json<ApiKeyView>, AuthError> {
         let ctx = state.to_context();
-        let response = get_key_core(&query.id, user.id(), &plugin, &ctx).await?;
+        let response = get_key_core(&query.id, &user.id(), &plugin, &ctx).await?;
         Ok(Json(response))
     }
 
@@ -897,7 +897,7 @@ mod axum_impl {
         CurrentSession { user, .. }: CurrentSession<DB>,
     ) -> Result<Json<Vec<ApiKeyView>>, AuthError> {
         let ctx = state.to_context();
-        let response = list_keys_core(user.id(), &plugin, &ctx).await?;
+        let response = list_keys_core(&user.id(), &plugin, &ctx).await?;
         Ok(Json(response))
     }
 
@@ -908,7 +908,7 @@ mod axum_impl {
         ValidatedJson(body): ValidatedJson<UpdateKeyRequest>,
     ) -> Result<Json<ApiKeyView>, AuthError> {
         let ctx = state.to_context();
-        let response = update_key_core(&body, user.id(), &plugin, &ctx).await?;
+        let response = update_key_core(&body, &user.id(), &plugin, &ctx).await?;
         Ok(Json(response))
     }
 
@@ -919,7 +919,7 @@ mod axum_impl {
         ValidatedJson(body): ValidatedJson<DeleteKeyRequest>,
     ) -> Result<Json<serde_json::Value>, AuthError> {
         let ctx = state.to_context();
-        let response = delete_key_core(&body, user.id(), &plugin, &ctx).await?;
+        let response = delete_key_core(&body, &user.id(), &plugin, &ctx).await?;
         Ok(Json(response))
     }
 
@@ -939,7 +939,7 @@ mod axum_impl {
         CurrentSession { user, .. }: CurrentSession<DB>,
     ) -> Result<Json<serde_json::Value>, AuthError> {
         let ctx = state.to_context();
-        let response = delete_all_expired_core(user.id(), &plugin, &ctx).await?;
+        let response = delete_all_expired_core(&user.id(), &plugin, &ctx).await?;
         Ok(Json(response))
     }
 
