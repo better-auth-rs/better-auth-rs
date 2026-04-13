@@ -19,10 +19,6 @@ function normalizeScalar(value: string, key: string) {
     return `<${key}>`;
   }
 
-  if (!Number.isNaN(Date.parse(value)) && key.endsWith("At")) {
-    return "<date>";
-  }
-
   return value;
 }
 

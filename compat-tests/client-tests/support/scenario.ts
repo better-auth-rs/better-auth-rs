@@ -131,7 +131,16 @@ async function runScenario(
       fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>;
     }
   >();
-  const shortSeed = seed.replace(/-/g, "").slice(0, 12);
+  // Derive a short, collision-resistant seed that actually folds in
+  // UUID entropy. A naive `seed.replace(/-/g, "").slice(0, 12)` kept
+  // only the 13-digit millisecond timestamp (the UUID part sat past
+  // position 12), so two scenarios starting in the same 10 ms window
+  // produced identical `shortSeed` → duplicate emails from the same
+  // prefix.
+  const shortSeed = `${Date.now().toString(36)}${crypto
+    .randomUUID()
+    .replace(/-/g, "")
+    .slice(0, 8)}`;
 
   const context: ScenarioServerContext = {
     actor(name = "primary") {
@@ -253,7 +262,11 @@ export function compatScenario(
   scenarioName: string,
   scenario: (ctx: ScenarioServerContext) => Promise<unknown>,
 ) {
-  test.serial(scenarioName, async () => {
+  // `bun:test` does not expose AVA-style `test.serial`; tests in a
+  // single Bun test file already run sequentially by default, so
+  // plain `test(...)` gives us the serialization the scenario runner
+  // needs (`resetServerState` between scenarios must not race).
+  test(scenarioName, async () => {
     const seed = `${Date.now()}-${crypto.randomUUID()}`;
     const ts = await runScenario("TS", TS_BASE_URL, seed, scenario);
     const rust = await runScenario("Rust", RUST_BASE_URL, seed, scenario);

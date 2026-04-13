@@ -131,15 +131,6 @@ function normalizeCookies(response: Response) {
   );
 }
 
-function getSetCookieValues(response: Response) {
-  if (typeof response.headers.getSetCookie === "function") {
-    return response.headers.getSetCookie();
-  }
-
-  const single = response.headers.get("set-cookie");
-  return single ? [single] : [];
-}
-
 function applyCookiesToJar(jar: CookieJar, response: Response) {
   for (const cookie of parseSetCookie(response, {
     silent: true,

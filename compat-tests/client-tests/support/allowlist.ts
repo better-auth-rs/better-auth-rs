@@ -117,7 +117,9 @@ export const RAW_DIFF_ALLOWLIST: RawDiffAllowance[] = [
   },
   {
     scenario: /send verification email then verify marks the user verified/i,
-    path: /path/,
+    // Anchor on `^\d+\.path$` so this only matches the trace-entry
+    // URL `path` field (e.g. `2.path`) and not `…cookies.…path`.
+    path: /^\d+\.path$/,
     reason: "opaque verification tokens differ across servers but are client-inert",
   },
   {
@@ -137,7 +139,9 @@ export const RAW_DIFF_ALLOWLIST: RawDiffAllowance[] = [
   },
   {
     scenario: /change email for an unverified user completes after verify email/i,
-    path: /path/,
+    // Anchor on `^\d+\.path$` so this only matches the trace-entry
+    // URL `path` field (e.g. `2.path`) and not `…cookies.…path`.
+    path: /^\d+\.path$/,
     reason: "opaque verification tokens differ across servers but are client-inert",
   },
   {
@@ -147,7 +151,9 @@ export const RAW_DIFF_ALLOWLIST: RawDiffAllowance[] = [
   },
   {
     scenario: /change email for a verified user requires old-email confirmation first/i,
-    path: /path/,
+    // Anchor on `^\d+\.path$` so this only matches the trace-entry
+    // URL `path` field (e.g. `2.path`) and not `…cookies.…path`.
+    path: /^\d+\.path$/,
     reason: "opaque verification tokens differ across servers but are client-inert",
   },
   {
