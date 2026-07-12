@@ -12,13 +12,27 @@ pub enum OAuthStateStrategy {
 }
 
 /// Configuration for the OAuth plugin, containing all registered providers.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct OAuthConfig {
     pub providers: HashMap<String, OAuthProvider>,
     /// Skip state cookie verification (default: false) - SECURITY WARNING
     pub skip_state_cookie_check: bool,
     /// Where to store OAuth state: Cookie (stateless) or Database (default: Cookie)
     pub store_state_strategy: OAuthStateStrategy,
+    /// User-Agent sent on OAuth HTTP requests. Some provider APIs (notably
+    /// GitHub) reject requests without one. Defaults to `"better-auth"`.
+    pub user_agent: String,
+}
+
+impl Default for OAuthConfig {
+    fn default() -> Self {
+        Self {
+            providers: HashMap::new(),
+            skip_state_cookie_check: false,
+            store_state_strategy: OAuthStateStrategy::default(),
+            user_agent: "better-auth".to_string(),
+        }
+    }
 }
 
 /// User information extracted from an OAuth provider's user info endpoint.

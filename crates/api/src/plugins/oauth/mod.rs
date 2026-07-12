@@ -36,6 +36,13 @@ impl OAuthPlugin {
         self.config.providers.insert(name.to_string(), provider);
         self
     }
+
+    /// Set the User-Agent sent on OAuth HTTP requests (default `"better-auth"`).
+    /// Some provider APIs (notably GitHub) reject requests without one.
+    pub fn user_agent(mut self, user_agent: impl Into<String>) -> Self {
+        self.config.user_agent = user_agent.into();
+        self
+    }
 }
 
 impl Default for OAuthPlugin {
