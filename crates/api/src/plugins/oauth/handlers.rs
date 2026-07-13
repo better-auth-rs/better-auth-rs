@@ -483,6 +483,7 @@ pub(crate) async fn callback_core<DB: DatabaseAdapter>(
         .get(&provider.user_info_url)
         .bearer_auth(access_token)
         .header("Accept", "application/json")
+        .header("User-Agent", "better-auth")
         .send()
         .await
         .map_err(|e| AuthError::internal(format!("Failed to fetch user info: {}", e)))?;
