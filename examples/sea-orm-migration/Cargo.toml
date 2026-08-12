@@ -6,22 +6,32 @@ publish = false
 
 [dependencies]
 better-auth = { path = "../..", features = ["axum", "sqlx-postgres", "derive"] }
-better-auth-core = { path = "../../crates/core", features = ["derive", "sqlx-postgres"] }
-sea-orm = { version = "1.1", features = [
+better-auth-core = { path = "../../crates/core", features = [
+    "derive",
+    "sqlx-postgres",
+] }
+sea-orm = { version = "2.0.1", features = [
     "runtime-tokio-rustls",
     "sqlx-postgres",
     "macros",
+    "chrono",
     "with-chrono",
     "with-json",
     "with-uuid",
 ] }
-sea-orm-migration = { version = "1.1", features = [
+sea-orm-migration = { version = "2.0.1", features = [
     "runtime-tokio-rustls",
     "sqlx-postgres",
 ] }
 tokio = { version = "1", features = ["full"] }
 axum = "0.8"
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid", "json"] }
+sqlx = { version = "0.9.0", features = [
+    "runtime-tokio",
+    "postgres",
+    "chrono",
+    "uuid",
+    "json",
+] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }

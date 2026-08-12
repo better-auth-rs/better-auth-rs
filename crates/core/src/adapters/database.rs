@@ -59,8 +59,8 @@ pub mod sqlx_adapter {
         Passkey, Session, TwoFactor, UpdateAccount, UpdateApiKey, UpdateOrganization, UpdateUser,
         User, Verification,
     };
-    use sqlx::PgPool;
     use sqlx::postgres::PgRow;
+    use sqlx::{AssertSqlSafe, PgPool};
     use std::marker::PhantomData;
     use uuid::Uuid;
 
@@ -232,7 +232,7 @@ pub mod sqlx_adapter {
                 qi(U::col_updated_at()),
                 qi(U::col_metadata()),
             );
-            let user = sqlx::query_as::<_, U>(&sql)
+            let user = sqlx::query_as::<_, U>(AssertSqlSafe(sql))
                 .bind(&id)
                 .bind(&create_user.email)
                 .bind(&create_user.name)
@@ -258,7 +258,7 @@ pub mod sqlx_adapter {
                 qi(U::table()),
                 qi(U::col_id())
             );
-            let user = sqlx::query_as::<_, U>(&sql)
+            let user = sqlx::query_as::<_, U>(AssertSqlSafe(sql))
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -271,7 +271,7 @@ pub mod sqlx_adapter {
                 qi(U::table()),
                 qi(U::col_email())
             );
-            let user = sqlx::query_as::<_, U>(&sql)
+            let user = sqlx::query_as::<_, U>(AssertSqlSafe(sql))
                 .bind(email)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -284,7 +284,7 @@ pub mod sqlx_adapter {
                 qi(U::table()),
                 qi(U::col_username())
             );
-            let user = sqlx::query_as::<_, U>(&sql)
+            let user = sqlx::query_as::<_, U>(AssertSqlSafe(sql))
                 .bind(username)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -395,7 +395,10 @@ pub mod sqlx_adapter {
                 qi(U::table()),
                 qi(U::col_id())
             );
-            sqlx::query(&sql).bind(id).execute(&self.pool).await?;
+            sqlx::query(AssertSqlSafe(sql))
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
             Ok(())
         }
 
@@ -480,7 +483,7 @@ pub mod sqlx_adapter {
                 qi(U::table()),
                 where_clause
             );
-            let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
+            let mut count_query = sqlx::query_scalar::<_, i64>(AssertSqlSafe(count_sql));
             for v in &bind_values {
                 count_query = count_query.bind(v);
             }
@@ -497,7 +500,7 @@ pub mod sqlx_adapter {
                 limit_idx,
                 offset_idx
             );
-            let mut data_query = sqlx::query_as::<_, U>(&data_sql);
+            let mut data_query = sqlx::query_as::<_, U>(AssertSqlSafe(data_sql));
             for v in &bind_values {
                 data_query = data_query.bind(v);
             }
@@ -545,7 +548,7 @@ pub mod sqlx_adapter {
                 qi(S::col_active_organization_id()),
                 qi(S::col_active()),
             );
-            let session = sqlx::query_as::<_, S>(&sql)
+            let session = sqlx::query_as::<_, S>(AssertSqlSafe(sql))
                 .bind(&id)
                 .bind(&create_session.user_id)
                 .bind(&token)
@@ -569,7 +572,7 @@ pub mod sqlx_adapter {
                 qi(S::col_token()),
                 qi(S::col_active())
             );
-            let session = sqlx::query_as::<_, S>(&sql)
+            let session = sqlx::query_as::<_, S>(AssertSqlSafe(sql))
                 .bind(token)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -584,7 +587,7 @@ pub mod sqlx_adapter {
                 qi(S::col_active()),
                 qi(S::col_created_at())
             );
-            let sessions = sqlx::query_as::<_, S>(&sql)
+            let sessions = sqlx::query_as::<_, S>(AssertSqlSafe(sql))
                 .bind(user_id)
                 .fetch_all(&self.pool)
                 .await?;
@@ -604,7 +607,7 @@ pub mod sqlx_adapter {
                 qi(S::col_token()),
                 qi(S::col_active())
             );
-            sqlx::query(&sql)
+            sqlx::query(AssertSqlSafe(sql))
                 .bind(expires_at)
                 .bind(Utc::now())
                 .bind(token)
@@ -619,7 +622,10 @@ pub mod sqlx_adapter {
                 qi(S::table()),
                 qi(S::col_token())
             );
-            sqlx::query(&sql).bind(token).execute(&self.pool).await?;
+            sqlx::query(AssertSqlSafe(sql))
+                .bind(token)
+                .execute(&self.pool)
+                .await?;
             Ok(())
         }
 
@@ -629,7 +635,10 @@ pub mod sqlx_adapter {
                 qi(S::table()),
                 qi(S::col_user_id())
             );
-            sqlx::query(&sql).bind(user_id).execute(&self.pool).await?;
+            sqlx::query(AssertSqlSafe(sql))
+                .bind(user_id)
+                .execute(&self.pool)
+                .await?;
             Ok(())
         }
 
@@ -640,7 +649,7 @@ pub mod sqlx_adapter {
                 qi(S::col_expires_at()),
                 qi(S::col_active())
             );
-            let result = sqlx::query(&sql).execute(&self.pool).await?;
+            let result = sqlx::query(AssertSqlSafe(sql)).execute(&self.pool).await?;
             Ok(result.rows_affected() as usize)
         }
 
@@ -657,7 +666,7 @@ pub mod sqlx_adapter {
                 qi(S::col_token()),
                 qi(S::col_active())
             );
-            let session = sqlx::query_as::<_, S>(&sql)
+            let session = sqlx::query_as::<_, S>(AssertSqlSafe(sql))
                 .bind(organization_id)
                 .bind(token)
                 .fetch_one(&self.pool)
@@ -706,7 +715,7 @@ pub mod sqlx_adapter {
                 qi(A::col_created_at()),
                 qi(A::col_updated_at()),
             );
-            let account = sqlx::query_as::<_, A>(&sql)
+            let account = sqlx::query_as::<_, A>(AssertSqlSafe(sql))
                 .bind(&id)
                 .bind(&create_account.account_id)
                 .bind(&create_account.provider_id)
@@ -737,7 +746,7 @@ pub mod sqlx_adapter {
                 qi(A::col_provider_id()),
                 qi(A::col_account_id())
             );
-            let account = sqlx::query_as::<_, A>(&sql)
+            let account = sqlx::query_as::<_, A>(AssertSqlSafe(sql))
                 .bind(provider)
                 .bind(provider_account_id)
                 .fetch_optional(&self.pool)
@@ -752,7 +761,7 @@ pub mod sqlx_adapter {
                 qi(A::col_user_id()),
                 qi(A::col_created_at())
             );
-            let accounts = sqlx::query_as::<_, A>(&sql)
+            let accounts = sqlx::query_as::<_, A>(AssertSqlSafe(sql))
                 .bind(user_id)
                 .fetch_all(&self.pool)
                 .await?;
@@ -809,7 +818,10 @@ pub mod sqlx_adapter {
                 qi(A::table()),
                 qi(A::col_id())
             );
-            sqlx::query(&sql).bind(id).execute(&self.pool).await?;
+            sqlx::query(AssertSqlSafe(sql))
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
             Ok(())
         }
     }
@@ -850,7 +862,7 @@ pub mod sqlx_adapter {
                 qi(V::col_created_at()),
                 qi(V::col_updated_at()),
             );
-            let verification = sqlx::query_as::<_, V>(&sql)
+            let verification = sqlx::query_as::<_, V>(AssertSqlSafe(sql))
                 .bind(&id)
                 .bind(&create_verification.identifier)
                 .bind(&create_verification.value)
@@ -871,7 +883,7 @@ pub mod sqlx_adapter {
                 qi(V::col_value()),
                 qi(V::col_expires_at())
             );
-            let verification = sqlx::query_as::<_, V>(&sql)
+            let verification = sqlx::query_as::<_, V>(AssertSqlSafe(sql))
                 .bind(identifier)
                 .bind(value)
                 .fetch_optional(&self.pool)
@@ -886,7 +898,7 @@ pub mod sqlx_adapter {
                 qi(V::col_value()),
                 qi(V::col_expires_at())
             );
-            let verification = sqlx::query_as::<_, V>(&sql)
+            let verification = sqlx::query_as::<_, V>(AssertSqlSafe(sql))
                 .bind(value)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -900,7 +912,7 @@ pub mod sqlx_adapter {
                 qi(V::col_identifier()),
                 qi(V::col_expires_at())
             );
-            let verification = sqlx::query_as::<_, V>(&sql)
+            let verification = sqlx::query_as::<_, V>(AssertSqlSafe(sql))
                 .bind(identifier)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -926,7 +938,7 @@ pub mod sqlx_adapter {
                 exp = qi(V::col_expires_at()),
                 ca = qi(V::col_created_at()),
             );
-            let verification = sqlx::query_as::<_, V>(&sql)
+            let verification = sqlx::query_as::<_, V>(AssertSqlSafe(sql))
                 .bind(identifier)
                 .bind(value)
                 .fetch_optional(&self.pool)
@@ -940,7 +952,10 @@ pub mod sqlx_adapter {
                 qi(V::table()),
                 qi(V::col_id())
             );
-            sqlx::query(&sql).bind(id).execute(&self.pool).await?;
+            sqlx::query(AssertSqlSafe(sql))
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
             Ok(())
         }
 
@@ -950,7 +965,7 @@ pub mod sqlx_adapter {
                 qi(V::table()),
                 qi(V::col_expires_at())
             );
-            let result = sqlx::query(&sql).execute(&self.pool).await?;
+            let result = sqlx::query(AssertSqlSafe(sql)).execute(&self.pool).await?;
             Ok(result.rows_affected() as usize)
         }
     }
@@ -989,7 +1004,7 @@ pub mod sqlx_adapter {
                 qi(O::col_created_at()),
                 qi(O::col_updated_at()),
             );
-            let organization = sqlx::query_as::<_, O>(&sql)
+            let organization = sqlx::query_as::<_, O>(AssertSqlSafe(sql))
                 .bind(&id)
                 .bind(&create_org.name)
                 .bind(&create_org.slug)
@@ -1011,7 +1026,7 @@ pub mod sqlx_adapter {
                 qi(O::table()),
                 qi(O::col_id())
             );
-            let organization = sqlx::query_as::<_, O>(&sql)
+            let organization = sqlx::query_as::<_, O>(AssertSqlSafe(sql))
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1024,7 +1039,7 @@ pub mod sqlx_adapter {
                 qi(O::table()),
                 qi(O::col_slug())
             );
-            let organization = sqlx::query_as::<_, O>(&sql)
+            let organization = sqlx::query_as::<_, O>(AssertSqlSafe(sql))
                 .bind(slug)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1069,7 +1084,10 @@ pub mod sqlx_adapter {
                 qi(O::table()),
                 qi(O::col_id())
             );
-            sqlx::query(&sql).bind(id).execute(&self.pool).await?;
+            sqlx::query(AssertSqlSafe(sql))
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
             Ok(())
         }
 
@@ -1083,7 +1101,7 @@ pub mod sqlx_adapter {
                 qi(M::col_user_id()),
                 qi(O::col_created_at()),
             );
-            let organizations = sqlx::query_as::<_, O>(&sql)
+            let organizations = sqlx::query_as::<_, O>(AssertSqlSafe(sql))
                 .bind(user_id)
                 .fetch_all(&self.pool)
                 .await?;
@@ -1122,7 +1140,7 @@ pub mod sqlx_adapter {
                 qi(M::col_role()),
                 qi(M::col_created_at()),
             );
-            let member = sqlx::query_as::<_, M>(&sql)
+            let member = sqlx::query_as::<_, M>(AssertSqlSafe(sql))
                 .bind(&id)
                 .bind(&create_member.organization_id)
                 .bind(&create_member.user_id)
@@ -1141,7 +1159,7 @@ pub mod sqlx_adapter {
                 qi(M::col_organization_id()),
                 qi(M::col_user_id())
             );
-            let member = sqlx::query_as::<_, M>(&sql)
+            let member = sqlx::query_as::<_, M>(AssertSqlSafe(sql))
                 .bind(organization_id)
                 .bind(user_id)
                 .fetch_optional(&self.pool)
@@ -1155,7 +1173,7 @@ pub mod sqlx_adapter {
                 qi(M::table()),
                 qi(M::col_id())
             );
-            let member = sqlx::query_as::<_, M>(&sql)
+            let member = sqlx::query_as::<_, M>(AssertSqlSafe(sql))
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1169,7 +1187,7 @@ pub mod sqlx_adapter {
                 qi(M::col_role()),
                 qi(M::col_id())
             );
-            let member = sqlx::query_as::<_, M>(&sql)
+            let member = sqlx::query_as::<_, M>(AssertSqlSafe(sql))
                 .bind(role)
                 .bind(member_id)
                 .fetch_one(&self.pool)
@@ -1183,7 +1201,7 @@ pub mod sqlx_adapter {
                 qi(M::table()),
                 qi(M::col_id())
             );
-            sqlx::query(&sql)
+            sqlx::query(AssertSqlSafe(sql))
                 .bind(member_id)
                 .execute(&self.pool)
                 .await?;
@@ -1197,7 +1215,7 @@ pub mod sqlx_adapter {
                 qi(M::col_organization_id()),
                 qi(M::col_created_at())
             );
-            let members = sqlx::query_as::<_, M>(&sql)
+            let members = sqlx::query_as::<_, M>(AssertSqlSafe(sql))
                 .bind(organization_id)
                 .fetch_all(&self.pool)
                 .await?;
@@ -1210,7 +1228,7 @@ pub mod sqlx_adapter {
                 qi(M::table()),
                 qi(M::col_organization_id())
             );
-            let count: (i64,) = sqlx::query_as(&sql)
+            let count: (i64,) = sqlx::query_as(AssertSqlSafe(sql))
                 .bind(organization_id)
                 .fetch_one(&self.pool)
                 .await?;
@@ -1224,7 +1242,7 @@ pub mod sqlx_adapter {
                 qi(M::col_organization_id()),
                 qi(M::col_role())
             );
-            let count: (i64,) = sqlx::query_as(&sql)
+            let count: (i64,) = sqlx::query_as(AssertSqlSafe(sql))
                 .bind(organization_id)
                 .fetch_one(&self.pool)
                 .await?;
@@ -1267,7 +1285,7 @@ pub mod sqlx_adapter {
                 qi(I::col_expires_at()),
                 qi(I::col_created_at()),
             );
-            let invitation = sqlx::query_as::<_, I>(&sql)
+            let invitation = sqlx::query_as::<_, I>(AssertSqlSafe(sql))
                 .bind(&id)
                 .bind(&create_inv.organization_id)
                 .bind(&create_inv.email)
@@ -1287,7 +1305,7 @@ pub mod sqlx_adapter {
                 qi(I::table()),
                 qi(I::col_id())
             );
-            let invitation = sqlx::query_as::<_, I>(&sql)
+            let invitation = sqlx::query_as::<_, I>(AssertSqlSafe(sql))
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1306,7 +1324,7 @@ pub mod sqlx_adapter {
                 qi(I::col_email()),
                 qi(I::col_status())
             );
-            let invitation = sqlx::query_as::<_, I>(&sql)
+            let invitation = sqlx::query_as::<_, I>(AssertSqlSafe(sql))
                 .bind(organization_id)
                 .bind(email)
                 .fetch_optional(&self.pool)
@@ -1325,7 +1343,7 @@ pub mod sqlx_adapter {
                 qi(I::col_status()),
                 qi(I::col_id())
             );
-            let invitation = sqlx::query_as::<_, I>(&sql)
+            let invitation = sqlx::query_as::<_, I>(AssertSqlSafe(sql))
                 .bind(status.to_string())
                 .bind(id)
                 .fetch_one(&self.pool)
@@ -1340,7 +1358,7 @@ pub mod sqlx_adapter {
                 qi(I::col_organization_id()),
                 qi(I::col_created_at())
             );
-            let invitations = sqlx::query_as::<_, I>(&sql)
+            let invitations = sqlx::query_as::<_, I>(AssertSqlSafe(sql))
                 .bind(organization_id)
                 .fetch_all(&self.pool)
                 .await?;
@@ -1356,7 +1374,7 @@ pub mod sqlx_adapter {
                 qi(I::col_expires_at()),
                 qi(I::col_created_at())
             );
-            let invitations = sqlx::query_as::<_, I>(&sql)
+            let invitations = sqlx::query_as::<_, I>(AssertSqlSafe(sql))
                 .bind(email)
                 .fetch_all(&self.pool)
                 .await?;
@@ -1396,7 +1414,7 @@ pub mod sqlx_adapter {
                 qi(TF::col_created_at()),
                 qi(TF::col_updated_at()),
             );
-            let two_factor = sqlx::query_as::<_, TF>(&sql)
+            let two_factor = sqlx::query_as::<_, TF>(AssertSqlSafe(sql))
                 .bind(&id)
                 .bind(&create.secret)
                 .bind(&create.backup_codes)
@@ -1415,7 +1433,7 @@ pub mod sqlx_adapter {
                 qi(TF::table()),
                 qi(TF::col_user_id())
             );
-            let two_factor = sqlx::query_as::<_, TF>(&sql)
+            let two_factor = sqlx::query_as::<_, TF>(AssertSqlSafe(sql))
                 .bind(user_id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1434,7 +1452,7 @@ pub mod sqlx_adapter {
                 qi(TF::col_updated_at()),
                 qi(TF::col_user_id())
             );
-            let two_factor = sqlx::query_as::<_, TF>(&sql)
+            let two_factor = sqlx::query_as::<_, TF>(AssertSqlSafe(sql))
                 .bind(backup_codes)
                 .bind(user_id)
                 .fetch_one(&self.pool)
@@ -1448,7 +1466,10 @@ pub mod sqlx_adapter {
                 qi(TF::table()),
                 qi(TF::col_user_id())
             );
-            sqlx::query(&sql).bind(user_id).execute(&self.pool).await?;
+            sqlx::query(AssertSqlSafe(sql))
+                .bind(user_id)
+                .execute(&self.pool)
+                .await?;
             Ok(())
         }
     }
@@ -1498,7 +1519,7 @@ pub mod sqlx_adapter {
                 qi(AK::col_permissions()),
                 qi(AK::col_metadata()),
             );
-            let api_key = sqlx::query_as::<_, AK>(&sql)
+            let api_key = sqlx::query_as::<_, AK>(AssertSqlSafe(sql))
                 .bind(&id)
                 .bind(&input.name)
                 .bind(&input.start)
@@ -1529,7 +1550,7 @@ pub mod sqlx_adapter {
                 qi(AK::table()),
                 qi(AK::col_id())
             );
-            let api_key = sqlx::query_as::<_, AK>(&sql)
+            let api_key = sqlx::query_as::<_, AK>(AssertSqlSafe(sql))
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1542,7 +1563,7 @@ pub mod sqlx_adapter {
                 qi(AK::table()),
                 qi(AK::col_key_hash())
             );
-            let api_key = sqlx::query_as::<_, AK>(&sql)
+            let api_key = sqlx::query_as::<_, AK>(AssertSqlSafe(sql))
                 .bind(hash)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1556,7 +1577,7 @@ pub mod sqlx_adapter {
                 qi(AK::col_user_id()),
                 qi(AK::col_created_at())
             );
-            let keys = sqlx::query_as::<_, AK>(&sql)
+            let keys = sqlx::query_as::<_, AK>(AssertSqlSafe(sql))
                 .bind(user_id)
                 .fetch_all(&self.pool)
                 .await?;
@@ -1648,7 +1669,10 @@ pub mod sqlx_adapter {
                 qi(AK::table()),
                 qi(AK::col_id())
             );
-            sqlx::query(&sql).bind(id).execute(&self.pool).await?;
+            sqlx::query(AssertSqlSafe(sql))
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
             Ok(())
         }
 
@@ -1663,7 +1687,10 @@ pub mod sqlx_adapter {
                 qi(AK::col_expires_at()),
                 qi(AK::col_expires_at()),
             );
-            let result = sqlx::query(&sql).bind(&now).execute(&self.pool).await?;
+            let result = sqlx::query(AssertSqlSafe(sql))
+                .bind(&now)
+                .execute(&self.pool)
+                .await?;
             Ok(result.rows_affected() as usize)
         }
     }
@@ -1707,7 +1734,7 @@ pub mod sqlx_adapter {
                 qi(PK::col_transports()),
                 qi(PK::col_created_at()),
             );
-            let passkey = sqlx::query_as::<_, PK>(&sql)
+            let passkey = sqlx::query_as::<_, PK>(AssertSqlSafe(sql))
                 .bind(&id)
                 .bind(&input.name)
                 .bind(&input.public_key)
@@ -1736,7 +1763,7 @@ pub mod sqlx_adapter {
                 qi(PK::table()),
                 qi(PK::col_id())
             );
-            let passkey = sqlx::query_as::<_, PK>(&sql)
+            let passkey = sqlx::query_as::<_, PK>(AssertSqlSafe(sql))
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1752,7 +1779,7 @@ pub mod sqlx_adapter {
                 qi(PK::table()),
                 qi(PK::col_credential_id())
             );
-            let passkey = sqlx::query_as::<_, PK>(&sql)
+            let passkey = sqlx::query_as::<_, PK>(AssertSqlSafe(sql))
                 .bind(credential_id)
                 .fetch_optional(&self.pool)
                 .await?;
@@ -1766,7 +1793,7 @@ pub mod sqlx_adapter {
                 qi(PK::col_user_id()),
                 qi(PK::col_created_at())
             );
-            let passkeys = sqlx::query_as::<_, PK>(&sql)
+            let passkeys = sqlx::query_as::<_, PK>(AssertSqlSafe(sql))
                 .bind(user_id)
                 .fetch_all(&self.pool)
                 .await?;
@@ -1782,7 +1809,7 @@ pub mod sqlx_adapter {
                 qi(PK::col_counter()),
                 qi(PK::col_id())
             );
-            let passkey = sqlx::query_as::<_, PK>(&sql)
+            let passkey = sqlx::query_as::<_, PK>(AssertSqlSafe(sql))
                 .bind(id)
                 .bind(counter)
                 .fetch_one(&self.pool)
@@ -1801,7 +1828,7 @@ pub mod sqlx_adapter {
                 qi(PK::col_name()),
                 qi(PK::col_id())
             );
-            let passkey = sqlx::query_as::<_, PK>(&sql)
+            let passkey = sqlx::query_as::<_, PK>(AssertSqlSafe(sql))
                 .bind(id)
                 .bind(name)
                 .fetch_one(&self.pool)
@@ -1819,7 +1846,10 @@ pub mod sqlx_adapter {
                 qi(PK::table()),
                 qi(PK::col_id())
             );
-            sqlx::query(&sql).bind(id).execute(&self.pool).await?;
+            sqlx::query(AssertSqlSafe(sql))
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
             Ok(())
         }
     }

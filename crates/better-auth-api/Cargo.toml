@@ -46,7 +46,7 @@ tower-http = { version = "0.6", optional = true, features = ["cors", "fs"] }
 # Database adapters
 sea-orm = { workspace = true }
 redis = { version = "0.24", optional = true }
-sqlx = { version = "0.8", optional = true, features = ["runtime-tokio-rustls", "postgres", "macros", "uuid", "chrono", "json"] }
+sqlx = { workspace = true, optional = true, features = ["macros"] }
 
 [dev-dependencies]
 tokio-test = "0.4"
