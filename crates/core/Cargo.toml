@@ -56,5 +56,6 @@ tracing.workspace = true
 default = []
 derive = ["dep:better-auth-derive"]
 sqlx-postgres = ["dep:sqlx"]
+sqlx-sqlite = ["dep:sqlx"]
 redis-cache = ["dep:redis"]
 axum = ["dep:axum", "dep:http-body-util"]
