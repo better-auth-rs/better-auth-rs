@@ -60,8 +60,11 @@ where
     }
 
     async fn get_verification(&self, identifier: &str, value: &str) -> AuthResult<Option<V>> {
+        // Use a bind-parameter with an RFC 3339 timestamp instead of
+        // CURRENT_TIMESTAMP so the comparison is straightforward.
+        let now = Utc::now().to_rfc3339();
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = ? AND {} = ? AND {} > CURRENT_TIMESTAMP",
+            "SELECT * FROM {} WHERE {} = ? AND {} = ? AND {} > ?",
             qi(V::table()),
             qi(V::col_identifier()),
             qi(V::col_value()),
@@ -70,44 +73,56 @@ where
         let verification = sqlx::query_as::<_, V>(AssertSqlSafe(sql))
             .bind(identifier)
             .bind(value)
+            .bind(&now)
             .fetch_optional(&self.pool)
             .await?;
         Ok(verification)
     }
 
     async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<V>> {
+        // Use a bind-parameter with an RFC 3339 timestamp instead of
+        // CURRENT_TIMESTAMP so the comparison is straightforward.
+        let now = Utc::now().to_rfc3339();
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = ? AND {} > CURRENT_TIMESTAMP",
+            "SELECT * FROM {} WHERE {} = ? AND {} > ?",
             qi(V::table()),
             qi(V::col_value()),
             qi(V::col_expires_at())
         );
         let verification = sqlx::query_as::<_, V>(AssertSqlSafe(sql))
             .bind(value)
+            .bind(&now)
             .fetch_optional(&self.pool)
             .await?;
         Ok(verification)
     }
 
     async fn get_verification_by_identifier(&self, identifier: &str) -> AuthResult<Option<V>> {
+        // Use a bind-parameter with an RFC 3339 timestamp instead of
+        // CURRENT_TIMESTAMP so the comparison is straightforward.
+        let now = Utc::now().to_rfc3339();
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = ? AND {} > CURRENT_TIMESTAMP",
+            "SELECT * FROM {} WHERE {} = ? AND {} > ?",
             qi(V::table()),
             qi(V::col_identifier()),
             qi(V::col_expires_at())
         );
         let verification = sqlx::query_as::<_, V>(AssertSqlSafe(sql))
             .bind(identifier)
+            .bind(&now)
             .fetch_optional(&self.pool)
             .await?;
         Ok(verification)
     }
 
     async fn consume_verification(&self, identifier: &str, value: &str) -> AuthResult<Option<V>> {
+        // Use a bind-parameter with an RFC 3339 timestamp instead of
+        // CURRENT_TIMESTAMP so the comparison is straightforward.
+        let now = Utc::now().to_rfc3339();
         let sql = format!(
             "DELETE FROM {tbl} WHERE {id} IN (\
                     SELECT {id} FROM {tbl} \
-                    WHERE {ident} = ? AND {val} = ? AND {exp} > CURRENT_TIMESTAMP \
+                    WHERE {ident} = ? AND {val} = ? AND {exp} > ? \
                     ORDER BY {ca} DESC \
                     LIMIT 1\
                 ) RETURNING *",
@@ -121,6 +136,7 @@ where
         let verification = sqlx::query_as::<_, V>(AssertSqlSafe(sql))
             .bind(identifier)
             .bind(value)
+            .bind(&now)
             .fetch_optional(&self.pool)
             .await?;
         Ok(verification)
@@ -140,15 +156,18 @@ where
     }
 
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
+        // Use a bind-parameter with an RFC 3339 timestamp instead of
+        // CURRENT_TIMESTAMP so the comparison is straightforward.
+        let now = Utc::now().to_rfc3339();
         let sql = format!(
-            "DELETE FROM {} WHERE {} < CURRENT_TIMESTAMP",
+            "DELETE FROM {} WHERE {} < ?",
             qi(V::table()),
             qi(V::col_expires_at())
         );
-        let result = sqlx::query(AssertSqlSafe(sql)).execute(&self.pool).await?;
+        let result = sqlx::query(AssertSqlSafe(sql))
+            .bind(&now)
+            .execute(&self.pool)
+            .await?;
         Ok(result.rows_affected() as usize)
     }
 }
-
-
-

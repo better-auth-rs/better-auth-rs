@@ -125,8 +125,11 @@ where
     }
 
     async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<I>> {
+        // Use a bind-parameter with an RFC 3339 timestamp instead of
+        // CURRENT_TIMESTAMP so the comparison is straightforward.
+        let now = Utc::now().to_rfc3339();
         let sql = format!(
-            "SELECT * FROM {} WHERE LOWER({}) = LOWER(?) AND {} = 'pending' AND {} > CURRENT_TIMESTAMP ORDER BY {} DESC",
+            "SELECT * FROM {} WHERE LOWER({}) = LOWER(?) AND {} = 'pending' AND {} > ? ORDER BY {} DESC",
             qi(I::table()),
             qi(I::col_email()),
             qi(I::col_status()),
@@ -135,6 +138,7 @@ where
         );
         let invitations = sqlx::query_as::<_, I>(AssertSqlSafe(sql))
             .bind(email)
+            .bind(&now)
             .fetch_all(&self.pool)
             .await?;
         Ok(invitations)

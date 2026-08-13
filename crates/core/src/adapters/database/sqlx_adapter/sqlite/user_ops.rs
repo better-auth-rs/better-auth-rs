@@ -111,11 +111,15 @@ where
     }
 
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<U> {
+        // Use a bind-parameter with an RFC 3339 timestamp instead of
+        // CURRENT_TIMESTAMP so the comparison is straightforward.
+        let now = Utc::now().to_rfc3339();
         let mut query = sqlx::QueryBuilder::new(format!(
-            "UPDATE {} SET {} = CURRENT_TIMESTAMP",
+            "UPDATE {} SET {} = ",
             qi(U::table()),
             qi(U::col_updated_at())
         ));
+        query.push_bind(&now);
         let mut has_updates = false;
 
         if let Some(email) = &update.email {

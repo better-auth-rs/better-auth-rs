@@ -16,7 +16,8 @@ use uuid::Uuid;
 // -- TwoFactorOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V, TF, AK, PK> TwoFactorOps for SqliteAdapter<U, S, A, O, M, I, V, TF, AK, PK>
+impl<U, S, A, O, M, I, V, TF, AK, PK> TwoFactorOps
+    for SqliteAdapter<U, S, A, O, M, I, V, TF, AK, PK>
 where
     U: AuthUser + AuthUserMeta + SqliteEntity,
     S: AuthSession + AuthSessionMeta + SqliteEntity,
@@ -76,8 +77,11 @@ where
         user_id: &str,
         backup_codes: &str,
     ) -> AuthResult<TF> {
+        // Use a bind-parameter with an RFC 3339 timestamp instead of
+        // CURRENT_TIMESTAMP so the comparison is straightforward.
+        let now = Utc::now().to_rfc3339();
         let sql = format!(
-            "UPDATE {} SET {} = ?, {} = CURRENT_TIMESTAMP WHERE {} = ? RETURNING *",
+            "UPDATE {} SET {} = ?, {} = ? WHERE {} = ? RETURNING *",
             qi(TF::table()),
             qi(TF::col_backup_codes()),
             qi(TF::col_updated_at()),
@@ -85,6 +89,7 @@ where
         );
         let two_factor = sqlx::query_as::<_, TF>(AssertSqlSafe(sql))
             .bind(backup_codes)
+            .bind(&now)
             .bind(user_id)
             .fetch_one(&self.pool)
             .await?;
@@ -104,6 +109,3 @@ where
         Ok(())
     }
 }
-
-
-

@@ -16,8 +16,7 @@ use uuid::Uuid;
 // -- SessionOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V, TF, AK, PK> SessionOps
-    for SqliteAdapter<U, S, A, O, M, I, V, TF, AK, PK>
+impl<U, S, A, O, M, I, V, TF, AK, PK> SessionOps for SqliteAdapter<U, S, A, O, M, I, V, TF, AK, PK>
 where
     U: AuthUser + AuthUserMeta + SqliteEntity,
     S: AuthSession + AuthSessionMeta + SqliteEntity,
@@ -146,13 +145,19 @@ where
     }
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
+        // Use a bind-parameter with an RFC 3339 timestamp instead of
+        // CURRENT_TIMESTAMP so the comparison is straightforward.
+        let now = Utc::now().to_rfc3339();
         let sql = format!(
-            "DELETE FROM {} WHERE {} < CURRENT_TIMESTAMP OR {} = false",
+            "DELETE FROM {} WHERE {} < ? OR {} = false",
             qi(S::table()),
             qi(S::col_expires_at()),
             qi(S::col_active())
         );
-        let result = sqlx::query(AssertSqlSafe(sql)).execute(&self.pool).await?;
+        let result = sqlx::query(AssertSqlSafe(sql))
+            .bind(&now)
+            .execute(&self.pool)
+            .await?;
         Ok(result.rows_affected() as usize)
     }
 
@@ -161,8 +166,11 @@ where
         token: &str,
         organization_id: Option<&str>,
     ) -> AuthResult<S> {
+        // Use a bind-parameter with an RFC 3339 timestamp instead of
+        // CURRENT_TIMESTAMP so the comparison is straightforward.
+        let now = Utc::now().to_rfc3339();
         let sql = format!(
-            "UPDATE {} SET {} = ?, {} = CURRENT_TIMESTAMP WHERE {} = ? AND {} = true RETURNING *",
+            "UPDATE {} SET {} = ?, {} = ? WHERE {} = ? AND {} = true RETURNING *",
             qi(S::table()),
             qi(S::col_active_organization_id()),
             qi(S::col_updated_at()),
@@ -171,11 +179,10 @@ where
         );
         let session = sqlx::query_as::<_, S>(AssertSqlSafe(sql))
             .bind(organization_id)
+            .bind(&now)
             .bind(token)
             .fetch_one(&self.pool)
             .await?;
         Ok(session)
     }
 }
-
-
