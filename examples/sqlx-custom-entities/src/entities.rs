@@ -228,7 +228,7 @@ pub struct SaasVerification {
 // Type alias for the PostgreSQL adapter with all custom types
 // ---------------------------------------------------------------------------
 
-pub type SaasAdapter = better_auth::adapters::SqlxAdapter<
+pub type SaasAdapter = better_auth::adapters::PostgresAdapter<
     SaasUser,
     SaasSession,
     SaasAccount,

@@ -14,6 +14,8 @@ pub(crate) enum ReturnKind {
     Bool,
     /// `fn x(&self) -> u64` — field is `u64`
     U64,
+    /// `fn x(&self) -> Option<i64>` — field is `Option<i64>`
+    OptionI64,
     /// `fn x(&self) -> DateTime<Utc>` — field is `DateTime<Utc>`
     DateTime,
     /// `fn x(&self) -> Option<DateTime<Utc>>` — field is `Option<DateTime<Utc>>`
@@ -224,6 +226,10 @@ pub(crate) fn gen_getter_tokens(
         ),
         Bool => (quote! { bool }, quote! { self.#field_ident }),
         U64 => (quote! { u64 }, quote! { self.#field_ident }),
+        OptionI64 => (
+            quote! { ::core::option::Option<i64> },
+            quote! { self.#field_ident },
+        ),
         DateTime => (
             quote! { ::chrono::DateTime<::chrono::Utc> },
             quote! { self.#field_ident },

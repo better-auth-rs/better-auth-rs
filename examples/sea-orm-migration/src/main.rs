@@ -1,31 +1,28 @@
-//! # Sea-ORM Migration Example
+//! # Sea-ORM Migration Example (SQLite In-Memory)
 //!
 //! Demonstrates how to use better-auth alongside Sea-ORM in the same application,
-//! with schema migrations managed by `sea-orm-migration` (Rust code, not raw SQL).
+//! with schema automatically synced from entity definitions (SeaORM 2.0 entity-first workflow).
 //!
 //! - **Sea-ORM** (`DatabaseConnection`) — for app-level queries (e.g., find users by plan)
-//! - **better-auth** (`SqlxAdapter`) — for authentication (sign-up, sign-in, sessions)
-//! - **sea-orm-migration** — for schema migrations in Rust
+//! - **better-auth** (`SqliteAdapter`) — for authentication (sign-up, sign-in, sessions)
+//! - **schema sync** — automatically creates tables from entity definitions
 //!
-//! The key pattern: extract the underlying `sqlx::PgPool` from Sea-ORM's
-//! `DatabaseConnection` via `get_postgres_connection_pool()`, then pass it
-//! to `SqlxAdapter::from_pool()`.
+//! The key pattern: extract the underlying `sqlx::SqlitePool` from Sea-ORM's
+//! `DatabaseConnection` via `get_sqlite_connection_pool()`, then pass it
+//! to `SqliteAdapter::from_pool()`.
 //!
 //! ## Setup
 //!
 //! ```bash
-//! createdb better_auth_example
-//! export DATABASE_URL="postgresql://user:pass@localhost:5432/better_auth_example"
+//! # No database setup needed - uses in-memory SQLite!
 //! cargo run --manifest-path examples/sea-orm-migration/Cargo.toml
 //! ```
 
 mod auth_entities;
 mod entities;
-mod migration;
 
 use crate::auth_entities::{AppAdapter, AppUser};
 use crate::entities::UserEntity;
-use crate::migration::Migrator;
 use axum::extract::{Request, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -37,7 +34,6 @@ use better_auth::plugins::{
 };
 use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use sea_orm_migration::MigratorTrait;
 use serde::Serialize;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
@@ -54,21 +50,21 @@ struct AppState {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let database_url =
-        std::env::var("DATABASE_URL").expect("DATABASE_URL environment variable required");
+    // 1. Connect to SQLite in-memory database via Sea-ORM
+    let db: DatabaseConnection = sea_orm::Database::connect("sqlite::memory:").await?;
+    println!("[*] Sea-ORM connected to in-memory SQLite");
 
-    // 1. Connect via Sea-ORM (this creates a sqlx pool internally)
-    let db: DatabaseConnection = sea_orm::Database::connect(&database_url).await?;
-    println!("[*] Sea-ORM connected");
-
-    // 2. Run migrations via sea-orm-migration (Rust code, not raw SQL)
-    Migrator::up(&db, None).await?;
-    println!("[*] Migrations applied");
+    // 2. Sync schema from entity definitions (SeaORM 2.0 pattern)
+    //    This automatically creates tables, columns, and foreign keys
+    db.get_schema_registry("sea_orm_migration_example::entities::*")
+        .sync(&db)
+        .await?;
+    println!("[*] Schema synced from entity definitions");
 
     // 3. Create the better-auth SqlxAdapter from the SAME pool
     //    Both Sea-ORM and better-auth share one connection pool.
-    let pg_pool = db.get_postgres_connection_pool();
-    let adapter = AppAdapter::from_pool(pg_pool.clone());
+    let sqlite_pool = db.get_sqlite_connection_pool();
+    let adapter = AppAdapter::from_pool(sqlite_pool.clone());
 
     let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
         .base_url("http://localhost:8080")
@@ -106,6 +102,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("[*] Listening on http://localhost:8080");
     println!();
+    println!("  📦 Using SQLite in-memory database");
+    println!("  ⚠️  All data will be lost when the server stops!");
+    println!();
     println!("  Auth (better-auth):");
     println!("    POST /auth/sign-up/email");
     println!("    POST /auth/sign-in/email");
@@ -122,7 +121,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("    # Sign up");
     println!("    curl -s -X POST http://localhost:8080/auth/sign-up/email \\");
     println!("      -H 'Content-Type: application/json' \\");
-    println!("      -d '{{\"email\":\"alice@example.com\",\"password\":\"secure123\",\"name\":\"Alice\"}}'");
+    println!(
+        "      -d '{{\"email\":\"alice@example.com\",\"password\":\"secure123\",\"name\":\"Alice\"}}'"
+    );
     println!();
     println!("    # Query users by plan (Sea-ORM)");
     println!("    curl -s 'http://localhost:8080/api/users-by-plan?plan=free'");
@@ -185,8 +186,7 @@ async fn get_me(State(state): State<AppState>, req: Request) -> Response {
         }
     };
 
-    let body: serde_json::Value =
-        serde_json::from_slice(&session_resp.body).unwrap_or_default();
+    let body: serde_json::Value = serde_json::from_slice(&session_resp.body).unwrap_or_default();
 
     let user: AppUser = match serde_json::from_value(body["user"].clone()) {
         Ok(u) => u,
@@ -221,10 +221,7 @@ struct UserSummary {
     plan: String,
 }
 
-async fn get_users_by_plan(
-    State(state): State<AppState>,
-    req: Request,
-) -> Response {
+async fn get_users_by_plan(State(state): State<AppState>, req: Request) -> Response {
     let plan = req
         .uri()
         .query()

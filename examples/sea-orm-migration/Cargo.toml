@@ -4,15 +4,25 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(feature, values("sqlx-postgres", "sqlx-sqlite"))',
+] }
+
+[features]
+default = ["sqlx-sqlite"]
+sqlx-sqlite = []
+sqlx-postgres = []
+
 [dependencies]
-better-auth = { path = "../..", features = ["axum", "sqlx-postgres", "derive"] }
+better-auth = { path = "../..", features = ["axum", "sqlx-sqlite", "derive"] }
 better-auth-core = { path = "../../crates/core", features = [
     "derive",
-    "sqlx-postgres",
+    "sqlx-sqlite",
 ] }
 sea-orm = { version = "2.0.1", features = [
     "runtime-tokio-rustls",
-    "sqlx-postgres",
+    "sqlx-sqlite",
     "macros",
     "chrono",
     "with-chrono",
@@ -21,15 +31,12 @@ sea-orm = { version = "2.0.1", features = [
     "schema-sync",
     "entity-registry",
 ] }
-sea-orm-migration = { version = "2.0.1", features = [
-    "runtime-tokio-rustls",
-    "sqlx-postgres",
-] }
+
 tokio = { version = "1", features = ["full"] }
 axum = "0.8"
 sqlx = { version = "0.9.0", features = [
     "runtime-tokio",
-    "postgres",
+    "sqlite",
     "chrono",
     "uuid",
     "json",

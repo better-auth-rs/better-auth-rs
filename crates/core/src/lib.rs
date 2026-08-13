@@ -32,7 +32,9 @@ pub use adapters::{
     VerificationOps,
 };
 #[cfg(feature = "sqlx-postgres")]
-pub use adapters::{SqlxAdapter, SqlxEntity};
+pub use adapters::{PostgresAdapter, PostgresEntity};
+#[cfg(feature = "sqlx-sqlite")]
+pub use adapters::{SqliteAdapter, SqliteEntity};
 pub use config::{
     AccountConfig, AccountLinkingConfig, AdvancedConfig, AdvancedDatabaseConfig, Argon2Config,
     AuthConfig, CookieAttributes, CookieCacheConfig, CookieCacheStrategy, CookieOverride,

@@ -39,10 +39,3 @@ pub use postgres::{PostgresAdapter, PostgresEntity};
 
 #[cfg(feature = "sqlx-sqlite")]
 pub use sqlite::{SqliteAdapter, SqliteEntity};
-
-// Legacy alias for backward compatibility (PostgreSQL was the first implementation)
-#[cfg(feature = "sqlx-postgres")]
-pub use PostgresAdapter as SqlxAdapter;
-
-#[cfg(feature = "sqlx-postgres")]
-pub use PostgresEntity as SqlxEntity;

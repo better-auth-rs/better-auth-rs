@@ -47,7 +47,7 @@ impl<T> DatabaseAdapter for T where
 pub use sqlx_adapter::{PoolConfig, PoolStats};
 
 #[cfg(feature = "sqlx-postgres")]
-pub use sqlx_adapter::{PostgresAdapter, PostgresEntity, SqlxAdapter, SqlxEntity};
+pub use sqlx_adapter::{PostgresAdapter, PostgresEntity};
 
 #[cfg(feature = "sqlx-sqlite")]
 pub use sqlx_adapter::{SqliteAdapter, SqliteEntity};

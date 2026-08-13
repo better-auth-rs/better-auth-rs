@@ -240,9 +240,16 @@ fn gen_from_row_field_expr(field: &FromRowField) -> TokenStream2 {
     }
 }
 
-/// If the struct has `#[auth(from_row)]`, generate an
-/// `impl sqlx::FromRow<'_, PgRow> for Struct` block.
+/// If the struct has `#[auth(from_row)]`, generate
+/// `impl sqlx::FromRow` blocks for enabled database backends.
 /// Returns empty tokens if the attribute is absent.
+///
+/// Generates implementations for:
+/// - PostgreSQL (PgRow) when `sqlx-postgres` feature is enabled
+/// - SQLite (SqliteRow) when `sqlx-sqlite` feature is enabled
+///
+/// Both implementations can coexist, allowing the same entity
+/// to work with multiple database backends at compile time.
 pub(crate) fn maybe_gen_from_row(input: &DeriveInput) -> TokenStream2 {
     if !has_auth_from_row(&input.attrs) {
         return quote! {};
@@ -265,12 +272,105 @@ pub(crate) fn maybe_gen_from_row(input: &DeriveInput) -> TokenStream2 {
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let field_exprs: Vec<TokenStream2> = fields.iter().map(gen_from_row_field_expr).collect();
 
+    // Generate PostgreSQL implementation when feature is enabled
+    let postgres_impl = quote! {
+        #[cfg(feature = "sqlx-postgres")]
+        impl #impl_generics ::sqlx::FromRow<'_, ::sqlx::postgres::PgRow>
+            for #struct_name #ty_generics #where_clause
+        {
+            fn from_row(
+                row: &::sqlx::postgres::PgRow,
+            ) -> ::core::result::Result<Self, ::sqlx::Error> {
+                use ::sqlx::Row as _;
+                ::core::result::Result::Ok(Self {
+                    #(#field_exprs),*
+                })
+            }
+        }
+    };
+
+    // Generate SQLite implementation when feature is enabled
+    // Uses identical field mapping logic, just different row type
+    let sqlite_impl = quote! {
+        #[cfg(feature = "sqlx-sqlite")]
+        impl #impl_generics ::sqlx::FromRow<'_, ::sqlx::sqlite::SqliteRow>
+            for #struct_name #ty_generics #where_clause
+        {
+            fn from_row(
+                row: &::sqlx::sqlite::SqliteRow,
+            ) -> ::core::result::Result<Self, ::sqlx::Error> {
+                use ::sqlx::Row as _;
+                ::core::result::Result::Ok(Self {
+                    #(#field_exprs),*
+                })
+            }
+        }
+    };
+
+    quote! {
+        #postgres_impl
+        #sqlite_impl
+    }
+}
+
+/// Generate FromRow implementation specifically for PostgreSQL.
+/// Always generates regardless of feature flags - this is called by dedicated macros.
+pub(crate) fn gen_from_row_postgres(input: &DeriveInput) -> TokenStream2 {
+    let fields = match parse_from_row_fields(input) {
+        Ok(f) => f,
+        Err(e) => return e,
+    };
+
+    let struct_name = &input.ident;
+
+    // CRITICAL: Only implement FromRow for `Model`, NOT `ModelEx`
+    if struct_name != "Model" {
+        return quote! {};
+    }
+
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let field_exprs: Vec<TokenStream2> = fields.iter().map(gen_from_row_field_expr).collect();
+
     quote! {
         impl #impl_generics ::sqlx::FromRow<'_, ::sqlx::postgres::PgRow>
             for #struct_name #ty_generics #where_clause
         {
             fn from_row(
                 row: &::sqlx::postgres::PgRow,
+            ) -> ::core::result::Result<Self, ::sqlx::Error> {
+                use ::sqlx::Row as _;
+                ::core::result::Result::Ok(Self {
+                    #(#field_exprs),*
+                })
+            }
+        }
+    }
+}
+
+/// Generate FromRow implementation specifically for SQLite.
+/// Always generates regardless of feature flags - this is called by dedicated macros.
+pub(crate) fn gen_from_row_sqlite(input: &DeriveInput) -> TokenStream2 {
+    let fields = match parse_from_row_fields(input) {
+        Ok(f) => f,
+        Err(e) => return e,
+    };
+
+    let struct_name = &input.ident;
+
+    // CRITICAL: Only implement FromRow for `Model`, NOT `ModelEx`
+    if struct_name != "Model" {
+        return quote! {};
+    }
+
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let field_exprs: Vec<TokenStream2> = fields.iter().map(gen_from_row_field_expr).collect();
+
+    quote! {
+        impl #impl_generics ::sqlx::FromRow<'_, ::sqlx::sqlite::SqliteRow>
+            for #struct_name #ty_generics #where_clause
+        {
+            fn from_row(
+                row: &::sqlx::sqlite::SqliteRow,
             ) -> ::core::result::Result<Self, ::sqlx::Error> {
                 use ::sqlx::Row as _;
                 ::core::result::Result::Ok(Self {
