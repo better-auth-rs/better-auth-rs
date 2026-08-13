@@ -244,9 +244,13 @@ fn gen_from_row_field_expr(field: &FromRowField) -> TokenStream2 {
 /// `impl sqlx::FromRow` blocks for enabled database backends.
 /// Returns empty tokens if the attribute is absent.
 ///
+/// IMPORTANT: Feature checks happen at proc-macro compile time, not user crate compile time.
+/// This means the derive macro decides which impls to emit based on features enabled when
+/// better-auth-derive itself is compiled, ensuring the generated code is unconditional.
+///
 /// Generates implementations for:
-/// - PostgreSQL (PgRow) when `sqlx-postgres` feature is enabled
-/// - SQLite (SqliteRow) when `sqlx-sqlite` feature is enabled
+/// - PostgreSQL (PgRow) when `sqlx-postgres` feature is enabled in better-auth-derive
+/// - SQLite (SqliteRow) when `sqlx-sqlite` feature is enabled in better-auth-derive
 ///
 /// Both implementations can coexist, allowing the same entity
 /// to work with multiple database backends at compile time.
@@ -270,47 +274,61 @@ pub(crate) fn maybe_gen_from_row(input: &DeriveInput) -> TokenStream2 {
         return quote! {};
     }
 
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let field_exprs: Vec<TokenStream2> = fields.iter().map(gen_from_row_field_expr).collect();
+    // Check features at proc-macro compile time and conditionally emit impls.
+    // This ensures the user's crate doesn't need to define these features themselves.
 
-    // Generate PostgreSQL implementation when feature is enabled
-    let postgres_impl = quote! {
+    #[cfg(any(feature = "sqlx-postgres", feature = "sqlx-sqlite"))]
+    {
+        let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+        let field_exprs: Vec<TokenStream2> = fields.iter().map(gen_from_row_field_expr).collect();
+
         #[cfg(feature = "sqlx-postgres")]
-        impl #impl_generics ::sqlx::FromRow<'_, ::sqlx::postgres::PgRow>
-            for #struct_name #ty_generics #where_clause
-        {
-            fn from_row(
-                row: &::sqlx::postgres::PgRow,
-            ) -> ::core::result::Result<Self, ::sqlx::Error> {
-                use ::sqlx::Row as _;
-                ::core::result::Result::Ok(Self {
-                    #(#field_exprs),*
-                })
+        let postgres_impl = quote! {
+            impl #impl_generics ::sqlx::FromRow<'_, ::sqlx::postgres::PgRow>
+                for #struct_name #ty_generics #where_clause
+            {
+                fn from_row(
+                    row: &::sqlx::postgres::PgRow,
+                ) -> ::core::result::Result<Self, ::sqlx::Error> {
+                    use ::sqlx::Row as _;
+                    ::core::result::Result::Ok(Self {
+                        #(#field_exprs),*
+                    })
+                }
             }
-        }
-    };
+        };
+        #[cfg(not(feature = "sqlx-postgres"))]
+        let postgres_impl = quote! {};
 
-    // Generate SQLite implementation when feature is enabled
-    // Uses identical field mapping logic, just different row type
-    let sqlite_impl = quote! {
         #[cfg(feature = "sqlx-sqlite")]
-        impl #impl_generics ::sqlx::FromRow<'_, ::sqlx::sqlite::SqliteRow>
-            for #struct_name #ty_generics #where_clause
-        {
-            fn from_row(
-                row: &::sqlx::sqlite::SqliteRow,
-            ) -> ::core::result::Result<Self, ::sqlx::Error> {
-                use ::sqlx::Row as _;
-                ::core::result::Result::Ok(Self {
-                    #(#field_exprs),*
-                })
+        let sqlite_impl = quote! {
+            impl #impl_generics ::sqlx::FromRow<'_, ::sqlx::sqlite::SqliteRow>
+                for #struct_name #ty_generics #where_clause
+            {
+                fn from_row(
+                    row: &::sqlx::sqlite::SqliteRow,
+                ) -> ::core::result::Result<Self, ::sqlx::Error> {
+                    use ::sqlx::Row as _;
+                    ::core::result::Result::Ok(Self {
+                        #(#field_exprs),*
+                    })
+                }
             }
-        }
-    };
+        };
+        #[cfg(not(feature = "sqlx-sqlite"))]
+        let sqlite_impl = quote! {};
 
-    quote! {
-        #postgres_impl
-        #sqlite_impl
+        quote! {
+            #postgres_impl
+            #sqlite_impl
+        }
+    }
+
+    #[cfg(not(any(feature = "sqlx-postgres", feature = "sqlx-sqlite")))]
+    {
+        // No database features enabled - suppress unused variable warning
+        let _ = fields;
+        quote! {}
     }
 }
 
