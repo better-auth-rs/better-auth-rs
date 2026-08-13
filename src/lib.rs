@@ -63,8 +63,8 @@ pub use better_auth_core::{
 // Postgres-specific derives (always available when derive feature is enabled)
 #[cfg(all(feature = "derive", feature = "sqlx-postgres"))]
 pub use better_auth_core::{
-    AuthAccountPg, AuthInvitationPg, AuthMemberPg, AuthOrganizationPg, AuthSessionPg, AuthUserPg,
-    AuthVerificationPg,
+    AuthAccountPg, AuthApiKeyPg, AuthInvitationPg, AuthMemberPg, AuthOrganizationPg, AuthPasskeyPg,
+    AuthSessionPg, AuthTwoFactorPg, AuthUserPg, AuthVerificationPg,
 };
 
 // Re-export types under `types` module for backwards compatibility
