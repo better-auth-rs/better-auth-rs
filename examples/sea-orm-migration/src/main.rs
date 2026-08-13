@@ -11,6 +11,15 @@
 //! `DatabaseConnection` via `get_sqlite_connection_pool()`, then pass it
 //! to `SqliteAdapter::from_pool()`.
 //!
+//! ## Important: In-Memory Database Pooling
+//!
+//! This example uses a shared in-memory SQLite database (`sqlite::memory:?cache=shared`)
+//! with a single connection. Without this, each connection in the pool would get its own
+//! private in-memory database, causing "no such table" errors after schema sync completes
+//! on one connection but later queries acquire a different connection.
+//!
+//! For production use with persistent databases, normal connection pooling is fine.
+//!
 //! ## Setup
 //!
 //! ```bash
@@ -51,8 +60,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     // 1. Connect to SQLite in-memory database via Sea-ORM
-    let db: DatabaseConnection = sea_orm::Database::connect("sqlite::memory:").await?;
-    println!("[*] Sea-ORM connected to in-memory SQLite");
+    //    Use a shared in-memory database with a single connection to avoid pool isolation.
+    //    Without this, each connection in the pool would get its own private in-memory DB,
+    //    causing "no such table" errors after schema sync.
+    let mut opt = sea_orm::ConnectOptions::new("sqlite::memory:?cache=shared");
+    opt.max_connections(1) // Ensure all operations use the same connection
+        .min_connections(1);
+    let db: DatabaseConnection = sea_orm::Database::connect(opt).await?;
+    println!("[*] Sea-ORM connected to shared in-memory SQLite (single connection)");
 
     // 2. Sync schema from entity definitions (SeaORM 2.0 pattern)
     //    This automatically creates tables, columns, and foreign keys
@@ -102,8 +117,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("[*] Listening on http://localhost:8080");
     println!();
-    println!("  📦 Using SQLite in-memory database");
+    println!("  📦 Using shared in-memory SQLite (single connection)");
     println!("  ⚠️  All data will be lost when the server stops!");
+    println!("  ℹ️  Shared cache + single connection prevents pool isolation");
     println!();
     println!("  Auth (better-auth):");
     println!("    POST /auth/sign-up/email");
