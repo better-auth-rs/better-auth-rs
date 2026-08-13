@@ -151,6 +151,18 @@ pub(crate) fn find_field_for_getter<'a>(
     None
 }
 
+/// Check if a type is a SeaORM relation type (HasMany or HasOne).
+/// These fields are not database columns and should be skipped in derive generation.
+fn is_seaorm_relation_type(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        let ident_str = segment.ident.to_string();
+        return ident_str == "HasMany" || ident_str == "HasOne";
+    }
+    false
+}
+
 /// Parse named fields from a DeriveInput, returning field infos or a compile error.
 pub(crate) fn parse_named_fields(
     input: &DeriveInput,
@@ -182,6 +194,12 @@ pub(crate) fn parse_named_fields(
         let Some(ident) = f.ident.clone() else {
             continue;
         };
+
+        // Skip SeaORM relation fields (HasMany, HasOne) - they're not part of the Auth traits
+        if is_seaorm_relation_type(&f.ty) {
+            continue;
+        }
+
         let parsed = parse_auth_attrs(&f.attrs).map_err(|e| e.to_compile_error())?;
         fields.push(FieldInfo {
             ident,

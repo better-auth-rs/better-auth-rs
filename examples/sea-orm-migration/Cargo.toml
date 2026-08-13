@@ -18,6 +18,8 @@ sea-orm = { version = "2.0.1", features = [
     "with-chrono",
     "with-json",
     "with-uuid",
+    "schema-sync",
+    "entity-registry",
 ] }
 sea-orm-migration = { version = "2.0.1", features = [
     "runtime-tokio-rustls",

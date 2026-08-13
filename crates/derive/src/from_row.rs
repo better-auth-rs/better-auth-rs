@@ -31,6 +31,18 @@ struct FromRowField {
     auth_column: Option<String>,
 }
 
+/// Check if a type is a SeaORM relation type (HasMany or HasOne).
+/// These fields are not database columns and should be skipped in FromRow generation.
+fn is_seaorm_relation_type(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        let ident_str = segment.ident.to_string();
+        return ident_str == "HasMany" || ident_str == "HasOne";
+    }
+    false
+}
+
 /// Parse fields for FromRow generation, extracting type info and relevant attributes.
 fn parse_from_row_fields(input: &DeriveInput) -> Result<Vec<FromRowField>, TokenStream2> {
     let struct_name = &input.ident;
@@ -59,6 +71,12 @@ fn parse_from_row_fields(input: &DeriveInput) -> Result<Vec<FromRowField>, Token
             continue;
         };
         let ty = f.ty.clone();
+
+        // Skip SeaORM relation fields (HasMany, HasOne) - they're not database columns
+        if is_seaorm_relation_type(&ty) {
+            continue;
+        }
+
         let mut is_json = false;
         let mut auth_field_name = None;
         let mut auth_column = None;
@@ -236,6 +254,14 @@ pub(crate) fn maybe_gen_from_row(input: &DeriveInput) -> TokenStream2 {
     };
 
     let struct_name = &input.ident;
+
+    // CRITICAL: Only implement FromRow for `Model`, NOT `ModelEx`
+    // SeaORM's #[sea_orm::model] generates both structs, but FromRow
+    // should only apply to the database-backed Model struct.
+    if struct_name != "Model" {
+        return quote! {};
+    }
+
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let field_exprs: Vec<TokenStream2> = fields.iter().map(gen_from_row_field_expr).collect();
 
