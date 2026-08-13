@@ -605,3 +605,60 @@ pub fn derive_auth_verification_pg(input: TokenStream) -> TokenStream {
     let r = gen_from_row_postgres(&input);
     quote! { #t #m #r }.into()
 }
+
+#[proc_macro_derive(AuthTwoFactorPg, attributes(auth))]
+pub fn derive_auth_two_factor_pg(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let t = derive_entity_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthTwoFactor },
+        "AuthTwoFactor",
+        AUTH_TWO_FACTOR_GETTERS,
+    );
+    let m = derive_meta_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthTwoFactorMeta },
+        "AuthTwoFactorMeta",
+        AUTH_TWO_FACTOR_GETTERS,
+    );
+    let r = gen_from_row_postgres(&input);
+    quote! { #t #m #r }.into()
+}
+
+#[proc_macro_derive(AuthPasskeyPg, attributes(auth))]
+pub fn derive_auth_passkey_pg(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let t = derive_entity_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthPasskey },
+        "AuthPasskey",
+        AUTH_PASSKEY_GETTERS,
+    );
+    let m = derive_meta_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthPasskeyMeta },
+        "AuthPasskeyMeta",
+        AUTH_PASSKEY_GETTERS,
+    );
+    let r = gen_from_row_postgres(&input);
+    quote! { #t #m #r }.into()
+}
+
+#[proc_macro_derive(AuthApiKeyPg, attributes(auth))]
+pub fn derive_auth_api_key_pg(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let t = derive_entity_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthApiKey },
+        "AuthApiKey",
+        AUTH_API_KEY_GETTERS,
+    );
+    let m = derive_meta_trait(
+        &input,
+        quote! { ::better_auth_core::entity::AuthApiKeyMeta },
+        "AuthApiKeyMeta",
+        AUTH_API_KEY_GETTERS,
+    );
+    let r = gen_from_row_postgres(&input);
+    quote! { #t #m #r }.into()
+}
