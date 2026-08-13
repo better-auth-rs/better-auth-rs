@@ -125,8 +125,8 @@ where
             qi(PK::col_id())
         );
         let passkey = sqlx::query_as::<_, PK>(AssertSqlSafe(sql))
-            .bind(id)
             .bind(counter)
+            .bind(id)
             .fetch_one(&self.pool)
             .await
             .map_err(|err| match err {
@@ -144,8 +144,8 @@ where
             qi(PK::col_id())
         );
         let passkey = sqlx::query_as::<_, PK>(AssertSqlSafe(sql))
-            .bind(id)
             .bind(name)
+            .bind(id)
             .fetch_one(&self.pool)
             .await
             .map_err(|err| match err {
@@ -168,6 +168,3 @@ where
         Ok(())
     }
 }
-
-
-
