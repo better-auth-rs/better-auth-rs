@@ -37,7 +37,7 @@ where
 
         let sql = format!(
             "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?, ?, ?, ?) RETURNING *",
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
             qi(AK::table()),
             qi(AK::col_id()),
             qi(AK::col_name()),
@@ -217,8 +217,7 @@ where
 
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
         // Use a bind-parameter with an RFC 3339 timestamp instead of
-        // CURRENT_TIMESTAMP / ::timestamptz so the comparison is straightforward.
-        // (This adapter is PostgreSQL-only; ? placeholders are correct.)
+        // CURRENT_TIMESTAMP so the comparison is straightforward.
         let now = Utc::now().to_rfc3339();
         let sql = format!(
             "DELETE FROM {} WHERE {} IS NOT NULL AND {} < ?",
@@ -233,6 +232,3 @@ where
         Ok(result.rows_affected() as usize)
     }
 }
-
-
-

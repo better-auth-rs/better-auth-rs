@@ -262,10 +262,11 @@ pub(crate) fn maybe_gen_from_row(input: &DeriveInput) -> TokenStream2 {
 
     let struct_name = &input.ident;
 
-    // CRITICAL: Only implement FromRow for `Model`, NOT `ModelEx`
-    // SeaORM's #[sea_orm::model] generates both structs, but FromRow
-    // should only apply to the database-backed Model struct.
-    if struct_name != "Model" {
+    // CRITICAL: Don't implement FromRow for SeaORM's `ModelEx` struct
+    // SeaORM's #[sea_orm::model] generates both Model and ModelEx,
+    // but FromRow should only apply to the database-backed Model struct.
+    // Allow all other struct names (custom entities like MyUser, UserRecord, etc.)
+    if struct_name == "ModelEx" {
         return quote! {};
     }
 
@@ -323,8 +324,8 @@ pub(crate) fn gen_from_row_postgres(input: &DeriveInput) -> TokenStream2 {
 
     let struct_name = &input.ident;
 
-    // CRITICAL: Only implement FromRow for `Model`, NOT `ModelEx`
-    if struct_name != "Model" {
+    // CRITICAL: Don't implement FromRow for SeaORM's `ModelEx` struct
+    if struct_name == "ModelEx" {
         return quote! {};
     }
 
@@ -357,8 +358,8 @@ pub(crate) fn gen_from_row_sqlite(input: &DeriveInput) -> TokenStream2 {
 
     let struct_name = &input.ident;
 
-    // CRITICAL: Only implement FromRow for `Model`, NOT `ModelEx`
-    if struct_name != "Model" {
+    // CRITICAL: Don't implement FromRow for SeaORM's `ModelEx` struct
+    if struct_name == "ModelEx" {
         return quote! {};
     }
 

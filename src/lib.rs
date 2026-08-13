@@ -55,8 +55,9 @@ pub use better_auth_core::entity::{
 // SQLite-specific derives (always available when derive feature is enabled)
 #[cfg(all(feature = "derive", feature = "sqlx-sqlite"))]
 pub use better_auth_core::{
-    AuthAccountSqlite, AuthInvitationSqlite, AuthMemberSqlite, AuthOrganizationSqlite,
-    AuthSessionSqlite, AuthUserSqlite, AuthVerificationSqlite,
+    AuthAccountSqlite, AuthApiKeySqlite, AuthInvitationSqlite, AuthMemberSqlite,
+    AuthOrganizationSqlite, AuthPasskeySqlite, AuthSessionSqlite, AuthTwoFactorSqlite,
+    AuthUserSqlite, AuthVerificationSqlite,
 };
 
 // Postgres-specific derives (always available when derive feature is enabled)
