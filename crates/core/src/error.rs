@@ -187,7 +187,7 @@ pub enum DatabaseError {
     Transaction(String),
 }
 
-#[cfg(feature = "sqlx-postgres")]
+#[cfg(any(feature = "sqlx-postgres", feature = "sqlx-sqlite"))]
 impl From<sqlx::Error> for DatabaseError {
     fn from(err: sqlx::Error) -> Self {
         match err {
@@ -205,7 +205,7 @@ impl From<sqlx::Error> for DatabaseError {
     }
 }
 
-#[cfg(feature = "sqlx-postgres")]
+#[cfg(any(feature = "sqlx-postgres", feature = "sqlx-sqlite"))]
 impl From<sqlx::Error> for AuthError {
     fn from(err: sqlx::Error) -> Self {
         AuthError::Database(DatabaseError::from(err))

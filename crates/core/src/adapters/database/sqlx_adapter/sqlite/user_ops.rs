@@ -1,10 +1,10 @@
-// -- UserOps --
+// SQLite UserOps implementation
 
 use super::*;
 use async_trait::async_trait;
 use chrono::Utc;
 
-use crate::UpdateUser;
+use crate::UserOps;
 use crate::entity::{
     AuthAccount, AuthAccountMeta, AuthApiKey, AuthApiKeyMeta, AuthInvitation, AuthInvitationMeta,
     AuthMember, AuthMemberMeta, AuthOrganization, AuthOrganizationMeta, AuthPasskey,
@@ -12,23 +12,23 @@ use crate::entity::{
     AuthUserMeta, AuthVerification, AuthVerificationMeta,
 };
 use crate::error::{AuthError, AuthResult};
-use crate::types::{CreateUser, ListUsersParams};
+use crate::types::{CreateUser, ListUsersParams, UpdateUser};
 use sqlx::AssertSqlSafe;
 use uuid::Uuid;
 
 #[async_trait]
-impl<U, S, A, O, M, I, V, TF, AK, PK> UserOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
+impl<U, S, A, O, M, I, V, TF, AK, PK> UserOps for SqliteAdapter<U, S, A, O, M, I, V, TF, AK, PK>
 where
-    U: AuthUser + AuthUserMeta + SqlxEntity,
-    S: AuthSession + AuthSessionMeta + SqlxEntity,
-    A: AuthAccount + AuthAccountMeta + SqlxEntity,
-    O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
-    M: AuthMember + AuthMemberMeta + SqlxEntity,
-    I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
-    V: AuthVerification + AuthVerificationMeta + SqlxEntity,
-    TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
-    AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
-    PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
+    U: AuthUser + AuthUserMeta + SqliteEntity,
+    S: AuthSession + AuthSessionMeta + SqliteEntity,
+    A: AuthAccount + AuthAccountMeta + SqliteEntity,
+    O: AuthOrganization + AuthOrganizationMeta + SqliteEntity,
+    M: AuthMember + AuthMemberMeta + SqliteEntity,
+    I: AuthInvitation + AuthInvitationMeta + SqliteEntity,
+    V: AuthVerification + AuthVerificationMeta + SqliteEntity,
+    TF: AuthTwoFactor + AuthTwoFactorMeta + SqliteEntity,
+    AK: AuthApiKey + AuthApiKeyMeta + SqliteEntity,
+    PK: AuthPasskey + AuthPasskeyMeta + SqliteEntity,
 {
     type User = U;
 
@@ -37,7 +37,7 @@ where
         let now = Utc::now();
 
         let sql = format!(
-            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *",
+            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
             qi(U::table()),
             qi(U::col_id()),
             qi(U::col_email()),
@@ -73,7 +73,7 @@ where
 
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<U>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1",
+            "SELECT * FROM {} WHERE {} = ?",
             qi(U::table()),
             qi(U::col_id())
         );
@@ -86,7 +86,7 @@ where
 
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<U>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1",
+            "SELECT * FROM {} WHERE {} = ?",
             qi(U::table()),
             qi(U::col_email())
         );
@@ -99,7 +99,7 @@ where
 
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<U>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1",
+            "SELECT * FROM {} WHERE {} = ?",
             qi(U::table()),
             qi(U::col_username())
         );
@@ -112,7 +112,7 @@ where
 
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<U> {
         let mut query = sqlx::QueryBuilder::new(format!(
-            "UPDATE {} SET {} = NOW()",
+            "UPDATE {} SET {} = CURRENT_TIMESTAMP",
             qi(U::table()),
             qi(U::col_updated_at())
         ));
@@ -167,9 +167,7 @@ where
             }
         }
         // Only process ban_reason and ban_expires when we are NOT
-        // explicitly unbanning.  When banned == Some(false) the block
-        // above already emits `ban_reason = NULL, ban_expires = NULL`,
-        // so applying these fields again would overwrite the NULLs.
+        // explicitly unbanning
         if update.banned != Some(false) {
             if let Some(ban_reason) = &update.ban_reason {
                 query.push(format!(", {} = ", qi(U::col_ban_reason())));
@@ -210,7 +208,7 @@ where
 
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
         let sql = format!(
-            "DELETE FROM {} WHERE {} = $1",
+            "DELETE FROM {} WHERE {} = ?",
             qi(U::table()),
             qi(U::col_id())
         );
@@ -243,7 +241,7 @@ where
                 _ => format!("%{}%", escaped),
             };
             let idx = bind_values.len() + 1;
-            conditions.push(format!("{} ILIKE ${}", col, idx));
+            conditions.push(format!("{} LIKE ${}", col, idx));
             bind_values.push(pattern);
         }
 
@@ -259,7 +257,7 @@ where
             match op {
                 "contains" => {
                     let escaped = filter_value.replace('%', "\\%").replace('_', "\\_");
-                    conditions.push(format!("{} ILIKE ${}", col, idx));
+                    conditions.push(format!("{} LIKE ${}", col, idx));
                     bind_values.push(format!("%{}%", escaped));
                 }
                 "ne" => {

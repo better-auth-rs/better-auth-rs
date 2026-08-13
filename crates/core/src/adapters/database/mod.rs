@@ -3,12 +3,6 @@ pub use super::traits::{
     TwoFactorOps, UserOps, VerificationOps,
 };
 
-#[cfg(not(any(feature = "sqlx-postgres", feature = "sqlx-sqlite")))]
-compile_error!(
-    "At least one of 'sqlx-postgres' or 'sqlx-sqlite' must be enabled. \
-     Add one of these features to your Cargo.toml."
-);
-
 #[cfg(any(feature = "sqlx-postgres", feature = "sqlx-sqlite"))]
 pub mod sqlx_adapter;
 

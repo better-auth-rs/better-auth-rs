@@ -1,17 +1,3 @@
-mod account_ops;
-mod api_key_ops;
-mod invitation_ops;
-mod member_ops;
-mod organization_ops;
-mod passkey_ops;
-mod session_ops;
-mod two_factor_ops;
-mod user_ops;
-mod verification_ops;
-
-use super::*;
-
-
 use crate::error::{AuthError, AuthResult};
 use crate::types::{
     Account, ApiKey, Invitation, Member, Organization, Passkey, Session, TwoFactor, User,
@@ -19,11 +5,18 @@ use crate::types::{
 };
 use std::marker::PhantomData;
 
+// Backend-specific implementations
 #[cfg(feature = "sqlx-postgres")]
-use sqlx::postgres::{PgPool, PgRow};
+pub mod postgres;
 
 #[cfg(feature = "sqlx-sqlite")]
-use sqlx::sqlite::{SqlitePool, SqliteRow};
+pub mod sqlite;
+
+#[cfg(feature = "sqlx-postgres")]
+use sqlx::postgres::PgPool;
+
+#[cfg(feature = "sqlx-sqlite")]
+use sqlx::sqlite::SqlitePool;
 
 /// Database backend type detected from URL
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,45 +44,41 @@ fn parse_database_url(url: &str) -> AuthResult<DatabaseBackendType> {
     Err(AuthError::bad_request(format!(
         "Unsupported database URL scheme. Expected one of: {}",
         {
-            let mut schemes = vec![];
-            #[cfg(feature = "sqlx-postgres")]
-            schemes.push("postgres://");
-            #[cfg(feature = "sqlx-sqlite")]
-            schemes.push("sqlite://");
-            schemes.join(", ")
+            #[cfg(all(feature = "sqlx-postgres", feature = "sqlx-sqlite"))]
+            {
+                "postgres://, postgresql://, sqlite://, or file:"
+            }
+            #[cfg(all(feature = "sqlx-postgres", not(feature = "sqlx-sqlite")))]
+            {
+                "postgres:// or postgresql://"
+            }
+            #[cfg(all(not(feature = "sqlx-postgres"), feature = "sqlx-sqlite"))]
+            {
+                "sqlite:// or file:"
+            }
         }
     )))
 }
 
-/// Quote a SQL identifier with double quotes for PostgreSQL.
-///
-/// This prevents issues with reserved words (e.g. `user`, `key`, `order`)
-/// and ensures correct identifier handling regardless of the names returned
-/// by `Auth*Meta` traits.
-#[inline]
-fn qi(ident: &str) -> String {
-    format!("\"{}\"", ident.replace('"', "\"\""))
-}
-
-/// Blanket trait combining all bounds needed for SQLx-based entity types.
-///
-/// Any type that implements `sqlx::FromRow` plus the standard marker traits
-/// automatically satisfies this bound. Custom entity types just need
-/// `#[derive(sqlx::FromRow)]` (or a manual `FromRow` impl) alongside
-/// their `Auth*` derive.
-pub trait SqlxEntity:
-    for<'r> sqlx::FromRow<'r, PgRow> + Send + Sync + Unpin + Clone + 'static
-{
-}
-
-impl<T> SqlxEntity for T where
-    T: for<'r> sqlx::FromRow<'r, PgRow> + Send + Sync + Unpin + Clone + 'static
-{
+/// Backend-specific implementation enum
+enum SqlxBackend<U, S, A, O, M, I, V, TF, AK, PK> {
+    #[cfg(feature = "sqlx-postgres")]
+    Postgres(postgres::PostgresAdapter<U, S, A, O, M, I, V, TF, AK, PK>),
+    #[cfg(feature = "sqlx-sqlite")]
+    Sqlite(sqlite::SqliteAdapter<U, S, A, O, M, I, V, TF, AK, PK>),
 }
 
 type SqlxAdapterEntities<U, S, A, O, M, I, V, TF, AK, PK> = (U, S, A, O, M, I, V, TF, AK, PK);
 
-/// PostgreSQL database adapter via SQLx.
+/// Legacy re-export for backward compatibility
+#[cfg(feature = "sqlx-postgres")]
+pub use postgres::PostgresEntity as SqlxEntity;
+
+/// Unified database adapter supporting PostgreSQL and SQLite.
+///
+/// Runtime backend selection based on connection URL:
+/// - `postgres://` or `postgresql://` → PostgreSQL
+/// - `sqlite://` or `file:` → SQLite
 ///
 /// Generic over entity types — use default type parameters for the built-in
 /// types, or supply your own custom structs that implement `Auth*` + `sqlx::FromRow`.
@@ -105,60 +94,134 @@ pub struct SqlxAdapter<
     AK = ApiKey,
     PK = Passkey,
 > {
-    pool: PgPool,
+    backend: SqlxBackend<U, S, A, O, M, I, V, TF, AK, PK>,
     #[allow(clippy::type_complexity)]
     _phantom: PhantomData<SqlxAdapterEntities<U, S, A, O, M, I, V, TF, AK, PK>>,
 }
 
 /// Constructors for the default (built-in) entity types.
 impl SqlxAdapter {
-    pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
-        let pool = PgPool::connect(database_url).await?;
-        Ok(Self {
-            pool,
-            _phantom: PhantomData,
-        })
+    /// Create a new adapter with runtime backend detection from URL.
+    ///
+    /// Supported URL schemes:
+    /// - PostgreSQL: `postgres://` or `postgresql://`
+    /// - SQLite: `sqlite://` or `file:`
+    pub async fn new(database_url: &str) -> AuthResult<Self> {
+        let backend_type = parse_database_url(database_url)?;
+
+        match backend_type {
+            #[cfg(feature = "sqlx-postgres")]
+            DatabaseBackendType::Postgres => {
+                let adapter = postgres::PostgresAdapter::new(database_url)
+                    .await
+                    .map_err(|e| {
+                        AuthError::internal(format!("Failed to connect to PostgreSQL: {}", e))
+                    })?;
+                Ok(Self {
+                    backend: SqlxBackend::Postgres(adapter),
+                    _phantom: PhantomData,
+                })
+            }
+            #[cfg(feature = "sqlx-sqlite")]
+            DatabaseBackendType::Sqlite => {
+                let adapter = sqlite::SqliteAdapter::new(database_url)
+                    .await
+                    .map_err(|e| {
+                        AuthError::internal(format!("Failed to connect to SQLite: {}", e))
+                    })?;
+                Ok(Self {
+                    backend: SqlxBackend::Sqlite(adapter),
+                    _phantom: PhantomData,
+                })
+            }
+            #[cfg(not(any(feature = "sqlx-postgres", feature = "sqlx-sqlite")))]
+            _ => Err(AuthError::internal("No SQL backend feature enabled")),
+        }
     }
 
-    pub async fn with_config(database_url: &str, config: PoolConfig) -> Result<Self, sqlx::Error> {
-        let pool = sqlx::postgres::PgPoolOptions::new()
-            .max_connections(config.max_connections)
-            .min_connections(config.min_connections)
-            .acquire_timeout(config.acquire_timeout)
-            .idle_timeout(config.idle_timeout)
-            .max_lifetime(config.max_lifetime)
-            .connect(database_url)
-            .await?;
-        Ok(Self {
-            pool,
+    /// Create adapter with custom pool configuration.
+    pub async fn with_config(database_url: &str, config: PoolConfig) -> AuthResult<Self> {
+        let backend_type = parse_database_url(database_url)?;
+
+        match backend_type {
+            #[cfg(feature = "sqlx-postgres")]
+            DatabaseBackendType::Postgres => {
+                let adapter = postgres::PostgresAdapter::with_config(database_url, config)
+                    .await
+                    .map_err(|e| {
+                        AuthError::internal(format!("Failed to connect to PostgreSQL: {}", e))
+                    })?;
+                Ok(Self {
+                    backend: SqlxBackend::Postgres(adapter),
+                    _phantom: PhantomData,
+                })
+            }
+            #[cfg(feature = "sqlx-sqlite")]
+            DatabaseBackendType::Sqlite => {
+                let adapter = sqlite::SqliteAdapter::with_config(database_url, config)
+                    .await
+                    .map_err(|e| {
+                        AuthError::internal(format!("Failed to connect to SQLite: {}", e))
+                    })?;
+                Ok(Self {
+                    backend: SqlxBackend::Sqlite(adapter),
+                    _phantom: PhantomData,
+                })
+            }
+            #[cfg(not(any(feature = "sqlx-postgres", feature = "sqlx-sqlite")))]
+            _ => Err(AuthError::internal("No SQL backend feature enabled")),
+        }
+    }
+}
+
+/// Feature-specific constructors
+impl SqlxAdapter {
+    /// Create adapter from an existing PostgreSQL pool.
+    #[cfg(feature = "sqlx-postgres")]
+    pub fn from_postgres_pool(pool: PgPool) -> Self {
+        Self {
+            backend: SqlxBackend::Postgres(postgres::PostgresAdapter::from_pool(pool)),
             _phantom: PhantomData,
-        })
+        }
+    }
+
+    /// Create adapter from an existing SQLite pool.
+    #[cfg(feature = "sqlx-sqlite")]
+    pub fn from_sqlite_pool(pool: SqlitePool) -> Self {
+        Self {
+            backend: SqlxBackend::Sqlite(sqlite::SqliteAdapter::from_pool(pool)),
+            _phantom: PhantomData,
+        }
     }
 }
 
 /// Methods available for all type parameterizations.
 impl<U, S, A, O, M, I, V, TF, AK, PK> SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK> {
-    pub fn from_pool(pool: PgPool) -> Self {
-        Self {
-            pool,
-            _phantom: PhantomData,
+    pub async fn test_connection(&self) -> Result<(), sqlx::Error> {
+        match &self.backend {
+            #[cfg(feature = "sqlx-postgres")]
+            SqlxBackend::Postgres(pg) => pg.test_connection().await,
+            #[cfg(feature = "sqlx-sqlite")]
+            SqlxBackend::Sqlite(sq) => sq.test_connection().await,
         }
     }
 
-    pub async fn test_connection(&self) -> Result<(), sqlx::Error> {
-        sqlx::query("SELECT 1").execute(&self.pool).await?;
-        Ok(())
-    }
-
     pub fn pool_stats(&self) -> PoolStats {
-        PoolStats {
-            size: self.pool.size(),
-            idle: self.pool.num_idle(),
+        match &self.backend {
+            #[cfg(feature = "sqlx-postgres")]
+            SqlxBackend::Postgres(pg) => pg.pool_stats(),
+            #[cfg(feature = "sqlx-sqlite")]
+            SqlxBackend::Sqlite(sq) => sq.pool_stats(),
         }
     }
 
     pub async fn close(&self) {
-        self.pool.close().await;
+        match &self.backend {
+            #[cfg(feature = "sqlx-postgres")]
+            SqlxBackend::Postgres(pg) => pg.close().await,
+            #[cfg(feature = "sqlx-sqlite")]
+            SqlxBackend::Sqlite(sq) => sq.close().await,
+        }
     }
 }
 

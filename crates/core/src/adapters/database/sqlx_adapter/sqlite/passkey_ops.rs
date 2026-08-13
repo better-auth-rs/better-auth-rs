@@ -16,18 +16,18 @@ use uuid::Uuid;
 // -- PasskeyOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V, TF, AK, PK> PasskeyOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
+impl<U, S, A, O, M, I, V, TF, AK, PK> PasskeyOps for SqliteAdapter<U, S, A, O, M, I, V, TF, AK, PK>
 where
-    U: AuthUser + AuthUserMeta + SqlxEntity,
-    S: AuthSession + AuthSessionMeta + SqlxEntity,
-    A: AuthAccount + AuthAccountMeta + SqlxEntity,
-    O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
-    M: AuthMember + AuthMemberMeta + SqlxEntity,
-    I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
-    V: AuthVerification + AuthVerificationMeta + SqlxEntity,
-    TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
-    AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
-    PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
+    U: AuthUser + AuthUserMeta + SqliteEntity,
+    S: AuthSession + AuthSessionMeta + SqliteEntity,
+    A: AuthAccount + AuthAccountMeta + SqliteEntity,
+    O: AuthOrganization + AuthOrganizationMeta + SqliteEntity,
+    M: AuthMember + AuthMemberMeta + SqliteEntity,
+    I: AuthInvitation + AuthInvitationMeta + SqliteEntity,
+    V: AuthVerification + AuthVerificationMeta + SqliteEntity,
+    TF: AuthTwoFactor + AuthTwoFactorMeta + SqliteEntity,
+    AK: AuthApiKey + AuthApiKeyMeta + SqliteEntity,
+    PK: AuthPasskey + AuthPasskeyMeta + SqliteEntity,
 {
     type Passkey = PK;
 
@@ -39,7 +39,7 @@ where
 
         let sql = format!(
             "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
             qi(PK::table()),
             qi(PK::col_id()),
             qi(PK::col_name()),
@@ -77,7 +77,7 @@ where
 
     async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<PK>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1",
+            "SELECT * FROM {} WHERE {} = ?",
             qi(PK::table()),
             qi(PK::col_id())
         );
@@ -90,7 +90,7 @@ where
 
     async fn get_passkey_by_credential_id(&self, credential_id: &str) -> AuthResult<Option<PK>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1",
+            "SELECT * FROM {} WHERE {} = ?",
             qi(PK::table()),
             qi(PK::col_credential_id())
         );
@@ -103,7 +103,7 @@ where
 
     async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<PK>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1 ORDER BY {} DESC",
+            "SELECT * FROM {} WHERE {} = ? ORDER BY {} DESC",
             qi(PK::table()),
             qi(PK::col_user_id()),
             qi(PK::col_created_at())
@@ -119,7 +119,7 @@ where
         let counter = i64::try_from(counter)
             .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
         let sql = format!(
-            "UPDATE {} SET {} = $2 WHERE {} = $1 RETURNING *",
+            "UPDATE {} SET {} = ? WHERE {} = ? RETURNING *",
             qi(PK::table()),
             qi(PK::col_counter()),
             qi(PK::col_id())
@@ -138,7 +138,7 @@ where
 
     async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<PK> {
         let sql = format!(
-            "UPDATE {} SET {} = $2 WHERE {} = $1 RETURNING *",
+            "UPDATE {} SET {} = ? WHERE {} = ? RETURNING *",
             qi(PK::table()),
             qi(PK::col_name()),
             qi(PK::col_id())
@@ -157,7 +157,7 @@ where
 
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
         let sql = format!(
-            "DELETE FROM {} WHERE {} = $1",
+            "DELETE FROM {} WHERE {} = ?",
             qi(PK::table()),
             qi(PK::col_id())
         );
@@ -168,3 +168,6 @@ where
         Ok(())
     }
 }
+
+
+

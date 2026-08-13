@@ -16,18 +16,18 @@ use uuid::Uuid;
 // -- InvitationOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V, TF, AK, PK> InvitationOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
+impl<U, S, A, O, M, I, V, TF, AK, PK> InvitationOps for SqliteAdapter<U, S, A, O, M, I, V, TF, AK, PK>
 where
-    U: AuthUser + AuthUserMeta + SqlxEntity,
-    S: AuthSession + AuthSessionMeta + SqlxEntity,
-    A: AuthAccount + AuthAccountMeta + SqlxEntity,
-    O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
-    M: AuthMember + AuthMemberMeta + SqlxEntity,
-    I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
-    V: AuthVerification + AuthVerificationMeta + SqlxEntity,
-    TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
-    AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
-    PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
+    U: AuthUser + AuthUserMeta + SqliteEntity,
+    S: AuthSession + AuthSessionMeta + SqliteEntity,
+    A: AuthAccount + AuthAccountMeta + SqliteEntity,
+    O: AuthOrganization + AuthOrganizationMeta + SqliteEntity,
+    M: AuthMember + AuthMemberMeta + SqliteEntity,
+    I: AuthInvitation + AuthInvitationMeta + SqliteEntity,
+    V: AuthVerification + AuthVerificationMeta + SqliteEntity,
+    TF: AuthTwoFactor + AuthTwoFactorMeta + SqliteEntity,
+    AK: AuthApiKey + AuthApiKeyMeta + SqliteEntity,
+    PK: AuthPasskey + AuthPasskeyMeta + SqliteEntity,
 {
     type Invitation = I;
 
@@ -37,7 +37,7 @@ where
 
         let sql = format!(
             "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) \
-                 VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7) RETURNING *",
+                 VALUES (?, ?, ?, ?, 'pending', ?, ?, ?) RETURNING *",
             qi(I::table()),
             qi(I::col_id()),
             qi(I::col_organization_id()),
@@ -64,7 +64,7 @@ where
 
     async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<I>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1",
+            "SELECT * FROM {} WHERE {} = ?",
             qi(I::table()),
             qi(I::col_id())
         );
@@ -81,7 +81,7 @@ where
         email: &str,
     ) -> AuthResult<Option<I>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1 AND LOWER({}) = LOWER($2) AND {} = 'pending'",
+            "SELECT * FROM {} WHERE {} = ? AND LOWER({}) = LOWER(?) AND {} = 'pending'",
             qi(I::table()),
             qi(I::col_organization_id()),
             qi(I::col_email()),
@@ -97,7 +97,7 @@ where
 
     async fn update_invitation_status(&self, id: &str, status: InvitationStatus) -> AuthResult<I> {
         let sql = format!(
-            "UPDATE {} SET {} = $1 WHERE {} = $2 RETURNING *",
+            "UPDATE {} SET {} = ? WHERE {} = ? RETURNING *",
             qi(I::table()),
             qi(I::col_status()),
             qi(I::col_id())
@@ -112,7 +112,7 @@ where
 
     async fn list_organization_invitations(&self, organization_id: &str) -> AuthResult<Vec<I>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1 ORDER BY {} DESC",
+            "SELECT * FROM {} WHERE {} = ? ORDER BY {} DESC",
             qi(I::table()),
             qi(I::col_organization_id()),
             qi(I::col_created_at())
@@ -126,7 +126,7 @@ where
 
     async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<I>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE LOWER({}) = LOWER($1) AND {} = 'pending' AND {} > NOW() ORDER BY {} DESC",
+            "SELECT * FROM {} WHERE LOWER({}) = LOWER(?) AND {} = 'pending' AND {} > CURRENT_TIMESTAMP ORDER BY {} DESC",
             qi(I::table()),
             qi(I::col_email()),
             qi(I::col_status()),
@@ -140,3 +140,6 @@ where
         Ok(invitations)
     }
 }
+
+
+

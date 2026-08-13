@@ -16,18 +16,19 @@ use uuid::Uuid;
 // -- SessionOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V, TF, AK, PK> SessionOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
+impl<U, S, A, O, M, I, V, TF, AK, PK> SessionOps
+    for SqliteAdapter<U, S, A, O, M, I, V, TF, AK, PK>
 where
-    U: AuthUser + AuthUserMeta + SqlxEntity,
-    S: AuthSession + AuthSessionMeta + SqlxEntity,
-    A: AuthAccount + AuthAccountMeta + SqlxEntity,
-    O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
-    M: AuthMember + AuthMemberMeta + SqlxEntity,
-    I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
-    V: AuthVerification + AuthVerificationMeta + SqlxEntity,
-    TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
-    AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
-    PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
+    U: AuthUser + AuthUserMeta + SqliteEntity,
+    S: AuthSession + AuthSessionMeta + SqliteEntity,
+    A: AuthAccount + AuthAccountMeta + SqliteEntity,
+    O: AuthOrganization + AuthOrganizationMeta + SqliteEntity,
+    M: AuthMember + AuthMemberMeta + SqliteEntity,
+    I: AuthInvitation + AuthInvitationMeta + SqliteEntity,
+    V: AuthVerification + AuthVerificationMeta + SqliteEntity,
+    TF: AuthTwoFactor + AuthTwoFactorMeta + SqliteEntity,
+    AK: AuthApiKey + AuthApiKeyMeta + SqliteEntity,
+    PK: AuthPasskey + AuthPasskeyMeta + SqliteEntity,
 {
     type Session = S;
 
@@ -37,7 +38,7 @@ where
         let now = Utc::now();
 
         let sql = format!(
-            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
+            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
             qi(S::table()),
             qi(S::col_id()),
             qi(S::col_user_id()),
@@ -69,7 +70,7 @@ where
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<S>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1 AND {} = true",
+            "SELECT * FROM {} WHERE {} = ? AND {} = true",
             qi(S::table()),
             qi(S::col_token()),
             qi(S::col_active())
@@ -83,7 +84,7 @@ where
 
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<S>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1 AND {} = true ORDER BY {} DESC",
+            "SELECT * FROM {} WHERE {} = ? AND {} = true ORDER BY {} DESC",
             qi(S::table()),
             qi(S::col_user_id()),
             qi(S::col_active()),
@@ -102,7 +103,7 @@ where
         expires_at: DateTime<Utc>,
     ) -> AuthResult<()> {
         let sql = format!(
-            "UPDATE {} SET {} = $1, {} = $2 WHERE {} = $3 AND {} = true",
+            "UPDATE {} SET {} = ?, {} = ? WHERE {} = ? AND {} = true",
             qi(S::table()),
             qi(S::col_expires_at()),
             qi(S::col_updated_at()),
@@ -120,7 +121,7 @@ where
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
         let sql = format!(
-            "DELETE FROM {} WHERE {} = $1",
+            "DELETE FROM {} WHERE {} = ?",
             qi(S::table()),
             qi(S::col_token())
         );
@@ -133,7 +134,7 @@ where
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
         let sql = format!(
-            "DELETE FROM {} WHERE {} = $1",
+            "DELETE FROM {} WHERE {} = ?",
             qi(S::table()),
             qi(S::col_user_id())
         );
@@ -146,7 +147,7 @@ where
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
         let sql = format!(
-            "DELETE FROM {} WHERE {} < NOW() OR {} = false",
+            "DELETE FROM {} WHERE {} < CURRENT_TIMESTAMP OR {} = false",
             qi(S::table()),
             qi(S::col_expires_at()),
             qi(S::col_active())
@@ -161,7 +162,7 @@ where
         organization_id: Option<&str>,
     ) -> AuthResult<S> {
         let sql = format!(
-            "UPDATE {} SET {} = $1, {} = NOW() WHERE {} = $2 AND {} = true RETURNING *",
+            "UPDATE {} SET {} = ?, {} = CURRENT_TIMESTAMP WHERE {} = ? AND {} = true RETURNING *",
             qi(S::table()),
             qi(S::col_active_organization_id()),
             qi(S::col_updated_at()),
@@ -176,3 +177,5 @@ where
         Ok(session)
     }
 }
+
+

@@ -16,18 +16,18 @@ use uuid::Uuid;
 // -- ApiKeyOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V, TF, AK, PK> ApiKeyOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
+impl<U, S, A, O, M, I, V, TF, AK, PK> ApiKeyOps for PostgresAdapter<U, S, A, O, M, I, V, TF, AK, PK>
 where
-    U: AuthUser + AuthUserMeta + SqlxEntity,
-    S: AuthSession + AuthSessionMeta + SqlxEntity,
-    A: AuthAccount + AuthAccountMeta + SqlxEntity,
-    O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
-    M: AuthMember + AuthMemberMeta + SqlxEntity,
-    I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
-    V: AuthVerification + AuthVerificationMeta + SqlxEntity,
-    TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
-    AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
-    PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
+    U: AuthUser + AuthUserMeta + PostgresEntity,
+    S: AuthSession + AuthSessionMeta + PostgresEntity,
+    A: AuthAccount + AuthAccountMeta + PostgresEntity,
+    O: AuthOrganization + AuthOrganizationMeta + PostgresEntity,
+    M: AuthMember + AuthMemberMeta + PostgresEntity,
+    I: AuthInvitation + AuthInvitationMeta + PostgresEntity,
+    V: AuthVerification + AuthVerificationMeta + PostgresEntity,
+    TF: AuthTwoFactor + AuthTwoFactorMeta + PostgresEntity,
+    AK: AuthApiKey + AuthApiKeyMeta + PostgresEntity,
+    PK: AuthPasskey + AuthPasskeyMeta + PostgresEntity,
 {
     type ApiKey = AK;
 
@@ -233,3 +233,4 @@ where
         Ok(result.rows_affected() as usize)
     }
 }
+

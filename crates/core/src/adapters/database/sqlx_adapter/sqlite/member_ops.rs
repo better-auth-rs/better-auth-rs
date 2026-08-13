@@ -16,18 +16,18 @@ use uuid::Uuid;
 // -- MemberOps --
 
 #[async_trait]
-impl<U, S, A, O, M, I, V, TF, AK, PK> MemberOps for SqlxAdapter<U, S, A, O, M, I, V, TF, AK, PK>
+impl<U, S, A, O, M, I, V, TF, AK, PK> MemberOps for SqliteAdapter<U, S, A, O, M, I, V, TF, AK, PK>
 where
-    U: AuthUser + AuthUserMeta + SqlxEntity,
-    S: AuthSession + AuthSessionMeta + SqlxEntity,
-    A: AuthAccount + AuthAccountMeta + SqlxEntity,
-    O: AuthOrganization + AuthOrganizationMeta + SqlxEntity,
-    M: AuthMember + AuthMemberMeta + SqlxEntity,
-    I: AuthInvitation + AuthInvitationMeta + SqlxEntity,
-    V: AuthVerification + AuthVerificationMeta + SqlxEntity,
-    TF: AuthTwoFactor + AuthTwoFactorMeta + SqlxEntity,
-    AK: AuthApiKey + AuthApiKeyMeta + SqlxEntity,
-    PK: AuthPasskey + AuthPasskeyMeta + SqlxEntity,
+    U: AuthUser + AuthUserMeta + SqliteEntity,
+    S: AuthSession + AuthSessionMeta + SqliteEntity,
+    A: AuthAccount + AuthAccountMeta + SqliteEntity,
+    O: AuthOrganization + AuthOrganizationMeta + SqliteEntity,
+    M: AuthMember + AuthMemberMeta + SqliteEntity,
+    I: AuthInvitation + AuthInvitationMeta + SqliteEntity,
+    V: AuthVerification + AuthVerificationMeta + SqliteEntity,
+    TF: AuthTwoFactor + AuthTwoFactorMeta + SqliteEntity,
+    AK: AuthApiKey + AuthApiKeyMeta + SqliteEntity,
+    PK: AuthPasskey + AuthPasskeyMeta + SqliteEntity,
 {
     type Member = M;
 
@@ -36,7 +36,7 @@ where
         let now = Utc::now();
 
         let sql = format!(
-            "INSERT INTO {} ({}, {}, {}, {}, {}) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+            "INSERT INTO {} ({}, {}, {}, {}, {}) VALUES (?, ?, ?, ?, ?) RETURNING *",
             qi(M::table()),
             qi(M::col_id()),
             qi(M::col_organization_id()),
@@ -58,7 +58,7 @@ where
 
     async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<M>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1 AND {} = $2",
+            "SELECT * FROM {} WHERE {} = ? AND {} = ?",
             qi(M::table()),
             qi(M::col_organization_id()),
             qi(M::col_user_id())
@@ -73,7 +73,7 @@ where
 
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<M>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1",
+            "SELECT * FROM {} WHERE {} = ?",
             qi(M::table()),
             qi(M::col_id())
         );
@@ -86,7 +86,7 @@ where
 
     async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<M> {
         let sql = format!(
-            "UPDATE {} SET {} = $1 WHERE {} = $2 RETURNING *",
+            "UPDATE {} SET {} = ? WHERE {} = ? RETURNING *",
             qi(M::table()),
             qi(M::col_role()),
             qi(M::col_id())
@@ -101,7 +101,7 @@ where
 
     async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
         let sql = format!(
-            "DELETE FROM {} WHERE {} = $1",
+            "DELETE FROM {} WHERE {} = ?",
             qi(M::table()),
             qi(M::col_id())
         );
@@ -114,7 +114,7 @@ where
 
     async fn list_organization_members(&self, organization_id: &str) -> AuthResult<Vec<M>> {
         let sql = format!(
-            "SELECT * FROM {} WHERE {} = $1 ORDER BY {} ASC",
+            "SELECT * FROM {} WHERE {} = ? ORDER BY {} ASC",
             qi(M::table()),
             qi(M::col_organization_id()),
             qi(M::col_created_at())
@@ -128,7 +128,7 @@ where
 
     async fn count_organization_members(&self, organization_id: &str) -> AuthResult<usize> {
         let sql = format!(
-            "SELECT COUNT(*) FROM {} WHERE {} = $1",
+            "SELECT COUNT(*) FROM {} WHERE {} = ?",
             qi(M::table()),
             qi(M::col_organization_id())
         );
@@ -141,7 +141,7 @@ where
 
     async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<usize> {
         let sql = format!(
-            "SELECT COUNT(*) FROM {} WHERE {} = $1 AND {} = 'owner'",
+            "SELECT COUNT(*) FROM {} WHERE {} = ? AND {} = 'owner'",
             qi(M::table()),
             qi(M::col_organization_id()),
             qi(M::col_role())
@@ -153,3 +153,6 @@ where
         Ok(count.0 as usize)
     }
 }
+
+
+
