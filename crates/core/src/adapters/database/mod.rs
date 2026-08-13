@@ -42,5 +42,12 @@ impl<T> DatabaseAdapter for T where
 {
 }
 
+// Re-export database adapters and shared types
+#[cfg(any(feature = "sqlx-postgres", feature = "sqlx-sqlite"))]
+pub use sqlx_adapter::{PoolConfig, PoolStats};
+
 #[cfg(feature = "sqlx-postgres")]
-pub use sqlx_adapter::{SqlxAdapter, SqlxEntity};
+pub use sqlx_adapter::{PostgresAdapter, PostgresEntity, SqlxAdapter, SqlxEntity};
+
+#[cfg(feature = "sqlx-sqlite")]
+pub use sqlx_adapter::{SqliteAdapter, SqliteEntity};
