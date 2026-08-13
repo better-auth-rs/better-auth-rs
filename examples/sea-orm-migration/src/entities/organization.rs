@@ -19,8 +19,11 @@ pub struct Model {
     pub updated_at: DateTimeUtc,
     // --- Application-specific columns ---
     pub billing_email: Option<String>,
-    #[auth(default = "\"free\".to_string()")]
-    pub plan: String,
+    // Made nullable to avoid NOT NULL constraint during organization creation
+    // The adapter only inserts standard auth columns, so custom columns
+    // must be nullable OR have a database default
+    #[auth(default = "Some(\"free\".to_string())")]
+    pub plan: Option<String>,
 
     // Relations
     #[sea_orm(has_many)]

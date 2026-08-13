@@ -203,7 +203,7 @@ async fn get_me(State(state): State<AppState>, req: Request) -> Response {
         id: user.id,
         email: user.email,
         name: user.name,
-        plan: user.plan,
+        plan: user.plan.unwrap_or_else(|| "free".to_string()),
         stripe_customer_id: user.stripe_customer_id,
     })
     .into_response()
@@ -236,7 +236,7 @@ async fn get_users_by_plan(State(state): State<AppState>, req: Request) -> Respo
     // This is a Sea-ORM query — completely independent of better-auth.
     // It uses the Sea-ORM entity model and the shared DatabaseConnection.
     let users = UserEntity::find()
-        .filter(entities::user::Column::Plan.eq(&plan))
+        .filter(entities::user::Column::Plan.eq(Some(plan.clone())))
         .all(&state.db)
         .await;
 
@@ -248,7 +248,7 @@ async fn get_users_by_plan(State(state): State<AppState>, req: Request) -> Respo
                     id: u.id,
                     email: u.email,
                     name: u.name,
-                    plan: u.plan,
+                    plan: u.plan.unwrap_or_else(|| "free".to_string()),
                 })
                 .collect();
             Json(serde_json::json!({

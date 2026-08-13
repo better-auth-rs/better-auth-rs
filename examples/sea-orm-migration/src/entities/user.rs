@@ -31,8 +31,11 @@ pub struct Model {
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
     // --- Application-specific columns ---
-    #[auth(default = "\"free\".to_string()")]
-    pub plan: String,
+    // Made nullable to avoid NOT NULL constraint during sign-up
+    // The adapter only inserts standard auth columns, so custom columns
+    // must be nullable OR have a database default
+    #[auth(default = "Some(\"free\".to_string())")]
+    pub plan: Option<String>,
     pub stripe_customer_id: Option<String>,
     pub phone: Option<String>,
 
