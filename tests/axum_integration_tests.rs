@@ -1012,8 +1012,12 @@ async fn test_axum_signout_clears_cookie() {
         "Cookie should contain session token name"
     );
     assert!(
-        cookie_value.contains("Expires=Thu, 01 Jan 1970"),
+        cookie_value.contains("Max-Age=0"),
         "Cookie should be expired to clear it"
+    );
+    assert!(
+        !cookie_value.contains("Expires="),
+        "TS clears the session cookie with Max-Age=0 only, without Expires"
     );
     assert!(cookie_value.contains("Path=/"), "Cookie should have Path=/");
 }

@@ -77,18 +77,20 @@ pub fn create_session_like_cookie(
 
 /// Build a `Set-Cookie` header value that clears the session cookie.
 pub fn create_clear_session_cookie(config: &AuthConfig) -> String {
-    create_session_cookie_with_max_age(None, Some(0), config)
+    create_clear_cookie(&config.session.cookie_name, config)
 }
 
 /// Build a `Set-Cookie` header value that clears an arbitrary cookie by name,
 /// using the session config's cookie attributes for consistency.
+///
+/// Mirrors the TypeScript `expireCookie`, which clears a cookie with `Max-Age=0`
+/// while preserving its attributes, and emits no `Expires`.
 pub fn create_clear_cookie(name: &str, config: &AuthConfig) -> String {
     let session_config = &config.session;
     let same_site = map_same_site(&session_config.cookie_same_site);
 
     let mut cookie = Cookie::build((name, ""))
         .path("/")
-        .expires(cookie::time::OffsetDateTime::UNIX_EPOCH)
         .max_age(cookie::time::Duration::seconds(0))
         .http_only(session_config.cookie_http_only)
         .same_site(same_site);
