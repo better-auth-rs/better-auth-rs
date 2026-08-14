@@ -66,6 +66,10 @@ jobs:
             require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
           "
           npm install "better-auth@$TARGET" "@better-auth/passkey@$TARGET" js-yaml --silent
+          # apiKey left the better-auth/plugins barrel in 1.5.0; before that
+          # there is no standalone package to install.
+          npm install "@better-auth/api-key@$TARGET" --silent \
+            || echo "[warn] @better-auth/api-key@$TARGET unavailable, expecting apiKey in better-auth/plugins"
 
           cp "$GITHUB_WORKSPACE/scripts/generate-openapi-matrix.mjs" .
           node generate-openapi-matrix.mjs --profile aligned-rs --output spec.json

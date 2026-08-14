@@ -32,7 +32,30 @@ if (!outputPath) {
 }
 
 const { betterAuth } = await import("better-auth/minimal");
-const plugins = await import("better-auth/plugins");
+const barrel = await import("better-auth/plugins");
+
+// Plugins upstream moved out of the `better-auth/plugins` barrel into their own
+// package. `apiKey` left the barrel in better-auth 1.5.0.
+const standalonePackages = {
+  apiKey: "@better-auth/api-key",
+};
+
+const plugins = { ...barrel };
+for (const [name, specifier] of Object.entries(standalonePackages)) {
+  if (typeof plugins[name] === "function") {
+    continue;
+  }
+  try {
+    const mod = await import(specifier);
+    if (typeof mod[name] === "function") {
+      plugins[name] = mod[name];
+    }
+  } catch (error) {
+    if (error?.code !== "ERR_MODULE_NOT_FOUND") {
+      throw error;
+    }
+  }
+}
 
 const loadPasskeyFactory = async () => {
   const candidates = [
@@ -54,10 +77,15 @@ const loadPasskeyFactory = async () => {
 
 const passkeyFactory = await loadPasskeyFactory();
 
+const pluginSource = (name) =>
+  standalonePackages[name]
+    ? `better-auth/plugins or ${standalonePackages[name]}`
+    : "better-auth/plugins";
+
 const requiredPlugin = (name, ...factoryArgs) => {
   const factory = plugins[name];
   if (typeof factory !== "function") {
-    throw new Error(`Plugin '${name}' is not exported by better-auth/plugins`);
+    throw new Error(`Plugin '${name}' is not exported by ${pluginSource(name)}`);
   }
   return factory(...factoryArgs);
 };
