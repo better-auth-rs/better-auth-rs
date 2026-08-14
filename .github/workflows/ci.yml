@@ -49,7 +49,7 @@ jobs:
       - name: Run library unit tests
         run: cargo test --workspace --lib
       - name: Run alignment checks
-        run: ./scripts/alignment-check.sh --skip-build
+        run: ./scripts/alignment-check.sh
 
   doc:
     name: Documentation
