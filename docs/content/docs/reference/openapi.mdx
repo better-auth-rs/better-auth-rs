@@ -3,23 +3,23 @@ title: OpenAPI
 description: Auto-generated OpenAPI specification.
 ---
 
-Better Auth generates an OpenAPI 3.0 specification from its registered plugins and routes.
+Better Auth RS generates an OpenAPI 3.1 specification from its registered plugins and routes.
 
-## Accessing the Spec
+There is no public HTTP route for the spec. The internal test harness mounts a private endpoint at `GET /auth/__test/openapi.json`, but production integrations should use the programmatic API.
 
-When using the Axum integration, the spec is available at:
-
-```
-GET /auth/reference/openapi.json
-```
+The docs site consumes a committed schema artifact at `docs/better-auth.json`.
+That artifact is generated from the Rust runtime's v1 docs profile and then
+split into per-tag pages for Fumadocs.
 
 ## Programmatic Access
 
 Generate the spec without a web server:
 
+This example assumes you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(EmailPasswordPlugin::new())
     .build()
     .await?;

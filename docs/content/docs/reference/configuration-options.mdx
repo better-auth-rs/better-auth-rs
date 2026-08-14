@@ -1,45 +1,66 @@
 ---
 title: Configuration Options
-description: Complete reference for all configuration fields and defaults.
+description: Reference for the public configuration structs exposed by AuthConfig.
 ---
+
+This page documents the public configuration types in `crates/core/src/config.rs`.
 
 ## AuthConfig
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `secret` | `String` | (required) | Signing secret, minimum 32 characters |
-| `base_url` | `String` | `"http://localhost:3000"` | Application base URL |
-| `trusted_origins` | `Vec<String>` | `[]` | Additional trusted origins |
-| `session` | `SessionConfig` | See below | Session settings |
-| `jwt` | `JwtConfig` | See below | JWT settings |
-| `password` | `PasswordConfig` | See below | Password policy |
+| `secret` | `String` | empty until set | Signing/encryption secret; must be at least 32 characters |
+| `app_name` | `String` | `"Better Auth"` | App name used by emails and cookie-related metadata |
+| `base_url` | `String` | `"http://localhost:3000"` | Base URL for the auth service |
+| `base_path` | `String` | `"/api/auth"` | Auth route mount prefix |
+| `trusted_origins` | `Vec<String>` | `[]` | Origins trusted for CSRF/origin checks |
+| `disabled_paths` | `Vec<String>` | `[]` | Routes that should behave as disabled |
+| `session` | `SessionConfig` | see below | Session token and cookie behavior |
+| `jwt` | `JwtConfig` | see below | Optional JWT behavior |
+| `password` | `PasswordConfig` | see below | Password policy and Argon2 settings |
+| `account` | `AccountConfig` | see below | OAuth/account-linking behavior |
+| `email_provider` | `Option<Arc<dyn EmailProvider>>` | `None` | Global email provider |
+| `advanced` | `AdvancedConfig` | see below | Advanced cookie, IP, and DB options |
 
 ## SessionConfig
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `expires_in` | `Duration` | 7 days | Session token lifetime |
-| `update_age` | `Option<Duration>` | `Some(1 day)` | Refresh session expiry when last update exceeds this duration. `None` disables refresh entirely |
-| `fresh_age` | `Duration` | 1 day | Window after creation in which a session is considered "fresh" for sensitive operations |
-| `cookie_name` | `String` | `"better-auth.session-token"` | Session cookie name |
-| `cookie_secure` | `bool` | `true` | Secure cookie flag |
-| `cookie_http_only` | `bool` | `true` | HttpOnly cookie flag |
-| `cookie_same_site` | `SameSite` | `Lax` | SameSite cookie policy |
-| `cookie_cache` | `Option<CookieCacheConfig>` | `None` | Optional cookie-based session cache to skip DB lookups |
+| `expires_in` | `chrono::Duration` | `7 days` | Session lifetime |
+| `update_age` | `Option<chrono::Duration>` | `Some(1 day)` | Age threshold before refreshing a session |
+| `disable_session_refresh` | `bool` | `false` | Disable automatic refresh entirely |
+| `fresh_age` | `Option<chrono::Duration>` | `None` | Optional freshness window for sensitive actions |
+| `cookie_name` | `String` | `"better-auth.session_token"` | Cookie name used for session transport |
+| `cookie_secure` | `bool` | Derived from `base_url` | `true` for HTTPS URLs, `false` for HTTP URLs |
+| `cookie_http_only` | `bool` | `true` | Prevent JavaScript access to the cookie |
+| `cookie_same_site` | `SameSite` | `Lax` | SameSite policy |
+| `cookie_cache` | `Option<CookieCacheConfig>` | `None` | Optional cookie-backed session cache |
+
+Refresh semantics:
+
+- `update_age = Some(duration)`: refresh only when older than `duration`.
+- `update_age = None`: refresh on every access.
+- `disable_session_refresh = true`: never refresh automatically.
 
 ## CookieCacheConfig
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | `bool` | `false` | Whether the cookie cache is active |
-| `max_age` | `Duration` | 5 minutes | Max age before a fresh DB lookup is required |
-| `strategy` | `CookieCacheStrategy` | `Compact` | Signing/encryption strategy (`Compact`, `Jwt`, or `Jwe`) |
+| `enabled` | `bool` | `false` | Whether the cache is active |
+| `max_age` | `chrono::Duration` | `5 minutes` | Max age before forcing a DB lookup |
+| `strategy` | `CookieCacheStrategy` | `Compact` | Protection strategy for the cached payload |
+
+`CookieCacheStrategy` variants:
+
+- `Compact`
+- `Jwt`
+- `Jwe`
 
 ## JwtConfig
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `expires_in` | `Duration` | 1 day | JWT token lifetime |
+| `expires_in` | `chrono::Duration` | `1 day` | JWT lifetime |
 | `algorithm` | `String` | `"HS256"` | Signing algorithm |
 | `issuer` | `Option<String>` | `None` | JWT `iss` claim |
 | `audience` | `Option<String>` | `None` | JWT `aud` claim |
@@ -49,94 +70,99 @@ description: Complete reference for all configuration fields and defaults.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `min_length` | `usize` | `8` | Minimum password length |
-| `require_uppercase` | `bool` | `false` | Require uppercase letter |
-| `require_lowercase` | `bool` | `false` | Require lowercase letter |
-| `require_numbers` | `bool` | `false` | Require digit |
-| `require_special` | `bool` | `false` | Require special character |
+| `require_uppercase` | `bool` | `false` | Require uppercase letters |
+| `require_lowercase` | `bool` | `false` | Require lowercase letters |
+| `require_numbers` | `bool` | `false` | Require digits |
+| `require_special` | `bool` | `false` | Require special characters |
+| `argon2_config` | `Argon2Config` | see below | Argon2 tuning |
 
-## Argon2Config
+### Argon2Config
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `memory_cost` | `u32` | `4096` | Memory usage in KiB |
-| `time_cost` | `u32` | `3` | Number of iterations |
+| `memory_cost` | `u32` | `4096` | Memory cost in KiB |
+| `time_cost` | `u32` | `3` | Iteration count |
 | `parallelism` | `u32` | `1` | Degree of parallelism |
 
-## CsrfConfig
+## AccountConfig
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | `bool` | `true` | Enable CSRF checks |
+| `update_account_on_sign_in` | `bool` | `true` | Refresh stored OAuth account data during sign-in |
+| `account_linking` | `AccountLinkingConfig` | see below | Account-linking behavior |
+| `encrypt_oauth_tokens` | `bool` | `false` | Encrypt stored OAuth tokens |
+| `store_account_cookie` | `bool` | `false` | Store account data in a cookie for OAuth token flows |
+| `store_state_strategy` | `OAuthStateStrategy` | `Database` | Where to persist OAuth state |
+| `skip_state_cookie_check` | `bool` | `false` | Skip callback cookie-state verification |
 
-## RateLimitConfig
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `window` | `Duration` | `60s` | Default time window |
-| `max_requests` | `u32` | `100` | Default max requests per window |
-| `per_endpoint` | `HashMap` | `{}` | Per-endpoint overrides |
-| `enabled` | `bool` | `true` | Enable rate limiting |
-
-## CorsConfig
+### AccountLinkingConfig
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `allowed_origins` | `Vec<String>` | `[]` | Allowed origins |
-| `allowed_methods` | `Vec<String>` | `GET, POST, PUT, DELETE, PATCH, OPTIONS` | Allowed HTTP methods |
-| `allowed_headers` | `Vec<String>` | `Content-Type, Authorization, X-Requested-With` | Allowed headers |
-| `exposed_headers` | `Vec<String>` | `[]` | Headers exposed to clients |
-| `allow_credentials` | `bool` | `true` | Allow credentials |
-| `max_age` | `u64` | `86400` | Preflight cache duration (seconds) |
-| `enabled` | `bool` | `true` | Enable CORS |
+| `enabled` | `bool` | `true` | Enable account linking |
+| `trusted_providers` | `Vec<String>` | `[]` | Providers allowed to auto-link |
+| `allow_different_emails` | `bool` | `false` | Allow linking accounts with different emails |
+| `allow_unlinking_all` | `bool` | `false` | Allow unlinking the last linked account |
+| `disable_implicit_linking` | `bool` | `false` | Only allow explicit linking via `link-social` |
+| `update_user_info_on_link` | `bool` | `false` | Refresh user info when linking an account |
 
-## BodyLimitConfig
+`OAuthStateStrategy` variants:
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `max_bytes` | `usize` | `1,048,576` | Maximum body size in bytes (1 MB) |
-| `enabled` | `bool` | `true` | Enable body limit |
+- `Cookie`
+- `Database`
 
-## PoolConfig (PostgreSQL)
+## AdvancedConfig
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `max_connections` | `u32` | `10` | Maximum pool size |
-| `min_connections` | `u32` | `0` | Minimum idle connections |
-| `acquire_timeout` | `Duration` | `30s` | Connection acquire timeout |
-| `idle_timeout` | `Option<Duration>` | `600s` | Idle connection timeout |
-| `max_lifetime` | `Option<Duration>` | `1800s` | Maximum connection lifetime |
+| `ip_address` | `IpAddressConfig` | see below | Client IP extraction behavior |
+| `disable_csrf_check` | `bool` | `false` | Disable request-origin / Fetch Metadata CSRF checks |
+| `disable_origin_check` | `bool` | `false` | Skip callback / redirect target origin validation |
+| `cross_sub_domain_cookies` | `Option<CrossSubDomainConfig>` | `None` | Share cookies across subdomains |
+| `cookies` | `HashMap<String, CookieOverride>` | `{}` | Per-cookie overrides |
+| `default_cookie_attributes` | `CookieAttributes` | all `None` | Default attributes applied to every cookie |
+| `cookie_prefix` | `Option<String>` | `None` | Prefix applied to every cookie name |
+| `database` | `AdvancedDatabaseConfig` | see below | Database-related defaults |
+| `trusted_proxy_headers` | `Vec<String>` | `[]` | Headers trusted for real client IP extraction |
 
-## Plugin Configs
+### IpAddressConfig
 
-### EmailPasswordConfig
+| Field | Type | Default |
+|-------|------|---------|
+| `headers` | `Vec<String>` | `["x-forwarded-for", "x-real-ip"]` |
+| `disable_ip_tracking` | `bool` | `false` |
+
+### CrossSubDomainConfig
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `domain` | `String` | Parent cookie domain such as `".example.com"` |
+
+### CookieAttributes
+
+| Field | Type | Default |
+|-------|------|---------|
+| `secure` | `Option<bool>` | `None` |
+| `http_only` | `Option<bool>` | `None` |
+| `same_site` | `Option<SameSite>` | `None` |
+| `path` | `Option<String>` | `None` |
+| `max_age` | `Option<i64>` | `None` |
+| `domain` | `Option<String>` | `None` |
+
+### CookieOverride
+
+| Field | Type | Default |
+|-------|------|---------|
+| `name` | `Option<String>` | `None` |
+| `attributes` | `CookieAttributes` | all `None` |
+
+### AdvancedDatabaseConfig
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enable_signup` | `bool` | `true` | Allow new registrations |
-| `require_email_verification` | `bool` | `false` | Require verified email for sign-in |
-| `password_min_length` | `usize` | `8` | Minimum password length |
+| `default_find_many_limit` | `usize` | `100` | Default limit for "find many" queries |
+| `use_number_id` | `bool` | `false` | Prefer numeric generated IDs instead of UUID-like IDs |
 
-### SessionManagementConfig
+## Plugin-Specific Config
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enable_session_listing` | `bool` | `true` | Allow listing sessions |
-| `enable_session_revocation` | `bool` | `true` | Allow revoking sessions |
-| `require_authentication` | `bool` | `true` | Require auth for endpoints |
-
-### PasswordManagementConfig
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `reset_token_expiry_hours` | `i64` | `24` | Reset token validity |
-| `require_current_password` | `bool` | `true` | Require current password for changes |
-| `send_email_notifications` | `bool` | `true` | Notify on password changes |
-
-### EmailVerificationConfig
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `verification_token_expiry_hours` | `i64` | `24` | Token validity |
-| `send_email_notifications` | `bool` | `true` | Send verification emails |
-| `require_verification_for_signin` | `bool` | `false` | Block unverified sign-in |
-| `auto_verify_new_users` | `bool` | `false` | Auto-send on sign-up |
+Plugin configs such as `EmailPasswordConfig`, `SessionManagementConfig`, `OrganizationConfig`, `PasskeyConfig`, and `TwoFactorConfig` are documented in their plugin guides, because their behavior is best understood next to the routes they affect.

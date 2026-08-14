@@ -1,0 +1,18 @@
+---
+title: Device Authorization
+description: Device authorization endpoints from the v1 compatibility surface.
+full: true
+---
+
+<APIPage
+  document={"./better-auth.json"}
+  webhooks={[]}
+  operations={[
+    { path: "/device/code", method: "post" },
+    { path: "/device/token", method: "post" },
+    { path: "/device", method: "get" },
+    { path: "/device/approve", method: "post" },
+    { path: "/device/deny", method: "post" }
+  ]}
+  showTitle={true}
+/>

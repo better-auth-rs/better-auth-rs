@@ -93,15 +93,9 @@ fn compare_shapes_inner(
         }
         (Value::Array(ref_arr), Value::Array(tgt_arr)) => {
             // Compare first element shapes only
-            if !ref_arr.is_empty() && !tgt_arr.is_empty() {
+            if let (Some(ref_first), Some(tgt_first)) = (ref_arr.first(), tgt_arr.first()) {
                 let elem_path = format!("{}[0]", path);
-                compare_shapes_inner(
-                    &ref_arr[0],
-                    &tgt_arr[0],
-                    &elem_path,
-                    strict_extra_fields,
-                    diffs,
-                );
+                compare_shapes_inner(ref_first, tgt_first, &elem_path, strict_extra_fields, diffs);
             }
         }
         _ => {
@@ -161,10 +155,10 @@ pub fn extract_type_signature(value: &Value, indent: usize) -> String {
                     Value::Number(_) => "number".to_string(),
                     Value::String(_) => "string".to_string(),
                     Value::Array(arr) => {
-                        if arr.is_empty() {
-                            "array(empty)".to_string()
+                        if let Some(first) = arr.first() {
+                            format!("array<{}>", json_type_name(first))
                         } else {
-                            format!("array<{}>", json_type_name(&arr[0]))
+                            "array(empty)".to_string()
                         }
                     }
                     Value::Object(_) => extract_type_signature(val, indent + 1),
@@ -175,10 +169,10 @@ pub fn extract_type_signature(value: &Value, indent: usize) -> String {
             lines.join("\n")
         }
         Value::Array(arr) => {
-            if arr.is_empty() {
-                "[]".to_string()
+            if let Some(first) = arr.first() {
+                format!("Array<{}>", extract_type_signature(first, indent))
             } else {
-                format!("Array<{}>", extract_type_signature(&arr[0], indent))
+                "[]".to_string()
             }
         }
         Value::Null => "null".to_string(),

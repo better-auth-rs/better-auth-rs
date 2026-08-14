@@ -1,19 +1,13 @@
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use governor::clock::DefaultClock;
-use governor::state::{InMemoryState, NotKeyed};
-use governor::{Quota, RateLimiter};
-use rand::RngCore;
-use serde::Serialize;
+use rand::seq::SliceRandom;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
-use std::num::NonZeroU32;
 use std::sync::Mutex;
 
-use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::entity::{AuthApiKey, AuthUser};
+use better_auth_core::entity::{AuthApiKey as _, AuthUser};
+use better_auth_core::store::ConsumeApiKeyResult;
 use better_auth_core::{AuthContext, AuthError, AuthResult, BeforeRequestAction};
-use better_auth_core::{AuthRequest, AuthResponse, UpdateApiKey};
+use better_auth_core::{AuthRequest, AuthResponse};
 
 pub(super) mod handlers;
 pub(super) mod types;
@@ -28,56 +22,33 @@ use types::*;
 // Error codes -- mirrors the TypeScript `API_KEY_ERROR_CODES`
 // ---------------------------------------------------------------------------
 
-/// Dedicated API Key error codes aligned with the TypeScript implementation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// Dedicated API Key error codes aligned with the TypeScript `API_KEY_ERROR_CODES`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApiKeyErrorCode {
-    #[serde(rename = "INVALID_API_KEY")]
     InvalidApiKey,
-    #[serde(rename = "KEY_DISABLED")]
     KeyDisabled,
-    #[serde(rename = "KEY_EXPIRED")]
     KeyExpired,
-    #[serde(rename = "USAGE_EXCEEDED")]
     UsageExceeded,
-    #[serde(rename = "KEY_NOT_FOUND")]
     KeyNotFound,
-    #[serde(rename = "RATE_LIMITED")]
     RateLimited,
-    #[serde(rename = "UNAUTHORIZED_SESSION")]
     UnauthorizedSession,
-    #[serde(rename = "INVALID_PREFIX_LENGTH")]
     InvalidPrefixLength,
-    #[serde(rename = "INVALID_NAME_LENGTH")]
     InvalidNameLength,
-    #[serde(rename = "METADATA_DISABLED")]
     MetadataDisabled,
-    #[serde(rename = "NO_VALUES_TO_UPDATE")]
     NoValuesToUpdate,
-    #[serde(rename = "KEY_DISABLED_EXPIRATION")]
     KeyDisabledExpiration,
-    #[serde(rename = "EXPIRES_IN_IS_TOO_SMALL")]
     ExpiresInTooSmall,
-    #[serde(rename = "EXPIRES_IN_IS_TOO_LARGE")]
     ExpiresInTooLarge,
-    #[serde(rename = "INVALID_REMAINING")]
     InvalidRemaining,
-    #[serde(rename = "REFILL_AMOUNT_AND_INTERVAL_REQUIRED")]
     RefillAmountAndIntervalRequired,
-    #[serde(rename = "NAME_REQUIRED")]
     NameRequired,
-    #[serde(rename = "INVALID_USER_ID_FROM_API_KEY")]
     InvalidUserIdFromApiKey,
-    #[serde(rename = "SERVER_ONLY_PROPERTY")]
     ServerOnlyProperty,
-    #[serde(rename = "FAILED_TO_UPDATE_API_KEY")]
     FailedToUpdateApiKey,
-    #[serde(rename = "INVALID_METADATA_TYPE")]
     InvalidMetadataType,
 }
 
 impl ApiKeyErrorCode {
-    /// Return the SCREAMING_SNAKE_CASE string for this error code.
-    /// Used by `handle_verify` to produce the structured JSON error response.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::InvalidApiKey => "INVALID_API_KEY",
@@ -141,11 +112,14 @@ fn api_key_error(code: ApiKeyErrorCode) -> AuthError {
     AuthError::bad_request(code.message())
 }
 
-/// Structured error returned by `validate_api_key` so that `handle_verify`
-/// can extract the error code without fragile string matching.
-struct ApiKeyValidationError {
-    code: ApiKeyErrorCode,
-    message: String,
+/// Structured error returned by `validate_api_key`.
+pub(super) struct ApiKeyValidationError {
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "read by the test module's verify_key helper")
+    )]
+    pub(super) code: ApiKeyErrorCode,
+    pub(super) message: String,
 }
 
 impl ApiKeyValidationError {
@@ -166,13 +140,7 @@ pub struct ApiKeyPlugin {
     pub(super) config: ApiKeyConfig,
     /// Throttle for `delete_expired_api_keys` -- stores the last check instant.
     last_expired_check: Mutex<Option<std::time::Instant>>,
-    /// Per-key in-memory rate limiters backed by the `governor` crate.
-    /// Key: API key ID -> governor rate limiter.
-    pub(super) rate_limiters: Mutex<HashMap<String, std::sync::Arc<GovernorLimiter>>>,
 }
-
-/// Type alias for the governor rate limiter we use (not keyed, in-memory, default clock).
-type GovernorLimiter = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
 
 /// Configuration for the API Key plugin, aligned with the TypeScript `ApiKeyOptions`.
 #[derive(Debug, Clone)]
@@ -233,7 +201,7 @@ impl Default for KeyExpirationConfig {
             default_expires_in: None,
             disable_custom_expires_time: false,
             max_expires_in: 365,
-            min_expires_in: 0,
+            min_expires_in: 1,
         }
     }
 }
@@ -261,7 +229,7 @@ impl Default for RateLimitDefaults {
 impl Default for ApiKeyConfig {
     fn default() -> Self {
         Self {
-            key_length: 32,
+            key_length: 64,
             prefix: None,
             default_remaining: None,
             api_key_header: "x-api-key".to_string(),
@@ -300,7 +268,7 @@ impl Default for ApiKeyConfig {
 impl ApiKeyPlugin {
     #[builder]
     pub fn new(
-        #[builder(default = 32)] key_length: usize,
+        #[builder(default = 64)] key_length: usize,
         prefix: Option<String>,
         default_remaining: Option<i64>,
         #[builder(default = "x-api-key".to_string())] api_key_header: String,
@@ -337,7 +305,6 @@ impl ApiKeyPlugin {
                 enable_session_for_api_keys,
             },
             last_expired_check: Mutex::new(None),
-            rate_limiters: Mutex::new(HashMap::new()),
         }
     }
 
@@ -345,24 +312,34 @@ impl ApiKeyPlugin {
         Self {
             config,
             last_expired_check: Mutex::new(None),
-            rate_limiters: Mutex::new(HashMap::new()),
         }
     }
 
     // -- internal helpers --
 
     pub(super) fn generate_key(&self, custom_prefix: Option<&str>) -> (String, String, String) {
-        let mut bytes = vec![0u8; self.config.key_length];
-        rand::rngs::OsRng.fill_bytes(&mut bytes);
-        let raw = URL_SAFE_NO_PAD.encode(&bytes);
-
-        let start_len = self.config.starting_characters_length;
-        let start = raw.chars().take(start_len).collect::<String>();
+        // Match TS: generateRandomString(length, "a-z", "A-Z") — alpha only
+        const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let mut rng = rand::thread_rng();
+        let raw: String = (0..self.config.key_length)
+            .map(|_| {
+                ALPHABET
+                    .choose(&mut rng)
+                    .copied()
+                    .map(char::from)
+                    .unwrap_or('a')
+            })
+            .collect();
 
         let prefix = custom_prefix
             .or(self.config.prefix.as_deref())
             .unwrap_or("");
         let full_key = format!("{}{}", prefix, raw);
+
+        // TS computes start from the full key (including prefix):
+        //   start = key.substring(0, charactersLength)
+        let start_len = self.config.starting_characters_length;
+        let start: String = full_key.chars().take(start_len).collect();
 
         let hash = if self.config.disable_key_hashing {
             full_key.clone()
@@ -381,9 +358,15 @@ impl ApiKeyPlugin {
     }
 
     /// Throttled cleanup -- at most once per 10 seconds.
-    pub(super) async fn maybe_delete_expired<DB: DatabaseAdapter>(&self, ctx: &AuthContext<DB>) {
+    pub(super) async fn maybe_delete_expired(
+        &self,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) {
         let should_run = {
-            let mut last = self.last_expired_check.lock().unwrap();
+            let mut last = self
+                .last_expired_check
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             let now = std::time::Instant::now();
             match *last {
                 Some(prev) if now.duration_since(prev).as_secs() < 10 => false,
@@ -430,18 +413,19 @@ impl ApiKeyPlugin {
 
     pub(super) fn validate_expires_in(&self, expires_in: Option<i64>) -> AuthResult<Option<i64>> {
         let cfg = &self.config.key_expiration;
-        if let Some(ms) = expires_in {
+        if let Some(secs) = expires_in {
             if cfg.disable_custom_expires_time {
                 return Err(api_key_error(ApiKeyErrorCode::KeyDisabledExpiration));
             }
-            let days = ms as f64 / 86_400_000.0;
+            // expiresIn is in seconds; min/max are in days
+            let days = secs as f64 / 86_400.0;
             if days < cfg.min_expires_in as f64 {
                 return Err(api_key_error(ApiKeyErrorCode::ExpiresInTooSmall));
             }
             if days > cfg.max_expires_in as f64 {
                 return Err(api_key_error(ApiKeyErrorCode::ExpiresInTooLarge));
             }
-            Ok(Some(ms))
+            Ok(Some(secs))
         } else {
             Ok(cfg.default_expires_in)
         }
@@ -473,13 +457,13 @@ impl ApiKeyPlugin {
     }
 
     // -----------------------------------------------------------------------
-    // Route handlers (old -- delegate to core functions)
+    // Route handlers
     // -----------------------------------------------------------------------
 
-    async fn handle_create<DB: DatabaseAdapter>(
+    async fn handle_create(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: CreateKeyRequest = match better_auth_core::validate_request_body(req) {
@@ -490,10 +474,10 @@ impl ApiKeyPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_get<DB: DatabaseAdapter>(
+    async fn handle_get(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let id = req
@@ -504,20 +488,20 @@ impl ApiKeyPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_list<DB: DatabaseAdapter>(
+    async fn handle_list(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let response = list_keys_core(user.id(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_update<DB: DatabaseAdapter>(
+    async fn handle_update(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: UpdateKeyRequest = match better_auth_core::validate_request_body(req) {
@@ -528,10 +512,10 @@ impl ApiKeyPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    async fn handle_delete<DB: DatabaseAdapter>(
+    async fn handle_delete(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let body: DeleteKeyRequest = match better_auth_core::validate_request_body(req) {
@@ -542,33 +526,16 @@ impl ApiKeyPlugin {
         Ok(AuthResponse::json(200, &response)?)
     }
 
-    // -----------------------------------------------------------------------
-    // POST /api-key/verify -- core verification endpoint
-    // -----------------------------------------------------------------------
-
-    async fn handle_verify<DB: DatabaseAdapter>(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<AuthResponse> {
-        let verify_req: VerifyKeyRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
-        let response = verify_key_core(&verify_req, self, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
-    }
-
-    /// Core validation logic shared by `handle_verify` and `before_request`.
+    /// Core validation logic used by `before_request` and tests.
     ///
     /// Validation chain: exists -> disabled -> expired -> permissions ->
     /// remaining/refill -> rate limit.
     ///
     /// Returns `Ok(ApiKeyView)` on success, or `Err(ApiKeyValidationError)` with
-    /// a structured error code (no fragile string matching needed).
-    async fn validate_api_key<DB: DatabaseAdapter>(
+    /// a structured error code.
+    pub(super) async fn validate_api_key(
         &self,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
         raw_key: &str,
         required_permissions: Option<&serde_json::Value>,
     ) -> Result<ApiKeyView, ApiKeyValidationError> {
@@ -597,12 +564,7 @@ impl ApiKeyPlugin {
             && let Ok(expires_at) = chrono::DateTime::parse_from_rfc3339(expires_at_str)
             && chrono::Utc::now() > expires_at
         {
-            // Delete expired key and evict its cached rate limiter
-            let _ = ctx.database.delete_api_key(api_key.id()).await;
-            self.rate_limiters
-                .lock()
-                .expect("rate_limiters mutex poisoned")
-                .remove(api_key.id());
+            let _ = ctx.database.delete_api_key(&api_key.id()).await;
             return Err(ApiKeyValidationError::new(ApiKeyErrorCode::KeyExpired));
         }
 
@@ -617,154 +579,29 @@ impl ApiKeyPlugin {
             }
         }
 
-        // 4. Remaining / refill
-        let mut new_remaining = api_key.remaining();
-        let mut new_last_refill_at: Option<String> =
-            api_key.last_refill_at().map(|s| s.to_string());
-
-        if let Some(0) = api_key.remaining()
-            && api_key.refill_amount().is_none()
+        // 4. Atomically consume one use: decrement remaining (with refill),
+        // increment rate-limit counter, update timestamps. All counter
+        // mutations happen inside a transaction against the locked row to
+        // prevent concurrent requests from corrupting counters.
+        let updated = match ctx
+            .database
+            .consume_api_key_usage(&api_key.id(), self.config.rate_limit.enabled)
+            .await
+            .map_err(|_| ApiKeyValidationError::new(ApiKeyErrorCode::FailedToUpdateApiKey))?
         {
-            // Usage exhausted, no refill configured -- delete key and evict cache
-            let _ = ctx.database.delete_api_key(api_key.id()).await;
-            self.rate_limiters
-                .lock()
-                .expect("rate_limiters mutex poisoned")
-                .remove(api_key.id());
-            return Err(ApiKeyValidationError::new(ApiKeyErrorCode::UsageExceeded));
-        }
-
-        if let Some(remaining) = api_key.remaining() {
-            let refill_interval = api_key.refill_interval();
-            let refill_amount = api_key.refill_amount();
-            let mut current_remaining = remaining;
-
-            if let (Some(interval), Some(amount)) = (refill_interval, refill_amount) {
-                let now = chrono::Utc::now();
-                let last_time_str = api_key
-                    .last_refill_at()
-                    .or_else(|| Some(api_key.created_at()));
-                if let Some(last_str) = last_time_str
-                    && let Ok(last_dt) = chrono::DateTime::parse_from_rfc3339(last_str)
-                {
-                    let elapsed_ms = (now - last_dt.with_timezone(&chrono::Utc)).num_milliseconds();
-                    if elapsed_ms > interval {
-                        current_remaining = amount;
-                        new_last_refill_at = Some(now.to_rfc3339());
-                    }
-                }
+            ConsumeApiKeyResult::Allowed(key) => *key,
+            ConsumeApiKeyResult::RateLimited => {
+                return Err(ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited));
             }
-
-            if current_remaining <= 0 {
+            ConsumeApiKeyResult::UsageExhausted => {
                 return Err(ApiKeyValidationError::new(ApiKeyErrorCode::UsageExceeded));
             }
-
-            new_remaining = Some(current_remaining - 1);
-        }
-
-        // 5. Rate limiting via `governor` crate
-        self.check_rate_limit_governor(&api_key)?;
-
-        // 6. Build update
-        let mut update = UpdateApiKey {
-            remaining: new_remaining,
-            ..Default::default()
         };
-        if new_last_refill_at != api_key.last_refill_at().map(|s| s.to_string()) {
-            update.last_refill_at = Some(new_last_refill_at);
-        }
-
-        let updated = ctx
-            .database
-            .update_api_key(api_key.id(), update)
-            .await
-            .map_err(|_| ApiKeyValidationError::new(ApiKeyErrorCode::FailedToUpdateApiKey))?;
 
         // Throttled cleanup
         self.maybe_delete_expired(ctx).await;
 
-        Ok(ApiKeyView::from_entity(&updated))
-    }
-
-    /// Check rate limiting for an API key using the `governor` crate.
-    ///
-    /// Creates or retrieves a per-key in-memory rate limiter backed by GCRA
-    /// (Generic Cell Rate Algorithm), which is thread-safe and lock-free on
-    /// the hot path.
-    fn check_rate_limit_governor(
-        &self,
-        api_key: &impl AuthApiKey,
-    ) -> Result<(), ApiKeyValidationError> {
-        // Determine if rate limiting is enabled for this key.
-        let key_has_explicit_setting =
-            api_key.rate_limit_time_window().is_some() || api_key.rate_limit_max().is_some();
-        let key_enabled = api_key.rate_limit_enabled();
-
-        if !key_enabled {
-            // Key explicitly disabled rate limiting -- skip.
-            if key_has_explicit_setting {
-                return Ok(());
-            }
-            // Key has no explicit setting and global is also off -- skip.
-            if !self.config.rate_limit.enabled {
-                return Ok(());
-            }
-        }
-
-        let time_window_ms = api_key
-            .rate_limit_time_window()
-            .unwrap_or(self.config.rate_limit.time_window);
-        let max_requests = api_key
-            .rate_limit_max()
-            .unwrap_or(self.config.rate_limit.max_requests);
-
-        if time_window_ms <= 0 || max_requests <= 0 {
-            return Ok(());
-        }
-
-        let key_id = api_key.id().to_string();
-
-        // Get or create the rate limiter for this key
-        let limiter = {
-            let mut limiters = self
-                .rate_limiters
-                .lock()
-                .expect("rate_limiters mutex poisoned");
-            limiters
-                .entry(key_id)
-                .or_insert_with(|| {
-                    let max = NonZeroU32::new(max_requests as u32).unwrap_or(NonZeroU32::MIN);
-                    let period_ms = (time_window_ms as u64)
-                        .checked_div(max_requests as u64)
-                        .unwrap_or(0);
-                    // Guard against zero-period panic (e.g. time_window_ms < max_requests)
-                    let period = std::time::Duration::from_millis(period_ms.max(1));
-                    let quota = Quota::with_period(period)
-                        .expect("period >= 1ms is always valid")
-                        .allow_burst(max);
-                    std::sync::Arc::new(RateLimiter::direct(quota))
-                })
-                .clone()
-        };
-
-        match limiter.check() {
-            Ok(()) => Ok(()),
-            Err(_not_until) => Err(ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited)),
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // POST /api-key/delete-all-expired-api-keys
-    // -----------------------------------------------------------------------
-
-    async fn handle_delete_all_expired<DB: DatabaseAdapter>(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<DB>,
-    ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
-        let response = delete_all_expired_core(user.id(), self, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(ApiKeyView::from(&updated))
     }
 }
 
@@ -780,14 +617,12 @@ better_auth_core::impl_auth_plugin! {
         post "/api-key/update"                    => handle_update,             "api_key_update";
         post "/api-key/delete"                    => handle_delete,             "api_key_delete";
         get  "/api-key/list"                      => handle_list,               "api_key_list";
-        post "/api-key/verify"                    => handle_verify,             "api_key_verify";
-        post "/api-key/delete-all-expired-api-keys" => handle_delete_all_expired, "api_key_delete_all_expired";
     }
     extra {
         async fn before_request(
             &self,
             req: &AuthRequest,
-            ctx: &AuthContext<DB>,
+            ctx: &AuthContext<S>,
         ) -> AuthResult<Option<BeforeRequestAction>> {
             if !self.config.enable_session_for_api_keys {
                 return Ok(None);
@@ -798,13 +633,6 @@ better_auth_core::impl_auth_plugin! {
                 Some(k) if !k.is_empty() => k.clone(),
                 _ => return Ok(None),
             };
-
-            // Skip session emulation for API-key management routes to avoid
-            // double-validating the key (before_request + handle_verify both
-            // call validate_api_key, consuming usage/rate-limit budget twice).
-            if req.path().starts_with("/api-key/") {
-                return Ok(None);
-            }
 
             // Validate the key (reuses the full verify logic)
             let view = self
@@ -844,126 +672,6 @@ better_auth_core::impl_auth_plugin! {
                 user_id: view.user_id,
                 session_token: raw_key,
             }))
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Axum integration
-// ---------------------------------------------------------------------------
-
-#[cfg(feature = "axum")]
-mod axum_impl {
-    use super::*;
-    use std::sync::Arc;
-
-    use axum::Json;
-    use axum::extract::Extension;
-    use axum::extract::{Query, State};
-    use better_auth_core::{AuthState, CurrentSession, ValidatedJson};
-    use serde::Deserialize;
-
-    /// Query parameters for GET /api-key/get
-    #[derive(Debug, Deserialize)]
-    struct GetKeyQuery {
-        id: String,
-    }
-
-    async fn handle_create<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-        ValidatedJson(body): ValidatedJson<CreateKeyRequest>,
-    ) -> Result<Json<CreateKeyResponse>, AuthError> {
-        let ctx = state.to_context();
-        let response = create_key_core(&body, user.id(), &plugin, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    async fn handle_get<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-        Query(query): Query<GetKeyQuery>,
-    ) -> Result<Json<ApiKeyView>, AuthError> {
-        let ctx = state.to_context();
-        let response = get_key_core(&query.id, user.id(), &plugin, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    async fn handle_list<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-    ) -> Result<Json<Vec<ApiKeyView>>, AuthError> {
-        let ctx = state.to_context();
-        let response = list_keys_core(user.id(), &plugin, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    async fn handle_update<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-        ValidatedJson(body): ValidatedJson<UpdateKeyRequest>,
-    ) -> Result<Json<ApiKeyView>, AuthError> {
-        let ctx = state.to_context();
-        let response = update_key_core(&body, user.id(), &plugin, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    async fn handle_delete<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-        ValidatedJson(body): ValidatedJson<DeleteKeyRequest>,
-    ) -> Result<Json<serde_json::Value>, AuthError> {
-        let ctx = state.to_context();
-        let response = delete_key_core(&body, user.id(), &plugin, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    async fn handle_verify<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
-        Json(body): Json<VerifyKeyRequest>,
-    ) -> Result<Json<VerifyKeyResponse>, AuthError> {
-        let ctx = state.to_context();
-        let response = verify_key_core(&body, &plugin, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    async fn handle_delete_all_expired<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<Arc<ApiKeyPlugin>>,
-        CurrentSession { user, .. }: CurrentSession<DB>,
-    ) -> Result<Json<serde_json::Value>, AuthError> {
-        let ctx = state.to_context();
-        let response = delete_all_expired_core(user.id(), &plugin, &ctx).await?;
-        Ok(Json(response))
-    }
-
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for ApiKeyPlugin {
-        fn name(&self) -> &'static str {
-            "api-key"
-        }
-
-        fn router(&self) -> axum::Router<AuthState<DB>> {
-            use axum::routing::{get, post};
-
-            let plugin = Arc::new(ApiKeyPlugin::with_config(self.config.clone()));
-            axum::Router::new()
-                .route("/api-key/create", post(handle_create::<DB>))
-                .route("/api-key/get", get(handle_get::<DB>))
-                .route("/api-key/update", post(handle_update::<DB>))
-                .route("/api-key/delete", post(handle_delete::<DB>))
-                .route("/api-key/list", get(handle_list::<DB>))
-                .route("/api-key/verify", post(handle_verify::<DB>))
-                .route(
-                    "/api-key/delete-all-expired-api-keys",
-                    post(handle_delete_all_expired::<DB>),
-                )
-                .layer(Extension(plugin))
         }
     }
 }

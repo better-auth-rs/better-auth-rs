@@ -1,11 +1,19 @@
-//! Endpoint validation tests — the main compatibility gate.
+//! Endpoint validation smoke tests for selected schema-covered endpoints.
 //!
 //! These tests exercise each API endpoint and validate responses against the
 //! OpenAPI spec schema.
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "endpoint smoke tests intentionally use direct JSON assertions against the generated spec"
+)]
 
 mod compat;
 
 use std::collections::HashSet;
+
+use better_auth::prelude::CreateAccount;
 
 use compat::helpers::*;
 use compat::schema::extract_success_schema;
@@ -13,8 +21,8 @@ use compat::shapes::check_camel_case_fields;
 use compat::validation::{DiffKind, ShapeDiff, json_type_name};
 use compat::validator::{EndpointResult, SpecValidator};
 
-/// Run all spec-driven endpoint validations in a single test.
-/// This is the main compatibility gate.
+/// Run selected spec-driven endpoint validations in a single smoke test.
+/// The hard compatibility gate is the dual-server client-compat harness.
 #[tokio::test]
 async fn test_spec_driven_endpoint_validation() {
     let auth = create_test_auth().await;
@@ -23,10 +31,6 @@ async fn test_spec_driven_endpoint_validation() {
     // --- GET /ok ---
     let (status, body) = send_request(&auth, get_request("/ok")).await;
     validator.validate_endpoint("/ok", "get", status, &body);
-
-    // --- GET /error ---
-    let (status, body) = send_request(&auth, get_request("/error")).await;
-    validator.validate_endpoint("/error", "get", status, &body);
 
     // --- POST /sign-up/email (success) ---
     let (status, body) = send_request(
@@ -118,21 +122,21 @@ async fn test_spec_driven_endpoint_validation() {
     .await;
     validator.validate_endpoint("/sign-out", "post", status, &body);
 
-    // --- POST /forget-password ---
+    // --- POST /request-password-reset ---
     // Sign up a fresh user for password tests
     let (pw_token, _) = signup_user(&auth, "pw@example.com", "password123", "PW User").await;
 
     let (status, body) = send_request(
         &auth,
         post_json(
-            "/forget-password",
+            "/request-password-reset",
             serde_json::json!({
                 "email": "pw@example.com",
             }),
         ),
     )
     .await;
-    validator.validate_endpoint("/forget-password", "post", status, &body);
+    validator.validate_endpoint("/request-password-reset", "post", status, &body);
 
     // --- POST /change-password ---
     let (status, body) = send_request(
@@ -149,6 +153,20 @@ async fn test_spec_driven_endpoint_validation() {
     )
     .await;
     validator.validate_endpoint("/change-password", "post", status, &body);
+
+    // --- POST /verify-password ---
+    let (status, body) = send_request(
+        &auth,
+        post_json_with_auth(
+            "/verify-password",
+            serde_json::json!({
+                "password": "newpassword456"
+            }),
+            &pw_token,
+        ),
+    )
+    .await;
+    validator.validate_endpoint("/verify-password", "post", status, &body);
 
     // --- POST /update-user ---
     let (upd_token, _) = signup_user(&auth, "upd@example.com", "password123", "UPD User").await;
@@ -236,8 +254,41 @@ async fn test_spec_driven_endpoint_validation() {
         });
     }
 
-    // --- GET /reference/openapi.json ---
-    let (status, body) = send_request(&auth, get_request("/reference/openapi.json")).await;
+    // --- GET /account-info ---
+    let (ai_token, ai_signup_body) =
+        signup_user(&auth, "ai@example.com", "password123", "AI User").await;
+    let ai_user_id = ai_signup_body["user"]["id"]
+        .as_str()
+        .expect("sign-up should return user id");
+    _ = auth
+        .store()
+        .create_account(CreateAccount {
+            user_id: ai_user_id.to_string(),
+            account_id: "mock-account-id".to_string(),
+            provider_id: "mock".to_string(),
+            access_token: Some("mock-access-token".to_string()),
+            refresh_token: Some("mock-refresh-token".to_string()),
+            id_token: None,
+            access_token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(1)),
+            refresh_token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(2)),
+            scope: Some("openid,email,profile".to_string()),
+            password: None,
+        })
+        .await
+        .expect("account-info test account should be created");
+    let (status, body) = send_request(
+        &auth,
+        get_with_auth_and_query(
+            "/account-info",
+            &ai_token,
+            vec![("accountId", "mock-account-id")],
+        ),
+    )
+    .await;
+    validator.validate_endpoint("/account-info", "get", status, &body);
+
+    // --- GET /__test/openapi.json ---
+    let (status, body) = send_request(&auth, get_request("/__test/openapi.json")).await;
     assert_eq!(status, 200, "OpenAPI endpoint should return 200");
     assert!(body["openapi"].is_string(), "Should have openapi version");
     assert!(body["paths"].is_object(), "Should have paths");
@@ -249,6 +300,12 @@ async fn test_spec_driven_endpoint_validation() {
     // All known incompatibilities have been fixed.
     // Track any future gaps here so the gate catches *new* regressions.
     let known_failing: HashSet<&str> = HashSet::new();
+
+    assert_eq!(
+        validator.skipped_count(),
+        0,
+        "Spec-driven validation skipped endpoints; path or method drift is losing coverage."
+    );
 
     let unexpected_failures: Vec<_> = validator
         .results
@@ -274,7 +331,7 @@ async fn test_error_response_shapes_match_spec() {
     let spec = compat::schema::load_openapi_spec();
 
     // Collect error scenarios
-    let error_scenarios: Vec<(&str, &str, better_auth::types::AuthRequest, u16)> = vec![
+    let error_scenarios: Vec<(&str, &str, better_auth::prelude::AuthRequest, u16)> = vec![
         (
             "/sign-in/email",
             "post",

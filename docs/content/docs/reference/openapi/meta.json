@@ -2,6 +2,7 @@
   "title": "OpenAPI Reference",
   "pages": [
     "default",
+    "device-authorization",
     "admin",
     "organization",
     "two-factor",

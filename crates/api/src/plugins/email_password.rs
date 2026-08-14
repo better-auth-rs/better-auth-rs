@@ -1,19 +1,56 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use validator::Validate;
+use validator::{Validate, ValidateEmail};
 
-use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::entity::{AuthSession, AuthUser};
+use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
-    AuthRequest, AuthResponse, CreateUser, CreateVerification, HttpMethod, PASSWORD_HASH_KEY,
+    AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, ErrorCodeMessageResponse,
+    HttpMethod, RequestMeta,
 };
 
-use super::email_verification::EmailVerificationPlugin;
-use better_auth_core::utils::cookie_utils::create_session_cookie;
+use super::{email_verification::EmailVerificationPlugin, two_factor};
+use better_auth_core::utils::cookie_utils::{
+    create_session_cookie, create_session_cookie_with_max_age,
+};
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
+use better_auth_core::utils::username::{
+    UsernameValidationError, normalize_username, normalize_username_fields, validate_username,
+};
+use better_auth_core::wire::UserView;
+
+use crate::plugins::helpers::{SessionIssueError, apply_default_role, issue_user_session};
+
+const MESSAGE_INVALID_USERNAME_OR_PASSWORD: &str = "Invalid username or password";
+const MESSAGE_EMAIL_NOT_VERIFIED: &str = "Email not verified";
+const MESSAGE_USERNAME_TOO_SHORT: &str = "Username is too short";
+const MESSAGE_USERNAME_TOO_LONG: &str = "Username is too long";
+const MESSAGE_INVALID_USERNAME: &str = "Username is invalid";
+
+fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult<AuthResponse> {
+    AuthResponse::json(
+        status,
+        &ErrorCodeMessageResponse {
+            code: code.to_string(),
+            message: message.to_string(),
+        },
+    )
+    .map_err(AuthError::from)
+}
+
+fn create_session_cookie_for_remember_me(
+    token: &str,
+    remember_me: Option<bool>,
+    config: &better_auth_core::AuthConfig,
+) -> String {
+    if remember_me == Some(false) {
+        create_session_cookie_with_max_age(Some(token), None, config)
+    } else {
+        create_session_cookie(token, config)
+    }
+}
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
     config: EmailPasswordConfig,
@@ -56,7 +93,7 @@ impl std::fmt::Debug for EmailPasswordConfig {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[allow(dead_code)]
+#[expect(dead_code, reason = "fields deserialized from request body")]
 pub(crate) struct SignUpRequest {
     #[validate(length(min = 1, message = "Name is required"))]
     name: String,
@@ -72,7 +109,6 @@ pub(crate) struct SignUpRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[allow(dead_code)]
 pub(crate) struct SignInRequest {
     #[validate(email(message = "Invalid email address"))]
     email: String,
@@ -85,14 +121,23 @@ pub(crate) struct SignInRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[allow(dead_code)]
 pub(crate) struct SignInUsernameRequest {
-    #[validate(length(min = 1, message = "Username is required"))]
     username: String,
-    #[validate(length(min = 1, message = "Password is required"))]
     password: String,
     #[serde(rename = "rememberMe")]
     remember_me: Option<bool>,
+    #[serde(rename = "callbackURL")]
+    callback_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+struct IsUsernameAvailableRequest {
+    username: String,
+}
+
+#[derive(Debug, Serialize)]
+struct IsUsernameAvailableResponse {
+    available: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -105,26 +150,35 @@ pub(crate) struct SignUpResponse<U: Serialize> {
 pub(crate) struct SignInResponse<U: Serialize> {
     redirect: bool,
     token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     url: Option<String>,
     user: U,
 }
 
-/// 2FA redirect response returned when the user has 2FA enabled.
 #[derive(Debug, Serialize)]
-pub(crate) struct TwoFactorRedirectResponse {
-    #[serde(rename = "twoFactorRedirect")]
-    two_factor_redirect: bool,
+pub(crate) struct SignInUsernameResponse<U: Serialize> {
     token: String,
+    user: U,
 }
 
 /// Result of sign-in: either a successful session or a 2FA redirect.
 pub(crate) enum SignInCoreResult<U: Serialize> {
-    Success(SignInResponse<U>, String),
-    TwoFactorRedirect(TwoFactorRedirectResponse),
+    Success {
+        response: SignInResponse<U>,
+        token: String,
+        set_cookie_headers: Vec<String>,
+    },
+    TwoFactorRedirect {
+        response: two_factor::TwoFactorRedirectResponse,
+        set_cookie_headers: Vec<String>,
+    },
 }
 
 impl EmailPasswordPlugin {
-    #[allow(clippy::new_without_default)]
+    #[expect(
+        clippy::new_without_default,
+        reason = "plugin construction is intentionally explicit"
+    )]
     pub fn new() -> Self {
         Self {
             config: EmailPasswordConfig::default(),
@@ -176,17 +230,52 @@ impl EmailPasswordPlugin {
         self
     }
 
-    async fn handle_sign_up<DB: DatabaseAdapter>(
+    async fn handle_sign_up(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let signup_req: SignUpRequest = match better_auth_core::validate_request_body(req) {
+        let mut signup_req: SignUpRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
-        let (response, session_token) = sign_up_core(&signup_req, &self.config, ctx).await?;
+        let (username, display_username) = normalize_username_fields(
+            signup_req.username.take(),
+            signup_req.display_username.take(),
+        );
+        signup_req.username = username;
+        signup_req.display_username = display_username;
+
+        if let Some(username) = signup_req.username.as_deref() {
+            match validate_username(username) {
+                Ok(()) => {}
+                Err(UsernameValidationError::TooShort) => {
+                    return username_error_response(
+                        400,
+                        "USERNAME_TOO_SHORT",
+                        MESSAGE_USERNAME_TOO_SHORT,
+                    );
+                }
+                Err(UsernameValidationError::TooLong) => {
+                    return username_error_response(
+                        400,
+                        "USERNAME_IS_TOO_LONG",
+                        MESSAGE_USERNAME_TOO_LONG,
+                    );
+                }
+                Err(UsernameValidationError::Invalid) => {
+                    return username_error_response(
+                        400,
+                        "USERNAME_IS_INVALID",
+                        MESSAGE_INVALID_USERNAME,
+                    );
+                }
+            }
+        }
+
+        let meta = RequestMeta::from_request(req);
+        let (response, session_token) = sign_up_core(&signup_req, &self.config, &meta, ctx).await?;
 
         if let Some(token) = session_token {
             let cookie_header = create_session_cookie(&token, &ctx.config);
@@ -196,60 +285,210 @@ impl EmailPasswordPlugin {
         }
     }
 
-    async fn handle_sign_in<DB: DatabaseAdapter>(
+    async fn handle_sign_in(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
+        if let Ok(raw_body) = req.body_as_json::<serde_json::Value>()
+            && let Some(email) = raw_body.get("email").and_then(|value| value.as_str())
+            && !email.validate_email()
+        {
+            return Err(AuthError::bad_request("Invalid email"));
+        }
+
         let signin_req: SignInRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
+        let meta = RequestMeta::from_request(req);
         match sign_in_core(
+            req,
             &signin_req,
             &self.config,
             self.email_verification.as_deref(),
+            &meta,
             ctx,
         )
         .await?
         {
-            SignInCoreResult::Success(response, token) => {
-                let cookie_header = create_session_cookie(&token, &ctx.config);
-                Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+            SignInCoreResult::Success {
+                response,
+                token,
+                set_cookie_headers,
+            } => {
+                let mut auth_response = AuthResponse::json(200, &response)?.with_appended_header(
+                    "Set-Cookie",
+                    create_session_cookie_for_remember_me(
+                        &token,
+                        signin_req.remember_me,
+                        &ctx.config,
+                    ),
+                );
+                for cookie in set_cookie_headers {
+                    auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
+                }
+                Ok(auth_response)
             }
-            SignInCoreResult::TwoFactorRedirect(redirect) => {
-                Ok(AuthResponse::json(200, &redirect)?)
+            SignInCoreResult::TwoFactorRedirect {
+                response,
+                set_cookie_headers,
+            } => {
+                let mut auth_response = AuthResponse::json(200, &response)?;
+                for cookie in set_cookie_headers {
+                    auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
+                }
+                Ok(auth_response)
             }
         }
     }
 
-    async fn handle_sign_in_username<DB: DatabaseAdapter>(
+    async fn handle_sign_in_username(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let signin_req: SignInUsernameRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
-        match sign_in_username_core(
-            &signin_req,
-            &self.config,
-            self.email_verification.as_deref(),
-            ctx,
-        )
-        .await?
-        {
-            SignInCoreResult::Success(response, token) => {
-                let cookie_header = create_session_cookie(&token, &ctx.config);
-                Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+        if signin_req.username.is_empty() || signin_req.password.is_empty() {
+            return username_error_response(
+                401,
+                "INVALID_USERNAME_OR_PASSWORD",
+                MESSAGE_INVALID_USERNAME_OR_PASSWORD,
+            );
+        }
+
+        let username = normalize_username(&signin_req.username);
+
+        match validate_username(&username) {
+            Ok(()) => {}
+            Err(UsernameValidationError::TooShort) => {
+                return username_error_response(
+                    422,
+                    "USERNAME_TOO_SHORT",
+                    MESSAGE_USERNAME_TOO_SHORT,
+                );
             }
-            SignInCoreResult::TwoFactorRedirect(redirect) => {
-                Ok(AuthResponse::json(200, &redirect)?)
+            Err(UsernameValidationError::TooLong) => {
+                return username_error_response(
+                    422,
+                    "USERNAME_IS_TOO_LONG",
+                    MESSAGE_USERNAME_TOO_LONG,
+                );
+            }
+            Err(UsernameValidationError::Invalid) => {
+                return username_error_response(
+                    422,
+                    "USERNAME_IS_INVALID",
+                    MESSAGE_INVALID_USERNAME,
+                );
             }
         }
+
+        let meta = RequestMeta::from_request(req);
+        match sign_in_username_core(
+            req,
+            &signin_req,
+            &username,
+            &self.config,
+            self.email_verification.as_deref(),
+            &meta,
+            ctx,
+        )
+        .await
+        {
+            Ok(SignInCoreResult::Success {
+                response,
+                token,
+                set_cookie_headers,
+            }) => {
+                let username_response = SignInUsernameResponse {
+                    token: response.token,
+                    user: response.user,
+                };
+                let mut auth_response = AuthResponse::json(200, &username_response)?
+                    .with_appended_header(
+                        "Set-Cookie",
+                        create_session_cookie_for_remember_me(
+                            &token,
+                            signin_req.remember_me,
+                            &ctx.config,
+                        ),
+                    );
+                for cookie in set_cookie_headers {
+                    auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
+                }
+                Ok(auth_response)
+            }
+            Ok(SignInCoreResult::TwoFactorRedirect {
+                response,
+                set_cookie_headers,
+            }) => {
+                let mut auth_response = AuthResponse::json(200, &response)?;
+                for cookie in set_cookie_headers {
+                    auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
+                }
+                Ok(auth_response)
+            }
+            Err(SignInUsernameFailure::InvalidUsernameOrPassword) => username_error_response(
+                401,
+                "INVALID_USERNAME_OR_PASSWORD",
+                MESSAGE_INVALID_USERNAME_OR_PASSWORD,
+            ),
+            Err(SignInUsernameFailure::EmailNotVerified) => {
+                username_error_response(403, "EMAIL_NOT_VERIFIED", MESSAGE_EMAIL_NOT_VERIFIED)
+            }
+            Err(SignInUsernameFailure::Auth(error)) => Err(error),
+        }
+    }
+
+    async fn handle_is_username_available(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> AuthResult<AuthResponse> {
+        let body: IsUsernameAvailableRequest = match better_auth_core::validate_request_body(req) {
+            Ok(v) => v,
+            Err(resp) => return Ok(resp),
+        };
+
+        match validate_username(&body.username) {
+            Ok(()) => {}
+            Err(UsernameValidationError::TooShort) => {
+                return username_error_response(
+                    422,
+                    "USERNAME_TOO_SHORT",
+                    MESSAGE_USERNAME_TOO_SHORT,
+                );
+            }
+            Err(UsernameValidationError::TooLong) => {
+                return username_error_response(
+                    422,
+                    "USERNAME_IS_TOO_LONG",
+                    MESSAGE_USERNAME_TOO_LONG,
+                );
+            }
+            Err(UsernameValidationError::Invalid) => {
+                return username_error_response(
+                    422,
+                    "USERNAME_IS_INVALID",
+                    MESSAGE_INVALID_USERNAME,
+                );
+            }
+        }
+
+        let normalized = normalize_username(&body.username);
+        let user = ctx.database.get_user_by_username(&normalized).await?;
+        let available = user.is_none();
+
+        Ok(AuthResponse::json(
+            200,
+            &IsUsernameAvailableResponse { available },
+        )?)
     }
 }
 
@@ -261,26 +500,14 @@ impl EmailPasswordPlugin {
 ///
 /// Returns `(response, Option<session_token>)`. The session token is present
 /// only when `auto_sign_in` is true.
-pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
+pub(crate) async fn sign_up_core(
     body: &SignUpRequest,
     config: &EmailPasswordConfig,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<(SignUpResponse<DB::User>, Option<String>)> {
+    meta: &RequestMeta,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<(SignUpResponse<UserView>, Option<String>)> {
     if !config.enable_signup {
         return Err(AuthError::forbidden("User registration is not enabled"));
-    }
-
-    // Validate callbackURL even though sign-up does not currently use it:
-    // the request type accepts the field, so we must not let a caller
-    // think an untrusted value was accepted. Require an absolute URL so
-    // the contract matches `send_verification_email` / `/sign-in/email`
-    // when sign-up eventually wires this through.
-    if let Some(ref url) = body.callback_url
-        && !ctx.config.is_absolute_trusted_callback_url(url)
-    {
-        return Err(AuthError::bad_request(
-            "callbackURL must be an absolute http(s) URL on a trusted origin",
-        ));
     }
 
     password_utils::validate_password(
@@ -292,96 +519,144 @@ pub(crate) async fn sign_up_core<DB: DatabaseAdapter>(
 
     // Check if user already exists
     if ctx.database.get_user_by_email(&body.email).await?.is_some() {
-        return Err(AuthError::conflict("A user with this email already exists"));
+        // TS returns 422 UNPROCESSABLE_ENTITY for duplicate email
+        return Err(AuthError::UnprocessableEntity(
+            "User already exists. Use another email.".to_string(),
+        ));
     }
 
     // Hash password
     let password_hash =
         password_utils::hash_password(config.password_hasher.as_ref(), &body.password).await?;
 
-    let metadata = {
-        let mut m = serde_json::Map::new();
-        m.insert(
-            PASSWORD_HASH_KEY.to_string(),
-            serde_json::Value::String(password_hash),
-        );
-        serde_json::Value::Object(m)
-    };
-
     let mut create_user = CreateUser::new()
         .with_email(&body.email)
         .with_name(&body.name);
+    apply_default_role(ctx, &mut create_user);
     if let Some(ref username) = body.username {
-        create_user = create_user.with_username(username.clone());
+        create_user = create_user.with_username(normalize_username(username));
     }
     if let Some(ref display_username) = body.display_username {
         create_user.display_username = Some(display_username.clone());
+    } else if let Some(ref username) = body.username {
+        create_user.display_username = Some(username.clone());
     }
-    create_user.metadata = Some(metadata);
+    let auto_sign_in = config.auto_sign_in;
+    let expires_in = ctx.config.session.expires_in;
+    let ip_address = meta.ip_address.clone();
+    let user_agent = meta.user_agent.clone();
+    let database = ctx.database.clone();
+    let transaction_database = database.clone();
 
-    let user = ctx.database.create_user(create_user).await?;
+    better_auth_core::store::transaction(database.as_ref(), move |tx| {
+        let _database = transaction_database.clone();
+        Box::pin(async move {
+            let user = match tx.create_user(create_user).await {
+                Ok(user) => user,
+                Err(AuthError::Database(_)) => {
+                    return Err(AuthError::UnprocessableEntity(
+                        "Failed to create user".to_string(),
+                    ));
+                }
+                Err(error) => return Err(error),
+            };
 
-    if config.auto_sign_in {
-        let session = ctx
-            .session_manager()
-            .create_session(&user, None, None)
-            .await?;
-        let token = session.token().to_string();
+            let _ = tx
+                .create_account(CreateAccount {
+                    user_id: user.id().to_string(),
+                    account_id: user.id().to_string(),
+                    provider_id: "credential".to_string(),
+                    access_token: None,
+                    refresh_token: None,
+                    id_token: None,
+                    access_token_expires_at: None,
+                    refresh_token_expires_at: None,
+                    scope: None,
+                    password: Some(password_hash.clone()),
+                })
+                .await?;
 
-        let response = SignUpResponse {
-            token: Some(token.clone()),
-            user,
-        };
-        Ok((response, Some(token)))
-    } else {
-        let response = SignUpResponse { token: None, user };
-        Ok((response, None))
-    }
+            if auto_sign_in {
+                let session = tx
+                    .create_session(CreateSession {
+                        user_id: user.id().to_string(),
+                        expires_at: chrono::Utc::now() + expires_in,
+                        ip_address,
+                        user_agent,
+                        impersonated_by: None,
+                        active_organization_id: None,
+                    })
+                    .await?;
+                let token = session.token().to_string();
+
+                Ok((
+                    SignUpResponse {
+                        token: Some(token.clone()),
+                        user: UserView::from(&user),
+                    },
+                    Some(token),
+                ))
+            } else {
+                Ok((
+                    SignUpResponse {
+                        token: None,
+                        user: UserView::from(&user),
+                    },
+                    None,
+                ))
+            }
+        })
+    })
+    .await
 }
 
-/// Shared sign-in logic after user lookup: verify password, check 2FA, create session.
-async fn sign_in_with_user_core<DB: DatabaseAdapter>(
-    user: DB::User,
+async fn load_credential_password_hash(
+    user: &impl AuthUser,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<String> {
+    ctx.database
+        .get_user_accounts(&user.id())
+        .await?
+        .into_iter()
+        .find(|account| account.provider_id() == "credential" && account.password().is_some())
+        .and_then(|account| account.password().map(str::to_string))
+        .ok_or(AuthError::InvalidCredentials)
+}
+
+async fn verify_user_password(
+    user: &impl AuthUser,
     password: &str,
     config: &EmailPasswordConfig,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<()> {
+    let stored_hash = load_credential_password_hash(user, ctx).await?;
+    password_utils::verify_password(config.password_hasher.as_ref(), password, &stored_hash).await
+}
+
+/// Shared sign-in finalization logic after user lookup and credential verification.
+async fn finalize_sign_in_with_user_core(
+    req: &AuthRequest,
+    user: impl AuthUser,
+    remember_me: Option<bool>,
     email_verification: Option<&EmailVerificationPlugin>,
     callback_url: Option<&str>,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<SignInCoreResult<DB::User>> {
-    // Defence in depth: `sign_in_core` already validated the callback,
-    // but helper functions called directly (`sign_in_username_core`
-    // passes `None`) must still honour the same contract. Require an
-    // absolute http(s) URL on a trusted origin so any future caller
-    // that plumbs a raw request value through can't regress.
-    if let Some(url) = callback_url
-        && !ctx.config.is_absolute_trusted_callback_url(url)
-    {
-        return Err(AuthError::bad_request(
-            "callbackURL must be an absolute http(s) URL on a trusted origin",
-        ));
-    }
-
-    // Verify password
-    let stored_hash = user.password_hash().ok_or(AuthError::InvalidCredentials)?;
-
-    password_utils::verify_password(config.password_hasher.as_ref(), password, stored_hash).await?;
-
-    // Check if 2FA is enabled
-    if user.two_factor_enabled() {
-        let pending_token = format!("2fa_{}", uuid::Uuid::new_v4());
-        ctx.database
-            .create_verification(CreateVerification {
-                identifier: format!("2fa_pending:{}", pending_token),
-                value: user.id().to_string(),
-                expires_at: chrono::Utc::now() + chrono::Duration::minutes(5),
-            })
-            .await?;
-        return Ok(SignInCoreResult::TwoFactorRedirect(
-            TwoFactorRedirectResponse {
-                two_factor_redirect: true,
-                token: pending_token,
-            },
-        ));
+    meta: &RequestMeta,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<SignInCoreResult<UserView>> {
+    let mut set_cookie_headers = Vec::new();
+    if two_factor::is_enabled(ctx) && user.two_factor_enabled() {
+        let trusted_device = two_factor::inspect_trusted_device(req, &user, ctx).await?;
+        if trusted_device.trusted {
+            set_cookie_headers.extend(trusted_device.set_cookie_headers);
+        } else {
+            let redirect = two_factor::begin_sign_in_challenge(&user, remember_me, ctx).await?;
+            let mut redirect_headers = trusted_device.set_cookie_headers;
+            redirect_headers.extend(redirect.set_cookie_headers);
+            return Ok(SignInCoreResult::TwoFactorRedirect {
+                response: redirect.response,
+                set_cookie_headers: redirect_headers,
+            });
+        }
     }
 
     // Send verification email on sign-in if configured
@@ -396,74 +671,121 @@ async fn sign_in_with_user_core<DB: DatabaseAdapter>(
         );
     }
 
-    // Create session
-    let session = ctx
-        .session_manager()
-        .create_session(&user, None, None)
-        .await?;
+    let issued = issue_user_session(
+        ctx,
+        &user.id(),
+        meta.ip_address.clone(),
+        meta.user_agent.clone(),
+    )
+    .await
+    .map_err(SessionIssueError::into_auth_error)?;
+    let session = issued.session;
     let token = session.token().to_string();
 
     let response = SignInResponse {
         redirect: false,
         token: token.clone(),
         url: None,
-        user,
+        user: UserView::from(&issued.user),
     };
-    Ok(SignInCoreResult::Success(response, token))
+    Ok(SignInCoreResult::Success {
+        response,
+        token,
+        set_cookie_headers,
+    })
 }
 
 /// Core sign-in by email.
-pub(crate) async fn sign_in_core<DB: DatabaseAdapter>(
+pub(crate) async fn sign_in_core(
+    req: &AuthRequest,
     body: &SignInRequest,
     config: &EmailPasswordConfig,
     email_verification: Option<&EmailVerificationPlugin>,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<SignInCoreResult<DB::User>> {
-    // Validate callbackURL BEFORE the user lookup so that "unknown user"
-    // and "untrusted callback" return the same 400 regardless of whether
-    // the email exists — prevents the enumeration oracle that would
-    // otherwise differ 401 vs 400. The callback ends up in a
-    // verification-email `href` when the user is unverified, so require
-    // an absolute URL.
-    if let Some(ref url) = body.callback_url
-        && !ctx.config.is_absolute_trusted_callback_url(url)
-    {
-        return Err(AuthError::bad_request(
-            "callbackURL must be an absolute http(s) URL on a trusted origin",
-        ));
-    }
-
+    meta: &RequestMeta,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<SignInCoreResult<UserView>> {
     let user = ctx
         .database
         .get_user_by_email(&body.email)
         .await?
         .ok_or(AuthError::InvalidCredentials)?;
 
-    sign_in_with_user_core(
+    verify_user_password(&user, &body.password, config, ctx).await?;
+
+    finalize_sign_in_with_user_core(
+        req,
         user,
-        &body.password,
-        config,
+        body.remember_me,
         email_verification,
         body.callback_url.as_deref(),
+        meta,
         ctx,
     )
     .await
 }
 
 /// Core sign-in by username.
-pub(crate) async fn sign_in_username_core<DB: DatabaseAdapter>(
+pub(crate) async fn sign_in_username_core(
+    req: &AuthRequest,
     body: &SignInUsernameRequest,
+    normalized_username: &str,
     config: &EmailPasswordConfig,
     email_verification: Option<&EmailVerificationPlugin>,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<SignInCoreResult<DB::User>> {
-    let user = ctx
+    meta: &RequestMeta,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> Result<SignInCoreResult<UserView>, SignInUsernameFailure> {
+    let Some(user) = ctx
         .database
-        .get_user_by_username(&body.username)
-        .await?
-        .ok_or(AuthError::InvalidCredentials)?;
+        .get_user_by_username(normalized_username)
+        .await
+        .map_err(SignInUsernameFailure::Auth)?
+    else {
+        let _ = password_utils::hash_password(config.password_hasher.as_ref(), &body.password)
+            .await
+            .map_err(SignInUsernameFailure::Auth)?;
+        return Err(SignInUsernameFailure::InvalidUsernameOrPassword);
+    };
 
-    sign_in_with_user_core(user, &body.password, config, email_verification, None, ctx).await
+    verify_user_password(&user, &body.password, config, ctx)
+        .await
+        .map_err(|error| match error {
+            AuthError::InvalidCredentials => SignInUsernameFailure::InvalidUsernameOrPassword,
+            other => SignInUsernameFailure::Auth(other),
+        })?;
+
+    if let Some(ev) = email_verification
+        && ev.is_verification_required()
+        && !user.email_verified()
+    {
+        if let Err(error) = ev
+            .send_verification_on_sign_in(&user, body.callback_url.as_deref(), ctx)
+            .await
+        {
+            tracing::warn!(
+                error = %error,
+                "Failed to send verification email on username sign-in"
+            );
+        }
+        return Err(SignInUsernameFailure::EmailNotVerified);
+    }
+
+    finalize_sign_in_with_user_core(
+        req,
+        user,
+        body.remember_me,
+        email_verification,
+        body.callback_url.as_deref(),
+        meta,
+        ctx,
+    )
+    .await
+    .map_err(SignInUsernameFailure::Auth)
+}
+
+pub(crate) enum SignInUsernameFailure {
+    InvalidUsernameOrPassword,
+    EmailNotVerified,
+    Auth(AuthError),
 }
 
 impl Default for EmailPasswordConfig {
@@ -480,7 +802,7 @@ impl Default for EmailPasswordConfig {
 }
 
 #[async_trait]
-impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailPasswordPlugin {
+impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
     fn name(&self) -> &'static str {
         "email-password"
     }
@@ -489,6 +811,7 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailPasswordPlugin {
         let mut routes = vec![
             AuthRoute::post("/sign-in/email", "sign_in_email"),
             AuthRoute::post("/sign-in/username", "sign_in_username"),
+            AuthRoute::post("/is-username-available", "is_username_available"),
         ];
 
         if self.config.enable_signup {
@@ -501,7 +824,7 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailPasswordPlugin {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Post, "/sign-up/email") if self.config.enable_signup => {
@@ -511,11 +834,14 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailPasswordPlugin {
             (HttpMethod::Post, "/sign-in/username") => {
                 Ok(Some(self.handle_sign_in_username(req, ctx).await?))
             }
+            (HttpMethod::Post, "/is-username-available") => {
+                Ok(Some(self.handle_is_username_available(req, ctx).await?))
+            }
             _ => Ok(None),
         }
     }
 
-    async fn on_user_created(&self, user: &DB::User, _ctx: &AuthContext<DB>) -> AuthResult<()> {
+    async fn on_user_created(&self, user: &S::User, _ctx: &AuthContext<S>) -> AuthResult<()> {
         if self.config.require_email_verification
             && !user.email_verified()
             && let Some(email) = user.email()
@@ -526,133 +852,22 @@ impl<DB: DatabaseAdapter> AuthPlugin<DB> for EmailPasswordPlugin {
     }
 }
 
-#[cfg(feature = "axum")]
-mod axum_impl {
-    use super::*;
-    use std::sync::Arc;
-
-    use axum::Json;
-    use axum::extract::{Extension, State};
-    use axum::http::header;
-    use axum::response::IntoResponse;
-    use better_auth_core::{AuthState, ValidatedJson};
-
-    /// Shared plugin state wrapping the full plugin (non-Clone due to
-    /// Option<Arc<EmailVerificationPlugin>>).
-    type SharedPlugin = Arc<EmailPasswordPlugin>;
-
-    async fn handle_sign_up<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<SharedPlugin>,
-        ValidatedJson(body): ValidatedJson<SignUpRequest>,
-    ) -> Result<axum::response::Response, AuthError> {
-        let ctx = state.to_context();
-        let (response, session_token) = sign_up_core(&body, &plugin.config, &ctx).await?;
-
-        if let Some(token) = session_token {
-            let cookie = state.session_cookie(&token);
-            Ok(([(header::SET_COOKIE, cookie)], Json(response)).into_response())
-        } else {
-            Ok(Json(response).into_response())
-        }
-    }
-
-    /// Helper to convert a `SignInCoreResult` into an axum response.
-    fn sign_in_result_to_response<DB: DatabaseAdapter>(
-        result: SignInCoreResult<DB::User>,
-        state: &AuthState<DB>,
-    ) -> axum::response::Response {
-        match result {
-            SignInCoreResult::Success(response, token) => {
-                let cookie = state.session_cookie(&token);
-                ([(header::SET_COOKIE, cookie)], Json(response)).into_response()
-            }
-            SignInCoreResult::TwoFactorRedirect(redirect) => Json(redirect).into_response(),
-        }
-    }
-
-    async fn handle_sign_in<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<SharedPlugin>,
-        ValidatedJson(body): ValidatedJson<SignInRequest>,
-    ) -> Result<axum::response::Response, AuthError> {
-        let ctx = state.to_context();
-        let result = sign_in_core(
-            &body,
-            &plugin.config,
-            plugin.email_verification.as_deref(),
-            &ctx,
-        )
-        .await?;
-        Ok(sign_in_result_to_response::<DB>(result, &state))
-    }
-
-    async fn handle_sign_in_username<DB: DatabaseAdapter>(
-        State(state): State<AuthState<DB>>,
-        Extension(plugin): Extension<SharedPlugin>,
-        ValidatedJson(body): ValidatedJson<SignInUsernameRequest>,
-    ) -> Result<axum::response::Response, AuthError> {
-        let ctx = state.to_context();
-        let result = sign_in_username_core(
-            &body,
-            &plugin.config,
-            plugin.email_verification.as_deref(),
-            &ctx,
-        )
-        .await?;
-        Ok(sign_in_result_to_response::<DB>(result, &state))
-    }
-
-    #[async_trait::async_trait]
-    impl<DB: DatabaseAdapter> better_auth_core::AxumPlugin<DB> for EmailPasswordPlugin {
-        fn name(&self) -> &'static str {
-            "email-password"
-        }
-
-        fn router(&self) -> axum::Router<AuthState<DB>> {
-            use axum::routing::post;
-
-            let shared: SharedPlugin = Arc::new(EmailPasswordPlugin {
-                config: self.config.clone(),
-                email_verification: self.email_verification.clone(),
-            });
-
-            axum::Router::new()
-                .route("/sign-up/email", post(handle_sign_up::<DB>))
-                .route("/sign-in/email", post(handle_sign_in::<DB>))
-                .route("/sign-in/username", post(handle_sign_in_username::<DB>))
-                .layer(Extension(shared))
-        }
-
-        async fn on_user_created(
-            &self,
-            user: &DB::User,
-            _ctx: &better_auth_core::AuthContext<DB>,
-        ) -> better_auth_core::AuthResult<()> {
-            if self.config.require_email_verification
-                && !user.email_verified()
-                && let Some(email) = user.email()
-            {
-                println!("Email verification required for user: {}", email);
-            }
-            Ok(())
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use better_auth_core::AuthContext;
-    use better_auth_core::adapters::{MemoryDatabaseAdapter, UserOps};
     use better_auth_core::config::AuthConfig;
     use std::collections::HashMap;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
-    fn create_test_context() -> AuthContext<MemoryDatabaseAdapter> {
+    type TestSchema =
+        better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
+
+    async fn create_test_context() -> AuthContext<TestSchema> {
         let config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
         let config = Arc::new(config);
-        let database = Arc::new(MemoryDatabaseAdapter::new());
+        let database = crate::plugins::test_helpers::create_test_database().await;
         AuthContext::new(config, database)
     }
 
@@ -671,10 +886,11 @@ mod tests {
         )
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/sign-up.test.ts :: describe("sign-up with custom fields") and packages/better-auth/src/api/routes/sign-in.test.ts :: describe("sign-in"); adapted to the Rust email-password plugin behavior.
     #[tokio::test]
     async fn test_auto_sign_in_false_returns_no_session() {
         let plugin = EmailPasswordPlugin::new().auto_sign_in(false);
-        let ctx = create_test_context();
+        let ctx = create_test_context().await;
 
         let req = create_signup_request("auto@example.com", "Password123!");
         let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
@@ -697,10 +913,11 @@ mod tests {
         assert!(body["user"]["id"].is_string());
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/sign-up.test.ts :: describe("sign-up with custom fields") and packages/better-auth/src/api/routes/sign-in.test.ts :: describe("sign-in"); adapted to the Rust email-password plugin behavior.
     #[tokio::test]
     async fn test_auto_sign_in_true_returns_session() {
         let plugin = EmailPasswordPlugin::new(); // default auto_sign_in=true
-        let ctx = create_test_context();
+        let ctx = create_test_context().await;
 
         let req = create_signup_request("autotrue@example.com", "Password123!");
         let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
@@ -721,10 +938,11 @@ mod tests {
         );
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/sign-up.test.ts :: describe("sign-up with custom fields") and packages/better-auth/src/api/routes/sign-in.test.ts :: describe("sign-in"); adapted to the Rust email-password plugin behavior.
     #[tokio::test]
     async fn test_password_max_length_rejection() {
         let plugin = EmailPasswordPlugin::new().password_max_length(128);
-        let ctx = create_test_context();
+        let ctx = create_test_context().await;
 
         // Password of exactly 129 chars should be rejected
         let long_password = format!("A1!{}", "a".repeat(126)); // 129 chars total
@@ -739,6 +957,7 @@ mod tests {
         assert_eq!(response.status, 200);
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/sign-up.test.ts :: describe("sign-up with custom fields") and packages/better-auth/src/api/routes/sign-in.test.ts :: describe("sign-in"); adapted to the Rust email-password plugin behavior.
     #[tokio::test]
     async fn test_custom_password_hasher() {
         /// A simple test hasher that prefixes the password with "hashed:"
@@ -756,7 +975,7 @@ mod tests {
 
         let hasher: Arc<dyn PasswordHasher> = Arc::new(TestHasher);
         let plugin = EmailPasswordPlugin::new().password_hasher(hasher);
-        let ctx = create_test_context();
+        let ctx = create_test_context().await;
 
         // Sign up with custom hasher
         let req = create_signup_request("hasher@example.com", "Password123!");
@@ -770,12 +989,15 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let stored_hash = user
-            .metadata
-            .get(PASSWORD_HASH_KEY)
+        let stored_hash = ctx
+            .database
+            .get_user_accounts(&user.id())
+            .await
             .unwrap()
-            .as_str()
-            .unwrap();
+            .into_iter()
+            .find(|account| account.provider_id() == "credential")
+            .and_then(|account| account.password().map(str::to_string))
+            .expect("credential account should store hashed password");
         assert_eq!(stored_hash, "hashed:Password123!");
 
         // Sign in should work with the custom hasher
@@ -809,80 +1031,196 @@ mod tests {
         assert_eq!(err.to_string(), AuthError::InvalidCredentials.to_string());
     }
 
-    fn create_signin_request_with_callback(
-        email: &str,
-        password: &str,
-        callback_url: &str,
-    ) -> AuthRequest {
-        let body = serde_json::json!({
-            "email": email,
-            "password": password,
-            "callbackURL": callback_url,
+    // Upstream reference: packages/better-auth/src/plugins/username/index.ts :: sign-in path verifies the password once before creating a session; adapted to ensure the Rust username path does not duplicate expensive password verification.
+    #[tokio::test]
+    async fn test_sign_in_username_verifies_password_once() {
+        struct CountingHasher {
+            verify_calls: Arc<AtomicUsize>,
+        }
+
+        #[async_trait]
+        impl PasswordHasher for CountingHasher {
+            async fn hash(&self, password: &str) -> AuthResult<String> {
+                Ok(format!("hashed:{password}"))
+            }
+
+            async fn verify(&self, hash: &str, password: &str) -> AuthResult<bool> {
+                self.verify_calls.fetch_add(1, Ordering::SeqCst);
+                Ok(hash == format!("hashed:{password}"))
+            }
+        }
+
+        let verify_calls = Arc::new(AtomicUsize::new(0));
+        let hasher: Arc<dyn PasswordHasher> = Arc::new(CountingHasher {
+            verify_calls: verify_calls.clone(),
         });
-        AuthRequest::from_parts(
-            HttpMethod::Post,
-            "/sign-in/email".to_string(),
-            HashMap::new(),
-            Some(body.to_string().into_bytes()),
-            HashMap::new(),
-        )
-    }
+        let plugin = EmailPasswordPlugin::new().password_hasher(hasher);
+        let ctx = create_test_context().await;
 
-    #[tokio::test]
-    async fn test_sign_in_rejects_untrusted_callback_url_without_email_oracle() {
-        // callback URL is rejected for both existing and non-existing users,
-        // proving the check lives before the user lookup and does not create
-        // an enumeration oracle.
-        let plugin = EmailPasswordPlugin::new();
-        let ctx = create_test_context();
-
-        let signup_req = create_signup_request("sign-in-cb@test.com", "Password123!");
-        plugin.handle_sign_up(&signup_req, &ctx).await.unwrap();
-
-        let bad_for_existing = create_signin_request_with_callback(
-            "sign-in-cb@test.com",
-            "Password123!",
-            "https://evil.example.com/cb",
-        );
-        let err_existing = plugin
-            .handle_sign_in(&bad_for_existing, &ctx)
-            .await
-            .unwrap_err();
-        assert_eq!(err_existing.status_code(), 400);
-
-        let bad_for_missing = create_signin_request_with_callback(
-            "does-not-exist@test.com",
-            "Password123!",
-            "https://evil.example.com/cb",
-        );
-        let err_missing = plugin
-            .handle_sign_in(&bad_for_missing, &ctx)
-            .await
-            .unwrap_err();
-        assert_eq!(err_missing.status_code(), 400);
-        assert_eq!(err_existing.to_string(), err_missing.to_string());
-    }
-
-    #[tokio::test]
-    async fn test_sign_up_rejects_untrusted_callback_url() {
-        let plugin = EmailPasswordPlugin::new();
-        let ctx = create_test_context();
-
-        let body = serde_json::json!({
-            "name": "Sign Up CB",
-            "email": "signup-cb@test.com",
+        let signup_body = serde_json::json!({
+            "email": "username-counter@example.com",
             "password": "Password123!",
-            "callbackURL": "https://evil.example.com/cb",
+            "name": "Counter User",
+            "username": "Counter_User",
         });
-        let req = AuthRequest::from_parts(
+        let signup_req = AuthRequest::from_parts(
             HttpMethod::Post,
             "/sign-up/email".to_string(),
             HashMap::new(),
+            Some(signup_body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+        let signup_response = plugin.handle_sign_up(&signup_req, &ctx).await.unwrap();
+        assert_eq!(signup_response.status, 200);
+
+        verify_calls.store(0, Ordering::SeqCst);
+
+        let signin_body = serde_json::json!({
+            "username": "COUNTER_USER",
+            "password": "Password123!",
+        });
+        let signin_req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/sign-in/username".to_string(),
+            HashMap::new(),
+            Some(signin_body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+        let signin_response = plugin
+            .handle_sign_in_username(&signin_req, &ctx)
+            .await
+            .unwrap();
+        assert_eq!(signin_response.status, 200);
+        assert_eq!(verify_calls.load(Ordering::SeqCst), 1);
+    }
+
+    // Rust-specific surface: route-table registration for the endpoint declared in
+    // packages/better-auth/src/plugins/username/index.ts :: isUsernameAvailable.
+    #[tokio::test]
+    async fn test_is_username_available_route_registered() {
+        let plugin = EmailPasswordPlugin::new();
+        let routes =
+            <EmailPasswordPlugin as better_auth_core::AuthPlugin<TestSchema>>::routes(&plugin);
+        assert!(
+            routes.iter().any(|r| r.path == "/is-username-available"),
+            "route /is-username-available should be registered"
+        );
+    }
+
+    // Upstream reference: packages/better-auth/src/plugins/username/index.ts ::
+    // isUsernameAvailable returns `{ available: true }` when no user holds the
+    // normalized username; adapted to the Rust email-password plugin.
+    #[tokio::test]
+    async fn test_is_username_available_fresh() {
+        let plugin = EmailPasswordPlugin::new();
+        let ctx = create_test_context().await;
+
+        let body = serde_json::json!({ "username": "fresh_user" });
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/is-username-available".to_string(),
+            HashMap::new(),
             Some(body.to_string().into_bytes()),
             HashMap::new(),
         );
+        let response = plugin
+            .handle_is_username_available(&req, &ctx)
+            .await
+            .unwrap();
+        assert_eq!(response.status, 200);
+        let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(json["available"], true);
+    }
 
-        let err = plugin.handle_sign_up(&req, &ctx).await.unwrap_err();
-        assert_eq!(err.status_code(), 400);
+    // Upstream reference: packages/better-auth/src/plugins/username/index.ts ::
+    // isUsernameAvailable returns `{ available: false }` when the adapter finds a
+    // user on the normalized username; adapted to the Rust email-password plugin.
+    #[tokio::test]
+    async fn test_is_username_available_taken() {
+        let plugin = EmailPasswordPlugin::new();
+        let ctx = create_test_context().await;
+
+        // Sign up a user with a username
+        let signup_body = serde_json::json!({
+            "name": "Taken User",
+            "email": "taken@example.com",
+            "password": "Password123!",
+            "username": "taken_user",
+        });
+        let signup_req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/sign-up/email".to_string(),
+            HashMap::new(),
+            Some(signup_body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+        let resp = plugin.handle_sign_up(&signup_req, &ctx).await.unwrap();
+        assert_eq!(resp.status, 200);
+
+        let body = serde_json::json!({ "username": "taken_user" });
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/is-username-available".to_string(),
+            HashMap::new(),
+            Some(body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+        let response = plugin
+            .handle_is_username_available(&req, &ctx)
+            .await
+            .unwrap();
+        assert_eq!(response.status, 200);
+        let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(json["available"], false);
+    }
+
+    // Upstream reference: packages/better-auth/src/plugins/username/index.ts ::
+    // isUsernameAvailable throws UNPROCESSABLE_ENTITY with code USERNAME_TOO_SHORT
+    // below `minUsernameLength` (default 3); adapted to the Rust email-password plugin.
+    #[tokio::test]
+    async fn test_is_username_available_too_short() {
+        let plugin = EmailPasswordPlugin::new();
+        let ctx = create_test_context().await;
+
+        let body = serde_json::json!({ "username": "ab" });
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/is-username-available".to_string(),
+            HashMap::new(),
+            Some(body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+        let response = plugin
+            .handle_is_username_available(&req, &ctx)
+            .await
+            .unwrap();
+        assert_eq!(response.status, 422);
+        let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(json["code"], "USERNAME_TOO_SHORT");
+    }
+
+    // Upstream reference: packages/better-auth/src/plugins/username/index.ts ::
+    // isUsernameAvailable rejects usernames that fail `defaultUsernameValidator`
+    // with UNPROCESSABLE_ENTITY; adapted to the Rust email-password plugin.
+    #[tokio::test]
+    async fn test_is_username_available_invalid_chars() {
+        let plugin = EmailPasswordPlugin::new();
+        let ctx = create_test_context().await;
+
+        let body = serde_json::json!({ "username": "bad user!" });
+        let req = AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/is-username-available".to_string(),
+            HashMap::new(),
+            Some(body.to_string().into_bytes()),
+            HashMap::new(),
+        );
+        let response = plugin
+            .handle_is_username_available(&req, &ctx)
+            .await
+            .unwrap();
+        assert_eq!(response.status, 422);
+        let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(json["code"], "USERNAME_IS_INVALID");
     }
 }

@@ -149,8 +149,9 @@ AuthError::not_implemented("Feature not available yet");
 
 | Error | When |
 |-------|------|
-| `NotImplemented(...)` | `allow_insecure_unverified_assertion` is `false` |
-| `BadRequest("Invalid or expired ... challenge")` | Challenge expired or already used |
+| `BadRequest("Challenge not found")` | Missing or invalid passkey challenge cookie |
+| `BadRequest("Authentication failed")` | Invalid passkey assertion |
+| `Forbidden("Passkey not found")` | Passkey credential does not exist |
 
 ## Error Handling in Axum
 

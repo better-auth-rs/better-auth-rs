@@ -1,5 +1,9 @@
 //! Cross-endpoint consistency tests — verify user/session objects are
 //! structurally identical across different API responses.
+#![allow(
+    clippy::indexing_slicing,
+    reason = "consistency tests use direct JSON indexing to compare response object shapes"
+)]
 
 mod compat;
 
@@ -64,7 +68,7 @@ async fn test_duplicate_signup_error_shape() {
     let auth = create_test_auth().await;
 
     // First signup succeeds
-    signup_user(&auth, "dup@example.com", "password123", "Dup User").await;
+    let _ = signup_user(&auth, "dup@example.com", "password123", "Dup User").await;
 
     // Second signup with same email should fail
     let (status, body) = send_request(

@@ -3,15 +3,17 @@ title: Admin
 description: User management, banning, impersonation, and role management for administrators.
 ---
 
-The `AdminPlugin` provides administrative endpoints for user management. All endpoints require an authenticated session with the admin role.
+The `AdminPlugin` provides administrative endpoints for user management. Route access is permission-based and follows the TypeScript Better Auth admin plugin behavior. By default, the built-in `admin` role has full admin permissions and `user` has none.
 
 ## Setup
+
+These examples assume you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
 
 ```rust
 use better_auth::plugins::AdminPlugin;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(AdminPlugin::new())
     .build()
     .await?;
@@ -22,15 +24,16 @@ let auth = BetterAuth::new(config)
 ```rust
 use better_auth::plugins::admin::AdminConfig;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(
         AdminPlugin::new()
-            .admin_role("admin")
-            .default_user_role("user")
-            .allow_ban_admin(false)
-            .default_page_limit(100)
-            .max_page_limit(500)
+            .default_role("user")
+            .admin_roles(vec!["admin".to_string(), "superadmin".to_string()])
+            .admin_user_ids(vec!["bootstrap-admin-id".to_string()])
+            .default_ban_reason("No reason".to_string())
+            .default_ban_expires_in(60 * 60 * 24)
+            .allow_impersonating_admins(false)
     )
     .build()
     .await?;
@@ -38,25 +41,33 @@ let auth = BetterAuth::new(config)
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `admin_role` | `String` | `"admin"` | Role required to access admin endpoints |
-| `default_user_role` | `String` | `"user"` | Default role for newly created users |
-| `allow_ban_admin` | `bool` | `false` | Whether admins can ban other admins |
-| `default_page_limit` | `usize` | `100` | Default users per page in list |
-| `max_page_limit` | `usize` | `500` | Maximum users per page |
+| `default_role` | `String` | `"user"` | Default role for new users and role-less permission checks |
+| `admin_roles` | `Vec<String>` | `["admin"]` | Roles treated as admin for target-admin checks |
+| `admin_user_ids` | `Option<Vec<String>>` | `None` | User IDs that always bypass admin permission checks |
+| `roles` | `HashMap<String, RolePermissions>` | built-in `admin` / `user` when unset | Custom permission definitions that replace the built-in defaults when provided |
+| `default_ban_reason` | `Option<String>` | `None` | Default reason used by `/admin/ban-user` |
+| `default_ban_expires_in` | `Option<i64>` | `None` | Default ban duration in seconds |
+| `impersonation_session_duration` | `Option<i64>` | `None` | Override impersonation session lifetime in seconds |
+| `banned_user_message` | `String` | upstream default message | Message shown when a banned user is blocked |
+| `allow_impersonating_admins` | `bool` | `false` | Whether admin targets may be impersonated |
 
 ## API Endpoints
 
-The Admin plugin exposes 13 endpoints. All require admin role authentication. For full request/response details, see the [OpenAPI Reference](/docs/reference/openapi/admin).
+The Admin plugin exposes 15 endpoints. For full request/response details, see the [OpenAPI Reference](/docs/reference/openapi/admin).
 
 ### User Management
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/admin/get-user` | GET | Fetch one user by id |
 | `/admin/create-user` | POST | Create a new user |
+| `/admin/update-user` | POST | Update a user |
 | `/admin/list-users` | GET | List users with pagination, search, and filtering |
 | `/admin/set-role` | POST | Set a user's role |
 | `/admin/set-user-password` | POST | Reset a user's password |
 | `/admin/remove-user` | POST | Permanently delete a user |
+
+`/admin/create-user` creates a credential account only when a non-empty password is provided. Omitting the password creates a passwordless user, matching the upstream TypeScript behavior.
 
 ### Ban Management
 
@@ -91,6 +102,6 @@ The Admin plugin exposes 13 endpoints. All require admin role authentication. Fo
 | Status | Condition |
 |--------|-----------|
 | 401 | Not authenticated |
-| 403 | User does not have the admin role |
+| 403 | Current user lacks the required admin permission |
 | 404 | Target user not found |
-| 409 | Email already exists (create user) |
+| 400 | Validation or admin-plugin bad request error |

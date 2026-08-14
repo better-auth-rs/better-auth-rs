@@ -2,6 +2,15 @@
 //!
 //! Plugin implementations for the Better Auth authentication framework.
 
+#![cfg_attr(
+    test,
+    allow(
+        unused_results,
+        unreachable_pub,
+        reason = "test code intentionally discards setup return values and exposes helpers broadly"
+    )
+)]
+
 #[cfg(all(feature = "native-tls", feature = "rustls"))]
 compile_error!(
     "features `native-tls` and `rustls` are mutually exclusive. \
@@ -20,7 +29,7 @@ pub mod plugins;
 
 pub use plugins::account_management::AccountManagementPlugin;
 pub use plugins::api_key::{ApiKeyConfig, ApiKeyPlugin};
-pub use plugins::device_authorization::{DeviceAuthorizationConfig, DeviceAuthorizationPlugin};
+pub use plugins::device_authorization::DeviceAuthorizationPlugin;
 pub use plugins::email_password::EmailPasswordPlugin;
 pub use plugins::email_verification::EmailVerificationPlugin;
 pub use plugins::oauth::OAuthPlugin;

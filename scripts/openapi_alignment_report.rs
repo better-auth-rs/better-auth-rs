@@ -117,10 +117,10 @@ fn main() -> Result<(), DynError> {
     let mut reference_keys = BTreeSet::new();
     let mut target_keys = BTreeSet::new();
     for key in reference_ops.keys() {
-        reference_keys.insert(key.clone());
+        _ = reference_keys.insert(key.clone());
     }
     for key in target_ops.keys() {
-        target_keys.insert(key.clone());
+        _ = target_keys.insert(key.clone());
     }
 
     let mut missing = Vec::new();
@@ -310,7 +310,7 @@ fn extract_operations(spec: &Value) -> Result<BTreeMap<OperationKey, OperationIn
             let request_schema = extract_request_schema(operation);
             let response_schema = extract_response_schema(operation);
 
-            ops.insert(
+            _ = ops.insert(
                 key,
                 OperationInfo {
                     plugin,
@@ -399,7 +399,7 @@ fn canonicalize(value: &Value) -> Value {
 
             let mut out = Map::new();
             for (key, val) in entries {
-                out.insert(key.clone(), canonicalize(val));
+                _ = out.insert(key.clone(), canonicalize(val));
             }
             Value::Object(out)
         }

@@ -6,8 +6,11 @@ license = { workspace = true }
 description = "Plugin implementations for better-auth"
 repository = { workspace = true }
 
+[lints]
+workspace = true
+
 [dependencies]
-better-auth-core = { workspace = true, features = ["derive"] }
+better-auth-core = { workspace = true }
 
 # Asynchronous runtime
 async-trait = { workspace = true }
@@ -48,12 +51,16 @@ reqwest = { workspace = true }
 url = { workspace = true }
 urlencoding = "2"
 bon = "3.3"
-governor = "0.10.4"
 nonzero_ext = "0.3.0"
 axum = { workspace = true, optional = true }
+jsonwebtoken.workspace = true
+serde_with = "3.18.0"
+webauthn-rs = { version = "0.5.4", features = ["conditional-ui", "danger-allow-state-serialisation"] }
+serde_cbor_2 = "0.13.0"
 
 [dev-dependencies]
 tokio = { workspace = true }
+better-auth-seaorm = { workspace = true }
 
 [features]
 default = ["native-tls"]

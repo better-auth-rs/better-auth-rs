@@ -7,11 +7,13 @@ The `PasskeyPlugin` enables passwordless authentication using the WebAuthn stand
 
 ## Setup
 
+This example assumes you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
 use better_auth::plugins::PasskeyPlugin;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(
         PasskeyPlugin::new()
             .rp_id("example.com")
@@ -26,14 +28,13 @@ let auth = BetterAuth::new(config)
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `rp_id` | `String` | `"localhost"` | Relying Party ID (your domain) |
+| `rp_id` | `String` | `base_url` host | Relying Party ID (your domain) |
 | `rp_name` | `String` | `"Better Auth"` | Relying Party display name |
-| `origin` | `String` | `"http://localhost:3000"` | Expected origin for WebAuthn responses |
+| `origin` | `String` | request `Origin` header | Expected origin for WebAuthn responses |
 | `challenge_ttl_secs` | `i64` | `300` (5 min) | Challenge expiration in seconds |
-| `allow_insecure_unverified_assertion` | `bool` | `false` | Allow simplified verification (dev only) |
 
-<Callout type="warn">
-The current implementation uses simplified WebAuthn verification. For production, keep `allow_insecure_unverified_assertion` disabled and integrate a full FIDO2 library like `webauthn-rs` for complete attestation and assertion verification.
+<Callout>
+`rp_id` must be an effective domain of `origin`. This is enforced by `webauthn-rs`, so combinations like `rp_id = "example.com"` with `origin = "https://other.test"` are rejected during configuration.
 </Callout>
 
 ## How It Works
@@ -43,14 +44,14 @@ The current implementation uses simplified WebAuthn verification. For production
 1. Client calls `GET /passkey/generate-register-options` to get WebAuthn creation options
 2. Client uses the browser's `navigator.credentials.create()` API with the options
 3. Client sends the credential response to `POST /passkey/verify-registration`
-4. Server validates the challenge round-trip and stores the passkey
+4. Server validates the WebAuthn registration response and stores the passkey
 
 ### Authentication Flow
 
-1. Client calls `POST /passkey/generate-authenticate-options` to get assertion options
+1. Client calls `GET /passkey/generate-authenticate-options` to get assertion options
 2. Client uses the browser's `navigator.credentials.get()` API with the options
 3. Client sends the assertion response to `POST /passkey/verify-authentication`
-4. Server validates the challenge, looks up the passkey, and creates a session
+4. Server validates the assertion, looks up the passkey, and creates a session
 
 ## API Endpoints
 
@@ -60,7 +61,7 @@ The Passkey plugin exposes 7 endpoints. For full request/response details, see t
 |----------|--------|-------------|
 | `/passkey/generate-register-options` | GET | Get WebAuthn creation options |
 | `/passkey/verify-registration` | POST | Verify and store a new passkey |
-| `/passkey/generate-authenticate-options` | POST | Get WebAuthn assertion options |
+| `/passkey/generate-authenticate-options` | GET | Get WebAuthn assertion options |
 | `/passkey/verify-authentication` | POST | Verify passkey and create session |
 | `/passkey/list-user-passkeys` | GET | List all passkeys for the user |
 | `/passkey/delete-passkey` | POST | Delete a passkey |
@@ -99,7 +100,7 @@ const verifyRes = await fetch('/auth/passkey/verify-registration', {
 ```javascript
 // 1. Get authentication options
 const optionsRes = await fetch('/auth/passkey/generate-authenticate-options', {
-  method: 'POST'
+  method: 'GET'
 });
 const options = await optionsRes.json();
 
@@ -112,7 +113,7 @@ const verifyRes = await fetch('/auth/passkey/verify-authentication', {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ response: assertion })
 });
-const { session, user } = await verifyRes.json();
+const { session } = await verifyRes.json();
 ```
 
 ## Errors
@@ -122,5 +123,4 @@ const { session, user } = await verifyRes.json();
 | 400 | Invalid or missing WebAuthn response data |
 | 400 | Invalid or expired challenge |
 | 401 | Not authenticated (for registration/list/delete) |
-| 404 | Passkey not found |
-| 501 | Full WebAuthn verification not enabled |
+| 403 | Passkey not found |

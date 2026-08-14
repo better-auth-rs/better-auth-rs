@@ -12,6 +12,8 @@ export default function SignInPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [passkeySupported, setPasskeySupported] = useState(false);
 
   // Redirect already-authenticated users to the dashboard.
   useEffect(() => {
@@ -19,6 +21,10 @@ export default function SignInPage() {
       router.push("/dashboard");
     }
   }, [isPending, session, router]);
+
+  useEffect(() => {
+    setPasskeySupported(typeof window !== "undefined" && "PublicKeyCredential" in window);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,6 +46,21 @@ export default function SignInPage() {
     setLoading(false);
   }
 
+  async function handlePasskeySignIn() {
+    setError("");
+    setPasskeyLoading(true);
+
+    const result = await signIn.passkey();
+
+    if (result.error) {
+      setError(result.error.message || "Passkey sign in failed");
+      setPasskeyLoading(false);
+      return;
+    }
+
+    router.push("/dashboard");
+  }
+
   return (
     <div className="container" style={{ marginTop: "4rem" }}>
       <div className="card">
@@ -56,6 +77,7 @@ export default function SignInPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
+            autoComplete="username webauthn"
             required
           />
 
@@ -66,6 +88,7 @@ export default function SignInPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Your password"
+            autoComplete="current-password webauthn"
             required
           />
 
@@ -73,6 +96,21 @@ export default function SignInPage() {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
+
+        <div className="divider">or</div>
+
+        <button
+          type="button"
+          className="secondary"
+          onClick={handlePasskeySignIn}
+          disabled={!passkeySupported || passkeyLoading}
+        >
+          {passkeyLoading
+            ? "Waiting for passkey..."
+            : passkeySupported
+              ? "Sign In with Passkey"
+              : "Passkeys unavailable in this browser"}
+        </button>
 
         <div className="form-footer">
           Don&apos;t have an account? <Link href="/sign-up">Sign up</Link>

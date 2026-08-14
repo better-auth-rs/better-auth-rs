@@ -11,8 +11,8 @@ must match upstream.
 
 Rust does not need to mirror the TypeScript embedding interface. Public
 Rust APIs should follow native Rust ecosystem conventions for the
-integrations we support (Axum, sqlx), but those integrations are not
-themselves the compatibility contract.
+integrations we support. Axum + SeaORM is the current Rust integration
+surface, but it is not itself the compatibility contract.
 
 ## Source of Truth
 
@@ -20,13 +20,12 @@ When sources disagree, trust them in this order:
 
 1. Runtime behavior of the TypeScript reference server in
    `compat-tests/reference-server/`
-2. TypeScript source in a local checkout of
-   https://github.com/better-auth/better-auth, when available
+2. TypeScript source in a local checkout of `better-auth@1.4.19` when
+   available
 3. Generated upstream OpenAPI profiles from the pinned published package
 4. Better Auth documentation
 
-The pinned reference version is `better-auth@1.4.19` (see
-`compat-tests/reference-server/package.json`).
+The pinned reference version is `better-auth@1.4.19`.
 
 ## Non-Negotiables
 
@@ -40,15 +39,15 @@ The pinned reference version is `better-auth@1.4.19` (see
 
 ## Before You Change Code
 
-Install the TypeScript reference server used by the compatibility
-harness:
+Install the Bun workspaces used by the compatibility harness:
 
 ```bash
-cd compat-tests/reference-server && npm install
+cd compat-tests/reference-server && bun install
+cd ../client-tests && bun install
 ```
 
-A local checkout of https://github.com/better-auth/better-auth is
-useful for inspecting upstream source and runtime behavior.
+You should have a local checkout of `better-auth@1.4.19` to inspect
+upstream behavior and source.
 
 ## Workflow
 
@@ -58,16 +57,36 @@ useful for inspecting upstream source and runtime behavior.
 4. Add or update tests in the same change
 5. Do not batch unrelated endpoint fixes into one commit
 
+Use any downstream compatibility target only as a downstream signal, not
+as the source of truth.
+
+## Docs OpenAPI
+
+The docs site consumes a committed schema artifact at `docs/better-auth.json`.
+That file should reflect the Rust runtime, not an upstream TypeScript export.
+
+When the documented v1 route surface changes, regenerate the docs OpenAPI
+artifacts with:
+
+```bash
+cargo run --bin generate_docs_openapi --features seaorm2
+cd docs && bun scripts/generate-openapi.mts
+```
+
 ## Testing Strategy
 
-1. Rust unit tests: `cargo test --workspace --lib`
-2. Integration and compatibility tests against the pinned TS reference
-   server: `cargo test --workspace --tests`. See
-   [compat-tests/README.md](compat-tests/README.md) for how the
-   dual-server harness is wired.
+There are three layers:
 
-Compatibility coverage against the TypeScript reference server is the
-hard gate — endpoint behavior must match upstream.
+1. Rust unit/integration tests: `cargo test --workspace --lib`
+2. Raw wire smoke tests:
+   `cargo test --test wire_compat_smoke_tests -- --nocapture`
+3. Dual-server client compatibility tests using the real
+   `better-auth/client` SDK:
+   `cargo test --test client_compat_tests phase0_client_compat -- --ignored --nocapture`
+
+The client-compat layer is the hard gate and the primary compatibility
+contract. For more detail, see
+[compat-tests/README.md](compat-tests/README.md).
 
 ## Required Checks
 

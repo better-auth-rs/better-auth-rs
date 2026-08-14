@@ -2,8 +2,16 @@
 
 The most comprehensive authentication framework for Rust. Inspired by [Better Auth](https://www.better-auth.com/).
 
-> [!NOTE]
-> **v1 ([`v1`](https://github.com/better-auth-rs/better-auth-rs/tree/v1) branch, alpha):** complete rewrite with app-owned schema and full compatibility with [`better-auth@1.4.19`](https://www.npmjs.com/package/better-auth/v/1.4.19).
+> [!WARNING]
+> **v1 is in alpha.** The current release (`1.0.0-alpha.1`) is under active
+> development. APIs, wire formats, and database schemas may change without
+> notice between alpha releases, and production use is not recommended yet.
+> Please report issues and feedback on [GitHub](https://github.com/better-auth-rs/better-auth-rs/issues).
+
+The pinned compatibility target is `better-auth@1.4.19`. The v1 release
+scope covers phases 0-12 in [ROADMAP.md](ROADMAP.md), and the TypeScript
+runtime plus `better-auth/client` harness remain the source of truth for
+wire behavior.
 
 [![Crates.io](https://img.shields.io/crates/v/better-auth.svg)](https://crates.io/crates/better-auth)
 [![Documentation](https://docs.rs/better-auth/badge.svg)](https://docs.rs/better-auth)
@@ -16,7 +24,7 @@ The most comprehensive authentication framework for Rust. Inspired by [Better Au
 - **Plugin Architecture** — compose only the auth features you need
 - **Type Safety** — leverages Rust's type system for compile-time guarantees
 - **Async First** — built on Tokio with full async/await support
-- **Database Agnostic** — in-memory for development, PostgreSQL for production
+- **App-Owned SeaORM Schema** — auth entities live in your SeaORM model graph
 - **Framework Integration** — first-class Axum support with session extractors
 - **OpenAPI** — auto-generated API specification
 - **Middleware** — CSRF, CORS, rate limiting, body size limits
@@ -26,33 +34,74 @@ The most comprehensive authentication framework for Rust. Inspired by [Better Au
 
 ```toml
 [dependencies]
-better-auth = "0.8"
+better-auth = { version = "1.0.0-alpha.1", features = ["axum", "seaorm2"] }
 ```
 
-```rust
-use better_auth::{BetterAuth, AuthConfig};
+Generate the schema scaffolding with the CLI:
+
+```bash
+cargo install better-auth-cli
+better-auth-rs generate -o src/auth_schema.rs
+```
+
+Or write it by hand — the `AuthEntity` derive generates all trait impls:
+
+```rust,ignore
+use better_auth::{AuthConfig, AuthSchema, BetterAuth};
 use better_auth::plugins::EmailPasswordPlugin;
-use better_auth::adapters::MemoryDatabaseAdapter;
+use better_auth::seaorm::{AuthEntity, Database, SeaOrmStore};
+use better_auth::seaorm::sea_orm::entity::prelude::*;
+
+// Only include the fields you need — plugin fields are optional.
+// The AuthEntity macro adapts: missing fields return sensible defaults.
+#[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, AuthEntity)]
+#[auth(role = "user")]
+#[sea_orm(table_name = "users")]
+pub struct UserModel {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: String,
+    pub name: Option<String>,
+    pub email: Option<String>,
+    pub email_verified: bool,
+    pub image: Option<String>,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
+    // Plugin fields — add only if you use the plugin:
+    // pub username: Option<String>,          // username plugin
+    // pub two_factor_enabled: bool,          // two-factor plugin
+    // pub role: Option<String>,              // admin plugin
+    // pub banned: bool,                      // admin plugin
+    // Extra app-specific fields work too:
+    // pub locale: Option<String>,
+}
+
+// ... session, account, verification entities ...
+
+#[derive(AuthSchema)]
+#[auth(user = "crate::UserModel")]
+#[auth(session = "crate::SessionModel")]
+#[auth(account = "crate::AccountModel")]
+#[auth(verification = "crate::VerificationModel")]
+pub struct AppAuthSchema;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let auth = BetterAuth::new(
-            AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
-                .base_url("http://localhost:3000"),
-        )
-        .database(MemoryDatabaseAdapter::new())
+    let database = Database::connect("sqlite::memory:").await?;
+    let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
+        .base_url("http://localhost:3000");
+    let store = SeaOrmStore::<AppAuthSchema>::new(config.clone(), database);
+
+    let auth = BetterAuth::<AppAuthSchema>::new(config)
+        .store(store)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .build()
         .await?;
-
-    // Mount as an Axum router (requires `axum` feature)
-    // let app = auth.axum_router();
 
     Ok(())
 }
 ```
 
-> See the [Quick Start guide](docs/content/docs/quick-start.mdx) for a complete walkthrough including sign-up, sign-in, and session usage.
+Your app owns the auth entities and migrations — Better Auth adapts to whatever schema you define.
 
 ## Plugins
 
@@ -65,13 +114,12 @@ Better Auth RS ships with a rich set of plugins. Enable only what you need:
 | **Password Management** | Password reset, change, and set flows |
 | **Email Verification** | Email verification workflows |
 | **Account Management** | Account linking and unlinking |
+| **Organization** | Multi-tenant organizations with RBAC |
 | **OAuth** | Social sign-in via OAuth 2.0 providers |
 | **Two-Factor** | TOTP-based 2FA with backup codes |
-| **Organization** | Multi-tenant organizations with RBAC |
-| **Admin** | User management and administrative operations |
-| **API Key** | API key generation, rotation, and revocation |
 | **Passkey** | WebAuthn passkey authentication |
-| **Device Authorization** | Device flow for TVs, consoles, CLIs, and other input-constrained clients |
+| **API Key** | API key generation, rotation, and revocation |
+| **Admin** | User management and administrative operations |
 
 > See the [Plugins documentation](docs/content/docs/concepts/plugins.mdx) for usage details.
 
@@ -80,47 +128,42 @@ Better Auth RS ships with a rich set of plugins. Enable only what you need:
 | Feature | Description |
 |---------|-------------|
 | `axum` | Axum web framework integration |
-| `derive` | Derive macros for custom entity types (`AuthUser`, `MemoryUser`, etc.) |
-| `sqlx-postgres` | PostgreSQL database support via SQLx |
+| `seaorm2` | SeaORM database integration |
+| `redis-cache` | Redis session/cache backend |
 
 ## Crate Structure
 
 | Crate | Description |
 |-------|-------------|
 | [`better-auth`](https://crates.io/crates/better-auth) | Main crate — re-exports and framework integration |
-| [`better-auth-core`](https://crates.io/crates/better-auth-core) | Core abstractions: traits, config, middleware, error handling |
+| [`better-auth-core`](https://crates.io/crates/better-auth-core) | Core auth runtime, store, middleware, and error handling |
 | [`better-auth-api`](https://crates.io/crates/better-auth-api) | Plugin implementations |
-| [`better-auth-derive`](https://crates.io/crates/better-auth-derive) | Derive macros for custom entity types |
+| [`better-auth-seaorm`](https://crates.io/crates/better-auth-seaorm) | SeaORM store, entity traits, and `AuthEntity` derive macro |
+| [`better-auth-cli`](https://crates.io/crates/better-auth-cli) | CLI tools (`better-auth-rs generate`) |
 
 ## Documentation
 
 Detailed guides and API reference are available in the [`docs/`](docs/) directory:
 
+- [Contributing](CONTRIBUTING.md)
+- [Alignment Roadmap](ROADMAP.md)
 - [Installation](docs/content/docs/installation.mdx)
 - [Quick Start](docs/content/docs/quick-start.mdx)
 - **Authentication** — [Email/Password](docs/content/docs/authentication/email-password.mdx) · [Sessions](docs/content/docs/authentication/sessions.mdx) · [Email Verification](docs/content/docs/authentication/email-verification.mdx)
 - **Concepts** — [Configuration](docs/content/docs/concepts/configuration.mdx) · [Database](docs/content/docs/concepts/database.mdx) · [Plugins](docs/content/docs/concepts/plugins.mdx) · [Middleware](docs/content/docs/concepts/middleware.mdx) · [Hooks](docs/content/docs/concepts/hooks.mdx)
-- **Plugins** — [OAuth](docs/content/docs/plugins/oauth.mdx) · [Two-Factor](docs/content/docs/plugins/two-factor.mdx) · [Organization](docs/content/docs/plugins/organization.mdx) · [Admin](docs/content/docs/plugins/admin.mdx) · [API Key](docs/content/docs/plugins/api-key.mdx) · [Passkey](docs/content/docs/plugins/passkey.mdx) · [Device Authorization](docs/content/docs/plugins/device-authorization.mdx)
+- **Plugins** — [OAuth](docs/content/docs/plugins/oauth.mdx) · [Organization](docs/content/docs/plugins/organization.mdx) · [Two-Factor](docs/content/docs/plugins/two-factor.mdx) · [Passkey](docs/content/docs/plugins/passkey.mdx) · [API Key](docs/content/docs/plugins/api-key.mdx) · [Admin](docs/content/docs/plugins/admin.mdx)
 - **Reference** — [API Routes](docs/content/docs/reference/api-routes.mdx) · [Configuration Options](docs/content/docs/reference/configuration-options.mdx) · [Errors](docs/content/docs/reference/errors.mdx) · [Security](docs/content/docs/reference/security.mdx) · [OpenAPI](docs/content/docs/reference/openapi.mdx)
 - **Integrations** — [Axum](docs/content/docs/integrations/axum.mdx)
+- **Compatibility** — [Compatibility Harness](compat-tests/README.md)
 
 ## Examples
 
 ```bash
-# Basic usage (in-memory)
-cargo run --example basic_usage
-
 # Axum web server
-cargo run --example axum_server --features axum
+cargo run --example axum_server --features axum,seaorm2
 
-# PostgreSQL
-cargo run --example postgres_usage --features sqlx-postgres
-
-# Custom entity types with derive macros
-cargo run --example custom_entities --features derive
-
-# Custom ORM adapter
-cargo run --example custom_orm_adapter
+# PostgreSQL (custom ID types, manual trait impls)
+cargo run --example postgres_usage --features seaorm2
 
 # Full-stack (better-auth frontend + better-auth-rs backend)
 cargo run --manifest-path examples/fullstack/backend/Cargo.toml

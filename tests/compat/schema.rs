@@ -1,6 +1,9 @@
-//! OpenAPI spec loading, `$ref` resolution, and `SchemaExpectation` types.
+//! Generated upstream OpenAPI loading, `$ref` resolution, and schema types.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::OnceLock;
 
 use oas3::spec::{ObjectOrReference, ObjectSchema, SchemaType, SchemaTypeSet};
 
@@ -33,45 +36,119 @@ pub struct FieldExpectation {
 // Spec loading
 // ---------------------------------------------------------------------------
 
-/// Load and parse the OpenAPI spec using `oas3`.
+/// Upstream OpenAPI profile to generate from the pinned published TS package.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpenApiProfile {
+    /// Default blocking structural contract.
+    Core,
+    /// Blocking structural contract for the Better Auth surface we intend to match.
+    AlignedRs,
+    /// Informational full-surface report over the broader upstream plugin set.
+    AllIn,
+}
+
+impl OpenApiProfile {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Core => "core",
+            Self::AlignedRs => "aligned-rs",
+            Self::AllIn => "all-in",
+        }
+    }
+}
+
+static CORE_OPENAPI: OnceLock<Result<String, String>> = OnceLock::new();
+static ALIGNED_RS_OPENAPI: OnceLock<Result<String, String>> = OnceLock::new();
+static ALL_IN_OPENAPI: OnceLock<Result<String, String>> = OnceLock::new();
+
+/// Load and parse the default upstream OpenAPI contract.
 ///
-/// The canonical `better-auth.yaml` uses the non-standard `type: date` for
-/// date/time fields.  JSON Schema (and therefore OpenAPI 3.1) only recognises
-/// `type: string` with `format: date-time`, so we normalise the YAML before
-/// handing it to the parser.
+/// The default blocking contract is the generated `core` profile from the
+/// pinned published `better-auth` package in `compat-tests/reference-server`.
 pub fn load_openapi_spec() -> oas3::spec::Spec {
-    let yaml_str = std::fs::read_to_string("better-auth.yaml")
-        .expect("better-auth.yaml must exist in the project root");
+    load_openapi_spec_with_profile(OpenApiProfile::Core)
+}
 
-    // Normalise non-standard "type: date" -> "type: string" (+ format kept in
-    // our FieldExpectation as "date" via a post-processing step).
-    //
-    // We use a line-by-line approach instead of a blanket `replace()` to avoid
-    // corrupting values like "type: date-time" or "type: daterange".
-    let yaml_str: String = yaml_str
-        .lines()
-        .map(|line| {
-            let trimmed = line.trim_start();
-            if let Some(rest) = trimmed.strip_prefix("type: date") {
-                // Only replace when "date" is the complete value (end-of-line,
-                // followed by whitespace, or followed by a YAML comment).
-                if rest.is_empty()
-                    || rest.starts_with(' ')
-                    || rest.starts_with('#')
-                    || rest.starts_with('\t')
-                {
-                    line.replacen("type: date", "type: string", 1)
-                } else {
-                    line.to_string()
-                }
-            } else {
-                line.to_string()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+/// Load and parse a generated upstream OpenAPI contract for the given profile.
+pub fn load_openapi_spec_with_profile(profile: OpenApiProfile) -> oas3::spec::Spec {
+    let raw = cached_openapi_spec(profile)
+        .as_ref()
+        .unwrap_or_else(|message| panic!("{message}"));
 
-    oas3::from_yaml(yaml_str).expect("better-auth.yaml must be valid OpenAPI 3.1")
+    oas3::from_yaml(raw.clone()).unwrap_or_else(|e| {
+        panic!(
+            "generated upstream OpenAPI profile `{}` must be valid OpenAPI 3.1: {e}",
+            profile.as_str()
+        )
+    })
+}
+
+fn cached_openapi_spec(profile: OpenApiProfile) -> &'static Result<String, String> {
+    let cache = match profile {
+        OpenApiProfile::Core => &CORE_OPENAPI,
+        OpenApiProfile::AlignedRs => &ALIGNED_RS_OPENAPI,
+        OpenApiProfile::AllIn => &ALL_IN_OPENAPI,
+    };
+
+    cache.get_or_init(|| generate_openapi_spec(profile))
+}
+
+fn generate_openapi_spec(profile: OpenApiProfile) -> Result<String, String> {
+    let workspace_dir = Path::new("compat-tests/reference-server");
+    if !workspace_dir.join("package.json").exists() {
+        return Err(format!(
+            "compat reference workspace missing at {}",
+            workspace_dir.display()
+        ));
+    }
+    if !workspace_dir.join("generate-openapi.mjs").exists() {
+        return Err(format!(
+            "OpenAPI generator missing at {}",
+            workspace_dir.join("generate-openapi.mjs").display()
+        ));
+    }
+
+    let output_path = temp_output_path(profile);
+    let bun = Command::new("bun")
+        .arg("./generate-openapi.mjs")
+        .arg("--profile")
+        .arg(profile.as_str())
+        .arg("--output")
+        .arg(&output_path)
+        .current_dir(workspace_dir)
+        .output()
+        .map_err(|e| {
+            format!(
+                "failed to run bun for upstream OpenAPI generation: {e}. Install Bun and run `cd compat-tests/reference-server && bun install`."
+            )
+        })?;
+
+    if !bun.status.success() {
+        return Err(format!(
+            "failed to generate upstream OpenAPI profile `{}` via `compat-tests/reference-server/generate-openapi.mjs`.\nstdout:\n{}\nstderr:\n{}\nRun `cd compat-tests/reference-server && bun install` to refresh the pinned dependencies.",
+            profile.as_str(),
+            String::from_utf8_lossy(&bun.stdout).trim(),
+            String::from_utf8_lossy(&bun.stderr).trim()
+        ));
+    }
+
+    let raw = std::fs::read_to_string(&output_path).map_err(|e| {
+        format!(
+            "generated upstream OpenAPI profile `{}` did not produce readable output at {}: {e}",
+            profile.as_str(),
+            output_path.display()
+        )
+    })?;
+    let _ = std::fs::remove_file(&output_path);
+    Ok(raw)
+}
+
+fn temp_output_path(profile: OpenApiProfile) -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "better-auth-rs-openapi-{}-{}.json",
+        profile.as_str(),
+        std::process::id()
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -142,9 +219,21 @@ pub fn extract_success_schema(
 ) -> Option<SchemaExpectation> {
     let path_item = get_path_item(spec, path)?;
     let operation = get_operation(path_item, method)?;
-    let response = operation.responses.as_ref()?.get("200")?;
-    let obj_schema = schema_from_response(spec, response)?;
-    Some(object_schema_to_expectation(spec, &obj_schema))
+    let responses = operation.responses.as_ref()?;
+    let mut success_statuses: Vec<&String> = responses
+        .keys()
+        .filter(|status| status.starts_with('2'))
+        .collect();
+    success_statuses.sort();
+
+    for status in success_statuses {
+        let response = responses.get(status)?;
+        if let Some(obj_schema) = schema_from_response(spec, response) {
+            return Some(object_schema_to_expectation(spec, &obj_schema));
+        }
+    }
+
+    None
 }
 
 /// Extract error response schemas (4xx, 5xx) for a given path and method.
@@ -164,13 +253,13 @@ pub fn extract_error_schemas(
         return result;
     };
     for (status, response) in responses {
-        if status.starts_with('4') || status.starts_with('5') {
-            if let Some(obj_schema) = schema_from_response(spec, response) {
-                result.insert(
-                    status.clone(),
-                    object_schema_to_expectation(spec, &obj_schema),
-                );
-            }
+        if (status.starts_with('4') || status.starts_with('5'))
+            && let Some(obj_schema) = schema_from_response(spec, response)
+        {
+            let _ = result.insert(
+                status.clone(),
+                object_schema_to_expectation(spec, &obj_schema),
+            );
         }
     }
     result
@@ -190,10 +279,10 @@ pub fn object_schema_to_expectation(
 
     for (name, prop_ref) in &obj.properties {
         if let Some(prop_schema) = resolve_object_schema(spec, prop_ref) {
-            fields.insert(name.clone(), object_schema_to_field(spec, &prop_schema));
+            let _ = fields.insert(name.clone(), object_schema_to_field(spec, &prop_schema));
         } else {
             // Unresolvable ref -- treat as unknown string
-            fields.insert(
+            let _ = fields.insert(
                 name.clone(),
                 FieldExpectation {
                     field_type: "string".to_string(),

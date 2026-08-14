@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use validator::Validate;
 
 #[derive(Debug, Deserialize, Validate)]
@@ -10,15 +10,18 @@ pub(crate) struct ChangeEmailRequest {
     pub(crate) callback_url: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Validate)]
+pub(crate) struct DeleteUserRequest {
+    #[serde(rename = "callbackURL")]
+    pub(crate) callback_url: Option<String>,
+    pub(crate) password: Option<String>,
+    pub(crate) token: Option<String>,
+}
+
 /// Query parameters for token-based verification endpoints.
-#[cfg(feature = "axum")]
 #[derive(Debug, Deserialize)]
 pub(crate) struct TokenQuery {
     pub(crate) token: String,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct StatusMessageResponse {
-    pub(crate) status: bool,
-    pub(crate) message: String,
+    #[serde(rename = "callbackURL")]
+    pub(crate) callback_url: Option<String>,
 }

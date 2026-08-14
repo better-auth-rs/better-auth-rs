@@ -5,17 +5,186 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, Once, OnceLock};
 
 use better_auth::{
-    AuthBuilder, AuthConfig, BetterAuth, MemoryDatabaseAdapter,
+    AuthBuilder, AuthConfig, BetterAuth,
     plugins::{
         AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, EmailPasswordPlugin,
         EmailVerificationPlugin, OAuthPlugin, OrganizationPlugin, PasskeyPlugin,
-        PasswordManagementPlugin, SessionManagementPlugin, TwoFactorPlugin,
+        PasswordManagementPlugin, SessionManagementPlugin, TwoFactorPlugin, UserManagementPlugin,
+        oauth::{
+            OAuthProvider, OAuthUserInfo, OAuthUserInfoHandler, OAuthUserInfoRequest,
+            OAuthUserInfoResponse,
+        },
+        password_management::SendResetPassword,
     },
-    types::{AuthRequest, HttpMethod},
+    prelude::{AuthRequest, HttpMethod},
 };
+use better_auth_seaorm::{Database, DatabaseConnection, SeaOrmStore};
+use reqwest::Url;
 use serde_json::Value;
+
+type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
+type TestAuth = BetterAuth<TestSchema>;
+
+static LOCAL_PROXY_BYPASS: Once = Once::new();
+static MOCK_OAUTH_SERVER: Once = Once::new();
+
+const MOCK_OAUTH_BASE_URL: &str = "http://127.0.0.1:3110";
+
+fn ensure_local_proxy_bypass() {
+    LOCAL_PROXY_BYPASS.call_once(|| {
+        // SAFETY: Test helpers set a single stable localhost proxy bypass
+        // before issuing any mock OAuth localhost requests.
+        unsafe { std::env::set_var("NO_PROXY", "localhost,127.0.0.1") };
+        // SAFETY: Test helpers set a single stable localhost proxy bypass
+        // before issuing any mock OAuth localhost requests.
+        unsafe { std::env::set_var("no_proxy", "localhost,127.0.0.1") };
+    });
+}
+
+fn ensure_mock_oauth_server() {
+    ensure_local_proxy_bypass();
+    MOCK_OAUTH_SERVER.call_once(|| {
+        tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:3110")
+                .await
+                .expect("mock OAuth server should bind to 127.0.0.1:3110");
+
+            loop {
+                let (mut stream, _) = listener
+                    .accept()
+                    .await
+                    .expect("mock OAuth server should accept connections");
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 4096];
+                    let read_len = stream.read(&mut buf).await.unwrap_or(0);
+                    let request = String::from_utf8_lossy(&buf[..read_len]);
+
+                    let response = if request.starts_with("GET /__test/oauth/authorize") {
+                        let path = request
+                            .lines()
+                            .next()
+                            .and_then(|line| line.split_whitespace().nth(1))
+                            .unwrap_or("/");
+                        let url = Url::parse(&format!("{MOCK_OAUTH_BASE_URL}{path}"))
+                            .expect("mock OAuth authorize URL should parse");
+                        let redirect_uri = url
+                            .query_pairs()
+                            .find(|(key, _)| key == "redirect_uri")
+                            .map(|(_, value)| value.into_owned())
+                            .unwrap_or_else(|| "http://localhost:3000/callback".to_string());
+                        let state = url
+                            .query_pairs()
+                            .find(|(key, _)| key == "state")
+                            .map(|(_, value)| value.into_owned())
+                            .unwrap_or_else(|| "missing-state".to_string());
+                        let location =
+                            format!("{redirect_uri}?code=compat-code&state={state}");
+                        format!(
+                            "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        )
+                    } else if request.starts_with("POST /__test/oauth/token") {
+                        let body = serde_json::json!({
+                            "access_token": "mock-access-token",
+                            "refresh_token": "mock-refresh-token",
+                            "token_type": "Bearer",
+                            "expires_in": 3600,
+                            "scope": "openid email profile"
+                        })
+                        .to_string();
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        )
+                    } else if request.starts_with("GET /__test/oauth/userinfo") {
+                        let body = serde_json::json!({
+                            "sub": "mock-user-id-123",
+                            "email": "mock@example.com",
+                            "name": "Mock OAuth User",
+                            "email_verified": true
+                        })
+                        .to_string();
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        )
+                    } else {
+                        let body = serde_json::json!({"error": "not found"}).to_string();
+                        format!(
+                            "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        )
+                    };
+
+                    let _ = stream.write_all(response.as_bytes()).await;
+                    let _ = stream.flush().await;
+                });
+            }
+        });
+    });
+    std::thread::sleep(std::time::Duration::from_millis(25));
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ResetSenderMode {
+    #[default]
+    Capture,
+    Fail,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TestAuthOptions {
+    pub reset_sender_mode: ResetSenderMode,
+    pub creator_role: Option<String>,
+}
+
+struct TestResetSender {
+    mode: ResetSenderMode,
+}
+
+static RESET_PASSWORD_OUTBOX: OnceLock<Mutex<std::collections::HashMap<String, String>>> =
+    OnceLock::new();
+
+fn reset_password_outbox() -> &'static Mutex<std::collections::HashMap<String, String>> {
+    RESET_PASSWORD_OUTBOX.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
+
+#[async_trait::async_trait]
+impl SendResetPassword for TestResetSender {
+    async fn send(
+        &self,
+        user: &serde_json::Value,
+        _url: &str,
+        token: &str,
+    ) -> better_auth::AuthResult<()> {
+        if self.mode == ResetSenderMode::Fail {
+            return Err(better_auth::AuthError::internal(
+                "test reset sender failure".to_string(),
+            ));
+        }
+        if let Some(email) = user.get("email").and_then(|value| value.as_str()) {
+            reset_password_outbox()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(email.to_string(), token.to_string());
+        }
+        Ok(())
+    }
+}
+
+pub fn take_reset_password_token(email: &str) -> Option<String> {
+    reset_password_outbox()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(email)
+}
 
 // ---------------------------------------------------------------------------
 // Unique email generator
@@ -39,34 +208,133 @@ pub fn test_secret() -> String {
 }
 
 pub fn test_config() -> AuthConfig {
-    AuthConfig::new(&test_secret())
+    AuthConfig::new(test_secret())
         .base_url("http://localhost:3000")
         .password_min_length(8)
 }
 
-pub async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
-    AuthBuilder::new(test_config())
-        .database(MemoryDatabaseAdapter::new())
+fn mock_oauth_plugin() -> OAuthPlugin {
+    struct MockUserInfoHandler;
+
+    #[async_trait::async_trait]
+    impl OAuthUserInfoHandler for MockUserInfoHandler {
+        async fn get_user_info(
+            &self,
+            _request: OAuthUserInfoRequest,
+        ) -> Result<OAuthUserInfoResponse, String> {
+            Ok(OAuthUserInfoResponse {
+                user: OAuthUserInfo {
+                    id: "mock-account-id".to_string(),
+                    email: "mock@example.com".to_string(),
+                    name: Some("Mock OAuth User".to_string()),
+                    image: None,
+                    email_verified: true,
+                },
+                data: serde_json::json!({
+                    "id": "mock-account-id",
+                    "email": "mock@example.com",
+                    "name": "Mock OAuth User",
+                    "image": null,
+                    "emailVerified": true,
+                }),
+            })
+        }
+    }
+
+    OAuthPlugin::new().add_provider(
+        "mock",
+        OAuthProvider {
+            client_id: "mock-client-id".to_string(),
+            client_secret: "mock-client-secret".to_string(),
+            auth_url: format!("{MOCK_OAUTH_BASE_URL}/__test/oauth/authorize"),
+            token_url: format!("{MOCK_OAUTH_BASE_URL}/__test/oauth/token"),
+            user_info_url: Some(format!("{MOCK_OAUTH_BASE_URL}/__test/oauth/userinfo")),
+            scopes: vec![
+                "openid".to_string(),
+                "email".to_string(),
+                "profile".to_string(),
+            ],
+            authorization_params: Vec::new(),
+            map_user_info: Some(|_value| {
+                Ok(OAuthUserInfo {
+                    id: "mock-account-id".to_string(),
+                    email: "mock@example.com".to_string(),
+                    name: Some("Mock OAuth User".to_string()),
+                    image: None,
+                    email_verified: true,
+                })
+            }),
+            get_user_info: Some(Arc::new(MockUserInfoHandler)),
+            refresh_access_token: None,
+            verify_id_token: None,
+            disable_implicit_sign_up: false,
+            disable_sign_up: false,
+            override_user_info_on_sign_in: false,
+        },
+    )
+}
+
+async fn test_database() -> DatabaseConnection {
+    ensure_local_proxy_bypass();
+    let database = Database::connect("sqlite::memory:")
+        .await
+        .unwrap_or_else(|e| panic!("sqlite test database should connect: {e}"));
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
+        .await
+        .unwrap_or_else(|e| panic!("sqlite test migrations should run: {e}"));
+    database
+}
+
+async fn test_store(config: &AuthConfig) -> SeaOrmStore<TestSchema> {
+    SeaOrmStore::<TestSchema>::new(config.clone(), test_database().await)
+}
+
+pub async fn create_test_auth() -> TestAuth {
+    create_test_auth_with_options(TestAuthOptions::default()).await
+}
+
+pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth {
+    let config = test_config();
+    let store = test_store(&config).await;
+    let organization_plugin = if let Some(creator_role) = options.creator_role.clone() {
+        OrganizationPlugin::new().creator_role(creator_role)
+    } else {
+        OrganizationPlugin::new()
+    };
+
+    AuthBuilder::<TestSchema>::new(config)
+        .store(store)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
-        .plugin(PasswordManagementPlugin::new().require_current_password(true))
+        .plugin(
+            PasswordManagementPlugin::new()
+                .require_current_password(true)
+                .send_reset_password(Arc::new(TestResetSender {
+                    mode: options.reset_sender_mode,
+                })),
+        )
         .plugin(AccountManagementPlugin::new())
         .plugin(EmailVerificationPlugin::new())
+        .plugin(
+            UserManagementPlugin::new()
+                .change_email_enabled(true)
+                .delete_user_enabled(true)
+                .require_delete_verification(false),
+        )
         .plugin(ApiKeyPlugin::builder().build())
-        .plugin(OAuthPlugin::new())
+        .plugin(mock_oauth_plugin())
         .plugin(TwoFactorPlugin::new())
-        .plugin(OrganizationPlugin::new())
+        .plugin(organization_plugin)
         .plugin(
             PasskeyPlugin::new()
                 .rp_id("localhost")
                 .rp_name("Better Auth Test")
-                .origin("http://localhost:3000")
-                .allow_insecure_unverified_assertion(true),
+                .origin("http://localhost:3000"),
         )
         .plugin(AdminPlugin::new())
         .build()
         .await
-        .expect("Failed to create test auth instance")
+        .unwrap_or_else(|e| panic!("Failed to create test auth instance: {e}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -76,53 +344,63 @@ pub async fn create_test_auth() -> BetterAuth<MemoryDatabaseAdapter> {
 pub fn post_json(path: &str, body: Value) -> AuthRequest {
     let mut req = AuthRequest::new(HttpMethod::Post, path);
     req.body = Some(body.to_string().into_bytes());
-    req.headers
+    let _ = req
+        .headers
         .insert("content-type".to_string(), "application/json".to_string());
-    req.headers
+    let _ = req
+        .headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
     req
 }
 
 pub fn get_request(path: &str) -> AuthRequest {
     let mut req = AuthRequest::new(HttpMethod::Get, path);
-    req.headers
+    let _ = req
+        .headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
     req
 }
 
 pub fn get_with_auth(path: &str, token: &str) -> AuthRequest {
     let mut req = AuthRequest::new(HttpMethod::Get, path);
-    req.headers
+    let _ = req
+        .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
-    req.headers
+    let _ = req
+        .headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
     req
 }
 
 pub fn get_with_auth_and_query(path: &str, token: &str, query: Vec<(&str, &str)>) -> AuthRequest {
     let mut req = AuthRequest::new(HttpMethod::Get, path);
-    req.headers
+    let _ = req
+        .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
-    req.headers
+    let _ = req
+        .headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
     for (k, v) in query {
-        req.query.insert(k.to_string(), v.to_string());
+        let _ = req.query.insert(k.to_string(), v.to_string());
     }
     req
 }
 
 pub fn post_json_with_auth(path: &str, body: Value, token: &str) -> AuthRequest {
     let mut req = post_json(path, body);
-    req.headers
+    let _ = req
+        .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
     req
 }
 
 pub fn delete_with_auth(path: &str, token: &str) -> AuthRequest {
     let mut req = AuthRequest::new(HttpMethod::Delete, path);
-    req.headers
+    let _ = req
+        .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
-    req.headers
+    let _ = req
+        .headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
     req
 }
@@ -134,9 +412,11 @@ pub fn delete_with_auth(path: &str, token: &str) -> AuthRequest {
 pub fn post_with_auth(path: &str, token: &str) -> AuthRequest {
     let mut req = AuthRequest::new(HttpMethod::Post, path);
     req.body = Some(b"{}".to_vec());
-    req.headers
+    let _ = req
+        .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
-    req.headers
+    let _ = req
+        .headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
     req
 }
@@ -145,14 +425,11 @@ pub fn post_with_auth(path: &str, token: &str) -> AuthRequest {
 // Send / signup / signin
 // ---------------------------------------------------------------------------
 
-pub async fn send_request(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
-    req: AuthRequest,
-) -> (u16, Value) {
+pub async fn send_request(auth: &TestAuth, req: AuthRequest) -> (u16, Value) {
     let resp = auth
         .handle_request(req)
         .await
-        .expect("Request should not panic");
+        .unwrap_or_else(|e| panic!("Request should not panic: {e}"));
     let status = resp.status;
     let json: Value = serde_json::from_slice(&resp.body)
         .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&resp.body).to_string()));
@@ -160,7 +437,7 @@ pub async fn send_request(
 }
 
 pub async fn signup_user(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    auth: &TestAuth,
     email: &str,
     password: &str,
     name: &str,
@@ -179,18 +456,15 @@ pub async fn signup_user(
         "signup should succeed, got status {}: {}",
         status, json
     );
-    let token = json["token"]
-        .as_str()
-        .expect("signup response missing token")
+    let token = json
+        .get("token")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| panic!("signup response missing token"))
         .to_string();
     (token, json)
 }
 
-pub async fn signin_user(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
-    email: &str,
-    password: &str,
-) -> (String, Value) {
+pub async fn signin_user(auth: &TestAuth, email: &str, password: &str) -> (String, Value) {
     let req = post_json(
         "/sign-in/email",
         serde_json::json!({
@@ -204,9 +478,10 @@ pub async fn signin_user(
         "signin should succeed, got status {}: {}",
         status, json
     );
-    let token = json["token"]
-        .as_str()
-        .expect("signin response missing token")
+    let token = json
+        .get("token")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| panic!("signin response missing token"))
         .to_string();
     (token, json)
 }
@@ -226,7 +501,7 @@ pub async fn signin_user(
 /// assert_eq!(status, 200);
 /// ```
 pub struct TestHarness {
-    auth: Arc<BetterAuth<MemoryDatabaseAdapter>>,
+    auth: Arc<TestAuth>,
 }
 
 impl TestHarness {
@@ -239,6 +514,14 @@ impl TestHarness {
         }
     }
 
+    /// Create a harness with configurable test auth behavior.
+    pub async fn with_options(options: TestAuthOptions) -> Self {
+        let auth = create_test_auth_with_options(options).await;
+        Self {
+            auth: Arc::new(auth),
+        }
+    }
+
     /// Create a harness with a **minimal** plugin set matching
     /// `integration_tests.rs` conventions (EmailPassword, SessionManagement,
     /// PasswordManagement, AccountManagement, ApiKey).
@@ -246,33 +529,46 @@ impl TestHarness {
         let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
             .base_url("http://localhost:3000")
             .password_min_length(6);
-        let auth = AuthBuilder::new(config)
-            .database(MemoryDatabaseAdapter::new())
+        let store = test_store(&config).await;
+        let auth = AuthBuilder::<TestSchema>::new(config)
+            .store(store)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .plugin(SessionManagementPlugin::new())
-            .plugin(PasswordManagementPlugin::new())
+            .plugin(
+                PasswordManagementPlugin::new().send_reset_password(Arc::new(TestResetSender {
+                    mode: ResetSenderMode::Capture,
+                })),
+            )
             .plugin(AccountManagementPlugin::new())
+            .plugin(EmailVerificationPlugin::new())
+            .plugin(
+                UserManagementPlugin::new()
+                    .change_email_enabled(true)
+                    .delete_user_enabled(true)
+                    .require_delete_verification(false),
+            )
             .plugin(ApiKeyPlugin::builder().build())
+            .plugin(mock_oauth_plugin())
             .build()
             .await
-            .expect("Failed to create test auth instance");
+            .unwrap_or_else(|e| panic!("Failed to create test auth instance: {e}"));
         Self {
             auth: Arc::new(auth),
         }
     }
 
     /// Wrap an existing `Arc<BetterAuth>` in a harness.
-    pub fn from_arc(auth: Arc<BetterAuth<MemoryDatabaseAdapter>>) -> Self {
+    pub fn from_arc(auth: Arc<TestAuth>) -> Self {
         Self { auth }
     }
 
     /// Access the inner `BetterAuth` reference.
-    pub fn auth(&self) -> &BetterAuth<MemoryDatabaseAdapter> {
+    pub fn auth(&self) -> &TestAuth {
         &self.auth
     }
 
     /// Consume the harness and return the inner `Arc`.
-    pub fn into_arc(self) -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
+    pub fn into_arc(self) -> Arc<TestAuth> {
         self.auth
     }
 
@@ -327,9 +623,10 @@ impl TestHarness {
             "signup should succeed, got status {}: {}",
             status, json
         );
-        let token = json["token"]
-            .as_str()
-            .expect("signup response missing token")
+        let token = json
+            .get("token")
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| panic!("signup response missing token"))
             .to_string();
         (token, json)
     }
@@ -346,9 +643,10 @@ impl TestHarness {
             "signin should succeed, got status {}: {}",
             status, json
         );
-        let token = json["token"]
-            .as_str()
-            .expect("signin response missing token")
+        let token = json
+            .get("token")
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| panic!("signin response missing token"))
             .to_string();
         (token, json)
     }
@@ -357,9 +655,11 @@ impl TestHarness {
     pub async fn create_user_with_session(&self) -> (String, String) {
         let email = unique_email("harness");
         let (token, json) = self.signup(&email, "password123", "Test User").await;
-        let user_id = json["user"]["id"]
-            .as_str()
-            .expect("missing user id")
+        let user_id = json
+            .get("user")
+            .and_then(|u| u.get("id"))
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| panic!("missing user id"))
             .to_string();
         (user_id, token)
     }

@@ -1,11 +1,11 @@
 #[cfg(feature = "axum")]
 use axum::{
     Router,
-    extract::{FromRequestParts, Request, State},
+    extract::{FromRef, FromRequestParts, Request, State},
     http::StatusCode,
     http::request::Parts,
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{get, post},
 };
 #[cfg(feature = "axum")]
 use std::sync::Arc;
@@ -13,24 +13,44 @@ use std::sync::Arc;
 #[cfg(feature = "axum")]
 use crate::BetterAuth;
 #[cfg(feature = "axum")]
-use better_auth_core::SessionManager;
-#[cfg(feature = "axum")]
-use better_auth_core::entity::AuthSession as AuthSessionTrait;
+use better_auth_core::AuthSession;
 use better_auth_core::{
-    AuthError, AuthRequest, AuthResponse, DatabaseAdapter, ErrorMessageResponse,
-    HealthCheckResponse, HttpMethod, OkResponse, core_paths,
+    AuthError, AuthRequest, AuthResponse, AuthSchema, HttpMethod, OkResponse, core_paths,
 };
+
+#[cfg(feature = "axum")]
+type AxumAuthHandlerFuture = std::pin::Pin<Box<dyn std::future::Future<Output = Response> + Send>>;
 
 /// Integration trait for Axum web framework
 #[cfg(feature = "axum")]
-pub trait AxumIntegration<DB: DatabaseAdapter> {
+pub trait AxumIntegration {
+    type Schema: AuthSchema;
+
     /// Create an Axum router with all authentication routes
-    fn axum_router(self) -> Router<Arc<BetterAuth<DB>>>;
+    fn axum_router(self) -> Router<Arc<BetterAuth<Self::Schema>>>;
+
+    /// Create an Axum router that can be nested into an application using a
+    /// custom state type.
+    fn axum_router_with_state<S>(self) -> Router<S>
+    where
+        Self: Sized,
+        Arc<BetterAuth<Self::Schema>>: FromRef<S>,
+        S: Clone + Send + Sync + 'static;
 }
 
 #[cfg(feature = "axum")]
-impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
-    fn axum_router(self) -> Router<Arc<BetterAuth<DB>>> {
+impl<T: AuthSchema> AxumIntegration for Arc<BetterAuth<T>> {
+    type Schema = T;
+
+    fn axum_router(self) -> Router<Arc<BetterAuth<T>>> {
+        self.axum_router_with_state::<Arc<BetterAuth<T>>>()
+    }
+
+    fn axum_router_with_state<S>(self) -> Router<S>
+    where
+        Arc<BetterAuth<T>>: FromRef<S>,
+        S: Clone + Send + Sync + 'static,
+    {
         // NOTE: disabled_paths is checked here at route-registration time so
         // that disabled routes are never mounted in Axum at all.  The core
         // handler (`handle_request_inner`) performs the same check at
@@ -48,40 +68,15 @@ impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
             router = router.route(core_paths::ERROR, get(error_check));
         }
 
-        // Add default health check route
-        if !disabled_paths.contains(&core_paths::HEALTH.to_string()) {
-            router = router.route(core_paths::HEALTH, get(health_check));
-        }
-
         // Add OpenAPI spec endpoint
         if !disabled_paths.contains(&core_paths::OPENAPI_SPEC.to_string()) {
-            router = router.route(core_paths::OPENAPI_SPEC, get(create_plugin_handler::<DB>()));
+            router = router.route(core_paths::OPENAPI_SPEC, get(create_plugin_handler::<T>()));
         }
 
         // Add core user management routes
         if !disabled_paths.contains(&core_paths::UPDATE_USER.to_string()) {
-            router = router.route(core_paths::UPDATE_USER, post(create_plugin_handler::<DB>()));
+            router = router.route(core_paths::UPDATE_USER, post(create_plugin_handler::<T>()));
         }
-        if !disabled_paths.contains(&core_paths::DELETE_USER.to_string()) {
-            router = router.route(core_paths::DELETE_USER, post(create_plugin_handler::<DB>()));
-            router = router.route(
-                core_paths::DELETE_USER,
-                delete(create_plugin_handler::<DB>()),
-            );
-        }
-        if !disabled_paths.contains(&core_paths::CHANGE_EMAIL.to_string()) {
-            router = router.route(
-                core_paths::CHANGE_EMAIL,
-                post(create_plugin_handler::<DB>()),
-            );
-        }
-        if !disabled_paths.contains(&core_paths::DELETE_USER_CALLBACK.to_string()) {
-            router = router.route(
-                core_paths::DELETE_USER_CALLBACK,
-                get(create_plugin_handler::<DB>()),
-            );
-        }
-
         // Register plugin routes
         for plugin in self.plugins() {
             for route in plugin.routes() {
@@ -90,7 +85,7 @@ impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
                     continue;
                 }
 
-                let handler_fn = create_plugin_handler::<DB>();
+                let handler_fn = create_plugin_handler::<T>();
                 match route.method {
                     HttpMethod::Get => {
                         router = router.route(&route.path, get(handler_fn.clone()));
@@ -114,7 +109,7 @@ impl<DB: DatabaseAdapter> AxumIntegration<DB> for Arc<BetterAuth<DB>> {
             }
         }
 
-        router.with_state(self)
+        router
     }
 }
 
@@ -124,55 +119,35 @@ async fn ok_check() -> impl IntoResponse {
 }
 
 #[cfg(feature = "axum")]
-async fn error_check() -> impl IntoResponse {
-    axum::Json(OkResponse { ok: false })
+async fn error_check(
+    query: axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let error_code = query
+        .get("error")
+        .cloned()
+        .unwrap_or_else(|| "UNKNOWN".to_string());
+    let html = core_paths::error_page_html(&error_code);
+    axum::response::Html(html)
 }
 
 #[cfg(feature = "axum")]
-async fn health_check() -> impl IntoResponse {
-    axum::Json(HealthCheckResponse {
-        status: "ok",
-        service: "better-auth",
-    })
-}
-
-#[cfg(feature = "axum")]
-#[allow(clippy::type_complexity)]
-fn create_plugin_handler<DB: DatabaseAdapter>() -> impl Fn(
-    State<Arc<BetterAuth<DB>>>,
-    Request,
-) -> std::pin::Pin<
-    Box<dyn std::future::Future<Output = Response> + Send>,
-> + Clone {
-    |State(auth): State<Arc<BetterAuth<DB>>>, req: Request| {
+fn create_plugin_handler<T: AuthSchema>()
+-> impl Fn(State<Arc<BetterAuth<T>>>, Request) -> AxumAuthHandlerFuture + Clone {
+    |State(auth): State<Arc<BetterAuth<T>>>, req: Request| {
         Box::pin(async move {
-            // `enabled = false` on the configured body limit means the
-            // caller has opted out of body-size enforcement entirely —
-            // honour that by using `usize::MAX`, the same posture the
-            // handler had before the 1 MiB cap was introduced. When
-            // enabled, use the configured ceiling.
-            let limit_cfg = auth.body_limit_config();
-            let max_bytes = if limit_cfg.enabled {
-                limit_cfg.max_bytes
-            } else {
-                usize::MAX
-            };
-            match convert_axum_request(req, max_bytes).await {
+            match convert_axum_request(req).await {
                 Ok(auth_req) => match auth.handle_request(auth_req).await {
                     Ok(auth_response) => convert_auth_response(auth_response),
-                    Err(err) => convert_auth_error(err),
+                    Err(err) => err.into_response(),
                 },
-                Err(err) => convert_auth_error(err),
+                Err(err) => err.into_response(),
             }
         })
     }
 }
 
 #[cfg(feature = "axum")]
-async fn convert_axum_request(
-    req: Request,
-    max_body_bytes: usize,
-) -> Result<AuthRequest, AuthError> {
+async fn convert_axum_request(req: Request) -> Result<AuthRequest, AuthError> {
     use std::collections::HashMap;
 
     let (parts, body) = req.into_parts();
@@ -197,7 +172,7 @@ async fn convert_axum_request(
     let mut headers = HashMap::new();
     for (name, value) in parts.headers.iter() {
         if let Ok(value_str) = value.to_str() {
-            headers.insert(name.to_string(), value_str.to_string());
+            let _ = headers.insert(name.to_string(), value_str.to_string());
         }
     }
 
@@ -208,35 +183,12 @@ async fn convert_axum_request(
     let mut query = HashMap::new();
     if let Some(query_str) = parts.uri.query() {
         for (key, value) in url::form_urlencoded::parse(query_str.as_bytes()) {
-            query.insert(key.to_string(), value.to_string());
+            let _ = query.insert(key.to_string(), value.to_string());
         }
     }
 
-    // Bound the body read at the caller-configured limit
-    // (`AuthBuilder::body_limit(...)`; defaults to
-    // `DEFAULT_MAX_BODY_BYTES` = 1 MiB). `BodyLimitMiddleware` only
-    // inspects `Content-Length` and cannot cover chunked bodies, so
-    // this pre-parse cap is the only line of defence against
-    // memory-exhaustion DoS via `Transfer-Encoding: chunked`.
-    //
-    // Two paths:
-    // - Content-Length declared > limit → 413 before reading anything.
-    // - `to_bytes` error during the read → 413 if the error is a
-    //   `LengthLimitError` (chunked body exceeded the cap), otherwise
-    //   400 (malformed chunked framing, client disconnect, etc.).
-    if let Some(len) = parts
-        .headers
-        .get(axum::http::header::CONTENT_LENGTH)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.parse::<usize>().ok())
-        && len > max_body_bytes
-    {
-        return Err(AuthError::payload_too_large(format!(
-            "Request body exceeds the {}-byte limit",
-            max_body_bytes
-        )));
-    }
-    let body_bytes = match axum::body::to_bytes(body, max_body_bytes).await {
+    // Convert body
+    let body_bytes = match axum::body::to_bytes(body, usize::MAX).await {
         Ok(bytes) => {
             if bytes.is_empty() {
                 None
@@ -244,16 +196,7 @@ async fn convert_axum_request(
                 Some(bytes.to_vec())
             }
         }
-        Err(err) => {
-            if better_auth_core::extractors::is_body_length_limit_error(&err) {
-                return Err(AuthError::payload_too_large(format!(
-                    "Request body exceeds the {}-byte limit",
-                    max_body_bytes
-                )));
-            }
-            tracing::warn!(error = %err, "Failed to read request body");
-            return Err(AuthError::bad_request("Failed to read request body"));
-        }
+        Err(_) => None,
     };
 
     Ok(AuthRequest::from_parts(
@@ -277,29 +220,14 @@ fn convert_auth_response(auth_response: AuthResponse) -> Response {
         }
     }
 
-    response
-        .body(axum::body::Body::from(auth_response.body))
-        .unwrap_or_else(|_| {
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(axum::body::Body::from("Internal server error"))
-                .unwrap()
-        })
-}
-
-#[cfg(feature = "axum")]
-fn convert_auth_error(err: AuthError) -> Response {
-    let status_code =
-        StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-
-    let message = match err.status_code() {
-        500 => "Internal server error".to_string(),
-        _ => err.to_string(),
-    };
-
-    let body = ErrorMessageResponse { message };
-
-    (status_code, axum::Json(body)).into_response()
+    match response.body(axum::body::Body::from(auth_response.body)) {
+        Ok(resp) => resp,
+        Err(_) => {
+            let (mut parts, _) = Response::new(()).into_parts();
+            parts.status = StatusCode::INTERNAL_SERVER_ERROR;
+            Response::from_parts(parts, axum::body::Body::from("Internal server error"))
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -311,23 +239,24 @@ fn convert_auth_error(err: AuthError) -> Response {
 /// Extracts and validates the current user and session from the request.
 /// Returns `401 Unauthorized` if no valid session is found.
 ///
-/// Requires `State<Arc<BetterAuth<DB>>>` to be present in the router.
+/// Requires `State<Arc<BetterAuth>>` to be present in the router.
 ///
 /// # Example
 ///
 /// ```rust,ignore
-/// use better_auth::handlers::axum::CurrentSession;
+/// use better_auth::integrations::axum::CurrentSession;
 ///
-/// async fn profile(session: CurrentSession<MyDB>) -> impl IntoResponse {
+/// async fn profile(session: CurrentSession<AppAuthSchema>) -> impl IntoResponse {
 ///     let user = &session.user;
 ///     let session = &session.session;
 ///     axum::Json(serde_json::json!({ "id": user.id() }))
 /// }
 /// ```
 #[cfg(feature = "axum")]
-pub struct CurrentSession<DB: DatabaseAdapter> {
-    pub user: DB::User,
-    pub session: DB::Session,
+#[derive(Debug, Clone)]
+pub struct CurrentSession<T: AuthSchema> {
+    pub user: T::User,
+    pub session: T::Session,
 }
 
 /// Optional authenticated session extractor.
@@ -339,7 +268,7 @@ pub struct CurrentSession<DB: DatabaseAdapter> {
 /// # Example
 ///
 /// ```rust,ignore
-/// async fn home(session: OptionalSession<MyDB>) -> impl IntoResponse {
+/// async fn home(session: OptionalSession<AppAuthSchema>) -> impl IntoResponse {
 ///     if let Some(session) = session.0 {
 ///         axum::Json(serde_json::json!({ "user": session.user.id() }))
 ///     } else {
@@ -348,7 +277,8 @@ pub struct CurrentSession<DB: DatabaseAdapter> {
 /// }
 /// ```
 #[cfg(feature = "axum")]
-pub struct OptionalSession<DB: DatabaseAdapter>(pub Option<CurrentSession<DB>>);
+#[derive(Debug, Clone)]
+pub struct OptionalSession<T: AuthSchema>(pub Option<CurrentSession<T>>);
 
 /// Extract a session token from the request parts.
 ///
@@ -382,48 +312,51 @@ fn extract_token_from_parts(parts: &Parts, cookie_name: &str) -> Option<String> 
 }
 
 #[cfg(feature = "axum")]
-impl<DB: DatabaseAdapter> FromRequestParts<Arc<BetterAuth<DB>>> for CurrentSession<DB> {
+impl<S, T> FromRequestParts<S> for CurrentSession<T>
+where
+    T: AuthSchema,
+    Arc<BetterAuth<T>>: FromRef<S>,
+    S: Send + Sync,
+{
     type Rejection = Response;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &Arc<BetterAuth<DB>>,
-    ) -> Result<Self, Self::Rejection> {
-        let cookie_name = &state.config().session.cookie_name;
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let auth = Arc::<BetterAuth<T>>::from_ref(state);
+        let cookie_name = &auth.config().session.cookie_name;
         let token = extract_token_from_parts(parts, cookie_name)
-            .ok_or_else(|| convert_auth_error(AuthError::Unauthenticated))?;
+            .ok_or_else(|| AuthError::Unauthenticated.into_response())?;
 
-        let session_manager =
-            SessionManager::new(Arc::new(state.config().clone()), state.database().clone());
-
-        let session = session_manager
+        let session = auth
+            .store()
             .get_session(&token)
             .await
-            .map_err(convert_auth_error)?
-            .ok_or_else(|| convert_auth_error(AuthError::SessionNotFound))?;
+            .map_err(IntoResponse::into_response)?
+            .ok_or_else(|| AuthError::SessionNotFound.into_response())?;
 
-        let user = state
-            .database()
-            .get_user_by_id(session.user_id())
+        let user = auth
+            .store()
+            .get_user_by_id(&session.user_id())
             .await
-            .map_err(convert_auth_error)?
-            .ok_or_else(|| convert_auth_error(AuthError::UserNotFound))?;
+            .map_err(IntoResponse::into_response)?
+            .ok_or_else(|| AuthError::UserNotFound.into_response())?;
 
         Ok(CurrentSession { user, session })
     }
 }
 
 #[cfg(feature = "axum")]
-impl<DB: DatabaseAdapter> FromRequestParts<Arc<BetterAuth<DB>>> for OptionalSession<DB> {
+impl<S, T> FromRequestParts<S> for OptionalSession<T>
+where
+    T: AuthSchema,
+    Arc<BetterAuth<T>>: FromRef<S>,
+    S: Send + Sync,
+{
     type Rejection = Response;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &Arc<BetterAuth<DB>>,
-    ) -> Result<Self, Self::Rejection> {
-        match CurrentSession::from_request_parts(parts, state).await {
-            Ok(session) => Ok(OptionalSession(Some(session))),
-            Err(_) => Ok(OptionalSession(None)),
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        match CurrentSession::<T>::from_request_parts(parts, state).await {
+            Ok(session) => Ok(OptionalSession::<T>(Some(session))),
+            Err(_) => Ok(OptionalSession::<T>(None)),
         }
     }
 }

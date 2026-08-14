@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use better_auth_core::adapters::DatabaseAdapter;
 use better_auth_core::{AuthContext, AuthResult, CreateApiKey, UpdateApiKey};
 
 use super::ApiKeyPlugin;
@@ -96,12 +95,28 @@ pub(super) fn check_permissions(key_permissions_json: &str, required: &serde_jso
 // Core functions -- framework-agnostic business logic
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn create_key_core<DB: DatabaseAdapter>(
+pub(crate) async fn create_key_core(
     body: &CreateKeyRequest,
-    user_id: &str,
+    user_id: impl AsRef<str>,
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<CreateKeyResponse> {
+    // Reject server-only properties from HTTP clients (matches TS behavior).
+    // In the TS implementation, these fields can only be set from the server
+    // auth instance; HTTP requests always count as "client" calls.
+    if body.refill_amount.is_some()
+        || body.refill_interval.is_some()
+        || body.rate_limit_max.is_some()
+        || body.rate_limit_time_window.is_some()
+        || body.rate_limit_enabled.is_some()
+        || body.permissions.is_some()
+        || body.remaining.is_some()
+    {
+        return Err(super::api_key_error(
+            super::ApiKeyErrorCode::ServerOnlyProperty,
+        ));
+    }
+
     // Validations
     plugin.validate_prefix(body.prefix.as_deref())?;
     plugin.validate_name(body.name.as_deref(), true)?;
@@ -123,16 +138,22 @@ pub(crate) async fn create_key_core<DB: DatabaseAdapter>(
     };
 
     let input = CreateApiKey {
-        user_id: user_id.to_string(),
+        user_id: user_id.as_ref().to_string(),
         name: body.name.clone(),
         prefix: body.prefix.clone().or_else(|| plugin.config.prefix.clone()),
         key_hash: hash,
         start: store_start,
         expires_at,
         remaining,
-        rate_limit_enabled: body.rate_limit_enabled.unwrap_or(false),
-        rate_limit_time_window: body.rate_limit_time_window,
-        rate_limit_max: body.rate_limit_max,
+        rate_limit_enabled: body
+            .rate_limit_enabled
+            .unwrap_or(plugin.config.rate_limit.enabled),
+        rate_limit_time_window: body
+            .rate_limit_time_window
+            .or(Some(plugin.config.rate_limit.time_window)),
+        rate_limit_max: body
+            .rate_limit_max
+            .or(Some(plugin.config.rate_limit.max_requests)),
         refill_interval: body.refill_interval,
         refill_amount: body.refill_amount,
         permissions: body
@@ -153,52 +174,91 @@ pub(crate) async fn create_key_core<DB: DatabaseAdapter>(
 
     Ok(CreateKeyResponse {
         key: full_key,
-        api_key: ApiKeyView::from_entity(&api_key),
+        api_key: ApiKeyView::from(&api_key),
     })
 }
 
-pub(crate) async fn get_key_core<DB: DatabaseAdapter>(
+pub(crate) async fn get_key_core(
     id: &str,
-    user_id: &str,
+    user_id: impl AsRef<str>,
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ApiKeyView> {
     let api_key = helpers::get_owned_api_key(ctx, id, user_id).await?;
     plugin.maybe_delete_expired(ctx).await;
-    Ok(ApiKeyView::from_entity(&api_key))
+    Ok(ApiKeyView::from(&api_key))
 }
 
-pub(crate) async fn list_keys_core<DB: DatabaseAdapter>(
-    user_id: &str,
+pub(crate) async fn list_keys_core(
+    user_id: impl AsRef<str>,
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<ApiKeyView>> {
-    let keys = ctx.database.list_api_keys_by_user(user_id).await?;
-    let views: Vec<ApiKeyView> = keys.iter().map(ApiKeyView::from_entity).collect();
+    let keys = ctx.database.list_api_keys_by_user(user_id.as_ref()).await?;
+    let views: Vec<ApiKeyView> = keys.iter().map(ApiKeyView::from).collect();
     plugin.maybe_delete_expired(ctx).await;
     Ok(views)
 }
 
-pub(crate) async fn update_key_core<DB: DatabaseAdapter>(
+pub(crate) async fn update_key_core(
     body: &UpdateKeyRequest,
-    user_id: &str,
+    user_id: impl AsRef<str>,
     plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ApiKeyView> {
+    // Reject server-only properties from HTTP clients (matches TS behavior).
+    if body.refill_amount.is_some()
+        || body.refill_interval.is_some()
+        || body.rate_limit_max.is_some()
+        || body.rate_limit_time_window.is_some()
+        || body.rate_limit_enabled.is_some()
+        || body.remaining.is_some()
+        || body.permissions.is_some()
+    {
+        return Err(super::api_key_error(
+            super::ApiKeyErrorCode::ServerOnlyProperty,
+        ));
+    }
+
+    // Check that at least one client-allowed field is provided.
+    // expires_in is Option<Option<i64>>: None = not sent.
+    if body.name.is_none()
+        && body.enabled.is_none()
+        && body.expires_in.is_none()
+        && body.metadata.is_none()
+    {
+        return Err(super::api_key_error(
+            super::ApiKeyErrorCode::NoValuesToUpdate,
+        ));
+    }
+
     // Validations
     plugin.validate_name(body.name.as_deref(), false)?;
     plugin.validate_metadata(&body.metadata)?;
-    ApiKeyPlugin::validate_refill(body.refill_interval, body.refill_amount)?;
 
     // Ownership check via shared helper
-    let _existing = helpers::get_owned_api_key(ctx, &body.id, user_id).await?;
+    let _existing = helpers::get_owned_api_key(ctx, &body.key_id, user_id).await?;
 
-    // Build expires_at if expiresIn is provided
-    let expires_at = if let Some(ms) = body.expires_in {
-        let effective_ms = plugin.validate_expires_in(Some(ms))?;
-        helpers::expires_in_to_at(effective_ms)?.map(Some)
-    } else {
-        None
+    // Build expires_at from expiresIn:
+    //   None         = not sent → don't touch expires_at
+    //   Some(None)   = sent as null → clear expires_at
+    //   Some(Some(n)) = sent with value → set expires_at
+    //
+    // TS checks disableCustomExpiresTime before distinguishing null vs
+    // value, so any expiresIn (including null) is rejected when custom
+    // expiration is disabled.
+    let expires_at = match body.expires_in {
+        None => None,
+        Some(_) if plugin.config.key_expiration.disable_custom_expires_time => {
+            return Err(super::api_key_error(
+                super::ApiKeyErrorCode::KeyDisabledExpiration,
+            ));
+        }
+        Some(None) => Some(None),
+        Some(Some(secs)) => {
+            let validated = plugin.validate_expires_in(Some(secs))?;
+            helpers::expires_in_to_at(validated)?.map(Some)
+        }
     };
 
     let update = UpdateApiKey {
@@ -224,91 +284,23 @@ pub(crate) async fn update_key_core<DB: DatabaseAdapter>(
         last_refill_at: None,
     };
 
-    let updated = ctx.database.update_api_key(&body.id, update).await?;
-
-    // Invalidate cached rate limiter if rate limit settings changed
-    if body.rate_limit_time_window.is_some()
-        || body.rate_limit_max.is_some()
-        || body.rate_limit_enabled.is_some()
-    {
-        plugin
-            .rate_limiters
-            .lock()
-            .expect("rate_limiters mutex poisoned")
-            .remove(&body.id);
-    }
+    let updated = ctx.database.update_api_key(&body.key_id, update).await?;
 
     plugin.maybe_delete_expired(ctx).await;
 
-    Ok(ApiKeyView::from_entity(&updated))
+    Ok(ApiKeyView::from(&updated))
 }
 
-pub(crate) async fn delete_key_core<DB: DatabaseAdapter>(
+pub(crate) async fn delete_key_core(
     body: &DeleteKeyRequest,
-    user_id: &str,
-    plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<DB>,
+    user_id: impl AsRef<str>,
+    _plugin: &ApiKeyPlugin,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<serde_json::Value> {
     // Ownership check via shared helper
-    let _existing = helpers::get_owned_api_key(ctx, &body.id, user_id).await?;
+    let _existing = helpers::get_owned_api_key(ctx, &body.key_id, user_id).await?;
 
-    ctx.database.delete_api_key(&body.id).await?;
+    ctx.database.delete_api_key(&body.key_id).await?;
 
-    // Evict cached rate limiter for the deleted key
-    plugin
-        .rate_limiters
-        .lock()
-        .expect("rate_limiters mutex poisoned")
-        .remove(&body.id);
-
-    Ok(serde_json::json!({ "status": true }))
-}
-
-pub(crate) async fn verify_key_core<DB: DatabaseAdapter>(
-    body: &VerifyKeyRequest,
-    plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<VerifyKeyResponse> {
-    let result = plugin
-        .validate_api_key(ctx, &body.key, body.permissions.as_ref())
-        .await;
-
-    match result {
-        Ok(view) => Ok(VerifyKeyResponse {
-            valid: true,
-            error: None,
-            key: Some(view),
-        }),
-        Err(validation_err) => {
-            let code_str = validation_err.code.as_str().to_string();
-            let message = validation_err.message;
-            Ok(VerifyKeyResponse {
-                valid: false,
-                error: Some(VerifyErrorBody {
-                    message,
-                    code: code_str,
-                }),
-                key: None,
-            })
-        }
-    }
-}
-
-pub(crate) async fn delete_all_expired_core<DB: DatabaseAdapter>(
-    _user_id: &str,
-    plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<serde_json::Value> {
-    let count = ctx.database.delete_expired_api_keys().await?;
-
-    // Best-effort eviction: clear all cached limiters when bulk-deleting.
-    if count > 0 {
-        plugin
-            .rate_limiters
-            .lock()
-            .expect("rate_limiters mutex poisoned")
-            .clear();
-    }
-
-    Ok(serde_json::json!({ "deleted": count }))
+    Ok(serde_json::json!({ "success": true }))
 }

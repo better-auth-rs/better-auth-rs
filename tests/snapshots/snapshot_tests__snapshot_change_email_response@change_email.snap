@@ -1,6 +1,0 @@
----
-source: tests/snapshot_tests.rs
-expression: redact(&body)
----
-message: Email updated
-status: true

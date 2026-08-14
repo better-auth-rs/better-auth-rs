@@ -1,0 +1,10 @@
+[package]
+name = "better-auth-schema-registry"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "Authoritative field registry for better-auth entity schemas"
+repository = { workspace = true }
+
+[lints]
+workspace = true

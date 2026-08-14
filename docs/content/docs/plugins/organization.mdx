@@ -7,11 +7,13 @@ The `OrganizationPlugin` provides multi-tenancy support with organizations, memb
 
 ## Setup
 
+These examples assume you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
 use better_auth::plugins::OrganizationPlugin;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(OrganizationPlugin::new())
     .build()
     .await?;
@@ -22,8 +24,8 @@ let auth = BetterAuth::new(config)
 ```rust
 use better_auth::plugins::organization::OrganizationConfig;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(
         OrganizationPlugin::new()
             .allow_user_to_create_organization(true)
@@ -77,8 +79,8 @@ let config = OrganizationConfig {
     ..Default::default()
 };
 
-let auth = BetterAuth::new(auth_config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(auth_config)
+    .store(store)
     .plugin(OrganizationPlugin::with_config(config))
     .build()
     .await?;
@@ -92,7 +94,7 @@ let auth = BetterAuth::new(auth_config)
 
 ## API Endpoints
 
-The Organization plugin exposes 18 endpoints. For full request/response details, see the [OpenAPI Reference](/docs/reference/openapi/organization).
+The Organization plugin exposes 21 endpoints. For full request/response details, see the [OpenAPI Reference](/docs/reference/openapi/organization).
 
 ### Organization CRUD
 
@@ -112,6 +114,7 @@ The Organization plugin exposes 18 endpoints. For full request/response details,
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/organization/get-active-member` | GET | Get current member record |
+| `/organization/get-active-member-role` | GET | Get the current member role |
 | `/organization/list-members` | GET | List organization members (with pagination) |
 | `/organization/remove-member` | POST | Remove a member (requires `member:delete`) |
 | `/organization/update-member-role` | POST | Update member role (requires `member:update`) |

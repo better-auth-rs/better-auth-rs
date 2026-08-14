@@ -1,68 +1,89 @@
 ---
 title: Configuration
-description: AuthConfig and related configuration structs.
+description: AuthConfig and the main runtime configuration surfaces.
 ---
 
-All configuration is done through `AuthConfig`, which uses a builder pattern.
+All runtime configuration goes through `AuthConfig`.
 
 ## AuthConfig
 
 ```rust
 use better_auth::AuthConfig;
-use std::time::Duration;
+use chrono::Duration;
 
 let config = AuthConfig::new("your-secret-key-at-least-32-characters-long")
-    .base_url("http://localhost:3000")
-    .session_expires_in(Duration::from_secs(7 * 24 * 3600))
-    .jwt_expires_in(Duration::from_secs(24 * 3600))
+    .app_name("My App")
+    .base_url("https://auth.example.com")
+    .base_path("/api/auth")
+    .trusted_origin("https://app.example.com")
+    .session_expires_in(Duration::days(7))
+    .session_update_age(Duration::days(1))
+    .session_fresh_age(Duration::minutes(10))
+    .jwt_expires_in(Duration::hours(24))
     .password_min_length(8);
 ```
 
 | Method | Description |
 |--------|-------------|
-| `new(secret)` | Create config with signing secret (min 32 chars) |
-| `base_url(url)` | Set the application base URL |
-| `session_expires_in(duration)` | Session token lifetime |
-| `jwt_expires_in(duration)` | JWT token lifetime |
-| `password_min_length(length)` | Minimum password length |
+| `new(secret)` | Create config with the signing secret (minimum 32 characters) |
+| `app_name(name)` | Set the app name used by emails and cookie-related metadata |
+| `base_url(url)` | Set the auth service base URL |
+| `base_path(path)` | Set the route mount prefix (default `/api/auth`) |
+| `trusted_origin(origin)` | Add one trusted origin |
+| `trusted_origins(origins)` | Replace the trusted origin list |
+| `disabled_path(path)` | Disable one route path |
+| `disabled_paths(paths)` | Replace the disabled path list |
+| `session_expires_in(duration)` | Set session lifetime |
+| `session_update_age(duration)` | Refresh sessions only when older than the given age |
+| `disable_session_refresh(flag)` | Disable automatic session refresh entirely |
+| `session_fresh_age(duration)` | Mark recently created sessions as "fresh" |
+| `session_cookie_cache(config)` | Enable cookie-backed session caching |
+| `jwt_expires_in(duration)` | Set JWT lifetime for the optional JWT surface |
+| `password_min_length(length)` | Set minimum password length |
+| `account(account_config)` | Replace the account/OAuth configuration block |
+
+## Key Behaviors
+
+- **Session tokens are opaque tokens for the v1 HTTP surface.** Phases 0-12 use session cookies and Bearer tokens backed by the database. `JwtConfig` is only relevant when you enable the JWT surface from phase 13.
+- **`base_url(...)` also sets `session.cookie_secure`.** HTTPS URLs set `Secure=true`; HTTP URLs set `Secure=false`. With the default `http://localhost:3000`, the default is `false`.
+- **`update_age` and `disable_session_refresh` are separate controls.**
+  - `Some(duration)` refreshes only when the session is older than that duration.
+  - `None` refreshes on every access.
+  - `disable_session_refresh(true)` disables refresh entirely.
+- **`fresh_age` is optional.** Leave it `None` unless you need a freshness window for sensitive actions.
 
 ## SessionConfig
 
-Controls session token behavior and cookie settings.
+Controls opaque session token handling and cookie behavior.
 
 | Field | Type | Default |
 |-------|------|---------|
-| `expires_in` | `Duration` | 7 days |
-| `update_age` | `Option<Duration>` | `Some(1 day)` |
-| `fresh_age` | `Duration` | 1 day |
-| `cookie_name` | `String` | `"better-auth.session-token"` |
-| `cookie_secure` | `bool` | `true` |
+| `expires_in` | `chrono::Duration` | `7 days` |
+| `update_age` | `Option<chrono::Duration>` | `Some(1 day)` |
+| `disable_session_refresh` | `bool` | `false` |
+| `fresh_age` | `Option<chrono::Duration>` | `None` |
+| `cookie_name` | `String` | `"better-auth.session_token"` |
+| `cookie_secure` | `bool` | Derived from `base_url` |
 | `cookie_http_only` | `bool` | `true` |
 | `cookie_same_site` | `SameSite` | `Lax` |
 | `cookie_cache` | `Option<CookieCacheConfig>` | `None` |
 
 `SameSite` variants: `Strict`, `Lax`, `None`.
 
-`update_age`: `None` disables session refresh entirely. `Some(duration)` refreshes the session only when last updated more than `duration` ago.
-
-`fresh_age`: Used by `SessionManager::is_session_fresh()` to check if a session was created recently enough for sensitive operations.
-
-`cookie_cache`: When set, session data is cached in a signed/encrypted cookie to avoid DB lookups. See `CookieCacheConfig` and `CookieCacheStrategy` (`Compact`, `Jwt`, `Jwe`).
-
 ## JwtConfig
 
-Controls JWT token generation.
+Controls the optional JWT surface.
 
 | Field | Type | Default |
 |-------|------|---------|
-| `expires_in` | `Duration` | 1 day |
+| `expires_in` | `chrono::Duration` | `1 day` |
 | `algorithm` | `String` | `"HS256"` |
 | `issuer` | `Option<String>` | `None` |
 | `audience` | `Option<String>` | `None` |
 
 ## PasswordConfig
 
-Controls password validation and hashing.
+Controls password validation and Argon2 hashing parameters.
 
 | Field | Type | Default |
 |-------|------|---------|
@@ -72,9 +93,7 @@ Controls password validation and hashing.
 | `require_numbers` | `bool` | `false` |
 | `require_special` | `bool` | `false` |
 
-## Argon2Config
-
-Controls the Argon2 password hashing parameters.
+`PasswordConfig::argon2_config` defaults to:
 
 | Field | Type | Default |
 |-------|------|---------|
@@ -84,18 +103,21 @@ Controls the Argon2 password hashing parameters.
 
 ## Email Provider
 
-An email provider is required for password reset and email verification flows. Configure it on the builder:
+An email provider configures the global email backend used by flows that call `EmailProvider` directly.
+
+This example assumes you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
 
 ```rust
+use better_auth::BetterAuth;
 use better_auth::email::ConsoleEmailProvider;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .email_provider(ConsoleEmailProvider)
     .build()
     .await?;
 ```
 
-See [Email Verification](/docs/authentication/email-verification) for implementing a custom provider.
+For password reset specifically, `POST /request-password-reset` is enabled by `PasswordManagementPlugin::send_reset_password(...)`, not by `EmailProvider` alone.
 
 ## Validation
 

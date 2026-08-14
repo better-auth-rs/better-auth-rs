@@ -1,0 +1,13 @@
+[default]
+# Run library unit tests only (not integration tests or examples)
+run-types = ["Lib"]
+# Workspace-level coverage
+workspace = true
+# Exclude non-library crates
+exclude = ["better-auth-derive"]
+# Skip files that are purely test infrastructure
+exclude-files = ["tests/*", "examples/*", "compat-tests/*", "scripts/*"]
+# Output formats
+out = ["stdout"]
+# Fail if function coverage drops below this threshold
+fail-under = 0

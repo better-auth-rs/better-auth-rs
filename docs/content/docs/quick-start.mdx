@@ -5,13 +5,15 @@ description: Get up and running with Better Auth in minutes.
 
 This guide walks through a minimal working example: configure auth, sign up a user, sign in, and use a session token.
 
+For a complete app-owned SeaORM schema setup, start with the [Axum Integration](/docs/integrations/axum) guide or the canonical [`examples/axum_server.rs`](../../../../examples/axum_server.rs) example. The snippet below assumes that `AppAuthSchema` has already been defined there.
+
 ## Setup
 
 ```rust
-use better_auth::{BetterAuth, AuthConfig};
+use better_auth::{AuthConfig, BetterAuth};
 use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
-use better_auth::adapters::MemoryDatabaseAdapter;
-use better_auth::types::{AuthRequest, HttpMethod};
+use better_auth::prelude::{AuthRequest, HttpMethod};
+use better_auth::seaorm::{Database, SeaOrmStore};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -20,10 +22,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
         .base_url("http://localhost:3000")
         .password_min_length(8);
+    let database = Database::connect("sqlite::memory:").await?;
+    let store = SeaOrmStore::<AppAuthSchema>::new(config.clone(), database);
 
     // 2. Build
-    let auth = BetterAuth::new(config)
-        .database(MemoryDatabaseAdapter::new())
+    let auth = BetterAuth::<AppAuthSchema>::new(config)
+        .store(store)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .build()
@@ -38,30 +42,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "name": "Test User"
     });
 
-    let response = auth.handle_request(AuthRequest {
-        method: HttpMethod::Post,
-        path: "/sign-up/email".to_string(),
-        headers: HashMap::from([
-            ("content-type".to_string(), "application/json".to_string()),
-        ]),
-        body: Some(serde_json::to_vec(&body)?),
-        query: HashMap::new(),
-    }).await?;
+    let response = auth
+        .handle_request(AuthRequest::from_parts(
+            HttpMethod::Post,
+            "/sign-up/email",
+            HashMap::from([(
+                "content-type".to_string(),
+                "application/json".to_string(),
+            )]),
+            Some(serde_json::to_vec(&body)?),
+            HashMap::new(),
+        ))
+        .await?;
 
     let data: serde_json::Value = serde_json::from_slice(&response.body)?;
     let token = data["token"].as_str().unwrap();
     println!("Signed up: {}", data["user"]["email"]);
 
     // 4. Use the session token
-    let response = auth.handle_request(AuthRequest {
-        method: HttpMethod::Get,
-        path: "/get-session".to_string(),
-        headers: HashMap::from([
-            ("authorization".to_string(), format!("Bearer {}", token)),
-        ]),
-        body: None,
-        query: HashMap::new(),
-    }).await?;
+    let response = auth
+        .handle_request(AuthRequest::from_parts(
+            HttpMethod::Get,
+            "/get-session",
+            HashMap::from([(
+                "authorization".to_string(),
+                format!("Bearer {}", token),
+            )]),
+            None,
+            HashMap::new(),
+        ))
+        .await?;
 
     let session: serde_json::Value = serde_json::from_slice(&response.body)?;
     println!("Session user: {}", session["user"]["email"]);

@@ -5,6 +5,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+type PasskeyRecord = {
+  id: string;
+  name?: string;
+  createdAt: string;
+  deviceType: string;
+  backedUp: boolean;
+};
+
 export default function SettingsPage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
@@ -23,6 +31,15 @@ export default function SettingsPage() {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
 
+  // Passkey management
+  const [passkeys, setPasskeys] = useState<PasskeyRecord[]>([]);
+  const [passkeysLoading, setPasskeysLoading] = useState(false);
+  const [passkeyName, setPasskeyName] = useState("");
+  const [passkeyMessage, setPasskeyMessage] = useState("");
+  const [passkeyError, setPasskeyError] = useState("");
+  const [registeringPasskey, setRegisteringPasskey] = useState(false);
+  const [deletingPasskeyId, setDeletingPasskeyId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!isPending && !session) {
       router.push("/sign-in");
@@ -34,6 +51,14 @@ export default function SettingsPage() {
     if (session?.user?.name) {
       setName(session.user.name);
     }
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    void loadPasskeys();
   }, [session]);
 
   async function handleUpdateProfile(e: React.FormEvent) {
@@ -96,6 +121,71 @@ export default function SettingsPage() {
     setPasswordLoading(false);
   }
 
+  async function loadPasskeys() {
+    setPasskeysLoading(true);
+
+    const result = await authClient.$fetch<PasskeyRecord[]>("/passkey/list-user-passkeys", {
+      method: "GET",
+      throw: false,
+    });
+
+    if (result.data) {
+      setPasskeys(result.data);
+      setPasskeyError("");
+    } else if (result.error) {
+      setPasskeyError(result.error.message || "Failed to load passkeys");
+    }
+
+    setPasskeysLoading(false);
+  }
+
+  async function handleRegisterPasskey() {
+    setPasskeyError("");
+    setPasskeyMessage("");
+    setRegisteringPasskey(true);
+
+    const name =
+      passkeyName.trim() || session?.user.email || session?.user.name || "My Passkey";
+
+    const result = await authClient.passkey.addPasskey({
+      name,
+      authenticatorAttachment: "cross-platform",
+    });
+
+    if (result.error) {
+      setPasskeyError(result.error.message || "Failed to register passkey");
+      setRegisteringPasskey(false);
+      return;
+    }
+
+    setPasskeyName("");
+    setPasskeyMessage("Passkey registered successfully");
+    await loadPasskeys();
+    setRegisteringPasskey(false);
+  }
+
+  async function handleDeletePasskey(id: string) {
+    setPasskeyError("");
+    setPasskeyMessage("");
+    setDeletingPasskeyId(id);
+
+    const result = await authClient.$fetch<{ status: boolean }>("/passkey/delete-passkey", {
+      method: "POST",
+      body: { id },
+      throw: false,
+    });
+
+    if (result.error) {
+      setPasskeyError(result.error.message || "Failed to delete passkey");
+      setDeletingPasskeyId(null);
+      return;
+    }
+
+    setPasskeyMessage("Passkey removed");
+    await loadPasskeys();
+    setDeletingPasskeyId(null);
+  }
+
   if (isPending) {
     return (
       <div className="container" style={{ marginTop: "4rem" }}>
@@ -155,7 +245,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Change Password */}
-      <div className="card">
+      <div className="card" style={{ marginBottom: "1.5rem" }}>
         <h2>Change Password</h2>
         <form onSubmit={handleChangePassword}>
           {passwordError && <div className="error">{passwordError}</div>}
@@ -197,6 +287,60 @@ export default function SettingsPage() {
             {passwordLoading ? "Changing..." : "Change Password"}
           </button>
         </form>
+      </div>
+
+      {/* Passkeys */}
+      <div className="card">
+        <h2>Passkeys</h2>
+        <p className="muted">Register a passkey for passwordless sign-in.</p>
+
+        {passkeyError && <div className="error">{passkeyError}</div>}
+        {passkeyMessage && <div className="success">{passkeyMessage}</div>}
+
+        <div style={{ marginBottom: "1rem" }}>
+          <label htmlFor="passkeyName">Passkey Name</label>
+          <input
+            id="passkeyName"
+            type="text"
+            value={passkeyName}
+            onChange={(e) => setPasskeyName(e.target.value)}
+            placeholder="Laptop, Phone, Security Key"
+          />
+
+          <button type="button" onClick={handleRegisterPasskey} disabled={registeringPasskey}>
+            {registeringPasskey ? "Waiting for passkey..." : "Register Passkey"}
+          </button>
+        </div>
+
+        <div className="stack">
+          {passkeysLoading ? (
+            <p className="muted">Loading passkeys...</p>
+          ) : passkeys.length === 0 ? (
+            <p className="muted">No passkeys registered yet.</p>
+          ) : (
+            passkeys.map((passkey) => (
+              <div key={passkey.id} className="passkey-row">
+                <div>
+                  <div className="passkey-name">{passkey.name || "Unnamed Passkey"}</div>
+                  <div className="passkey-meta">
+                    {passkey.deviceType}
+                    {passkey.backedUp ? " • backed up" : ""}
+                    {" • "}
+                    {new Date(passkey.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="danger-inline"
+                  onClick={() => handleDeletePasskey(passkey.id)}
+                  disabled={deletingPasskeyId === passkey.id}
+                >
+                  {deletingPasskeyId === passkey.id ? "Removing..." : "Remove"}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

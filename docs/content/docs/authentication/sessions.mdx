@@ -1,17 +1,19 @@
 ---
 title: Sessions
-description: Session lifecycle, token handling, and session management endpoints.
+description: Session lifecycle, transport, refresh behavior, and session-management endpoints.
 ---
 
-The `SessionManagementPlugin` provides endpoints for querying, listing, and revoking sessions. Sessions are created automatically during sign-up and sign-in.
+The `SessionManagementPlugin` provides endpoints for querying, listing, and revoking sessions. Sessions are created automatically during sign-up, sign-in, passkey authentication, and successful 2FA completion.
 
 ## Setup
+
+These examples assume you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
 
 ```rust
 use better_auth::plugins::SessionManagementPlugin;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(SessionManagementPlugin::new())
     .build()
     .await?;
@@ -21,145 +23,79 @@ let auth = BetterAuth::new(config)
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `enable_session_listing` | `bool` | `true` | Allow listing all user sessions |
-| `enable_session_revocation` | `bool` | `true` | Allow revoking sessions |
-| `require_authentication` | `bool` | `true` | Require auth for all endpoints |
+| `enable_session_listing` | `bool` | `true` | Allow `GET /list-sessions` |
+| `enable_session_revocation` | `bool` | `true` | Allow revocation endpoints |
+| `require_authentication` | `bool` | `true` | Require a valid session for plugin endpoints |
 
-## Authentication Methods
+## Opaque Session Tokens
 
-Session tokens can be sent via **Bearer header** or **cookie**:
+For the v1 release surface, Better Auth uses **opaque session tokens** stored in the database and transported through:
 
 ```http
 Authorization: Bearer session_abc123...
 ```
 
 ```http
-Cookie: better-auth.session-token=session_abc123...
+Cookie: better-auth.session_token=session_abc123...
 ```
 
-The cookie name is configurable via `SessionConfig::cookie_name`.
+JWTs are a separate optional surface documented in phase 13. They are not how the phase 0-12 session endpoints authenticate requests.
 
-## Get Current Session
+## Endpoints
 
-```http
-GET /get-session
-Authorization: Bearer <token>
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/get-session` | Return the current session and user |
+| `POST` | `/sign-out` | Revoke the current session and clear cookies |
+| `GET` | `/list-sessions` | List all active sessions for the current user |
+| `POST` | `/revoke-session` | Revoke one specific session by token |
+| `POST` | `/revoke-sessions` | Revoke all sessions for the current user |
+| `POST` | `/revoke-other-sessions` | Revoke every session except the current one |
+
+## Session Lifecycle
+
+1. A session is created after successful authentication.
+2. The opaque token and session metadata are stored in the database.
+3. The token is returned to the client and usually set as a cookie.
+4. Authenticated requests resolve the token back to the stored session.
+5. Expired or revoked sessions stop authenticating requests.
+
+## Refresh Behavior
+
+Session refresh is controlled by `SessionConfig`:
+
+```rust
+use better_auth::AuthConfig;
+use better_auth::config::SameSite;
+use chrono::Duration;
+
+let mut config = AuthConfig::new("secret...")
+    .base_url("https://auth.example.com");
+config.session.expires_in = Duration::days(7);
+config.session.update_age = Some(Duration::days(1));
+config.session.disable_session_refresh = false;
+config.session.fresh_age = Some(Duration::minutes(10));
+config.session.cookie_name = "better-auth.session_token".to_string();
+config.session.cookie_secure = true;
+config.session.cookie_http_only = true;
+config.session.cookie_same_site = SameSite::Lax;
 ```
 
-### Response
-
-```json
-{
-  "session": {
-    "id": "uuid",
-    "token": "session_abc123...",
-    "userId": "uuid",
-    "expiresAt": "2024-01-08T00:00:00Z",
-    "createdAt": "2024-01-01T00:00:00Z",
-    "updatedAt": "2024-01-01T00:00:00Z",
-    "ipAddress": null,
-    "userAgent": null
-  },
-  "user": {
-    "id": "uuid",
-    "email": "alice@example.com",
-    ...
-  }
-}
-```
-
-Returns `401` if the token is missing, invalid, or expired.
-
-## Sign Out
-
-```http
-POST /sign-out
-Authorization: Bearer <token>
-```
-
-Revokes the current session. Returns:
-
-```json
-{
-  "success": true
-}
-```
-
-## List Sessions
-
-```http
-GET /list-sessions
-Authorization: Bearer <token>
-```
-
-Returns all active sessions for the authenticated user:
-
-```json
-{
-  "sessions": [
-    { "id": "uuid", "token": "session_...", "createdAt": "...", ... },
-    { "id": "uuid", "token": "session_...", "createdAt": "...", ... }
-  ]
-}
-```
-
-## Revoke a Specific Session
-
-```http
-POST /revoke-session
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```json
-{
-  "token": "session_to_revoke..."
-}
-```
-
-Returns `{ "success": true }`.
-
-## Revoke All Sessions
-
-```http
-POST /revoke-sessions
-Authorization: Bearer <token>
-```
-
-Revokes all sessions for the user, including the current one:
-
-```json
-{
-  "count": 3
-}
-```
-
-## Revoke Other Sessions
-
-```http
-POST /revoke-other-sessions
-Authorization: Bearer <token>
-```
-
-Revokes all sessions except the current one:
-
-```json
-{
-  "count": 2
-}
-```
+- `update_age = Some(duration)`: refresh only when the session is older than that duration.
+- `update_age = None`: refresh on every access.
+- `disable_session_refresh = true`: never refresh automatically.
+- `fresh_age`: optional window for treating a session as "fresh" for sensitive actions.
 
 ## Using Sessions in Axum Handlers
 
-With the `axum` feature, use the `CurrentSession` extractor to access the authenticated user directly in your handler — no manual token parsing needed:
+With the `axum` feature, use the `CurrentSession` extractor to access the authenticated user directly in your handler:
 
 ```rust
-use better_auth::handlers::CurrentSession;
-use better_auth::adapters::MemoryDatabaseAdapter;
-use better_auth::AuthUser;
-use axum::{Json, response::IntoResponse};
+use axum::Json;
+use better_auth::integrations::axum::CurrentSession;
+use better_auth::prelude::{AuthSession, AuthUser};
 
-async fn profile(session: CurrentSession<MemoryDatabaseAdapter>) -> impl IntoResponse {
+async fn profile(session: CurrentSession<AppAuthSchema>) -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "user_id": session.user.id(),
         "session_token": session.session.token(),
@@ -167,75 +103,15 @@ async fn profile(session: CurrentSession<MemoryDatabaseAdapter>) -> impl IntoRes
 }
 ```
 
-Use `OptionalSession` for routes that should work for both authenticated and anonymous users. See [Axum Integration](/docs/integrations/axum) for full details.
+Use `OptionalSession<AppAuthSchema>` for routes that should work for both authenticated and anonymous users.
 
-## Session Configuration
+## Two-Factor Interaction
 
-Session behavior is configured via `AuthConfig`:
+When 2FA is enabled, sign-in verifies the primary credential first and then pauses on a pending verification flow. A full session is only created after `verify-totp`, `verify-otp`, or `verify-backup-code` succeeds.
 
-```rust
-use better_auth::{AuthConfig, SameSite};
-use std::time::Duration;
+## Security Notes
 
-let mut config = AuthConfig::new("secret...");
-config.session.expires_in = Duration::hours(24 * 7);        // 7 days
-config.session.cookie_name = "better-auth.session-token".to_string();
-config.session.cookie_secure = true;                         // HTTPS only
-config.session.cookie_http_only = true;                      // Block JavaScript access
-config.session.cookie_same_site = SameSite::Lax;             // CSRF protection
-```
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `session.expires_in` | `Duration` | `7 days` | Session lifetime |
-| `session.cookie_name` | `String` | `better-auth.session-token` | Cookie name |
-| `session.cookie_secure` | `bool` | `true` | HTTPS-only cookie |
-| `session.cookie_http_only` | `bool` | `true` | Prevent JavaScript access |
-| `session.cookie_same_site` | `SameSite` | `Lax` | SameSite cookie policy |
-
-See [Configuration Options](/docs/reference/configuration-options) for all session settings.
-
-## Session Lifecycle
-
-1. **Creation**: A session is created on successful sign-up, sign-in, or 2FA verification
-2. **Storage**: The session token and metadata are stored in the database
-3. **Transmission**: The token is returned in the response body and set as a cookie
-4. **Validation**: On each authenticated request, the token is verified against the database
-5. **Expiration**: Sessions automatically expire after the configured duration
-6. **Revocation**: Sessions can be explicitly revoked via the API
-
-## Session Fields
-
-| Field | Description |
-|-------|-------------|
-| `id` | Unique session identifier |
-| `token` | Session token (sent as cookie or Bearer token) |
-| `userId` | ID of the authenticated user |
-| `expiresAt` | Session expiration timestamp |
-| `createdAt` | When the session was created |
-| `updatedAt` | Last update timestamp |
-| `ipAddress` | Client IP address (if available) |
-| `userAgent` | Client User-Agent string (if available) |
-| `impersonatedBy` | Admin user ID if this is an impersonated session |
-| `activeOrganizationId` | Active organization ID (if using Organization plugin) |
-
-## Two-Factor Authentication
-
-When 2FA is enabled for a user, the sign-in flow changes:
-
-1. User provides email/password — credentials are verified but no session is created
-2. A pending verification token is returned instead
-3. User must complete 2FA verification (TOTP, OTP, or backup code)
-4. Only after successful 2FA verification is a full session created
-
-See [Two-Factor Authentication](/docs/plugins/two-factor) for details.
-
-## Session Security
-
-- **Token entropy**: Tokens are generated using `OsRng` with sufficient entropy
-- **Cookie security**: Configure `Secure`, `HttpOnly`, and `SameSite` attributes appropriately
-- **IP tracking**: Client IP and User-Agent are stored for audit purposes
-- **Multiple sessions**: Users can have multiple active sessions across devices
-- **Selective revocation**: Revoke individual sessions, all sessions, or all except current
-
-See [Cookies](/docs/concepts/cookies) and [Security](/docs/reference/security) for more details.
+- Session tokens are generated with `OsRng`.
+- Cookie transport should normally keep `Secure`, `HttpOnly`, and `SameSite` enabled.
+- Session records can retain audit metadata such as IP address and user-agent.
+- Users can hold multiple sessions across devices and revoke them selectively.

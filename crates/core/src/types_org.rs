@@ -1,6 +1,48 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::borrow::Cow;
 use uuid::Uuid;
+
+use crate::entity::{AuthInvitation, AuthMember, AuthOrganization};
+
+fn serialize_json_option_as_string<S>(
+    value: &Option<serde_json::Value>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match value {
+        Some(inner) => serializer
+            .serialize_some(&serde_json::to_string(inner).map_err(serde::ser::Error::custom)?),
+        None => serializer.serialize_none(),
+    }
+}
+
+fn deserialize_json_option_from_string<'de, D>(
+    deserializer: D,
+) -> Result<Option<serde_json::Value>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum MetadataValue {
+        Json(serde_json::Value),
+        String(String),
+    }
+
+    let value = Option::<MetadataValue>::deserialize(deserializer)?;
+    value
+        .map(|inner| match inner {
+            MetadataValue::Json(value) => Ok(value),
+            MetadataValue::String(value) => match serde_json::from_str(&value) {
+                Ok(parsed) => Ok(parsed),
+                Err(_) => Ok(serde_json::Value::String(value)),
+            },
+        })
+        .transpose()
+}
 
 /// Organization entity - matches OpenAPI schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,7 +51,11 @@ pub struct Organization {
     pub name: String,
     pub slug: String,
     pub logo: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        serialize_with = "serialize_json_option_as_string",
+        deserialize_with = "deserialize_json_option_from_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub metadata: Option<serde_json::Value>,
     #[serde(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
@@ -28,29 +74,6 @@ pub struct Member {
     pub role: String,
     #[serde(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
-}
-
-/// Member with user details (for API responses)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemberWithUser {
-    pub id: String,
-    #[serde(rename = "organizationId")]
-    pub organization_id: String,
-    #[serde(rename = "userId")]
-    pub user_id: String,
-    pub role: String,
-    #[serde(rename = "createdAt")]
-    pub created_at: DateTime<Utc>,
-    pub user: MemberUser,
-}
-
-/// Minimal user info for member responses
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemberUser {
-    pub id: String,
-    pub email: Option<String>,
-    pub name: Option<String>,
-    pub image: Option<String>,
 }
 
 /// Invitation status
@@ -206,11 +229,112 @@ impl CreateInvitation {
     }
 }
 
-/// Full organization with members and invitations
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FullOrganization {
-    #[serde(flatten)]
-    pub organization: Organization,
-    pub members: Vec<MemberWithUser>,
-    pub invitations: Vec<Invitation>,
+impl<T: AuthOrganization> From<&T> for Organization {
+    fn from(organization: &T) -> Self {
+        Self {
+            id: organization.id().into_owned(),
+            name: organization.name().to_owned(),
+            slug: organization.slug().to_owned(),
+            logo: organization.logo().map(str::to_owned),
+            metadata: organization.metadata().cloned(),
+            created_at: organization.created_at(),
+            updated_at: organization.updated_at(),
+        }
+    }
+}
+
+impl AuthOrganization for Organization {
+    fn id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.id)
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn slug(&self) -> &str {
+        &self.slug
+    }
+    fn logo(&self) -> Option<&str> {
+        self.logo.as_deref()
+    }
+    fn metadata(&self) -> Option<&serde_json::Value> {
+        self.metadata.as_ref()
+    }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
+}
+
+impl AuthMember for Member {
+    fn id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.id)
+    }
+    fn organization_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.organization_id)
+    }
+    fn user_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.user_id)
+    }
+    fn role(&self) -> &str {
+        &self.role
+    }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+}
+
+impl<T: AuthMember> From<&T> for Member {
+    fn from(member: &T) -> Self {
+        Self {
+            id: member.id().into_owned(),
+            organization_id: member.organization_id().into_owned(),
+            user_id: member.user_id().into_owned(),
+            role: member.role().to_owned(),
+            created_at: member.created_at(),
+        }
+    }
+}
+
+impl AuthInvitation for Invitation {
+    fn id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.id)
+    }
+    fn organization_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.organization_id)
+    }
+    fn email(&self) -> &str {
+        &self.email
+    }
+    fn role(&self) -> &str {
+        &self.role
+    }
+    fn status(&self) -> &InvitationStatus {
+        &self.status
+    }
+    fn inviter_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.inviter_id)
+    }
+    fn expires_at(&self) -> DateTime<Utc> {
+        self.expires_at
+    }
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+}
+
+impl<T: AuthInvitation> From<&T> for Invitation {
+    fn from(invitation: &T) -> Self {
+        Self {
+            id: invitation.id().into_owned(),
+            organization_id: invitation.organization_id().into_owned(),
+            email: invitation.email().to_owned(),
+            role: invitation.role().to_owned(),
+            status: invitation.status().clone(),
+            inviter_id: invitation.inviter_id().into_owned(),
+            expires_at: invitation.expires_at(),
+            created_at: invitation.created_at(),
+        }
+    }
 }

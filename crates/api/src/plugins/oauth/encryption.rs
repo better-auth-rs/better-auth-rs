@@ -23,9 +23,12 @@ const HKDF_INFO: &[u8] = b"better-auth-oauth-token-encryption";
 fn derive_key(secret: &str) -> Key<Aes256Gcm> {
     let hk = Hkdf::<Sha256>::new(None, secret.as_bytes());
     let mut okm = [0u8; 32];
-    // info is static so expand will never fail
-    hk.expand(HKDF_INFO, &mut okm)
-        .expect("32 bytes is a valid length for HKDF-SHA256");
+    // info is static and 32 bytes is always valid for HKDF-SHA256, so this
+    // cannot fail at runtime.
+    if hk.expand(HKDF_INFO, &mut okm).is_err() {
+        // Unreachable: 32 bytes is within SHA-256 HKDF output limit (255 * 32).
+        okm = [0u8; 32];
+    }
     *Key::<Aes256Gcm>::from_slice(&okm)
 }
 
@@ -89,22 +92,13 @@ pub fn maybe_encrypt(
 
 /// Conditionally decrypt a token value. Returns the original value when
 /// encryption is disabled, or the decrypted value when enabled.
-///
-/// When encryption is enabled and decryption fails (e.g. because the token
-/// was stored as plaintext before encryption was turned on), the original
-/// value is returned as-is. This graceful fallback allows enabling
-/// `encrypt_oauth_tokens` on an existing database without breaking reads
-/// for previously stored plaintext tokens.
 pub fn maybe_decrypt(
     value: Option<&str>,
     encrypt: bool,
     secret: &str,
 ) -> Result<Option<String>, AuthError> {
     match (value, encrypt) {
-        (Some(v), true) => match decrypt_token(v, secret) {
-            Ok(decrypted) => Ok(Some(decrypted)),
-            Err(_) => Ok(Some(v.to_string())),
-        },
+        (Some(v), true) => decrypt_token(v, secret).map(Some),
         (Some(v), false) => Ok(Some(v.to_string())),
         (None, _) => Ok(None),
     }
@@ -119,8 +113,8 @@ pub struct EncryptedTokenSet {
 
 /// Read `encrypt_oauth_tokens` and `secret` from the auth context and
 /// conditionally encrypt a full set of OAuth tokens in one call.
-pub fn encrypt_token_set<DB: better_auth_core::DatabaseAdapter>(
-    ctx: &better_auth_core::AuthContext<DB>,
+pub fn encrypt_token_set(
+    ctx: &better_auth_core::AuthContext<impl better_auth_core::AuthSchema>,
     access_token: Option<String>,
     refresh_token: Option<String>,
     id_token: Option<String>,
@@ -138,6 +132,7 @@ pub fn encrypt_token_set<DB: better_auth_core::DatabaseAdapter>(
 mod tests {
     use super::*;
 
+    // Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/utils.ts; adapted to the Rust OAuth token encryption helpers.
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
         let secret = "a]vt!MFX8H-e!4igKa5)Tu.{ec:2$z%n";
@@ -150,12 +145,14 @@ mod tests {
         assert_eq!(decrypted, plaintext);
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/utils.ts; adapted to the Rust OAuth token encryption helpers.
     #[test]
     fn test_maybe_encrypt_none() {
         let result = maybe_encrypt(None, true, "secret-key-that-is-32-chars-long").unwrap();
         assert!(result.is_none());
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/utils.ts; adapted to the Rust OAuth token encryption helpers.
     #[test]
     fn test_maybe_encrypt_disabled() {
         let token = "plain-token".to_string();
@@ -163,18 +160,18 @@ mod tests {
         assert_eq!(result, Some(token));
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/utils.ts; adapted to the Rust OAuth token encryption helpers.
     #[test]
     fn test_maybe_decrypt_none() {
         let result = maybe_decrypt(None, true, "secret-key-that-is-32-chars-long").unwrap();
         assert!(result.is_none());
     }
 
+    // Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/utils.ts; adapted to the Rust OAuth token encryption helpers.
     #[test]
-    fn test_maybe_decrypt_plaintext_fallback() {
-        // Simulate a token that was stored as plaintext before encryption was enabled.
-        // `maybe_decrypt` should gracefully fall back to returning the original value.
+    fn test_maybe_decrypt_rejects_plaintext_when_encryption_is_enabled() {
         let plaintext = "ya29.a0AfH6SMBx-some-access-token";
-        let result = maybe_decrypt(Some(plaintext), true, "some-secret").unwrap();
-        assert_eq!(result, Some(plaintext.to_string()));
+        let result = maybe_decrypt(Some(plaintext), true, "some-secret");
+        assert!(result.is_err());
     }
 }

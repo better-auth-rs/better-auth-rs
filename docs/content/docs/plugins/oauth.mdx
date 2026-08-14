@@ -7,12 +7,14 @@ The `OAuthPlugin` enables social sign-in via OAuth 2.0 providers. It handles the
 
 ## Setup
 
+These examples assume you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
 use better_auth::plugins::OAuthPlugin;
 use better_auth::plugins::oauth::OAuthProvider;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(
         OAuthPlugin::new()
             .add_provider("google", OAuthProvider::google(
@@ -35,7 +37,7 @@ Better Auth RS includes pre-configured providers with correct URLs and user info
 | Provider | Constructor | Default Scopes |
 |----------|------------|----------------|
 | Google | `OAuthProvider::google(client_id, client_secret)` | `openid`, `email`, `profile` |
-| GitHub | `OAuthProvider::github(client_id, client_secret)` | `user:email` |
+| GitHub | `OAuthProvider::github(client_id, client_secret)` | `read:user`, `user:email` |
 | Discord | `OAuthProvider::discord(client_id, client_secret)` | `identify`, `email` |
 
 ## Custom Provider
@@ -63,8 +65,8 @@ let custom_provider = OAuthProvider {
     },
 };
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(
         OAuthPlugin::new()
             .add_provider("custom", custom_provider)
@@ -86,8 +88,19 @@ The OAuth plugin exposes the following endpoints. For full request/response deta
 | `/link-social` | POST | Link a social account to an existing user |
 | `/get-access-token` | POST | Retrieve stored OAuth access token |
 | `/refresh-token` | POST | Refresh the OAuth access token |
+| `/account-info` | GET | Retrieve provider user info for a linked account |
 | `/list-accounts` | GET | List all linked accounts |
 | `/unlink-account` | POST | Unlink a social account |
+
+## Provider Account Info
+
+Use `GET /account-info` to fetch provider-specific user info for a linked account.
+Pass the provider account id as the `accountId` query parameter.
+
+```http
+GET /account-info?accountId=provider-account-id
+Authorization: Bearer <token>
+```
 
 ## How It Works
 

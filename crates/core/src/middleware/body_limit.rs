@@ -98,6 +98,7 @@ mod tests {
         }
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_body_limit_allows_within_limit() {
         let mw = BodyLimitMiddleware::new(BodyLimitConfig::new().max_bytes(1024));
@@ -105,6 +106,7 @@ mod tests {
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_body_limit_allows_exact_limit() {
         let mw = BodyLimitMiddleware::new(BodyLimitConfig::new().max_bytes(1024));
@@ -112,6 +114,7 @@ mod tests {
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_body_limit_rejects_over_limit() {
         let mw = BodyLimitMiddleware::new(BodyLimitConfig::new().max_bytes(1024));
@@ -121,6 +124,7 @@ mod tests {
         assert_eq!(resp.unwrap().status, 413);
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_body_limit_allows_no_body() {
         let mw = BodyLimitMiddleware::new(BodyLimitConfig::new().max_bytes(1024));
@@ -135,6 +139,7 @@ mod tests {
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }
 
+    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
     #[tokio::test]
     async fn test_body_limit_disabled() {
         let config = BodyLimitConfig::new().max_bytes(10).enabled(false);

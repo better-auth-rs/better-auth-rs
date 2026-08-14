@@ -1,8 +1,8 @@
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-use crate::adapters::DatabaseAdapter;
 use crate::plugin::AuthPlugin;
+use crate::schema::AuthSchema;
 use crate::types::HttpMethod;
 
 /// Minimal OpenAPI 3.1.0 spec builder that collects routes from plugins.
@@ -80,7 +80,7 @@ impl OpenApiBuilder {
             tags: vec![tag.to_string()],
             responses: {
                 let mut r = BTreeMap::new();
-                r.insert(
+                _ = r.insert(
                     "200".to_string(),
                     OpenApiResponse {
                         description: "Successful response".to_string(),
@@ -90,7 +90,8 @@ impl OpenApiBuilder {
             },
         };
 
-        self.paths
+        _ = self
+            .paths
             .entry(path.to_string())
             .or_default()
             .insert(method_str.to_string(), operation);
@@ -98,7 +99,7 @@ impl OpenApiBuilder {
     }
 
     /// Register all routes from a plugin.
-    pub fn plugin<DB: DatabaseAdapter>(mut self, plugin: &dyn AuthPlugin<DB>) -> Self {
+    pub fn plugin<S: AuthSchema>(mut self, plugin: &dyn AuthPlugin<S>) -> Self {
         let tag = plugin.name();
         for route in plugin.routes() {
             self = self.route(&route.method, &route.path, &route.operation_id, tag);
@@ -111,14 +112,6 @@ impl OpenApiBuilder {
         self.route(&HttpMethod::Get, "/ok", "ok", "core")
             .route(&HttpMethod::Get, "/error", "error", "core")
             .route(&HttpMethod::Post, "/update-user", "update_user", "core")
-            .route(&HttpMethod::Post, "/delete-user", "delete_user", "core")
-            .route(&HttpMethod::Post, "/change-email", "change_email", "core")
-            .route(
-                &HttpMethod::Get,
-                "/delete-user/callback",
-                "delete_user_callback",
-                "core",
-            )
     }
 
     /// Build the final OpenAPI spec.
@@ -151,6 +144,7 @@ impl OpenApiSpec {
 mod tests {
     use super::*;
 
+    // Rust-specific surface: `OpenApiBuilder` and `OpenApiSpec` are Rust-specific public APIs for embedded schema generation.
     #[test]
     fn test_builder_core_routes() {
         let spec = OpenApiBuilder::new("Better Auth", "0.1.0")
@@ -163,7 +157,6 @@ mod tests {
         assert!(spec.paths.contains_key("/ok"));
         assert!(spec.paths.contains_key("/error"));
         assert!(spec.paths.contains_key("/update-user"));
-        assert!(spec.paths.contains_key("/delete-user"));
 
         // /ok should have a GET operation
         let ok_path = &spec.paths["/ok"];
@@ -171,6 +164,7 @@ mod tests {
         assert_eq!(ok_path["get"].operation_id, "ok");
     }
 
+    // Rust-specific surface: `OpenApiBuilder` and `OpenApiSpec` are Rust-specific public APIs for embedded schema generation.
     #[test]
     fn test_builder_custom_route() {
         let spec = OpenApiBuilder::new("Test", "1.0.0")
@@ -187,6 +181,7 @@ mod tests {
         assert_eq!(path["post"].tags, vec!["email-password"]);
     }
 
+    // Rust-specific surface: `OpenApiBuilder` and `OpenApiSpec` are Rust-specific public APIs for embedded schema generation.
     #[test]
     fn test_spec_to_json() {
         let spec = OpenApiBuilder::new("Test", "1.0.0").core_routes().build();
@@ -196,6 +191,7 @@ mod tests {
         assert!(json.contains("\"/ok\""));
     }
 
+    // Rust-specific surface: `OpenApiBuilder` and `OpenApiSpec` are Rust-specific public APIs for embedded schema generation.
     #[test]
     fn test_spec_to_value() {
         let spec = OpenApiBuilder::new("Test", "1.0.0").core_routes().build();

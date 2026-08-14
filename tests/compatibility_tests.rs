@@ -1,66 +1,178 @@
 //! Compatibility tests that compare our implementation against the
-//! reference `better-auth.yaml` OpenAPI specification (v1.4.18).
+//! generated upstream OpenAPI contract from the pinned Better Auth package.
 //!
 //! These tests ensure route coverage and response shape alignment with
 //! the canonical Better-Auth TypeScript implementation.
+#![allow(
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "compatibility tests intentionally use panic-on-failure assertions and direct JSON indexing for contract checks"
+)]
+
+mod compat;
 
 use std::collections::{BTreeMap, HashSet};
 
 use better_auth::{
-    AuthBuilder, AuthConfig, BetterAuth, MemoryDatabaseAdapter,
+    AuthBuilder, AuthConfig, BetterAuth,
     plugins::EmailPasswordPlugin,
-    types::{AuthRequest, HttpMethod},
+    prelude::{AuthRequest, HttpMethod},
 };
+use better_auth_seaorm::{Database, DatabaseConnection, SeaOrmStore};
 use serde_json::Value;
+
+type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Parse the reference OpenAPI YAML and return a map of path → set of HTTP methods.
+/// Parse the generated upstream OpenAPI and return a map of path → set of HTTP methods.
 fn load_reference_spec() -> BTreeMap<String, HashSet<String>> {
-    let yaml_str = std::fs::read_to_string("better-auth.yaml")
-        .expect("better-auth.yaml must exist in project root");
-
-    let doc: Value = serde_yaml::from_str(&yaml_str).expect("better-auth.yaml must be valid YAML");
-
-    let paths = doc["paths"]
-        .as_object()
-        .expect("better-auth.yaml must have a 'paths' key");
+    let spec =
+        compat::schema::load_openapi_spec_with_profile(compat::schema::OpenApiProfile::AllIn);
+    let paths = spec.paths.as_ref().expect("generated spec must have paths");
 
     let mut result = BTreeMap::new();
     for (path, methods) in paths {
         let mut method_set = HashSet::new();
-        if let Some(obj) = methods.as_object() {
-            for method in obj.keys() {
-                // Skip non-method keys like "parameters"
-                match method.as_str() {
-                    "get" | "post" | "put" | "delete" | "patch" | "options" | "head" => {
-                        method_set.insert(method.clone());
-                    }
-                    _ => {}
-                }
-            }
+        if methods.get.is_some() {
+            let _ = method_set.insert("get".to_string());
         }
-        result.insert(path.clone(), method_set);
+        if methods.post.is_some() {
+            let _ = method_set.insert("post".to_string());
+        }
+        if methods.put.is_some() {
+            let _ = method_set.insert("put".to_string());
+        }
+        if methods.delete.is_some() {
+            let _ = method_set.insert("delete".to_string());
+        }
+        if methods.patch.is_some() {
+            let _ = method_set.insert("patch".to_string());
+        }
+        if methods.options.is_some() {
+            let _ = method_set.insert("options".to_string());
+        }
+        if methods.head.is_some() {
+            let _ = method_set.insert("head".to_string());
+        }
+        let _ = result.insert(path.clone(), method_set);
     }
     result
 }
 
+fn completed_phase_reference_surface(
+    reference: &BTreeMap<String, HashSet<String>>,
+) -> BTreeMap<String, HashSet<String>> {
+    let mut surface: BTreeMap<String, HashSet<String>> = [
+        "/ok",
+        "/error",
+        "/sign-up/email",
+        "/sign-in/email",
+        "/get-session",
+        "/sign-out",
+        "/list-sessions",
+        "/revoke-session",
+        "/revoke-sessions",
+        "/revoke-other-sessions",
+        "/refresh-token",
+        "/get-access-token",
+        "/request-password-reset",
+        "/reset-password",
+        "/reset-password/{token}",
+        "/change-password",
+        "/verify-password",
+        "/update-user",
+        "/delete-user",
+        "/delete-user/callback",
+        "/change-email",
+        "/send-verification-email",
+        "/verify-email",
+        "/sign-in/social",
+        "/link-social",
+        "/list-accounts",
+        "/unlink-account",
+        "/account-info",
+        "/device/code",
+        "/device/token",
+        "/device",
+        "/device/approve",
+        "/device/deny",
+        "/api-key/create",
+        "/api-key/get",
+        "/api-key/list",
+        "/api-key/update",
+        "/api-key/delete",
+    ]
+    .into_iter()
+    .map(|path| {
+        (
+            path.to_string(),
+            reference
+                .get(path)
+                .unwrap_or_else(|| panic!("reference spec missing completed-phase path {}", path))
+                .clone(),
+        )
+    })
+    .collect();
+
+    // The pinned TS runtime exposes `/callback/{provider}` publicly, but the
+    // generated OpenAPI profile omits it. Treat it as a completed-phase
+    // runtime route and assert it explicitly until the structural profile
+    // catches up.
+    let _ = surface.insert(
+        "/callback/{provider}".to_string(),
+        HashSet::from(["get".to_string(), "post".to_string()]),
+    );
+    // The pinned TS runtime exposes `/sign-in/username` and
+    // `/is-username-available` publicly when the username plugin is enabled,
+    // but the generated OpenAPI profile omits them.
+    let _ = surface.insert(
+        "/sign-in/username".to_string(),
+        HashSet::from(["post".to_string()]),
+    );
+    let _ = surface.insert(
+        "/is-username-available".to_string(),
+        HashSet::from(["post".to_string()]),
+    );
+
+    surface
+}
+
 /// Create a test auth instance with all currently implemented plugins.
-async fn create_full_auth() -> BetterAuth<MemoryDatabaseAdapter> {
+async fn test_database() -> DatabaseConnection {
+    let database = Database::connect("sqlite::memory:").await.unwrap();
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
+        .await
+        .unwrap();
+    database
+}
+
+async fn create_full_auth() -> BetterAuth<TestSchema> {
     let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
         .base_url("http://localhost:3000")
         .password_min_length(8);
 
-    AuthBuilder::new(config)
-        .database(MemoryDatabaseAdapter::new())
+    let store = SeaOrmStore::<TestSchema>::new(config.clone(), test_database().await);
+
+    AuthBuilder::<TestSchema>::new(config)
+        .store(store)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(better_auth::plugins::SessionManagementPlugin::new())
         .plugin(better_auth::plugins::PasswordManagementPlugin::new())
         .plugin(better_auth::plugins::EmailVerificationPlugin::new())
+        .plugin(
+            better_auth::plugins::UserManagementPlugin::new()
+                .change_email_enabled(true)
+                .delete_user_enabled(true)
+                .require_delete_verification(false),
+        )
         .plugin(better_auth::plugins::AccountManagementPlugin::new())
         .plugin(better_auth::plugins::OAuthPlugin::new())
+        .plugin(better_auth::plugins::DeviceAuthorizationPlugin::new())
         .plugin(better_auth::plugins::TwoFactorPlugin::new())
         .plugin(better_auth::plugins::ApiKeyPlugin::builder().build())
         .build()
@@ -69,23 +181,13 @@ async fn create_full_auth() -> BetterAuth<MemoryDatabaseAdapter> {
 }
 
 /// Collect all routes our implementation exposes (core + plugin).
-fn collect_implemented_routes(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
-) -> BTreeMap<String, HashSet<String>> {
+fn collect_implemented_routes(auth: &BetterAuth<TestSchema>) -> BTreeMap<String, HashSet<String>> {
     let mut routes: BTreeMap<String, HashSet<String>> = BTreeMap::new();
 
     // Core routes (from handle_core_request)
-    let core = vec![
-        ("/ok", "get"),
-        ("/error", "get"),
-        ("/reference/openapi.json", "get"),
-        ("/update-user", "post"),
-        ("/delete-user", "post"),
-        ("/change-email", "post"),
-        ("/delete-user/callback", "get"),
-    ];
+    let core = vec![("/ok", "get"), ("/error", "get"), ("/update-user", "post")];
     for (path, method) in core {
-        routes
+        let _ = routes
             .entry(path.to_string())
             .or_default()
             .insert(method.to_string());
@@ -103,7 +205,7 @@ fn collect_implemented_routes(
                 HttpMethod::Options => "options",
                 HttpMethod::Head => "head",
             };
-            routes
+            let _ = routes
                 .entry(route.path.clone())
                 .or_default()
                 .insert(method_str.to_string());
@@ -201,38 +303,100 @@ async fn test_route_coverage_report() {
     eprintln!("=============================");
 }
 
-/// Verify that the "default" (core auth) endpoints we claim to support
-/// actually exist in our implementation.
 #[tokio::test]
-async fn test_core_endpoints_present() {
+async fn test_completed_phase_surface_matches_reference_exactly() {
+    let reference = load_reference_spec();
+    let expected = completed_phase_reference_surface(&reference);
     let auth = create_full_auth().await;
     let implemented = collect_implemented_routes(&auth);
 
-    // Endpoints that MUST be present per Phase 0-1
+    let mut missing = Vec::new();
+    let mut extra = Vec::new();
+
+    for (path, expected_methods) in &expected {
+        match implemented.get(path) {
+            Some(actual_methods) => {
+                for method in expected_methods {
+                    if !actual_methods.contains(method) {
+                        missing.push(format!("{} {}", method.to_uppercase(), path));
+                    }
+                }
+                for method in actual_methods {
+                    if !expected_methods.contains(method) {
+                        extra.push(format!("{} {}", method.to_uppercase(), path));
+                    }
+                }
+            }
+            None => {
+                for method in expected_methods {
+                    missing.push(format!("{} {}", method.to_uppercase(), path));
+                }
+            }
+        }
+    }
+
+    assert!(
+        missing.is_empty() && extra.is_empty(),
+        "completed phase route drift detected\nmissing:\n{}\nextra:\n{}",
+        if missing.is_empty() {
+            "<none>".to_string()
+        } else {
+            missing.join("\n")
+        },
+        if extra.is_empty() {
+            "<none>".to_string()
+        } else {
+            extra.join("\n")
+        }
+    );
+}
+
+/// Verify that the completed pre-stage-8 endpoints covered by the main surface test exist at all.
+#[tokio::test]
+async fn test_completed_phase_endpoints_present() {
+    let auth = create_full_auth().await;
+    let implemented = collect_implemented_routes(&auth);
+
     let required = vec![
         ("get", "/ok"),
         ("get", "/error"),
         ("post", "/sign-up/email"),
         ("post", "/sign-in/email"),
+        ("post", "/sign-in/username"),
+        ("post", "/is-username-available"),
         ("get", "/get-session"),
         ("post", "/sign-out"),
         ("post", "/update-user"),
         ("post", "/delete-user"),
-        ("post", "/forget-password"),
+        ("post", "/request-password-reset"),
         ("post", "/reset-password"),
         ("post", "/change-password"),
-        ("post", "/set-password"),
+        ("post", "/verify-password"),
         ("post", "/send-verification-email"),
         ("get", "/verify-email"),
         ("get", "/list-sessions"),
         ("post", "/revoke-session"),
         ("post", "/revoke-sessions"),
         ("post", "/revoke-other-sessions"),
+        ("post", "/sign-in/social"),
+        ("get", "/callback/{provider}"),
+        ("post", "/callback/{provider}"),
+        ("post", "/link-social"),
         ("get", "/list-accounts"),
         ("post", "/unlink-account"),
+        ("get", "/account-info"),
         ("post", "/change-email"),
         ("get", "/delete-user/callback"),
-        ("post", "/sign-in/username"),
+        ("post", "/device/code"),
+        ("post", "/device/token"),
+        ("get", "/device"),
+        ("post", "/device/approve"),
+        ("post", "/device/deny"),
+        ("post", "/api-key/create"),
+        ("get", "/api-key/get"),
+        ("get", "/api-key/list"),
+        ("post", "/api-key/update"),
+        ("post", "/api-key/delete"),
     ];
 
     let mut missing = Vec::new();
@@ -280,6 +444,14 @@ async fn test_generated_openapi_has_core_routes() {
         spec.paths.contains_key("/sign-in/email"),
         "OpenAPI spec missing /sign-in/email"
     );
+    assert!(
+        spec.paths.contains_key("/verify-password"),
+        "OpenAPI spec missing /verify-password"
+    );
+    assert!(
+        spec.paths.contains_key("/account-info"),
+        "OpenAPI spec missing /account-info"
+    );
 }
 
 /// Verify the generated OpenAPI spec version and info fields.
@@ -299,7 +471,7 @@ async fn test_generated_openapi_metadata() {
 
 /// Helper to send a request and parse the JSON response body.
 async fn send_json_request(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    auth: &BetterAuth<TestSchema>,
     method: HttpMethod,
     path: &str,
     body: Option<Value>,
@@ -307,7 +479,8 @@ async fn send_json_request(
     let mut req = AuthRequest::new(method, path);
     if let Some(b) = body {
         req.body = Some(b.to_string().into_bytes());
-        req.headers
+        let _ = req
+            .headers
             .insert("content-type".to_string(), "application/json".to_string());
     }
     let resp = auth
@@ -329,13 +502,35 @@ async fn test_contract_ok_endpoint() {
     assert_eq!(body["ok"], true);
 }
 
-/// GET /error should return { "ok": false }
+/// GET /error should return the TS-compatible HTML error page.
 #[tokio::test]
 async fn test_contract_error_endpoint() {
     let auth = create_full_auth().await;
     let (status, body) = send_json_request(&auth, HttpMethod::Get, "/error", None).await;
     assert_eq!(status, 200);
-    assert_eq!(body["ok"], false);
+    let html = body.as_str().expect("/error should return HTML text");
+    // The HTML page uses inline-styled elements matching the TS template
+    // (not plain `<h1>ERROR</h1>` — both TS and Rust use styled tags).
+    assert!(
+        html.contains("<title>Error</title>"),
+        "error page should contain <title>Error</title>"
+    );
+    assert!(
+        html.contains("ERROR"),
+        "error page should contain ERROR heading"
+    );
+    assert!(
+        html.contains("UNKNOWN"),
+        "error page should contain the UNKNOWN error code"
+    );
+    assert!(
+        html.contains("CODE:"),
+        "error page should contain CODE: label"
+    );
+    assert!(
+        html.contains("Ask AI"),
+        "error page should contain Ask AI button"
+    );
 }
 
 /// POST /sign-up/email should return { token, user: { id, email, name, ... } }
@@ -379,7 +574,7 @@ async fn test_contract_signin_response_shape() {
     let auth = create_full_auth().await;
 
     // Create user first
-    send_json_request(
+    let _ = send_json_request(
         &auth,
         HttpMethod::Post,
         "/sign-up/email",
@@ -434,7 +629,8 @@ async fn test_contract_signout_response_shape() {
 
     // Sign out
     let mut req = AuthRequest::new(HttpMethod::Post, "/sign-out");
-    req.headers
+    let _ = req
+        .headers
         .insert("authorization".to_string(), format!("Bearer {}", token));
     let resp = auth
         .handle_request(req)
@@ -490,7 +686,7 @@ async fn test_contract_validation_error_shape() {
     .await;
 
     assert!(
-        status >= 400 && status < 500,
+        (400..500).contains(&status),
         "Validation error should be 4xx, got {}",
         status
     );
@@ -500,12 +696,12 @@ async fn test_contract_validation_error_shape() {
     );
 }
 
-/// GET /reference/openapi.json should return valid OpenAPI spec
+/// GET /__test/openapi.json should return valid OpenAPI spec
 #[tokio::test]
 async fn test_contract_openapi_endpoint() {
     let auth = create_full_auth().await;
     let (status, body) =
-        send_json_request(&auth, HttpMethod::Get, "/reference/openapi.json", None).await;
+        send_json_request(&auth, HttpMethod::Get, "/__test/openapi.json", None).await;
 
     assert_eq!(status, 200);
     assert!(

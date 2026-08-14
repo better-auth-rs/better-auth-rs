@@ -1,10 +1,13 @@
 [package]
-name = "better-auth-derive"
+name = "better-auth-macros"
 version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
-description = "Derive macros for better-auth entity traits"
+description = "Proc macros used internally by the better-auth workspace"
 repository = { workspace = true }
+
+[lints]
+workspace = true
 
 [lib]
 proc-macro = true

@@ -1,25 +1,35 @@
-use better_auth_core::adapters::DatabaseAdapter;
-use better_auth_core::entity::{AuthMember, AuthSession, AuthUser};
+use better_auth_core::entity::{AuthMember, AuthOrganization, AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
+use better_auth_core::store::ListOrganizationMembersParams;
 use better_auth_core::types::{AuthRequest, AuthResponse};
+use std::collections::HashMap;
 
 use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::OrganizationConfig;
 use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
 use crate::plugins::organization::types::{
-    ListMembersQuery, ListMembersResponse, MemberResponse, MemberWrappedResponse,
-    RemoveMemberRequest, RemovedMemberInfo, RemovedMemberResponse, UpdateMemberRoleRequest,
+    BasicMemberResponse, GetActiveMemberRoleQuery, GetActiveMemberRoleResponse, ListMembersQuery,
+    ListMembersResponse, MemberResponse, RemoveMemberRequest, RemovedMemberResponse,
+    UpdateMemberRoleRequest,
 };
+
+fn has_role(member: &impl AuthMember, role: &str) -> bool {
+    member
+        .role()
+        .split(',')
+        .map(str::trim)
+        .any(|candidate| candidate == role)
+}
 
 // ---------------------------------------------------------------------------
 // Core functions
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn get_active_member_core<DB: DatabaseAdapter>(
-    user: &DB::User,
-    session: &DB::Session,
-    ctx: &AuthContext<DB>,
+pub(crate) async fn get_active_member_core(
+    user: &impl AuthUser,
+    session: &impl AuthSession,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<MemberResponse> {
     let org_id = session
         .active_organization_id()
@@ -27,108 +37,155 @@ pub(crate) async fn get_active_member_core<DB: DatabaseAdapter>(
 
     let member = ctx
         .database
-        .get_member(org_id, user.id())
+        .get_member(org_id, &user.id())
         .await?
-        .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
+        .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
     Ok(MemberResponse::from_member_and_user(&member, user))
 }
 
-pub(crate) async fn list_members_core<DB: DatabaseAdapter>(
+pub(crate) async fn list_members_core(
     query: &ListMembersQuery,
-    user: &DB::User,
-    session: &DB::Session,
-    ctx: &AuthContext<DB>,
+    user: &impl AuthUser,
+    session: &impl AuthSession,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ListMembersResponse> {
-    let org_id = resolve_organization_id(
-        query.organization_id.as_deref(),
-        query.organization_slug.as_deref(),
-        session,
-        ctx,
-    )
-    .await?;
+    let org_id = if let Some(slug) = query.organization_slug.as_deref() {
+        let organization = ctx
+            .database
+            .get_organization_by_slug(slug)
+            .await?
+            .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+        organization.id().to_string()
+    } else {
+        resolve_organization_id(query.organization_id.as_deref(), None, session, ctx).await?
+    };
 
-    ctx.database
-        .get_member(&org_id, user.id())
+    let _ = ctx
+        .database
+        .get_member(&org_id, &user.id())
         .await?
-        .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
+        .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
 
-    let members_raw = ctx.database.list_organization_members(&org_id).await?;
-    let total = members_raw.len();
-
-    let offset = query.offset.unwrap_or(0);
-    let limit = query.limit.unwrap_or(50).min(100);
-
-    let members_page: Vec<_> = members_raw.into_iter().skip(offset).take(limit).collect();
-
-    let mut members = Vec::with_capacity(members_page.len());
-    for member in &members_page {
-        if let Some(user_info) = ctx.database.get_user_by_id(member.user_id()).await? {
-            members.push(MemberResponse::from_member_and_user(member, &user_info));
+    let member_params = ListOrganizationMembersParams {
+        organization_id: org_id,
+        limit: query.limit.map(|limit| limit.min(100)).or(Some(50)),
+        offset: query.offset,
+        sort_by: query.sort_by.clone(),
+        sort_direction: query.sort_direction.clone(),
+        filter_field: query.filter_field.clone(),
+        filter_value: query.filter_value.clone(),
+        filter_operator: query.filter_operator.clone(),
+    };
+    let (members_raw, total) = ctx
+        .database
+        .query_organization_members(&member_params)
+        .await?;
+    let user_ids = members_raw
+        .iter()
+        .map(|member| member.user_id.clone())
+        .collect::<Vec<_>>();
+    let users_by_id = ctx
+        .database
+        .list_users_by_ids(&user_ids)
+        .await?
+        .into_iter()
+        .map(|user| (user.id().to_string(), user))
+        .collect::<HashMap<_, _>>();
+    let mut members = Vec::with_capacity(members_raw.len());
+    for member in &members_raw {
+        if let Some(user_info) = users_by_id.get(&member.user_id) {
+            members.push(MemberResponse::from_member_and_user(member, user_info));
         }
     }
 
     Ok(ListMembersResponse { members, total })
 }
 
-pub(crate) async fn remove_member_core<DB: DatabaseAdapter>(
+pub(crate) async fn get_active_member_role_core(
+    query: &GetActiveMemberRoleQuery,
+    user: &impl AuthUser,
+    session: &impl AuthSession,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<GetActiveMemberRoleResponse> {
+    let org_id = if let Some(slug) = query.organization_slug.as_deref() {
+        let organization = ctx
+            .database
+            .get_organization_by_slug(slug)
+            .await?
+            .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+        organization.id().to_string()
+    } else {
+        resolve_organization_id(query.organization_id.as_deref(), None, session, ctx).await?
+    };
+
+    let requester_member = ctx
+        .database
+        .get_member(&org_id, &user.id())
+        .await?
+        .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
+
+    if let Some(user_id) = query.user_id.as_deref() {
+        let target_member = ctx
+            .database
+            .get_member(&org_id, user_id)
+            .await?
+            .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
+        return Ok(GetActiveMemberRoleResponse {
+            role: target_member.role().to_string(),
+        });
+    }
+
+    Ok(GetActiveMemberRoleResponse {
+        role: requester_member.role().to_string(),
+    })
+}
+
+pub(crate) async fn remove_member_core(
     body: &RemoveMemberRequest,
-    user: &DB::User,
-    session: &DB::Session,
+    user: &impl AuthUser,
+    session: &impl AuthSession,
     config: &OrganizationConfig,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<RemovedMemberResponse> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
     let requester_member = ctx
         .database
-        .get_member(&org_id, user.id())
+        .get_member(&org_id, &user.id())
         .await?
-        .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
+        .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
-    // Determine target member
-    let target_member_id: String;
-    let target_member_org_id: String;
-    let target_member_user_id: String;
-    let target_member_role: String;
-
-    if let Some(member_id) = &body.member_id {
-        let target = ctx
-            .database
-            .get_member_by_id(member_id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("Member not found"))?;
-        target_member_id = target.id().to_string();
-        target_member_org_id = target.organization_id().to_string();
-        target_member_user_id = target.user_id().to_string();
-        target_member_role = target.role().to_string();
-    } else if let Some(email) = &body.email {
+    let target_member = if body.member_id_or_email.contains('@') {
         let target_user = ctx
             .database
-            .get_user_by_email(email)
+            .get_user_by_email(&body.member_id_or_email)
             .await?
-            .ok_or_else(|| AuthError::not_found("User not found"))?;
-        let target = ctx
-            .database
-            .get_member(&org_id, target_user.id())
+            .ok_or_else(|| AuthError::bad_request("Member not found"))?;
+        ctx.database
+            .get_member(&org_id, &target_user.id())
             .await?
-            .ok_or_else(|| AuthError::not_found("Member not found"))?;
-        target_member_id = target.id().to_string();
-        target_member_org_id = target.organization_id().to_string();
-        target_member_user_id = target.user_id().to_string();
-        target_member_role = target.role().to_string();
+            .ok_or_else(|| AuthError::bad_request("Member not found"))?
     } else {
-        return Err(AuthError::bad_request(
-            "Either memberId or email must be provided",
-        ));
+        let target_member = ctx
+            .database
+            .get_member_by_id(&body.member_id_or_email)
+            .await?
+            .ok_or_else(|| AuthError::bad_request("Member not found"))?;
+        if target_member.organization_id() != org_id {
+            return Err(AuthError::bad_request("Member not found"));
+        }
+        target_member
     };
 
-    if target_member_org_id != org_id {
-        return Err(AuthError::bad_request("Member not in this organization"));
-    }
+    let target_user = ctx
+        .database
+        .get_user_by_id(&target_member.user_id())
+        .await?
+        .ok_or_else(|| AuthError::bad_request("User not found"))?;
 
-    let is_self_removal = target_member_user_id == user.id();
+    let is_self_removal = target_member.user_id() == user.id();
 
     if !is_self_removal
         && !has_permission_any(
@@ -143,49 +200,51 @@ pub(crate) async fn remove_member_core<DB: DatabaseAdapter>(
         ));
     }
 
-    if target_member_role.contains("owner") {
+    if has_role(&target_member, &config.creator_role) {
         let all_members = ctx.database.list_organization_members(&org_id).await?;
         let owner_count = all_members
             .iter()
-            .filter(|m| m.role().contains("owner"))
+            .filter(|candidate| has_role(*candidate, &config.creator_role))
             .count();
 
         if owner_count <= 1 {
             return Err(AuthError::bad_request(
-                "Cannot remove the last owner from an organization",
+                "You cannot leave the organization as the only owner",
             ));
         }
     }
 
     let response = RemovedMemberResponse {
-        member: RemovedMemberInfo {
-            id: target_member_id.clone(),
-            user_id: target_member_user_id,
-            organization_id: target_member_org_id,
-            role: target_member_role,
-        },
+        member: MemberResponse::from_member_and_user(&target_member, &target_user),
     };
 
-    ctx.database.delete_member(&target_member_id).await?;
+    ctx.database.delete_member(&target_member.id()).await?;
+
+    if is_self_removal && session.active_organization_id() == Some(&org_id) {
+        let _ = ctx
+            .database
+            .update_session_active_organization(session.token(), None)
+            .await?;
+    }
 
     Ok(response)
 }
 
-pub(crate) async fn update_member_role_core<DB: DatabaseAdapter>(
+pub(crate) async fn update_member_role_core(
     body: &UpdateMemberRoleRequest,
-    user: &DB::User,
-    session: &DB::Session,
+    user: &impl AuthUser,
+    session: &impl AuthSession,
     config: &OrganizationConfig,
-    ctx: &AuthContext<DB>,
-) -> AuthResult<MemberWrappedResponse> {
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<BasicMemberResponse> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
     let requester_member = ctx
         .database
-        .get_member(&org_id, user.id())
+        .get_member(&org_id, &user.id())
         .await?
-        .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
+        .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
     if !has_permission_any(
         requester_member.role(),
@@ -194,7 +253,7 @@ pub(crate) async fn update_member_role_core<DB: DatabaseAdapter>(
         &config.roles,
     ) {
         return Err(AuthError::forbidden(
-            "You don't have permission to update member roles",
+            "You are not allowed to update this member",
         ));
     }
 
@@ -202,40 +261,48 @@ pub(crate) async fn update_member_role_core<DB: DatabaseAdapter>(
         .database
         .get_member_by_id(&body.member_id)
         .await?
-        .ok_or_else(|| AuthError::not_found("Member not found"))?;
+        .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
     if target_member.organization_id() != org_id {
-        return Err(AuthError::bad_request("Member not in this organization"));
+        return Err(AuthError::forbidden(
+            "You are not allowed to update this member",
+        ));
     }
 
-    if target_member.role().contains("owner") && !body.role.contains("owner") {
+    let requester_is_owner = has_role(&requester_member, &config.creator_role);
+    let target_is_owner = has_role(&target_member, &config.creator_role);
+    let new_role = body.role.joined();
+    let new_role_contains_owner = new_role
+        .split(',')
+        .map(str::trim)
+        .any(|role| role == config.creator_role);
+
+    if (new_role_contains_owner || target_is_owner) && !requester_is_owner {
+        return Err(AuthError::forbidden(
+            "You are not allowed to update this member",
+        ));
+    }
+
+    if target_is_owner && requester_member.id() == target_member.id() && !new_role_contains_owner {
         let all_members = ctx.database.list_organization_members(&org_id).await?;
         let owner_count = all_members
             .iter()
-            .filter(|m| m.role().contains("owner"))
+            .filter(|candidate| has_role(*candidate, &config.creator_role))
             .count();
 
         if owner_count <= 1 {
             return Err(AuthError::bad_request(
-                "Cannot demote the last owner. Transfer ownership first.",
+                "You cannot leave the organization without an owner",
             ));
         }
     }
 
     let updated = ctx
         .database
-        .update_member_role(&body.member_id, &body.role)
+        .update_member_role(&body.member_id, &new_role)
         .await?;
 
-    let user_info = ctx
-        .database
-        .get_user_by_id(updated.user_id())
-        .await?
-        .ok_or_else(|| AuthError::internal("User not found for updated member"))?;
-
-    Ok(MemberWrappedResponse {
-        member: MemberResponse::from_member_and_user(&updated, &user_info),
-    })
+    Ok(BasicMemberResponse::from_member(&updated))
 }
 
 // ---------------------------------------------------------------------------
@@ -243,9 +310,9 @@ pub(crate) async fn update_member_role_core<DB: DatabaseAdapter>(
 // ---------------------------------------------------------------------------
 
 /// Handle get active member request
-pub async fn handle_get_active_member<DB: DatabaseAdapter>(
+pub async fn handle_get_active_member(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let response = get_active_member_core(&user, &session, ctx).await?;
@@ -253,9 +320,9 @@ pub async fn handle_get_active_member<DB: DatabaseAdapter>(
 }
 
 /// Handle list members request
-pub async fn handle_list_members<DB: DatabaseAdapter>(
+pub async fn handle_list_members(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
     let query = parse_query::<ListMembersQuery>(&req.query);
@@ -263,10 +330,21 @@ pub async fn handle_list_members<DB: DatabaseAdapter>(
     Ok(AuthResponse::json(200, &response)?)
 }
 
-/// Handle remove member request
-pub async fn handle_remove_member<DB: DatabaseAdapter>(
+/// Handle get active member role request
+pub async fn handle_get_active_member_role(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<AuthResponse> {
+    let (user, session) = require_session(req, ctx).await?;
+    let query = parse_query::<GetActiveMemberRoleQuery>(&req.query);
+    let response = get_active_member_role_core(&query, &user, &session, ctx).await?;
+    Ok(AuthResponse::json(200, &response)?)
+}
+
+/// Handle remove member request
+pub async fn handle_remove_member(
+    req: &AuthRequest,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
@@ -279,9 +357,9 @@ pub async fn handle_remove_member<DB: DatabaseAdapter>(
 }
 
 /// Handle update member role request
-pub async fn handle_update_member_role<DB: DatabaseAdapter>(
+pub async fn handle_update_member_role(
     req: &AuthRequest,
-    ctx: &AuthContext<DB>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;

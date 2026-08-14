@@ -3,7 +3,7 @@
 //! Collects per-endpoint results and produces a human-readable compatibility
 //! report suitable for CI output.
 
-use super::schema::{extract_success_schema, load_openapi_spec};
+use super::schema::{OpenApiProfile, extract_success_schema};
 use super::validation::{ShapeDiff, validate_response};
 
 /// Validate that every endpoint's response matches the OpenAPI spec schema.
@@ -55,8 +55,13 @@ impl std::fmt::Display for EndpointResult {
 
 impl SpecValidator {
     pub fn new() -> Self {
+        Self::with_profile(OpenApiProfile::Core)
+    }
+
+    /// Construct a validator for a specific upstream OpenAPI profile.
+    pub fn with_profile(profile: OpenApiProfile) -> Self {
         Self {
-            spec: load_openapi_spec(),
+            spec: super::schema::load_openapi_spec_with_profile(profile),
             results: Vec::new(),
         }
     }
@@ -119,14 +124,12 @@ impl SpecValidator {
         lines.join("\n")
     }
 
-    #[allow(dead_code)]
     pub fn all_passed(&self) -> bool {
         self.results.iter().filter(|r| !r.skipped).all(|r| r.passed)
     }
 
     /// Return the number of endpoints that were skipped due to missing spec
     /// schemas.
-    #[allow(dead_code)]
     pub fn skipped_count(&self) -> usize {
         self.results.iter().filter(|r| r.skipped).count()
     }

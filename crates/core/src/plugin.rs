@@ -2,13 +2,22 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::adapters::DatabaseAdapter;
 use crate::config::AuthConfig;
 use crate::email::EmailProvider;
 use crate::entity::AuthSession;
 use crate::error::{AuthError, AuthResult};
+use crate::schema::AuthSchema;
+#[cfg(test)]
 use crate::session::SessionManager;
+use crate::store::AuthStore;
 use crate::types::{AuthRequest, AuthResponse, HttpMethod};
+
+type MetadataMap = HashMap<String, serde_json::Value>;
+
+pub struct AuthInitParts {
+    pub metadata: MetadataMap,
+    pub email_provider: Option<Arc<dyn EmailProvider>>,
+}
 
 /// Action returned by [`AuthPlugin::before_request`].
 #[derive(Debug)]
@@ -24,10 +33,8 @@ pub enum BeforeRequestAction {
 
 /// Plugin trait that all authentication plugins must implement.
 ///
-/// Generic over `DB` so that lifecycle hooks receive the adapter's concrete
-/// entity types (e.g., `DB::User`, `DB::Session`).
 #[async_trait]
-pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
+pub trait AuthPlugin<S: AuthSchema>: Send + Sync {
     /// Plugin name - should be unique
     fn name(&self) -> &'static str;
 
@@ -35,7 +42,7 @@ pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
     fn routes(&self) -> Vec<AuthRoute>;
 
     /// Called when the plugin is initialized
-    async fn on_init(&self, ctx: &mut AuthContext<DB>) -> AuthResult<()> {
+    async fn on_init(&self, ctx: &mut AuthInitContext<S>) -> AuthResult<()> {
         let _ = ctx;
         Ok(())
     }
@@ -49,7 +56,7 @@ pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
     async fn before_request(
         &self,
         _req: &AuthRequest,
-        _ctx: &AuthContext<DB>,
+        _ctx: &AuthContext<S>,
     ) -> AuthResult<Option<BeforeRequestAction>> {
         Ok(None)
     }
@@ -58,11 +65,11 @@ pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
     async fn on_request(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>>;
 
     /// Called after a user is created
-    async fn on_user_created(&self, user: &DB::User, ctx: &AuthContext<DB>) -> AuthResult<()> {
+    async fn on_user_created(&self, user: &S::User, ctx: &AuthContext<S>) -> AuthResult<()> {
         let _ = (user, ctx);
         Ok(())
     }
@@ -70,15 +77,15 @@ pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
     /// Called after a session is created
     async fn on_session_created(
         &self,
-        session: &DB::Session,
-        ctx: &AuthContext<DB>,
+        session: &S::Session,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<()> {
         let _ = (session, ctx);
         Ok(())
     }
 
     /// Called before a user is deleted
-    async fn on_user_deleted(&self, user_id: &str, ctx: &AuthContext<DB>) -> AuthResult<()> {
+    async fn on_user_deleted(&self, user_id: &str, ctx: &AuthContext<S>) -> AuthResult<()> {
         let _ = (user_id, ctx);
         Ok(())
     }
@@ -87,14 +94,14 @@ pub trait AuthPlugin<DB: DatabaseAdapter>: Send + Sync {
     async fn on_session_deleted(
         &self,
         session_token: &str,
-        ctx: &AuthContext<DB>,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<()> {
         let _ = (session_token, ctx);
         Ok(())
     }
 }
 
-/// Generates the [`AuthPlugin<DB>`] impl for a plugin with static route dispatch.
+/// Generates the [`AuthPlugin`] impl for a plugin with static route dispatch.
 ///
 /// Eliminates the dual declaration of routes in `routes()` and `on_request()`
 /// by generating both from a single route table.
@@ -128,7 +135,7 @@ macro_rules! impl_auth_plugin {
         $( extra { $($extra:tt)* } )?
     ) => {
         #[::async_trait::async_trait]
-        impl<DB: $crate::adapters::DatabaseAdapter> $crate::AuthPlugin<DB> for $plugin {
+        impl<S: $crate::AuthSchema> $crate::AuthPlugin<S> for $plugin {
             fn name(&self) -> &'static str { $name }
 
             fn routes(&self) -> Vec<$crate::AuthRoute> {
@@ -140,7 +147,7 @@ macro_rules! impl_auth_plugin {
             async fn on_request(
                 &self,
                 req: &$crate::AuthRequest,
-                ctx: &$crate::AuthContext<DB>,
+                ctx: &$crate::AuthContext<S>,
             ) -> $crate::AuthResult<Option<$crate::AuthResponse>> {
                 match (req.method(), req.path()) {
                     $(
@@ -166,12 +173,20 @@ pub struct AuthRoute {
     pub operation_id: String,
 }
 
-/// Context passed to plugin methods
-pub struct AuthContext<DB: DatabaseAdapter> {
+/// Initialization context passed to plugin setup.
+pub struct AuthInitContext<S: AuthSchema> {
     pub config: Arc<AuthConfig>,
-    pub database: Arc<DB>,
+    pub database: Arc<dyn AuthStore<S>>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
-    pub metadata: HashMap<String, serde_json::Value>,
+    pub metadata: MetadataMap,
+}
+
+/// Context passed to plugin methods.
+pub struct AuthContext<S: AuthSchema> {
+    pub config: Arc<AuthConfig>,
+    pub database: Arc<dyn AuthStore<S>>,
+    pub email_provider: Option<Arc<dyn EmailProvider>>,
+    pub metadata: MetadataMap,
 }
 
 impl AuthRoute {
@@ -204,19 +219,60 @@ impl AuthRoute {
     }
 }
 
-impl<DB: DatabaseAdapter> AuthContext<DB> {
-    pub fn new(config: Arc<AuthConfig>, database: Arc<DB>) -> Self {
+impl<S: AuthSchema> AuthInitContext<S> {
+    pub fn new(config: Arc<AuthConfig>, database: Arc<dyn AuthStore<S>>) -> Self {
         let email_provider = config.email_provider.clone();
         Self {
             config,
             database,
             email_provider,
-            metadata: HashMap::new(),
+            metadata: MetadataMap::new(),
         }
     }
 
     pub fn set_metadata(&mut self, key: impl Into<String>, value: serde_json::Value) {
-        self.metadata.insert(key.into(), value);
+        _ = self.metadata.insert(key.into(), value);
+    }
+
+    pub fn get_metadata(&self, key: &str) -> Option<&serde_json::Value> {
+        self.metadata.get(key)
+    }
+
+    pub fn into_parts(self) -> AuthInitParts {
+        AuthInitParts {
+            metadata: self.metadata,
+            email_provider: self.email_provider,
+        }
+    }
+}
+
+impl<S: AuthSchema> AuthContext<S> {
+    pub fn new(config: Arc<AuthConfig>, database: Arc<dyn AuthStore<S>>) -> Self {
+        let email_provider = config.email_provider.clone();
+        Self {
+            config,
+            database,
+            email_provider,
+            metadata: MetadataMap::new(),
+        }
+    }
+
+    pub fn with_metadata(
+        config: Arc<AuthConfig>,
+        database: Arc<dyn AuthStore<S>>,
+        metadata: MetadataMap,
+    ) -> Self {
+        let email_provider = config.email_provider.clone();
+        Self {
+            config,
+            database,
+            email_provider,
+            metadata,
+        }
+    }
+
+    pub fn set_metadata(&mut self, key: impl Into<String>, value: serde_json::Value) {
+        _ = self.metadata.insert(key.into(), value);
     }
 
     pub fn get_metadata(&self, key: &str) -> Option<&serde_json::Value> {
@@ -231,7 +287,7 @@ impl<DB: DatabaseAdapter> AuthContext<DB> {
     }
 
     /// Create a `SessionManager` from this context's config and database.
-    pub fn session_manager(&self) -> crate::session::SessionManager<DB> {
+    pub fn session_manager(&self) -> crate::session::SessionManager<S> {
         crate::session::SessionManager::new(self.config.clone(), self.database.clone())
     }
 
@@ -240,12 +296,12 @@ impl<DB: DatabaseAdapter> AuthContext<DB> {
     ///
     /// This centralises the pattern previously duplicated across many plugins
     /// (`get_authenticated_user`, `require_session`, etc.).
-    pub async fn require_session(&self, req: &AuthRequest) -> AuthResult<(DB::User, DB::Session)> {
+    pub async fn require_session(&self, req: &AuthRequest) -> AuthResult<(S::User, S::Session)> {
         let session_manager = self.session_manager();
 
         if let Some(token) = session_manager.extract_session_token(req)
             && let Some(session) = session_manager.get_session(&token).await?
-            && let Some(user) = self.database.get_user_by_id(session.user_id()).await?
+            && let Some(user) = self.database.get_user_by_id(&session.user_id()).await?
         {
             return Ok((user, session));
         }
@@ -254,100 +310,108 @@ impl<DB: DatabaseAdapter> AuthContext<DB> {
     }
 }
 
-/// Axum-friendly shared state type.
-///
-/// All fields are behind `Arc` so `AuthState` is cheap to clone and can
-/// be used directly as axum `State`.
-pub struct AuthState<DB: DatabaseAdapter> {
-    pub config: Arc<AuthConfig>,
-    pub database: Arc<DB>,
-    pub session_manager: SessionManager<DB>,
-    pub email_provider: Option<Arc<dyn EmailProvider>>,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::AuthUser;
+    use crate::test_store::test_database;
 
-impl<DB: DatabaseAdapter> Clone for AuthState<DB> {
-    fn clone(&self) -> Self {
-        Self {
-            config: self.config.clone(),
-            database: self.database.clone(),
-            session_manager: self.session_manager.clone(),
-            email_provider: self.email_provider.clone(),
-        }
-    }
-}
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
+    #[test]
+    fn auth_route_constructors() {
+        let get = AuthRoute::get("/test", "getTest");
+        assert_eq!(get.method, HttpMethod::Get);
+        assert_eq!(get.path, "/test");
+        assert_eq!(get.operation_id, "getTest");
 
-impl<DB: DatabaseAdapter> AuthState<DB> {
-    /// Create a new `AuthState` from an `AuthContext` and `SessionManager`.
-    pub fn new(ctx: &AuthContext<DB>, session_manager: SessionManager<DB>) -> Self {
-        Self {
-            config: ctx.config.clone(),
-            database: ctx.database.clone(),
-            session_manager,
-            email_provider: ctx.email_provider.clone(),
-        }
+        let post = AuthRoute::post("/create", "createItem");
+        assert_eq!(post.method, HttpMethod::Post);
+
+        let put = AuthRoute::put("/update", "updateItem");
+        assert_eq!(put.method, HttpMethod::Put);
+
+        let delete = AuthRoute::delete("/remove", "deleteItem");
+        assert_eq!(delete.method, HttpMethod::Delete);
     }
 
-    /// Create an `AuthContext` for use with existing plugin handler methods.
-    pub fn to_context(&self) -> AuthContext<DB> {
-        let mut ctx = AuthContext::new(self.config.clone(), self.database.clone());
-        ctx.email_provider = self.email_provider.clone();
-        ctx
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
+    #[test]
+    fn auth_route_new() {
+        let route = AuthRoute::new(HttpMethod::Patch, "/patch", "patchIt");
+        assert_eq!(route.method, HttpMethod::Patch);
+        assert_eq!(route.path, "/patch");
     }
 
-    /// Build a `Set-Cookie` header value for a session token.
-    pub fn session_cookie(&self, token: &str) -> String {
-        crate::utils::cookie_utils::create_session_cookie(token, &self.config)
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
+    #[test]
+    fn auth_context_new() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let db = runtime.block_on(test_database());
+        let ctx = AuthContext::new(config.clone(), db);
+        assert!(ctx.email_provider.is_none());
+        assert!(ctx.metadata.is_empty());
     }
 
-    /// Build a `Set-Cookie` header value that clears the session cookie.
-    pub fn clear_session_cookie(&self) -> String {
-        crate::utils::cookie_utils::create_clear_session_cookie(&self.config)
-    }
-}
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
+    #[test]
+    fn auth_context_metadata() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let db = runtime.block_on(test_database());
+        let mut ctx = AuthContext::new(config, db);
 
-/// Plugin trait for axum-native routing.
-///
-/// Unlike [`AuthPlugin`] which uses the custom `AuthRequest`/`AuthResponse`
-/// abstraction, `AxumPlugin` returns a standard `axum::Router` with handlers
-/// already bound to routes. This eliminates the triple route-matching overhead
-/// and enables use of axum extractors.
-#[cfg(feature = "axum")]
-#[async_trait]
-pub trait AxumPlugin<DB: DatabaseAdapter>: Send + Sync {
-    /// Plugin name — should be unique and match the `AuthPlugin` name when
-    /// both traits are implemented on the same type.
-    fn name(&self) -> &'static str;
-
-    /// Return an axum `Router` with all routes for this plugin.
-    ///
-    /// The router uses `AuthState<DB>` as its state type.
-    fn router(&self) -> axum::Router<AuthState<DB>>;
-
-    /// Called after a user is created.
-    async fn on_user_created(&self, _user: &DB::User, _ctx: &AuthContext<DB>) -> AuthResult<()> {
-        Ok(())
+        ctx.set_metadata("key", serde_json::json!("value"));
+        assert_eq!(ctx.get_metadata("key"), Some(&serde_json::json!("value")));
+        assert!(ctx.get_metadata("missing").is_none());
     }
 
-    /// Called after a session is created.
-    async fn on_session_created(
-        &self,
-        _session: &DB::Session,
-        _ctx: &AuthContext<DB>,
-    ) -> AuthResult<()> {
-        Ok(())
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
+    #[test]
+    fn auth_context_email_provider_error_when_none() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let db = runtime.block_on(test_database());
+        let ctx = AuthContext::new(config, db);
+        assert!(ctx.email_provider().is_err());
     }
 
-    /// Called before a user is deleted.
-    async fn on_user_deleted(&self, _user_id: &str, _ctx: &AuthContext<DB>) -> AuthResult<()> {
-        Ok(())
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
+    #[tokio::test]
+    async fn auth_context_require_session_unauthenticated() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let db = test_database().await;
+        let ctx = AuthContext::new(config, db);
+        let req = AuthRequest::new(HttpMethod::Get, "/test");
+        let result = ctx.require_session(&req).await;
+        assert!(result.is_err());
     }
 
-    /// Called before a session is deleted.
-    async fn on_session_deleted(
-        &self,
-        _session_token: &str,
-        _ctx: &AuthContext<DB>,
-    ) -> AuthResult<()> {
-        Ok(())
+    // Rust-specific surface: plugin infrastructure helpers and request-dispatch helpers in `crates/core::plugin` are Rust library APIs with no direct TS analogue.
+    #[tokio::test]
+    async fn auth_context_require_session_with_valid_session() {
+        let config = Arc::new(AuthConfig::new("test-secret-min-32-chars-1234567"));
+        let db = test_database().await;
+
+        // Create a user
+        let user = db
+            .create_user(crate::types::CreateUser::new().with_email("test@test.com"))
+            .await
+            .unwrap();
+
+        // Create a session
+        let sm = SessionManager::new(config.clone(), db.clone());
+        let session = sm.create_session(&user, None, None).await.unwrap();
+
+        // Build request with the session token
+        let ctx = AuthContext::new(config.clone(), db);
+        let mut req = AuthRequest::new(HttpMethod::Get, "/test");
+        let _ = req.headers.insert(
+            "cookie".into(),
+            format!("better-auth.session_token={}", session.token()),
+        );
+
+        let (found_user, _found_session) = ctx.require_session(&req).await.unwrap();
+        assert_eq!(found_user.id(), user.id());
     }
 }

@@ -1,5 +1,0 @@
----
-source: tests/snapshot_tests.rs
-expression: redact(&body)
----
-status: true

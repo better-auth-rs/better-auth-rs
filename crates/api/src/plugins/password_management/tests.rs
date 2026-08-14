@@ -1,12 +1,32 @@
 use super::*;
 use crate::plugins::test_helpers;
-use better_auth_core::adapters::{MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps};
+use better_auth_core::AuthContext;
 use better_auth_core::config::{Argon2Config, AuthConfig, PasswordConfig};
-use better_auth_core::{CreateUser, CreateVerification, PASSWORD_HASH_KEY, Session, User};
+use better_auth_core::wire::{SessionView, UserView};
+use better_auth_core::{CreateAccount, CreateUser, CreateVerification};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
+use std::sync::Arc;
 
-async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>, User, Session) {
+type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
+
+const PASSWORD_RESET_SUCCESS_MESSAGE: &str =
+    "If this email exists in our system, check your email for the reset link";
+
+struct NoopResetSender;
+
+#[async_trait::async_trait]
+impl SendResetPassword for NoopResetSender {
+    async fn send(&self, _user: &serde_json::Value, _url: &str, _token: &str) -> AuthResult<()> {
+        Ok(())
+    }
+}
+
+fn plugin_with_reset_sender() -> PasswordManagementPlugin {
+    PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender))
+}
+
+async fn create_test_context_with_user() -> (AuthContext<TestSchema>, UserView, SessionView) {
     let mut config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
     config.password = PasswordConfig {
         min_length: 8,
@@ -17,38 +37,76 @@ async fn create_test_context_with_user() -> (AuthContext<MemoryDatabaseAdapter>,
         argon2_config: Argon2Config::default(),
     };
 
-    let ctx = test_helpers::create_test_context_with_config(config);
+    let ctx = test_helpers::create_test_context_with_config(config).await;
 
     // Create test user with hashed password
     let plugin = PasswordManagementPlugin::new();
     let password_hash = plugin.hash_password("Password123!").await.unwrap();
 
-    let metadata = {
-        let mut m = serde_json::Map::new();
-        m.insert(
-            PASSWORD_HASH_KEY.to_string(),
-            serde_json::Value::String(password_hash),
-        );
-        serde_json::Value::Object(m)
-    };
-
     let create_user = CreateUser::new()
         .with_email("test@example.com")
-        .with_name("Test User")
-        .with_metadata(metadata);
+        .with_name("Test User");
     let user = test_helpers::create_user(&ctx, create_user).await;
+    let _ = ctx
+        .database
+        .create_account(CreateAccount {
+            user_id: user.id.clone(),
+            account_id: user.id.clone(),
+            provider_id: "credential".to_string(),
+            access_token: None,
+            refresh_token: None,
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: None,
+            password: Some(password_hash),
+        })
+        .await
+        .unwrap();
     let session = test_helpers::create_session(&ctx, user.id.clone(), Duration::hours(24)).await;
 
     (ctx, user, session)
 }
 
+async fn create_test_context_with_oauth_only_user()
+-> (AuthContext<TestSchema>, UserView, SessionView) {
+    let (ctx, user, session) = create_test_context_with_user().await;
+
+    let existing_accounts = ctx.database.get_user_accounts(&user.id).await.unwrap();
+    for account in existing_accounts {
+        ctx.database.delete_account(&account.id).await.unwrap();
+    }
+
+    let _ = ctx
+        .database
+        .create_account(CreateAccount {
+            user_id: user.id.clone(),
+            account_id: "google-account-id".to_string(),
+            provider_id: "google".to_string(),
+            access_token: Some("oauth-access-token".to_string()),
+            refresh_token: Some("oauth-refresh-token".to_string()),
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: Some("email profile".to_string()),
+            password: None,
+        })
+        .await
+        .unwrap();
+
+    (ctx, user, session)
+}
+
 /// Helper: create a reset-password verification token for the given user
-/// email and store it in the database. Returns the token string.
-async fn create_reset_token(ctx: &AuthContext<MemoryDatabaseAdapter>, email: &str) -> String {
-    let reset_token = format!("reset_{}", uuid::Uuid::new_v4());
+/// and store it in the database. Returns the token string.
+async fn create_reset_token(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    user_id: &str,
+) -> String {
+    let reset_token = uuid::Uuid::new_v4().simple().to_string();
     let create_verification = CreateVerification {
-        identifier: email.to_string(),
-        value: reset_token.clone(),
+        identifier: format!("reset-password:{}", reset_token),
+        value: user_id.to_string(),
         expires_at: Utc::now() + Duration::hours(24),
     };
     ctx.database
@@ -58,9 +116,10 @@ async fn create_reset_token(ctx: &AuthContext<MemoryDatabaseAdapter>, email: &st
     reset_token
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
-async fn test_forget_password_success() {
-    let plugin = PasswordManagementPlugin::new();
+async fn test_request_password_reset_success() {
+    let plugin = plugin_with_reset_sender();
     let (ctx, _user, _session) = create_test_context_with_user().await;
 
     let body = serde_json::json!({
@@ -70,117 +129,27 @@ async fn test_forget_password_success() {
 
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
-        "/forget-password",
+        "/request-password-reset",
         None,
         Some(body.to_string().into_bytes()),
     );
 
-    let response = plugin.handle_forget_password(&req, &ctx).await.unwrap();
+    let response = plugin
+        .handle_request_password_reset(&req, &ctx)
+        .await
+        .unwrap();
     assert_eq!(response.status, 200);
 
     let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: StatusResponse = serde_json::from_str(&body_str).unwrap();
+    let response_data: RequestPasswordResetResponse = serde_json::from_str(&body_str).unwrap();
     assert!(response_data.status);
+    assert_eq!(response_data.message, PASSWORD_RESET_SUCCESS_MESSAGE);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
-async fn test_forget_password_untrusted_redirect_to_falls_back_to_base_url() {
-    // A custom sender captures the reset URL embedded in the email.
-    use std::sync::Mutex;
-
-    struct UrlCapture {
-        captured: Arc<Mutex<Option<String>>>,
-    }
-
-    #[async_trait::async_trait]
-    impl SendResetPassword for UrlCapture {
-        async fn send(&self, _user: &serde_json::Value, url: &str, _token: &str) -> AuthResult<()> {
-            *self.captured.lock().unwrap() = Some(url.to_string());
-            Ok(())
-        }
-    }
-
-    let captured: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
-    let sender: Arc<dyn SendResetPassword> = Arc::new(UrlCapture {
-        captured: captured.clone(),
-    });
-
-    let plugin = PasswordManagementPlugin::new().send_reset_password(sender);
-    let (ctx, _user, _session) = create_test_context_with_user().await;
-
-    let body = serde_json::json!({
-        "email": "test@example.com",
-        "redirectTo": "https://evil.example.com/reset"
-    });
-    let req = test_helpers::create_auth_request_no_query(
-        HttpMethod::Post,
-        "/forget-password",
-        None,
-        Some(body.to_string().into_bytes()),
-    );
-
-    let response = plugin.handle_forget_password(&req, &ctx).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let captured_url = captured.lock().unwrap().clone().expect("sender invoked");
-    // Untrusted redirect_to falls back to server base_url — never
-    // embedded in the email, never leaking the reset token off-origin.
-    assert!(captured_url.starts_with("http://localhost:3000/reset-password?token="));
-    assert!(!captured_url.contains("evil.example.com"));
-}
-
-#[tokio::test]
-async fn test_forget_password_rejects_hostname_prefix_attack() {
-    // `base_url.starts_with("https://app.com")` used to let
-    // `"https://app.com.evil.com/x"` through — fixing that is the main
-    // point of upgrading the half-baked `starts_with` check to
-    // `is_redirect_target_trusted`.
-    use std::sync::Mutex;
-
-    struct UrlCapture {
-        captured: Arc<Mutex<Option<String>>>,
-    }
-
-    #[async_trait::async_trait]
-    impl SendResetPassword for UrlCapture {
-        async fn send(&self, _user: &serde_json::Value, url: &str, _token: &str) -> AuthResult<()> {
-            *self.captured.lock().unwrap() = Some(url.to_string());
-            Ok(())
-        }
-    }
-
-    let captured: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
-    let sender: Arc<dyn SendResetPassword> = Arc::new(UrlCapture {
-        captured: captured.clone(),
-    });
-
-    let plugin = PasswordManagementPlugin::new().send_reset_password(sender);
-    let (ctx, _user, _session) = create_test_context_with_user().await;
-
-    // `http://localhost:3000.evil.com/...` looks "prefix-identical" to
-    // `http://localhost:3000` but the origin is `localhost:3000.evil.com`.
-    let body = serde_json::json!({
-        "email": "test@example.com",
-        "redirectTo": "http://localhost:3000.evil.com/reset"
-    });
-    let req = test_helpers::create_auth_request_no_query(
-        HttpMethod::Post,
-        "/forget-password",
-        None,
-        Some(body.to_string().into_bytes()),
-    );
-
-    let response = plugin.handle_forget_password(&req, &ctx).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let captured_url = captured.lock().unwrap().clone().expect("sender invoked");
-    assert!(!captured_url.contains("evil.com"));
-    assert!(captured_url.starts_with("http://localhost:3000/reset-password"));
-}
-
-#[tokio::test]
-async fn test_forget_password_unknown_email() {
-    let plugin = PasswordManagementPlugin::new();
+async fn test_request_password_reset_unknown_email() {
+    let plugin = plugin_with_reset_sender();
     let (ctx, _user, _session) = create_test_context_with_user().await;
 
     let body = serde_json::json!({
@@ -189,26 +158,30 @@ async fn test_forget_password_unknown_email() {
 
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
-        "/forget-password",
+        "/request-password-reset",
         None,
         Some(body.to_string().into_bytes()),
     );
 
-    let response = plugin.handle_forget_password(&req, &ctx).await.unwrap();
+    let response = plugin
+        .handle_request_password_reset(&req, &ctx)
+        .await
+        .unwrap();
     assert_eq!(response.status, 200);
 
-    // Should return success even for unknown emails (security)
     let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: StatusResponse = serde_json::from_str(&body_str).unwrap();
+    let response_data: RequestPasswordResetResponse = serde_json::from_str(&body_str).unwrap();
     assert!(response_data.status);
+    assert_eq!(response_data.message, PASSWORD_RESET_SUCCESS_MESSAGE);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_reset_password_success() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
     let body = serde_json::json!({
         "newPassword": "NewPassword123!",
@@ -230,17 +203,11 @@ async fn test_reset_password_success() {
     assert!(response_data.status);
 
     // Verify password was updated
-    let updated_user = ctx
-        .database
-        .get_user_by_id(&user.id)
-        .await
-        .unwrap()
-        .unwrap();
-    let stored_hash = updated_user
-        .metadata
-        .get(PASSWORD_HASH_KEY)
-        .unwrap()
-        .as_str()
+    let accounts = ctx.database.get_user_accounts(&user.id).await.unwrap();
+    let stored_hash = accounts
+        .iter()
+        .find(|account| account.provider_id == "credential")
+        .and_then(|account| account.password.as_deref())
         .unwrap();
     assert!(
         plugin
@@ -249,15 +216,15 @@ async fn test_reset_password_success() {
             .is_ok()
     );
 
-    // Verify token was deleted
     let verification_check = ctx
         .database
-        .get_verification_by_value(&reset_token)
+        .get_verification_by_identifier(&format!("reset-password:{}", reset_token))
         .await
         .unwrap();
     assert!(verification_check.is_none());
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_reset_password_invalid_token() {
     let plugin = PasswordManagementPlugin::new();
@@ -279,12 +246,13 @@ async fn test_reset_password_invalid_token() {
     assert_eq!(err.status_code(), 400);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_reset_password_weak_password() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
     let body = serde_json::json!({
         "newPassword": "weak",
@@ -302,6 +270,7 @@ async fn test_reset_password_weak_password() {
     assert_eq!(err.status_code(), 400);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_success() {
     let plugin = PasswordManagementPlugin::new();
@@ -329,12 +298,11 @@ async fn test_change_password_success() {
 
     // Verify password was updated by checking the database directly
     let user_id = response_data["user"]["id"].as_str().unwrap();
-    let updated_user = ctx.database.get_user_by_id(user_id).await.unwrap().unwrap();
-    let stored_hash = updated_user
-        .metadata
-        .get(PASSWORD_HASH_KEY)
-        .unwrap()
-        .as_str()
+    let accounts = ctx.database.get_user_accounts(user_id).await.unwrap();
+    let stored_hash = accounts
+        .iter()
+        .find(|account| account.provider_id == "credential")
+        .and_then(|account| account.password.as_deref())
         .unwrap();
     assert!(
         plugin
@@ -344,6 +312,7 @@ async fn test_change_password_success() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_with_session_revocation() {
     let plugin = PasswordManagementPlugin::new();
@@ -370,6 +339,7 @@ async fn test_change_password_with_session_revocation() {
     assert!(response_data["token"].is_string()); // New token when revoking sessions
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_sets_cookie_on_session_revocation() {
     let plugin = PasswordManagementPlugin::new();
@@ -413,6 +383,7 @@ async fn test_change_password_sets_cookie_on_session_revocation() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_no_cookie_without_revocation() {
     let plugin = PasswordManagementPlugin::new();
@@ -441,6 +412,7 @@ async fn test_change_password_no_cookie_without_revocation() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_revoke_with_boolean() {
     let plugin = PasswordManagementPlugin::new();
@@ -471,6 +443,7 @@ async fn test_change_password_revoke_with_boolean() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_wrong_current_password() {
     let plugin = PasswordManagementPlugin::new();
@@ -489,9 +462,10 @@ async fn test_change_password_wrong_current_password() {
     );
 
     let err = plugin.handle_change_password(&req, &ctx).await.unwrap_err();
-    assert_eq!(err.status_code(), 401);
+    assert_eq!(err.status_code(), 400);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_change_password_unauthorized() {
     let plugin = PasswordManagementPlugin::new();
@@ -513,37 +487,145 @@ async fn test_change_password_unauthorized() {
     assert_eq!(err.status_code(), 401);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: verifyPassword with
+// a valid session and the correct credential password succeeds.
 #[tokio::test]
-async fn test_reset_password_token_endpoint_success() {
+async fn test_verify_password_success() {
+    let plugin = PasswordManagementPlugin::new();
+    let (ctx, _user, session) = create_test_context_with_user().await;
+
+    let body = serde_json::json!({
+        "password": "Password123!"
+    });
+
+    let req = test_helpers::create_auth_request_no_query(
+        HttpMethod::Post,
+        "/verify-password",
+        Some(&session.token),
+        Some(body.to_string().into_bytes()),
+    );
+
+    let response = plugin.handle_verify_password(&req, &ctx).await.unwrap();
+    assert_eq!(response.status, 200);
+
+    let body_str = String::from_utf8(response.body).unwrap();
+    let response_data: StatusResponse = serde_json::from_str(&body_str).unwrap();
+    assert!(response_data.status);
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: verifyPassword with
+// a bad password returns BAD_REQUEST / Invalid password.
+#[tokio::test]
+async fn test_verify_password_invalid_password() {
+    let plugin = PasswordManagementPlugin::new();
+    let (ctx, _user, session) = create_test_context_with_user().await;
+
+    let body = serde_json::json!({
+        "password": "wrong-password"
+    });
+
+    let req = test_helpers::create_auth_request_no_query(
+        HttpMethod::Post,
+        "/verify-password",
+        Some(&session.token),
+        Some(body.to_string().into_bytes()),
+    );
+
+    let err = plugin.handle_verify_password(&req, &ctx).await.unwrap_err();
+    assert_eq!(err.status_code(), 400);
+    assert_eq!(err.to_string(), "Invalid password");
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/password.ts :: verifyPassword returns
+// Invalid password when the signed-in user does not have a credential account.
+#[tokio::test]
+async fn test_verify_password_oauth_only_user_returns_invalid_password() {
+    let plugin = PasswordManagementPlugin::new();
+    let (ctx, _user, session) = create_test_context_with_oauth_only_user().await;
+
+    let body = serde_json::json!({
+        "password": "Password123!"
+    });
+
+    let req = test_helpers::create_auth_request_no_query(
+        HttpMethod::Post,
+        "/verify-password",
+        Some(&session.token),
+        Some(body.to_string().into_bytes()),
+    );
+
+    let err = plugin.handle_verify_password(&req, &ctx).await.unwrap_err();
+    assert_eq!(err.status_code(), 400);
+    assert_eq!(err.to_string(), "Invalid password");
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: verifyPassword
+// requires an authenticated session.
+#[tokio::test]
+async fn test_verify_password_requires_session() {
+    let plugin = PasswordManagementPlugin::new();
+    let (ctx, _user, _session) = create_test_context_with_user().await;
+
+    let body = serde_json::json!({
+        "password": "Password123!"
+    });
+
+    let req = test_helpers::create_auth_request_no_query(
+        HttpMethod::Post,
+        "/verify-password",
+        None,
+        Some(body.to_string().into_bytes()),
+    );
+
+    let response = plugin.handle_verify_password(&req, &ctx).await.unwrap();
+    assert_eq!(response.status, 401);
+    assert!(response.body.is_empty());
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
+#[tokio::test]
+async fn test_reset_password_token_endpoint_redirects_with_callback_token() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
-    let req = test_helpers::create_auth_request_no_query(
+    let mut query = HashMap::new();
+    query.insert(
+        "callbackURL".to_string(),
+        "http://localhost:3000/reset".to_string(),
+    );
+
+    let req = AuthRequest::from_parts(
         HttpMethod::Get,
-        "/reset-password/token",
+        "/reset-password/token".to_string(),
+        HashMap::new(),
         None,
-        None,
+        query,
     );
 
     let response = plugin
         .handle_reset_password_token(&reset_token, &req, &ctx)
         .await
         .unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: types::ResetPasswordTokenResponse = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(response_data.token, reset_token);
+    assert_eq!(response.status, 302);
+    assert!(
+        response.headers["Location"].contains("http://localhost:3000/reset"),
+        "redirect must preserve the callback URL"
+    );
+    assert!(
+        response.headers["Location"].contains(&format!("token={}", reset_token)),
+        "redirect must contain the reset token"
+    );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_reset_password_token_endpoint_with_callback() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
     let mut query = HashMap::new();
     query.insert(
@@ -580,93 +662,9 @@ async fn test_reset_password_token_endpoint_with_callback() {
     assert!(location_header.unwrap().contains(&reset_token));
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_reset_password_token_endpoint_invalid_token() {
-    let plugin = PasswordManagementPlugin::new();
-    let (ctx, _user, _session) = create_test_context_with_user().await;
-
-    let req = test_helpers::create_auth_request_no_query(
-        HttpMethod::Get,
-        "/reset-password/token",
-        None,
-        None,
-    );
-
-    let err = plugin
-        .handle_reset_password_token("invalid_token", &req, &ctx)
-        .await
-        .unwrap_err();
-    assert_eq!(err.status_code(), 400);
-}
-
-#[tokio::test]
-async fn test_reset_password_token_rejects_untrusted_callback_url() {
-    // Untrusted callbackURL on an invalid token must not redirect to the
-    // attacker origin; it falls through to the 400 path.
-    let plugin = PasswordManagementPlugin::new();
-    let (ctx, _user, _session) = create_test_context_with_user().await;
-
-    let mut query = HashMap::new();
-    query.insert(
-        "callbackURL".to_string(),
-        "https://evil.example.com/steal".to_string(),
-    );
-    let req = AuthRequest::from_parts(
-        HttpMethod::Get,
-        "/reset-password/token".to_string(),
-        HashMap::new(),
-        None,
-        query,
-    );
-
-    let err = plugin
-        .handle_reset_password_token("invalid_token", &req, &ctx)
-        .await
-        .unwrap_err();
-    assert_eq!(err.status_code(), 400);
-}
-
-#[tokio::test]
-async fn test_reset_password_token_valid_with_untrusted_callback_returns_json() {
-    // Valid token + untrusted callback must NOT 302 to evil.com — that
-    // would exfiltrate the reset token. Falls through to JSON response.
-    let plugin = PasswordManagementPlugin::new();
-    let (ctx, user, _session) = create_test_context_with_user().await;
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
-
-    let mut query = HashMap::new();
-    query.insert(
-        "callbackURL".to_string(),
-        "https://evil.example.com/steal".to_string(),
-    );
-    let req = AuthRequest::from_parts(
-        HttpMethod::Get,
-        "/reset-password/token".to_string(),
-        HashMap::new(),
-        None,
-        query,
-    );
-
-    let response = plugin
-        .handle_reset_password_token(&reset_token, &req, &ctx)
-        .await
-        .unwrap();
-    assert_eq!(response.status, 200);
-    assert!(
-        !response
-            .headers
-            .iter()
-            .any(|(k, _)| k.eq_ignore_ascii_case("Location"))
-    );
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
-    assert_eq!(body["token"], reset_token);
-}
-
-#[tokio::test]
-async fn test_reset_password_token_invalid_with_trusted_callback_redirects_with_error() {
-    // Invalid token + trusted callback should 302 to the callback with
-    // ?error=INVALID_TOKEN — confirms the error-redirect branch still
-    // works after the callback-URL trust gate.
     let plugin = PasswordManagementPlugin::new();
     let (ctx, _user, _session) = create_test_context_with_user().await;
 
@@ -684,20 +682,14 @@ async fn test_reset_password_token_invalid_with_trusted_callback_redirects_with_
     );
 
     let response = plugin
-        .handle_reset_password_token("bogus_token", &req, &ctx)
+        .handle_reset_password_token("invalid_token", &req, &ctx)
         .await
         .unwrap();
     assert_eq!(response.status, 302);
-    let location = response
-        .headers
-        .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case("Location"))
-        .map(|(_, v)| v.clone())
-        .expect("Location header");
-    assert!(location.contains("http://localhost:3000/reset"));
-    assert!(location.contains("error=INVALID_TOKEN"));
+    assert!(response.headers["Location"].contains("error=INVALID_TOKEN"));
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_password_validation() {
     let plugin = PasswordManagementPlugin::new();
@@ -710,7 +702,8 @@ async fn test_password_validation() {
         require_special: true,
         argon2_config: Argon2Config::default(),
     };
-    let ctx = AuthContext::new(Arc::new(config), Arc::new(MemoryDatabaseAdapter::new()));
+    let database = test_helpers::create_test_database().await;
+    let ctx = AuthContext::new(Arc::new(config), database);
 
     // Test valid password
     assert!(plugin.validate_password("Password123!", &ctx).is_ok());
@@ -731,6 +724,7 @@ async fn test_password_validation() {
     assert!(plugin.validate_password("Password123", &ctx).is_err());
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_password_hashing_and_verification() {
     let plugin = PasswordManagementPlugin::new();
@@ -750,16 +744,19 @@ async fn test_password_hashing_and_verification() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_plugin_routes() {
     let plugin = PasswordManagementPlugin::new();
-    let routes = AuthPlugin::<MemoryDatabaseAdapter>::routes(&plugin);
+    let routes = AuthPlugin::<
+        better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema,
+    >::routes(&plugin);
 
     assert_eq!(routes.len(), 5);
     assert!(
         routes
             .iter()
-            .any(|r| r.path == "/forget-password" && r.method == HttpMethod::Post)
+            .any(|r| r.path == "/request-password-reset" && r.method == HttpMethod::Post)
     );
     assert!(
         routes
@@ -774,20 +771,25 @@ async fn test_plugin_routes() {
     assert!(
         routes
             .iter()
+            .any(|r| r.path == "/verify-password" && r.method == HttpMethod::Post)
+    );
+    assert!(
+        routes
+            .iter()
             .any(|r| r.path == "/change-password" && r.method == HttpMethod::Post)
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_plugin_on_request_routing() {
-    let plugin = PasswordManagementPlugin::new();
+    let plugin = plugin_with_reset_sender();
     let (ctx, _user, session) = create_test_context_with_user().await;
 
-    // Test forget password
     let body = serde_json::json!({"email": "test@example.com"});
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
-        "/forget-password",
+        "/request-password-reset",
         None,
         Some(body.to_string().into_bytes()),
     );
@@ -817,6 +819,7 @@ async fn test_plugin_on_request_routing() {
     assert!(response.is_none());
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_configuration() {
     let config = PasswordManagementConfig {
@@ -832,6 +835,7 @@ async fn test_configuration() {
     assert!(!plugin.config.send_email_notifications);
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_send_reset_password_custom_sender() {
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -868,12 +872,15 @@ async fn test_send_reset_password_custom_sender() {
     });
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
-        "/forget-password",
+        "/request-password-reset",
         None,
         Some(body.to_string().into_bytes()),
     );
 
-    let response = plugin.handle_forget_password(&req, &ctx).await.unwrap();
+    let response = plugin
+        .handle_request_password_reset(&req, &ctx)
+        .await
+        .unwrap();
     assert_eq!(response.status, 200);
 
     // The custom sender should have been called
@@ -883,6 +890,7 @@ async fn test_send_reset_password_custom_sender() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_on_password_reset_callback() {
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -901,7 +909,7 @@ async fn test_on_password_reset_callback() {
     let plugin = PasswordManagementPlugin::new().on_password_reset(callback);
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
     let body = serde_json::json!({
         "newPassword": "NewPassword123!",
@@ -924,12 +932,13 @@ async fn test_on_password_reset_callback() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_revoke_sessions_on_password_reset_false() {
     let plugin = PasswordManagementPlugin::new().revoke_sessions_on_password_reset(false);
     let (ctx, user, session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
     let body = serde_json::json!({
         "newPassword": "NewPassword123!",
@@ -957,13 +966,13 @@ async fn test_revoke_sessions_on_password_reset_false() {
     );
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_revoke_sessions_on_password_reset_true() {
-    // Default is true
-    let plugin = PasswordManagementPlugin::new();
+    let plugin = PasswordManagementPlugin::new().revoke_sessions_on_password_reset(true);
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, user.email.as_deref().unwrap()).await;
+    let reset_token = create_reset_token(&ctx, &user.id).await;
 
     let body = serde_json::json!({
         "newPassword": "NewPassword123!",

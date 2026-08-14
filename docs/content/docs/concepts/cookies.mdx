@@ -11,7 +11,7 @@ By default, Better Auth sets session cookies with the following attributes:
 
 | Attribute | Default | Description |
 |-----------|---------|-------------|
-| **Name** | `better-auth.session-token` | Cookie name |
+| **Name** | `better-auth.session_token` | Cookie name |
 | **Path** | `/` | Available on all paths |
 | **Secure** | `true` | HTTPS only by default (disable for local HTTP development) |
 | **HttpOnly** | `true` | Not accessible via JavaScript |
@@ -22,7 +22,8 @@ By default, Better Auth sets session cookies with the following attributes:
 Configure cookie behavior through `AuthConfig`:
 
 ```rust
-use better_auth::{AuthConfig, SameSite};
+use better_auth::AuthConfig;
+use better_auth::config::SameSite;
 use chrono::Duration;
 
 let mut config = AuthConfig::new("your-secret-key-at-least-32-chars");
@@ -68,7 +69,7 @@ Controls when the cookie is sent with cross-site requests:
 | `None` | Cookie sent for all requests. Requires `Secure: true`. Use for cross-origin API access. |
 
 ```rust
-use better_auth::SameSite;
+use better_auth::config::SameSite;
 
 // Recommended for most applications
 config.session.cookie_same_site = SameSite::Lax;
@@ -93,7 +94,7 @@ config.session.expires_in = Duration::hours(24 * 7);
 The session cookie is set via the `Set-Cookie` HTTP header:
 
 ```
-Set-Cookie: better-auth.session-token=session_abc123...; Path=/; Expires=Thu, 08 Jan 2025 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax
+Set-Cookie: better-auth.session_token=session_abc123...; Path=/; Expires=Thu, 08 Jan 2025 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax
 ```
 
 ## Cross-Origin Usage
@@ -103,10 +104,12 @@ If your frontend and backend are on different origins, you need to:
 1. Set `SameSite::None` and `Secure: true` on the cookie
 2. Configure CORS to allow credentials:
 
+This example assumes you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
 use better_auth::CorsConfig;
 
-let auth = BetterAuth::new(config)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
     .cors(
         CorsConfig::new()
             .allowed_origin("https://frontend.example.com")

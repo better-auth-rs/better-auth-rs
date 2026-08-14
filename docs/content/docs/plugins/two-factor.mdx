@@ -7,11 +7,13 @@ The `TwoFactorPlugin` adds two-factor authentication (2FA) to your application. 
 
 ## Setup
 
+These examples assume you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+
 ```rust
 use better_auth::plugins::TwoFactorPlugin;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(TwoFactorPlugin::new())
     .build()
     .await?;
@@ -21,16 +23,19 @@ let auth = BetterAuth::new(config)
 
 ```rust
 use better_auth::plugins::two_factor::TwoFactorConfig;
+use std::sync::Arc;
 
-let auth = BetterAuth::new(config)
-    .database(database)
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
     .plugin(
         TwoFactorPlugin::new().with_config(TwoFactorConfig {
-            issuer: "My App".to_string(),
-            backup_code_count: 10,
-            backup_code_length: 8,
+            issuer: Some("My App".to_string()),
+            skip_verification_on_enable: false,
+            two_factor_cookie_max_age: 600,
+            trust_device_max_age: 30 * 24 * 60 * 60,
             totp_period: 30,
             totp_digits: 6,
+            send_otp: None,
         })
     )
     .build()
@@ -39,20 +44,23 @@ let auth = BetterAuth::new(config)
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `issuer` | `String` | `"BetterAuth"` | Issuer name shown in authenticator apps |
-| `backup_code_count` | `usize` | `10` | Number of backup codes to generate |
-| `backup_code_length` | `usize` | `8` | Length of each backup code |
+| `issuer` | `Option<String>` | `None` | Issuer name shown in authenticator apps. Falls back to `app_name`. |
+| `skip_verification_on_enable` | `bool` | `false` | Marks the user as 2FA-enabled immediately during enrollment. |
+| `two_factor_cookie_max_age` | `i64` | `600` | Lifetime of the pending 2FA cookie in seconds. |
+| `trust_device_max_age` | `i64` | `2592000` | Lifetime of the trusted-device cookie in seconds. |
 | `totp_period` | `u64` | `30` | TOTP time step in seconds |
 | `totp_digits` | `usize` | `6` | Number of digits in TOTP code |
+| `send_otp` | `Option<Arc<dyn SendTwoFactorOtp>>` | `None` | Callback used by `/two-factor/send-otp`. |
 
 ## How It Works
 
 ### Enrollment Flow
 
 1. User calls `/two-factor/enable` with their password
-2. A TOTP secret is generated and stored
-3. Backup codes are generated (hashed with Argon2 before storage)
+2. An encrypted TOTP secret is generated and stored
+3. Backup codes are generated and stored as encrypted JSON
 4. User scans the TOTP URI in their authenticator app
+5. `twoFactorEnabled` remains `false` until verification unless `skip_verification_on_enable` is enabled
 
 ### Sign-In Flow with 2FA
 
@@ -80,14 +88,18 @@ The 2FA plugin exposes the following endpoints. For full request/response detail
 | `/two-factor/verify-backup-code` | POST | Verify a backup code during sign-in |
 
 <Callout type="warn">
-Backup codes are shown only once during enrollment or regeneration. Store them securely — they cannot be retrieved later.
+Backup codes are shown only once during enrollment or regeneration on the public HTTP surface. Store them securely.
+</Callout>
+
+<Callout>
+For TS compatibility, Rust keeps backup-code retrieval as a server-only capability. Use `TwoFactorPlugin::view_backup_codes(...)` from trusted server code when you need to read the currently stored codes. There is no public HTTP route for this.
 </Callout>
 
 ## Security Details
 
-- **TOTP secrets** are stored as raw bytes in the database
-- **Backup codes** are hashed with Argon2 before storage — the plaintext is only returned once during generation
-- **OTP codes** are stored as verification records and expire after 5 minutes
+- **TOTP secrets** are encrypted before being stored in the database
+- **Backup codes** are stored as encrypted JSON — the plaintext is only returned once during generation
+- **OTP codes** are stored as verification records and expire after 3 minutes
 - **Password verification** is required to enable/disable 2FA and to regenerate backup codes
 - **Used backup codes** are immediately removed from the stored set
 
@@ -95,9 +107,12 @@ Backup codes are shown only once during enrollment or regeneration. Store them s
 
 | Status | Condition |
 |--------|-----------|
-| 400 | Invalid TOTP code |
-| 400 | Invalid or expired backup code |
-| 400 | No backup codes available |
-| 401 | Invalid password |
+| 400 | Invalid password |
+| 400 | TOTP not enabled |
+| 400 | Two factor isn't enabled |
+| 400 | OTP has expired |
+| 400 | Too many attempts. Please request a new code. |
+| 401 | Invalid code |
+| 401 | Invalid backup code |
+| 401 | Invalid two factor cookie |
 | 401 | Unauthenticated (missing or invalid session) |
-| 404 | Two-factor authentication not enabled |

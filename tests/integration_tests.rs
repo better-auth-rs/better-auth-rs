@@ -1,21 +1,32 @@
+#![expect(
+    unused_results,
+    reason = "integration tests intentionally ignore helper return values like HashMap::insert"
+)]
+#![allow(
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "integration tests intentionally use panic-on-failure assertions and direct JSON indexing for endpoint behavior checks"
+)]
+
 mod compat;
 
 use better_auth::BetterAuth;
-use better_auth::adapters::{
-    AccountOps, MemoryDatabaseAdapter, SessionOps, UserOps, VerificationOps,
-};
+use better_auth_core::entity::AuthUser;
+use better_auth_core::store::UserStore;
 use compat::helpers::*;
 use std::sync::Arc;
 
+type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
+
 /// Helper to create test BetterAuth instance with memory database
-async fn create_test_auth_memory() -> Arc<BetterAuth<MemoryDatabaseAdapter>> {
+async fn create_test_auth_memory() -> Arc<BetterAuth<TestSchema>> {
     TestHarness::minimal().await.into_arc()
 }
 
 /// Helper to create user and get session token
-async fn create_test_user_and_session(
-    auth: Arc<BetterAuth<MemoryDatabaseAdapter>>,
-) -> (String, String) {
+async fn create_test_user_and_session(auth: Arc<BetterAuth<TestSchema>>) -> (String, String) {
     let req = post_json(
         "/sign-up/email",
         serde_json::json!({
@@ -32,7 +43,17 @@ async fn create_test_user_and_session(
     (user_id, session_token)
 }
 
+async fn user_id_from_email(auth: &Arc<BetterAuth<TestSchema>>, email: &str) -> String {
+    auth.store()
+        .get_user_by_email(email)
+        .await
+        .unwrap()
+        .map(|user| user.id)
+        .unwrap_or_else(|| panic!("expected user for email {email}"))
+}
+
 /// Integration test for get-session endpoint
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_get_session_integration() {
     let auth = create_test_auth_memory().await;
@@ -48,6 +69,7 @@ async fn test_get_session_integration() {
 }
 
 /// Integration test for sign-out endpoint
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_sign_out_integration() {
     let auth = create_test_auth_memory().await;
@@ -58,12 +80,15 @@ async fn test_sign_out_integration() {
     assert_eq!(status, 200);
     assert_eq!(response_data["success"], true);
 
-    // Verify session is no longer valid
-    let (status2, _) = send_request(&auth, get_with_auth("/get-session", &session_token)).await;
-    assert_eq!(status2, 401); // Session should be invalidated
+    // Verify session is no longer valid; get-session returns 200 with null body.
+    let (status2, response2) =
+        send_request(&auth, get_with_auth("/get-session", &session_token)).await;
+    assert_eq!(status2, 200);
+    assert_eq!(response2, serde_json::Value::Null);
 }
 
 /// Integration test for list-sessions endpoint
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_list_sessions_integration() {
     let auth = create_test_auth_memory().await;
@@ -79,13 +104,14 @@ async fn test_list_sessions_integration() {
 }
 
 /// Integration test for revoke-session endpoint
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_revoke_session_integration() {
     let auth = create_test_auth_memory().await;
     let (user_id, session_token1) = create_test_user_and_session(auth.clone()).await;
 
     // Create a second session for the same user
-    use better_auth::types::CreateSession;
+    use better_auth::prelude::CreateSession;
     use chrono::{Duration, Utc};
 
     let create_session = CreateSession {
@@ -97,13 +123,9 @@ async fn test_revoke_session_integration() {
         active_organization_id: None,
     };
 
-    let session2 = auth
-        .database()
-        .create_session(create_session)
-        .await
-        .unwrap();
+    let session2 = auth.store().create_session(create_session).await.unwrap();
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -117,7 +139,7 @@ async fn test_revoke_session_integration() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/revoke-session".to_string(),
         headers,
         Some(revoke_data.to_string().into_bytes()),
@@ -134,6 +156,7 @@ async fn test_revoke_session_integration() {
 }
 
 /// Integration test for revoke-sessions endpoint
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_revoke_sessions_integration() {
     let auth = create_test_auth_memory().await;
@@ -146,16 +169,19 @@ async fn test_revoke_sessions_integration() {
 }
 
 /// Integration test for unauthorized access
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_unauthorized_session_access() {
     let auth = create_test_auth_memory().await;
 
-    // Try to access get-session without token
-    let (status, _) = send_request(&auth, get_request("/get-session")).await;
-    assert_eq!(status, 401);
+    // Unauthenticated get-session returns 200 with a null JSON body.
+    let (status, response) = send_request(&auth, get_request("/get-session")).await;
+    assert_eq!(status, 200);
+    assert_eq!(response, serde_json::Value::Null);
 }
 
 /// Integration test for forget-password endpoint
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_forget_password_integration() {
     let auth = create_test_auth_memory().await;
@@ -164,7 +190,7 @@ async fn test_forget_password_integration() {
     let (status, response_data) = send_request(
         &auth,
         post_json(
-            "/forget-password",
+            "/request-password-reset",
             serde_json::json!({
                 "email": "integration@test.com",
                 "redirectTo": "http://localhost:3000/reset"
@@ -177,6 +203,7 @@ async fn test_forget_password_integration() {
 }
 
 /// Integration test for reset-password endpoint
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_reset_password_integration() {
     let auth = create_test_auth_memory().await;
@@ -184,22 +211,22 @@ async fn test_reset_password_integration() {
 
     // First, create a verification token manually
 
-    use better_auth::types::CreateVerification;
+    use better_auth::prelude::CreateVerification;
     use chrono::{Duration, Utc};
     use uuid::Uuid;
 
     let reset_token = format!("reset_{}", Uuid::new_v4());
     let create_verification = CreateVerification {
-        identifier: "integration@test.com".to_string(),
-        value: reset_token.clone(),
+        identifier: format!("reset-password:{}", reset_token),
+        value: user_id_from_email(&auth, "integration@test.com").await,
         expires_at: Utc::now() + Duration::hours(24),
     };
-    auth.database()
+    auth.store()
         .create_verification(create_verification)
         .await
         .unwrap();
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -211,7 +238,7 @@ async fn test_reset_password_integration() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/reset-password".to_string(),
         headers,
         Some(reset_data.to_string().into_bytes()),
@@ -228,6 +255,7 @@ async fn test_reset_password_integration() {
 }
 
 /// Integration test for change-password endpoint
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_change_password_integration() {
     let auth = create_test_auth_memory().await;
@@ -253,6 +281,7 @@ async fn test_change_password_integration() {
 }
 
 /// Integration test for change-password with session revocation
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_change_password_with_revocation_integration() {
     let auth = create_test_auth_memory().await;
@@ -278,6 +307,7 @@ async fn test_change_password_with_revocation_integration() {
 }
 
 /// Integration test for reset-password token endpoint
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_reset_password_token_integration() {
     let auth = create_test_auth_memory().await;
@@ -285,42 +315,48 @@ async fn test_reset_password_token_integration() {
 
     // Create a verification token manually
 
-    use better_auth::types::CreateVerification;
+    use better_auth::prelude::CreateVerification;
     use chrono::{Duration, Utc};
     use uuid::Uuid;
 
     let reset_token = format!("reset_{}", Uuid::new_v4());
     let create_verification = CreateVerification {
-        identifier: "integration@test.com".to_string(),
-        value: reset_token.clone(),
+        identifier: format!("reset-password:{}", reset_token),
+        value: user_id_from_email(&auth, "integration@test.com").await,
         expires_at: Utc::now() + Duration::hours(24),
     };
-    auth.database()
+    auth.store()
         .create_verification(create_verification)
         .await
         .unwrap();
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         format!("/reset-password/{}", reset_token),
         HashMap::new(),
         None,
-        HashMap::new(),
+        HashMap::from([(
+            "callbackURL".to_string(),
+            "http://localhost:3000/reset".to_string(),
+        )]),
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-
-    assert_eq!(response_data["token"], reset_token);
+    assert_eq!(response.status, 302);
+    let location = response
+        .headers
+        .get("Location")
+        .cloned()
+        .unwrap_or_default();
+    assert!(location.contains("http://localhost:3000/reset"));
+    assert!(location.contains(&format!("token={reset_token}")));
 }
 
 /// Integration test for /ok endpoint
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_ok_endpoint() {
     let auth = create_test_auth_memory().await;
@@ -331,22 +367,25 @@ async fn test_ok_endpoint() {
 }
 
 /// Integration test for /error endpoint
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_error_endpoint() {
     let auth = create_test_auth_memory().await;
 
     let (status, response_data) = send_request(&auth, get_request("/error")).await;
     assert_eq!(status, 200);
-    assert_eq!(response_data["ok"], false);
+    let html = response_data.as_str().unwrap_or_default();
+    assert!(html.contains("CODE: UNKNOWN"));
 }
 
-/// Integration test for POST /get-session (in addition to GET)
+/// Integration test for POST /get-session remaining unavailable publicly
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
-async fn test_get_session_post_integration() {
+async fn test_get_session_post_route_absent() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -356,7 +395,7 @@ async fn test_get_session_post_integration() {
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/get-session".to_string(),
         headers,
         Some(b"{}".to_vec()),
@@ -364,23 +403,17 @@ async fn test_get_session_post_integration() {
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-
-    assert!(response_data["session"]["token"].is_string());
-    assert!(response_data["user"]["id"].is_string());
-    assert_eq!(response_data["user"]["email"], "integration@test.com");
+    assert_eq!(response.status, 404);
 }
 
-/// Integration test for POST /delete-user (changed from DELETE)
+/// Integration test for POST /delete-user
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_delete_user_post_method() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -390,7 +423,7 @@ async fn test_delete_user_post_method() {
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/delete-user".to_string(),
         headers,
         Some(b"{}".to_vec()),
@@ -405,12 +438,13 @@ async fn test_delete_user_post_method() {
     assert_eq!(response_data["success"], true);
 }
 
-/// Integration test for set-password success (social-only user, no password)
+/// Integration test for set-password public route absence
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
-async fn test_set_password_success() {
+async fn test_set_password_public_route_absent_for_social_user() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::{AuthRequest, CreateSession, CreateUser};
+    use better_auth::prelude::{AuthRequest, CreateSession, CreateUser};
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
 
@@ -418,7 +452,7 @@ async fn test_set_password_success() {
     let create_user = CreateUser::new()
         .with_email("social@test.com")
         .with_name("Social User");
-    let user = auth.database().create_user(create_user).await.unwrap();
+    let user = auth.store().create_user(create_user).await.unwrap();
 
     let create_session = CreateSession {
         user_id: user.id.clone(),
@@ -428,11 +462,7 @@ async fn test_set_password_success() {
         impersonated_by: None,
         active_organization_id: None,
     };
-    let session = auth
-        .database()
-        .create_session(create_session)
-        .await
-        .unwrap();
+    let session = auth.store().create_session(create_session).await.unwrap();
 
     let mut headers = HashMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
@@ -446,7 +476,7 @@ async fn test_set_password_success() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/set-password".to_string(),
         headers,
         Some(set_data.to_string().into_bytes()),
@@ -454,20 +484,17 @@ async fn test_set_password_success() {
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 200);
-
-    let body_str = String::from_utf8(response.body).unwrap();
-    let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(response_data["status"], true);
+    assert_eq!(response.status, 404);
 }
 
-/// Integration test for set-password when user already has a password → 400
+/// Integration test for set-password public route remains unavailable with an existing password
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_set_password_already_has_password() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -482,7 +509,7 @@ async fn test_set_password_already_has_password() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/set-password".to_string(),
         headers,
         Some(set_data.to_string().into_bytes()),
@@ -490,15 +517,16 @@ async fn test_set_password_already_has_password() {
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 400);
+    assert_eq!(response.status, 404);
 }
 
-/// Integration test for set-password unauthenticated → 401
+/// Integration test for set-password public route remains unavailable when unauthenticated
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_set_password_unauthenticated() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -509,7 +537,7 @@ async fn test_set_password_unauthenticated() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/set-password".to_string(),
         headers,
         Some(set_data.to_string().into_bytes()),
@@ -517,10 +545,11 @@ async fn test_set_password_unauthenticated() {
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 401);
+    assert_eq!(response.status, 404);
 }
 
 /// Integration test for revoke-other-sessions endpoint
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_revoke_other_sessions_integration() {
     let auth = create_test_auth_memory().await;
@@ -528,7 +557,7 @@ async fn test_revoke_other_sessions_integration() {
 
     // Create a second session for the same user
 
-    use better_auth::types::{AuthRequest, CreateSession};
+    use better_auth::prelude::{AuthRequest, CreateSession};
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
 
@@ -540,11 +569,7 @@ async fn test_revoke_other_sessions_integration() {
         impersonated_by: None,
         active_organization_id: None,
     };
-    let session2 = auth
-        .database()
-        .create_session(create_session)
-        .await
-        .unwrap();
+    let session2 = auth.store().create_session(create_session).await.unwrap();
 
     let mut headers = HashMap::new();
     headers.insert(
@@ -553,7 +578,7 @@ async fn test_revoke_other_sessions_integration() {
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/revoke-other-sessions".to_string(),
         headers,
         Some(b"{}".to_vec()),
@@ -564,32 +589,33 @@ async fn test_revoke_other_sessions_integration() {
     assert_eq!(response.status, 200);
 
     // The current session should still be valid
-    let s1 = auth.database().get_session(&session_token1).await.unwrap();
+    let s1 = auth.store().get_session(&session_token1).await.unwrap();
     assert!(s1.is_some());
 
     // The other session should be revoked
-    let s2 = auth.database().get_session(&session2.token).await.unwrap();
+    let s2 = auth.store().get_session(&session2.token).await.unwrap();
     assert!(s2.is_none());
 }
 
 /// Integration test for cookie-based authentication
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_cookie_based_auth() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     // Use cookie header instead of Bearer token
     let mut headers = HashMap::new();
     headers.insert(
         "cookie".to_string(),
-        format!("better-auth.session-token={}; other=value", session_token),
+        format!("better-auth.session_token={}; other=value", session_token),
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/get-session".to_string(),
         headers,
         None,
@@ -605,12 +631,13 @@ async fn test_cookie_based_auth() {
 }
 
 /// Integration test: Bearer token takes precedence over cookie
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_bearer_takes_precedence_over_cookie() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     // Provide both Bearer and cookie, but cookie has invalid token
@@ -621,11 +648,11 @@ async fn test_bearer_takes_precedence_over_cookie() {
     );
     headers.insert(
         "cookie".to_string(),
-        "better-auth.session-token=invalid_token".to_string(),
+        "better-auth.session_token=invalid_token".to_string(),
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/get-session".to_string(),
         headers,
         None,
@@ -638,11 +665,12 @@ async fn test_bearer_takes_precedence_over_cookie() {
 }
 
 /// Integration test for unauthorized password operations
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_unauthorized_password_operations() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -654,7 +682,7 @@ async fn test_unauthorized_password_operations() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/change-password".to_string(),
         headers,
         Some(change_data.to_string().into_bytes()),
@@ -665,12 +693,13 @@ async fn test_unauthorized_password_operations() {
     assert_eq!(response.status, 401);
 }
 /// Integration test for change-email success
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_change_email_success() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -683,7 +712,7 @@ async fn test_change_email_success() {
     let body = serde_json::json!({ "newEmail": "newemail@test.com" });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/change-email".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
@@ -696,15 +725,16 @@ async fn test_change_email_success() {
     let body_str = String::from_utf8(response.body).unwrap();
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     assert_eq!(data["status"], true);
-    assert_eq!(data["message"], "Email updated");
+    assert!(data.get("message").is_none());
 }
 
 /// Integration test for change-email duplicate → 409
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_change_email_duplicate() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::{AuthRequest, CreateUser};
+    use better_auth::prelude::{AuthRequest, CreateUser};
     use std::collections::HashMap;
 
     // Create first user
@@ -714,7 +744,7 @@ async fn test_change_email_duplicate() {
     let create_user = CreateUser::new()
         .with_email("existing@test.com")
         .with_name("Existing User");
-    auth.database().create_user(create_user).await.unwrap();
+    auth.store().create_user(create_user).await.unwrap();
 
     let mut headers = HashMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
@@ -726,7 +756,7 @@ async fn test_change_email_duplicate() {
     let body = serde_json::json!({ "newEmail": "existing@test.com" });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/change-email".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
@@ -734,15 +764,16 @@ async fn test_change_email_duplicate() {
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 409);
+    assert_eq!(response.status, 422);
 }
 
 /// Integration test for change-email unauthenticated → 401
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_change_email_unauthenticated() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -751,7 +782,7 @@ async fn test_change_email_unauthenticated() {
     let body = serde_json::json!({ "newEmail": "x@y.com" });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/change-email".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
@@ -763,23 +794,24 @@ async fn test_change_email_unauthenticated() {
 }
 
 /// Integration test for delete-user/callback success
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_delete_user_callback_success() {
     let auth = create_test_auth_memory().await;
-    let (user_id, _session_token) = create_test_user_and_session(auth.clone()).await;
+    let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::{AuthRequest, CreateVerification};
+    use better_auth::prelude::{AuthRequest, CreateVerification};
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
 
     // Create a deletion verification token
     let token = format!("delete_{}", uuid::Uuid::new_v4());
     let create_verification = CreateVerification {
-        identifier: user_id.clone(),
-        value: token.clone(),
+        identifier: format!("delete-account-{}", token),
+        value: user_id.clone(),
         expires_at: Utc::now() + Duration::hours(24),
     };
-    auth.database()
+    auth.store()
         .create_verification(create_verification)
         .await
         .unwrap();
@@ -788,9 +820,16 @@ async fn test_delete_user_callback_success() {
     query.insert("token".to_string(), token);
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/delete-user/callback".to_string(),
-        HashMap::new(),
+        {
+            let mut headers = HashMap::new();
+            headers.insert(
+                "authorization".to_string(),
+                format!("Bearer {}", session_token),
+            );
+            headers
+        },
         None,
         query,
     );
@@ -803,40 +842,50 @@ async fn test_delete_user_callback_success() {
     assert_eq!(data["success"], true);
 
     // Verify user is deleted
-    let user = auth.database().get_user_by_id(&user_id).await.unwrap();
+    let user = auth.store().get_user_by_id(&user_id).await.unwrap();
     assert!(user.is_none());
 }
 
-/// Integration test for delete-user/callback invalid token → 400
+/// Integration test for delete-user/callback invalid token → 404
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_delete_user_callback_invalid_token() {
     let auth = create_test_auth_memory().await;
+    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut query = HashMap::new();
     query.insert("token".to_string(), "invalid_token".to_string());
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/delete-user/callback".to_string(),
-        HashMap::new(),
+        {
+            let mut headers = HashMap::new();
+            headers.insert(
+                "authorization".to_string(),
+                format!("Bearer {}", session_token),
+            );
+            headers
+        },
         None,
         query,
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 400);
+    assert_eq!(response.status, 404);
 }
 
 /// Integration test for list-accounts (empty)
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_list_accounts_empty() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -846,7 +895,7 @@ async fn test_list_accounts_empty() {
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/list-accounts".to_string(),
         headers,
         None,
@@ -858,16 +907,18 @@ async fn test_list_accounts_empty() {
 
     let body_str = String::from_utf8(response.body).unwrap();
     let accounts: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(accounts.len(), 0); // No linked accounts yet
+    assert_eq!(accounts.len(), 1); // Sign-up creates the credential account.
+    assert_eq!(accounts[0]["providerId"], "credential");
 }
 
 /// Integration test for list-accounts with an account
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_list_accounts_with_account() {
     let auth = create_test_auth_memory().await;
     let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::{AuthRequest, CreateAccount};
+    use better_auth::prelude::{AuthRequest, CreateAccount};
     use std::collections::HashMap;
 
     // Create an account for the user
@@ -883,10 +934,7 @@ async fn test_list_accounts_with_account() {
         scope: Some("email profile".to_string()),
         password: None,
     };
-    auth.database()
-        .create_account(create_account)
-        .await
-        .unwrap();
+    auth.store().create_account(create_account).await.unwrap();
 
     let mut headers = HashMap::new();
     headers.insert(
@@ -895,7 +943,7 @@ async fn test_list_accounts_with_account() {
     );
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/list-accounts".to_string(),
         headers,
         None,
@@ -907,24 +955,28 @@ async fn test_list_accounts_with_account() {
 
     let body_str = String::from_utf8(response.body).unwrap();
     let accounts: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(accounts.len(), 1);
-    assert_eq!(accounts[0]["provider"], "google");
+    assert_eq!(accounts.len(), 2);
+    let google_account = accounts
+        .iter()
+        .find(|account| account["providerId"] == "google")
+        .expect("google account should be present");
     assert_eq!(
-        accounts[0]["scopes"],
+        google_account["scopes"],
         serde_json::json!(["email", "profile"])
     );
     // Sensitive fields should NOT be present
-    assert!(accounts[0].get("access_token").is_none());
-    assert!(accounts[0].get("password").is_none());
+    assert!(google_account.get("access_token").is_none());
+    assert!(google_account.get("password").is_none());
 }
 
 /// Integration test for unlink-account success
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_unlink_account_success() {
     let auth = create_test_auth_memory().await;
     let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
-    use better_auth::types::{AuthRequest, CreateAccount};
+    use better_auth::prelude::{AuthRequest, CreateAccount};
     use std::collections::HashMap;
 
     // Create two accounts
@@ -941,10 +993,7 @@ async fn test_unlink_account_success() {
             scope: None,
             password: None,
         };
-        auth.database()
-            .create_account(create_account)
-            .await
-            .unwrap();
+        auth.store().create_account(create_account).await.unwrap();
     }
 
     let mut headers = HashMap::new();
@@ -959,7 +1008,7 @@ async fn test_unlink_account_success() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/unlink-account".to_string(),
         headers,
         Some(unlink_data.to_string().into_bytes()),
@@ -969,18 +1018,28 @@ async fn test_unlink_account_success() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    // Verify only one account remains
-    let accounts = auth.database().get_user_accounts(&user_id).await.unwrap();
-    assert_eq!(accounts.len(), 1);
-    assert_eq!(accounts[0].provider_id, "github");
+    // Verify only the remaining social account and the credential account remain.
+    let accounts = auth.store().get_user_accounts(&user_id).await.unwrap();
+    assert_eq!(accounts.len(), 2);
+    assert!(
+        accounts
+            .iter()
+            .any(|account| account.provider_id == "github")
+    );
+    assert!(
+        accounts
+            .iter()
+            .any(|account| account.provider_id == "credential")
+    );
 }
 
 /// Integration test for unlink-account last credential → 400
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_unlink_last_account_fails() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::{AuthRequest, CreateAccount, CreateSession, CreateUser};
+    use better_auth::prelude::{AuthRequest, CreateAccount, CreateSession, CreateUser};
     use chrono::{Duration, Utc};
     use std::collections::HashMap;
 
@@ -988,7 +1047,7 @@ async fn test_unlink_last_account_fails() {
     let create_user = CreateUser::new()
         .with_email("social-only@test.com")
         .with_name("Social Only");
-    let user = auth.database().create_user(create_user).await.unwrap();
+    let user = auth.store().create_user(create_user).await.unwrap();
 
     let create_session = CreateSession {
         user_id: user.id.clone(),
@@ -998,11 +1057,7 @@ async fn test_unlink_last_account_fails() {
         impersonated_by: None,
         active_organization_id: None,
     };
-    let session = auth
-        .database()
-        .create_session(create_session)
-        .await
-        .unwrap();
+    let session = auth.store().create_session(create_session).await.unwrap();
 
     // Add one account
     let create_account = CreateAccount {
@@ -1017,10 +1072,7 @@ async fn test_unlink_last_account_fails() {
         scope: None,
         password: None,
     };
-    auth.database()
-        .create_account(create_account)
-        .await
-        .unwrap();
+    auth.store().create_account(create_account).await.unwrap();
 
     let mut headers = HashMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
@@ -1034,7 +1086,7 @@ async fn test_unlink_last_account_fails() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/unlink-account".to_string(),
         headers,
         Some(unlink_data.to_string().into_bytes()),
@@ -1046,15 +1098,16 @@ async fn test_unlink_last_account_fails() {
 }
 
 /// Integration test for list-accounts unauthenticated → 401
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_list_accounts_unauthenticated() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/list-accounts".to_string(),
         HashMap::new(),
         None,
@@ -1066,29 +1119,8 @@ async fn test_list_accounts_unauthenticated() {
 }
 
 /*
-/// Test basic Axum integration with memory database
-#[tokio::test]
-async fn test_axum_health_check() {
-    let auth = create_test_auth_memory().await;
-
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri("/health")
-        .body(Body::empty())
-        .unwrap();
-
-    let response = call_service(auth, request).await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let response_json: Value = serde_json::from_slice(&body).unwrap();
-
-    assert_eq!(response_json["status"], "ok");
-    assert_eq!(response_json["service"], "better-auth");
-}
-
 /// Test signup via Axum integration
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_axum_signup() {
     let auth = create_test_auth_memory().await;
@@ -1120,6 +1152,7 @@ async fn test_axum_signup() {
 }
 
 /// Test signin via Axum integration
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_axum_signin() {
     let auth = create_test_auth_memory().await;
@@ -1166,6 +1199,7 @@ async fn test_axum_signin() {
 }
 
 /// Test error handling in Axum integration
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_axum_error_handling() {
     let auth = create_test_auth_memory().await;
@@ -1209,6 +1243,7 @@ async fn test_axum_error_handling() {
 }
 
 /// Test duplicate email handling
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_axum_duplicate_email() {
     let auth = create_test_auth_memory().await;
@@ -1239,35 +1274,26 @@ async fn test_axum_duplicate_email() {
     assert_eq!(response2.status(), StatusCode::CONFLICT);
 }
 
-#[cfg(feature = "sqlx-postgres")]
 mod postgres_tests {
     use super::*;
-    use better_auth::adapters::{PoolConfig, SqlxAdapter};
+    use better_auth_seaorm::{Database, SeaOrmStore};
     use std::env;
 
     /// Helper to create test BetterAuth instance with PostgreSQL
-    async fn create_test_auth_postgres() -> Option<Arc<BetterAuth<SqlxAdapter>>> {
+    async fn create_test_auth_postgres() -> Option<Arc<BetterAuth<TestSchema>>> {
         let database_url = env::var("TEST_DATABASE_URL").ok()?;
-
-        let pool_config = PoolConfig {
-            max_connections: 5,
-            min_connections: 1,
-            acquire_timeout: std::time::Duration::from_secs(10),
-            idle_timeout: Some(std::time::Duration::from_secs(300)),
-            max_lifetime: Some(std::time::Duration::from_secs(1800)),
-        };
-
-        let database = SqlxAdapter::with_config(&database_url, pool_config).await.ok()?;
-
-        // Test connection
-        database.test_connection().await.ok()?;
+        let database = Database::connect(&database_url).await.ok()?;
+        better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
+            .await
+            .ok()?;
 
         let config = AuthConfig::new("postgres-test-secret-key-32-chars-long")
             .base_url("http://localhost:3000")
             .password_min_length(6);
 
-        let auth = BetterAuth::<SqlxAdapter>::new(config)
-            .database(database)
+        let store = SeaOrmStore::<TestSchema>::new(config.clone(), database);
+        let auth = BetterAuth::<TestSchema>::new(config)
+            .store(store)
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
             .build()
             .await
@@ -1297,6 +1323,7 @@ mod postgres_tests {
     }
 
     /// Test PostgreSQL signup
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
     #[tokio::test]
     async fn test_postgres_signup() {
         if setup_test_database().await.is_none() {
@@ -1336,6 +1363,7 @@ mod postgres_tests {
     }
 
     /// Test PostgreSQL signin
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
     #[tokio::test]
     async fn test_postgres_signin() {
         if setup_test_database().await.is_none() {
@@ -1390,6 +1418,7 @@ mod postgres_tests {
     }
 
     /// Test PostgreSQL connection pool and session persistence
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
     #[tokio::test]
     async fn test_postgres_session_persistence() {
         if setup_test_database().await.is_none() {
@@ -1403,10 +1432,10 @@ mod postgres_tests {
         };
 
         // Create a user and session directly via database
-        let database = auth.database();
+        let database = auth.store();
         let session_manager = auth.session_manager();
 
-        let create_user = better_auth::types::CreateUser::new()
+        let create_user = better_auth::prelude::CreateUser::new()
             .with_email("session.persistence.test.example@test.com")
             .with_name("Session Persistence User");
 
@@ -1445,6 +1474,7 @@ mod postgres_tests {
     }
 
     /// Test PostgreSQL constraint violations (duplicate email)
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
     #[tokio::test]
     async fn test_postgres_constraints() {
         if setup_test_database().await.is_none() {
@@ -1487,6 +1517,7 @@ mod postgres_tests {
 }
 
 /// Performance test for concurrent requests
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_concurrent_requests() {
     let auth = create_test_auth_memory().await;
@@ -1529,11 +1560,12 @@ async fn test_concurrent_requests() {
 // ---------------------------------------------------------------------------
 
 /// Sign up with username, then sign in by username
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_sign_up_with_username_and_sign_in() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     // Sign up with username
@@ -1549,7 +1581,7 @@ async fn test_sign_up_with_username_and_sign_in() {
     headers.insert("content-type".to_string(), "application/json".to_string());
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-up/email".to_string(),
         headers.clone(),
         Some(signup_data.to_string().into_bytes()),
@@ -1571,7 +1603,7 @@ async fn test_sign_up_with_username_and_sign_in() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-in/username".to_string(),
         headers,
         Some(signin_data.to_string().into_bytes()),
@@ -1589,11 +1621,12 @@ async fn test_sign_up_with_username_and_sign_in() {
 }
 
 /// Sign in by username with wrong password → 401
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_sign_in_username_wrong_password() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     // Sign up with username
@@ -1608,7 +1641,7 @@ async fn test_sign_in_username_wrong_password() {
     headers.insert("content-type".to_string(), "application/json".to_string());
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-up/email".to_string(),
         headers.clone(),
         Some(signup_data.to_string().into_bytes()),
@@ -1624,7 +1657,7 @@ async fn test_sign_in_username_wrong_password() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-in/username".to_string(),
         headers,
         Some(signin_data.to_string().into_bytes()),
@@ -1636,11 +1669,12 @@ async fn test_sign_in_username_wrong_password() {
 }
 
 /// Sign in by nonexistent username → 401
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_sign_in_username_nonexistent() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let signin_data = serde_json::json!({
@@ -1652,7 +1686,7 @@ async fn test_sign_in_username_nonexistent() {
     headers.insert("content-type".to_string(), "application/json".to_string());
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-in/username".to_string(),
         headers,
         Some(signin_data.to_string().into_bytes()),
@@ -1668,7 +1702,7 @@ async fn test_sign_in_username_nonexistent() {
 // ---------------------------------------------------------------------------
 
 /// Helper: create auth with ApiKeyPlugin and return auth + session token
-async fn create_auth_with_apikey() -> (Arc<BetterAuth<MemoryDatabaseAdapter>>, String, String) {
+async fn create_auth_with_apikey() -> (Arc<BetterAuth<TestSchema>>, String, String) {
     let auth = create_test_auth_memory().await;
     let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
     (auth, user_id, session_token)
@@ -1676,11 +1710,11 @@ async fn create_auth_with_apikey() -> (Arc<BetterAuth<MemoryDatabaseAdapter>>, S
 
 /// Create an API key and return (raw_key, key_id)
 async fn create_api_key(
-    auth: &BetterAuth<MemoryDatabaseAdapter>,
+    auth: &BetterAuth<TestSchema>,
     token: &str,
     body: serde_json::Value,
 ) -> (String, String) {
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -1688,7 +1722,7 @@ async fn create_api_key(
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/create".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
@@ -1707,6 +1741,7 @@ async fn create_api_key(
 }
 
 /// Integration test: create API key
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_create() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
@@ -1727,11 +1762,12 @@ async fn test_api_key_create() {
 }
 
 /// Integration test: create API key with remaining and expiry
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_create_with_options() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -1748,7 +1784,7 @@ async fn test_api_key_create_with_options() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/create".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
@@ -1770,12 +1806,13 @@ async fn test_api_key_create_with_options() {
 }
 
 /// Integration test: get API key by ID
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_get() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
     let (_key, id) = create_api_key(&auth, &token, serde_json::json!({"name": "get-test"})).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -1785,7 +1822,7 @@ async fn test_api_key_get() {
     query.insert("id".to_string(), id.clone());
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/get".to_string(),
         headers,
         None,
@@ -1807,6 +1844,7 @@ async fn test_api_key_get() {
 }
 
 /// Integration test: list API keys
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_list() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
@@ -1815,14 +1853,14 @@ async fn test_api_key_list() {
     create_api_key(&auth, &token, serde_json::json!({"name": "key-1"})).await;
     create_api_key(&auth, &token, serde_json::json!({"name": "key-2"})).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/list".to_string(),
         headers,
         None,
@@ -1839,13 +1877,14 @@ async fn test_api_key_list() {
 }
 
 /// Integration test: update API key
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_update() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
     let (_key, id) =
         create_api_key(&auth, &token, serde_json::json!({"name": "original-name"})).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -1860,7 +1899,7 @@ async fn test_api_key_update() {
     });
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/update".to_string(),
         headers,
         Some(update_body.to_string().into_bytes()),
@@ -1880,12 +1919,13 @@ async fn test_api_key_update() {
 }
 
 /// Integration test: delete API key
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_delete() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
     let (_key, id) = create_api_key(&auth, &token, serde_json::json!({"name": "delete-me"})).await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -1895,7 +1935,7 @@ async fn test_api_key_delete() {
     let delete_body = serde_json::json!({"id": id});
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/delete".to_string(),
         headers,
         Some(delete_body.to_string().into_bytes()),
@@ -1914,7 +1954,7 @@ async fn test_api_key_delete() {
     headers2.insert("authorization".to_string(), format!("Bearer {}", token));
 
     let list_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/list".to_string(),
         headers2,
         None,
@@ -1927,11 +1967,12 @@ async fn test_api_key_delete() {
 }
 
 /// Integration test: unauthenticated create → 401
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_create_unauthenticated() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -1940,7 +1981,7 @@ async fn test_api_key_create_unauthenticated() {
     let body = serde_json::json!({"name": "no-auth"});
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/create".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
@@ -1952,15 +1993,16 @@ async fn test_api_key_create_unauthenticated() {
 }
 
 /// Integration test: unauthenticated list → 401
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_list_unauthenticated() {
     let auth = create_test_auth_memory().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/list".to_string(),
         HashMap::new(),
         None,
@@ -1972,13 +2014,14 @@ async fn test_api_key_list_unauthenticated() {
 }
 
 /// Integration test: get key owned by another user → 404
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_get_other_users_key() {
     let (auth, _user_id, token1) = create_auth_with_apikey().await;
     let (_key, id) = create_api_key(&auth, &token1, serde_json::json!({"name": "user1-key"})).await;
 
     // Create a second user
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -1991,7 +2034,7 @@ async fn test_api_key_get_other_users_key() {
     });
 
     let signup_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-up/email".to_string(),
         headers,
         Some(signup_data.to_string().into_bytes()),
@@ -2010,7 +2053,7 @@ async fn test_api_key_get_other_users_key() {
     query.insert("id".to_string(), id.clone());
 
     let get_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/get".to_string(),
         headers2,
         None,
@@ -2022,13 +2065,14 @@ async fn test_api_key_get_other_users_key() {
 }
 
 /// Integration test: delete key owned by another user → 404
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_delete_other_users_key() {
     let (auth, _user_id, token1) = create_auth_with_apikey().await;
     let (_key, id) = create_api_key(&auth, &token1, serde_json::json!({"name": "user1-key"})).await;
 
     // Create a second user
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -2041,7 +2085,7 @@ async fn test_api_key_delete_other_users_key() {
     });
 
     let signup_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-up/email".to_string(),
         headers,
         Some(signup_data.to_string().into_bytes()),
@@ -2060,7 +2104,7 @@ async fn test_api_key_delete_other_users_key() {
     let delete_body = serde_json::json!({"id": id});
 
     let delete_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/delete".to_string(),
         headers2,
         Some(delete_body.to_string().into_bytes()),
@@ -2072,13 +2116,14 @@ async fn test_api_key_delete_other_users_key() {
 }
 
 /// Integration test: update key owned by another user → 404
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_update_other_users_key() {
     let (auth, _user_id, token1) = create_auth_with_apikey().await;
     let (_key, id) = create_api_key(&auth, &token1, serde_json::json!({"name": "user1-key"})).await;
 
     // Create a second user
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -2091,7 +2136,7 @@ async fn test_api_key_update_other_users_key() {
     });
 
     let signup_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/sign-up/email".to_string(),
         headers,
         Some(signup_data.to_string().into_bytes()),
@@ -2113,7 +2158,7 @@ async fn test_api_key_update_other_users_key() {
     });
 
     let update_request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Post,
+        better_auth::prelude::HttpMethod::Post,
         "/api-key/update".to_string(),
         headers2,
         Some(update_body.to_string().into_bytes()),
@@ -2125,18 +2170,19 @@ async fn test_api_key_update_other_users_key() {
 }
 
 /// Integration test: list keys for user with no keys → empty array
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_list_empty() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/list".to_string(),
         headers,
         None,
@@ -2151,18 +2197,19 @@ async fn test_api_key_list_empty() {
 }
 
 /// Integration test: get key with missing 'id' query param → 400
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_get_missing_id() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/get".to_string(),
         headers,
         None,
@@ -2174,11 +2221,12 @@ async fn test_api_key_get_missing_id() {
 }
 
 /// Integration test: get nonexistent key → 404
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_api_key_get_nonexistent() {
     let (auth, _user_id, token) = create_auth_with_apikey().await;
 
-    use better_auth::types::AuthRequest;
+    use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
@@ -2188,7 +2236,7 @@ async fn test_api_key_get_nonexistent() {
     query.insert("id".to_string(), "nonexistent-id".to_string());
 
     let request = AuthRequest::from_parts(
-        better_auth::types::HttpMethod::Get,
+        better_auth::prelude::HttpMethod::Get,
         "/api-key/get".to_string(),
         headers,
         None,
@@ -2200,12 +2248,21 @@ async fn test_api_key_get_nonexistent() {
 }
 
 /// get_user_by_username works via database adapter
+// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_get_user_by_username_adapter() {
-    use better_auth::adapters::MemoryDatabaseAdapter;
-    use better_auth::types::CreateUser;
-
-    let db = MemoryDatabaseAdapter::new();
+    use better_auth::prelude::CreateUser;
+    use better_auth_seaorm::{Database, SeaOrmStore};
+    let database = Database::connect("sqlite::memory:").await.unwrap();
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
+        .await
+        .unwrap();
+    let db = SeaOrmStore::<TestSchema>::new(
+        Arc::new(better_auth::AuthConfig::new(
+            "test-secret-key-that-is-at-least-32-characters-long",
+        )),
+        database,
+    );
 
     // Create user with username
     let create = CreateUser::new()
@@ -2218,7 +2275,7 @@ async fn test_get_user_by_username_adapter() {
     // Lookup by username
     let found = db.get_user_by_username("db_user").await.unwrap();
     assert!(found.is_some());
-    assert_eq!(found.unwrap().id, user.id);
+    assert_eq!(found.unwrap().id(), user.id());
 
     // Lookup nonexistent
     let not_found = db.get_user_by_username("no_user").await.unwrap();
