@@ -1094,6 +1094,8 @@ mod tests {
         assert_eq!(verify_calls.load(Ordering::SeqCst), 1);
     }
 
+    // Rust-specific surface: route-table registration for the endpoint declared in
+    // packages/better-auth/src/plugins/username/index.ts :: isUsernameAvailable.
     #[tokio::test]
     async fn test_is_username_available_route_registered() {
         let plugin = EmailPasswordPlugin::new();
@@ -1105,6 +1107,9 @@ mod tests {
         );
     }
 
+    // Upstream reference: packages/better-auth/src/plugins/username/index.ts ::
+    // isUsernameAvailable returns `{ available: true }` when no user holds the
+    // normalized username; adapted to the Rust email-password plugin.
     #[tokio::test]
     async fn test_is_username_available_fresh() {
         let plugin = EmailPasswordPlugin::new();
@@ -1127,6 +1132,9 @@ mod tests {
         assert_eq!(json["available"], true);
     }
 
+    // Upstream reference: packages/better-auth/src/plugins/username/index.ts ::
+    // isUsernameAvailable returns `{ available: false }` when the adapter finds a
+    // user on the normalized username; adapted to the Rust email-password plugin.
     #[tokio::test]
     async fn test_is_username_available_taken() {
         let plugin = EmailPasswordPlugin::new();
@@ -1166,6 +1174,9 @@ mod tests {
         assert_eq!(json["available"], false);
     }
 
+    // Upstream reference: packages/better-auth/src/plugins/username/index.ts ::
+    // isUsernameAvailable throws UNPROCESSABLE_ENTITY with code USERNAME_TOO_SHORT
+    // below `minUsernameLength` (default 3); adapted to the Rust email-password plugin.
     #[tokio::test]
     async fn test_is_username_available_too_short() {
         let plugin = EmailPasswordPlugin::new();
@@ -1188,6 +1199,9 @@ mod tests {
         assert_eq!(json["code"], "USERNAME_TOO_SHORT");
     }
 
+    // Upstream reference: packages/better-auth/src/plugins/username/index.ts ::
+    // isUsernameAvailable rejects usernames that fail `defaultUsernameValidator`
+    // with UNPROCESSABLE_ENTITY; adapted to the Rust email-password plugin.
     #[tokio::test]
     async fn test_is_username_available_invalid_chars() {
         let plugin = EmailPasswordPlugin::new();
