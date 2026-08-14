@@ -13,7 +13,7 @@ pub use crate::entities::session::Model as AppSession;
 pub use crate::entities::user::Model as AppUser;
 pub use crate::entities::verification::Model as AppVerification;
 
-pub type AppAdapter = better_auth::adapters::SqlxAdapter<
+pub type AppAdapter = better_auth::adapters::SqliteAdapter<
     AppUser,
     AppSession,
     AppAccount,

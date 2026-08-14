@@ -246,3 +246,27 @@ pub(crate) const AUTH_PASSKEY_GETTERS: &[(&str, ReturnKind)] = &[
     ("transports", OptionRefStr),
     ("created_at", DateTime),
 ];
+
+pub(crate) const AUTH_API_KEY_GETTERS: &[(&str, ReturnKind)] = &[
+    ("id", RefStr),
+    ("name", OptionRefStr),
+    ("start", OptionRefStr),
+    ("prefix", OptionRefStr),
+    ("key_hash", RefStr),
+    ("user_id", RefStr),
+    ("refill_interval", OptionI64),
+    ("refill_amount", OptionI64),
+    ("last_refill_at", OptionRefStr),
+    ("enabled", Bool),
+    ("rate_limit_enabled", Bool),
+    ("rate_limit_time_window", OptionI64),
+    ("rate_limit_max", OptionI64),
+    ("request_count", OptionI64),
+    ("remaining", OptionI64),
+    ("last_request", OptionRefStr),
+    ("expires_at", OptionRefStr),
+    ("created_at", RefStr),
+    ("updated_at", RefStr),
+    ("permissions", OptionRefStr),
+    ("metadata", OptionRefStr),
+];

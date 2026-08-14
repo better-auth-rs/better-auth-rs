@@ -1,14 +1,23 @@
 //! Example of creating a custom database adapter for your ORM
 //!
 //! This example shows how to integrate better-auth with any ORM or database
-//! library by implementing the DatabaseAdapter trait.
+//! library by implementing the required operation traits. The DatabaseAdapter
+//! trait is automatically implemented when all operation traits are present.
 
 use async_trait::async_trait;
-use better_auth::adapters::DatabaseAdapter;
-use better_auth::error::{AuthError, AuthResult};
+use better_auth::adapters::{
+    AccountOps, InvitationOps, MemberOps, OrganizationOps, PasskeyOps, SessionOps, UserOps,
+    VerificationOps,
+};
 use better_auth::plugins::EmailPasswordPlugin;
 use better_auth::types::*;
 use better_auth::{AuthConfig, BetterAuth};
+use better_auth::{AuthError, AuthResult};
+use better_auth_core::types::{Member, Organization};
+use better_auth_core::{
+    ApiKey, ApiKeyOps, CreateApiKey, CreateTwoFactor, ListUsersParams, TwoFactorOps, UpdateAccount,
+    UpdateApiKey,
+};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -18,6 +27,7 @@ use uuid::Uuid;
 ///
 /// This example uses an in-memory store for simplicity, but you would
 /// replace this with calls to your actual ORM (Diesel, SeaORM, etc.)
+#[derive(Default)]
 pub struct CustomORMAdapter {
     // In a real implementation, this would be your ORM's connection/client
     // For example:
@@ -26,7 +36,6 @@ pub struct CustomORMAdapter {
     // - mongodb: mongodb::Client
     users: Arc<Mutex<HashMap<String, User>>>,
     sessions: Arc<Mutex<HashMap<String, Session>>>,
-    credentials: Arc<Mutex<HashMap<String, String>>>, // user_id -> password_hash
     email_index: Arc<Mutex<HashMap<String, String>>>, // email -> user_id
 }
 
@@ -35,7 +44,6 @@ impl CustomORMAdapter {
         Self {
             users: Arc::new(Mutex::new(HashMap::new())),
             sessions: Arc::new(Mutex::new(HashMap::new())),
-            credentials: Arc::new(Mutex::new(HashMap::new())),
             email_index: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -114,8 +122,14 @@ impl CustomORMAdapter {
     }
 }
 
+// ============================================================================
+// User Operations
+// ============================================================================
+
 #[async_trait]
-impl DatabaseAdapter for CustomORMAdapter {
+impl UserOps for CustomORMAdapter {
+    type User = User;
+
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<User> {
         let id = create_user.id.unwrap_or_else(|| Uuid::new_v4().to_string());
         let now = Utc::now();
@@ -140,7 +154,7 @@ impl DatabaseAdapter for CustomORMAdapter {
 
         self.orm_create_user(user)
             .await
-            .map_err(|e| AuthError::database(e))
+            .map_err(AuthError::internal)
     }
 
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<User>> {
@@ -151,7 +165,16 @@ impl DatabaseAdapter for CustomORMAdapter {
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<User>> {
         self.orm_find_user_by_email(email)
             .await
-            .map_err(|e| AuthError::database(e))
+            .map_err(AuthError::internal)
+    }
+
+    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<User>> {
+        // Stub implementation - would need username index in real implementation
+        let users = self.users.lock().unwrap();
+        Ok(users
+            .values()
+            .find(|u| u.username.as_deref() == Some(username))
+            .cloned())
     }
 
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<User> {
@@ -159,20 +182,44 @@ impl DatabaseAdapter for CustomORMAdapter {
 
         let user = users
             .get_mut(id)
-            .ok_or_else(|| AuthError::database("User not found"))?;
+            .ok_or_else(|| AuthError::not_found("User not found"))?;
 
         // Update fields if provided
         if let Some(email) = update.email {
             user.email = Some(email);
         }
         if let Some(name) = update.name {
-            user.name = name;
+            user.name = Some(name);
         }
         if let Some(image) = update.image {
-            user.image = image;
+            user.image = Some(image);
         }
         if let Some(email_verified) = update.email_verified {
             user.email_verified = email_verified;
+        }
+        if let Some(username) = update.username {
+            user.username = Some(username);
+        }
+        if let Some(display_username) = update.display_username {
+            user.display_username = Some(display_username);
+        }
+        if let Some(role) = update.role {
+            user.role = Some(role);
+        }
+        if let Some(banned) = update.banned {
+            user.banned = banned;
+        }
+        if let Some(ban_reason) = update.ban_reason {
+            user.ban_reason = Some(ban_reason);
+        }
+        if let Some(ban_expires) = update.ban_expires {
+            user.ban_expires = Some(ban_expires);
+        }
+        if let Some(two_factor_enabled) = update.two_factor_enabled {
+            user.two_factor_enabled = two_factor_enabled;
+        }
+        if let Some(metadata) = update.metadata {
+            user.metadata = metadata;
         }
 
         user.updated_at = Utc::now();
@@ -184,39 +231,66 @@ impl DatabaseAdapter for CustomORMAdapter {
         let mut users = self.users.lock().unwrap();
         let mut email_index = self.email_index.lock().unwrap();
 
-        if let Some(user) = users.remove(id) {
-            if let Some(email) = user.email {
-                email_index.remove(&email);
-            }
+        if let Some(user) = users.remove(id)
+            && let Some(email) = user.email
+        {
+            email_index.remove(&email);
         }
 
         Ok(())
     }
 
+    async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<User>, usize)> {
+        // Simple stub implementation - real implementation would handle filtering/sorting
+        let users = self.users.lock().unwrap();
+        let all_users: Vec<User> = users.values().cloned().collect();
+        let total = all_users.len();
+
+        let offset = params.offset.unwrap_or(0);
+        let limit = params.limit.unwrap_or(100);
+
+        let paginated: Vec<User> = all_users.into_iter().skip(offset).take(limit).collect();
+
+        Ok((paginated, total))
+    }
+}
+
+// ============================================================================
+// Session Operations
+// ============================================================================
+
+#[async_trait]
+impl SessionOps for CustomORMAdapter {
+    type Session = Session;
+
     async fn create_session(&self, create_session: CreateSession) -> AuthResult<Session> {
         let id = Uuid::new_v4().to_string();
+        let token = format!("session_{}", Uuid::new_v4());
         let now = Utc::now();
 
         let session = Session {
             id: id.clone(),
-            token: create_session.token,
+            token: token.clone(),
             user_id: create_session.user_id,
             expires_at: create_session.expires_at,
             ip_address: create_session.ip_address,
             user_agent: create_session.user_agent,
+            impersonated_by: create_session.impersonated_by,
+            active_organization_id: create_session.active_organization_id,
+            active: true,
             created_at: now,
             updated_at: now,
         };
 
         self.orm_create_session(session)
             .await
-            .map_err(|e| AuthError::database(e))
+            .map_err(AuthError::internal)
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<Session>> {
         self.orm_find_session(token)
             .await
-            .map_err(|e| AuthError::database(e))
+            .map_err(AuthError::internal)
     }
 
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<Session>> {
@@ -264,10 +338,35 @@ impl DatabaseAdapter for CustomORMAdapter {
         Ok(initial_count - sessions.len())
     }
 
-    // Account operations (for OAuth)
+    async fn update_session_active_organization(
+        &self,
+        token: &str,
+        organization_id: Option<&str>,
+    ) -> AuthResult<Session> {
+        let mut sessions = self.sessions.lock().unwrap();
+
+        let session = sessions.get_mut(token).ok_or(AuthError::SessionNotFound)?;
+
+        session.active_organization_id = organization_id.map(String::from);
+        session.updated_at = Utc::now();
+
+        Ok(session.clone())
+    }
+}
+
+// ============================================================================
+// Account Operations (OAuth)
+// ============================================================================
+
+#[async_trait]
+impl AccountOps for CustomORMAdapter {
+    type Account = Account;
+
     async fn create_account(&self, _account: CreateAccount) -> AuthResult<Account> {
         // Implement based on your OAuth needs
-        unimplemented!("OAuth accounts not implemented in this example")
+        Err(AuthError::not_implemented(
+            "OAuth accounts not implemented in this example",
+        ))
     }
 
     async fn get_account(
@@ -282,23 +381,51 @@ impl DatabaseAdapter for CustomORMAdapter {
         Ok(vec![])
     }
 
+    async fn update_account(&self, _id: &str, _update: UpdateAccount) -> AuthResult<Account> {
+        Err(AuthError::not_implemented(
+            "OAuth accounts not implemented in this example",
+        ))
+    }
+
     async fn delete_account(&self, _id: &str) -> AuthResult<()> {
         Ok(())
     }
+}
 
-    // Verification token operations
+// ============================================================================
+// Verification Operations
+// ============================================================================
+
+#[async_trait]
+impl VerificationOps for CustomORMAdapter {
+    type Verification = Verification;
+
     async fn create_verification(
         &self,
         _verification: CreateVerification,
     ) -> AuthResult<Verification> {
-        unimplemented!("Verifications not implemented in this example")
+        Err(AuthError::not_implemented(
+            "Verifications not implemented in this example",
+        ))
     }
 
-    async fn get_verification(&self, _id: &str) -> AuthResult<Option<Verification>> {
+    async fn get_verification(
+        &self,
+        _identifier: &str,
+        _value: &str,
+    ) -> AuthResult<Option<Verification>> {
         Ok(None)
     }
 
     async fn get_verification_by_value(&self, _value: &str) -> AuthResult<Option<Verification>> {
+        Ok(None)
+    }
+
+    async fn consume_verification(
+        &self,
+        _identifier: &str,
+        _value: &str,
+    ) -> AuthResult<Option<Verification>> {
         Ok(None)
     }
 
@@ -309,81 +436,269 @@ impl DatabaseAdapter for CustomORMAdapter {
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
         Ok(0)
     }
+}
 
-    // Credential operations
-    async fn create_credential(&self, user_id: String, password_hash: String) -> AuthResult<()> {
-        let mut credentials = self.credentials.lock().unwrap();
-        credentials.insert(user_id, password_hash);
+// ============================================================================
+// Organization Operations (Stubs)
+// ============================================================================
+
+#[async_trait]
+impl OrganizationOps for CustomORMAdapter {
+    type Organization = Organization;
+
+    async fn create_organization(&self, _org: CreateOrganization) -> AuthResult<Organization> {
+        Err(AuthError::not_implemented(
+            "Organizations not implemented in this example",
+        ))
+    }
+
+    async fn get_organization_by_id(&self, _id: &str) -> AuthResult<Option<Organization>> {
+        Ok(None)
+    }
+
+    async fn get_organization_by_slug(&self, _slug: &str) -> AuthResult<Option<Organization>> {
+        Ok(None)
+    }
+
+    async fn update_organization(
+        &self,
+        _id: &str,
+        _update: UpdateOrganization,
+    ) -> AuthResult<Organization> {
+        Err(AuthError::not_implemented(
+            "Organizations not implemented in this example",
+        ))
+    }
+
+    async fn delete_organization(&self, _id: &str) -> AuthResult<()> {
         Ok(())
     }
 
-    async fn get_credential(&self, user_id: &str) -> AuthResult<Option<String>> {
-        let credentials = self.credentials.lock().unwrap();
-        Ok(credentials.get(user_id).cloned())
+    async fn list_user_organizations(&self, _user_id: &str) -> AuthResult<Vec<Organization>> {
+        Ok(vec![])
+    }
+}
+
+// ============================================================================
+// Member Operations (Stubs)
+// ============================================================================
+
+#[async_trait]
+impl MemberOps for CustomORMAdapter {
+    type Member = Member;
+
+    async fn create_member(&self, _member: CreateMember) -> AuthResult<Member> {
+        Err(AuthError::not_implemented(
+            "Organization members not implemented in this example",
+        ))
     }
 
-    async fn update_credential(&self, user_id: &str, password_hash: String) -> AuthResult<()> {
-        let mut credentials = self.credentials.lock().unwrap();
-        credentials.insert(user_id.to_string(), password_hash);
+    async fn get_member(
+        &self,
+        _organization_id: &str,
+        _user_id: &str,
+    ) -> AuthResult<Option<Member>> {
+        Ok(None)
+    }
+
+    async fn get_member_by_id(&self, _id: &str) -> AuthResult<Option<Member>> {
+        Ok(None)
+    }
+
+    async fn update_member_role(&self, _member_id: &str, _role: &str) -> AuthResult<Member> {
+        Err(AuthError::not_implemented(
+            "Organization members not implemented in this example",
+        ))
+    }
+
+    async fn delete_member(&self, _member_id: &str) -> AuthResult<()> {
         Ok(())
     }
 
-    async fn delete_credential(&self, user_id: &str) -> AuthResult<()> {
-        let mut credentials = self.credentials.lock().unwrap();
-        credentials.remove(user_id);
+    async fn list_organization_members(&self, _organization_id: &str) -> AuthResult<Vec<Member>> {
+        Ok(vec![])
+    }
+
+    async fn count_organization_members(&self, _organization_id: &str) -> AuthResult<usize> {
+        Ok(0)
+    }
+
+    async fn count_organization_owners(&self, _organization_id: &str) -> AuthResult<usize> {
+        Ok(0)
+    }
+}
+
+// ============================================================================
+// Invitation Operations (Stubs)
+// ============================================================================
+
+#[async_trait]
+impl InvitationOps for CustomORMAdapter {
+    type Invitation = Invitation;
+
+    async fn create_invitation(&self, _invitation: CreateInvitation) -> AuthResult<Invitation> {
+        Err(AuthError::not_implemented(
+            "Invitations not implemented in this example",
+        ))
+    }
+
+    async fn get_invitation_by_id(&self, _id: &str) -> AuthResult<Option<Invitation>> {
+        Ok(None)
+    }
+
+    async fn get_pending_invitation(
+        &self,
+        _organization_id: &str,
+        _email: &str,
+    ) -> AuthResult<Option<Invitation>> {
+        Ok(None)
+    }
+
+    async fn update_invitation_status(
+        &self,
+        _id: &str,
+        _status: InvitationStatus,
+    ) -> AuthResult<Invitation> {
+        Err(AuthError::not_implemented(
+            "Invitations not implemented in this example",
+        ))
+    }
+
+    async fn list_organization_invitations(
+        &self,
+        _organization_id: &str,
+    ) -> AuthResult<Vec<Invitation>> {
+        Ok(vec![])
+    }
+
+    async fn list_user_invitations(&self, _email: &str) -> AuthResult<Vec<Invitation>> {
+        Ok(vec![])
+    }
+}
+
+// ============================================================================
+// Two-Factor Operations (Stubs)
+// ============================================================================
+
+#[async_trait]
+impl TwoFactorOps for CustomORMAdapter {
+    type TwoFactor = TwoFactor;
+
+    async fn create_two_factor(&self, _two_factor: CreateTwoFactor) -> AuthResult<TwoFactor> {
+        Err(AuthError::not_implemented(
+            "Two-factor authentication not implemented in this example",
+        ))
+    }
+
+    async fn get_two_factor_by_user_id(&self, _user_id: &str) -> AuthResult<Option<TwoFactor>> {
+        Ok(None)
+    }
+
+    async fn update_two_factor_backup_codes(
+        &self,
+        _user_id: &str,
+        _backup_codes: &str,
+    ) -> AuthResult<TwoFactor> {
+        Err(AuthError::not_implemented(
+            "Two-factor authentication not implemented in this example",
+        ))
+    }
+
+    async fn delete_two_factor(&self, _user_id: &str) -> AuthResult<()> {
         Ok(())
     }
 }
 
-/// Example: Real-world Diesel adapter skeleton
-#[cfg(feature = "diesel-example")]
-mod diesel_adapter {
-    use super::*;
-    use diesel::PgConnection;
-    use diesel::prelude::*;
-    use diesel::r2d2::{ConnectionManager, Pool};
+// ============================================================================
+// API Key Operations (Stubs)
+// ============================================================================
 
-    pub struct DieselAdapter {
-        pool: Pool<ConnectionManager<PgConnection>>,
+#[async_trait]
+impl ApiKeyOps for CustomORMAdapter {
+    type ApiKey = ApiKey;
+
+    async fn create_api_key(&self, _input: CreateApiKey) -> AuthResult<ApiKey> {
+        Err(AuthError::not_implemented(
+            "API keys not implemented in this example",
+        ))
     }
 
-    impl DieselAdapter {
-        pub fn new(database_url: &str) -> Result<Self, diesel::r2d2::Error> {
-            let manager = ConnectionManager::<PgConnection>::new(database_url);
-            let pool = Pool::builder().max_size(10).build(manager)?;
-            Ok(Self { pool })
-        }
+    async fn get_api_key_by_id(&self, _id: &str) -> AuthResult<Option<ApiKey>> {
+        Ok(None)
     }
 
-    #[async_trait]
-    impl DatabaseAdapter for DieselAdapter {
-        async fn create_user(&self, create_user: CreateUser) -> AuthResult<User> {
-            let pool = self.pool.clone();
+    async fn get_api_key_by_hash(&self, _hash: &str) -> AuthResult<Option<ApiKey>> {
+        Ok(None)
+    }
 
-            // Run blocking Diesel operation in separate thread
-            tokio::task::spawn_blocking(move || {
-                let mut conn = pool.get().map_err(|e| AuthError::database(e.to_string()))?;
+    async fn list_api_keys_by_user(&self, _user_id: &str) -> AuthResult<Vec<ApiKey>> {
+        Ok(vec![])
+    }
 
-                // Your Diesel query here
-                // diesel::insert_into(users::table)
-                //     .values(&new_user)
-                //     .get_result(&mut conn)
-                //     .map_err(|e| AuthError::database(e.to_string()))
+    async fn update_api_key(&self, _id: &str, _update: UpdateApiKey) -> AuthResult<ApiKey> {
+        Err(AuthError::not_implemented(
+            "API keys not implemented in this example",
+        ))
+    }
 
-                todo!("Implement actual Diesel query")
-            })
-            .await
-            .map_err(|e| AuthError::database(e.to_string()))?
-        }
+    async fn delete_api_key(&self, _id: &str) -> AuthResult<()> {
+        Ok(())
+    }
 
-        // Implement other methods similarly...
-        async fn get_user_by_email(&self, _email: &str) -> AuthResult<Option<User>> {
-            todo!()
-        }
-
-        // ... rest of the trait methods
+    async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
+        Ok(0)
     }
 }
+
+// ============================================================================
+// Passkey Operations (Stubs)
+// ============================================================================
+
+#[async_trait]
+impl PasskeyOps for CustomORMAdapter {
+    type Passkey = Passkey;
+
+    async fn create_passkey(&self, _input: CreatePasskey) -> AuthResult<Passkey> {
+        Err(AuthError::not_implemented(
+            "Passkeys not implemented in this example",
+        ))
+    }
+
+    async fn get_passkey_by_id(&self, _id: &str) -> AuthResult<Option<Passkey>> {
+        Ok(None)
+    }
+
+    async fn get_passkey_by_credential_id(
+        &self,
+        _credential_id: &str,
+    ) -> AuthResult<Option<Passkey>> {
+        Ok(None)
+    }
+
+    async fn list_passkeys_by_user(&self, _user_id: &str) -> AuthResult<Vec<Passkey>> {
+        Ok(vec![])
+    }
+
+    async fn update_passkey_counter(&self, _id: &str, _counter: u64) -> AuthResult<Passkey> {
+        Err(AuthError::not_implemented(
+            "Passkeys not implemented in this example",
+        ))
+    }
+
+    async fn update_passkey_name(&self, _id: &str, _name: &str) -> AuthResult<Passkey> {
+        Err(AuthError::not_implemented(
+            "Passkeys not implemented in this example",
+        ))
+    }
+
+    async fn delete_passkey(&self, _id: &str) -> AuthResult<()> {
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Example Usage
+// ============================================================================
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -401,7 +716,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .password_min_length(8);
 
     // Build better-auth with your custom adapter
-    let auth = BetterAuth::new(config)
+    let auth: BetterAuth<CustomORMAdapter> = BetterAuth::<CustomORMAdapter>::new(config)
         .database(custom_adapter)
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .build()
@@ -475,12 +790,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", "=".repeat(50));
 
     println!("\n💡 Key points for implementing custom adapters:");
-    println!("   1. Implement the DatabaseAdapter trait");
-    println!("   2. Map your ORM types to better-auth types");
-    println!("   3. Handle blocking operations with tokio::task::spawn_blocking");
-    println!("   4. Convert ORM errors to AuthError");
-    println!("   5. Implement all required methods (users, sessions, credentials)");
-    println!("   6. OAuth and verification methods can return unimplemented if not needed");
+    println!("   1. Implement the operation traits (UserOps, SessionOps, etc.)");
+    println!("   2. DatabaseAdapter is automatically implemented via blanket impl");
+    println!("   3. Map your ORM types to better-auth types");
+    println!("   4. Handle blocking operations with tokio::task::spawn_blocking");
+    println!("   5. Convert ORM errors to AuthError using AuthError::internal()");
+    println!("   6. Implement required traits fully (User, Session)");
+    println!("   7. Stub optional traits (Organization, TwoFactor, etc.) if not needed");
 
     println!("\n📚 Adapter implementation tips:");
     println!("   • Diesel: Use spawn_blocking for all queries");
@@ -488,6 +804,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   • MongoDB: Use the async driver");
     println!("   • Redis: Can be used for session storage");
     println!("   • Custom REST API: Use reqwest for HTTP calls");
+
+    println!("\n🔍 Trait structure:");
+    println!("   • UserOps - User CRUD operations");
+    println!("   • SessionOps - Session management");
+    println!("   • AccountOps - OAuth account linking");
+    println!("   • VerificationOps - Email/phone verification");
+    println!("   • OrganizationOps - Organization management");
+    println!("   • MemberOps - Organization membership");
+    println!("   • InvitationOps - Organization invitations");
+    println!("   • TwoFactorOps - 2FA management");
+    println!("   • ApiKeyOps - API key management");
+    println!("   • PasskeyOps - WebAuthn passkey management");
 
     Ok(())
 }

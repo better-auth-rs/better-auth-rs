@@ -31,6 +31,18 @@ struct FromRowField {
     auth_column: Option<String>,
 }
 
+/// Check if a type is a SeaORM relation type (HasMany or HasOne).
+/// These fields are not database columns and should be skipped in FromRow generation.
+fn is_seaorm_relation_type(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        let ident_str = segment.ident.to_string();
+        return ident_str == "HasMany" || ident_str == "HasOne";
+    }
+    false
+}
+
 /// Parse fields for FromRow generation, extracting type info and relevant attributes.
 fn parse_from_row_fields(input: &DeriveInput) -> Result<Vec<FromRowField>, TokenStream2> {
     let struct_name = &input.ident;
@@ -59,6 +71,12 @@ fn parse_from_row_fields(input: &DeriveInput) -> Result<Vec<FromRowField>, Token
             continue;
         };
         let ty = f.ty.clone();
+
+        // Skip SeaORM relation fields (HasMany, HasOne) - they're not database columns
+        if is_seaorm_relation_type(&ty) {
+            continue;
+        }
+
         let mut is_json = false;
         let mut auth_field_name = None;
         let mut auth_column = None;
@@ -222,9 +240,20 @@ fn gen_from_row_field_expr(field: &FromRowField) -> TokenStream2 {
     }
 }
 
-/// If the struct has `#[auth(from_row)]`, generate an
-/// `impl sqlx::FromRow<'_, PgRow> for Struct` block.
+/// If the struct has `#[auth(from_row)]`, generate
+/// `impl sqlx::FromRow` blocks for enabled database backends.
 /// Returns empty tokens if the attribute is absent.
+///
+/// IMPORTANT: Feature checks happen at proc-macro compile time, not user crate compile time.
+/// This means the derive macro decides which impls to emit based on features enabled when
+/// better-auth-derive itself is compiled, ensuring the generated code is unconditional.
+///
+/// Generates implementations for:
+/// - PostgreSQL (PgRow) when `sqlx-postgres` feature is enabled in better-auth-derive
+/// - SQLite (SqliteRow) when `sqlx-sqlite` feature is enabled in better-auth-derive
+///
+/// Both implementations can coexist, allowing the same entity
+/// to work with multiple database backends at compile time.
 pub(crate) fn maybe_gen_from_row(input: &DeriveInput) -> TokenStream2 {
     if !has_auth_from_row(&input.attrs) {
         return quote! {};
@@ -236,6 +265,88 @@ pub(crate) fn maybe_gen_from_row(input: &DeriveInput) -> TokenStream2 {
     };
 
     let struct_name = &input.ident;
+
+    // CRITICAL: Don't implement FromRow for SeaORM's `ModelEx` struct
+    // SeaORM's #[sea_orm::model] generates both Model and ModelEx,
+    // but FromRow should only apply to the database-backed Model struct.
+    // Allow all other struct names (custom entities like MyUser, UserRecord, etc.)
+    if struct_name == "ModelEx" {
+        return quote! {};
+    }
+
+    // Check features at proc-macro compile time and conditionally emit impls.
+    // This ensures the user's crate doesn't need to define these features themselves.
+
+    #[cfg(any(feature = "sqlx-postgres", feature = "sqlx-sqlite"))]
+    {
+        let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+        let field_exprs: Vec<TokenStream2> = fields.iter().map(gen_from_row_field_expr).collect();
+
+        #[cfg(feature = "sqlx-postgres")]
+        let postgres_impl = quote! {
+            impl #impl_generics ::sqlx::FromRow<'_, ::sqlx::postgres::PgRow>
+                for #struct_name #ty_generics #where_clause
+            {
+                fn from_row(
+                    row: &::sqlx::postgres::PgRow,
+                ) -> ::core::result::Result<Self, ::sqlx::Error> {
+                    use ::sqlx::Row as _;
+                    ::core::result::Result::Ok(Self {
+                        #(#field_exprs),*
+                    })
+                }
+            }
+        };
+        #[cfg(not(feature = "sqlx-postgres"))]
+        let postgres_impl = quote! {};
+
+        #[cfg(feature = "sqlx-sqlite")]
+        let sqlite_impl = quote! {
+            impl #impl_generics ::sqlx::FromRow<'_, ::sqlx::sqlite::SqliteRow>
+                for #struct_name #ty_generics #where_clause
+            {
+                fn from_row(
+                    row: &::sqlx::sqlite::SqliteRow,
+                ) -> ::core::result::Result<Self, ::sqlx::Error> {
+                    use ::sqlx::Row as _;
+                    ::core::result::Result::Ok(Self {
+                        #(#field_exprs),*
+                    })
+                }
+            }
+        };
+        #[cfg(not(feature = "sqlx-sqlite"))]
+        let sqlite_impl = quote! {};
+
+        quote! {
+            #postgres_impl
+            #sqlite_impl
+        }
+    }
+
+    #[cfg(not(any(feature = "sqlx-postgres", feature = "sqlx-sqlite")))]
+    {
+        // No database features enabled - suppress unused variable warning
+        let _ = fields;
+        quote! {}
+    }
+}
+
+/// Generate FromRow implementation specifically for PostgreSQL.
+/// Always generates regardless of feature flags - this is called by dedicated macros.
+pub(crate) fn gen_from_row_postgres(input: &DeriveInput) -> TokenStream2 {
+    let fields = match parse_from_row_fields(input) {
+        Ok(f) => f,
+        Err(e) => return e,
+    };
+
+    let struct_name = &input.ident;
+
+    // CRITICAL: Don't implement FromRow for SeaORM's `ModelEx` struct
+    if struct_name == "ModelEx" {
+        return quote! {};
+    }
+
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let field_exprs: Vec<TokenStream2> = fields.iter().map(gen_from_row_field_expr).collect();
 
@@ -245,6 +356,40 @@ pub(crate) fn maybe_gen_from_row(input: &DeriveInput) -> TokenStream2 {
         {
             fn from_row(
                 row: &::sqlx::postgres::PgRow,
+            ) -> ::core::result::Result<Self, ::sqlx::Error> {
+                use ::sqlx::Row as _;
+                ::core::result::Result::Ok(Self {
+                    #(#field_exprs),*
+                })
+            }
+        }
+    }
+}
+
+/// Generate FromRow implementation specifically for SQLite.
+/// Always generates regardless of feature flags - this is called by dedicated macros.
+pub(crate) fn gen_from_row_sqlite(input: &DeriveInput) -> TokenStream2 {
+    let fields = match parse_from_row_fields(input) {
+        Ok(f) => f,
+        Err(e) => return e,
+    };
+
+    let struct_name = &input.ident;
+
+    // CRITICAL: Don't implement FromRow for SeaORM's `ModelEx` struct
+    if struct_name == "ModelEx" {
+        return quote! {};
+    }
+
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let field_exprs: Vec<TokenStream2> = fields.iter().map(gen_from_row_field_expr).collect();
+
+    quote! {
+        impl #impl_generics ::sqlx::FromRow<'_, ::sqlx::sqlite::SqliteRow>
+            for #struct_name #ty_generics #where_clause
+        {
+            fn from_row(
+                row: &::sqlx::sqlite::SqliteRow,
             ) -> ::core::result::Result<Self, ::sqlx::Error> {
                 use ::sqlx::Row as _;
                 ::core::result::Result::Ok(Self {

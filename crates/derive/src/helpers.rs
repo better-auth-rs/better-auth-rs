@@ -14,6 +14,8 @@ pub(crate) enum ReturnKind {
     Bool,
     /// `fn x(&self) -> u64` — field is `u64`
     U64,
+    /// `fn x(&self) -> Option<i64>` — field is `Option<i64>`
+    OptionI64,
     /// `fn x(&self) -> DateTime<Utc>` — field is `DateTime<Utc>`
     DateTime,
     /// `fn x(&self) -> Option<DateTime<Utc>>` — field is `Option<DateTime<Utc>>`
@@ -151,6 +153,18 @@ pub(crate) fn find_field_for_getter<'a>(
     None
 }
 
+/// Check if a type is a SeaORM relation type (HasMany or HasOne).
+/// These fields are not database columns and should be skipped in derive generation.
+fn is_seaorm_relation_type(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        let ident_str = segment.ident.to_string();
+        return ident_str == "HasMany" || ident_str == "HasOne";
+    }
+    false
+}
+
 /// Parse named fields from a DeriveInput, returning field infos or a compile error.
 pub(crate) fn parse_named_fields(
     input: &DeriveInput,
@@ -182,6 +196,12 @@ pub(crate) fn parse_named_fields(
         let Some(ident) = f.ident.clone() else {
             continue;
         };
+
+        // Skip SeaORM relation fields (HasMany, HasOne) - they're not part of the Auth traits
+        if is_seaorm_relation_type(&f.ty) {
+            continue;
+        }
+
         let parsed = parse_auth_attrs(&f.attrs).map_err(|e| e.to_compile_error())?;
         fields.push(FieldInfo {
             ident,
@@ -206,6 +226,10 @@ pub(crate) fn gen_getter_tokens(
         ),
         Bool => (quote! { bool }, quote! { self.#field_ident }),
         U64 => (quote! { u64 }, quote! { self.#field_ident }),
+        OptionI64 => (
+            quote! { ::core::option::Option<i64> },
+            quote! { self.#field_ident },
+        ),
         DateTime => (
             quote! { ::chrono::DateTime<::chrono::Utc> },
             quote! { self.#field_ident },

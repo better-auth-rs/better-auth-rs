@@ -52,6 +52,21 @@ pub use better_auth_core::entity::{
     AuthTwoFactor, AuthUser, AuthVerification, MemberUserView,
 };
 
+// SQLite-specific derives (always available when derive feature is enabled)
+#[cfg(all(feature = "derive", feature = "sqlx-sqlite"))]
+pub use better_auth_core::{
+    AuthAccountSqlite, AuthApiKeySqlite, AuthInvitationSqlite, AuthMemberSqlite,
+    AuthOrganizationSqlite, AuthPasskeySqlite, AuthSessionSqlite, AuthTwoFactorSqlite,
+    AuthUserSqlite, AuthVerificationSqlite,
+};
+
+// Postgres-specific derives (always available when derive feature is enabled)
+#[cfg(all(feature = "derive", feature = "sqlx-postgres"))]
+pub use better_auth_core::{
+    AuthAccountPg, AuthApiKeyPg, AuthInvitationPg, AuthMemberPg, AuthOrganizationPg, AuthPasskeyPg,
+    AuthSessionPg, AuthTwoFactorPg, AuthUserPg, AuthVerificationPg,
+};
+
 // Re-export types under `types` module for backwards compatibility
 pub mod types {
     pub use better_auth_core::{
@@ -71,9 +86,14 @@ pub mod adapters {
         OrganizationOps, PasskeyOps, SessionOps, UserOps, VerificationOps,
     };
 
+    #[cfg(feature = "sqlx-sqlite")]
+    pub use better_auth_core::adapters::database::{
+        PoolConfig, PoolStats, SqliteAdapter, SqliteEntity,
+    };
+
     #[cfg(feature = "sqlx-postgres")]
     pub use better_auth_core::adapters::database::sqlx_adapter::{
-        PoolConfig, PoolStats, SqlxAdapter, SqlxEntity,
+        PoolConfig, PoolStats, PostgresAdapter, PostgresEntity,
     };
 }
 

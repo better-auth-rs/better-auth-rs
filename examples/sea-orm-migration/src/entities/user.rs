@@ -2,6 +2,7 @@ use better_auth_core::AuthUser;
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+#[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize, AuthUser)]
 #[sea_orm(table_name = "users")]
 #[auth(from_row)]
@@ -10,10 +11,12 @@ pub struct Model {
     pub id: String,
     #[auth(field = "name")]
     pub name: Option<String>,
+    #[sea_orm(unique, indexed)]
     pub email: Option<String>,
     #[auth(default = "false")]
     pub email_verified: bool,
     pub image: Option<String>,
+    #[sea_orm(unique, indexed)]
     pub username: Option<String>,
     pub display_username: Option<String>,
     #[auth(default = "false")]
@@ -24,16 +27,25 @@ pub struct Model {
     pub ban_reason: Option<String>,
     pub ban_expires: Option<DateTimeUtc>,
     pub metadata: Json,
+    #[sea_orm(indexed)]
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
     // --- Application-specific columns ---
-    #[auth(default = "\"free\".to_string()")]
-    pub plan: String,
+    // Made nullable to avoid NOT NULL constraint during sign-up
+    // The adapter only inserts standard auth columns, so custom columns
+    // must be nullable OR have a database default
+    #[auth(default = "Some(\"free\".to_string())")]
+    pub plan: Option<String>,
     pub stripe_customer_id: Option<String>,
     pub phone: Option<String>,
-}
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+    // Relations
+    #[sea_orm(has_many)]
+    pub accounts: HasMany<super::account::Entity>,
+    #[sea_orm(has_many)]
+    pub sessions: HasMany<super::session::Entity>,
+    #[sea_orm(has_many)]
+    pub members: HasMany<super::member::Entity>,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

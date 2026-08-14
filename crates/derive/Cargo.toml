@@ -9,6 +9,12 @@ repository = { workspace = true }
 [lib]
 proc-macro = true
 
+[features]
+# Feature flags for conditional FromRow generation
+# These must match the parent crate's feature names
+sqlx-postgres = []
+sqlx-sqlite = []
+
 [dependencies]
 proc-macro2 = { workspace = true }
 quote = { workspace = true }

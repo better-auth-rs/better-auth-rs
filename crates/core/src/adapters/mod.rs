@@ -15,8 +15,15 @@ pub use memory::{
     MemoryVerification,
 };
 
+// Always export PoolConfig and PoolStats when any sqlx feature is enabled
+#[cfg(any(feature = "sqlx-postgres", feature = "sqlx-sqlite"))]
+pub use database::sqlx_adapter::{PoolConfig, PoolStats};
+
 #[cfg(feature = "sqlx-postgres")]
-pub use database::sqlx_adapter::{PoolConfig, PoolStats, SqlxAdapter, SqlxEntity};
+pub use database::sqlx_adapter::{PostgresAdapter, PostgresEntity};
+
+#[cfg(feature = "sqlx-sqlite")]
+pub use database::sqlx_adapter::{SqliteAdapter, SqliteEntity};
 
 #[cfg(feature = "redis-cache")]
 pub use cache::RedisAdapter;
