@@ -13,8 +13,6 @@ All notable changes to this project will be documented in this file.
 
 - propagate session refresh errors and bound axum body reads ([#69](https://github.com/better-auth-rs/better-auth-rs/pull/69))
 
-<<<<<<< Updated upstream
-=======
 - enforce trusted-origin policy on callback URLs and stop serializing Account.password ([#70](https://github.com/better-auth-rs/better-auth-rs/pull/70))
 
 
@@ -22,7 +20,6 @@ All notable changes to this project will be documented in this file.
 
 - add CONTRIBUTING.md and ROADMAP.md ([#71](https://github.com/better-auth-rs/better-auth-rs/pull/71))
 
->>>>>>> Stashed changes
 
 ### Features
 
