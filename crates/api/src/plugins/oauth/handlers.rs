@@ -1898,7 +1898,7 @@ pub(crate) async fn handle_callback(
 
         let mut params = url::form_urlencoded::Serializer::new(String::new());
         let mut pairs: Vec<_> = merged.iter().collect();
-        pairs.sort_by(|(left, _), (right, _)| left.cmp(right));
+        pairs.sort_by_key(|(left, _)| *left);
         for (key, value) in pairs {
             let _ = params.append_pair(key, value);
         }

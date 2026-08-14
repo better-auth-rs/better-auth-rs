@@ -411,7 +411,7 @@ pub struct MemberResponse {
 }
 
 impl MemberResponse {
-    /// Construct from any type implementing [`AuthMember`](better_auth_core::entity::AuthMember) and [`AuthUser`](better_auth_core::entity::AuthUser).
+    /// Construct from any type implementing [`AuthMember`] and [`AuthUser`](better_auth_core::entity::AuthUser).
     pub fn from_member_and_user(
         member: &impl better_auth_core::entity::AuthMember,
         user: &impl better_auth_core::entity::AuthUser,
