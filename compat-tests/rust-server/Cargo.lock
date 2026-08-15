@@ -517,6 +517,7 @@ dependencies = [
  "better-auth-core",
  "chrono",
  "clap",
+ "http-body-util",
  "jsonwebtoken",
  "rand 0.8.5",
  "serde",
@@ -525,6 +526,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tower",
+ "tracing",
  "url",
  "uuid",
 ]

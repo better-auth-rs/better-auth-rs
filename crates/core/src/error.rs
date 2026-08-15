@@ -47,6 +47,9 @@ pub enum AuthError {
     Conflict(String),
 
     #[error("{0}")]
+    PayloadTooLarge(String),
+
+    #[error("{0}")]
     UnprocessableEntity(String),
 
     #[error("Too many requests")]
@@ -94,6 +97,8 @@ impl AuthError {
             Self::UserNotFound | Self::NotFound(_) => 404,
             // 409
             Self::Conflict(_) => 409,
+            // 413
+            Self::PayloadTooLarge(_) => 413,
             // 422
             Self::UnprocessableEntity(_) => 422,
             // 429
@@ -180,6 +185,10 @@ impl AuthError {
 
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::Conflict(message.into())
+    }
+
+    pub fn payload_too_large(message: impl Into<String>) -> Self {
+        Self::PayloadTooLarge(message.into())
     }
 
     pub fn not_implemented(message: impl Into<String>) -> Self {

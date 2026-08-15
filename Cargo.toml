@@ -87,7 +87,14 @@ syn = { version = "2", features = ["full"] }
 default = ["native-tls"]
 native-tls = ["better-auth-api/native-tls"]
 rustls = ["better-auth-api/rustls"]
-axum = ["dep:axum", "dep:tower", "dep:url", "better-auth-core/axum", "better-auth-api/axum"]
+axum = [
+    "dep:axum",
+    "dep:tower",
+    "dep:url",
+    "dep:http-body-util",
+    "better-auth-core/axum",
+    "better-auth-api/axum",
+]
 seaorm2 = ["dep:better-auth-seaorm"]
 redis-cache = ["dep:redis"]
 
@@ -129,6 +136,8 @@ url = { workspace = true, optional = true }
 
 # Cache (optional)
 redis = { workspace = true, optional = true }
+tracing.workspace = true
+http-body-util = { version = "0.1", optional = true }
 
 [dev-dependencies]
 better-auth-seaorm = { workspace = true }

@@ -31,6 +31,7 @@ pub struct BetterAuth<S: AuthSchema> {
     config: Arc<AuthConfig>,
     plugins: Vec<Box<dyn AuthPlugin<S>>>,
     middlewares: Vec<Box<dyn Middleware>>,
+    body_limit: BodyLimitConfig,
     store: Arc<dyn AuthStore<S>>,
     session_manager: SessionManager<S>,
     context: AuthContext<S>,
@@ -145,11 +146,11 @@ impl<S: AuthSchema> AuthBuilder<S> {
         let context =
             AuthContext::with_metadata(config.clone(), store.clone(), init_parts.metadata);
 
+        let body_limit = self.body_limit_config.unwrap_or_default();
+
         // Build middleware chain (order matters: body limit → rate limit → CSRF → CORS → custom)
         let mut middlewares: Vec<Box<dyn Middleware>> = vec![
-            Box::new(BodyLimitMiddleware::new(
-                self.body_limit_config.unwrap_or_default(),
-            )),
+            Box::new(BodyLimitMiddleware::new(body_limit.clone())),
             Box::new(RateLimitMiddleware::new(
                 self.rate_limit_config.unwrap_or_default(),
             )),
@@ -166,6 +167,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
             config,
             plugins: self.plugins,
             middlewares,
+            body_limit,
             store,
             session_manager,
             context,
@@ -293,6 +295,14 @@ impl<S: AuthSchema> BetterAuth<S> {
     /// Get the shared auth store used by Better Auth.
     pub fn store(&self) -> &Arc<dyn AuthStore<S>> {
         &self.store
+    }
+
+    /// Get the effective request body size limit.
+    ///
+    /// Transports read the body before any middleware runs, so they need this
+    /// to bound the read itself rather than rejecting after buffering.
+    pub fn body_limit(&self) -> &BodyLimitConfig {
+        &self.body_limit
     }
 
     /// Get the session manager.

@@ -666,6 +666,27 @@ async fn test_axum_invalid_json() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
+/// Test that an oversize body is rejected at the read, not after buffering
+// Rust-specific surface: the Axum transport buffers the request body before any
+// middleware sees it, so the cap has to live at the read itself.
+#[tokio::test]
+async fn test_axum_oversize_body_is_rejected() {
+    let auth = create_test_auth().await;
+    let router = create_test_router(auth);
+
+    // Default BodyLimitConfig caps bodies at 1 MiB.
+    let oversize = "a".repeat(2 * 1024 * 1024);
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/auth/sign-up/email")
+        .header("content-type", "application/json")
+        .body(Body::from(oversize))
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+}
+
 /// Test missing required fields
 // Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to Axum transport coverage.
 #[tokio::test]
