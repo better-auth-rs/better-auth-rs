@@ -10,7 +10,7 @@ use better_auth_core::plugin::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::types::{AuthRequest, AuthResponse, HttpMethod};
 
 /// Permission definitions for a role
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct RolePermissions {
     pub organization: Vec<String>,
     pub member: Vec<String>,
@@ -56,10 +56,34 @@ pub struct OrganizationPlugin {
     config: OrganizationConfig,
 }
 
+/// Metadata key announcing that the organization plugin is installed.
+pub(crate) const METADATA_ENABLED: &str = "organization.enabled";
+/// Metadata key carrying the configured custom roles, so other plugins can run
+/// the organization's access control without depending on this plugin's config.
+pub(crate) const METADATA_ROLES: &str = "organization.roles";
+/// Metadata key carrying the creator role, which is allowed every action.
+pub(crate) const METADATA_CREATOR_ROLE: &str = "organization.creator_role";
+
 #[async_trait]
 impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
     fn name(&self) -> &'static str {
         "organization"
+    }
+
+    async fn on_init(
+        &self,
+        ctx: &mut better_auth_core::AuthInitContext<S>,
+    ) -> better_auth_core::AuthResult<()> {
+        ctx.set_metadata(METADATA_ENABLED, serde_json::Value::Bool(true));
+        ctx.set_metadata(
+            METADATA_ROLES,
+            serde_json::to_value(&self.config.roles).unwrap_or_default(),
+        );
+        ctx.set_metadata(
+            METADATA_CREATOR_ROLE,
+            serde_json::Value::String(self.config.creator_role.clone()),
+        );
+        Ok(())
     }
 
     fn routes(&self) -> Vec<AuthRoute> {

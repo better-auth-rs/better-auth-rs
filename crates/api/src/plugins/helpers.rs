@@ -74,6 +74,20 @@ pub async fn require_org_api_key_permission(
 ) -> AuthResult<()> {
     use crate::plugins::api_key::{ApiKeyErrorCode, api_key_error};
     use crate::plugins::organization::rbac::{Action, Resource, has_permission};
+    use crate::plugins::organization::{
+        METADATA_CREATOR_ROLE, METADATA_ENABLED, METADATA_ROLES, RolePermissions,
+    };
+    use std::collections::HashMap;
+
+    // Organization-owned keys are meaningless without the organization plugin,
+    // which is what supplies the access control below.
+    if !ctx
+        .get_metadata(METADATA_ENABLED)
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+    {
+        return Err(api_key_error(ApiKeyErrorCode::OrganizationPluginRequired));
+    }
 
     let Some(member) = ctx.database.get_member(organization_id, user_id).await? else {
         return Err(api_key_error(ApiKeyErrorCode::UserNotMemberOfOrganization));
@@ -81,19 +95,21 @@ pub async fn require_org_api_key_permission(
 
     // Upstream passes `allowCreatorAllPermissions`, so the creator role clears
     // every action without consulting the statements.
-    if member.role == "owner" {
+    let creator_role = ctx
+        .get_metadata(METADATA_CREATOR_ROLE)
+        .and_then(|value| value.as_str().map(str::to_string))
+        .unwrap_or_else(|| "owner".to_string());
+    if member.role == creator_role {
         return Ok(());
     }
 
+    let custom_roles: HashMap<String, RolePermissions> = ctx
+        .get_metadata(METADATA_ROLES)
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+        .unwrap_or_default();
+
     let allowed = Action::parse(action)
-        .map(|action| {
-            has_permission(
-                &member.role,
-                &Resource::ApiKey,
-                &action,
-                &std::collections::HashMap::new(),
-            )
-        })
+        .map(|action| has_permission(&member.role, &Resource::ApiKey, &action, &custom_roles))
         .unwrap_or(false);
 
     if allowed {

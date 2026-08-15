@@ -653,13 +653,14 @@ impl ApiKeyPlugin {
         raw_key: &str,
         required_permissions: Option<&serde_json::Value>,
     ) -> Result<ApiKeyView, ApiKeyValidationError> {
-        // Hashing is a property of the configuration that issued the key, and
-        // the key must be hashed before it can be looked up — so this uses the
-        // default configuration's setting.
-        let config = self
+        // The key has to be hashed before it can be looked up, so the lookup
+        // uses the addressed configuration's hashing setting. Everything after
+        // the lookup switches to the configuration that issued the key, which
+        // is what carries its rate limit and expiry policy.
+        let lookup_config = self
             .default_configuration()
             .map_err(|_| ApiKeyValidationError::new(ApiKeyErrorCode::NoDefaultConfiguration))?;
-        let hashed = if config.disable_key_hashing {
+        let hashed = if lookup_config.disable_key_hashing {
             raw_key.to_string()
         } else {
             Self::hash_key(raw_key)
@@ -672,6 +673,10 @@ impl ApiKeyPlugin {
             .await
             .map_err(|_| ApiKeyValidationError::new(ApiKeyErrorCode::InvalidApiKey))?
             .ok_or_else(|| ApiKeyValidationError::new(ApiKeyErrorCode::InvalidApiKey))?;
+
+        let config = self
+            .resolve_configuration(Some(&api_key.config_id))
+            .map_err(|_| ApiKeyValidationError::new(ApiKeyErrorCode::NoDefaultConfiguration))?;
 
         // 1. Disabled?
         if !api_key.enabled() {

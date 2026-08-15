@@ -14,7 +14,10 @@ pub struct AuthMigrator;
 #[async_trait::async_trait]
 impl MigratorTrait for AuthMigrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-        vec![Box::new(InitialAuthSchema)]
+        vec![
+            Box::new(InitialAuthSchema),
+            Box::new(ApiKeyReferenceOwnership),
+        ]
     }
 
     fn migration_table_name() -> sea_orm::DynIden {
@@ -24,6 +27,105 @@ impl MigratorTrait for AuthMigrator {
 
 pub async fn run_migrations(db: &sea_orm::DatabaseConnection) -> Result<(), DbErr> {
     AuthMigrator::up(db, None).await
+}
+
+/// Moves an existing `api_keys` table to reference-based ownership.
+///
+/// `InitialAuthSchema` creates the current shape, so a fresh database already
+/// satisfies this and the migration is a no-op. An installation created before
+/// the change still has `user_id`, no `config_id`, and a foreign key to
+/// `users` that would reject organization-owned keys.
+struct ApiKeyReferenceOwnership;
+
+// Named explicitly rather than derived: `DeriveMigrationName` uses the module
+// path, so every migration in this file would otherwise share one name. The
+// existing `InitialAuthSchema` keeps its derived name, which is already
+// recorded in deployed migration tables.
+impl MigrationName for ApiKeyReferenceOwnership {
+    fn name(&self) -> &str {
+        "m20260815_000001_api_key_reference_ownership"
+    }
+}
+
+#[async_trait::async_trait]
+impl MigrationTrait for ApiKeyReferenceOwnership {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        let table = api_key::Entity.table_name().to_string();
+
+        if manager.has_column(&table, "reference_id").await? {
+            return Ok(());
+        }
+
+        // The foreign key has to go before the column it constrains: a
+        // reference is a user id or an organization id from here on.
+        if manager.get_database_backend() != sea_orm::DatabaseBackend::Sqlite {
+            // SQLite cannot drop a constraint without rebuilding the table, and
+            // does not enforce foreign keys unless the connection opts in, so
+            // leaving it there is harmless for that backend only.
+            manager
+                .alter_table(
+                    Table::alter()
+                        .table(api_key::Entity)
+                        .drop_foreign_key(Alias::new("fk_api_keys_user_id"))
+                        .to_owned(),
+                )
+                .await?;
+        }
+
+        manager
+            .drop_index(
+                Index::drop()
+                    .name("idx_api_keys_user_id")
+                    .table(api_key::Entity)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(api_key::Entity)
+                    .rename_column(Alias::new("user_id"), api_key::Column::ReferenceId)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(api_key::Entity)
+                    .add_column(
+                        ColumnDef::new(api_key::Column::ConfigId)
+                            .string()
+                            .not_null()
+                            .default("default"),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_api_keys_reference_id")
+                    .table(api_key::Entity)
+                    .col(api_key::Column::ReferenceId)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_api_keys_config_id")
+                    .table(api_key::Entity)
+                    .col(api_key::Column::ConfigId)
+                    .to_owned(),
+            )
+            .await?;
+
+        Ok(())
+    }
 }
 
 #[derive(DeriveMigrationName)]

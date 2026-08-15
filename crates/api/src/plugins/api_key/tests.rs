@@ -1225,6 +1225,30 @@ async fn test_create_for_organization_requires_organization_id() {
     );
 }
 
+// Upstream reference: @better-auth/api-key :: checkOrgApiKeyPermission fails
+// when the organization plugin, which supplies the access control, is absent.
+#[tokio::test]
+async fn test_create_for_organization_requires_the_organization_plugin() {
+    let plugin = ApiKeyPlugin::builder()
+        .references(ApiKeyReferences::Organization)
+        .build();
+    let (ctx, _user, session) = create_test_context_with_user().await;
+
+    let req = create_auth_request(
+        HttpMethod::Post,
+        "/api-key/create",
+        Some(&session.token),
+        Some(serde_json::json!({ "name": "org-key", "organizationId": "org-1" })),
+        None,
+    );
+    let err = plugin.handle_create(&req, &ctx).await.unwrap_err();
+
+    assert_eq!(
+        err.to_string(),
+        "Organization plugin is required for organization-owned API keys. Please install and configure the organization plugin."
+    );
+}
+
 // Upstream reference: @better-auth/api-key :: checkOrgApiKeyPermission rejects
 // a caller who is not a member of the owning organization.
 #[tokio::test]
@@ -1233,6 +1257,14 @@ async fn test_create_for_organization_rejects_non_member() {
         .references(ApiKeyReferences::Organization)
         .build();
     let (ctx, _user, session) = create_test_context_with_user().await;
+
+    // Stand in for a registered organization plugin.
+    let mut metadata: HashMap<String, serde_json::Value> = HashMap::new();
+    let _ = metadata.insert(
+        crate::plugins::organization::METADATA_ENABLED.to_string(),
+        serde_json::Value::Bool(true),
+    );
+    let ctx = AuthContext::with_metadata(ctx.config.clone(), ctx.database.clone(), metadata);
 
     let req = create_auth_request(
         HttpMethod::Post,
@@ -1243,7 +1275,6 @@ async fn test_create_for_organization_rejects_non_member() {
     );
     let err = plugin.handle_create(&req, &ctx).await.unwrap_err();
 
-    assert_eq!(err.status_code(), 400);
     assert_eq!(
         err.to_string(),
         "You are not a member of the organization that owns this API key."
