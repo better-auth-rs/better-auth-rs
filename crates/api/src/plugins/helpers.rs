@@ -73,7 +73,7 @@ pub async fn require_org_api_key_permission(
     action: &str,
 ) -> AuthResult<()> {
     use crate::plugins::api_key::{ApiKeyErrorCode, api_key_error};
-    use crate::plugins::organization::rbac::{Action, Resource, has_permission};
+    use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
     use crate::plugins::organization::{
         METADATA_CREATOR_ROLE, METADATA_ENABLED, METADATA_ROLES, RolePermissions,
     };
@@ -95,11 +95,18 @@ pub async fn require_org_api_key_permission(
 
     // Upstream passes `allowCreatorAllPermissions`, so the creator role clears
     // every action without consulting the statements.
+    // Roles are composite (comma-separated), so the creator role counts when it
+    // is any one of them.
     let creator_role = ctx
         .get_metadata(METADATA_CREATOR_ROLE)
         .and_then(|value| value.as_str().map(str::to_string))
         .unwrap_or_else(|| "owner".to_string());
-    if member.role == creator_role {
+    if member
+        .role
+        .split(',')
+        .map(str::trim)
+        .any(|role| role == creator_role)
+    {
         return Ok(());
     }
 
@@ -109,7 +116,7 @@ pub async fn require_org_api_key_permission(
         .unwrap_or_default();
 
     let allowed = Action::parse(action)
-        .map(|action| has_permission(&member.role, &Resource::ApiKey, &action, &custom_roles))
+        .map(|action| has_permission_any(&member.role, &Resource::ApiKey, &action, &custom_roles))
         .unwrap_or(false);
 
     if allowed {

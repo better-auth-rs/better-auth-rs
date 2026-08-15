@@ -57,20 +57,21 @@ impl MigrationTrait for ApiKeyReferenceOwnership {
         }
 
         // The foreign key has to go before the column it constrains: a
-        // reference is a user id or an organization id from here on.
-        if manager.get_database_backend() != sea_orm::DatabaseBackend::Sqlite {
-            // SQLite cannot drop a constraint without rebuilding the table, and
-            // does not enforce foreign keys unless the connection opts in, so
-            // leaving it there is harmless for that backend only.
-            manager
-                .alter_table(
-                    Table::alter()
-                        .table(api_key::Entity)
-                        .drop_foreign_key(Alias::new("fk_api_keys_user_id"))
-                        .to_owned(),
-                )
-                .await?;
+        // reference is a user id or an organization id from here on. SQLite
+        // cannot drop a constraint in place — and `RENAME COLUMN` would carry
+        // it over to `reference_id` — so that backend rebuilds the table.
+        if manager.get_database_backend() == sea_orm::DatabaseBackend::Sqlite {
+            return rebuild_sqlite_api_keys(manager).await;
         }
+
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(api_key::Entity)
+                    .drop_foreign_key(Alias::new("fk_api_keys_user_id"))
+                    .to_owned(),
+            )
+            .await?;
 
         manager
             .drop_index(
@@ -725,6 +726,50 @@ async fn create_two_factor(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                 .to_owned(),
         )
         .await?;
+    Ok(())
+}
+
+/// Rebuild `api_keys` on SQLite so the old `users` foreign key is gone.
+///
+/// SQLite has no `DROP CONSTRAINT`, and `RENAME COLUMN` rewrites the
+/// constraint to follow the renamed column — which would keep organization ids
+/// out of `reference_id`. Copying through a new table is the supported way to
+/// drop it.
+async fn rebuild_sqlite_api_keys(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
+    use sea_orm::ConnectionTrait;
+
+    let db = manager.get_connection();
+
+    // Foreign keys must be off for the swap; SQLite ignores the pragma inside a
+    // transaction, so this runs before the copy and is restored after.
+    let _ = db.execute_unprepared("PRAGMA foreign_keys = OFF").await?;
+
+    for statement in [
+        "DROP INDEX IF EXISTS idx_api_keys_user_id",
+        "ALTER TABLE api_keys RENAME TO api_keys_old",
+    ] {
+        let _ = db.execute_unprepared(statement).await?;
+    }
+
+    create_api_keys(manager).await?;
+
+    let _ = db
+        .execute_unprepared(
+            "INSERT INTO api_keys (id, name, start, prefix, key, reference_id, config_id, \
+         refill_interval, refill_amount, last_refill_at, enabled, rate_limit_enabled, \
+         rate_limit_time_window, rate_limit_max, request_count, remaining, last_request, \
+         expires_at, created_at, updated_at, permissions, metadata) \
+         SELECT id, name, start, prefix, key, user_id, 'default', \
+         refill_interval, refill_amount, last_refill_at, enabled, rate_limit_enabled, \
+         rate_limit_time_window, rate_limit_max, request_count, remaining, last_request, \
+         expires_at, created_at, updated_at, permissions, metadata FROM api_keys_old",
+        )
+        .await?;
+
+    let _ = db.execute_unprepared("DROP TABLE api_keys_old").await?;
+
+    let _ = db.execute_unprepared("PRAGMA foreign_keys = ON").await?;
+
     Ok(())
 }
 

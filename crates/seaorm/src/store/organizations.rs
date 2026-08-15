@@ -103,6 +103,14 @@ where
     }
 
     async fn delete_organization(&self, id: &str) -> AuthResult<()> {
+        // Organization-owned API keys reference the organization polymorphically
+        // and so have no foreign key to cascade from.
+        let _ = entities::api_key::Entity::delete_many()
+            .filter(entities::api_key::Column::ReferenceId.eq(id))
+            .exec(self.connection())
+            .await
+            .map_err(map_db_err)?;
+
         Entity::delete_by_id(id.to_owned())
             .exec(self.connection())
             .await

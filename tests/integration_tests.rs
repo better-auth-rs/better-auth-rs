@@ -1918,6 +1918,35 @@ async fn test_api_key_update() {
     assert_eq!(data["enabled"], false);
 }
 
+/// Integration test: deleting a user removes the API keys they own
+// Rust-specific surface: api keys reference their owner polymorphically, so no
+// database cascade covers this; the store has to clean up explicitly.
+#[tokio::test]
+async fn test_delete_user_removes_their_api_keys() {
+    let (auth, user_id, token) = create_auth_with_apikey().await;
+    let (_key, key_id) =
+        create_api_key(&auth, &token, serde_json::json!({"name": "orphan-me"})).await;
+
+    assert!(
+        auth.store()
+            .get_api_key_by_id(&key_id)
+            .await
+            .unwrap()
+            .is_some()
+    );
+
+    auth.store().delete_user(&user_id).await.unwrap();
+
+    assert!(
+        auth.store()
+            .get_api_key_by_id(&key_id)
+            .await
+            .unwrap()
+            .is_none(),
+        "a deleted user must not leave usable credentials behind"
+    );
+}
+
 /// Integration test: delete API key
 // Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
