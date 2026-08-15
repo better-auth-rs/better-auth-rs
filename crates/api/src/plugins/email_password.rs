@@ -28,12 +28,13 @@ const MESSAGE_EMAIL_NOT_VERIFIED: &str = "Email not verified";
 const MESSAGE_USERNAME_TOO_SHORT: &str = "Username is too short";
 const MESSAGE_USERNAME_TOO_LONG: &str = "Username is too long";
 const MESSAGE_INVALID_USERNAME: &str = "Username is invalid";
+const MESSAGE_USERNAME_IS_ALREADY_TAKEN: &str = "Username is already taken. Please try another.";
 
 fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult<AuthResponse> {
     AuthResponse::json(
         status,
         &ErrorCodeMessageResponse {
-            code: code.to_string(),
+            code: Some(code.to_string()),
             message: message.to_string(),
         },
     )
@@ -157,7 +158,11 @@ pub(crate) struct SignInResponse<U: Serialize> {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct SignInUsernameResponse<U: Serialize> {
+    /// Upstream returns the same redirect envelope as `/sign-in/email`.
+    redirect: bool,
     token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    url: Option<String>,
     user: U,
 }
 
@@ -260,17 +265,28 @@ impl EmailPasswordPlugin {
                 Err(UsernameValidationError::TooLong) => {
                     return username_error_response(
                         400,
-                        "USERNAME_IS_TOO_LONG",
+                        "USERNAME_TOO_LONG",
                         MESSAGE_USERNAME_TOO_LONG,
                     );
                 }
                 Err(UsernameValidationError::Invalid) => {
                     return username_error_response(
                         400,
-                        "USERNAME_IS_INVALID",
+                        "INVALID_USERNAME",
                         MESSAGE_INVALID_USERNAME,
                     );
                 }
+            }
+
+            // Upstream's username hook rejects a taken username before the user
+            // is created, so the client sees USERNAME_IS_ALREADY_TAKEN rather
+            // than a failed insert.
+            if ctx.database.get_user_by_username(username).await?.is_some() {
+                return username_error_response(
+                    400,
+                    "USERNAME_IS_ALREADY_TAKEN",
+                    MESSAGE_USERNAME_IS_ALREADY_TAKEN,
+                );
             }
         }
 
@@ -376,16 +392,12 @@ impl EmailPasswordPlugin {
             Err(UsernameValidationError::TooLong) => {
                 return username_error_response(
                     422,
-                    "USERNAME_IS_TOO_LONG",
+                    "USERNAME_TOO_LONG",
                     MESSAGE_USERNAME_TOO_LONG,
                 );
             }
             Err(UsernameValidationError::Invalid) => {
-                return username_error_response(
-                    422,
-                    "USERNAME_IS_INVALID",
-                    MESSAGE_INVALID_USERNAME,
-                );
+                return username_error_response(422, "INVALID_USERNAME", MESSAGE_INVALID_USERNAME);
             }
         }
 
@@ -407,7 +419,9 @@ impl EmailPasswordPlugin {
                 set_cookie_headers,
             }) => {
                 let username_response = SignInUsernameResponse {
+                    redirect: response.redirect,
                     token: response.token,
+                    url: response.url,
                     user: response.user,
                 };
                 let mut auth_response = AuthResponse::json(200, &username_response)?
@@ -468,16 +482,12 @@ impl EmailPasswordPlugin {
             Err(UsernameValidationError::TooLong) => {
                 return username_error_response(
                     422,
-                    "USERNAME_IS_TOO_LONG",
+                    "USERNAME_TOO_LONG",
                     MESSAGE_USERNAME_TOO_LONG,
                 );
             }
             Err(UsernameValidationError::Invalid) => {
-                return username_error_response(
-                    422,
-                    "USERNAME_IS_INVALID",
-                    MESSAGE_INVALID_USERNAME,
-                );
+                return username_error_response(422, "INVALID_USERNAME", MESSAGE_INVALID_USERNAME);
             }
         }
 
@@ -1221,6 +1231,6 @@ mod tests {
             .unwrap();
         assert_eq!(response.status, 422);
         let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
-        assert_eq!(json["code"], "USERNAME_IS_INVALID");
+        assert_eq!(json["code"], "INVALID_USERNAME");
     }
 }

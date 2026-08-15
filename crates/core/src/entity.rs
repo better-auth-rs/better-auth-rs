@@ -138,7 +138,12 @@ pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stati
     fn start(&self) -> Option<&str>;
     fn prefix(&self) -> Option<&str>;
     fn key_hash(&self) -> &str;
-    fn user_id(&self) -> Cow<'_, str>;
+    /// Owner of the key — a user id, or an organization id when the key's
+    /// configuration references organizations.
+    fn reference_id(&self) -> Cow<'_, str>;
+    /// Name of the API-key configuration this key belongs to (`"default"`
+    /// unless the application registers named configurations).
+    fn config_id(&self) -> Cow<'_, str>;
     fn refill_interval(&self) -> Option<i64>;
     fn refill_amount(&self) -> Option<i64>;
     fn last_refill_at(&self) -> Option<&str>;

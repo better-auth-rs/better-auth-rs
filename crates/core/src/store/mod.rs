@@ -203,7 +203,7 @@ pub trait ApiKeyStore: Send + Sync {
     async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<ApiKey>;
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>>;
     async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>>;
-    async fn list_api_keys_by_user(&self, user_id: &str) -> AuthResult<Vec<ApiKey>>;
+    async fn list_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<Vec<ApiKey>>;
     async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<ApiKey>;
     async fn delete_api_key(&self, id: &str) -> AuthResult<()>;
     async fn delete_expired_api_keys(&self) -> AuthResult<usize>;
@@ -283,6 +283,13 @@ pub trait DeviceCodeStore: Send + Sync {
         current_status: &str,
         update: UpdateDeviceCode,
     ) -> AuthResult<bool>;
+    /// Bind a still-pending, still-unclaimed device code to a user.
+    ///
+    /// Returns `true` when this call performed the claim, and `false` when the
+    /// row was already claimed or no longer pending. The status and
+    /// unclaimed checks are part of the write so two concurrent verifiers
+    /// cannot both claim the same code.
+    async fn claim_device_code(&self, id: &str, user_id: &str) -> AuthResult<bool>;
     /// Delete a device code record.
     async fn delete_device_code(&self, id: &str) -> AuthResult<()>;
     /// Delete a device code only when it still has the expected status.

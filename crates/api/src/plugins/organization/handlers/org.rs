@@ -267,7 +267,7 @@ pub(crate) async fn check_slug_core(
         .await?
         .is_some()
     {
-        return Err(AuthError::bad_request("slug is taken"));
+        return Err(AuthError::bad_request("Organization slug already taken"));
     }
 
     Ok(CheckSlugResponse { status: true })

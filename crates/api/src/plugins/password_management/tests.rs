@@ -579,7 +579,10 @@ async fn test_verify_password_requires_session() {
 
     let response = plugin.handle_verify_password(&req, &ctx).await.unwrap();
     assert_eq!(response.status, 401);
-    assert!(response.body.is_empty());
+    // Upstream returns better-call's default 401 body rather than an empty one.
+    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    assert_eq!(body["code"], "UNAUTHORIZED");
+    assert_eq!(body["message"], "Unauthorized");
 }
 
 // Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.

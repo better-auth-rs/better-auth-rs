@@ -469,8 +469,10 @@ pub struct ApiKeyView {
     pub name: Option<String>,
     pub start: Option<String>,
     pub prefix: Option<String>,
-    #[serde(rename = "userId")]
-    pub user_id: String,
+    #[serde(rename = "referenceId")]
+    pub reference_id: String,
+    #[serde(rename = "configId")]
+    pub config_id: String,
     #[serde(rename = "refillInterval")]
     pub refill_interval: Option<i64>,
     #[serde(rename = "refillAmount")]
@@ -506,7 +508,8 @@ impl<T: AuthApiKey> From<&T> for ApiKeyView {
             name: ak.name().map(str::to_owned),
             start: ak.start().map(str::to_owned),
             prefix: ak.prefix().map(str::to_owned),
-            user_id: ak.user_id().into_owned(),
+            reference_id: ak.reference_id().into_owned(),
+            config_id: ak.config_id().into_owned(),
             refill_interval: ak.refill_interval(),
             refill_amount: ak.refill_amount(),
             last_refill_at: ak.last_refill_at().map(str::to_owned),

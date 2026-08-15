@@ -72,7 +72,7 @@ pub mod core_paths {
 
     fn default_error_description(code: &str) -> String {
         format!(
-            "We encountered an unexpected error. Please try again or return to the home page. If you're a developer, you can find more information about the error <a href='https://better-auth.com/docs/reference/errors/{code}' target='_blank' rel=\"noopener noreferrer\" style='color: var(--foreground); text-decoration: underline;'>here</a>."
+            "We encountered an unexpected error. Please try again or return to the home page. If you're a developer, you can find <a href='https://better-auth.com/docs/reference/errors/{code}' target='_blank' rel=\"noopener noreferrer\" style='color: var(--foreground); text-decoration: underline;'>more information about the error</a>."
         )
     }
 
@@ -525,6 +525,9 @@ pub struct AccountLinkingConfig {
     pub allow_unlinking_all: bool,
     /// Disable implicit linking during sign-in; only explicit link-social may link.
     pub disable_implicit_linking: bool,
+    /// Require the *existing local* account's email to be verified before a
+    /// social account may be linked to it implicitly (default: true).
+    pub require_local_email_verified: bool,
     /// Update user info when a new account is linked (default: false)
     pub update_user_info_on_link: bool,
 }
@@ -554,6 +557,11 @@ pub struct SessionConfig {
 
     /// If `true`, sessions are never automatically refreshed on access.
     pub disable_session_refresh: bool,
+
+    /// Allow `POST /get-session`, which defers the session refresh so a
+    /// prefetching client can read the session without a `GET` side effect.
+    /// Upstream rejects the `POST` form with 405 unless this is enabled.
+    pub defer_session_refresh: bool,
 
     /// Session freshness window. A session younger than this is considered
     /// "fresh" (useful for step-up auth or sensitive operations).
@@ -687,6 +695,7 @@ impl Default for AccountLinkingConfig {
             allow_different_emails: false,
             allow_unlinking_all: false,
             disable_implicit_linking: false,
+            require_local_email_verified: true,
             update_user_info_on_link: false,
         }
     }
@@ -823,6 +832,7 @@ impl Default for SessionConfig {
             expires_in: Duration::hours(24 * 7),   // 7 days
             update_age: Some(Duration::hours(24)), // refresh once per day
             disable_session_refresh: false,
+            defer_session_refresh: false,
             fresh_age: None,
             cookie_name: "better-auth.session_token".to_string(),
             // Secure flag is derived from base_url scheme (HTTPS → true).

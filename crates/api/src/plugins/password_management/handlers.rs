@@ -335,8 +335,12 @@ fn build_redirect_url(
     let base = Url::parse(base_url)
         .map_err(|error| AuthError::internal(format!("Invalid base URL: {}", error)))?;
     let mut url = if let Some(callback_url) = callback_url {
-        base.join(callback_url)
-            .map_err(|error| AuthError::bad_request(format!("Invalid callbackURL: {}", error)))?
+        base.join(callback_url).map_err(|error| {
+            // Upstream sends the bare message so the response carries the
+            // INVALID_CALLBACK_URL code; keep the parse detail in the log.
+            tracing::warn!(error = %error, callback_url, "Invalid callbackURL");
+            AuthError::bad_request("Invalid callbackURL")
+        })?
     } else {
         base.join("/error")
             .map_err(|error| AuthError::internal(format!("Invalid error URL: {}", error)))?

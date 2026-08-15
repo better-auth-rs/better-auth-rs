@@ -379,10 +379,12 @@ async fn test_error_endpoint() {
     assert!(text.contains("CODE: UNKNOWN"));
 }
 
-/// Integration test for POST /get-session remaining unavailable publicly
-// Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
+/// Integration test for POST /get-session being gated on deferSessionRefresh
+// Upstream reference: packages/better-auth/src/api/routes/session.ts :: getSession
+// declares `method: ["GET", "POST"]` and rejects the POST form with 405 unless
+// `session.deferSessionRefresh` is enabled.
 #[tokio::test]
-async fn test_get_session_post_route_absent() {
+async fn test_get_session_post_requires_defer_session_refresh() {
     let auth = create_test_auth_memory().await;
     let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
@@ -404,7 +406,9 @@ async fn test_get_session_post_route_absent() {
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 404);
+    assert_eq!(response.status, 405);
+    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    assert_eq!(body["code"], "METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED");
 }
 
 /// Integration test for POST /delete-user
@@ -1867,7 +1871,9 @@ async fn test_api_key_list() {
     assert_eq!(response.status, 200);
 
     let body_str = String::from_utf8(response.body).unwrap();
-    let data: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
+    // `/api-key/list` returns a paginated envelope: { apiKeys, total, .. }
+    let envelope: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    let data = envelope["apiKeys"].as_array().unwrap().clone();
 
     assert_eq!(data.len(), 2);
 }
@@ -1910,6 +1916,35 @@ async fn test_api_key_update() {
     assert_eq!(data["id"], id);
     assert_eq!(data["name"], "updated-name");
     assert_eq!(data["enabled"], false);
+}
+
+/// Integration test: deleting a user removes the API keys they own
+// Rust-specific surface: api keys reference their owner polymorphically, so no
+// database cascade covers this; the store has to clean up explicitly.
+#[tokio::test]
+async fn test_delete_user_removes_their_api_keys() {
+    let (auth, user_id, token) = create_auth_with_apikey().await;
+    let (_key, key_id) =
+        create_api_key(&auth, &token, serde_json::json!({"name": "orphan-me"})).await;
+
+    assert!(
+        auth.store()
+            .get_api_key_by_id(&key_id)
+            .await
+            .unwrap()
+            .is_some()
+    );
+
+    auth.store().delete_user(&user_id).await.unwrap();
+
+    assert!(
+        auth.store()
+            .get_api_key_by_id(&key_id)
+            .await
+            .unwrap()
+            .is_none(),
+        "a deleted user must not leave usable credentials behind"
+    );
 }
 
 /// Integration test: delete API key
@@ -1956,8 +1991,9 @@ async fn test_api_key_delete() {
     );
 
     let list_response = auth.handle_request(list_request).await.unwrap();
-    let list_body: Vec<serde_json::Value> = serde_json::from_slice(&list_response.body).unwrap();
-    assert_eq!(list_body.len(), 0);
+    let list_envelope: serde_json::Value = serde_json::from_slice(&list_response.body).unwrap();
+    assert_eq!(list_envelope["apiKeys"].as_array().unwrap().len(), 0);
+    assert_eq!(list_envelope["total"], 0);
 }
 
 /// Integration test: unauthenticated create → 401
@@ -2186,8 +2222,9 @@ async fn test_api_key_list_empty() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let data: Vec<serde_json::Value> = serde_json::from_slice(&response.body).unwrap();
-    assert_eq!(data.len(), 0);
+    let envelope: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    assert_eq!(envelope["apiKeys"].as_array().unwrap().len(), 0);
+    assert_eq!(envelope["total"], 0);
 }
 
 /// Integration test: get key with missing 'id' query param → 400

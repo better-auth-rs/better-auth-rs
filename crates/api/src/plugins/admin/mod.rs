@@ -44,7 +44,7 @@ fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult
     AuthResponse::json(
         status,
         &ErrorCodeMessageResponse {
-            code: code.to_string(),
+            code: Some(code.to_string()),
             message: message.to_string(),
         },
     )

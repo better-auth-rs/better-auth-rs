@@ -551,8 +551,12 @@ impl OAuthSignInError {
 
     fn redirect_parts(&self) -> (String, Option<&str>) {
         match self {
+            // Upstream turns a plain internal error string into the `error`
+            // param verbatim, with no description.
             Self::Generic(message) => (message.replace(' ', "_"), None),
-            Self::Banned(message) => ("banned".to_string(), Some(message.as_str())),
+            // An APIError instead redirects with its `code` and message, so the
+            // param is the constant, not a lowercased word.
+            Self::Banned(message) => ("BANNED_USER".to_string(), Some(message.as_str())),
         }
     }
 }
@@ -775,9 +779,12 @@ async fn process_oauth_sign_in(
             .iter()
             .any(|trusted| trusted == provider_name);
 
+        // Mirrors upstream's linking guard, including the local-account check:
+        // an unverified local account is not implicitly linkable.
         if !linking.enabled
             || linking.disable_implicit_linking
             || (!trusted_provider && !user_info.email_verified)
+            || (linking.require_local_email_verified && !existing_user.email_verified())
         {
             return Err(OAuthSignInError::Generic("account not linked".to_string()));
         }
@@ -1015,7 +1022,7 @@ async fn sign_in_with_id_token_core(
     let verifier = provider
         .verify_id_token
         .as_ref()
-        .ok_or_else(|| AuthError::not_found("id token not supported"))?;
+        .ok_or_else(|| AuthError::not_found("id_token not supported"))?;
     let valid = verifier
         .verify_id_token(&id_token.token, id_token.nonce.as_deref())
         .await
@@ -1078,7 +1085,7 @@ async fn link_with_id_token_core(
     let verifier = provider
         .verify_id_token
         .as_ref()
-        .ok_or_else(|| AuthError::not_found("id token not supported"))?;
+        .ok_or_else(|| AuthError::not_found("id_token not supported"))?;
     let valid = verifier
         .verify_id_token(&id_token.token, id_token.nonce.as_deref())
         .await
@@ -1492,10 +1499,11 @@ pub(crate) async fn refresh_token_core(
     let _ = body.user_id.as_deref();
     let provider_name = &body.provider_id;
 
-    let provider = config
-        .providers
-        .get(provider_name)
-        .ok_or_else(|| AuthError::bad_request(format!("Provider {} not found.", provider_name)))?;
+    let provider = config.providers.get(provider_name).ok_or_else(|| {
+        // Upstream's message is bare, which is what carries PROVIDER_NOT_FOUND.
+        tracing::warn!(provider = provider_name, "Provider not found");
+        AuthError::bad_request("Provider not found")
+    })?;
 
     let account_cookie = if ctx.config.account.store_account_cookie {
         decode_account_cookie(req, &ctx.config, &ctx.config.secret)?

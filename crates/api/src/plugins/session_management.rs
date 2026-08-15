@@ -7,7 +7,7 @@ use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 
-use better_auth_core::AuthResult;
+use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
 use super::StatusResponse;
@@ -52,6 +52,9 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for SessionManagementPlugin 
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
             AuthRoute::get("/get-session", "get_session"),
+            // Upstream declares `/get-session` as `method: ["GET", "POST"]`;
+            // the POST form requires `session.defer_session_refresh`.
+            AuthRoute::post("/get-session", "get_session"),
             AuthRoute::post("/sign-out", "sign_out"),
             AuthRoute::get("/list-sessions", "list_sessions"),
             AuthRoute::post("/revoke-session", "revoke_session"),
@@ -67,6 +70,14 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for SessionManagementPlugin 
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Get, "/get-session") => Ok(Some(self.handle_get_session(req, ctx).await?)),
+            (HttpMethod::Post, "/get-session") => {
+                if !ctx.config.session.defer_session_refresh {
+                    return Err(AuthError::method_not_allowed(
+                        "POST method requires deferSessionRefresh to be enabled in session config",
+                    ));
+                }
+                Ok(Some(self.handle_get_session(req, ctx).await?))
+            }
             (HttpMethod::Post, "/sign-out") => Ok(Some(self.handle_sign_out(req, ctx).await?)),
             (HttpMethod::Get, "/list-sessions") if self.config.enable_session_listing => {
                 Ok(Some(self.handle_list_sessions(req, ctx).await?))
@@ -660,14 +671,15 @@ mod tests {
             better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema,
         >::routes(&plugin);
 
-        assert_eq!(routes.len(), 6);
+        assert_eq!(routes.len(), 7);
         assert!(
             routes
                 .iter()
                 .any(|r| r.path == "/get-session" && r.method == HttpMethod::Get)
         );
+        // Upstream serves `/get-session` on both methods.
         assert!(
-            !routes
+            routes
                 .iter()
                 .any(|r| r.path == "/get-session" && r.method == HttpMethod::Post)
         );
@@ -716,14 +728,16 @@ mod tests {
         assert!(response.is_some());
         assert_eq!(response.unwrap().status, 200);
 
+        // POST /get-session is served, but rejected with 405 until
+        // `session.defer_session_refresh` is enabled.
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/get-session",
             Some(&session.token),
             Some(b"{}".to_vec()),
         );
-        let response = plugin.on_request(&req, &ctx).await.unwrap();
-        assert!(response.is_none());
+        let err = plugin.on_request(&req, &ctx).await.unwrap_err();
+        assert_eq!(err.status_code(), 405);
 
         // Test invalid route
         let req = test_helpers::create_auth_request_no_query(

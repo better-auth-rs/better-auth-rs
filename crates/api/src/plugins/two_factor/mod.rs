@@ -39,6 +39,7 @@ const TRUST_DEVICE_COOKIE_SUFFIX: &str = "trust_device";
 const DONT_REMEMBER_COOKIE_SUFFIX: &str = "dont_remember";
 
 const METADATA_ENABLED: &str = "two_factor.enabled";
+const METADATA_OTP_ENABLED: &str = "two_factor.otp_enabled";
 const METADATA_TWO_FACTOR_COOKIE_MAX_AGE: &str = "two_factor.two_factor_cookie_max_age";
 const METADATA_TRUST_DEVICE_MAX_AGE: &str = "two_factor.trust_device_max_age";
 
@@ -188,6 +189,10 @@ pub(crate) struct BackupCodesResponse {
 pub(crate) struct TwoFactorRedirectResponse {
     #[serde(rename = "twoFactorRedirect")]
     two_factor_redirect: bool,
+    /// Second factors this user can actually complete, so the client knows
+    /// which challenge to present.
+    #[serde(rename = "twoFactorMethods")]
+    two_factor_methods: Vec<&'static str>,
 }
 
 struct PendingTwoFactorState<S: better_auth_core::AuthSchema> {
@@ -330,9 +335,29 @@ pub(crate) async fn begin_sign_in_challenge(
         )?);
     }
 
+    // TOTP is per-user: only offered once the user has a stored secret. OTP is
+    // server-level: offered whenever a sender is configured.
+    let mut two_factor_methods = Vec::new();
+    if ctx
+        .database
+        .get_two_factor_by_user_id(user.id().as_ref())
+        .await?
+        .is_some()
+    {
+        two_factor_methods.push("totp");
+    }
+    if ctx
+        .get_metadata(METADATA_OTP_ENABLED)
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+    {
+        two_factor_methods.push("otp");
+    }
+
     Ok(SignInTwoFactorRedirect {
         response: TwoFactorRedirectResponse {
             two_factor_redirect: true,
+            two_factor_methods,
         },
         set_cookie_headers: headers,
     })
@@ -377,6 +402,10 @@ better_auth_core::impl_auth_plugin! {
             ctx: &mut better_auth_core::AuthInitContext<S>,
         ) -> better_auth_core::AuthResult<()> {
             ctx.set_metadata(METADATA_ENABLED, serde_json::Value::Bool(true));
+            ctx.set_metadata(
+                METADATA_OTP_ENABLED,
+                serde_json::Value::Bool(self.config.send_otp.is_some()),
+            );
             ctx.set_metadata(
                 METADATA_TWO_FACTOR_COOKIE_MAX_AGE,
                 serde_json::Value::Number(self.config.two_factor_cookie_max_age.into()),

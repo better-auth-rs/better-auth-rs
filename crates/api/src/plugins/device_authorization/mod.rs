@@ -37,6 +37,7 @@ const AUTHORIZATION_PENDING: &str = "Authorization pending";
 const ACCESS_DENIED: &str = "Access denied";
 const INVALID_USER_CODE: &str = "Invalid user code";
 const DEVICE_CODE_ALREADY_PROCESSED: &str = "Device code already processed";
+const DEVICE_CODE_NOT_CLAIMED: &str = "Device code has not been claimed by a verifying session; call `GET /device` with the `user_code` while signed in before approving or denying";
 const POLLING_TOO_FREQUENTLY: &str = "Polling too frequently";
 const USER_NOT_FOUND: &str = "User not found";
 const FAILED_TO_CREATE_SESSION: &str = "Failed to create session";
@@ -426,6 +427,24 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "expired_token", EXPIRED_USER_CODE);
         }
 
+        // A signed-in caller claims the code here; `/device/approve` and
+        // `/device/deny` refuse to act on a code nobody has claimed. The
+        // session is optional — anyone may look up the status.
+        if device_code.user_id.is_none() && device_code.status == DEVICE_STATUS_PENDING {
+            match ctx.require_session(req).await {
+                Ok((user, _)) => {
+                    // A losing race just means someone else claimed it first;
+                    // approve/deny still re-reads the record.
+                    let _claimed = ctx
+                        .database
+                        .claim_device_code(&device_code.id, &user.id())
+                        .await?;
+                }
+                Err(AuthError::Unauthenticated) => {}
+                Err(err) => return Err(err),
+            }
+        }
+
         AuthResponse::json(
             200,
             &DeviceVerifyResponse {
@@ -491,19 +510,18 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "invalid_request", DEVICE_CODE_ALREADY_PROCESSED);
         }
 
-        if let Some(user_id) = device_code.user_id.as_deref()
-            && user_id != current_user_id
-        {
+        // The code must already be bound to a user by `GET /device`. Without
+        // this, any signed-in caller who knows a user_code could approve a
+        // device they never claimed.
+        let Some(claimed_user_id) = device_code.user_id.as_deref() else {
+            return device_error_response(400, "invalid_request", DEVICE_CODE_NOT_CLAIMED);
+        };
+
+        if claimed_user_id != current_user_id {
             return device_error_response(403, "access_denied", decision.forbidden_message());
         }
 
-        let updated_user_id = match decision {
-            DeviceDecision::Approve => current_user_id.clone(),
-            DeviceDecision::Deny => device_code
-                .user_id
-                .clone()
-                .unwrap_or_else(|| current_user_id.clone()),
-        };
+        let updated_user_id = claimed_user_id.to_string();
 
         let updated = ctx
             .database

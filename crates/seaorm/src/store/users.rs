@@ -174,6 +174,15 @@ where
                 return Err(cancelled_by_hook("user deletion"));
             }
         }
+        // API keys reference their owner polymorphically, so they carry no
+        // foreign key to cascade from. Without this, a deleted user's keys
+        // would outlive them and start working again if the id were reused.
+        let _ = super::entities::api_key::Entity::delete_many()
+            .filter(super::entities::api_key::Column::ReferenceId.eq(id))
+            .exec(self.connection())
+            .await
+            .map_err(map_db_err)?;
+
         let _ = <S::User as SeaOrmUserModel>::Entity::delete_many()
             .filter(<S::User as SeaOrmUserModel>::id_column().eq(user_id))
             .exec(self.connection())

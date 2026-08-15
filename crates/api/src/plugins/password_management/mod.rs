@@ -217,7 +217,11 @@ impl PasswordManagementPlugin {
 
         let user = self.get_current_user(req, ctx).await?;
         let Some(user) = user else {
-            return Ok(AuthResponse::new(401).with_header("content-type", "application/json"));
+            // better-call's default body for a session-gated endpoint hit
+            // without a session, which upstream returns verbatim.
+            return Ok(
+                AuthError::AuthenticationFailed("Unauthorized".to_string()).to_auth_response()
+            );
         };
         let response = verify_password_core(&body, &user, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)

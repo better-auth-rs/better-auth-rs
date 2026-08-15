@@ -14,7 +14,10 @@ pub struct AuthMigrator;
 #[async_trait::async_trait]
 impl MigratorTrait for AuthMigrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-        vec![Box::new(InitialAuthSchema)]
+        vec![
+            Box::new(InitialAuthSchema),
+            Box::new(ApiKeyReferenceOwnership),
+        ]
     }
 
     fn migration_table_name() -> sea_orm::DynIden {
@@ -24,6 +27,106 @@ impl MigratorTrait for AuthMigrator {
 
 pub async fn run_migrations(db: &sea_orm::DatabaseConnection) -> Result<(), DbErr> {
     AuthMigrator::up(db, None).await
+}
+
+/// Moves an existing `api_keys` table to reference-based ownership.
+///
+/// `InitialAuthSchema` creates the current shape, so a fresh database already
+/// satisfies this and the migration is a no-op. An installation created before
+/// the change still has `user_id`, no `config_id`, and a foreign key to
+/// `users` that would reject organization-owned keys.
+struct ApiKeyReferenceOwnership;
+
+// Named explicitly rather than derived: `DeriveMigrationName` uses the module
+// path, so every migration in this file would otherwise share one name. The
+// existing `InitialAuthSchema` keeps its derived name, which is already
+// recorded in deployed migration tables.
+impl MigrationName for ApiKeyReferenceOwnership {
+    fn name(&self) -> &str {
+        "m20260815_000001_api_key_reference_ownership"
+    }
+}
+
+#[async_trait::async_trait]
+impl MigrationTrait for ApiKeyReferenceOwnership {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        let table = api_key::Entity.table_name().to_string();
+
+        if manager.has_column(&table, "reference_id").await? {
+            return Ok(());
+        }
+
+        // The foreign key has to go before the column it constrains: a
+        // reference is a user id or an organization id from here on. SQLite
+        // cannot drop a constraint in place — and `RENAME COLUMN` would carry
+        // it over to `reference_id` — so that backend rebuilds the table.
+        if manager.get_database_backend() == sea_orm::DatabaseBackend::Sqlite {
+            return rebuild_sqlite_api_keys(manager).await;
+        }
+
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(api_key::Entity)
+                    .drop_foreign_key(Alias::new("fk_api_keys_user_id"))
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .drop_index(
+                Index::drop()
+                    .name("idx_api_keys_user_id")
+                    .table(api_key::Entity)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(api_key::Entity)
+                    .rename_column(Alias::new("user_id"), api_key::Column::ReferenceId)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(api_key::Entity)
+                    .add_column(
+                        ColumnDef::new(api_key::Column::ConfigId)
+                            .string()
+                            .not_null()
+                            .default("default"),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_api_keys_reference_id")
+                    .table(api_key::Entity)
+                    .col(api_key::Column::ReferenceId)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_api_keys_config_id")
+                    .table(api_key::Entity)
+                    .col(api_key::Column::ConfigId)
+                    .to_owned(),
+            )
+            .await?;
+
+        Ok(())
+    }
 }
 
 #[derive(DeriveMigrationName)]
@@ -626,6 +729,50 @@ async fn create_two_factor(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
     Ok(())
 }
 
+/// Rebuild `api_keys` on SQLite so the old `users` foreign key is gone.
+///
+/// SQLite has no `DROP CONSTRAINT`, and `RENAME COLUMN` rewrites the
+/// constraint to follow the renamed column — which would keep organization ids
+/// out of `reference_id`. Copying through a new table is the supported way to
+/// drop it.
+async fn rebuild_sqlite_api_keys(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
+    use sea_orm::ConnectionTrait;
+
+    let db = manager.get_connection();
+
+    // Foreign keys must be off for the swap; SQLite ignores the pragma inside a
+    // transaction, so this runs before the copy and is restored after.
+    let _ = db.execute_unprepared("PRAGMA foreign_keys = OFF").await?;
+
+    for statement in [
+        "DROP INDEX IF EXISTS idx_api_keys_user_id",
+        "ALTER TABLE api_keys RENAME TO api_keys_old",
+    ] {
+        let _ = db.execute_unprepared(statement).await?;
+    }
+
+    create_api_keys(manager).await?;
+
+    let _ = db
+        .execute_unprepared(
+            "INSERT INTO api_keys (id, name, start, prefix, key, reference_id, config_id, \
+         refill_interval, refill_amount, last_refill_at, enabled, rate_limit_enabled, \
+         rate_limit_time_window, rate_limit_max, request_count, remaining, last_request, \
+         expires_at, created_at, updated_at, permissions, metadata) \
+         SELECT id, name, start, prefix, key, user_id, 'default', \
+         refill_interval, refill_amount, last_refill_at, enabled, rate_limit_enabled, \
+         rate_limit_time_window, rate_limit_max, request_count, remaining, last_request, \
+         expires_at, created_at, updated_at, permissions, metadata FROM api_keys_old",
+        )
+        .await?;
+
+    let _ = db.execute_unprepared("DROP TABLE api_keys_old").await?;
+
+    let _ = db.execute_unprepared("PRAGMA foreign_keys = ON").await?;
+
+    Ok(())
+}
+
 async fn create_api_keys(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
     manager
         .create_table(
@@ -647,7 +794,17 @@ async fn create_api_keys(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                         .not_null()
                         .unique_key(),
                 )
-                .col(ColumnDef::new(api_key::Column::UserId).string().not_null())
+                .col(
+                    ColumnDef::new(api_key::Column::ReferenceId)
+                        .string()
+                        .not_null(),
+                )
+                .col(
+                    ColumnDef::new(api_key::Column::ConfigId)
+                        .string()
+                        .not_null()
+                        .default("default"),
+                )
                 .col(ColumnDef::new(api_key::Column::RefillInterval).integer())
                 .col(ColumnDef::new(api_key::Column::RefillAmount).integer())
                 .col(ColumnDef::new(api_key::Column::LastRefillAt).timestamp_with_time_zone())
@@ -681,13 +838,9 @@ async fn create_api_keys(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                 )
                 .col(ColumnDef::new(api_key::Column::Permissions).string())
                 .col(ColumnDef::new(api_key::Column::Metadata).string())
-                .foreign_key(
-                    ForeignKey::create()
-                        .name("fk_api_keys_user_id")
-                        .from(api_key::Entity, api_key::Column::UserId)
-                        .to(user::Entity, user::Column::Id)
-                        .on_delete(ForeignKeyAction::Cascade),
-                )
+                // No foreign key to users: `reference_id` holds a user id or an
+                // organization id depending on the key's configuration, which is
+                // why upstream declares the field as a plain indexed string.
                 .to_owned(),
         )
         .await?;
@@ -695,9 +848,19 @@ async fn create_api_keys(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
     manager
         .create_index(
             Index::create()
-                .name("idx_api_keys_user_id")
+                .name("idx_api_keys_reference_id")
                 .table(api_key::Entity)
-                .col(api_key::Column::UserId)
+                .col(api_key::Column::ReferenceId)
+                .to_owned(),
+        )
+        .await?;
+
+    manager
+        .create_index(
+            Index::create()
+                .name("idx_api_keys_config_id")
+                .table(api_key::Entity)
+                .col(api_key::Column::ConfigId)
                 .to_owned(),
         )
         .await?;

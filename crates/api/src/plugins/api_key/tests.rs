@@ -311,9 +311,15 @@ async fn test_list_returns_only_user_keys() {
     assert_eq!(list_response.status, 200);
 
     let list_body = json_body(&list_response);
-    let list = list_body.as_array().unwrap();
+    // Upstream returns a paginated envelope rather than a bare array.
+    let list = list_body["apiKeys"].as_array().unwrap();
     assert_eq!(list.len(), 1);
-    assert_eq!(list[0]["userId"].as_str().unwrap(), user1.id);
+    assert_eq!(list_body["total"], 1);
+    // Upstream renamed the owner field to `referenceId` (a user or an
+    // organization id) and stamps the owning configuration on every key.
+    assert_eq!(list[0]["referenceId"].as_str().unwrap(), user1.id);
+    assert_eq!(list[0]["configId"].as_str().unwrap(), "default");
+    assert!(list[0].get("userId").is_none());
     assert!(list[0].get("key").is_none());
     assert!(list[0].get("key_hash").is_none());
 }
@@ -536,7 +542,11 @@ async fn test_delete_all_expired() {
     assert_eq!(body["success"], true);
 
     // Only the non-expired key should remain
-    let remaining_keys = ctx.database.list_api_keys_by_user(&_user.id).await.unwrap();
+    let remaining_keys = ctx
+        .database
+        .list_api_keys_by_reference(&_user.id)
+        .await
+        .unwrap();
     assert_eq!(remaining_keys.len(), 1);
 }
 
@@ -705,6 +715,67 @@ async fn test_refill_logic() {
 // =======================================================================
 // Comprehensive integration tests (9 scenarios from the test plan)
 // =======================================================================
+
+// Upstream reference: packages/better-auth/src/api/routes/session.ts gates the
+// POST form of /get-session on deferSessionRefresh; an API key must not be a
+// way around that, so the hook only answers the GET form itself.
+#[tokio::test]
+async fn test_virtual_session_does_not_answer_post_get_session() {
+    use better_auth_core::AuthPlugin;
+
+    let plugin = ApiKeyPlugin::builder()
+        .enable_session_for_api_keys(true)
+        .build();
+    let (ctx, _user, session) = create_test_context_with_user().await;
+
+    let (_id, raw_key) = create_key_and_get_raw(
+        &plugin,
+        &ctx,
+        &session.token,
+        serde_json::json!({ "name": "post-get-session" }),
+    )
+    .await;
+
+    let mut headers = HashMap::new();
+    let _ = headers.insert("x-api-key".to_string(), raw_key);
+    let post = AuthRequest::from_parts(
+        HttpMethod::Post,
+        "/get-session".to_string(),
+        headers.clone(),
+        Some(b"{}".to_vec()),
+        HashMap::new(),
+    );
+
+    let action = AuthPlugin::<TestSchema>::before_request(&plugin, &post, &ctx)
+        .await
+        .unwrap();
+
+    // The hook injects a session and lets the route apply its own gate, rather
+    // than short-circuiting with a 200.
+    assert!(
+        matches!(
+            action,
+            Some(better_auth_core::BeforeRequestAction::InjectSession { .. })
+        ),
+        "POST must fall through to the route so its 405 gate still applies"
+    );
+
+    // The GET form is still answered directly.
+    let get = AuthRequest::from_parts(
+        HttpMethod::Get,
+        "/get-session".to_string(),
+        headers,
+        None,
+        HashMap::new(),
+    );
+    let action = AuthPlugin::<TestSchema>::before_request(&plugin, &get, &ctx)
+        .await
+        .unwrap();
+    assert!(matches!(
+        action,
+        Some(better_auth_core::BeforeRequestAction::Respond(_))
+    ));
+}
 
 // 1. Virtual session: before_request injects session without DB writes
 // Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
@@ -1052,7 +1123,11 @@ async fn test_delete_expired_api_keys_memory_adapter() {
     assert_eq!(deleted, 1, "Should delete exactly 1 expired key");
 
     // Verify only the non-expired key remains
-    let remaining = ctx.database.list_api_keys_by_user(&_user.id).await.unwrap();
+    let remaining = ctx
+        .database
+        .list_api_keys_by_reference(&_user.id)
+        .await
+        .unwrap();
     assert_eq!(remaining.len(), 1);
 }
 
@@ -1093,7 +1168,11 @@ async fn test_delete_expired_removes_only_expired() {
     let deleted = ctx.database.delete_expired_api_keys().await.unwrap();
     assert_eq!(deleted, 1);
 
-    let remaining = ctx.database.list_api_keys_by_user(&_user.id).await.unwrap();
+    let remaining = ctx
+        .database
+        .list_api_keys_by_reference(&_user.id)
+        .await
+        .unwrap();
     assert_eq!(remaining.len(), 1);
 }
 
@@ -1126,5 +1205,139 @@ async fn test_before_request_disabled_returns_none() {
     assert!(
         action.is_none(),
         "before_request should return None when session emulation is disabled"
+    );
+}
+
+// Upstream reference: @better-auth/api-key :: resolveConfiguration — an absent
+// or unknown configId falls back to the default configuration.
+#[tokio::test]
+async fn test_resolve_configuration_falls_back_to_default() {
+    let plugin = ApiKeyPlugin::builder().build().configuration(ApiKeyConfig {
+        config_id: "billing".to_string(),
+        ..ApiKeyConfig::default()
+    });
+
+    assert_eq!(
+        plugin.resolve_configuration(None).unwrap().config_id,
+        "default"
+    );
+    assert_eq!(
+        plugin
+            .resolve_configuration(Some("billing"))
+            .unwrap()
+            .config_id,
+        "billing"
+    );
+    // Unknown ids fall back rather than erroring.
+    assert_eq!(
+        plugin
+            .resolve_configuration(Some("nope"))
+            .unwrap()
+            .config_id,
+        "default"
+    );
+}
+
+// Upstream reference: @better-auth/api-key :: resolveConfiguration errors when
+// no configuration is registered as the default.
+#[tokio::test]
+async fn test_resolve_configuration_without_default_is_an_error() {
+    let plugin = ApiKeyPlugin::builder()
+        .config_id("billing".to_string())
+        .build();
+
+    let err = plugin.resolve_configuration(None).unwrap_err();
+    assert_eq!(err.status_code(), 400);
+    assert_eq!(err.to_string(), "No default api-key configuration found.");
+}
+
+// Upstream reference: @better-auth/api-key :: configIdMatches treats a missing
+// configId as the default, for keys written before the column existed.
+#[tokio::test]
+async fn test_config_id_matches_treats_missing_as_default() {
+    assert!(super::config_id_matches("", "default"));
+    assert!(super::config_id_matches("default", ""));
+    assert!(super::config_id_matches("billing", "billing"));
+    assert!(!super::config_id_matches("billing", "default"));
+}
+
+// Upstream reference: @better-auth/api-key :: create with `references:
+// "organization"` requires organizationId.
+#[tokio::test]
+async fn test_create_for_organization_requires_organization_id() {
+    let plugin = ApiKeyPlugin::builder()
+        .references(ApiKeyReferences::Organization)
+        .build();
+    let (ctx, _user, session) = create_test_context_with_user().await;
+
+    let req = create_auth_request(
+        HttpMethod::Post,
+        "/api-key/create",
+        Some(&session.token),
+        Some(serde_json::json!({ "name": "org-key" })),
+        None,
+    );
+    let err = plugin.handle_create(&req, &ctx).await.unwrap_err();
+
+    assert_eq!(err.status_code(), 400);
+    assert_eq!(
+        err.to_string(),
+        "Organization ID is required for organization-owned API keys."
+    );
+}
+
+// Upstream reference: @better-auth/api-key :: checkOrgApiKeyPermission fails
+// when the organization plugin, which supplies the access control, is absent.
+#[tokio::test]
+async fn test_create_for_organization_requires_the_organization_plugin() {
+    let plugin = ApiKeyPlugin::builder()
+        .references(ApiKeyReferences::Organization)
+        .build();
+    let (ctx, _user, session) = create_test_context_with_user().await;
+
+    let req = create_auth_request(
+        HttpMethod::Post,
+        "/api-key/create",
+        Some(&session.token),
+        Some(serde_json::json!({ "name": "org-key", "organizationId": "org-1" })),
+        None,
+    );
+    let err = plugin.handle_create(&req, &ctx).await.unwrap_err();
+
+    assert_eq!(
+        err.to_string(),
+        "Organization plugin is required for organization-owned API keys. Please install and configure the organization plugin."
+    );
+}
+
+// Upstream reference: @better-auth/api-key :: checkOrgApiKeyPermission rejects
+// a caller who is not a member of the owning organization.
+#[tokio::test]
+async fn test_create_for_organization_rejects_non_member() {
+    let plugin = ApiKeyPlugin::builder()
+        .references(ApiKeyReferences::Organization)
+        .build();
+    let (ctx, _user, session) = create_test_context_with_user().await;
+
+    // Stand in for a registered organization plugin.
+    let mut metadata: HashMap<String, serde_json::Value> = HashMap::new();
+    let _ = metadata.insert(
+        crate::plugins::organization::METADATA_ENABLED.to_string(),
+        serde_json::Value::Bool(true),
+    );
+    let ctx = AuthContext::with_metadata(ctx.config.clone(), ctx.database.clone(), metadata);
+
+    let req = create_auth_request(
+        HttpMethod::Post,
+        "/api-key/create",
+        Some(&session.token),
+        Some(serde_json::json!({ "name": "org-key", "organizationId": "org-the-user-is-not-in" })),
+        None,
+    );
+    let err = plugin.handle_create(&req, &ctx).await.unwrap_err();
+
+    assert_eq!(
+        err.to_string(),
+        "You are not a member of the organization that owns this API key."
     );
 }
