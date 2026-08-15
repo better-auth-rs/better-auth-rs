@@ -60,7 +60,10 @@ serde_cbor_2 = "0.13.0"
 
 [dev-dependencies]
 tokio = { workspace = true }
-better-auth-seaorm = { workspace = true }
+# Path-only on purpose: better-auth-seaorm depends on better-auth-core, so a
+# versioned dev-dependency here would constrain publish order. Cargo drops
+# dev-dependencies without a version from the published manifest.
+better-auth-seaorm = { path = "../seaorm" }
 
 [features]
 default = ["native-tls"]

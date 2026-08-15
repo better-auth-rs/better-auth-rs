@@ -3,7 +3,7 @@
 The most comprehensive authentication framework for Rust. Inspired by [Better Auth](https://www.better-auth.com/).
 
 > [!WARNING]
-> **v1 is in alpha.** The current release (`1.0.0-alpha.1`) is under active
+> **v1 is in alpha.** The current release (`1.0.0-alpha.2`) is under active
 > development. APIs, wire formats, and database schemas may change without
 > notice between alpha releases, and production use is not recommended yet.
 > Please report issues and feedback on [GitHub](https://github.com/better-auth-rs/better-auth-rs/issues).
@@ -34,7 +34,7 @@ wire behavior.
 
 ```toml
 [dependencies]
-better-auth = { version = "1.0.0-alpha.1", features = ["axum", "seaorm2"] }
+better-auth = { version = "1.0.0-alpha.2", features = ["axum", "seaorm2"] }
 ```
 
 Generate the schema scaffolding with the CLI:

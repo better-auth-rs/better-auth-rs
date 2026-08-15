@@ -53,6 +53,3 @@ tracing.workspace = true
 default = []
 redis-cache = ["dep:redis"]
 axum = ["dep:axum"]
-
-[dev-dependencies]
-better-auth-seaorm = { workspace = true }
