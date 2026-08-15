@@ -20,7 +20,7 @@ fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult
     AuthResponse::json(
         status,
         &ErrorCodeMessageResponse {
-            code: code.to_string(),
+            code: Some(code.to_string()),
             message: message.to_string(),
         },
     )
@@ -402,7 +402,7 @@ impl<S: AuthSchema> BetterAuth<S> {
                 return Ok(AuthResponse::json(
                     400,
                     &better_auth_core::ErrorCodeMessageResponse {
-                        code: "VALIDATION_ERROR".to_string(),
+                        code: Some("VALIDATION_ERROR".to_string()),
                         message: format!(
                             "[body] Invalid input: expected record, received {}",
                             actual
@@ -435,16 +435,12 @@ impl<S: AuthSchema> BetterAuth<S> {
                 Err(UsernameValidationError::TooLong) => {
                     return username_error_response(
                         400,
-                        "USERNAME_IS_TOO_LONG",
+                        "USERNAME_TOO_LONG",
                         "Username is too long",
                     );
                 }
                 Err(UsernameValidationError::Invalid) => {
-                    return username_error_response(
-                        400,
-                        "USERNAME_IS_INVALID",
-                        "Username is invalid",
-                    );
+                    return username_error_response(400, "INVALID_USERNAME", "Username is invalid");
                 }
             }
 
