@@ -716,6 +716,67 @@ async fn test_refill_logic() {
 // Comprehensive integration tests (9 scenarios from the test plan)
 // =======================================================================
 
+// Upstream reference: packages/better-auth/src/api/routes/session.ts gates the
+// POST form of /get-session on deferSessionRefresh; an API key must not be a
+// way around that, so the hook only answers the GET form itself.
+#[tokio::test]
+async fn test_virtual_session_does_not_answer_post_get_session() {
+    use better_auth_core::AuthPlugin;
+
+    let plugin = ApiKeyPlugin::builder()
+        .enable_session_for_api_keys(true)
+        .build();
+    let (ctx, _user, session) = create_test_context_with_user().await;
+
+    let (_id, raw_key) = create_key_and_get_raw(
+        &plugin,
+        &ctx,
+        &session.token,
+        serde_json::json!({ "name": "post-get-session" }),
+    )
+    .await;
+
+    let mut headers = HashMap::new();
+    let _ = headers.insert("x-api-key".to_string(), raw_key);
+    let post = AuthRequest::from_parts(
+        HttpMethod::Post,
+        "/get-session".to_string(),
+        headers.clone(),
+        Some(b"{}".to_vec()),
+        HashMap::new(),
+    );
+
+    let action = AuthPlugin::<TestSchema>::before_request(&plugin, &post, &ctx)
+        .await
+        .unwrap();
+
+    // The hook injects a session and lets the route apply its own gate, rather
+    // than short-circuiting with a 200.
+    assert!(
+        matches!(
+            action,
+            Some(better_auth_core::BeforeRequestAction::InjectSession { .. })
+        ),
+        "POST must fall through to the route so its 405 gate still applies"
+    );
+
+    // The GET form is still answered directly.
+    let get = AuthRequest::from_parts(
+        HttpMethod::Get,
+        "/get-session".to_string(),
+        headers,
+        None,
+        HashMap::new(),
+    );
+    let action = AuthPlugin::<TestSchema>::before_request(&plugin, &get, &ctx)
+        .await
+        .unwrap();
+    assert!(matches!(
+        action,
+        Some(better_auth_core::BeforeRequestAction::Respond(_))
+    ));
+}
+
 // 1. Virtual session: before_request injects session without DB writes
 // Upstream reference: packages/better-auth/src/plugins/api-key/api-key.test.ts :: describe("api-key"); adapted to the Rust API key plugin handlers.
 #[tokio::test]

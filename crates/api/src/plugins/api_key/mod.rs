@@ -772,8 +772,12 @@ better_auth_core::impl_auth_plugin! {
                 .await?
                 .ok_or_else(|| api_key_error(ApiKeyErrorCode::InvalidUserIdFromApiKey))?;
 
-            // Build a virtual session response for `/get-session`
-            if req.path() == "/get-session" {
+            // Build a virtual session response for `GET /get-session`.
+            //
+            // The POST form is deliberately left to the route, which gates it
+            // on `session.defer_session_refresh` and answers 405 otherwise —
+            // answering here would let an API key bypass that gate.
+            if req.path() == "/get-session" && req.method() == &better_auth_core::HttpMethod::Get {
                 let session_json = serde_json::json!({
                     "user": {
                         "id": user.id(),
