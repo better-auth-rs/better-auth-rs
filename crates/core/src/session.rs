@@ -52,37 +52,82 @@ impl<S: AuthSchema> SessionManager<S> {
 
     /// Get session by token
     pub async fn get_session(&self, token: &str) -> AuthResult<Option<S::Session>> {
-        let session = self.database.get_session(token).await?;
+        let mut session = self.database.get_session(token).await?;
 
         // Check if session exists and is not expired
-        if let Some(ref session) = session {
+        let should_refresh = if let Some(ref s) = session {
             let now = Utc::now();
 
-            if session.expires_at() < now || !session.active() {
-                // Session expired or inactive - delete it
-                self.database.delete_session(token).await?;
+            if s.expires_at() < now || !s.active() {
+                // Session expired or inactive — best-effort cleanup. A DB
+                // hiccup here shouldn't turn "your session is expired" into
+                // a 500; the row will be caught by the next access or the
+                // periodic `cleanup_expired_sessions` sweep.
+                if let Err(err) = self.database.delete_session(token).await {
+                    tracing::warn!(
+                        error = %err,
+                        "Failed to delete expired session; will be retried later"
+                    );
+                }
                 return Ok(None);
             }
 
             // Update session if configured to do so
             if !self.config.session.disable_session_refresh {
-                let should_refresh = match self.config.session.update_age {
+                match self.config.session.update_age {
                     Some(age) => {
                         // Only refresh if the session was last updated more than
                         // `update_age` ago.
-                        let updated = session.updated_at();
+                        let updated = s.updated_at();
                         Utc::now().signed_duration_since(updated) >= age
                     }
                     // No update_age set → refresh on every access.
                     None => true,
-                };
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        };
 
-                if should_refresh {
-                    let new_expires_at = Utc::now() + self.config.session.expires_in;
-                    let _ = self
-                        .database
-                        .update_session_expiry(token, new_expires_at)
-                        .await;
+        if should_refresh {
+            let new_expires_at = Utc::now() + self.config.session.expires_in;
+            match self
+                .database
+                .update_session_expiry(token, new_expires_at)
+                .await
+            {
+                Ok(()) => {
+                    // Re-read so the returned session reflects the new expiry.
+                    // Both failure modes fall back to the pre-refresh session:
+                    // a concurrent revoke (re-read returns None) shouldn't log
+                    // the user out mid-request, and a second DB hiccup
+                    // shouldn't turn a successful refresh into a 500.
+                    match self.database.get_session(token).await {
+                        Ok(Some(refreshed)) => session = Some(refreshed),
+                        Ok(None) => {
+                            tracing::warn!(
+                                "Session re-read after refresh returned None (concurrent revoke?); returning pre-refresh value"
+                            );
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                error = %err,
+                                "Session re-read after refresh failed; returning pre-refresh value"
+                            );
+                        }
+                    }
+                }
+                Err(err) => {
+                    // Transient write failure (connection reset, contention,
+                    // etc.) must not fail the whole request. Keep the
+                    // pre-refresh session — auth still works, the refresh
+                    // window will be retried on the next call.
+                    tracing::warn!(
+                        error = %err,
+                        "Failed to refresh session expiry; returning pre-refresh session"
+                    );
                 }
             }
         }
@@ -400,6 +445,48 @@ mod tests {
 
         let retrieved = mgr.get_session(&token).await.unwrap();
         assert!(retrieved.is_some());
+    }
+
+    // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
+    #[tokio::test]
+    async fn refresh_returns_the_persisted_expiry() {
+        let db = test_database().await;
+        let mut config = AuthConfig::new("test-secret-min-32-chars-1234567");
+        // Refresh on every access so a single `get_session` exercises the path.
+        config.session.update_age = None;
+        let mgr = SessionManager::new(Arc::new(config), db.clone());
+
+        let user = db
+            .create_user(crate::types::CreateUser::new().with_email("refresh@test.com"))
+            .await
+            .unwrap();
+        let session = mgr.create_session(&user, None, None).await.unwrap();
+        let token = session.token().to_string();
+
+        // Move the stored expiry back so the refresh is observable.
+        let stale = session.expires_at() - Duration::minutes(30);
+        db.update_session_expiry(&token, stale).await.unwrap();
+
+        let returned = mgr
+            .get_session(&token)
+            .await
+            .unwrap()
+            .expect("session should still be live");
+        let stored = db
+            .get_session(&token)
+            .await
+            .unwrap()
+            .expect("session should still be stored");
+
+        assert!(
+            returned.expires_at() > stale,
+            "refresh should have extended the expiry"
+        );
+        assert_eq!(
+            returned.expires_at(),
+            stored.expires_at(),
+            "returned session must reflect the persisted expiry, not the pre-refresh value"
+        );
     }
 
     // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
