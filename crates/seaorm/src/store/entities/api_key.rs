@@ -10,7 +10,8 @@ pub struct Model {
     pub prefix: Option<String>,
     #[sea_orm(column_name = "key")]
     pub key_hash: String,
-    pub user_id: String,
+    pub reference_id: String,
+    pub config_id: String,
     pub refill_interval: Option<i32>,
     pub refill_amount: Option<i32>,
     pub last_refill_at: Option<DateTimeUtc>,

@@ -138,7 +138,8 @@ pub(crate) async fn create_key_core(
     };
 
     let input = CreateApiKey {
-        user_id: user_id.as_ref().to_string(),
+        reference_id: user_id.as_ref().to_string(),
+        config_id: plugin.config.config_id.clone(),
         name: body.name.clone(),
         prefix: body.prefix.clone().or_else(|| plugin.config.prefix.clone()),
         key_hash: hash,
@@ -191,13 +192,55 @@ pub(crate) async fn get_key_core(
 
 pub(crate) async fn list_keys_core(
     user_id: impl AsRef<str>,
+    query: &ListKeysQuery,
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<Vec<ApiKeyView>> {
-    let keys = ctx.database.list_api_keys_by_user(user_id.as_ref()).await?;
-    let views: Vec<ApiKeyView> = keys.iter().map(ApiKeyView::from).collect();
+) -> AuthResult<ListKeysResponse> {
+    let keys = ctx
+        .database
+        .list_api_keys_by_reference(user_id.as_ref())
+        .await?;
+    let mut views: Vec<ApiKeyView> = keys.iter().map(ApiKeyView::from).collect();
+
+    if let Some(config_id) = query.config_id.as_deref() {
+        views.retain(|view| view.config_id == config_id);
+    }
+
+    if let Some(sort_by) = query.sort_by.as_deref() {
+        sort_views(&mut views, sort_by, query.sort_direction.as_deref());
+    }
+
+    // `total` counts the filtered set, before the window is applied.
+    let total = views.len();
+    if let Some(offset) = query.offset {
+        views = views.split_off(offset.min(views.len()));
+    }
+    if let Some(limit) = query.limit {
+        views.truncate(limit);
+    }
+
     plugin.maybe_delete_expired(ctx).await;
-    Ok(views)
+    Ok(ListKeysResponse {
+        api_keys: views,
+        total,
+        limit: query.limit,
+        offset: query.offset,
+    })
+}
+
+/// Sort in place by a client-supplied field name, ignoring unknown fields the
+/// way a permissive query layer would.
+fn sort_views(views: &mut [ApiKeyView], sort_by: &str, direction: Option<&str>) {
+    match sort_by {
+        "createdAt" => views.sort_by(|a, b| a.created_at.cmp(&b.created_at)),
+        "updatedAt" => views.sort_by(|a, b| a.updated_at.cmp(&b.updated_at)),
+        "name" => views.sort_by(|a, b| a.name.cmp(&b.name)),
+        "expiresAt" => views.sort_by(|a, b| a.expires_at.cmp(&b.expires_at)),
+        _ => return,
+    }
+    if direction == Some("desc") {
+        views.reverse();
+    }
 }
 
 pub(crate) async fn update_key_core(

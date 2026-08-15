@@ -647,7 +647,17 @@ async fn create_api_keys(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                         .not_null()
                         .unique_key(),
                 )
-                .col(ColumnDef::new(api_key::Column::UserId).string().not_null())
+                .col(
+                    ColumnDef::new(api_key::Column::ReferenceId)
+                        .string()
+                        .not_null(),
+                )
+                .col(
+                    ColumnDef::new(api_key::Column::ConfigId)
+                        .string()
+                        .not_null()
+                        .default("default"),
+                )
                 .col(ColumnDef::new(api_key::Column::RefillInterval).integer())
                 .col(ColumnDef::new(api_key::Column::RefillAmount).integer())
                 .col(ColumnDef::new(api_key::Column::LastRefillAt).timestamp_with_time_zone())
@@ -681,13 +691,9 @@ async fn create_api_keys(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                 )
                 .col(ColumnDef::new(api_key::Column::Permissions).string())
                 .col(ColumnDef::new(api_key::Column::Metadata).string())
-                .foreign_key(
-                    ForeignKey::create()
-                        .name("fk_api_keys_user_id")
-                        .from(api_key::Entity, api_key::Column::UserId)
-                        .to(user::Entity, user::Column::Id)
-                        .on_delete(ForeignKeyAction::Cascade),
-                )
+                // No foreign key to users: `reference_id` holds a user id or an
+                // organization id depending on the key's configuration, which is
+                // why upstream declares the field as a plain indexed string.
                 .to_owned(),
         )
         .await?;
@@ -695,9 +701,19 @@ async fn create_api_keys(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
     manager
         .create_index(
             Index::create()
-                .name("idx_api_keys_user_id")
+                .name("idx_api_keys_reference_id")
                 .table(api_key::Entity)
-                .col(api_key::Column::UserId)
+                .col(api_key::Column::ReferenceId)
+                .to_owned(),
+        )
+        .await?;
+
+    manager
+        .create_index(
+            Index::create()
+                .name("idx_api_keys_config_id")
+                .table(api_key::Entity)
+                .col(api_key::Column::ConfigId)
                 .to_owned(),
         )
         .await?;

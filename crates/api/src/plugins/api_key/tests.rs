@@ -311,9 +311,15 @@ async fn test_list_returns_only_user_keys() {
     assert_eq!(list_response.status, 200);
 
     let list_body = json_body(&list_response);
-    let list = list_body.as_array().unwrap();
+    // Upstream returns a paginated envelope rather than a bare array.
+    let list = list_body["apiKeys"].as_array().unwrap();
     assert_eq!(list.len(), 1);
-    assert_eq!(list[0]["userId"].as_str().unwrap(), user1.id);
+    assert_eq!(list_body["total"], 1);
+    // Upstream renamed the owner field to `referenceId` (a user or an
+    // organization id) and stamps the owning configuration on every key.
+    assert_eq!(list[0]["referenceId"].as_str().unwrap(), user1.id);
+    assert_eq!(list[0]["configId"].as_str().unwrap(), "default");
+    assert!(list[0].get("userId").is_none());
     assert!(list[0].get("key").is_none());
     assert!(list[0].get("key_hash").is_none());
 }
@@ -536,7 +542,11 @@ async fn test_delete_all_expired() {
     assert_eq!(body["success"], true);
 
     // Only the non-expired key should remain
-    let remaining_keys = ctx.database.list_api_keys_by_user(&_user.id).await.unwrap();
+    let remaining_keys = ctx
+        .database
+        .list_api_keys_by_reference(&_user.id)
+        .await
+        .unwrap();
     assert_eq!(remaining_keys.len(), 1);
 }
 
@@ -1052,7 +1062,11 @@ async fn test_delete_expired_api_keys_memory_adapter() {
     assert_eq!(deleted, 1, "Should delete exactly 1 expired key");
 
     // Verify only the non-expired key remains
-    let remaining = ctx.database.list_api_keys_by_user(&_user.id).await.unwrap();
+    let remaining = ctx
+        .database
+        .list_api_keys_by_reference(&_user.id)
+        .await
+        .unwrap();
     assert_eq!(remaining.len(), 1);
 }
 
@@ -1093,7 +1107,11 @@ async fn test_delete_expired_removes_only_expired() {
     let deleted = ctx.database.delete_expired_api_keys().await.unwrap();
     assert_eq!(deleted, 1);
 
-    let remaining = ctx.database.list_api_keys_by_user(&_user.id).await.unwrap();
+    let remaining = ctx
+        .database
+        .list_api_keys_by_reference(&_user.id)
+        .await
+        .unwrap();
     assert_eq!(remaining.len(), 1);
 }
 

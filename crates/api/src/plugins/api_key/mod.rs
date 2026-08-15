@@ -145,6 +145,10 @@ pub struct ApiKeyPlugin {
 /// Configuration for the API Key plugin, aligned with the TypeScript `ApiKeyOptions`.
 #[derive(Debug, Clone)]
 pub struct ApiKeyConfig {
+    /// Name of this configuration, stored on every key it creates.
+    /// Upstream defaults it to `"default"`.
+    pub config_id: String,
+
     // -- key generation --
     pub key_length: usize,
     pub prefix: Option<String>,
@@ -229,6 +233,7 @@ impl Default for RateLimitDefaults {
 impl Default for ApiKeyConfig {
     fn default() -> Self {
         Self {
+            config_id: "default".to_string(),
             key_length: 64,
             prefix: None,
             default_remaining: None,
@@ -268,6 +273,7 @@ impl Default for ApiKeyConfig {
 impl ApiKeyPlugin {
     #[builder]
     pub fn new(
+        #[builder(default = "default".to_string())] config_id: String,
         #[builder(default = 64)] key_length: usize,
         prefix: Option<String>,
         default_remaining: Option<i64>,
@@ -287,6 +293,7 @@ impl ApiKeyPlugin {
     ) -> Self {
         Self {
             config: ApiKeyConfig {
+                config_id,
                 key_length,
                 prefix,
                 default_remaining,
@@ -494,7 +501,8 @@ impl ApiKeyPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-        let response = list_keys_core(user.id(), self, ctx).await?;
+        let query = ListKeysQuery::from_request(req);
+        let response = list_keys_core(user.id(), &query, self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -643,7 +651,7 @@ better_auth_core::impl_auth_plugin! {
             // Look up the user
             let user = ctx
                 .database
-                .get_user_by_id(&view.user_id)
+                .get_user_by_id(&view.reference_id)
                 .await?
                 .ok_or_else(|| api_key_error(ApiKeyErrorCode::InvalidUserIdFromApiKey))?;
 
@@ -658,7 +666,7 @@ better_auth_core::impl_auth_plugin! {
                     "session": {
                         "id": view.id,
                         "token": raw_key,
-                        "userId": view.user_id,
+                        "userId": view.reference_id,
                     }
                 });
                 return Ok(Some(BeforeRequestAction::Respond(AuthResponse::json(
@@ -669,7 +677,7 @@ better_auth_core::impl_auth_plugin! {
 
             // For all other routes, inject the session
             Ok(Some(BeforeRequestAction::InjectSession {
-                user_id: view.user_id,
+                user_id: view.reference_id,
                 session_token: raw_key,
             }))
         }

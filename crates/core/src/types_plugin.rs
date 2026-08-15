@@ -146,8 +146,10 @@ pub struct ApiKey {
     /// SHA-256 hash of the key (column name: `key` in SQL)
     #[serde(rename = "key")]
     pub key_hash: String,
-    #[serde(rename = "userId")]
-    pub user_id: String,
+    #[serde(rename = "referenceId")]
+    pub reference_id: String,
+    #[serde(rename = "configId")]
+    pub config_id: String,
     #[serde(rename = "refillInterval")]
     pub refill_interval: Option<i64>,
     #[serde(rename = "refillAmount")]
@@ -179,7 +181,11 @@ pub struct ApiKey {
 /// API key creation data.
 #[derive(Debug, Clone)]
 pub struct CreateApiKey {
-    pub user_id: String,
+    /// Owner of the key — a user id, or an organization id when the key's
+    /// configuration references organizations.
+    pub reference_id: String,
+    /// Name of the API-key configuration this key belongs to.
+    pub config_id: String,
     pub name: Option<String>,
     pub prefix: Option<String>,
     pub key_hash: String,
@@ -270,8 +276,11 @@ impl AuthApiKey for ApiKey {
     fn key_hash(&self) -> &str {
         &self.key_hash
     }
-    fn user_id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.user_id)
+    fn reference_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.reference_id)
+    }
+    fn config_id(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.config_id)
     }
     fn refill_interval(&self) -> Option<i64> {
         self.refill_interval
@@ -328,7 +337,8 @@ impl<T: AuthApiKey> From<&T> for ApiKey {
             start: api_key.start().map(str::to_owned),
             prefix: api_key.prefix().map(str::to_owned),
             key_hash: api_key.key_hash().to_owned(),
-            user_id: api_key.user_id().into_owned(),
+            reference_id: api_key.reference_id().into_owned(),
+            config_id: api_key.config_id().into_owned(),
             refill_interval: api_key.refill_interval(),
             refill_amount: api_key.refill_amount(),
             last_refill_at: api_key.last_refill_at().map(str::to_owned),

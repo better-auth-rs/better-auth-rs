@@ -14,6 +14,14 @@ function asArray(value: unknown): unknown[] {
   return value;
 }
 
+/**
+ * `GET /api-key/list` returns a paginated envelope since better-auth 1.5;
+ * the keys live under `apiKeys`.
+ */
+function asKeyList(value: unknown): unknown[] {
+  return asArray(asRecord(value).apiKeys);
+}
+
 // ---------------------------------------------------------------------------
 // Helper: sign up and get a session cookie header for authenticated requests
 // ---------------------------------------------------------------------------
@@ -120,7 +128,7 @@ compatScenario("api-key list returns created keys without key field", async (ctx
     path: "/api/auth/api-key/list",
   });
 
-  const items = asArray(res.body);
+  const items = asKeyList(res.body);
 
   return {
     status: res.status,
@@ -511,7 +519,7 @@ compatScenario("api-key list returns keys in insertion order", async (ctx) => {
     path: "/api/auth/api-key/list",
   });
 
-  const items = asArray(res.body);
+  const items = asKeyList(res.body);
 
   return {
     status: res.status,

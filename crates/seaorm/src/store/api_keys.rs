@@ -85,7 +85,8 @@ where
             start: Set(input.start),
             prefix: Set(input.prefix),
             key_hash: Set(input.key_hash),
-            user_id: Set(input.user_id),
+            reference_id: Set(input.reference_id),
+            config_id: Set(input.config_id),
             refill_interval: Set(to_optional_i32(input.refill_interval, "refill_interval")?),
             refill_amount: Set(to_optional_i32(input.refill_amount, "refill_amount")?),
             last_refill_at: Set(None),
@@ -131,11 +132,11 @@ where
             .map_err(map_db_err)
     }
 
-    async fn list_api_keys_by_user(&self, user_id: &str) -> AuthResult<Vec<ApiKey>> {
+    async fn list_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<Vec<ApiKey>> {
         // Explicit ASC order matches TS insertion-order behavior and avoids
         // nondeterministic results across database backends.
         Entity::find()
-            .filter(Column::UserId.eq(user_id))
+            .filter(Column::ReferenceId.eq(reference_id))
             .order_by_asc(Column::CreatedAt)
             .all(self.connection())
             .await
@@ -149,7 +150,7 @@ where
             .await
             .map_err(map_db_err)?
         else {
-            return Err(AuthError::not_found("API key not found"));
+            return Err(AuthError::not_found("API Key not found"));
         };
 
         let active = apply_update_fields(model.into_active_model(), update)?;
@@ -175,7 +176,7 @@ where
                     .await
                     .map_err(map_db_err)?
                 else {
-                    return Err(AuthError::not_found("API key not found"));
+                    return Err(AuthError::not_found("API Key not found"));
                 };
 
                 let now = Utc::now();

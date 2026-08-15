@@ -68,6 +68,43 @@ pub(crate) struct DeleteKeyRequest {
 // Response types
 // ---------------------------------------------------------------------------
 
+/// Query parameters accepted by `GET /api-key/list`.
+#[derive(Debug, Default)]
+pub(crate) struct ListKeysQuery {
+    pub config_id: Option<String>,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+    pub sort_by: Option<String>,
+    pub sort_direction: Option<String>,
+}
+
+impl ListKeysQuery {
+    pub(crate) fn from_request(req: &better_auth_core::AuthRequest) -> Self {
+        let number = |key: &str| req.query.get(key).and_then(|value| value.parse().ok());
+        Self {
+            config_id: req.query.get("configId").cloned(),
+            limit: number("limit"),
+            offset: number("offset"),
+            sort_by: req.query.get("sortBy").cloned(),
+            sort_direction: req.query.get("sortDirection").cloned(),
+        }
+    }
+}
+
+/// `GET /api-key/list` response. Upstream returns a paginated envelope rather
+/// than a bare array, and omits `limit`/`offset` when the client did not send
+/// them.
+#[derive(Debug, Serialize)]
+pub(crate) struct ListKeysResponse {
+    #[serde(rename = "apiKeys")]
+    pub api_keys: Vec<ApiKeyView>,
+    pub total: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<usize>,
+}
+
 #[derive(Debug, Serialize)]
 pub(crate) struct CreateKeyResponse {
     pub key: String,
