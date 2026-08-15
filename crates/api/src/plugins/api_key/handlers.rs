@@ -117,44 +117,61 @@ pub(crate) async fn create_key_core(
         ));
     }
 
+    let config = plugin.resolve_configuration(body.config_id.as_deref())?;
+
     // Validations
-    plugin.validate_prefix(body.prefix.as_deref())?;
-    plugin.validate_name(body.name.as_deref(), true)?;
-    plugin.validate_metadata(&body.metadata)?;
+    ApiKeyPlugin::validate_prefix(config, body.prefix.as_deref())?;
+    ApiKeyPlugin::validate_name(config, body.name.as_deref(), true)?;
+    ApiKeyPlugin::validate_metadata(config, &body.metadata)?;
     ApiKeyPlugin::validate_refill(body.refill_interval, body.refill_amount)?;
 
-    let effective_expires_in = plugin.validate_expires_in(body.expires_in)?;
+    let effective_expires_in = ApiKeyPlugin::validate_expires_in(config, body.expires_in)?;
 
-    let (full_key, hash, start) = plugin.generate_key(body.prefix.as_deref());
+    // Who the key belongs to: the caller, or the organization they named when
+    // this configuration references organizations.
+    let reference_id = match config.references {
+        super::ApiKeyReferences::User => user_id.as_ref().to_string(),
+        super::ApiKeyReferences::Organization => {
+            let organization_id = body.organization_id.as_deref().ok_or_else(|| {
+                super::api_key_error(super::ApiKeyErrorCode::OrganizationIdRequired)
+            })?;
+            helpers::require_org_api_key_permission(
+                ctx,
+                user_id.as_ref(),
+                organization_id,
+                "create",
+            )
+            .await?;
+            organization_id.to_string()
+        }
+    };
+
+    let (full_key, hash, start) = ApiKeyPlugin::generate_key(config, body.prefix.as_deref());
 
     let expires_at = helpers::expires_in_to_at(effective_expires_in)?;
 
-    let remaining = body.remaining.or(plugin.config.default_remaining);
+    let remaining = body.remaining.or(config.default_remaining);
 
-    let store_start = if plugin.config.store_starting_characters {
+    let store_start = if config.store_starting_characters {
         Some(start)
     } else {
         None
     };
 
     let input = CreateApiKey {
-        reference_id: user_id.as_ref().to_string(),
-        config_id: plugin.config.config_id.clone(),
+        reference_id,
+        config_id: config.config_id.clone(),
         name: body.name.clone(),
-        prefix: body.prefix.clone().or_else(|| plugin.config.prefix.clone()),
+        prefix: body.prefix.clone().or_else(|| config.prefix.clone()),
         key_hash: hash,
         start: store_start,
         expires_at,
         remaining,
-        rate_limit_enabled: body
-            .rate_limit_enabled
-            .unwrap_or(plugin.config.rate_limit.enabled),
+        rate_limit_enabled: body.rate_limit_enabled.unwrap_or(config.rate_limit.enabled),
         rate_limit_time_window: body
             .rate_limit_time_window
-            .or(Some(plugin.config.rate_limit.time_window)),
-        rate_limit_max: body
-            .rate_limit_max
-            .or(Some(plugin.config.rate_limit.max_requests)),
+            .or(Some(config.rate_limit.time_window)),
+        rate_limit_max: body.rate_limit_max.or(Some(config.rate_limit.max_requests)),
         refill_interval: body.refill_interval,
         refill_amount: body.refill_amount,
         permissions: body
@@ -181,11 +198,13 @@ pub(crate) async fn create_key_core(
 
 pub(crate) async fn get_key_core(
     id: &str,
+    config_id: Option<&str>,
     user_id: impl AsRef<str>,
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ApiKeyView> {
-    let api_key = helpers::get_owned_api_key(ctx, id, user_id).await?;
+    let config = plugin.resolve_configuration(config_id)?;
+    let api_key = helpers::get_owned_api_key(ctx, config, id, user_id.as_ref(), "read").await?;
     plugin.maybe_delete_expired(ctx).await;
     Ok(ApiKeyView::from(&api_key))
 }
@@ -196,15 +215,31 @@ pub(crate) async fn list_keys_core(
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ListKeysResponse> {
+    let config = plugin.resolve_configuration(query.config_id.as_deref())?;
+
+    // Organization-referencing configurations list the organization's keys, and
+    // only for a member who may read them.
+    let reference_id = match config.references {
+        super::ApiKeyReferences::User => user_id.as_ref().to_string(),
+        super::ApiKeyReferences::Organization => {
+            let organization_id = query.organization_id.as_deref().ok_or_else(|| {
+                super::api_key_error(super::ApiKeyErrorCode::OrganizationIdRequired)
+            })?;
+            helpers::require_org_api_key_permission(ctx, user_id.as_ref(), organization_id, "read")
+                .await?;
+            organization_id.to_string()
+        }
+    };
+
     let keys = ctx
         .database
-        .list_api_keys_by_reference(user_id.as_ref())
+        .list_api_keys_by_reference(&reference_id)
         .await?;
-    let mut views: Vec<ApiKeyView> = keys.iter().map(ApiKeyView::from).collect();
-
-    if let Some(config_id) = query.config_id.as_deref() {
-        views.retain(|view| view.config_id == config_id);
-    }
+    let mut views: Vec<ApiKeyView> = keys
+        .iter()
+        .map(ApiKeyView::from)
+        .filter(|view| super::config_id_matches(&view.config_id, &config.config_id))
+        .collect();
 
     if let Some(sort_by) = query.sort_by.as_deref() {
         sort_views(&mut views, sort_by, query.sort_direction.as_deref());
@@ -276,11 +311,13 @@ pub(crate) async fn update_key_core(
     }
 
     // Validations
-    plugin.validate_name(body.name.as_deref(), false)?;
-    plugin.validate_metadata(&body.metadata)?;
+    let config = plugin.resolve_configuration(body.config_id.as_deref())?;
+    ApiKeyPlugin::validate_name(config, body.name.as_deref(), false)?;
+    ApiKeyPlugin::validate_metadata(config, &body.metadata)?;
 
     // Ownership check via shared helper
-    let _existing = helpers::get_owned_api_key(ctx, &body.key_id, user_id).await?;
+    let _existing =
+        helpers::get_owned_api_key(ctx, config, &body.key_id, user_id.as_ref(), "update").await?;
 
     // Build expires_at from expiresIn:
     //   None         = not sent → don't touch expires_at
@@ -292,14 +329,14 @@ pub(crate) async fn update_key_core(
     // expiration is disabled.
     let expires_at = match body.expires_in {
         None => None,
-        Some(_) if plugin.config.key_expiration.disable_custom_expires_time => {
+        Some(_) if config.key_expiration.disable_custom_expires_time => {
             return Err(super::api_key_error(
                 super::ApiKeyErrorCode::KeyDisabledExpiration,
             ));
         }
         Some(None) => Some(None),
         Some(Some(secs)) => {
-            let validated = plugin.validate_expires_in(Some(secs))?;
+            let validated = ApiKeyPlugin::validate_expires_in(config, Some(secs))?;
             helpers::expires_in_to_at(validated)?.map(Some)
         }
     };
@@ -337,11 +374,13 @@ pub(crate) async fn update_key_core(
 pub(crate) async fn delete_key_core(
     body: &DeleteKeyRequest,
     user_id: impl AsRef<str>,
-    _plugin: &ApiKeyPlugin,
+    plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<serde_json::Value> {
+    let config = plugin.resolve_configuration(body.config_id.as_deref())?;
     // Ownership check via shared helper
-    let _existing = helpers::get_owned_api_key(ctx, &body.key_id, user_id).await?;
+    let _existing =
+        helpers::get_owned_api_key(ctx, config, &body.key_id, user_id.as_ref(), "delete").await?;
 
     ctx.database.delete_api_key(&body.key_id).await?;
 

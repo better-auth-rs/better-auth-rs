@@ -15,6 +15,10 @@ pub struct RolePermissions {
     pub organization: Vec<String>,
     pub member: Vec<String>,
     pub invitation: Vec<String>,
+    /// Actions this role may perform on organization-owned API keys. Upstream's
+    /// default statements define none, so only the creator role can manage them
+    /// until an application grants this explicitly.
+    pub api_key: Vec<String>,
 }
 
 /// Configuration for the Organization plugin

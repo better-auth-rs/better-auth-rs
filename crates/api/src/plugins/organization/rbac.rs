@@ -6,6 +6,9 @@ pub enum Resource {
     Organization,
     Member,
     Invitation,
+    /// Organization-owned API keys. Upstream's default statements grant no
+    /// role any action here; only the creator role is implicitly allowed.
+    ApiKey,
 }
 
 impl Resource {
@@ -14,6 +17,7 @@ impl Resource {
             "organization" => Some(Self::Organization),
             "member" => Some(Self::Member),
             "invitation" => Some(Self::Invitation),
+            "apikey" => Some(Self::ApiKey),
             _ => None,
         }
     }
@@ -119,6 +123,7 @@ pub fn has_permission(
             Resource::Organization => &custom_role.organization,
             Resource::Member => &custom_role.member,
             Resource::Invitation => &custom_role.invitation,
+            Resource::ApiKey => &custom_role.api_key,
         };
         let action_str = match action {
             Action::Create => "create",

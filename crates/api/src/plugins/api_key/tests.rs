@@ -1146,3 +1146,106 @@ async fn test_before_request_disabled_returns_none() {
         "before_request should return None when session emulation is disabled"
     );
 }
+
+// Upstream reference: @better-auth/api-key :: resolveConfiguration — an absent
+// or unknown configId falls back to the default configuration.
+#[tokio::test]
+async fn test_resolve_configuration_falls_back_to_default() {
+    let plugin = ApiKeyPlugin::builder().build().configuration(ApiKeyConfig {
+        config_id: "billing".to_string(),
+        ..ApiKeyConfig::default()
+    });
+
+    assert_eq!(
+        plugin.resolve_configuration(None).unwrap().config_id,
+        "default"
+    );
+    assert_eq!(
+        plugin
+            .resolve_configuration(Some("billing"))
+            .unwrap()
+            .config_id,
+        "billing"
+    );
+    // Unknown ids fall back rather than erroring.
+    assert_eq!(
+        plugin
+            .resolve_configuration(Some("nope"))
+            .unwrap()
+            .config_id,
+        "default"
+    );
+}
+
+// Upstream reference: @better-auth/api-key :: resolveConfiguration errors when
+// no configuration is registered as the default.
+#[tokio::test]
+async fn test_resolve_configuration_without_default_is_an_error() {
+    let plugin = ApiKeyPlugin::builder()
+        .config_id("billing".to_string())
+        .build();
+
+    let err = plugin.resolve_configuration(None).unwrap_err();
+    assert_eq!(err.status_code(), 400);
+    assert_eq!(err.to_string(), "No default api-key configuration found.");
+}
+
+// Upstream reference: @better-auth/api-key :: configIdMatches treats a missing
+// configId as the default, for keys written before the column existed.
+#[tokio::test]
+async fn test_config_id_matches_treats_missing_as_default() {
+    assert!(super::config_id_matches("", "default"));
+    assert!(super::config_id_matches("default", ""));
+    assert!(super::config_id_matches("billing", "billing"));
+    assert!(!super::config_id_matches("billing", "default"));
+}
+
+// Upstream reference: @better-auth/api-key :: create with `references:
+// "organization"` requires organizationId.
+#[tokio::test]
+async fn test_create_for_organization_requires_organization_id() {
+    let plugin = ApiKeyPlugin::builder()
+        .references(ApiKeyReferences::Organization)
+        .build();
+    let (ctx, _user, session) = create_test_context_with_user().await;
+
+    let req = create_auth_request(
+        HttpMethod::Post,
+        "/api-key/create",
+        Some(&session.token),
+        Some(serde_json::json!({ "name": "org-key" })),
+        None,
+    );
+    let err = plugin.handle_create(&req, &ctx).await.unwrap_err();
+
+    assert_eq!(err.status_code(), 400);
+    assert_eq!(
+        err.to_string(),
+        "Organization ID is required for organization-owned API keys."
+    );
+}
+
+// Upstream reference: @better-auth/api-key :: checkOrgApiKeyPermission rejects
+// a caller who is not a member of the owning organization.
+#[tokio::test]
+async fn test_create_for_organization_rejects_non_member() {
+    let plugin = ApiKeyPlugin::builder()
+        .references(ApiKeyReferences::Organization)
+        .build();
+    let (ctx, _user, session) = create_test_context_with_user().await;
+
+    let req = create_auth_request(
+        HttpMethod::Post,
+        "/api-key/create",
+        Some(&session.token),
+        Some(serde_json::json!({ "name": "org-key", "organizationId": "org-the-user-is-not-in" })),
+        None,
+    );
+    let err = plugin.handle_create(&req, &ctx).await.unwrap_err();
+
+    assert_eq!(err.status_code(), 400);
+    assert_eq!(
+        err.to_string(),
+        "You are not a member of the organization that owns this API key."
+    );
+}

@@ -3,7 +3,7 @@
 //! Extracted to avoid duplicating common patterns across plugins (DRY).
 
 use better_auth_core::config::OAuthStateStrategy;
-use better_auth_core::entity::{AuthAccount, AuthApiKey, AuthUser};
+use better_auth_core::entity::{AuthAccount, AuthUser};
 use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResult, CreateUser, UpdateUser};
 use chrono::Utc;
 
@@ -32,20 +32,77 @@ pub fn expires_in_to_at(expires_in_secs: Option<i64>) -> AuthResult<Option<Strin
 /// and `handle_delete`.
 pub async fn get_owned_api_key(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    config: &crate::plugins::api_key::ApiKeyConfig,
     key_id: &str,
-    user_id: impl AsRef<str>,
+    user_id: &str,
+    action: &str,
 ) -> AuthResult<better_auth_core::ApiKey> {
+    use crate::plugins::api_key::{ApiKeyReferences, config_id_matches};
+
     let api_key = ctx
         .database
         .get_api_key_by_id(key_id)
         .await?
         .ok_or_else(|| AuthError::not_found("API Key not found"))?;
 
-    if api_key.reference_id().as_ref() != user_id.as_ref() {
+    // A key only exists as far as the configuration that addressed it.
+    if !config_id_matches(&api_key.config_id, &config.config_id) {
         return Err(AuthError::not_found("API Key not found"));
     }
 
+    match config.references {
+        ApiKeyReferences::User => {
+            if api_key.reference_id != user_id {
+                return Err(AuthError::not_found("API Key not found"));
+            }
+        }
+        ApiKeyReferences::Organization => {
+            require_org_api_key_permission(ctx, user_id, &api_key.reference_id, action).await?;
+        }
+    }
+
     Ok(api_key)
+}
+
+/// Authorize a user against an organization-owned API key, mirroring
+/// upstream's `checkOrgApiKeyPermission`.
+pub async fn require_org_api_key_permission(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    user_id: &str,
+    organization_id: &str,
+    action: &str,
+) -> AuthResult<()> {
+    use crate::plugins::api_key::{ApiKeyErrorCode, api_key_error};
+    use crate::plugins::organization::rbac::{Action, Resource, has_permission};
+
+    let Some(member) = ctx.database.get_member(organization_id, user_id).await? else {
+        return Err(api_key_error(ApiKeyErrorCode::UserNotMemberOfOrganization));
+    };
+
+    // Upstream passes `allowCreatorAllPermissions`, so the creator role clears
+    // every action without consulting the statements.
+    if member.role == "owner" {
+        return Ok(());
+    }
+
+    let allowed = Action::parse(action)
+        .map(|action| {
+            has_permission(
+                &member.role,
+                &Resource::ApiKey,
+                &action,
+                &std::collections::HashMap::new(),
+            )
+        })
+        .unwrap_or(false);
+
+    if allowed {
+        Ok(())
+    } else {
+        Err(api_key_error(
+            ApiKeyErrorCode::InsufficientApiKeyPermissions,
+        ))
+    }
 }
 
 /// Fetch the user's credential account, if present.

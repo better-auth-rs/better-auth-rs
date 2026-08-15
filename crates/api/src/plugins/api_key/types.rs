@@ -8,6 +8,13 @@ use validator::Validate;
 
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct CreateKeyRequest {
+    /// Which api-key configuration to create under; the default when absent.
+    #[serde(rename = "configId")]
+    pub config_id: Option<String>,
+    /// Owning organization, required when the configuration references
+    /// organizations.
+    #[serde(rename = "organizationId")]
+    pub organization_id: Option<String>,
     pub name: Option<String>,
     pub prefix: Option<String>,
     #[serde(rename = "expiresIn")]
@@ -29,6 +36,9 @@ pub(crate) struct CreateKeyRequest {
 
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct UpdateKeyRequest {
+    /// Which api-key configuration the key belongs to.
+    #[serde(rename = "configId")]
+    pub config_id: Option<String>,
     #[serde(rename = "keyId")]
     #[validate(length(min = 1, message = "Key ID is required"))]
     pub key_id: String,
@@ -59,6 +69,9 @@ pub(crate) struct UpdateKeyRequest {
 
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct DeleteKeyRequest {
+    /// Which api-key configuration the key belongs to.
+    #[serde(rename = "configId")]
+    pub config_id: Option<String>,
     #[serde(rename = "keyId")]
     #[validate(length(min = 1, message = "Key ID is required"))]
     pub key_id: String,
@@ -72,6 +85,8 @@ pub(crate) struct DeleteKeyRequest {
 #[derive(Debug, Default)]
 pub(crate) struct ListKeysQuery {
     pub config_id: Option<String>,
+    /// List organization-owned keys instead of the caller's own.
+    pub organization_id: Option<String>,
     pub limit: Option<usize>,
     pub offset: Option<usize>,
     pub sort_by: Option<String>,
@@ -83,6 +98,7 @@ impl ListKeysQuery {
         let number = |key: &str| req.query.get(key).and_then(|value| value.parse().ok());
         Self {
             config_id: req.query.get("configId").cloned(),
+            organization_id: req.query.get("organizationId").cloned(),
             limit: number("limit"),
             offset: number("offset"),
             sort_by: req.query.get("sortBy").cloned(),
