@@ -2,12 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [master, v1]
+    branches: [master]
   pull_request:
-    branches: [master, v1]
+    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
+  # The Test job builds the workspace and compat-tests/rust-server, which is a
+  # separate manifest with its own target directory. Debug info for two full
+  # dependency trees is enough to starve a hosted runner.
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
 
 jobs:
   fmt:
