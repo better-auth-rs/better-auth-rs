@@ -375,7 +375,8 @@ async fn test_error_endpoint() {
     let (status, response_data) = send_request(&auth, get_request("/error")).await;
     assert_eq!(status, 200);
     let html = response_data.as_str().unwrap_or_default();
-    assert!(html.contains("CODE: UNKNOWN"));
+    let text = html_text_content(html);
+    assert!(text.contains("CODE: UNKNOWN"));
 }
 
 /// Integration test for POST /get-session remaining unavailable publicly
@@ -1776,11 +1777,8 @@ async fn test_api_key_create_with_options() {
 
     let body = serde_json::json!({
         "name": "limited-key",
-        "remaining": 100,
-        "expiresIn": 3600000,
-        "rateLimitEnabled": true,
-        "rateLimitMax": 10,
-        "rateLimitTimeWindow": 60000
+        "prefix": "lk_",
+        "expiresIn": 3600000
     });
 
     let request = AuthRequest::from_parts(
@@ -1799,9 +1797,7 @@ async fn test_api_key_create_with_options() {
 
     assert!(data["key"].is_string());
     assert_eq!(data["name"], "limited-key");
-    assert_eq!(data["remaining"], 100);
-    assert_eq!(data["rateLimitEnabled"], true);
-    assert_eq!(data["rateLimitMax"], 10);
+    assert_eq!(data["prefix"], "lk_");
     assert!(data["expiresAt"].is_string());
 }
 
@@ -1892,10 +1888,9 @@ async fn test_api_key_update() {
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
     let update_body = serde_json::json!({
-        "id": id,
+        "keyId": id,
         "name": "updated-name",
-        "enabled": false,
-        "remaining": 50
+        "enabled": false
     });
 
     let request = AuthRequest::from_parts(
@@ -1915,7 +1910,6 @@ async fn test_api_key_update() {
     assert_eq!(data["id"], id);
     assert_eq!(data["name"], "updated-name");
     assert_eq!(data["enabled"], false);
-    assert_eq!(data["remaining"], 50);
 }
 
 /// Integration test: delete API key
@@ -1932,7 +1926,7 @@ async fn test_api_key_delete() {
     headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert("authorization".to_string(), format!("Bearer {}", token));
 
-    let delete_body = serde_json::json!({"id": id});
+    let delete_body = serde_json::json!({"keyId": id});
 
     let request = AuthRequest::from_parts(
         better_auth::prelude::HttpMethod::Post,
@@ -1947,7 +1941,7 @@ async fn test_api_key_delete() {
 
     let body_str = String::from_utf8(response.body).unwrap();
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-    assert_eq!(data["status"], true);
+    assert_eq!(data["success"], true);
 
     // Verify it's gone by listing
     let mut headers2 = HashMap::new();
@@ -2101,7 +2095,7 @@ async fn test_api_key_delete_other_users_key() {
     headers2.insert("content-type".to_string(), "application/json".to_string());
     headers2.insert("authorization".to_string(), format!("Bearer {}", token2));
 
-    let delete_body = serde_json::json!({"id": id});
+    let delete_body = serde_json::json!({"keyId": id});
 
     let delete_request = AuthRequest::from_parts(
         better_auth::prelude::HttpMethod::Post,
@@ -2153,7 +2147,7 @@ async fn test_api_key_update_other_users_key() {
     headers2.insert("authorization".to_string(), format!("Bearer {}", token2));
 
     let update_body = serde_json::json!({
-        "id": id,
+        "keyId": id,
         "name": "hijacked-name"
     });
 

@@ -21,6 +21,7 @@ use better_auth::{
     prelude::{AuthRequest, HttpMethod},
 };
 use better_auth_seaorm::{Database, DatabaseConnection, SeaOrmStore};
+use compat::helpers::html_text_content;
 use serde_json::Value;
 
 type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
@@ -519,13 +520,10 @@ async fn test_contract_error_endpoint() {
         html.contains("ERROR"),
         "error page should contain ERROR heading"
     );
+    let text = html_text_content(html);
     assert!(
-        html.contains("UNKNOWN"),
-        "error page should contain the UNKNOWN error code"
-    );
-    assert!(
-        html.contains("CODE:"),
-        "error page should contain CODE: label"
+        text.contains("CODE: UNKNOWN"),
+        "error page should contain the CODE: UNKNOWN error code label"
     );
     assert!(
         html.contains("Ask AI"),

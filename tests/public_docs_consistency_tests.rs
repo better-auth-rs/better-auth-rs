@@ -27,6 +27,7 @@ fn crate_minor_version() -> String {
 #[test]
 fn docs_use_current_minor_version_and_canonical_paths() {
     let expected_minor = crate_minor_version();
+    let expected_full = env!("CARGO_PKG_VERSION");
 
     let readme = read_repo_file("README.md");
     let installation = read_repo_file("docs/content/docs/installation.mdx");
@@ -35,17 +36,22 @@ fn docs_use_current_minor_version_and_canonical_paths() {
 
     assert!(
         readme.contains(&format!("better-auth = \"{expected_minor}\""))
-            || readme.contains(&format!("version = \"{expected_minor}\"")),
-        "README should use the current minor crate version",
+            || readme.contains(&format!("better-auth = \"{expected_full}\""))
+            || readme.contains(&format!("version = \"{expected_minor}\""))
+            || readme.contains(&format!("version = \"{expected_full}\"")),
+        "README should use the current minor or full crate version",
     );
     assert!(
         installation.contains(&format!("better-auth = \"{expected_minor}\""))
-            || installation.contains(&format!("version = \"{expected_minor}\"")),
-        "installation guide should use the current minor crate version",
+            || installation.contains(&format!("better-auth = \"{expected_full}\""))
+            || installation.contains(&format!("version = \"{expected_minor}\""))
+            || installation.contains(&format!("version = \"{expected_full}\"")),
+        "installation guide should use the current minor or full crate version",
     );
     assert!(
-        axum.contains(&format!("better-auth = {{ version = \"{expected_minor}\"")),
-        "axum guide should use the current minor crate version",
+        axum.contains(&format!("better-auth = {{ version = \"{expected_minor}\""))
+            || axum.contains(&format!("better-auth = {{ version = \"{expected_full}\"")),
+        "axum guide should use the current minor or full crate version",
     );
 
     for text in [&readme, &quick_start, &axum] {

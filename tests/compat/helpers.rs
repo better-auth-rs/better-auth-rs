@@ -436,6 +436,128 @@ pub async fn send_request(auth: &TestAuth, req: AuthRequest) -> (u16, Value) {
     (status, json)
 }
 
+fn decode_html_entities(text: &str) -> String {
+    let mut decoded = String::with_capacity(text.len());
+    let bytes = text.as_bytes();
+    let mut i = 0;
+
+    while i < bytes.len() {
+        if bytes[i] == b'&' {
+            if let Some(offset) = text[i + 1..].find(';') {
+                let end = i + 1 + offset;
+                let entity = &text[i + 1..end];
+
+                let replacement = match entity {
+                    "nbsp" => Some(" ".to_string()),
+                    "amp" => Some("&".to_string()),
+                    "lt" => Some("<".to_string()),
+                    "gt" => Some(">".to_string()),
+                    "quot" => Some("\"".to_string()),
+                    "apos" => Some("'".to_string()),
+                    _ => decode_numeric_html_entity(entity),
+                };
+
+                if let Some(replacement) = replacement {
+                    decoded.push_str(&replacement);
+                    i = end + 1;
+                    continue;
+                }
+            }
+        }
+
+        let ch = text[i..]
+            .chars()
+            .next()
+            .unwrap_or_else(|| panic!("text slice should start with a valid UTF-8 character"));
+        decoded.push(ch);
+        i += ch.len_utf8();
+    }
+
+    decoded
+}
+
+fn decode_numeric_html_entity(entity: &str) -> Option<String> {
+    let codepoint = if let Some(hex) = entity
+        .strip_prefix("#x")
+        .or_else(|| entity.strip_prefix("#X"))
+    {
+        u32::from_str_radix(hex, 16).ok()?
+    } else if let Some(decimal) = entity.strip_prefix('#') {
+        decimal.parse::<u32>().ok()?
+    } else {
+        return None;
+    };
+
+    char::from_u32(codepoint).map(|ch| ch.to_string())
+}
+
+fn normalize_whitespace(text: &str) -> String {
+    let mut normalized = String::with_capacity(text.len());
+    let mut pending_space = false;
+
+    for ch in text.chars() {
+        if ch.is_whitespace() {
+            pending_space = !normalized.is_empty();
+            continue;
+        }
+
+        if pending_space {
+            normalized.push(' ');
+            pending_space = false;
+        }
+
+        normalized.push(ch);
+    }
+
+    normalized.trim().to_string()
+}
+
+/// Strip markup, decode common HTML entities, and normalize whitespace so tests
+/// can assert on rendered text.
+pub fn html_text_content(html: &str) -> String {
+    let mut text = String::with_capacity(html.len());
+    let mut in_tag = false;
+    let mut pending_space = false;
+
+    for ch in html.chars() {
+        match ch {
+            '<' => {
+                in_tag = true;
+                pending_space = !text.is_empty();
+            }
+            '>' => in_tag = false,
+            _ if in_tag => {}
+            _ if ch.is_whitespace() => pending_space = !text.is_empty(),
+            _ => {
+                if pending_space {
+                    text.push(' ');
+                    pending_space = false;
+                }
+                text.push(ch);
+            }
+        }
+    }
+
+    normalize_whitespace(&decode_html_entities(&text))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::html_text_content;
+
+    #[test]
+    fn html_text_content_decodes_entities_and_normalizes_whitespace() {
+        assert_eq!(
+            html_text_content("<div><span>CODE&#58;</span>&nbsp;<span>UNKNOWN</span></div>"),
+            "CODE: UNKNOWN"
+        );
+        assert_eq!(
+            html_text_content("<p>A&amp;B &lt;ok&gt; &#x26; &#38;</p>"),
+            "A&B <ok> & &"
+        );
+    }
+}
+
 pub async fn signup_user(
     auth: &TestAuth,
     email: &str,

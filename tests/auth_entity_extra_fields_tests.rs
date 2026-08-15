@@ -1,11 +1,13 @@
 //! Verifies that `AuthEntity` derive accepts extra fields beyond the core set.
 
+#![cfg(feature = "seaorm2")]
 #![allow(
     unreachable_pub,
     reason = "SeaORM DeriveEntityModel requires pub types"
 )]
 
 use better_auth::seaorm::AuthEntity;
+use better_auth::seaorm::SeaOrmUserModel;
 use better_auth::seaorm::sea_orm;
 use better_auth::seaorm::sea_orm::entity::prelude::*;
 
@@ -46,7 +48,6 @@ mod user_with_extras {
 #[test]
 fn extra_fields_get_not_set_in_new_active() {
     use better_auth::prelude::CreateUser;
-    use better_auth::seaorm::SeaOrmUserModel;
     use chrono::Utc;
     use sea_orm::ActiveValue;
 

@@ -9,3 +9,7 @@ CLAUDE.md
 AGENTS.md
 .codex
 .codex/
+.zed/
+
+# Stakpak session files
+.stakpak/session*
