@@ -32,7 +32,14 @@ if (!outputPath) {
 }
 
 const { betterAuth } = await import("better-auth/minimal");
-const plugins = await import("better-auth/plugins");
+const barrel = await import("better-auth/plugins");
+
+// apiKey left the `better-auth/plugins` barrel in better-auth 1.5.0.
+const plugins = { ...barrel };
+if (typeof plugins.apiKey !== "function") {
+  const { apiKey } = await import("@better-auth/api-key");
+  plugins.apiKey = apiKey;
+}
 const { passkey } = await import("@better-auth/passkey");
 
 const requiredPlugin = (name, ...factoryArgs) => {

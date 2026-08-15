@@ -3,8 +3,9 @@
 import { Database } from "bun:sqlite";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
-import { getMigrations } from "better-auth/db";
-import { admin, apiKey, deviceAuthorization, twoFactor, username } from "better-auth/plugins";
+import { getMigrations } from "better-auth/db/migration";
+import { apiKey } from "@better-auth/api-key";
+import { admin, deviceAuthorization, twoFactor, username } from "better-auth/plugins";
 import { organization } from "better-auth/plugins/organization";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 
@@ -244,7 +245,7 @@ const authOptions = {
   user: {
     changeEmail: {
       enabled: true,
-      async sendChangeEmailVerification({
+      async sendChangeEmailConfirmation({
         user,
         newEmail,
         url,
