@@ -3,6 +3,298 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.0.0-alpha.1](https://github.com/better-auth-rs/better-auth-rs/compare/v0.10.0...v1.0.0-alpha.1) - 2026-08-15
+
+### Bug Fixes
+
+- resolve AuthEntity crate paths for examples and integration tests
+
+- delete_expired_api_keys as single DB query, fix schema default
+
+- re-derive request_count from locked row inside transaction
+
+- check window expiry inside rate-limit transaction
+
+- transparent logo, version refs, example response parsing, and account update mappings
+
+- replace hardcoded SQL column names with Auth*Meta trait methods in SqlxAdapter ([#23](https://github.com/better-auth-rs/better-auth-rs/pull/23))
+
+- resolve cargo fmt and clippy warnings
+
+- remove verify and delete-all-expired HTTP routes
+
+- reject expiresIn null when disable_custom_expires_time is set
+
+- remove clippy indexing warning
+
+- harden auth cleanup flow
+
+- use try_seconds for impersonation session duration
+
+- address review follow-ups
+
+- address review feedback
+
+- prevent concurrent redemption
+
+- make device decisions atomic
+
+- atomic rate-limit check, deterministic list ordering
+
+- propagate list-users DB errors, fix MemoryStore unban clearing
+
+- stop discarding session-refresh errors
+
+- update tests and examples for schema-generic APIs
+
+- validate verify-email callbackURL and skip-serialize AccountView.password
+
+- sanitize error page XSS and respect disable_origin_check in redirects
+
+- align wire behavior with TS reference for phase 5
+
+- start field, list ordering, server-only enforcement
+
+- empty update check, nullable expiresIn on update
+
+- correct phase 0-5 audit coverage
+
+- tighten phase 6 audit follow-ups
+
+- honor creator role in member guards
+
+- replace rust,ignore code fences with rust for Shiki compat
+
+- restore phase 6 parity
+
+- move openapi route to private test path
+
+- align phase 0-9 client contract
+
+- align phase 0 compat surface
+
+- normalize lookup and avoid double verify
+
+- enforce invariants on writes
+
+- narrow username follow-ups
+
+- align error page test with actual TS template
+
+- align docs and examples with compat surface
+
+- generate openapi schema from rust runtime
+
+- clear cookies with Max-Age=0 and no Expires
+
+- bound request body reads
+
+
+### Build
+
+- include seaorm crates in release-plz
+
+
+### CI
+
+- run CI on the v1 branch
+
+- build the compat server before the alignment checks
+
+
+### Chores
+
+- satisfy clippy and rustdoc on stable 1.97
+
+- bump workspace to 0.10.0
+
+- refresh workspace dependencies
+
+- bump version to 1.0.0-alpha.1
+
+
+### Documentation
+
+- clarify compatibility contract
+
+- update snippets for explicit schema
+
+- add context for schema snippets
+
+- update for CLI, optional plugin fields, and seaorm2 feature
+
+- insert Phase 4 for device authorization grant
+
+- update plugin docs and roadmap for phase 5
+
+- align ts public route plan
+
+- remove local path assumptions
+
+- drop public organization add-member route
+
+- rebalance later phase plan
+
+- move passkey and admin earlier
+
+- move two-factor ahead of jwt
+
+- promote admin stateful flows to phase 10
+
+- warn that v1 is in alpha
+
+
+### Features
+
+- require root feature path
+
+- allow extra fields in AuthEntity derive
+
+- add #[auth(from_row)] derive macro and Sea-ORM example
+
+- implement passkey plugin and harden verification flow
+
+- add PluginConfig derive macro
+
+- align Rust auth surface with TS better-auth through Phase 3 (social OAuth) ([#54](https://github.com/better-auth-rs/better-auth-rs/pull/54))
+
+- add wire response views
+
+- add wire module files
+
+- add feature-gated root integration
+
+- add `better-auth-rs generate` command
+
+- allow extra fields in AuthEntity derive
+
+- add TLS backend feature flags for reqwest
+
+- implement phase 4 device flow
+
+- align phase 6 compat behavior
+
+- implement stage 7 account followups
+
+- align phase 8 contract
+
+- add passkey fullstack flow
+
+- align phase 9 contract
+
+- implement /is-username-available endpoint
+
+- align phase 10 stateful flows
+
+- align phase 11 and 12 flows
+
+- finish phase 12 alignment
+
+
+### Refactoring
+
+- make plugin fields optional in AuthEntity derive
+
+- remove unused crates and rename workspace directories
+
+- split DatabaseAdapter into sub-traits and clean up architecture
+
+- split large files into modules and
+
+- accept auth traits in core helpers
+
+- use generic session helper path
+
+- genericize send-email helpers
+
+- load schema user from session
+
+- relax session helper inputs
+
+- use schema session in auth helper
+
+- genericize verify-email session input
+
+- use wire session views
+
+- use wire response views
+
+- use wire user views
+
+- use wire auth views
+
+- use wire user view
+
+- use wire auth views
+
+- use wire user views
+
+- use wire session view
+
+- repair fallout from dto export removal
+
+- remove #[cfg(test)] hacks, extract rate limiting
+
+- type account-info provider errors
+
+- use wire callback views
+
+- return schema models for account and verification
+
+- split plugin types from common types
+
+- consolidate plugin entity views into core wire module
+
+- move all counter mutations into transactional store method
+
+- adopt app-owned auth schema
+
+- remove legacy bundled surface
+
+- use schema models in runtime flow
+
+- delete dead internal scaffolding
+
+- make database hooks schema-aware
+
+- hide legacy auth dto structs
+
+- remove legacy auth dto internals
+
+- support app-owned legacy schemas
+
+- split seaorm integration crate
+
+- migrate tests and harnesses
+
+- finalize green split rollout
+
+- remove transition aliases
+
+- polish integration surface
+
+- align password storage with TS account model
+
+- demonstrate minimal core-only entity schema
+
+- AST-based schema generation with shared field registry
+
+
+### Tests
+
+- prune low-value unit coverage
+
+- add upstream markers to is-username-available tests
+
+- validate axum example source
+
+- update harness for schema-native auth
+
+
+### wip
+
+- drop legacy dto re-exports
+
 ## [0.9.0](https://github.com/better-auth-rs/better-auth-rs/compare/v0.8.0...v0.9.0) - 2026-03-11
 
 ### Bug Fixes
