@@ -72,8 +72,11 @@ pub(crate) async fn invite_member_core(
         .collect();
 
     if !unknown_roles.is_empty() {
+        // Upstream's invite path throws `new APIError` with the code inlined in
+        // the message and no `code` field — unlike the member path, which sets
+        // both. See organization/routes/crud-invites.ts.
         return Err(AuthError::bad_request(format!(
-            "Role not found: {}",
+            "ROLE_NOT_FOUND: {}",
             unknown_roles.join(", ")
         )));
     }
@@ -210,6 +213,14 @@ pub(crate) async fn list_user_invitations_core(
     user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<UserInvitationResponse<InvitationView>>> {
+    // Upstream refuses to list invitations for a session whose email is not
+    // verified, so an unverified address cannot enumerate what it was invited to.
+    if !user.email_verified() {
+        return Err(AuthError::forbidden(
+            "Email verification required to view or list invitations for the session email",
+        ));
+    }
+
     let user_email = user
         .email()
         .ok_or_else(|| AuthError::bad_request("User has no email"))?;

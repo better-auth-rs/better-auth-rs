@@ -359,7 +359,8 @@ async fn test_stop_impersonating_without_impersonated_session_returns_bad_reques
     assert_eq!(
         json_body(&response),
         serde_json::json!({
-            "code": "YOU_ARE_NOT_IMPERSONATING_ANYONE",
+            // Upstream throws this via `APIError.fromStatus`, which carries no
+            // code — only errors built from a code constant have one.
             "message": "You are not impersonating anyone"
         })
     );

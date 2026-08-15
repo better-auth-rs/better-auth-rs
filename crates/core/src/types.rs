@@ -528,7 +528,9 @@ pub struct ErrorMessageResponse {
 /// error response shape.
 #[derive(Debug, Serialize)]
 pub struct ErrorCodeMessageResponse {
-    pub code: String,
+    /// Omitted when upstream has no explicit code for this error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
     pub message: String,
 }
 

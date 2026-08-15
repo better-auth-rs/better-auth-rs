@@ -47,6 +47,9 @@ pub enum AuthError {
     Conflict(String),
 
     #[error("{0}")]
+    MethodNotAllowed(String),
+
+    #[error("{0}")]
     PayloadTooLarge(String),
 
     #[error("{0}")]
@@ -97,6 +100,8 @@ impl AuthError {
             Self::UserNotFound | Self::NotFound(_) => 404,
             // 409
             Self::Conflict(_) => 409,
+            // 405
+            Self::MethodNotAllowed(_) => 405,
             // 413
             Self::PayloadTooLarge(_) => 413,
             // 422
@@ -116,25 +121,28 @@ impl AuthError {
         }
     }
 
-    /// Derive the error code from the message, matching the TS better-auth
-    /// behavior: `message.toUpperCase().replace(/ /g, "_").replace(/[^A-Z0-9_]/g, "")`.
-    pub fn code_from_message(message: &str) -> String {
-        message
-            .to_uppercase()
-            .chars()
-            .map(|c| if c == ' ' { '_' } else { c })
-            .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
-            .collect()
+    /// Resolve the wire error code for a message, if upstream defines one.
+    ///
+    /// better-auth 1.5 replaced message-derived codes with explicit constants,
+    /// and only errors built from one of those constants carry a `code` at all
+    /// (`APIError.from` sets it; a plain `new APIError(status, { message })`
+    /// does not). So an unknown message yields `None` and the field is omitted,
+    /// rather than being back-derived from the text.
+    pub fn code_from_message(message: &str) -> Option<String> {
+        crate::error_codes::upstream_code(message).map(str::to_string)
     }
 
     /// Compute the HTTP status, error code, and user-facing message.
     ///
+    /// The code is `None` for messages upstream has no constant for; those
+    /// responses carry only a `message`.
+    ///
     /// Internal errors (500) are logged and replaced with a generic message
     /// to avoid leaking details.
-    pub fn error_payload(&self) -> (u16, String, String) {
+    pub fn error_payload(&self) -> (u16, Option<String>, String) {
         let status = self.status_code();
         let (code, message) = match self {
-            Self::BannedUser(message) => ("BANNED_USER".to_string(), message.clone()),
+            Self::BannedUser(message) => (Some("BANNED_USER".to_string()), message.clone()),
             _ => {
                 let message = match status {
                     500 => {
@@ -185,6 +193,10 @@ impl AuthError {
 
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::Conflict(message.into())
+    }
+
+    pub fn method_not_allowed(message: impl Into<String>) -> Self {
+        Self::MethodNotAllowed(message.into())
     }
 
     pub fn payload_too_large(message: impl Into<String>) -> Self {
@@ -278,7 +290,7 @@ pub fn validation_error_response(
     let message = messages.join("; ");
 
     let body = crate::types::ErrorCodeMessageResponse {
-        code: "VALIDATION_ERROR".to_string(),
+        code: Some("VALIDATION_ERROR".to_string()),
         message,
     };
 
@@ -414,28 +426,70 @@ mod tests {
 
     // ── code_from_message ───────────────────────────────────────────────
 
-    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
+    // Upstream reference: BASE_ERROR_CODES in @better-auth/core — a message
+    // upstream defines a constant for carries that constant.
     #[test]
-    fn code_from_message_uppercases_and_replaces_spaces() {
+    fn code_from_message_returns_the_upstream_constant() {
         assert_eq!(
-            AuthError::code_from_message("User not found"),
-            "USER_NOT_FOUND"
+            AuthError::code_from_message("User not found").as_deref(),
+            Some("USER_NOT_FOUND")
         );
     }
 
-    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
+    // Upstream reference: packages/core/src/error/index.ts :: `APIError.from`
+    // attaches a code, while `new APIError(status, { message })` does not — so
+    // a message outside every upstream table has no code on the wire.
     #[test]
-    fn code_from_message_strips_special_chars() {
+    fn code_from_message_is_none_for_unknown_messages() {
+        assert_eq!(AuthError::code_from_message("invalid email!"), None);
+        assert_eq!(AuthError::code_from_message("Email is the same"), None);
+        assert_eq!(AuthError::code_from_message(""), None);
+    }
+
+    // Upstream reference: plugin tables built with `defineErrorCodes` are part
+    // of the same vocabulary, not just the base set.
+    #[test]
+    fn code_from_message_covers_plugin_tables() {
         assert_eq!(
-            AuthError::code_from_message("invalid email!"),
-            "INVALID_EMAIL"
+            AuthError::code_from_message("Username is already taken. Please try another.")
+                .as_deref(),
+            Some("USERNAME_IS_ALREADY_TAKEN")
         );
     }
 
-    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
+    // Upstream reference: BASE_ERROR_CODES in @better-auth/core ::
+    // packages/core/src/error/codes.ts — codes are explicit constants since
+    // better-auth 1.5, so these must not be re-derived from the message.
     #[test]
-    fn code_from_message_empty() {
-        assert_eq!(AuthError::code_from_message(""), "");
+    fn base_error_codes_are_not_derived_from_the_message() {
+        for (message, expected) in [
+            ("Invalid callbackURL", "INVALID_CALLBACK_URL"),
+            ("Invalid redirectURL", "INVALID_REDIRECT_URL"),
+            ("Invalid errorCallbackURL", "INVALID_ERROR_CALLBACK_URL"),
+            (
+                "Invalid newUserCallbackURL",
+                "INVALID_NEW_USER_CALLBACK_URL",
+            ),
+            ("Email is already verified", "EMAIL_ALREADY_VERIFIED"),
+            (
+                "Verification email isn't enabled",
+                "VERIFICATION_EMAIL_NOT_ENABLED",
+            ),
+            (
+                "Session expired. Re-authenticate to perform this action.",
+                "SESSION_EXPIRED",
+            ),
+            (
+                "Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+                "CROSS_SITE_NAVIGATION_LOGIN_BLOCKED",
+            ),
+        ] {
+            assert_eq!(
+                AuthError::code_from_message(message).as_deref(),
+                Some(expected),
+                "message {message:?} must carry the upstream constant"
+            );
+        }
     }
 
     // ── error_payload ───────────────────────────────────────────────────
@@ -443,10 +497,16 @@ mod tests {
     // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
     #[test]
     fn error_payload_for_client_error() {
+        // Not an upstream message, so it goes out without a code.
         let (status, code, message) = AuthError::bad_request("Missing field").error_payload();
         assert_eq!(status, 400);
-        assert_eq!(code, "MISSING_FIELD");
+        assert_eq!(code, None);
         assert_eq!(message, "Missing field");
+
+        let (status, code, message) = AuthError::bad_request("Field is required").error_payload();
+        assert_eq!(status, 400);
+        assert_eq!(code.as_deref(), Some("MISSING_FIELD"));
+        assert_eq!(message, "Field is required");
     }
 
     // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.

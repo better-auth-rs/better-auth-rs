@@ -18,6 +18,7 @@ pub mod config;
 pub mod email;
 pub mod entity;
 pub mod error;
+mod error_codes;
 pub mod hooks;
 pub mod middleware;
 pub mod openapi;
