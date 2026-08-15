@@ -94,9 +94,8 @@ pub async fn require_org_api_key_permission(
     };
 
     // Upstream passes `allowCreatorAllPermissions`, so the creator role clears
-    // every action without consulting the statements.
-    // Roles are composite (comma-separated), so the creator role counts when it
-    // is any one of them.
+    // every action without consulting the statements. Roles are composite
+    // (comma-separated), so holding it alongside others still counts.
     let creator_role = ctx
         .get_metadata(METADATA_CREATOR_ROLE)
         .and_then(|value| value.as_str().map(str::to_string))
