@@ -117,6 +117,18 @@ where
             .map_err(map_db_err)
     }
 
+    async fn claim_device_code(&self, id: &str, user_id: &str) -> AuthResult<bool> {
+        Entity::update_many()
+            .col_expr(Column::UserId, Expr::value(user_id))
+            .filter(Column::Id.eq(id))
+            .filter(Column::Status.eq("pending"))
+            .filter(Column::UserId.is_null())
+            .exec(self.connection())
+            .await
+            .map(|result| result.rows_affected == 1)
+            .map_err(map_db_err)
+    }
+
     async fn delete_device_code(&self, id: &str) -> AuthResult<()> {
         Entity::delete_by_id(id.to_owned())
             .exec(self.connection())

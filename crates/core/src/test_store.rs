@@ -591,7 +591,7 @@ impl ApiKeyStore for MemoryStore {
     async fn get_api_key_by_hash(&self, _hash: &str) -> AuthResult<Option<ApiKey>> {
         Ok(None)
     }
-    async fn list_api_keys_by_user(&self, _user_id: &str) -> AuthResult<Vec<ApiKey>> {
+    async fn list_api_keys_by_reference(&self, _user_id: &str) -> AuthResult<Vec<ApiKey>> {
         Ok(Vec::new())
     }
     async fn update_api_key(&self, _id: &str, _update: UpdateApiKey) -> AuthResult<ApiKey> {
@@ -738,6 +738,20 @@ impl DeviceCodeStore for MemoryStore {
             device_code.last_polled_at = last_polled_at;
         }
 
+        Ok(true)
+    }
+
+    async fn claim_device_code(&self, id: &str, user_id: &str) -> AuthResult<bool> {
+        let mut state = self.lock();
+        let Some(device_code) = state.device_codes.get_mut(id) else {
+            return Ok(false);
+        };
+
+        if device_code.status != "pending" || device_code.user_id.is_some() {
+            return Ok(false);
+        }
+
+        device_code.user_id = Some(user_id.to_string());
         Ok(true)
     }
 

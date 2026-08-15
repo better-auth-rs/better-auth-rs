@@ -38,6 +38,14 @@ fn device_verify_request(user_code: &str) -> better_auth_core::AuthRequest {
     test_helpers::create_auth_request(HttpMethod::Get, "/device", None, None, query)
 }
 
+/// `GET /device` as a signed-in user, which is what binds the code to them.
+/// `/device/approve` and `/device/deny` reject codes that were never claimed.
+fn device_claim_request(user_code: &str, token: &str) -> better_auth_core::AuthRequest {
+    let mut query = HashMap::new();
+    let _ = query.insert("user_code".to_string(), user_code.to_string());
+    test_helpers::create_auth_request(HttpMethod::Get, "/device", Some(token), None, query)
+}
+
 async fn create_context_with_user(
     email: &str,
 ) -> (
@@ -391,6 +399,11 @@ async fn test_device_approve_flow_creates_session_and_returns_oauth_token_respon
     let device_code = create_body["device_code"].as_str().unwrap().to_string();
     let user_code = create_body["user_code"].as_str().unwrap().to_string();
 
+    plugin
+        .handle_device_verify(&device_claim_request(&user_code, &session.token), &ctx)
+        .await
+        .unwrap();
+
     let approve_request = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
         "/device/approve",
@@ -439,6 +452,55 @@ async fn test_device_approve_flow_creates_session_and_returns_oauth_token_respon
     );
 }
 
+// Upstream reference: packages/better-auth/src/plugins/device-authorization/routes.ts ::
+// deviceApprove rejects a record with no userId (DEVICE_CODE_NOT_CLAIMED), so a
+// signed-in caller cannot approve a code they never claimed via `GET /device`.
+#[tokio::test]
+async fn test_device_approve_rejects_unclaimed_code() {
+    let plugin = DeviceAuthorizationPlugin::new();
+    let (ctx, _user, session) = create_context_with_user("unclaimed@example.com").await;
+
+    let create_request = test_helpers::create_auth_json_request_no_query(
+        HttpMethod::Post,
+        "/device/code",
+        None,
+        Some(serde_json::json!({ "client_id": "test-client" })),
+    );
+    let create_response = plugin
+        .handle_device_code(&create_request, &ctx)
+        .await
+        .unwrap();
+    let create_body = json_body(&create_response);
+    let device_code = create_body["device_code"].as_str().unwrap().to_string();
+    let user_code = create_body["user_code"].as_str().unwrap().to_string();
+
+    // Deliberately skip the `GET /device` claim.
+    let approve_request = test_helpers::create_auth_json_request_no_query(
+        HttpMethod::Post,
+        "/device/approve",
+        Some(&session.token),
+        Some(serde_json::json!({ "userCode": user_code })),
+    );
+    let approve_response = plugin
+        .handle_device_approve(&approve_request, &ctx)
+        .await
+        .unwrap();
+    let approve_body = json_body(&approve_response);
+
+    assert_eq!(approve_response.status, 400);
+    assert_eq!(approve_body["error"], "invalid_request");
+    assert_eq!(approve_body["error_description"], DEVICE_CODE_NOT_CLAIMED);
+
+    let stored = ctx
+        .database
+        .get_device_code_by_device_code(&device_code)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.status, DEVICE_STATUS_PENDING);
+    assert_eq!(stored.user_id, None);
+}
+
 // Upstream source: packages/better-auth/src/plugins/device-authorization/device-authorization.test.ts :: denial flow.
 #[tokio::test]
 async fn test_device_deny_flow_returns_access_denied_and_deletes_record() {
@@ -458,6 +520,11 @@ async fn test_device_deny_flow_returns_access_denied_and_deletes_record() {
     let create_body = json_body(&create_response);
     let device_code = create_body["device_code"].as_str().unwrap().to_string();
     let user_code = create_body["user_code"].as_str().unwrap().to_string();
+
+    plugin
+        .handle_device_verify(&device_claim_request(&user_code, &session.token), &ctx)
+        .await
+        .unwrap();
 
     let deny_request = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
@@ -507,6 +574,11 @@ async fn test_device_approve_requires_authentication_and_blocks_double_processin
         .unwrap();
     let create_body = json_body(&create_response);
     let user_code = create_body["user_code"].as_str().unwrap().to_string();
+
+    plugin
+        .handle_device_verify(&device_claim_request(&user_code, &session.token), &ctx)
+        .await
+        .unwrap();
 
     let unauthenticated_request = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
@@ -570,6 +642,11 @@ async fn test_device_approve_allows_only_one_concurrent_decision() {
         .unwrap();
     let create_body = json_body(&create_response);
     let user_code = create_body["user_code"].as_str().unwrap().to_string();
+
+    plugin
+        .handle_device_verify(&device_claim_request(&user_code, &session.token), &ctx)
+        .await
+        .unwrap();
 
     let first_request = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
@@ -660,6 +737,11 @@ async fn test_device_token_allows_only_one_concurrent_redemption() {
     let create_body = json_body(&create_response);
     let device_code = create_body["device_code"].as_str().unwrap().to_string();
     let user_code = create_body["user_code"].as_str().unwrap().to_string();
+
+    plugin
+        .handle_device_verify(&device_claim_request(&user_code, &session.token), &ctx)
+        .await
+        .unwrap();
 
     let approve_request = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
