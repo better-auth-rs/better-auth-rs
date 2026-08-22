@@ -639,7 +639,7 @@ pub struct RateLimitErrorResponse {
 pub struct ValidationErrorResponse<'a> {
     pub code: &'static str,
     pub message: &'static str,
-    pub errors: std::collections::HashMap<&'a str, Vec<String>>,
+    pub errors: std::collections::HashMap<std::borrow::Cow<'a, str>, Vec<String>>,
 }
 
 /// Parameters for listing users (admin endpoint).
