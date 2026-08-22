@@ -240,7 +240,7 @@ impl axum::response::IntoResponse for AuthError {
 pub fn validation_error_response(
     errors: &validator::ValidationErrors,
 ) -> crate::types::AuthResponse {
-    let field_errors: std::collections::HashMap<&str, Vec<String>> = errors
+    let field_errors: std::collections::HashMap<_, Vec<String>> = errors
         .field_errors()
         .into_iter()
         .map(|(field, errs)| {
@@ -289,4 +289,24 @@ where
         .map_err(|e| validation_error_response(&e))?;
 
     Ok(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validation_error_response;
+
+    #[test]
+    fn validation_error_response_serializes_field_errors() {
+        let mut errors = validator::ValidationErrors::new();
+        let mut error = validator::ValidationError::new("email");
+        error.message = Some("Email is invalid".into());
+        errors.add("email", error);
+
+        let response = validation_error_response(&errors);
+        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+
+        assert_eq!(response.status, 422);
+        assert_eq!(body["code"], "VALIDATION_ERROR");
+        assert_eq!(body["errors"]["email"][0], "Email is invalid");
+    }
 }
