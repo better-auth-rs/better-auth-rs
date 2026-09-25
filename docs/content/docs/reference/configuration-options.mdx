@@ -29,6 +29,7 @@ This page documents the public configuration types in `crates/core/src/config.rs
 | `expires_in` | `chrono::Duration` | `7 days` | Session lifetime |
 | `update_age` | `Option<chrono::Duration>` | `Some(1 day)` | Age threshold before refreshing a session |
 | `disable_session_refresh` | `bool` | `false` | Disable automatic refresh entirely |
+| `defer_session_refresh` | `bool` | `false` | Allow `POST /get-session`, which reads the session without refreshing it; the `POST` form answers 405 otherwise |
 | `fresh_age` | `Option<chrono::Duration>` | `None` | Optional freshness window for sensitive actions |
 | `cookie_name` | `String` | `"better-auth.session_token"` | Cookie name used for session transport |
 | `cookie_secure` | `bool` | Derived from `base_url` | `true` for HTTPS URLs, `false` for HTTP URLs |
@@ -104,6 +105,7 @@ Refresh semantics:
 | `allow_different_emails` | `bool` | `false` | Allow linking accounts with different emails |
 | `allow_unlinking_all` | `bool` | `false` | Allow unlinking the last linked account |
 | `disable_implicit_linking` | `bool` | `false` | Only allow explicit linking via `link-social` |
+| `require_local_email_verified` | `bool` | `true` | Refuse to implicitly link a social account to an existing local account whose email is unverified |
 | `update_user_info_on_link` | `bool` | `false` | Refresh user info when linking an account |
 
 `OAuthStateStrategy` variants:

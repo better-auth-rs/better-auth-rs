@@ -34,6 +34,7 @@ This page is the authoritative v1 route inventory for phases 0-12. The pinned Ty
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/get-session` | Return the current session and user |
+| `POST` | `/get-session` | Same without a refresh; requires `session.defer_session_refresh` |
 | `POST` | `/sign-out` | Revoke the current session |
 | `GET` | `/list-sessions` | List active sessions for the current user |
 | `POST` | `/revoke-session` | Revoke one session by token |
@@ -82,7 +83,7 @@ This page is the authoritative v1 route inventory for phases 0-12. The pinned Ty
 |--------|------|-------------|
 | `POST` | `/api-key/create` | Create an API key |
 | `GET` | `/api-key/get` | Get one API key |
-| `GET` | `/api-key/list` | List API keys for the current user |
+| `GET` | `/api-key/list` | List API keys for the current user or an organization, paginated |
 | `POST` | `/api-key/update` | Update an API key |
 | `POST` | `/api-key/delete` | Delete an API key |
 

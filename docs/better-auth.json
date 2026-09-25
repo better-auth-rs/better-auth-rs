@@ -2,7 +2,7 @@
   "info": {
     "description": "OpenAPI schema for the better-auth-rs v1 docs surface.",
     "title": "Better Auth RS",
-    "version": "1.0.0-alpha.2"
+    "version": "1.0.0-alpha.3"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -482,6 +482,18 @@
     },
     "/get-session": {
       "get": {
+        "operationId": "get_session",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "get session",
+        "tags": [
+          "Default"
+        ]
+      },
+      "post": {
         "operationId": "get_session",
         "responses": {
           "200": {

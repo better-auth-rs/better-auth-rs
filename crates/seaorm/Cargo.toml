@@ -11,7 +11,7 @@ workspace = true
 
 [dependencies]
 better-auth-core = { workspace = true }
-better-auth-seaorm-macros = { version = "1.0.0-alpha.2", path = "../seaorm-macros" }
+better-auth-seaorm-macros = { version = "1.0.0-alpha.3", path = "../seaorm-macros" }
 
 async-trait = { workspace = true }
 chrono = { workspace = true }
