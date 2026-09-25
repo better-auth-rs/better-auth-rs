@@ -33,12 +33,13 @@ Use `better-auth-types` in a Rust client, including Dioxus apps targeting
 with Serde support and no authentication runtime dependency. Keep `better-auth`
 and `better-auth-core` in your backend dependencies.
 
-The new crate ships with the next release. After publication, use a versioned
-dependency matching your backend release (the workspace version is shown below):
+The new crate is planned for the next release, `1.0.0-alpha.3`. It is not included
+in `1.0.0-alpha.2`. The dependency below will be available after that release is
+published:
 
 ```toml title="Client Cargo.toml"
 [dependencies]
-better-auth-types = { version = "1.0.0-alpha.2", default-features = false }
+better-auth-types = { version = "1.0.0-alpha.3", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ```
