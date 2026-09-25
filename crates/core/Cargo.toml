@@ -10,6 +10,8 @@ repository = { workspace = true }
 workspace = true
 
 [dependencies]
+better-auth-types = { workspace = true, features = ["entity"] }
+
 # Asynchronous runtime
 tokio = { workspace = true }
 async-trait = { workspace = true }

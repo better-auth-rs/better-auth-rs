@@ -1,0 +1,20 @@
+[package]
+name = "better-auth-types"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "Shared Better Auth wire types for Rust servers and WebAssembly clients"
+repository = { workspace = true }
+
+[lints]
+workspace = true
+
+[features]
+default = ["entity"]
+entity = []
+
+[dependencies]
+# Do not inherit the server workspace's clock and wasm-bindgen features.
+chrono = { version = "0.4", default-features = false, features = ["serde", "std"] }
+serde = { workspace = true }
+serde_json = { workspace = true }

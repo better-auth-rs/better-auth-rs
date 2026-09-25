@@ -16,7 +16,6 @@ extern crate self as better_auth;
 
 pub mod config;
 pub mod email;
-pub mod entity;
 pub mod error;
 mod error_codes;
 pub mod hooks;
@@ -34,7 +33,8 @@ mod types_plugin;
 #[doc(hidden)]
 pub mod user_query;
 pub mod utils;
-pub mod wire;
+
+pub use better_auth_types::{entity, wire};
 
 // Re-export commonly used items
 pub use better_auth_macros::{AuthSchema, PluginConfig};

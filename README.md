@@ -136,10 +136,13 @@ Better Auth RS ships with a rich set of plugins. Enable only what you need:
 | Crate | Description |
 |-------|-------------|
 | [`better-auth`](https://crates.io/crates/better-auth) | Main crate — re-exports and framework integration |
+| [`better-auth-types`](crates/types) | Shared response views for Rust/WASM clients; optional server entity traits (ships next release) |
 | [`better-auth-core`](https://crates.io/crates/better-auth-core) | Core auth runtime, store, middleware, and error handling |
 | [`better-auth-api`](https://crates.io/crates/better-auth-api) | Plugin implementations |
 | [`better-auth-seaorm`](https://crates.io/crates/better-auth-seaorm) | SeaORM store, entity traits, and `AuthEntity` derive macro |
 | [`better-auth-cli`](https://crates.io/crates/better-auth-cli) | CLI tools (`better-auth-rs generate`) |
+
+For Dioxus and other Rust clients, see [shared types installation](docs/content/docs/installation.mdx#shared-types-for-rust-clients).
 
 ## Documentation
 

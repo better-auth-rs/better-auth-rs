@@ -26,6 +26,53 @@ better-auth = { version = "1.0.0-alpha.3", features = ["axum", "seaorm2"] }
 
 No features are enabled by default. The core library works with SeaORM-backed auth persistence and the framework-agnostic request/response types.
 
+## Shared Types for Rust Clients
+
+Use `better-auth-types` in a Rust client, including Dioxus apps targeting
+`wasm32-unknown-unknown`. It provides the same response views used by the server,
+with Serde support and no authentication runtime dependency. Keep `better-auth`
+and `better-auth-core` in your backend dependencies.
+
+The new crate is planned for the next release, `1.0.0-alpha.3`. It is not included
+in `1.0.0-alpha.2`. The dependency below will be available after that release is
+published:
+
+```toml title="Client Cargo.toml"
+[dependencies]
+better-auth-types = { version = "1.0.0-alpha.3", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+```
+
+Disabling default features excludes the server entity traits and their
+conversions. All response views remain available. The default `entity` feature
+is enabled by `better-auth-core` for server use. The types crate uses Chrono's
+`serde` and `std` features without its clock or JavaScript runtime dependencies.
+
+Deserialize the `/get-session` response using `UserView` and `SessionView`:
+
+```rust
+use better_auth_types::{SessionView, UserView};
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+struct SessionData {
+    user: UserView,
+    session: SessionView,
+}
+
+fn parse_session_response(body: &str) -> Result<Option<SessionData>, serde_json::Error> {
+    serde_json::from_str(body)
+}
+```
+
+An authenticated response contains `user` and `session`; an unauthenticated
+response is `null`, represented here by `None`. The views handle the wire field
+names, such as `emailVerified` and `expiresAt`, and timestamp deserialization.
+Account, organization, invitation, passkey, and API key views are also available.
+Existing server imports from `better_auth` and `better_auth_core` continue to use
+the same types.
+
 ## Minimum Supported Rust Version
 
 Better Auth requires Rust 1.85 or later (Rust 2024 edition).

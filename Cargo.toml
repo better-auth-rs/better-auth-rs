@@ -11,7 +11,7 @@ workspace = true
 
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/api", "crates/derive", "crates/seaorm", "crates/seaorm-macros", "crates/schema-registry", "crates/cli"]
+members = ["crates/core", "crates/types", "crates/api", "crates/derive", "crates/seaorm", "crates/seaorm-macros", "crates/schema-registry", "crates/cli"]
 exclude = ["examples/sqlx-custom-entities", "examples/fullstack/backend", "compat-tests/rust-server"]
 
 [workspace.package]
@@ -22,6 +22,7 @@ repository = "https://github.com/better-auth-rs/better-auth-rs"
 
 [workspace.dependencies]
 # Sub-crates
+better-auth-types = { version = "1.0.0-alpha.3", path = "crates/types" }
 better-auth-core = { version = "1.0.0-alpha.3", path = "crates/core" }
 better-auth-api = { version = "1.0.0-alpha.3", path = "crates/api", default-features = false }
 better-auth-macros = { version = "1.0.0-alpha.3", path = "crates/derive", package = "better-auth-macros" }

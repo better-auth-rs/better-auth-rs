@@ -573,6 +573,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "better-auth-macros",
+ "better-auth-types",
  "chrono",
  "cookie",
  "glob-match",
@@ -627,6 +628,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "better-auth-types"
+version = "1.0.0-alpha.2"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

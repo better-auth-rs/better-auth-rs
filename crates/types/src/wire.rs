@@ -1,18 +1,21 @@
-//! Concrete auth types for API responses and framework callbacks.
+//! Shared response shapes for Rust servers and clients.
 //!
-//! These types decouple JSON response shapes from app-owned SeaORM entities.
-//! Each view implements its corresponding `Auth*` entity trait, allowing it
-//! to be used in trait-generic framework code (hooks, helpers).
+//! These views support Serde serialization and deserialization, including on
+//! WebAssembly without a browser clock. The optional, default-on `entity` feature
+//! adds conversions from server entities and trait implementations for use in
+//! server hooks and helpers.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize, Serializer};
+#[cfg(feature = "entity")]
 use std::borrow::Cow;
 
+use crate::InvitationStatus;
+#[cfg(feature = "entity")]
 use crate::entity::{
     AuthAccount, AuthApiKey, AuthInvitation, AuthOrganization, AuthPasskey, AuthSession, AuthUser,
     AuthVerification,
 };
-use crate::types::InvitationStatus;
 
 /// Public user response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -41,6 +44,28 @@ pub struct UserView {
     pub ban_expires: Option<DateTime<Utc>>,
     #[serde(skip)]
     pub metadata: serde_json::Value,
+}
+
+/// Minimal user info for member-related API responses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemberUserView {
+    pub id: String,
+    pub email: Option<String>,
+    pub name: Option<String>,
+    pub image: Option<String>,
+}
+
+#[cfg(feature = "entity")]
+impl MemberUserView {
+    /// Construct from any type implementing [`AuthUser`].
+    pub fn from_user(user: &impl AuthUser) -> Self {
+        Self {
+            id: user.id().to_string(),
+            email: user.email().map(str::to_owned),
+            name: user.name().map(str::to_owned),
+            image: user.image().map(str::to_owned),
+        }
+    }
 }
 
 /// Public session response shape.
@@ -111,6 +136,7 @@ pub struct VerificationView {
     pub updated_at: DateTime<Utc>,
 }
 
+#[cfg(feature = "entity")]
 impl<T: AuthUser> From<&T> for UserView {
     fn from(user: &T) -> Self {
         Self {
@@ -133,6 +159,7 @@ impl<T: AuthUser> From<&T> for UserView {
     }
 }
 
+#[cfg(feature = "entity")]
 impl<T: AuthSession> From<&T> for SessionView {
     fn from(session: &T) -> Self {
         Self {
@@ -151,6 +178,7 @@ impl<T: AuthSession> From<&T> for SessionView {
     }
 }
 
+#[cfg(feature = "entity")]
 impl<T: AuthAccount> From<&T> for AccountView {
     fn from(account: &T) -> Self {
         Self {
@@ -171,6 +199,7 @@ impl<T: AuthAccount> From<&T> for AccountView {
     }
 }
 
+#[cfg(feature = "entity")]
 impl<T: AuthVerification> From<&T> for VerificationView {
     fn from(verification: &T) -> Self {
         Self {
@@ -184,6 +213,7 @@ impl<T: AuthVerification> From<&T> for VerificationView {
     }
 }
 
+#[cfg(feature = "entity")]
 impl AuthUser for UserView {
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
@@ -232,6 +262,7 @@ impl AuthUser for UserView {
     }
 }
 
+#[cfg(feature = "entity")]
 impl AuthSession for SessionView {
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
@@ -268,6 +299,7 @@ impl AuthSession for SessionView {
     }
 }
 
+#[cfg(feature = "entity")]
 impl AuthAccount for AccountView {
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
@@ -310,6 +342,7 @@ impl AuthAccount for AccountView {
     }
 }
 
+#[cfg(feature = "entity")]
 impl AuthVerification for VerificationView {
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
@@ -367,6 +400,7 @@ pub struct OrganizationView {
     pub updated_at: DateTime<Utc>,
 }
 
+#[cfg(feature = "entity")]
 impl<T: AuthOrganization> From<&T> for OrganizationView {
     fn from(org: &T) -> Self {
         Self {
@@ -398,6 +432,7 @@ pub struct InvitationView {
     pub created_at: DateTime<Utc>,
 }
 
+#[cfg(feature = "entity")]
 impl<T: AuthInvitation> From<&T> for InvitationView {
     fn from(inv: &T) -> Self {
         Self {
@@ -440,6 +475,7 @@ pub struct PasskeyView {
     pub aaguid: Option<String>,
 }
 
+#[cfg(feature = "entity")]
 impl<T: AuthPasskey> From<&T> for PasskeyView {
     fn from(pk: &T) -> Self {
         Self {
@@ -501,6 +537,7 @@ pub struct ApiKeyView {
     pub metadata: Option<serde_json::Value>,
 }
 
+#[cfg(feature = "entity")]
 impl<T: AuthApiKey> From<&T> for ApiKeyView {
     fn from(ak: &T) -> Self {
         Self {
@@ -541,8 +578,8 @@ mod tests {
             email: Some("ada@example.com".to_string()),
             email_verified: true,
             image: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            created_at: DateTime::UNIX_EPOCH,
+            updated_at: DateTime::UNIX_EPOCH,
             username: Some("ada".to_string()),
             display_username: Some("Ada".to_string()),
             two_factor_enabled: true,
@@ -553,7 +590,9 @@ mod tests {
             metadata: serde_json::json!({}),
         };
 
-        let json = serde_json::to_value(UserView::from(&user)).expect("serialize user view");
+        #[cfg(feature = "entity")]
+        let user = UserView::from(&user);
+        let json = serde_json::to_value(&user).expect("serialize user view");
         assert_eq!(json["emailVerified"], true);
         assert_eq!(json["displayUsername"], "Ada");
         assert_eq!(json["twoFactorEnabled"], true);
@@ -563,10 +602,10 @@ mod tests {
     fn session_view_serializes_camel_case() {
         let session = SessionView {
             id: "session-1".to_string(),
-            expires_at: Utc::now(),
+            expires_at: DateTime::UNIX_EPOCH,
             token: "token".to_string(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            created_at: DateTime::UNIX_EPOCH,
+            updated_at: DateTime::UNIX_EPOCH,
             ip_address: Some("127.0.0.1".to_string()),
             user_agent: Some("agent".to_string()),
             user_id: "user-1".to_string(),
@@ -575,8 +614,9 @@ mod tests {
             active: true,
         };
 
-        let json =
-            serde_json::to_value(SessionView::from(&session)).expect("serialize session view");
+        #[cfg(feature = "entity")]
+        let session = SessionView::from(&session);
+        let json = serde_json::to_value(&session).expect("serialize session view");
         assert_eq!(json["expiresAt"].is_string(), true);
         assert_eq!(json["ipAddress"], "127.0.0.1");
         assert_eq!(json["activeOrganizationId"], "org-1");
@@ -596,8 +636,8 @@ mod tests {
             refresh_token_expires_at: None,
             scope: None,
             password: Some("$2a$hash".to_string()),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            created_at: DateTime::UNIX_EPOCH,
+            updated_at: DateTime::UNIX_EPOCH,
         };
 
         let json = serde_json::to_value(&account).expect("serialize account view");

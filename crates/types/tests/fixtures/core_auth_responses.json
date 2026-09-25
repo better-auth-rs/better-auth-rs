@@ -1,0 +1,92 @@
+[
+  {
+    "version": "1.4.19",
+    "signup": {
+      "token": "fixture-session-token",
+      "user": {
+        "name": "Types Fixture",
+        "email": "types-fixture@example.com",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": "2026-09-06T18:03:16.717Z",
+        "updatedAt": "2026-09-06T18:03:16.717Z",
+        "id": "fixture-user"
+      }
+    },
+    "getSession": {
+      "session": {
+        "expiresAt": "2026-09-13T18:03:16.720Z",
+        "token": "fixture-session-token",
+        "createdAt": "2026-09-06T18:03:16.720Z",
+        "updatedAt": "2026-09-06T18:03:16.720Z",
+        "ipAddress": "",
+        "userAgent": "",
+        "userId": "fixture-user",
+        "id": "fixture-session"
+      },
+      "user": {
+        "name": "Types Fixture",
+        "email": "types-fixture@example.com",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": "2026-09-06T18:03:16.717Z",
+        "updatedAt": "2026-09-06T18:03:16.717Z",
+        "id": "fixture-user"
+      }
+    },
+    "unauthenticatedGetSession": null
+  },
+  {
+    "version": "1.6.29",
+    "signup": {
+      "token": "fixture-session-token",
+      "user": {
+        "name": "Types Fixture",
+        "email": "types-fixture@example.com",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": "2026-09-06T18:03:16.796Z",
+        "updatedAt": "2026-09-06T18:03:16.796Z",
+        "role": "user",
+        "banned": false,
+        "banReason": null,
+        "banExpires": null,
+        "twoFactorEnabled": false,
+        "username": null,
+        "displayUsername": null,
+        "id": "fixture-user"
+      }
+    },
+    "getSession": {
+      "session": {
+        "expiresAt": "2026-09-13T18:03:16.799Z",
+        "token": "fixture-session-token",
+        "createdAt": "2026-09-06T18:03:16.799Z",
+        "updatedAt": "2026-09-06T18:03:16.799Z",
+        "ipAddress": "",
+        "userAgent": "fixture-client",
+        "userId": "fixture-user",
+        "impersonatedBy": null,
+        "activeOrganizationId": null,
+        "id": "fixture-session"
+      },
+      "user": {
+        "name": "Types Fixture",
+        "email": "types-fixture@example.com",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": "2026-09-06T18:03:16.796Z",
+        "updatedAt": "2026-09-06T18:03:16.796Z",
+        "role": "user",
+        "banned": false,
+        "banReason": null,
+        "banExpires": null,
+        "twoFactorEnabled": false,
+        "username": null,
+        "displayUsername": null,
+        "id": "fixture-user"
+      }
+    },
+    "unauthenticatedGetSession": null
+  }
+]

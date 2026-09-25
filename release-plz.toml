@@ -75,6 +75,7 @@ version_group = "workspace"
 changelog_update = true
 changelog_path = "./CHANGELOG.md"
 changelog_include = [
+  "better-auth-types",
   "better-auth-core",
   "better-auth-api",
   "better-auth-macros",
@@ -90,6 +91,10 @@ git_release_body = """
 
 {{ changelog }}
 """
+
+[[package]]
+name = "better-auth-types"
+version_group = "workspace"
 
 [[package]]
 name = "better-auth-core"
