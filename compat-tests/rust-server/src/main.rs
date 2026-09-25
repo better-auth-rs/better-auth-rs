@@ -497,10 +497,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = AuthConfig::new(secret)
         .base_url(format!("http://localhost:{port}"))
         .password_min_length(8);
-    if let Some(domain) = std::env::var("COMPAT_COOKIE_DOMAIN")
-        .ok()
-        .filter(|domain| !domain.is_empty())
-    {
+    if let Ok(domain) = std::env::var("COMPAT_COOKIE_DOMAIN") {
         config = config.cross_sub_domain_cookies(domain);
     }
 

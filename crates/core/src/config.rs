@@ -768,6 +768,7 @@ pub struct IpAddressConfig {
 #[derive(Debug, Clone)]
 pub struct CrossSubDomainConfig {
     /// The parent domain (e.g. `".example.com"`).
+    /// An empty value is resolved from `base_url` by [`AuthConfig::validate`].
     pub domain: String,
 }
 
@@ -1064,7 +1065,12 @@ impl AuthConfig {
     pub fn is_path_disabled(&self, path: &str) -> bool {
         self.disabled_paths.iter().any(|disabled| disabled == path)
     }
-    pub fn validate(&self) -> Result<(), AuthError> {
+
+    /// Validate configuration and resolve an empty cross-subdomain cookie domain.
+    ///
+    /// `AuthBuilder::build` calls this before initializing plugins or serving
+    /// requests. Call it before using the cookie utilities directly as well.
+    pub fn validate(&mut self) -> Result<(), AuthError> {
         if self.secret.is_empty() {
             return Err(AuthError::config("Secret key cannot be empty"));
         }
@@ -1073,6 +1079,24 @@ impl AuthConfig {
             return Err(AuthError::config(
                 "Secret key must be at least 32 characters",
             ));
+        }
+
+        if let Some(cross_sub_domain) = &mut self.advanced.cross_sub_domain_cookies
+            && cross_sub_domain.domain.is_empty()
+        {
+            // TS createCookieGetter resolves the fallback once and refuses to
+            // initialize when cross-subdomain cookies have no usable domain.
+            let invalid_base_url = || {
+                AuthError::config(
+                    "base_url must have a hostname when cross-subdomain cookies are enabled without an explicit domain",
+                )
+            };
+            let url = url::Url::parse(&self.base_url).map_err(|_| invalid_base_url())?;
+            cross_sub_domain.domain = url
+                .host_str()
+                .filter(|hostname| !hostname.is_empty())
+                .ok_or_else(invalid_base_url)?
+                .to_owned();
         }
 
         Ok(())
@@ -1339,22 +1363,98 @@ mod tests {
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn validate_rejects_empty_secret() {
-        let cfg = AuthConfig::default();
+        let mut cfg = AuthConfig::default();
         assert!(cfg.validate().is_err());
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn validate_rejects_short_secret() {
-        let cfg = AuthConfig::new("short");
+        let mut cfg = AuthConfig::new("short");
         assert!(cfg.validate().is_err());
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn validate_accepts_valid_secret() {
-        let cfg = AuthConfig::new("test-secret-min-32-chars-1234567");
+        let mut cfg = AuthConfig::new("test-secret-min-32-chars-1234567");
         assert!(cfg.validate().is_ok());
+    }
+
+    // Upstream: cookies/index.ts :: createCookieGetter rejects a missing domain.
+    #[test]
+    fn validate_rejects_cross_subdomain_fallback_without_a_hostname() {
+        for base_url in [
+            "",
+            "localhost:3000",
+            "example.com",
+            "mailto:user@example.com",
+            "file:///tmp/auth",
+            "http://[",
+        ] {
+            let mut cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
+                .base_url(base_url)
+                .cross_sub_domain_cookies("");
+
+            assert!(
+                matches!(cfg.validate(), Err(AuthError::Config(message)) if message.contains("base_url must have a hostname")),
+                "base_url: {base_url:?}"
+            );
+        }
+    }
+
+    // Upstream: cookies/index.ts :: createCookieGetter uses the URL hostname.
+    #[test]
+    fn validate_resolves_cross_subdomain_fallback() -> Result<(), AuthError> {
+        for (base_url, domain) in [
+            ("https://auth.example.com:8443/api/auth", "auth.example.com"),
+            ("http://localhost:3000", "localhost"),
+            ("http://127.0.0.1:3000", "127.0.0.1"),
+            ("http://[::1]:3000", "[::1]"),
+        ] {
+            // Resolve only after configuration is complete, regardless of
+            // builder method order.
+            let mut cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
+                .cross_sub_domain_cookies("")
+                .base_url(base_url);
+            cfg.validate()?;
+            assert_eq!(
+                cfg.advanced
+                    .cross_sub_domain_cookies
+                    .as_ref()
+                    .map(|cookies| cookies.domain.as_str()),
+                Some(domain)
+            );
+            cfg.validate()?;
+        }
+        Ok(())
+    }
+
+    // Upstream: cookies/index.ts :: createCookieGetter prefers an explicit domain.
+    #[test]
+    fn validate_preserves_explicit_cross_subdomain_domains() -> Result<(), AuthError> {
+        for domain in ["example.com", ".example.com"] {
+            let mut cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
+                .base_url("localhost:3000")
+                .cross_sub_domain_cookies(domain);
+            cfg.validate()?;
+            assert_eq!(
+                cfg.advanced
+                    .cross_sub_domain_cookies
+                    .as_ref()
+                    .map(|cookies| cookies.domain.as_str()),
+                Some(domain)
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn validate_does_not_resolve_a_domain_when_cross_subdomain_cookies_are_disabled() {
+        let mut cfg =
+            AuthConfig::new("test-secret-min-32-chars-1234567").base_url("localhost:3000");
+        assert!(cfg.validate().is_ok());
+        assert!(cfg.advanced.cross_sub_domain_cookies.is_none());
     }
 
     // ── Defaults ────────────────────────────────────────────────────────

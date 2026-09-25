@@ -51,7 +51,7 @@ let config = AuthConfig::new("your-secret-key-at-least-32-chars")
 
 Auth cookies are set with `Domain=.example.com`, preserving the leading dot. Sign-out uses the same domain when clearing cookies, so the browser removes the shared session cookie. Cookie names beginning with `__Host-` always omit `Domain`.
 
-Without this setting, cookies remain scoped to the host that sets them. An empty domain string uses the hostname from `base_url`, excluding its port.
+Without this setting, cookies remain scoped to the host that sets them. An empty domain string uses the hostname from `base_url`, excluding its port. This is resolved when building the auth instance; initialization fails if `base_url` is invalid or has no hostname.
 
 ### Secure
 

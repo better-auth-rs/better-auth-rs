@@ -121,7 +121,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
     }
 
     /// Build the BetterAuth instance.
-    pub async fn build(self) -> AuthResult<BetterAuth<S>> {
+    pub async fn build(mut self) -> AuthResult<BetterAuth<S>> {
         // Validate configuration
         self.config.validate()?;
 

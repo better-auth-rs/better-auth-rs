@@ -214,7 +214,7 @@ const authOptions = {
   basePath: "/api/auth",
   secret: ["compat", "test", "only", "key", "not", "real", "minimum", "32chars"].join("-"),
   database,
-  advanced: process.env.COMPAT_COOKIE_DOMAIN
+  advanced: process.env.COMPAT_COOKIE_DOMAIN !== undefined
     ? {
         crossSubDomainCookies: {
           enabled: true,

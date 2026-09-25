@@ -82,7 +82,8 @@ fn start_reference_server(port: u16, cookie_domain: Option<&str>) -> ManagedChil
         .args(["run", "server.ts"])
         .current_dir(project_root().join("compat-tests/reference-server"))
         .env("PORT", port.to_string())
-        .env("COMPAT_COOKIE_DOMAIN", cookie_domain.unwrap_or_default())
+        .env_remove("COMPAT_COOKIE_DOMAIN")
+        .envs(cookie_domain.map(|domain| ("COMPAT_COOKIE_DOMAIN", domain)))
         .env("NO_PROXY", "localhost,127.0.0.1")
         .env("no_proxy", "localhost,127.0.0.1")
         .stdout(Stdio::inherit())
@@ -102,7 +103,8 @@ fn start_rust_compat_server(port: u16, cookie_domain: Option<&str>) -> ManagedCh
         ])
         .current_dir(project_root())
         .env("PORT", port.to_string())
-        .env("COMPAT_COOKIE_DOMAIN", cookie_domain.unwrap_or_default())
+        .env_remove("COMPAT_COOKIE_DOMAIN")
+        .envs(cookie_domain.map(|domain| ("COMPAT_COOKIE_DOMAIN", domain)))
         .env("NO_PROXY", "localhost,127.0.0.1")
         .env("no_proxy", "localhost,127.0.0.1")
         .stdout(Stdio::inherit())
@@ -119,7 +121,8 @@ fn run_bun_phase_suite(paths: &[&str], ts_port: u16, rust_port: u16, cookie_doma
         .args(paths)
         .current_dir(project_root().join("compat-tests/client-tests"))
         .env("AUTH_BASE_URL_TS", format!("http://localhost:{ts_port}"))
-        .env("COMPAT_COOKIE_DOMAIN", cookie_domain.unwrap_or_default())
+        .env_remove("COMPAT_COOKIE_DOMAIN")
+        .envs(cookie_domain.map(|domain| ("COMPAT_COOKIE_DOMAIN", domain)))
         .env(
             "AUTH_BASE_URL_RUST",
             format!("http://localhost:{rust_port}"),
@@ -167,6 +170,12 @@ async fn phase0_cross_subdomain_client_compat() {
         Some(".example.com"),
     )
     .await;
+}
+
+#[tokio::test]
+#[ignore = "starts external TS and Rust servers with an empty cross-subdomain cookie domain"]
+async fn phase0_cross_subdomain_fallback_client_compat() {
+    run_client_compat_with_cookie_domain(&["tests/phase0/cookie-domain.test.ts"], Some("")).await;
 }
 
 #[tokio::test]

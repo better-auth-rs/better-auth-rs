@@ -6,10 +6,13 @@ import { resetServerState } from "../../support/controls";
 import { createTracingFetch } from "../../support/trace";
 
 test.serial("Set-Cookie Domain serialization matches across signup, signin, and signout", async () => {
-  const expectedDomain = process.env.COMPAT_COOKIE_DOMAIN || undefined;
+  const configuredDomain = process.env.COMPAT_COOKIE_DOMAIN;
   const observations = [];
 
   for (const [label, baseURL] of [["TS", TS_BASE_URL], ["Rust", RUST_BASE_URL]]) {
+    const expectedDomain = configuredDomain === undefined
+      ? undefined
+      : configuredDomain || new URL(baseURL).hostname;
     await requireHealthy(baseURL, label);
     await resetServerState(baseURL);
 
