@@ -196,7 +196,7 @@ static PLUGINS: &[PluginSchema] = &[
                     f!("name", "String"),
                     f!("slug", "String"),
                     f!("logo", "Option<String>"),
-                    f!("metadata", "Json"),
+                    f!("metadata", "Option<Json>"),
                     f!("created_at", "DateTimeUtc"),
                     f!("updated_at", "DateTimeUtc"),
                 ],

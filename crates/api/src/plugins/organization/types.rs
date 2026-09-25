@@ -355,16 +355,7 @@ pub struct OrganizationResponse {
     pub logo: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: chrono::DateTime<chrono::Utc>,
-    pub metadata: Option<serde_json::Value>,
-}
-
-fn normalize_metadata(metadata: Option<&serde_json::Value>) -> Option<serde_json::Value> {
-    match metadata {
-        None => None,
-        Some(serde_json::Value::Null) => None,
-        Some(serde_json::Value::Object(map)) if map.is_empty() => None,
-        Some(value) => Some(value.clone()),
-    }
+    pub metadata: Option<String>,
 }
 
 impl CreatedOrganizationResponse {
@@ -375,7 +366,7 @@ impl CreatedOrganizationResponse {
             slug: organization.slug().to_string(),
             logo: organization.logo().map(str::to_owned),
             created_at: organization.created_at(),
-            metadata: normalize_metadata(organization.metadata()),
+            metadata: organization.metadata().cloned(),
         }
     }
 }
@@ -388,7 +379,11 @@ impl OrganizationResponse {
             slug: organization.slug().to_string(),
             logo: organization.logo().map(str::to_owned),
             created_at: organization.created_at(),
-            metadata: normalize_metadata(organization.metadata()),
+            // Better Auth 1.6.29 parses metadata for create/update responses,
+            // but read/delete responses expose the JSON-encoded database value.
+            // Re-encoding preserves the order returned by the store; PostgreSQL
+            // jsonb does not retain the original object key order.
+            metadata: organization.metadata().map(serde_json::Value::to_string),
         }
     }
 }

@@ -49,6 +49,23 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 | `invitation_limit` | `Option<usize>` | `Some(100)` | Max pending invitations per org |
 | `disable_organization_deletion` | `bool` | `false` | Prevent organization deletion |
 
+## Metadata
+
+Organization metadata is optional. Creating an organization without `metadata` stores no value; passing `{}` stores an empty object. Omitting `data.metadata` from an update preserves the existing value, while supplying an object replaces it.
+
+Response formats follow the TypeScript runtime:
+
+| Endpoints | Absent metadata | Object metadata |
+|-----------|-----------------|-----------------|
+| `/organization/create`, `/organization/update` | Field omitted | JSON object, including `{}` |
+| `/organization/list`, `/organization/get-full-organization`, `/organization/set-active`, `/organization/delete` | `null` | JSON-encoded string, such as `"{\"tier\":\"gold\"}"` |
+
+For the bundled SeaORM store, metadata object key order is preserved only on SQLite. PostgreSQL uses `jsonb`, which does not preserve object key order, so its JSON-encoded response strings can differ from TypeScript's stored `JSON.stringify` output. Enabling `serde_json`'s `preserve_order` cannot recover order discarded by the database.
+
+Generated SeaORM organization entities use `metadata: Option<Json>`, and the database column must allow SQL `NULL`. If you generated an entity or created a database before this field became optional, update the entity type and add a migration to your application's SeaORM migrator to make the column nullable while preserving existing values. See [Database](/docs/concepts/database) for the application-owned migration setup.
+
+The bundled migrator creates nullable metadata columns for fresh databases and upgrades existing columns without changing stored values or their storage type. SQLite requires version 3.35 or newer for this upgrade and SeaORM's `RETURNING` support; the bundled SQLite version already meets this requirement.
+
 ## RBAC (Role-Based Access Control)
 
 ### Default Roles
