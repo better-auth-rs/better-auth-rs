@@ -65,7 +65,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 ### Sign-In Flow with 2FA
 
 1. User signs in with email/password as normal
-2. If 2FA is enabled, instead of creating a session, a pending verification is created
+2. If 2FA is enabled, instead of creating a session, a pending verification is created and the response is `{ "twoFactorRedirect": true, "twoFactorMethods": [...] }`, where `twoFactorMethods` lists the factors this user can complete: `"totp"` once a secret is enrolled, `"otp"` when `send_otp` is configured
 3. User must verify with one of:
    - **TOTP**: Code from authenticator app
    - **OTP**: Code sent via email

@@ -3,12 +3,12 @@
 The most comprehensive authentication framework for Rust. Inspired by [Better Auth](https://www.better-auth.com/).
 
 > [!WARNING]
-> **v1 is in alpha.** The current release (`1.0.0-alpha.2`) is under active
+> **v1 is in alpha.** The current release (`1.0.0-alpha.3`) is under active
 > development. APIs, wire formats, and database schemas may change without
 > notice between alpha releases, and production use is not recommended yet.
 > Please report issues and feedback on [GitHub](https://github.com/better-auth-rs/better-auth-rs/issues).
 
-The pinned compatibility target is `better-auth@1.4.19`. The v1 release
+The pinned compatibility target is `better-auth@1.6.29`. The v1 release
 scope covers phases 0-12 in [ROADMAP.md](ROADMAP.md), and the TypeScript
 runtime plus `better-auth/client` harness remain the source of truth for
 wire behavior.
@@ -17,7 +17,7 @@ wire behavior.
 [![Documentation](https://docs.rs/better-auth/badge.svg)](https://docs.rs/better-auth)
 [![CI](https://github.com/better-auth-rs/better-auth-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/better-auth-rs/better-auth-rs/actions/workflows/ci.yml)
 [![License](https://img.shields.io/crates/l/better-auth.svg)](LICENSE-MIT)
-[![better-auth compatibility](https://img.shields.io/badge/better--auth-v1.4.19-blue?logo=typescript&logoColor=white)](https://www.npmjs.com/package/better-auth/v/1.4.19)
+[![better-auth compatibility](https://img.shields.io/badge/better--auth-v1.6.29-blue?logo=typescript&logoColor=white)](https://www.npmjs.com/package/better-auth/v/1.6.29)
 
 ## Features
 
@@ -34,7 +34,7 @@ wire behavior.
 
 ```toml
 [dependencies]
-better-auth = { version = "1.0.0-alpha.2", features = ["axum", "seaorm2"] }
+better-auth = { version = "1.0.0-alpha.3", features = ["axum", "seaorm2"] }
 ```
 
 Generate the schema scaffolding with the CLI:

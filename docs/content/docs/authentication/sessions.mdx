@@ -46,6 +46,7 @@ JWTs are a separate optional surface documented in phase 13. They are not how th
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/get-session` | Return the current session and user |
+| `POST` | `/get-session` | Same, without refreshing the session; requires `session.defer_session_refresh`, otherwise 405 |
 | `POST` | `/sign-out` | Revoke the current session and clear cookies |
 | `GET` | `/list-sessions` | List all active sessions for the current user |
 | `POST` | `/revoke-session` | Revoke one specific session by token |
@@ -74,6 +75,7 @@ let mut config = AuthConfig::new("secret...")
 config.session.expires_in = Duration::days(7);
 config.session.update_age = Some(Duration::days(1));
 config.session.disable_session_refresh = false;
+config.session.defer_session_refresh = false;
 config.session.fresh_age = Some(Duration::minutes(10));
 config.session.cookie_name = "better-auth.session_token".to_string();
 config.session.cookie_secure = true;
@@ -84,6 +86,7 @@ config.session.cookie_same_site = SameSite::Lax;
 - `update_age = Some(duration)`: refresh only when the session is older than that duration.
 - `update_age = None`: refresh on every access.
 - `disable_session_refresh = true`: never refresh automatically.
+- `defer_session_refresh = true`: additionally accept `POST /get-session`, which returns the session without touching its expiry so a prefetching client has no side effect.
 - `fresh_age`: optional window for treating a session as "fresh" for sensitive actions.
 
 ## Using Sessions in Axum Handlers
