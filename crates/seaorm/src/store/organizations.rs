@@ -156,7 +156,7 @@ mod tests {
     use crate::store::migrator::run_migrations;
 
     #[tokio::test]
-    async fn organization_metadata_keeps_key_order_in_storage()
+    async fn organization_metadata_keeps_key_order_in_sqlite_storage()
     -> Result<(), Box<dyn std::error::Error>> {
         let database = Database::connect("sqlite::memory:").await?;
         run_migrations(&database).await?;

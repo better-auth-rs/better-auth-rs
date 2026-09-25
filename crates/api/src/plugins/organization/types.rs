@@ -379,8 +379,10 @@ impl OrganizationResponse {
             slug: organization.slug().to_string(),
             logo: organization.logo().map(str::to_owned),
             created_at: organization.created_at(),
-            // Better Auth 1.4.19 parses metadata for create/update responses,
+            // Better Auth 1.6.29 parses metadata for create/update responses,
             // but read/delete responses expose the JSON-encoded database value.
+            // Re-encoding preserves the order returned by the store; PostgreSQL
+            // jsonb does not retain the original object key order.
             metadata: organization.metadata().map(serde_json::Value::to_string),
         }
     }

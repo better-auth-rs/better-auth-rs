@@ -27,6 +27,20 @@ All notable changes to this project will be documented in this file.
   `account_not_linked`.
 - `RolePermissions` (organization plugin) gained an `api_key` field, so
   struct literals must name it or use `..Default::default()`.
+- **`serde_json` now enables `preserve_order`.** Cargo feature unification
+  also enables it for downstream applications using the same `serde_json`
+  version. JSON maps iterate in insertion order, and `Map::remove` uses
+  `swap_remove`, which can reorder remaining entries. Use `shift_remove`
+  when order matters; the passkey and admin plugins now do so.
+
+### Bug Fixes
+
+- Organization metadata preserves absent, empty, and populated values.
+  Metadata key order is preserved in the bundled SQLite store only;
+  PostgreSQL continues to use `jsonb`, which does not retain object key order.
+  Generated entities now use `Option<Json>`; applications with CLI-generated
+  schemas must update their entities and migrate the column to allow `NULL`.
+  The bundled migrator upgrades its own schema automatically.
 
 ### Security
 

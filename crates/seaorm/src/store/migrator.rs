@@ -31,6 +31,13 @@ pub async fn run_migrations(db: &sea_orm::DatabaseConnection) -> Result<(), DbEr
 }
 
 /// Organization metadata is optional in the TypeScript organization schema.
+///
+/// `InitialAuthSchema` creates a nullable column, so a fresh database needs no
+/// change: SQLite skips the migration and PostgreSQL safely reapplies
+/// `DROP NOT NULL`. Older installations have a non-nullable column; this upgrade
+/// makes it nullable while preserving existing values, including empty objects.
+/// The storage type is unchanged, so PostgreSQL `jsonb` still does not preserve
+/// object key order.
 struct NullableOrganizationMetadata;
 
 impl MigrationName for NullableOrganizationMetadata {
@@ -77,7 +84,8 @@ async fn make_sqlite_organization_metadata_nullable(
     // SQLite cannot change nullability in place. Replacing only this column
     // keeps organization foreign keys, members, invitations, and indexes intact;
     // rebuilding the parent table could otherwise cascade deletes to its children.
-    // Bundled SQLite supports DROP COLUMN. A transaction also rolls back the
+    // SQLite 3.35+ is required for DROP COLUMN, as for SeaORM's RETURNING support;
+    // the bundled SQLite version satisfies this. A transaction rolls back the
     // replacement if an application-owned index or column prevents the change.
     let transaction = db.begin().await?;
     for statement in [

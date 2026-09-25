@@ -35,7 +35,8 @@ async-trait = "0.1"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
-# Organization metadata is exposed as JSON strings, where object key order is observable.
+# Preserve organization metadata key order in JSON strings when storage retains it
+# (SQLite does; PostgreSQL jsonb does not). Cargo unifies this feature downstream.
 serde_json = { version = "1.0", features = ["preserve_order"] }
 
 # Logging and tracing

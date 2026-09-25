@@ -258,10 +258,10 @@ pub(super) fn authentication_options_json(options: RequestChallengeResponse) -> 
         .and_then(Value::as_array)
         .is_some_and(|credentials| credentials.is_empty())
     {
-        let _ = root.remove("allowCredentials");
+        let _ = root.shift_remove("allowCredentials");
     }
 
-    let _ = root.remove("extensions");
+    let _ = root.shift_remove("extensions");
     let _ = root.insert(
         "timeout".to_string(),
         Value::Number(OPTIONS_TIMEOUT_MS.into()),
@@ -270,7 +270,7 @@ pub(super) fn authentication_options_json(options: RequestChallengeResponse) -> 
         "userVerification".to_string(),
         Value::String("preferred".to_string()),
     );
-    let _ = root.remove("hints");
+    let _ = root.shift_remove("hints");
     Ok(value)
 }
 
