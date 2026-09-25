@@ -75,6 +75,8 @@ jobs:
       - name: Install client compatibility dependencies
         run: bun install --frozen-lockfile
         working-directory: compat-tests/client-tests
+      - name: Test fixture capture isolation
+        run: bun test crates/types/tests/fixtures/capture.test.ts
       - name: Run library unit tests
         run: cargo test --workspace --lib
       - name: Run alignment checks

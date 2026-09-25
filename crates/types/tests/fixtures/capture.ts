@@ -73,27 +73,45 @@ database.close();
 // Own a fresh reference process so no existing test server or data is reset.
 const reference = Bun.spawn([process.execPath, "run", "server.ts", "--port", String(port)], {
   cwd: `${root}/compat-tests/reference-server`,
-  stdout: "ignore",
+  stdout: "pipe",
   stderr: "inherit",
 });
+let startupTimeout: ReturnType<typeof setTimeout> | undefined;
 try {
-  let ready = false;
-  for (let attempt = 0; attempt < 100; attempt++) {
-    if (reference.exitCode !== null) throw new Error("Reference server exited before capture");
-    try {
-      ready = (await fetch(`${referenceURL}/__health`)).ok;
-    } catch {
-      // Wait for migrations and the listener to start.
+  // server.ts emits READY only after successfully binding its listener. Read
+  // that child's stdout so an existing server cannot satisfy readiness.
+  const ready = new Promise<void>((resolve, reject) => {
+    async function consumeOutput() {
+      const decoder = new TextDecoder();
+      let pending = "";
+      for await (const chunk of reference.stdout) {
+        pending += decoder.decode(chunk, { stream: true });
+        const lines = pending.split("\n");
+        pending = lines.pop() ?? "";
+        if (lines.includes("READY")) resolve();
+      }
+      reject(new Error("Reference server closed stdout before becoming ready"));
     }
-    if (ready) break;
-    await Bun.sleep(100);
-  }
-  assert.ok(ready, "Reference server did not become ready");
+    // Continue draining stdout after READY while capture requests run.
+    void consumeOutput().catch(reject);
+  });
+  await Promise.race([
+    ready,
+    reference.exited.then((code) => {
+      throw new Error(`Reference server exited before capture (status ${code})`);
+    }),
+    new Promise<never>((_, reject) => {
+      startupTimeout = setTimeout(() => reject(new Error("Reference server did not become ready")), 10_000);
+    }),
+  ]);
+  assert.equal(reference.exitCode, null, "Reference server exited before capture");
   const referenceCapture = await capture(referenceVersion, referenceURL, fetch, "fixture-client");
+  assert.equal(reference.exitCode, null, "Reference server exited during capture");
   const output = process.argv[2] ?? `${import.meta.dir}/core_auth_responses.json`;
   await Bun.write(output, `${JSON.stringify([legacyCapture, referenceCapture], null, 2)}\n`);
   console.log(`Wrote ${output}`);
 } finally {
+  if (startupTimeout !== undefined) clearTimeout(startupTimeout);
   reference.kill();
   await reference.exited;
 }

@@ -18,14 +18,17 @@ Regenerate the captures from the repository root with Bun installed:
 (cd compat-tests/client-tests && bun install --frozen-lockfile)
 (cd compat-tests/reference-server && bun install --frozen-lockfile)
 bun crates/types/tests/fixtures/capture.ts
+bun test crates/types/tests/fixtures/capture.test.ts
 cargo test -p better-auth-types
 cargo test -p better-auth-types --no-default-features
 ```
 
 The script migrates a fresh in-memory database for 1.4.19 and starts and stops
 its own reference-server process on port 3194. Set `TYPES_FIXTURE_PORT` to use
-another free port. It reads the installed versions into the capture and only
-writes the JSON after both runtimes succeed. Dates remain real capture times,
+another free port. It waits for that child process's `READY` message after the
+listener binds; an occupied port fails without contacting the existing server
+or overwriting the fixture. It reads the installed versions into the capture
+and only writes the JSON after both runtimes succeed. Dates remain real capture times,
 so recapturing changes them. An optional output path lets you inspect a new
 capture before replacing the committed file:
 
