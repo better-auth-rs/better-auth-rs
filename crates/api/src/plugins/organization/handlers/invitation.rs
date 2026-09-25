@@ -277,7 +277,7 @@ pub(crate) async fn accept_invitation_core(
         return Err(AuthError::forbidden("This invitation is not for you"));
     }
 
-    if !invitation.is_pending() || invitation.expires_at() < chrono::Utc::now() {
+    if !invitation.is_pending() || invitation.is_expired() {
         return Err(AuthError::bad_request("Invitation not found"));
     }
 

@@ -94,6 +94,10 @@ pub trait AuthMember: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stati
 }
 
 /// Trait representing an invitation entity.
+///
+/// Expiration checks require a clock and belong in server code. Generic callers
+/// can compare [`Self::expires_at`] with their server's current time; the concrete
+/// `better_auth_core::Invitation` retains its inherent `is_expired` method.
 pub trait AuthInvitation: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
     fn id(&self) -> Cow<'_, str>;
     fn organization_id(&self) -> Cow<'_, str>;
