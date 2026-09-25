@@ -3,6 +3,38 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+### Breaking changes
+
+- **API keys are owned by a reference, not a user.** `apikey.user_id` is now
+  `reference_id`, a `config_id` column is added, and the foreign key to
+  `users` is gone: a reference may be an organization id. App-owned schemas
+  must apply the equivalent change; `AuthApiKey::user_id` became
+  `reference_id` plus `config_id`, and `ApiKeyStore::list_api_keys_by_user`
+  became `list_api_keys_by_reference`. The bundled migrator upgrades
+  existing installations in place; SQLite rebuilds the table because it
+  cannot drop the constraint.
+- **`GET /api-key/list` returns a paginated envelope** (`{ apiKeys, total,
+  limit, offset }`) instead of a bare array, with `configId`, `limit`,
+  `offset`, `sortBy` and `sortDirection` query parameters.
+- **Error responses carry `code` only where upstream defines one.**
+  `ErrorCodeMessageResponse::code` is `Option<String>`; ad-hoc messages
+  omit the field, and codes such as `INVALID_CALLBACK_URL` now match
+  upstream's constants rather than being derived from the message.
+- **Implicit account linking requires a verified local email** by default
+  (`account_linking.require_local_email_verified`); a callback that would
+  have linked to an unverified local account now redirects with
+  `account_not_linked`.
+- `RolePermissions` (organization plugin) gained an `api_key` field, so
+  struct literals must name it or use `..Default::default()`.
+
+### Security
+
+- Device authorization no longer approves or denies a code no signed-in
+  session has claimed.
+- `/organization/list-user-invitations` requires a verified email
+  (`EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION`).
+
 ## [1.0.0-alpha.2](https://github.com/better-auth-rs/better-auth-rs/compare/v0.10.0...v1.0.0-alpha.2) - 2026-08-15
 
 ### Bug Fixes
