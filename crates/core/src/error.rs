@@ -580,6 +580,24 @@ mod tests {
         assert_eq!(auth_err.status_code(), 500);
     }
 
+    // ── validation_error_response ───────────────────────────────────────
+
+    // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
+    #[test]
+    fn validation_error_response_serializes_field_errors() {
+        let mut errors = validator::ValidationErrors::new();
+        let mut error = validator::ValidationError::new("email");
+        error.message = Some("Email is invalid".into());
+        errors.add("email", error);
+
+        let resp = validation_error_response(&errors);
+        assert_eq!(resp.status, 400);
+        let body: serde_json::Value =
+            serde_json::from_slice(&resp.body).expect("response body should be valid JSON");
+        assert_eq!(body["code"], "VALIDATION_ERROR");
+        assert_eq!(body["message"], "[body.email] Email is invalid");
+    }
+
     // ── Display for fixed-message variants ──────────────────────────────
 
     // Rust-specific surface: `AuthError` and Rust-side response/error conversion behavior are public Rust library APIs with no direct TS analogue.
