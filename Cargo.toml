@@ -63,7 +63,7 @@ validator = { version = "0.19", features = ["derive"] }
 argon2 = "0.5"
 rand = "0.8"
 base64 = "0.22"
-jsonwebtoken = "9"
+jsonwebtoken = { version = "10.4", default-features = false, features = ["rust_crypto"] }
 sha2 = "0.10"
 aes-gcm = "0.10"
 hkdf = "0.12"
