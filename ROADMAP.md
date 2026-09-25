@@ -2,7 +2,7 @@
 
 This project targets strict 1:1 behavioral alignment with the
 [TypeScript better-auth](https://github.com/better-auth/better-auth)
-implementation (`better-auth@1.4.19`). Work is organized into
+implementation (`better-auth@1.6.29`). Work is organized into
 self-contained phases, each covering a group of related endpoints.
 
 This roadmap tracks the pinned upstream TypeScript surface plus exposed
