@@ -4,21 +4,7 @@ use std::borrow::Cow;
 use uuid::Uuid;
 
 use crate::entity::{AuthInvitation, AuthMember, AuthOrganization};
-use better_auth_types::InvitationStatus;
-
-fn serialize_json_option_as_string<S>(
-    value: &Option<serde_json::Value>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match value {
-        Some(inner) => serializer
-            .serialize_some(&serde_json::to_string(inner).map_err(serde::ser::Error::custom)?),
-        None => serializer.serialize_none(),
-    }
-}
+use better_auth_types::{InvitationStatus, OrganizationView};
 
 fn deserialize_json_option_from_string<'de, D>(
     deserializer: D,
@@ -46,22 +32,24 @@ where
 }
 
 /// Organization entity - matches OpenAPI schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Organization {
     pub id: String,
     pub name: String,
     pub slug: String,
     pub logo: Option<String>,
-    #[serde(
-        serialize_with = "serialize_json_option_as_string",
-        deserialize_with = "deserialize_json_option_from_string",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(deserialize_with = "deserialize_json_option_from_string")]
     pub metadata: Option<serde_json::Value>,
     #[serde(rename = "createdAt")]
     pub created_at: DateTime<Utc>,
     #[serde(rename = "updatedAt")]
     pub updated_at: DateTime<Utc>,
+}
+
+impl Serialize for Organization {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        OrganizationView::from(self).serialize(serializer)
+    }
 }
 
 /// Organization member

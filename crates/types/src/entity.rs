@@ -1,12 +1,13 @@
-//! Entity traits for the Better Auth framework.
+//! Optional server entity traits, enabled by the `entity` feature.
 //!
 //! These traits define the interface that entity types must implement.
 //! The framework accesses entity fields through these trait methods,
 //! allowing users to define their own entity structs with custom field names
 //! and extra fields.
 //!
-//! Implement these traits manually for any custom types used inside the auth
-//! runtime.
+//! Server applications can implement these traits for custom stored entities.
+//! Clients can use the response views in [`crate::wire`] without this module by
+//! disabling default features.
 
 use std::borrow::Cow;
 
@@ -14,6 +15,9 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 
 use crate::InvitationStatus;
+
+// Preserve the original server-facing path for this response type.
+pub use crate::wire::MemberUserView;
 
 /// Trait representing a user entity.
 ///
@@ -104,11 +108,6 @@ pub trait AuthInvitation: Clone + Send + Sync + Serialize + std::fmt::Debug + 's
     fn is_pending(&self) -> bool {
         *self.status() == InvitationStatus::Pending
     }
-
-    /// Check if the invitation has expired.
-    fn is_expired(&self) -> bool {
-        self.expires_at() < Utc::now()
-    }
 }
 
 /// Trait representing a verification token entity.
@@ -177,29 +176,3 @@ pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
     fn aaguid(&self) -> Option<&str>;
     fn credential(&self) -> &str;
 }
-
-/// Minimal user info for member-related API responses.
-///
-/// This is a concrete framework type (not generic) used to project
-/// user fields into member responses.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemberUserView {
-    pub id: String,
-    pub email: Option<String>,
-    pub name: Option<String>,
-    pub image: Option<String>,
-}
-
-impl MemberUserView {
-    /// Construct from any type implementing [`AuthUser`].
-    pub fn from_user(user: &impl AuthUser) -> Self {
-        Self {
-            id: user.id().to_string(),
-            email: user.email().map(|s| s.to_string()),
-            name: user.name().map(|s| s.to_string()),
-            image: user.image().map(|s| s.to_string()),
-        }
-    }
-}
-
-use serde::Deserialize;

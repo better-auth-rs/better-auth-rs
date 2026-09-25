@@ -9,7 +9,12 @@ repository = { workspace = true }
 [lints]
 workspace = true
 
+[features]
+default = ["entity"]
+entity = []
+
 [dependencies]
-chrono = { workspace = true }
+# Do not inherit the server workspace's clock and wasm-bindgen features.
+chrono = { version = "0.4", default-features = false, features = ["serde", "std"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

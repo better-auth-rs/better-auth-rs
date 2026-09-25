@@ -47,7 +47,19 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p better-auth-types
+      - run: cargo test -p better-auth-types --no-default-features
       - run: cargo check -p better-auth-types --target wasm32-unknown-unknown --all-targets
+      - run: cargo check -p better-auth-types --no-default-features --target wasm32-unknown-unknown --all-targets
+      - name: Verify shared types have no WASM runtime dependencies
+        shell: bash
+        run: |
+          for features in '' '--no-default-features'; do
+            cargo tree -p better-auth-types $features --target wasm32-unknown-unknown --prefix none > types-dependencies.txt
+            if grep -E '^(js-sys|wasm-bindgen|web-sys) ' types-dependencies.txt; then
+              echo 'Shared types must not depend on a browser or JavaScript runtime.'
+              exit 1
+            fi
+          done
 
   test:
     name: Test

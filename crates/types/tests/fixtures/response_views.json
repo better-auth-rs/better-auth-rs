@@ -1,0 +1,78 @@
+{
+  "account": {
+    "id": "account-1",
+    "accountId": "provider-account-1",
+    "providerId": "github",
+    "userId": "user-1",
+    "accessToken": "fixture-access-token",
+    "refreshToken": null,
+    "idToken": null,
+    "accessTokenExpiresAt": "2026-09-06T19:00:00Z",
+    "refreshTokenExpiresAt": null,
+    "scope": "read:user",
+    "createdAt": "2026-09-06T18:00:00Z",
+    "updatedAt": "2026-09-06T18:00:00Z"
+  },
+  "verification": {
+    "id": "verification-1",
+    "identifier": "fixture@example.com",
+    "value": "fixture-verification-token",
+    "expiresAt": "2026-09-06T19:00:00Z",
+    "createdAt": "2026-09-06T18:00:00Z",
+    "updatedAt": "2026-09-06T18:00:00Z"
+  },
+  "organization": {
+    "id": "org-1",
+    "name": "Fixture Organization",
+    "slug": "fixture-org",
+    "logo": null,
+    "metadata": "{\"plan\":\"free\"}",
+    "createdAt": "2026-09-06T18:00:00Z",
+    "updatedAt": "2026-09-06T18:00:00Z"
+  },
+  "invitation": {
+    "id": "invitation-1",
+    "organizationId": "org-1",
+    "email": "fixture@example.com",
+    "role": "member",
+    "status": "pending",
+    "inviterId": "user-1",
+    "expiresAt": "2026-09-13T18:00:00Z",
+    "createdAt": "2026-09-06T18:00:00Z"
+  },
+  "passkey": {
+    "id": "passkey-1",
+    "credentialID": "fixture-credential-id",
+    "userId": "user-1",
+    "publicKey": "fixture-public-key",
+    "counter": 0,
+    "deviceType": "multiDevice",
+    "backedUp": true,
+    "createdAt": "2026-09-06T18:00:00Z",
+    "updatedAt": "2026-09-06T18:00:00Z"
+  },
+  "apiKey": {
+    "id": "api-key-1",
+    "name": "Fixture key",
+    "start": "fixture",
+    "prefix": null,
+    "referenceId": "user-1",
+    "configId": "default",
+    "enabled": true,
+    "rateLimitEnabled": true,
+    "rateLimitTimeWindow": 86400000,
+    "rateLimitMax": 10,
+    "requestCount": 0,
+    "remaining": 10,
+    "createdAt": "2026-09-06T18:00:00Z",
+    "updatedAt": "2026-09-06T18:00:00Z",
+    "permissions": { "documents": ["read"] },
+    "metadata": { "plan": "free" }
+  },
+  "memberUser": {
+    "id": "user-1",
+    "email": "fixture@example.com",
+    "name": "Fixture User",
+    "image": null
+  }
+}
