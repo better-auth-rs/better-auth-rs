@@ -78,6 +78,24 @@ async fn test_builder_rejects_invalid_config() {
     assert!(result.is_err());
 }
 
+// Rust-specific surface: existing callers can validate a shared AuthConfig
+// reference without granting mutable access or changing the configuration.
+#[test]
+fn test_config_validation_accepts_shared_references() -> AuthResult<()> {
+    let config = test_config().cross_sub_domain_cookies("");
+    let shared: &AuthConfig = &config;
+    shared.validate()?;
+    assert_eq!(
+        shared
+            .advanced
+            .cross_sub_domain_cookies
+            .as_ref()
+            .map(|cookies| cookies.domain.as_str()),
+        Some("")
+    );
+    Ok(())
+}
+
 // Upstream: cookies/index.ts :: createCookieGetter rejects a missing domain
 // during initialization, before any request can emit host-only cookies.
 #[tokio::test]

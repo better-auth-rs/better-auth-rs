@@ -4,7 +4,7 @@
 //! duplicated across every plugin (`email_password`, `passkey`, `two_factor`,
 //! `admin`, `password_management`, `session_management`, `email_verification`).
 //!
-//! Call [`AuthConfig::validate`] before using these utilities directly, so
+//! Use [`AuthConfig::into_validated`] before calling these utilities directly, so
 //! cross-subdomain cookie domains are resolved before headers are serialized.
 
 use crate::config::AuthConfig;
@@ -117,7 +117,7 @@ fn serialize_cookie(cookie: Cookie<'_>, config: &AuthConfig) -> String {
     }
 
     if let Some(cross_sub_domain) = &config.advanced.cross_sub_domain_cookies {
-        // AuthConfig::validate resolves an empty domain before initialization.
+        // AuthConfig::into_validated resolves an empty domain before initialization.
         // TS/better-call serializes the configured domain without validation.
         // Preserve that behavior, including leading dots; Cookie::domain()
         // strips a leading dot during serialization.
@@ -208,10 +208,10 @@ mod tests {
     #[test]
     fn empty_cross_subdomain_domain_falls_back_to_base_url_hostname()
     -> Result<(), crate::error::AuthError> {
-        let mut config = AuthConfig::new("test-secret-min-32-chars-1234567")
+        let config = AuthConfig::new("test-secret-min-32-chars-1234567")
             .base_url("https://auth.example.com:8443")
-            .cross_sub_domain_cookies("");
-        config.validate()?;
+            .cross_sub_domain_cookies("")
+            .into_validated()?;
 
         for header in cookie_headers(&config) {
             assert!(header.ends_with("; Domain=auth.example.com"), "{header}");

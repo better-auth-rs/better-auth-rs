@@ -768,7 +768,7 @@ pub struct IpAddressConfig {
 #[derive(Debug, Clone)]
 pub struct CrossSubDomainConfig {
     /// The parent domain (e.g. `".example.com"`).
-    /// An empty value is resolved from `base_url` by [`AuthConfig::validate`].
+    /// An empty value is resolved from `base_url` by [`AuthConfig::into_validated`].
     pub domain: String,
 }
 
@@ -1066,11 +1066,29 @@ impl AuthConfig {
         self.disabled_paths.iter().any(|disabled| disabled == path)
     }
 
+    /// Validate configuration without modifying it.
+    ///
+    /// This also checks that an empty cross-subdomain cookie domain can be
+    /// resolved from `base_url`. Use [`Self::into_validated`] to persist the
+    /// resolved domain for runtime use.
+    pub fn validate(&self) -> Result<(), AuthError> {
+        self.validate_and_resolve_cookie_domain().map(|_| ())
+    }
+
     /// Validate configuration and resolve an empty cross-subdomain cookie domain.
     ///
     /// `AuthBuilder::build` calls this before initializing plugins or serving
-    /// requests. Call it before using the cookie utilities directly as well.
-    pub fn validate(&mut self) -> Result<(), AuthError> {
+    /// requests. Use the returned config when calling cookie utilities directly.
+    pub fn into_validated(mut self) -> Result<Self, AuthError> {
+        if let Some(domain) = self.validate_and_resolve_cookie_domain()?
+            && let Some(cross_sub_domain) = &mut self.advanced.cross_sub_domain_cookies
+        {
+            cross_sub_domain.domain = domain;
+        }
+        Ok(self)
+    }
+
+    fn validate_and_resolve_cookie_domain(&self) -> Result<Option<String>, AuthError> {
         if self.secret.is_empty() {
             return Err(AuthError::config("Secret key cannot be empty"));
         }
@@ -1081,7 +1099,7 @@ impl AuthConfig {
             ));
         }
 
-        if let Some(cross_sub_domain) = &mut self.advanced.cross_sub_domain_cookies
+        if let Some(cross_sub_domain) = &self.advanced.cross_sub_domain_cookies
             && cross_sub_domain.domain.is_empty()
         {
             // TS createCookieGetter resolves the fallback once and refuses to
@@ -1092,14 +1110,15 @@ impl AuthConfig {
                 )
             };
             let url = url::Url::parse(&self.base_url).map_err(|_| invalid_base_url())?;
-            cross_sub_domain.domain = url
+            let domain = url
                 .host_str()
                 .filter(|hostname| !hostname.is_empty())
                 .ok_or_else(invalid_base_url)?
                 .to_owned();
+            return Ok(Some(domain));
         }
 
-        Ok(())
+        Ok(None)
     }
 }
 
@@ -1363,21 +1382,21 @@ mod tests {
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn validate_rejects_empty_secret() {
-        let mut cfg = AuthConfig::default();
+        let cfg = AuthConfig::default();
         assert!(cfg.validate().is_err());
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn validate_rejects_short_secret() {
-        let mut cfg = AuthConfig::new("short");
+        let cfg = AuthConfig::new("short");
         assert!(cfg.validate().is_err());
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn validate_accepts_valid_secret() {
-        let mut cfg = AuthConfig::new("test-secret-min-32-chars-1234567");
+        let cfg = AuthConfig::new("test-secret-min-32-chars-1234567");
         assert!(cfg.validate().is_ok());
     }
 
@@ -1392,7 +1411,7 @@ mod tests {
             "file:///tmp/auth",
             "http://[",
         ] {
-            let mut cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
+            let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
                 .base_url(base_url)
                 .cross_sub_domain_cookies("");
 
@@ -1400,12 +1419,16 @@ mod tests {
                 matches!(cfg.validate(), Err(AuthError::Config(message)) if message.contains("base_url must have a hostname")),
                 "base_url: {base_url:?}"
             );
+            assert!(
+                matches!(cfg.into_validated(), Err(AuthError::Config(message)) if message.contains("base_url must have a hostname")),
+                "base_url: {base_url:?}"
+            );
         }
     }
 
     // Upstream: cookies/index.ts :: createCookieGetter uses the URL hostname.
     #[test]
-    fn validate_resolves_cross_subdomain_fallback() -> Result<(), AuthError> {
+    fn into_validated_resolves_cross_subdomain_fallback() -> Result<(), AuthError> {
         for (base_url, domain) in [
             ("https://auth.example.com:8443/api/auth", "auth.example.com"),
             ("http://localhost:3000", "localhost"),
@@ -1414,10 +1437,10 @@ mod tests {
         ] {
             // Resolve only after configuration is complete, regardless of
             // builder method order.
-            let mut cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
+            let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
                 .cross_sub_domain_cookies("")
-                .base_url(base_url);
-            cfg.validate()?;
+                .base_url(base_url)
+                .into_validated()?;
             assert_eq!(
                 cfg.advanced
                     .cross_sub_domain_cookies
@@ -1434,10 +1457,11 @@ mod tests {
     #[test]
     fn validate_preserves_explicit_cross_subdomain_domains() -> Result<(), AuthError> {
         for domain in ["example.com", ".example.com"] {
-            let mut cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
+            let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
                 .base_url("localhost:3000")
                 .cross_sub_domain_cookies(domain);
             cfg.validate()?;
+            let cfg = cfg.into_validated()?;
             assert_eq!(
                 cfg.advanced
                     .cross_sub_domain_cookies
@@ -1451,8 +1475,7 @@ mod tests {
 
     #[test]
     fn validate_does_not_resolve_a_domain_when_cross_subdomain_cookies_are_disabled() {
-        let mut cfg =
-            AuthConfig::new("test-secret-min-32-chars-1234567").base_url("localhost:3000");
+        let cfg = AuthConfig::new("test-secret-min-32-chars-1234567").base_url("localhost:3000");
         assert!(cfg.validate().is_ok());
         assert!(cfg.advanced.cross_sub_domain_cookies.is_none());
     }

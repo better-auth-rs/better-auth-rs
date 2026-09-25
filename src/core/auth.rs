@@ -121,11 +121,9 @@ impl<S: AuthSchema> AuthBuilder<S> {
     }
 
     /// Build the BetterAuth instance.
-    pub async fn build(mut self) -> AuthResult<BetterAuth<S>> {
-        // Validate configuration
-        self.config.validate()?;
-
-        let config = Arc::new(self.config);
+    pub async fn build(self) -> AuthResult<BetterAuth<S>> {
+        // Validate and resolve cookie domains before sharing the runtime config.
+        let config = Arc::new(self.config.into_validated()?);
         let store = self
             .store
             .ok_or_else(|| AuthError::config("Auth store not configured"))?;
