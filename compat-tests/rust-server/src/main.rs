@@ -494,9 +494,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(3200);
 
     let secret = "compat-test-only-key-not-real-minimum-32chars";
-    let config = AuthConfig::new(secret)
+    let mut config = AuthConfig::new(secret)
         .base_url(format!("http://localhost:{port}"))
         .password_min_length(8);
+    if let Ok(domain) = std::env::var("COMPAT_COOKIE_DOMAIN") {
+        config = config.cross_sub_domain_cookies(domain);
+    }
 
     let database = Database::connect("sqlite::memory:").await?;
     better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database).await?;

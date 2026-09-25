@@ -77,11 +77,13 @@ async fn wait_for_health(port: u16, child: &mut ManagedChild, timeout: Duration)
     );
 }
 
-fn start_reference_server(port: u16) -> ManagedChild {
+fn start_reference_server(port: u16, cookie_domain: Option<&str>) -> ManagedChild {
     let child = Command::new("bun")
         .args(["run", "server.ts"])
         .current_dir(project_root().join("compat-tests/reference-server"))
         .env("PORT", port.to_string())
+        .env_remove("COMPAT_COOKIE_DOMAIN")
+        .envs(cookie_domain.map(|domain| ("COMPAT_COOKIE_DOMAIN", domain)))
         .env("NO_PROXY", "localhost,127.0.0.1")
         .env("no_proxy", "localhost,127.0.0.1")
         .stdout(Stdio::inherit())
@@ -92,7 +94,7 @@ fn start_reference_server(port: u16) -> ManagedChild {
     ManagedChild::new("ts-reference", child)
 }
 
-fn start_rust_compat_server(port: u16) -> ManagedChild {
+fn start_rust_compat_server(port: u16, cookie_domain: Option<&str>) -> ManagedChild {
     let child = Command::new("cargo")
         .args([
             "run",
@@ -101,6 +103,8 @@ fn start_rust_compat_server(port: u16) -> ManagedChild {
         ])
         .current_dir(project_root())
         .env("PORT", port.to_string())
+        .env_remove("COMPAT_COOKIE_DOMAIN")
+        .envs(cookie_domain.map(|domain| ("COMPAT_COOKIE_DOMAIN", domain)))
         .env("NO_PROXY", "localhost,127.0.0.1")
         .env("no_proxy", "localhost,127.0.0.1")
         .stdout(Stdio::inherit())
@@ -111,12 +115,14 @@ fn start_rust_compat_server(port: u16) -> ManagedChild {
     ManagedChild::new("rust-compat", child)
 }
 
-fn run_bun_phase_suite(paths: &[&str], ts_port: u16, rust_port: u16) {
+fn run_bun_phase_suite(paths: &[&str], ts_port: u16, rust_port: u16, cookie_domain: Option<&str>) {
     let output = Command::new("bun")
         .arg("test")
         .args(paths)
         .current_dir(project_root().join("compat-tests/client-tests"))
         .env("AUTH_BASE_URL_TS", format!("http://localhost:{ts_port}"))
+        .env_remove("COMPAT_COOKIE_DOMAIN")
+        .envs(cookie_domain.map(|domain| ("COMPAT_COOKIE_DOMAIN", domain)))
         .env(
             "AUTH_BASE_URL_RUST",
             format!("http://localhost:{rust_port}"),
@@ -134,22 +140,42 @@ fn run_bun_phase_suite(paths: &[&str], ts_port: u16, rust_port: u16) {
 }
 
 async fn run_client_compat(paths: &[&str]) {
+    run_client_compat_with_cookie_domain(paths, None).await;
+}
+
+async fn run_client_compat_with_cookie_domain(paths: &[&str], cookie_domain: Option<&str>) {
     let ts_port = allocate_port();
     let rust_port = allocate_port();
 
-    let mut ts_server = start_reference_server(ts_port);
-    let mut rust_server = start_rust_compat_server(rust_port);
+    let mut ts_server = start_reference_server(ts_port, cookie_domain);
+    let mut rust_server = start_rust_compat_server(rust_port, cookie_domain);
 
     wait_for_health(ts_port, &mut ts_server, Duration::from_secs(20)).await;
     wait_for_health(rust_port, &mut rust_server, Duration::from_secs(90)).await;
 
-    run_bun_phase_suite(paths, ts_port, rust_port);
+    run_bun_phase_suite(paths, ts_port, rust_port, cookie_domain);
 }
 
 #[tokio::test]
 #[ignore = "starts external TS and Rust servers"]
 async fn phase0_client_compat() {
     run_client_compat(&["tests/phase0"]).await;
+}
+
+#[tokio::test]
+#[ignore = "starts external TS and Rust servers with cross-subdomain cookies"]
+async fn phase0_cross_subdomain_client_compat() {
+    run_client_compat_with_cookie_domain(
+        &["tests/phase0/cookie-domain.test.ts"],
+        Some(".example.com"),
+    )
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "starts external TS and Rust servers with an empty cross-subdomain cookie domain"]
+async fn phase0_cross_subdomain_fallback_client_compat() {
+    run_client_compat_with_cookie_domain(&["tests/phase0/cookie-domain.test.ts"], Some("")).await;
 }
 
 #[tokio::test]

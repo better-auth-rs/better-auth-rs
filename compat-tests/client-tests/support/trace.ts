@@ -128,6 +128,7 @@ function normalizeCookies(response: Response) {
       name,
       {
         path: cookie.path ?? null,
+        domain: cookie.domain ?? null,
         httpOnly: cookie.httpOnly === true,
         secure: cookie.secure === true,
         sameSite: cookie.sameSite ?? null,

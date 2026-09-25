@@ -43,6 +43,14 @@ bun run server.ts
 Bun test project containing phase-scoped client scenarios and the shared
 TS-vs-Rust diff harness.
 
+`phase0_cross_subdomain_client_compat` and
+`phase0_cross_subdomain_fallback_client_compat` check `Set-Cookie` domain
+serialization on sign-up, sign-in, and sign-out with an explicit domain and
+with an empty domain resolved from the base URL. Both servers run on localhost,
+and the test cookie jar forwards cookies without enforcing domains. This proves header
+compatibility, but does not test browser cookie acceptance or delivery between
+subdomains.
+
 Direct phase runs:
 
 ```bash
@@ -72,6 +80,8 @@ Cargo-native orchestration:
 
 ```bash
 cargo test --test client_compat_tests phase0_client_compat -- --ignored --nocapture
+cargo test --test client_compat_tests phase0_cross_subdomain_client_compat -- --ignored --nocapture
+cargo test --test client_compat_tests phase0_cross_subdomain_fallback_client_compat -- --ignored --nocapture
 cargo test --test client_compat_tests phase1_client_compat -- --ignored --nocapture
 cargo test --test client_compat_tests phase2_client_compat -- --ignored --nocapture
 cargo test --test client_compat_tests phase3_client_compat -- --ignored --nocapture

@@ -13,6 +13,7 @@ By default, Better Auth sets session cookies with the following attributes:
 |-----------|---------|-------------|
 | **Name** | `better-auth.session_token` | Cookie name |
 | **Path** | `/` | Available on all paths |
+| **Domain** | Omitted | Scoped to the host that sets the cookie |
 | **Secure** | `true` | HTTPS only by default (disable for local HTTP development) |
 | **HttpOnly** | `true` | Not accessible via JavaScript |
 | **SameSite** | `Lax` | CSRF protection with top-level navigation support |
@@ -35,6 +36,22 @@ config.session.expires_in = Duration::hours(24 * 7); // 7 days
 ```
 
 ## Cookie Attributes
+
+### Domain and Subdomain Sharing
+
+To share auth cookies across subdomains such as `auth.example.com` and `app.example.com`, configure their parent domain:
+
+```rust
+use better_auth::AuthConfig;
+
+let config = AuthConfig::new("your-secret-key-at-least-32-chars")
+    .base_url("https://auth.example.com")
+    .cross_sub_domain_cookies(".example.com");
+```
+
+Auth cookies are set with `Domain=.example.com`, preserving the leading dot. Sign-out uses the same domain when clearing cookies, so the browser removes the shared session cookie. Cookie names beginning with `__Host-` always omit `Domain`.
+
+Without this setting, cookies remain scoped to the host that sets them. An empty domain string uses the hostname from `base_url`, excluding its port. This is resolved when building the auth instance; initialization fails if `base_url` is invalid or has no hostname.
 
 ### Secure
 
