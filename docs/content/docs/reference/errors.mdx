@@ -9,9 +9,12 @@ All errors return JSON:
 
 ```json
 {
-  "message": "Description of the error"
+  "code": "USER_NOT_FOUND",
+  "message": "User not found"
 }
 ```
+
+`code` is present only when the upstream TypeScript implementation defines a constant for that message; the table mirrors every `defineErrorCodes` entry in `better-auth` and its plugins. Messages without an upstream code carry only `message`, so clients should branch on `code` when it exists and fall back to the status otherwise.
 
 For 5xx errors, the actual error details are hidden and a generic message is returned to avoid leaking internal information.
 

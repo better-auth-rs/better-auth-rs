@@ -45,6 +45,41 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 | `enable_metadata` | `bool` | `false` | Allow storing metadata on keys |
 | `require_name` | `bool` | `false` | Require a name when creating keys |
 | `enable_session_for_api_keys` | `bool` | `false` | Emulate sessions for API-key-authenticated requests |
+| `config_id` | `String` | `"default"` | Name of this configuration, stored on every key it creates |
+| `references` | `ApiKeyReferences` | `User` | Whether keys belong to the signed-in user or to an organization |
+
+### Named Configurations and Organization-Owned Keys
+
+A plugin instance holds one or more configurations. Each is identified by its `config_id`, and clients select one by sending `configId` on every request; when absent, the configuration marked `"default"` is used. Register additional configurations with `configuration`:
+
+```rust
+use better_auth::plugins::api_key::{ApiKeyConfig, ApiKeyReferences};
+
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
+    .plugin(OrganizationPlugin::new())
+    .plugin(
+        ApiKeyPlugin::builder()
+            .prefix("sk_".to_string())
+            .build()
+            .configuration(ApiKeyConfig {
+                config_id: "org".to_string(),
+                references: ApiKeyReferences::Organization,
+                prefix: Some("org_".to_string()),
+                ..Default::default()
+            }),
+    )
+    .build()
+    .await?;
+```
+
+When a configuration sets `references: ApiKeyReferences::Organization`, its keys belong to an organization instead of a user:
+
+- `create` and `list` require an `organizationId` (body field or query parameter respectively). `get`, `update`, and `delete` resolve the organization from the key itself.
+- The caller must be a member of that organization and hold the matching `apikey` action (`create`, `read`, `update`, or `delete`) in the organization plugin's RBAC. The creator role is allowed every action. The default roles grant none, so applications grant them through custom roles; see [Organization RBAC](/docs/plugins/organization#rbac-role-based-access-control).
+- The organization plugin must be registered, or requests fail with `ORGANIZATION_PLUGIN_REQUIRED`.
+
+Every key carries `referenceId` (the owning user or organization id) and `configId` in its response.
 
 ## How It Works
 
@@ -66,6 +101,8 @@ Each API key has:
 - **`prefix`**: Optional prefix (e.g., `sk_`, `pk_`)
 - **`enabled`**: Whether the key is active
 - **`remaining`**: Usage quota (decremented on each use, `null` = unlimited)
+- **`referenceId`**: Owner of the key: a user id, or an organization id for organization-owned configurations
+- **`configId`**: The configuration the key was created under
 - **`expiresAt`**: Optional expiration date (set via `expiresIn` in seconds)
 - **Rate limiting**: Counter-based rate limits with configurable time window and max requests
 
@@ -77,9 +114,30 @@ The API Key plugin exposes 5 client-facing endpoints. All require an authenticat
 |----------|--------|-------------|
 | `/api-key/create` | POST | Create a new API key (returns key only once) |
 | `/api-key/get` | GET | Get key metadata by ID (query param `id`) |
-| `/api-key/list` | GET | List all keys for the authenticated user |
+| `/api-key/list` | GET | List keys for the authenticated user or an organization (paginated) |
 | `/api-key/update` | POST | Update key settings (body field `keyId`) |
 | `/api-key/delete` | POST | Delete an API key (body field `keyId`) |
+
+### Listing
+
+`GET /api-key/list` returns a paginated envelope rather than a bare array:
+
+```json
+{
+  "apiKeys": [ ... ],
+  "total": 42,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+| Query parameter | Description |
+|-----------------|-------------|
+| `configId` | Configuration to list keys from (default configuration when absent) |
+| `organizationId` | Required for organization-referencing configurations |
+| `limit`, `offset` | Page window; `total` counts the whole result set and both fields are omitted when not sent |
+| `sortBy` | One of `createdAt`, `updatedAt`, `name`, `expiresAt` |
+| `sortDirection` | `asc` (default) or `desc` |
 
 <Callout type="warn">
 The full `key` value is returned only during creation. Store it securely — it cannot be retrieved later.
@@ -94,5 +152,6 @@ Fields like `permissions`, `remaining`, `refillAmount`, `refillInterval`, `rateL
 | Status | Condition |
 |--------|-----------|
 | 400 | Missing or invalid required fields |
+| 400 | `ORGANIZATION_ID_REQUIRED`, `ORGANIZATION_PLUGIN_REQUIRED`, `USER_NOT_MEMBER_OF_ORGANIZATION`, or `INSUFFICIENT_API_KEY_PERMISSIONS` for organization-owned keys |
 | 401 | Not authenticated |
-| 404 | API key not found (or not owned by user) |
+| 404 | API key not found, not owned by the caller, or not in the addressed configuration |

@@ -26,7 +26,7 @@ Portable Bun-native TypeScript reference server.
 
 - Runtime: Bun
 - Database: `bun:sqlite`
-- Better Auth version: published `better-auth@1.4.19`
+- Better Auth version: published `better-auth@1.6.29`
 - Test controls: reset state, reset-password token seeding, sender mode,
   OAuth account seeding, OAuth refresh mode
 
