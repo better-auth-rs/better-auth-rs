@@ -57,7 +57,7 @@ cookie = "0.18"
 uuid = { version = "1.18", features = ["v4", "v7", "serde"] }
 
 # Validation
-validator = { version = "0.19", features = ["derive"] }
+validator = { version = "0.20", features = ["derive"] }
 
 # Crypto
 argon2 = "0.5"
