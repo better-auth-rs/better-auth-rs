@@ -66,11 +66,13 @@ Generated SeaORM organization entities use `metadata: Option<Json>`, and the dat
 
 ### Default Roles
 
-| Role | Organization | Member | Invitation |
-|------|-------------|--------|------------|
-| **owner** | update, delete | create, update, delete | create, cancel |
-| **admin** | update | create, update, delete | create, cancel |
-| **member** | — | — | — |
+| Role | Organization | Member | Invitation | API key |
+|------|-------------|--------|------------|---------|
+| **owner** | update, delete | create, update, delete | create, cancel | — |
+| **admin** | update | create, update, delete | create, cancel | — |
+| **member** | — | — | — | — |
+
+The `apikey` resource governs organization-owned keys from the [API Key plugin](/docs/plugins/api-key#named-configurations-and-organization-owned-keys). Matching upstream, no default role is granted any action on it; the creator role (`creator_role`, `"owner"` by default) is allowed everything implicitly, and other roles need an explicit grant through a custom role.
 
 ### Custom Roles
 
@@ -85,6 +87,7 @@ roles.insert("editor".to_string(), RolePermissions {
     organization: vec!["read".to_string()],
     member: vec!["read".to_string()],
     invitation: vec![],
+    api_key: vec!["read".to_string(), "create".to_string()],
 });
 
 let config = OrganizationConfig {
@@ -101,7 +104,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(auth_config)
 
 ### Resources and Actions
 
-**Resources**: `organization`, `member`, `invitation`
+**Resources**: `organization`, `member`, `invitation`, `apikey`
 
 **Actions**: `create`, `read`, `update`, `delete`, `cancel`
 
@@ -139,7 +142,7 @@ The Organization plugin exposes 21 endpoints. For full request/response details,
 | `/organization/invite-member` | POST | Invite a user by email |
 | `/organization/get-invitation` | GET | Get invitation details |
 | `/organization/list-invitations` | GET | List organization invitations |
-| `/organization/list-user-invitations` | GET | List invitations for current user |
+| `/organization/list-user-invitations` | GET | List invitations for current user (requires a verified email) |
 | `/organization/accept-invitation` | POST | Accept an invitation |
 | `/organization/reject-invitation` | POST | Reject an invitation |
 | `/organization/cancel-invitation` | POST | Cancel an invitation (requires `invitation:cancel`) |
@@ -155,6 +158,6 @@ The Organization plugin exposes 21 endpoints. For full request/response details,
 | Status | Condition |
 |--------|-----------|
 | 400 | Invalid slug format or missing required fields |
-| 403 | Insufficient permissions for the operation |
+| 403 | Insufficient permissions for the operation, or `EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION` when listing invitations with an unverified email |
 | 404 | Organization, member, or invitation not found |
 | 409 | Slug already taken or user already a member |

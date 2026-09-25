@@ -20,12 +20,12 @@ When sources disagree, trust them in this order:
 
 1. Runtime behavior of the TypeScript reference server in
    `compat-tests/reference-server/`
-2. TypeScript source in a local checkout of `better-auth@1.4.19` when
+2. TypeScript source in a local checkout of `better-auth@1.6.29` when
    available
 3. Generated upstream OpenAPI profiles from the pinned published package
 4. Better Auth documentation
 
-The pinned reference version is `better-auth@1.4.19`.
+The pinned reference version is `better-auth@1.6.29`.
 
 ## Non-Negotiables
 
@@ -46,7 +46,7 @@ cd compat-tests/reference-server && bun install
 cd ../client-tests && bun install
 ```
 
-You should have a local checkout of `better-auth@1.4.19` to inspect
+You should have a local checkout of `better-auth@1.6.29` to inspect
 upstream behavior and source.
 
 ## Workflow

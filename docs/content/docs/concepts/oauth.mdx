@@ -65,7 +65,7 @@ Better Auth handles several scenarios during the OAuth callback:
 If no user exists with the email from the provider, a new user and account are created.
 
 ### Existing Email
-If a user with the same email already exists (from a different provider or email/password), the new provider is automatically linked to the existing user.
+If a user with the same email already exists (from a different provider or email/password), the new provider is automatically linked to the existing user, provided the provider reports the email as verified (or is listed in `trusted_providers`) and the existing user's email is verified. The second condition is `account_linking.require_local_email_verified`, enabled by default; when either check fails the callback redirects with `error=account_not_linked`.
 
 ### Existing Provider Account
 If the user has previously signed in with this provider, the stored tokens are updated and a new session is created.
