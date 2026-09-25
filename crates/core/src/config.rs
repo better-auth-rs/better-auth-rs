@@ -1078,7 +1078,8 @@ impl AuthConfig {
     /// Validate configuration and resolve an empty cross-subdomain cookie domain.
     ///
     /// `AuthBuilder::build` calls this before initializing plugins or serving
-    /// requests. Use the returned config when calling cookie utilities directly.
+    /// requests. Direct cookie-utility callers can also use the returned config
+    /// to avoid resolving the hostname for each cookie.
     pub fn into_validated(mut self) -> Result<Self, AuthError> {
         if let Some(domain) = self.validate_and_resolve_cookie_domain()?
             && let Some(cross_sub_domain) = &mut self.advanced.cross_sub_domain_cookies
@@ -1099,6 +1100,11 @@ impl AuthConfig {
             ));
         }
 
+        self.resolve_cookie_domain_fallback()
+    }
+
+    /// Resolve only an empty domain; runtime configs already contain the hostname.
+    pub(crate) fn resolve_cookie_domain_fallback(&self) -> Result<Option<String>, AuthError> {
         if let Some(cross_sub_domain) = &self.advanced.cross_sub_domain_cookies
             && cross_sub_domain.domain.is_empty()
         {
