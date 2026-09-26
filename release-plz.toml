@@ -72,6 +72,11 @@ group = "Reverts"
 [[package]]
 name = "better-auth"
 version_group = "workspace"
+# cargo-semver-checks enables every feature, and `native-tls` + `rustls` are
+# mutually exclusive by design (compile_error! in better-auth-api), so the
+# check cannot build. The outcome is informational and does not drive the
+# version, so skip it for the two crates that expose the TLS features.
+semver_check = false
 changelog_update = true
 changelog_path = "./CHANGELOG.md"
 changelog_include = [
@@ -98,6 +103,7 @@ version_group = "workspace"
 [[package]]
 name = "better-auth-api"
 version_group = "workspace"
+semver_check = false
 
 [[package]]
 name = "better-auth-macros"
