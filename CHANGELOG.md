@@ -3,6 +3,36 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.0.0-alpha.4](https://github.com/better-auth-rs/better-auth-rs/compare/v1.0.0-alpha.2...v1.0.0-alpha.4) - 2026-09-26
+
+### Bug Fixes
+
+- upgrade jsonwebtoken past CVE-2026-25537 and drop proc-macro-error2 ([#109](https://github.com/better-auth-rs/better-auth-rs/pull/109))
+
+- skip the semver check for the crates with exclusive TLS features ([#111](https://github.com/better-auth-rs/better-auth-rs/pull/111))
+
+
+### CI
+
+- drop debug info and stop triggering on the deleted v1 branch
+
+
+### Chores
+
+- leave the alpha.3 version bump to release-plz ([#110](https://github.com/better-auth-rs/better-auth-rs/pull/110))
+
+- release v1.0.0-alpha.3 ([#100](https://github.com/better-auth-rs/better-auth-rs/pull/100))
+
+
+### Documentation
+
+- prepare the 1.0.0-alpha.3 release ([#108](https://github.com/better-auth-rs/better-auth-rs/pull/108))
+
+
+### Features
+
+- align with better-auth 1.6.29 ([#101](https://github.com/better-auth-rs/better-auth-rs/pull/101))
+
 ## [1.0.0-alpha.3](https://github.com/better-auth-rs/better-auth-rs/compare/v1.0.0-alpha.2...v1.0.0-alpha.3) - 2026-09-26
 
 ### Bug Fixes
