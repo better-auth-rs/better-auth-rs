@@ -56,6 +56,15 @@ jobs:
       - name: Run alignment checks
         run: ./scripts/alignment-check.sh
 
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --locked --features axum
+
   doc:
     name: Documentation
     runs-on: ubuntu-latest

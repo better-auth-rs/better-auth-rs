@@ -3,6 +3,7 @@ name = "better-auth"
 description = "The most comprehensive authentication framework for Rust"
 version = { workspace = true }
 edition = { workspace = true }
+rust-version = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 
@@ -17,6 +18,7 @@ exclude = ["examples/sqlx-custom-entities", "examples/fullstack/backend", "compa
 [workspace.package]
 version = "1.0.0-alpha.3"
 edition = "2024"
+rust-version = "1.88"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/better-auth-rs/better-auth-rs"
 

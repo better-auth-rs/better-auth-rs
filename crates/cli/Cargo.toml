@@ -2,6 +2,7 @@
 name = "better-auth-cli"
 version = { workspace = true }
 edition = { workspace = true }
+rust-version = { workspace = true }
 license = { workspace = true }
 description = "CLI tools for better-auth-rs"
 repository = { workspace = true }
