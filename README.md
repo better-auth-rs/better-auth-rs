@@ -25,6 +25,7 @@ wire behavior.
 - **Type Safety** — leverages Rust's type system for compile-time guarantees
 - **Async First** — built on Tokio with full async/await support
 - **App-Owned SeaORM Schema** — auth entities live in your SeaORM model graph
+- **Diesel Support** — optional `diesel-async` store for PostgreSQL and SQLite
 - **Framework Integration** — first-class Axum support with session extractors
 - **OpenAPI** — auto-generated API specification
 - **Middleware** — CSRF, CORS, rate limiting, body size limits
@@ -129,6 +130,8 @@ Better Auth RS ships with a rich set of plugins. Enable only what you need:
 |---------|-------------|
 | `axum` | Axum web framework integration |
 | `seaorm2` | SeaORM database integration |
+| `diesel-postgres` | Diesel database integration on PostgreSQL |
+| `diesel-sqlite` | Diesel database integration on SQLite |
 | `redis-cache` | Redis session/cache backend |
 
 ## Crate Structure
@@ -139,6 +142,7 @@ Better Auth RS ships with a rich set of plugins. Enable only what you need:
 | [`better-auth-core`](https://crates.io/crates/better-auth-core) | Core auth runtime, store, middleware, and error handling |
 | [`better-auth-api`](https://crates.io/crates/better-auth-api) | Plugin implementations |
 | [`better-auth-seaorm`](https://crates.io/crates/better-auth-seaorm) | SeaORM store, entity traits, and `AuthEntity` derive macro |
+| [`better-auth-diesel`](https://crates.io/crates/better-auth-diesel) | Diesel store, schema, and migrations for PostgreSQL and SQLite |
 | [`better-auth-cli`](https://crates.io/crates/better-auth-cli) | CLI tools (`better-auth-rs generate`) |
 
 ## Documentation

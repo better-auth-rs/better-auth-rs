@@ -23,8 +23,11 @@ better-auth = { version = "1.0.0-alpha.3", features = ["axum", "seaorm2"] }
 | Feature | Description |
 |---------|-------------|
 | `axum` | Axum web framework integration with route mounting and session extractors |
+| `seaorm2` | SeaORM persistence with app-owned auth entities |
+| `diesel-postgres` | [Diesel](/docs/integrations/diesel) persistence on PostgreSQL |
+| `diesel-sqlite` | [Diesel](/docs/integrations/diesel) persistence on SQLite |
 
-No features are enabled by default. The core library works with SeaORM-backed auth persistence and the framework-agnostic request/response types.
+No features are enabled by default. Enable one persistence integration (`seaorm2`, `diesel-postgres`, or `diesel-sqlite`) together with the framework-agnostic request/response types.
 
 ## Minimum Supported Rust Version
 
