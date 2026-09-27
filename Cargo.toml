@@ -99,6 +99,8 @@ axum = [
     "better-auth-api/axum",
 ]
 seaorm2 = ["dep:better-auth-seaorm"]
+diesel-postgres = ["dep:better-auth-diesel", "better-auth-diesel/postgres"]
+diesel-sqlite = ["dep:better-auth-diesel", "better-auth-diesel/bundled-sqlite"]
 redis-cache = ["dep:redis"]
 
 [dependencies]
@@ -106,6 +108,7 @@ redis-cache = ["dep:redis"]
 better-auth-core = { workspace = true }
 better-auth-api = { workspace = true }
 better-auth-seaorm = { workspace = true, optional = true }
+better-auth-diesel = { workspace = true, optional = true }
 
 # Asynchronous runtime
 tokio = { workspace = true }
@@ -144,6 +147,7 @@ http-body-util = { version = "0.1", optional = true }
 
 [dev-dependencies]
 better-auth-seaorm = { workspace = true }
+better-auth-diesel = { workspace = true, features = ["bundled-sqlite"] }
 tokio = { workspace = true, features = ["full", "test-util"] }
 serde_yaml = "0.9"
 tower-http = { version = "0.6", features = ["cors"] }
@@ -159,6 +163,10 @@ required-features = ["axum", "seaorm2"]
 [[example]]
 name = "postgres_usage"
 required-features = ["seaorm2"]
+
+[[example]]
+name = "diesel_usage"
+required-features = ["diesel-sqlite"]
 
 [[bin]]
 name = "sync_better_auth_openapi"
