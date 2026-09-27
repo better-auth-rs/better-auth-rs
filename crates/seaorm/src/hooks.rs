@@ -4,24 +4,11 @@ use sea_orm::{DatabaseConnection, DatabaseTransaction};
 use better_auth_core::AuthResult;
 use better_auth_core::config::AuthConfig;
 use better_auth_core::hooks::RequestHookContext;
-pub use better_auth_core::hooks::current_request_hook_context;
+pub use better_auth_core::hooks::{HookControl, current_request_hook_context};
 use better_auth_core::schema::AuthSchema;
 use better_auth_core::types::{
     CreateAccount, CreateSession, CreateUser, CreateVerification, UpdateAccount, UpdateUser,
 };
-
-/// Control flow returned by SeaORM `before_*` hooks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HookControl {
-    Continue,
-    Cancel,
-}
-
-impl HookControl {
-    pub fn is_cancelled(self) -> bool {
-        matches!(self, Self::Cancel)
-    }
-}
 
 /// Context passed to SeaORM lifecycle hooks.
 pub struct SeaOrmHookContext<'a> {
