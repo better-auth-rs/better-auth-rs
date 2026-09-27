@@ -83,11 +83,13 @@ Configure Generic OAuth or OIDC with `OAuthPlugin::add_generic_provider` and `Ge
 | `rustls` | Alternative TLS backend; disable default features |
 | `axum` | Routes and session extractors |
 | `seaorm2` | SeaORM store and entity derives |
+| `diesel-postgres` | Diesel store on PostgreSQL |
+| `diesel-sqlite` | Diesel store on SQLite (bundled) |
 | `redis-cache` | Standalone asynchronous Redis cache adapter; not a session storage backend |
 
 ## Documentation and development
 
-- [Installation](docs/content/docs/installation.mdx) and [Axum integration](docs/content/docs/integrations/axum.mdx)
+- [Installation](docs/content/docs/installation.mdx), [Axum integration](docs/content/docs/integrations/axum.mdx), and [Diesel integration](docs/content/docs/integrations/diesel.mdx)
 - [API key server API](docs/content/docs/plugins/api-key.mdx) and [database hooks](docs/content/docs/concepts/hooks.mdx)
 - [Examples](examples/README.md), [contributing](CONTRIBUTING.md), and [alignment roadmap](ROADMAP.md)
 - [Compatibility harness](compat-tests/README.md); upstream behavior remains the source of truth

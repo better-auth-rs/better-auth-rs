@@ -1,0 +1,155 @@
+---
+title: Diesel
+description: Persist Better Auth with Diesel on PostgreSQL or SQLite.
+---
+
+Better Auth can persist its tables with [Diesel](https://diesel.rs) through the `better-auth-diesel` crate. The store uses [`diesel-async`](https://github.com/weiznich/diesel_async) connection pools and supports PostgreSQL and SQLite.
+
+The canonical example lives in [`examples/diesel_usage.rs`](../../../../examples/diesel_usage.rs).
+
+## Setup
+
+Enable the feature for your backend. Both can be enabled at the same time.
+
+```toml title="Cargo.toml"
+[dependencies]
+better-auth = { version = "1.0.0-alpha.3", git = "https://github.com/better-auth-rs/better-auth-rs", branch = "master", features = ["diesel-postgres"] }
+tokio = { version = "1", features = ["full"] }
+```
+
+| Feature | Backend | Connection |
+|---------|---------|------------|
+| `diesel-postgres` | PostgreSQL | `diesel_async::AsyncPgConnection` |
+| `diesel-sqlite` | SQLite | `SyncConnectionWrapper<SqliteConnection>` (bundled SQLite) |
+
+To link the system SQLite instead of the bundled one, depend on `better-auth-diesel` directly with `default-features = false, features = ["sqlite"]`. SQLite 3.35 or later is required.
+
+```rust
+use better_auth::diesel::{DieselAuthSchema, DieselPool, DieselStore};
+use better_auth::plugins::EmailPasswordPlugin;
+use better_auth::{AuthConfig, BetterAuth};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
+        .base_url("http://localhost:3000");
+    let pool = DieselPool::postgres(std::env::var("DATABASE_URL")?)?;
+    let store = DieselStore::new(config.clone(), pool);
+
+    let auth = BetterAuth::<DieselAuthSchema>::new(config)
+        .store(store)
+        .plugin(EmailPasswordPlugin::new().enable_signup(true))
+        .build()
+        .await?;
+
+    Ok(())
+}
+```
+
+`DieselPool::postgres` connects through TLS according to `sslmode` in the URL, as libpq does: `prefer` (the default) uses TLS when the server offers it, `require` refuses a plaintext connection, and `disable` never uses TLS. Unlike libpq, a TLS connection always verifies the server certificate against the system trust store (`SSL_CERT_FILE` and `SSL_CERT_DIR` also apply). For a remote database, use `sslmode=require`.
+
+Both constructors use the `diesel-async` pool defaults: a checkout waits for a free connection with no time limit. To use other trust roots or client certificates, or to set the pool size or timeouts, build a `diesel_async::pooled_connection::deadpool::Pool` yourself and pass it to `DieselStore::new`; it converts with `From`. Timeouts need a deadpool runtime feature, such as `deadpool/rt_tokio_1`.
+
+A SQLite pool built by hand must set `PRAGMA foreign_keys = ON` on every connection, because the auth schema relies on cascading deletes, and should set a `busy_timeout`. `DieselPool::sqlite` does both.
+
+Use `:memory:` SQLite databases for tests only. Each connection has its own private database, so the pool holds one connection, and the data is lost when the pool replaces it (for example, after a cancelled transaction). For a shared in-memory database, use `file:name?mode=memory&cache=shared`.
+
+The variants of `DieselPool` and `DieselConnection` depend on the enabled backend features, and another crate in the build can enable more. Use `as_postgres`, `as_sqlite`, or `with_connection!` instead of an exhaustive `match`.
+
+## Schema
+
+The Diesel integration owns a fixed schema. `DieselAuthSchema` binds the row types in `better_auth::diesel::models` (`User`, `Session`, `Account`, `Verification`) to the tables in `better_auth::diesel::schema`:
+
+| Table | Contents |
+|-------|----------|
+| `users`, `sessions`, `accounts`, `verifications` | Core auth data |
+| `organization`, `member`, `invitation` | Organization plugin |
+| `two_factor` | Two-factor plugin |
+| `api_keys` | API key plugin |
+| `passkeys` | Passkey plugin |
+| `device_code` | Device authorization plugin |
+
+The `table!` definitions are public, so your own tables can join them:
+
+```rust
+use better_auth::diesel::schema::users;
+
+diesel::table! {
+    posts (id) {
+        id -> Text,
+        author_id -> Text,
+    }
+}
+
+diesel::joinable!(posts -> users (author_id));
+diesel::allow_tables_to_appear_in_same_query!(posts, users);
+```
+
+Timestamp columns use `better_auth::diesel::sql_types::UtcTimestamp` (`TIMESTAMPTZ` on PostgreSQL, fixed-width text on SQLite) and JSON columns use `JsonDocument` (`JSONB` or text). Rows load them as `chrono::DateTime<Utc>` and `serde_json::Value`. To bind a value in your own query, wrap it in `UtcTimestampValue` or `JsonDocumentValue`.
+
+To add columns to `users`, give them a database default: the store only writes the columns it knows.
+
+If you need app-owned auth models, such as numeric user IDs, use the [SeaORM integration](/docs/concepts/database). Moving an existing SeaORM-managed database to the Diesel store is not supported: the migrations create the tables from scratch, and SQLite timestamps use a different text format.
+
+## Migrations
+
+Your application owns when migrations run. The SQL lives in the crate as standard Diesel migration directories (`migrations/postgres` and `migrations/sqlite`). Either copy the directory for your backend into your own `migrations` directory, or run the embedded set next to your own migrations:
+
+```rust
+use better_auth::diesel::diesel_async::AsyncMigrationHarness;
+use better_auth::diesel::diesel_migrations::MigrationHarness;
+use better_auth::diesel::migrations;
+
+let postgres = pool.as_postgres().expect("DieselPool::postgres builds a PostgreSQL pool");
+let mut harness = AsyncMigrationHarness::new(postgres.get().await?);
+harness.run_pending_migrations(migrations::POSTGRES)?;
+```
+
+`AsyncMigrationHarness` blocks the current thread, so it needs the multi-threaded Tokio runtime.
+
+## Hooks
+
+`DieselHooks` has the same lifecycle methods as [SeaORM hooks](/docs/concepts/hooks), over the Diesel row types. `DieselHookContext::connection()` returns the connection that runs the auth write. During sign-up this is the transaction's connection, so rows written through it commit or roll back with the new user. Outside a transaction, the write checks a connection out only after its `before_*` hooks run.
+
+```rust
+use async_trait::async_trait;
+use better_auth::diesel::diesel::{self, prelude::*};
+use better_auth::diesel::diesel_async::RunQueryDsl;
+use better_auth::diesel::{DieselHookContext, DieselHooks, DieselStore, models::User, with_connection};
+
+struct ProvisionWorkspace;
+
+#[async_trait]
+impl DieselHooks for ProvisionWorkspace {
+    async fn after_create_user(
+        &self,
+        user: &User,
+        ctx: &DieselHookContext<'_>,
+    ) -> better_auth::AuthResult<()> {
+        let mut connection = ctx.connection().await?;
+        with_connection!(&mut *connection, |c| {
+            diesel::insert_into(workspaces::table)
+                .values(workspaces::owner_id.eq(&user.id))
+                .execute(c)
+                .await
+        })
+        .map_err(|err| better_auth::AuthError::internal(err.to_string()))?;
+        Ok(())
+    }
+}
+
+let store = DieselStore::new(config.clone(), pool).hook(ProvisionWorkspace);
+```
+
+`with_connection!` runs the body on the concrete connection type and compiles it once for each enabled backend. The body is not a closure: `?` and `return` in it leave the hook.
+
+Inside a transaction, do not wait on `ctx.pool` or call store methods from a hook: the transaction already holds a connection, and when the pool has no other free connection (always, for `:memory:` SQLite) the hook waits forever. Use `ctx.connection()` instead, and drop its guard before calling it again.
+
+## Testing
+
+`crates/diesel/tests/store_tests.rs` runs the store against an in-memory SQLite database. Set `BETTER_AUTH_DIESEL_POSTGRES_URL` to a PostgreSQL URL whose role can create databases to run the same tests on PostgreSQL:
+
+```bash
+BETTER_AUTH_DIESEL_POSTGRES_URL=postgres://postgres@localhost/postgres \
+  cargo test -p better-auth-diesel
+```
