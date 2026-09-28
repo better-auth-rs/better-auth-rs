@@ -17,6 +17,7 @@ impl MigratorTrait for AuthMigrator {
         vec![
             Box::new(InitialAuthSchema),
             Box::new(ApiKeyReferenceOwnership),
+            Box::new(NullableOrganizationMetadata),
         ]
     }
 
@@ -27,6 +28,75 @@ impl MigratorTrait for AuthMigrator {
 
 pub async fn run_migrations(db: &sea_orm::DatabaseConnection) -> Result<(), DbErr> {
     AuthMigrator::up(db, None).await
+}
+
+/// Organization metadata is optional in the TypeScript organization schema.
+///
+/// `InitialAuthSchema` creates a nullable column, so a fresh database needs no
+/// change: SQLite skips the migration and PostgreSQL safely reapplies
+/// `DROP NOT NULL`. Older installations have a non-nullable column; this upgrade
+/// makes it nullable while preserving existing values, including empty objects.
+/// The storage type is unchanged, so PostgreSQL `jsonb` still does not preserve
+/// object key order.
+struct NullableOrganizationMetadata;
+
+impl MigrationName for NullableOrganizationMetadata {
+    fn name(&self) -> &str {
+        "m20260906_000001_nullable_organization_metadata"
+    }
+}
+
+#[async_trait::async_trait]
+impl MigrationTrait for NullableOrganizationMetadata {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        if manager.get_database_backend() == sea_orm::DatabaseBackend::Sqlite {
+            return make_sqlite_organization_metadata_nullable(manager).await;
+        }
+
+        manager.alter_table(nullable_organization_metadata()).await
+    }
+}
+
+fn nullable_organization_metadata() -> TableAlterStatement {
+    Table::alter()
+        .table(organization::Entity)
+        .modify_column(ColumnDef::new(organization::Column::Metadata).null())
+        .to_owned()
+}
+
+async fn make_sqlite_organization_metadata_nullable(
+    manager: &SchemaManager<'_>,
+) -> Result<(), DbErr> {
+    use sea_orm::{ConnectionTrait, DatabaseBackend, Statement, TransactionTrait};
+
+    let db = manager.get_connection();
+    let metadata = db
+        .query_one_raw(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            "SELECT \"notnull\" FROM pragma_table_info('organization') WHERE name = 'metadata'",
+        ))
+        .await?
+        .ok_or_else(|| DbErr::Custom("organization.metadata column is missing".into()))?;
+    if metadata.try_get::<i32>("", "notnull")? == 0 {
+        return Ok(());
+    }
+
+    // SQLite cannot change nullability in place. Replacing only this column
+    // keeps organization foreign keys, members, invitations, and indexes intact;
+    // rebuilding the parent table could otherwise cascade deletes to its children.
+    // SQLite 3.35+ is required for DROP COLUMN, as for SeaORM's RETURNING support;
+    // the bundled SQLite version satisfies this. A transaction rolls back the
+    // replacement if an application-owned index or column prevents the change.
+    let transaction = db.begin().await?;
+    for statement in [
+        "ALTER TABLE organization ADD COLUMN better_auth_metadata_nullable jsonb_text",
+        "UPDATE organization SET better_auth_metadata_nullable = metadata",
+        "ALTER TABLE organization DROP COLUMN metadata",
+        "ALTER TABLE organization RENAME COLUMN better_auth_metadata_nullable TO metadata",
+    ] {
+        let _ = transaction.execute_unprepared(statement).await?;
+    }
+    transaction.commit().await
 }
 
 /// Moves an existing `api_keys` table to reference-based ownership.
@@ -481,11 +551,7 @@ async fn create_organizations(manager: &SchemaManager<'_>) -> Result<(), DbErr> 
                         .unique_key(),
                 )
                 .col(ColumnDef::new(organization::Column::Logo).string())
-                .col(
-                    ColumnDef::new(organization::Column::Metadata)
-                        .json_binary()
-                        .not_null(),
-                )
+                .col(ColumnDef::new(organization::Column::Metadata).json_binary())
                 .col(
                     ColumnDef::new(organization::Column::CreatedAt)
                         .timestamp_with_time_zone()
@@ -1034,7 +1100,205 @@ async fn create_device_codes(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sea_orm::Database;
+    use sea_orm::{ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, Statement};
+
+    async fn database_with_required_organization_metadata() -> Result<DatabaseConnection, DbErr> {
+        let database = Database::connect("sqlite::memory:").await?;
+        let _ = database
+            .execute_unprepared(
+                "CREATE TABLE organization (\
+                    id varchar NOT NULL PRIMARY KEY, \
+                    name varchar NOT NULL, \
+                    slug varchar NOT NULL UNIQUE, \
+                    logo varchar, \
+                    metadata jsonb_text NOT NULL, \
+                    created_at timestamp_with_timezone_text NOT NULL, \
+                    updated_at timestamp_with_timezone_text NOT NULL\
+                )",
+            )
+            .await?;
+        // Record the migrations predating optional organization metadata while
+        // retaining the old table definition above.
+        AuthMigrator::up(&database, Some(2)).await?;
+
+        for statement in [
+            "INSERT INTO users (id, metadata, created_at, updated_at) \
+             VALUES ('owner', '{}', '2026-09-06T00:00:00Z', '2026-09-06T00:00:00Z')",
+            "INSERT INTO organization (id, name, slug, logo, metadata, created_at, updated_at) \
+             VALUES ('existing', 'Existing', 'existing', 'https://example.com/logo.png', \
+             '{\"tier\":\"pro\"}', '2026-09-06T00:00:00Z', '2026-09-06T01:00:00Z')",
+            "INSERT INTO member (id, organization_id, user_id, role, created_at) \
+             VALUES ('membership', 'existing', 'owner', 'owner', '2026-09-06T00:00:00Z')",
+            "INSERT INTO invitation \
+             (id, organization_id, email, role, status, inviter_id, expires_at, created_at) \
+             VALUES ('invitation', 'existing', 'invitee@example.com', 'member', 'pending', \
+             'owner', '2026-09-07T00:00:00Z', '2026-09-06T00:00:00Z')",
+        ] {
+            let _ = database.execute_unprepared(statement).await?;
+        }
+        Ok(database)
+    }
+
+    async fn query_count(database: &DatabaseConnection, sql: &str) -> Result<i64, DbErr> {
+        database
+            .query_one_raw(Statement::from_string(DatabaseBackend::Sqlite, sql))
+            .await?
+            .ok_or_else(|| DbErr::Custom("COUNT query returned no row".into()))?
+            .try_get("", "count")
+    }
+
+    async fn insert_organization_without_metadata(
+        database: &DatabaseConnection,
+    ) -> Result<(), DbErr> {
+        let _ = database
+            .execute_unprepared(
+                "INSERT INTO organization (id, name, slug, created_at, updated_at) \
+                 VALUES ('omitted', 'Omitted', 'omitted', \
+                 '2026-09-06T00:00:00Z', '2026-09-06T00:00:00Z')",
+            )
+            .await?;
+        assert_eq!(
+            query_count(
+                database,
+                "SELECT COUNT(*) AS count FROM organization \
+                 WHERE id = 'omitted' AND metadata IS NULL",
+            )
+            .await?,
+            1,
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn fresh_schema_allows_omitted_organization_metadata() -> Result<(), DbErr> {
+        let database = Database::connect("sqlite::memory:").await?;
+        run_migrations(&database).await?;
+
+        insert_organization_without_metadata(&database).await?;
+        run_migrations(&database).await?;
+        assert_eq!(
+            query_count(
+                &database,
+                "SELECT COUNT(*) AS count FROM organization WHERE metadata IS NULL",
+            )
+            .await?,
+            1,
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn organization_metadata_migration_preserves_data_and_relationships() -> Result<(), DbErr>
+    {
+        let database = database_with_required_organization_metadata().await?;
+
+        run_migrations(&database).await?;
+        run_migrations(&database).await?;
+        insert_organization_without_metadata(&database).await?;
+
+        assert_eq!(
+            query_count(
+                &database,
+                "SELECT COUNT(*) AS count FROM organization \
+                 WHERE id = 'existing' AND name = 'Existing' AND slug = 'existing' \
+                 AND logo = 'https://example.com/logo.png' AND metadata = '{\"tier\":\"pro\"}' \
+                 AND created_at = '2026-09-06T00:00:00Z' AND updated_at = '2026-09-06T01:00:00Z'",
+            )
+            .await?,
+            1,
+        );
+        for sql in [
+            "SELECT COUNT(*) AS count FROM member WHERE id = 'membership' AND organization_id = 'existing'",
+            "SELECT COUNT(*) AS count FROM invitation WHERE id = 'invitation' AND organization_id = 'existing'",
+            "SELECT COUNT(*) AS count FROM pragma_foreign_keys WHERE foreign_keys = 1",
+        ] {
+            assert_eq!(query_count(&database, sql).await?, 1);
+        }
+        let manager = SchemaManager::new(&database);
+        assert!(
+            manager
+                .has_index("organization", "idx_organization_slug")
+                .await?
+        );
+        assert!(
+            !manager
+                .has_column("organization", "better_auth_metadata_nullable")
+                .await?
+        );
+        assert!(
+            database
+                .execute_unprepared(
+                    "UPDATE organization SET slug = 'existing' WHERE id = 'omitted'"
+                )
+                .await
+                .is_err(),
+            "The unique slug constraint must survive the migration",
+        );
+
+        // Foreign keys still target organization, and their cascade semantics
+        // survive changing the parent table's metadata column.
+        let _ = database
+            .execute_unprepared("DELETE FROM organization WHERE id = 'existing'")
+            .await?;
+        for sql in [
+            "SELECT COUNT(*) AS count FROM member",
+            "SELECT COUNT(*) AS count FROM invitation",
+        ] {
+            assert_eq!(query_count(&database, sql).await?, 0);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn organization_metadata_migration_rolls_back_on_failure() -> Result<(), DbErr> {
+        let database = database_with_required_organization_metadata().await?;
+        // An application-owned index makes DROP COLUMN fail after the nullable
+        // replacement was populated, exercising rollback of both DDL and data.
+        let _ = database
+            .execute_unprepared("CREATE INDEX app_metadata_index ON organization (metadata)")
+            .await?;
+
+        assert!(run_migrations(&database).await.is_err());
+        let manager = SchemaManager::new(&database);
+        assert!(
+            !manager
+                .has_column("organization", "better_auth_metadata_nullable")
+                .await?
+        );
+        assert_eq!(
+            query_count(
+                &database,
+                "SELECT COUNT(*) AS count FROM organization \
+                 WHERE id = 'existing' AND metadata = '{\"tier\":\"pro\"}'",
+            )
+            .await?,
+            1,
+        );
+        assert_eq!(
+            query_count(
+                &database,
+                "SELECT COUNT(*) AS count FROM pragma_table_info('organization') \
+                 WHERE name = 'metadata' AND \"notnull\" = 1",
+            )
+            .await?,
+            1,
+        );
+
+        let _ = database
+            .execute_unprepared("DROP INDEX app_metadata_index")
+            .await?;
+        run_migrations(&database).await?;
+        insert_organization_without_metadata(&database).await?;
+        Ok(())
+    }
+
+    #[test]
+    fn postgres_organization_metadata_migration_drops_not_null() {
+        assert_eq!(
+            nullable_organization_metadata().to_string(PostgresQueryBuilder),
+            "ALTER TABLE \"organization\" ALTER COLUMN \"metadata\" DROP NOT NULL",
+        );
+    }
 
     #[derive(DeriveIden)]
     enum Todo {

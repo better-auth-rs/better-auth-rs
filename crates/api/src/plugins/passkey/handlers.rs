@@ -211,7 +211,7 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
     let mut response = authentication_options_json(options)?;
     if let Some(object) = response.as_object_mut() {
         if allow_credentials_json.is_empty() {
-            let _ = object.remove("allowCredentials");
+            let _ = object.shift_remove("allowCredentials");
         } else {
             let _ = object.insert(
                 "allowCredentials".to_string(),

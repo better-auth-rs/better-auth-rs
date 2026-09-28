@@ -249,6 +249,24 @@ mod tests {
     }
 
     #[test]
+    fn generate_schema_keeps_organization_metadata_nullable_and_user_metadata_required() {
+        let schema = generate_schema(&["organization".to_string(), "admin".to_string()]);
+
+        for (module_name, metadata_field) in [
+            ("organization", "pub metadata: Option<Json>,"),
+            ("user", "pub metadata: Json,"),
+        ] {
+            assert!(
+                schema.split("\nmod ").any(|module| {
+                    module.starts_with(&format!("{module_name} {{"))
+                        && module.contains(metadata_field)
+                }),
+                "expected {metadata_field} in the generated {module_name} entity"
+            );
+        }
+    }
+
+    #[test]
     fn generate_schema_phase_zero_through_eight_plugins_emit_required_entities() {
         let schema = generate_schema(&[
             "device-authorization".to_string(),

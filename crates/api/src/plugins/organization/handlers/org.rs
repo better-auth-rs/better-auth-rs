@@ -91,7 +91,7 @@ pub(crate) async fn update_organization_core(
     session: &impl AuthSession,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<OrganizationResponse> {
+) -> AuthResult<CreatedOrganizationResponse> {
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
@@ -131,7 +131,7 @@ pub(crate) async fn update_organization_core(
         .update_organization(&org_id, update_data)
         .await?;
 
-    Ok(OrganizationResponse::from_organization(&updated))
+    Ok(CreatedOrganizationResponse::from_organization(&updated))
 }
 
 pub(crate) async fn delete_organization_core(
@@ -517,11 +517,15 @@ mod tests {
 
     use crate::plugins::organization::OrganizationConfig;
     use crate::plugins::test_helpers::{
-        create_auth_json_request_no_query, create_test_context, create_user,
-        create_user_and_session,
+        create_auth_json_request, create_auth_json_request_no_query, create_test_context,
+        create_user, create_user_and_session,
     };
 
-    use super::{get_full_organization_core, handle_create_organization};
+    use super::{
+        get_full_organization_core, handle_create_organization, handle_delete_organization,
+        handle_get_full_organization, handle_list_organizations, handle_set_active_organization,
+        handle_update_organization,
+    };
     use crate::plugins::organization::types::GetFullOrganizationQuery;
 
     fn test_config() -> OrganizationConfig {
@@ -542,6 +546,171 @@ mod tests {
             email: Some(email.to_string()),
             name: Some(name.to_string()),
             ..CreateUser::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn organization_metadata_preserves_omitted_empty_and_populated_values() {
+        let ctx = create_test_context().await;
+        let config = test_config();
+        let (_, session) = create_user_and_session(
+            &ctx,
+            test_user("metadata-owner@example.com", "Owner"),
+            Duration::hours(1),
+        )
+        .await;
+
+        for (index, metadata) in [
+            None,
+            Some(serde_json::json!({})),
+            Some(serde_json::json!({ "tier": "gold" })),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut body = serde_json::json!({
+                "name": "Metadata",
+                "slug": format!("metadata-{index}")
+            });
+            if let Some(value) = &metadata {
+                body["metadata"] = value.clone();
+            }
+            let request = create_auth_json_request_no_query(
+                HttpMethod::Post,
+                "/organization/create",
+                Some(&session.token),
+                Some(body),
+            );
+            let response = handle_create_organization(&request, &ctx, &config)
+                .await
+                .expect("organization should be created");
+            assert_eq!(response.status, 200);
+            let created: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+            assert_eq!(created.get("metadata"), metadata.as_ref());
+            let organization_id = created["id"].as_str().unwrap();
+            let expected_stored_metadata = metadata
+                .as_ref()
+                .map(|value| serde_json::Value::String(value.to_string()))
+                .unwrap_or(serde_json::Value::Null);
+
+            let full_request = create_auth_json_request(
+                HttpMethod::Get,
+                "/organization/get-full-organization",
+                Some(&session.token),
+                None,
+                HashMap::from([("organizationId".to_string(), organization_id.to_string())]),
+            );
+            let full_response = handle_get_full_organization(&full_request, &ctx, &config)
+                .await
+                .expect("full organization should be returned");
+            let active_request = create_auth_json_request_no_query(
+                HttpMethod::Post,
+                "/organization/set-active",
+                Some(&session.token),
+                Some(serde_json::json!({ "organizationId": organization_id })),
+            );
+            let active_response = handle_set_active_organization(&active_request, &ctx)
+                .await
+                .expect("organization should be set active");
+            let list_request = create_auth_json_request_no_query(
+                HttpMethod::Get,
+                "/organization/list",
+                Some(&session.token),
+                None,
+            );
+            let list_response = handle_list_organizations(&list_request, &ctx)
+                .await
+                .expect("organizations should be listed");
+            assert_eq!(list_response.status, 200);
+            let listed: serde_json::Value = serde_json::from_slice(&list_response.body).unwrap();
+            assert_eq!(listed.as_array().unwrap().len(), 1);
+            assert_eq!(listed[0].get("metadata"), Some(&expected_stored_metadata));
+
+            let delete_request = create_auth_json_request_no_query(
+                HttpMethod::Post,
+                "/organization/delete",
+                Some(&session.token),
+                Some(serde_json::json!({ "organizationId": organization_id })),
+            );
+            let delete_response = handle_delete_organization(&delete_request, &ctx, &config)
+                .await
+                .expect("organization should be deleted");
+            for response in [full_response, active_response, delete_response] {
+                assert_eq!(response.status, 200);
+                let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+                assert_eq!(body.get("metadata"), Some(&expected_stored_metadata));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn organization_update_preserves_omitted_metadata_and_replaces_explicit_values() {
+        let ctx = create_test_context().await;
+        let config = test_config();
+        let (_, session) = create_user_and_session(
+            &ctx,
+            test_user("metadata-update-owner@example.com", "Owner"),
+            Duration::hours(1),
+        )
+        .await;
+        let create_request = create_auth_json_request_no_query(
+            HttpMethod::Post,
+            "/organization/create",
+            Some(&session.token),
+            Some(serde_json::json!({ "name": "Metadata", "slug": "metadata-update" })),
+        );
+        let response = handle_create_organization(&create_request, &ctx, &config)
+            .await
+            .expect("organization should be created");
+        let created: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        let organization_id = created["id"].as_str().unwrap();
+        let populated_metadata = serde_json::json!({ "tier": "gold" });
+        let empty_metadata = serde_json::json!({});
+
+        for (data, expected_metadata) in [
+            (serde_json::json!({ "name": "Absent" }), None),
+            (
+                serde_json::json!({ "metadata": populated_metadata }),
+                Some(&populated_metadata),
+            ),
+            (
+                serde_json::json!({ "name": "Populated" }),
+                Some(&populated_metadata),
+            ),
+            (
+                serde_json::json!({ "metadata": empty_metadata }),
+                Some(&empty_metadata),
+            ),
+            (
+                serde_json::json!({ "name": "Empty" }),
+                Some(&empty_metadata),
+            ),
+        ] {
+            let request = create_auth_json_request_no_query(
+                HttpMethod::Post,
+                "/organization/update",
+                Some(&session.token),
+                Some(serde_json::json!({
+                    "organizationId": organization_id,
+                    "data": data
+                })),
+            );
+            let response = handle_update_organization(&request, &ctx, &config)
+                .await
+                .expect("organization should be updated");
+            assert_eq!(response.status, 200);
+            let updated: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+            assert_eq!(updated.get("metadata"), expected_metadata);
+            let stored = ctx
+                .database
+                .get_organization_by_id(organization_id)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                better_auth_core::entity::AuthOrganization::metadata(&stored),
+                expected_metadata
+            );
         }
     }
 

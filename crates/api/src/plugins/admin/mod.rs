@@ -218,12 +218,12 @@ impl AdminPlugin {
         };
         let username = body
             .data
-            .remove("username")
+            .shift_remove("username")
             .and_then(|value| value.as_str().map(ToOwned::to_owned))
             .map(|value| value.to_lowercase());
         let display_username = body
             .data
-            .remove("displayUsername")
+            .shift_remove("displayUsername")
             .and_then(|value| value.as_str().map(ToOwned::to_owned));
 
         if let Some(username) = username.as_deref() {

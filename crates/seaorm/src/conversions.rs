@@ -16,7 +16,7 @@ impl From<&entities::organization::Model> for Organization {
             name: model.name.clone(),
             slug: model.slug.clone(),
             logo: model.logo.clone(),
-            metadata: Some(model.metadata.clone()),
+            metadata: model.metadata.clone(),
             created_at: model.created_at,
             updated_at: model.updated_at,
         }
