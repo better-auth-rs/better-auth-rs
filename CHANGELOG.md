@@ -3,6 +3,44 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [1.0.0-alpha.4](https://github.com/better-auth-rs/better-auth-rs/compare/v1.0.0-alpha.3...v1.0.0-alpha.4) - 2026-09-30
+
+### Bug Fixes
+
+- enforce session and plugin persistence invariants
+
+- generate complete usable auth schemas
+
+- repair async Redis feature integration
+
+- align session and credential security with upstream
+
+- align lookup and invitation lifecycle
+
+- support RP-initiated logout
+
+- close parity gaps and enforce upstream contracts
+
+
+### Chores
+
+- add reproducible devenv environment
+
+- unify verification and document working setup
+
+- configure tooling and repair frontend checks
+
+
+### Features
+
+- align machine credentials with better-auth 1.7.6
+
+- add typed server operations
+
+- align generic OAuth and OIDC with upstream
+
+- expose resolved provider availability
+
 ## [1.0.0-alpha.3](https://github.com/better-auth-rs/better-auth-rs/compare/v1.0.0-alpha.2...v1.0.0-alpha.3) - 2026-09-26
 
 ### Bug Fixes
