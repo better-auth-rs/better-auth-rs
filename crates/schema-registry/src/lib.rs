@@ -16,6 +16,12 @@ pub enum EntityRole {
     Team,
     TeamMember,
     OrganizationRole,
+    ApiKey,
+    DeviceCode,
+    Passkey,
+    TwoFactor,
+    Jwk,
+    WalletAddress,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -151,7 +157,7 @@ static PLUGINS: &[PluginSchema] = &[
         extra_entities: &[ExtraEntitySchema {
             mod_name: "jwk",
             table_name: "jwks",
-            role: None,
+            role: Some(EntityRole::Jwk),
             fields: &[
                 pk!("id", "String"),
                 f!("public_key", "String"),
@@ -185,7 +191,7 @@ static PLUGINS: &[PluginSchema] = &[
         extra_entities: &[ExtraEntitySchema {
             mod_name: "wallet_address",
             table_name: "wallet_address",
-            role: None,
+            role: Some(EntityRole::WalletAddress),
             fields: &[
                 pk!("id", "String"),
                 f!("user_id", "String"),
@@ -212,7 +218,7 @@ static PLUGINS: &[PluginSchema] = &[
         extra_entities: &[ExtraEntitySchema {
             mod_name: "two_factor",
             table_name: "two_factor",
-            role: None,
+            role: Some(EntityRole::TwoFactor),
             fields: &[
                 pk!("id", "String"),
                 f!("secret", "String"),
@@ -233,7 +239,7 @@ static PLUGINS: &[PluginSchema] = &[
         extra_entities: &[ExtraEntitySchema {
             mod_name: "device_code",
             table_name: "device_code",
-            role: None,
+            role: Some(EntityRole::DeviceCode),
             fields: &[
                 pk!("id", "String"),
                 f!("device_code", "String"),
@@ -279,7 +285,12 @@ static PLUGINS: &[PluginSchema] = &[
                     f!("logo", "Option<String>"),
                     f!("metadata", "Option<Json>"),
                     f!("created_at", "DateTimeUtc"),
-                    f!("updated_at", "DateTimeUtc"),
+                    FieldDef {
+                        name: "auth_updated_at",
+                        ty: "DateTimeUtc",
+                        is_primary_key: false,
+                        column_name: Some("updated_at"),
+                    },
                 ],
             },
             ExtraEntitySchema {
@@ -320,7 +331,12 @@ static PLUGINS: &[PluginSchema] = &[
                     f!("organization_id", "String"),
                     f!("created_at", "DateTimeUtc"),
                     f!("updated_at", "Option<DateTimeUtc>"),
-                    f!("member_count", "i64"),
+                    FieldDef {
+                        name: "member_count",
+                        ty: "i64",
+                        is_primary_key: false,
+                        column_name: Some("member_count"),
+                    },
                 ],
             },
             ExtraEntitySchema {
@@ -357,7 +373,7 @@ static PLUGINS: &[PluginSchema] = &[
         extra_entities: &[ExtraEntitySchema {
             mod_name: "api_key",
             table_name: "api_keys",
-            role: None,
+            role: Some(EntityRole::ApiKey),
             fields: &[
                 pk!("id", "String"),
                 f!("name", "Option<String>"),
@@ -391,7 +407,7 @@ static PLUGINS: &[PluginSchema] = &[
         extra_entities: &[ExtraEntitySchema {
             mod_name: "passkey",
             table_name: "passkeys",
-            role: None,
+            role: Some(EntityRole::Passkey),
             fields: &[
                 pk!("id", "String"),
                 f!("name", "Option<String>"),

@@ -493,7 +493,7 @@ async fn create_organizations(manager: &SchemaManager<'_>) -> Result<(), DbErr> 
                         .not_null(),
                 )
                 .col(
-                    ColumnDef::new(organization::Column::UpdatedAt)
+                    ColumnDef::new(organization::Column::AuthUpdatedAt)
                         .timestamp_with_time_zone()
                         .not_null(),
                 )

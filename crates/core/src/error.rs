@@ -1,5 +1,22 @@
 use thiserror::Error;
 
+/// An endpoint error response whose body and headers are excluded from diagnostics.
+pub struct ApiErrorResponse(crate::types::AuthResponse);
+
+impl std::fmt::Debug for ApiErrorResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiErrorResponse")
+            .field("status", &self.0.status)
+            .finish()
+    }
+}
+
+impl std::fmt::Display for ApiErrorResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Endpoint rejected request (HTTP {})", self.0.status)
+    }
+}
+
 /// Authentication framework error types.
 ///
 /// Each variant maps to an HTTP status code via [`AuthError::status_code`].
@@ -7,6 +24,9 @@ use thiserror::Error;
 /// matching the better-auth OpenAPI spec: `{ "message": "..." }`.
 #[derive(Error, Debug)]
 pub enum AuthError {
+    /// Preserve an endpoint's complete error body and repeated response headers.
+    #[error("{0}")]
+    Response(ApiErrorResponse),
     /// Public schema error with a field-specific message.
     #[error("{message}")]
     FieldInput {
@@ -111,6 +131,7 @@ impl AuthError {
     /// HTTP status code for this error.
     pub fn status_code(&self) -> u16 {
         match self {
+            Self::Response(response) => response.0.status,
             Self::FieldInput { .. } => 400,
             Self::Upstream { status, .. } => *status,
             // 400
@@ -196,6 +217,9 @@ impl AuthError {
     /// Named `to_auth_response` to avoid collision with Axum's
     /// `IntoResponse::into_response` when the `axum` feature is enabled.
     pub fn to_auth_response(self) -> crate::types::AuthResponse {
+        if let Self::Response(response) = self {
+            return response.0;
+        }
         let (status, code, message) = self.error_payload();
         crate::types::AuthResponse::json(
             status,
@@ -287,17 +311,29 @@ pub enum DatabaseError {
 
 pub type AuthResult<T> = Result<T, AuthError>;
 
+impl From<crate::types::AuthResponse> for AuthError {
+    fn from(response: crate::types::AuthResponse) -> Self {
+        Self::Response(ApiErrorResponse(response))
+    }
+}
+
 #[cfg(feature = "axum")]
 impl axum::response::IntoResponse for AuthError {
     fn into_response(self) -> axum::response::Response {
-        let (status_u16, code, message) = self.error_payload();
-        let status = axum::http::StatusCode::from_u16(status_u16)
+        let response = self.to_auth_response();
+        let status = axum::http::StatusCode::from_u16(response.status)
             .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
-        (
-            status,
-            axum::Json(crate::types::ErrorCodeMessageResponse { code, message }),
-        )
-            .into_response()
+        let mut output = axum::response::Response::new(axum::body::Body::from(response.body));
+        *output.status_mut() = status;
+        for (name, value) in response.headers {
+            if let (Ok(name), Ok(value)) = (
+                axum::http::HeaderName::from_bytes(name.as_bytes()),
+                axum::http::HeaderValue::from_str(&value),
+            ) {
+                let _ = output.headers_mut().append(name, value);
+            }
+        }
+        output
     }
 }
 
@@ -362,6 +398,51 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn endpoint_error_preserves_body_headers_and_redacts_diagnostics() {
+        let body = serde_json::json!({"code":"RATE_LIMITED", "message":"Rate limit exceeded.", "details":{"tryAgainIn":1234}});
+        let mut response = crate::types::AuthResponse::json(429, &body).unwrap();
+        response.headers.append("Set-Cookie", "sensitive=first");
+        response.headers.append("Set-Cookie", "sensitive=second");
+        let error = AuthError::from(response);
+        assert_eq!(error.status_code(), 429);
+        assert!(!format!("{error:?} {error}").contains("sensitive"));
+        assert!(!format!("{error:?} {error}").contains("tryAgainIn"));
+        let response = error.to_auth_response();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&response.body).unwrap(),
+            body
+        );
+        assert_eq!(
+            response.headers.get_all("set-cookie").collect::<Vec<_>>(),
+            ["sensitive=first", "sensitive=second"]
+        );
+    }
+
+    #[cfg(feature = "axum")]
+    #[tokio::test]
+    async fn endpoint_error_into_axum_preserves_json_and_repeated_headers() {
+        use axum::response::IntoResponse;
+        let mut response = crate::types::AuthResponse::json(
+            429,
+            &serde_json::json!({"details":{"tryAgainIn":1234}}),
+        )
+        .unwrap();
+        response.headers.append("Set-Cookie", "first=1");
+        response.headers.append("Set-Cookie", "second=2");
+        let output = AuthError::from(response).into_response();
+        assert_eq!(output.status(), 429);
+        assert_eq!(output.headers().get_all("set-cookie").iter().count(), 2);
+        assert_eq!(output.headers()["content-type"], "application/json");
+        let body = axum::body::to_bytes(output.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap()["details"]["tryAgainIn"],
+            1234
+        );
+    }
 
     // ── status_code ─────────────────────────────────────────────────────
 

@@ -15,7 +15,32 @@ use crate::types_org::{CreateMember, Member};
 use super::organization_models::{self as models, Entity, values};
 use super::{SeaOrmStore, map_db_err};
 use crate::SeaOrmOrganizationModel;
+use sea_orm::sea_query::{Expr, ExprTrait, SimpleExpr};
 use serde_json::json;
+
+fn member_expression(
+    column: impl ColumnTrait,
+    field: &str,
+    config: &better_auth_core::user_fields::UserConfig,
+    backend: DatabaseBackend,
+) -> SimpleExpr {
+    if backend == DatabaseBackend::Sqlite
+        && config.additional_fields.get(field).is_some_and(|field| {
+            matches!(
+                field.field_type,
+                better_auth_core::user_fields::UserFieldType::Json
+            )
+        })
+        && matches!(
+            column.def().get_column_type(),
+            sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
+        )
+    {
+        Expr::cust_with_expr("json_extract(?, '$')", Expr::col(column))
+    } else {
+        Expr::col(column)
+    }
+}
 
 fn member_column<M: SeaOrmOrganizationModel>(
     field: &str,
@@ -52,6 +77,7 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
     let Some(column) = member_column::<M>(field, config) else {
         return Ok(query);
     };
+    let column = member_expression(column, field, config, backend);
     let raw_value = value;
     let value = if field == "createdAt" {
         let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(value) else {
@@ -88,7 +114,7 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
                 sea_orm::Value::Bool(Some(value)) => value.to_string(),
                 _ => raw_value.to_owned(),
             };
-            query.filter(column.contains(pattern))
+            query.filter(column.like(format!("%{pattern}%")))
         }
         _ => query,
     };
@@ -99,12 +125,19 @@ fn apply_member_sort<M: SeaOrmOrganizationModel>(
     query: Select<Entity<M>>,
     params: &ListOrganizationMembersParams,
     config: &better_auth_core::user_fields::UserConfig,
+    backend: DatabaseBackend,
 ) -> AuthResult<Select<Entity<M>>> {
     let column = params
         .sort_by
         .as_deref()
         .and_then(|field| member_column::<M>(field, config))
         .unwrap_or(M::column("created_at")?);
+    let column = member_expression(
+        column,
+        params.sort_by.as_deref().unwrap_or("createdAt"),
+        config,
+        backend,
+    );
     Ok(if params.sort_direction.as_deref() == Some("desc") {
         query.order_by_desc(column)
     } else {
@@ -113,20 +146,24 @@ fn apply_member_sort<M: SeaOrmOrganizationModel>(
 }
 
 #[async_trait]
-impl<S, O: crate::SeaOrmOrganizationSchema> MemberStore for SeaOrmStore<S, O>
+impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> MemberStore
+    for SeaOrmStore<S, O, P>
 where
     S: AuthSchema + Send + Sync,
 {
     async fn create_member(&self, member: CreateMember) -> AuthResult<Member> {
+        let mut core = values([
+            ("id", json!(Uuid::new_v4().to_string())),
+            ("organization_id", json!(member.organization_id)),
+            ("user_id", json!(member.user_id)),
+            ("created_at", json!(Utc::now())),
+        ]);
+        if let Some(role) = member.role.json()? {
+            let _ = core.insert("role".into(), role);
+        }
         models::insert::<O::Member, _>(
             self.connection(),
-            values([
-                ("id", json!(Uuid::new_v4().to_string())),
-                ("organization_id", json!(member.organization_id)),
-                ("user_id", json!(member.user_id)),
-                ("role", json!(member.role)),
-                ("created_at", json!(Utc::now())),
-            ]),
+            core,
             member.additional_fields,
             &self.organization_fields()?.member,
         )
@@ -137,6 +174,27 @@ where
         Entity::<O::Member>::find()
             .filter(O::Member::column("organization_id")?.eq(organization_id))
             .filter(O::Member::column("user_id")?.eq(user_id))
+            .one(self.connection())
+            .await
+            .map_err(map_db_err)?
+            .map(|row| row.record(&self.organization_fields()?.member))
+            .transpose()
+    }
+
+    async fn get_member_value(
+        &self,
+        organization_id: &serde_json::Value,
+        user_id: &serde_json::Value,
+    ) -> AuthResult<Option<Member>> {
+        Entity::<O::Member>::find()
+            .filter(super::value_filter::equals(
+                O::Member::column("organization_id")?,
+                organization_id,
+            ))
+            .filter(super::value_filter::equals(
+                O::Member::column("user_id")?,
+                user_id,
+            ))
             .one(self.connection())
             .await
             .map_err(map_db_err)?
@@ -176,7 +234,9 @@ where
         {
             let member = member.record(&self.organization_fields()?.member)?;
             let teams = Entity::<O::Team>::find()
-                .filter(O::Team::column("organization_id")?.eq(member.organization_id))
+                .filter(
+                    O::Team::column("organization_id")?.eq(member.organization_id.typed()?.clone()),
+                )
                 .all(&tx)
                 .await
                 .map_err(map_db_err)?;
@@ -191,23 +251,19 @@ where
                     .exec(&tx)
                     .await
                     .map_err(map_db_err)?;
-                let _ = Entity::<O::TeamMember>::delete_many()
+                let deleted = Entity::<O::TeamMember>::delete_many()
                     .filter(O::TeamMember::column("team_id")?.eq(&team.id))
-                    .filter(O::TeamMember::column("user_id")?.eq(&member.user_id))
+                    .filter(O::TeamMember::column("user_id")?.eq(member.user_id.typed()?.clone()))
                     .exec(&tx)
                     .await
                     .map_err(map_db_err)?;
-                let count = Entity::<O::TeamMember>::find()
-                    .filter(O::TeamMember::column("team_id")?.eq(&team.id))
-                    .count(&tx)
-                    .await
-                    .map_err(map_db_err)?;
-                let _ = Entity::<O::Team>::update_many()
-                    .col_expr(O::Team::column("member_count")?, Expr::value(count as i64))
-                    .filter(O::Team::column("id")?.eq(team.id))
-                    .exec(&tx)
-                    .await
-                    .map_err(map_db_err)?;
+                super::team_capacity::release::<O::Team, _>(
+                    &tx,
+                    &team.id,
+                    deleted.rows_affected,
+                    &self.organization_fields()?.team,
+                )
+                .await?;
             }
             let _ = Entity::<O::Member>::delete_many()
                 .filter(O::Member::column("id")?.eq(member_id))
@@ -252,6 +308,7 @@ where
             filtered_query,
             params,
             &self.organization_fields()?.member,
+            self.connection().get_database_backend(),
         )?;
         if let Some(offset) = params.offset {
             query = query.offset(offset as u64);
@@ -329,10 +386,10 @@ mod tests {
             .create_organization(CreateOrganization {
                 additional_fields: Default::default(),
                 id: Some(org_id.clone()),
-                name: "Org".to_string(),
-                slug: "org".to_string(),
-                logo: None,
-                metadata: None,
+                name: "Org".to_string().into(),
+                slug: "org".to_string().into(),
+                logo: None.into(),
+                metadata: None.into(),
             })
             .await
             .expect("organization should be created");

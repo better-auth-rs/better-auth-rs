@@ -15,16 +15,18 @@ use sea_orm::{
 use serde_json::json;
 
 #[async_trait]
-impl<S: better_auth_core::AuthSchema, O: crate::SeaOrmOrganizationSchema> TeamStore
-    for SeaOrmStore<S, O>
+impl<
+    S: better_auth_core::AuthSchema,
+    O: crate::SeaOrmOrganizationSchema,
+    P: crate::SeaOrmPluginSchema,
+> TeamStore for SeaOrmStore<S, O, P>
 {
-    async fn create_team(&self, input: CreateTeam) -> AuthResult<Team> {
+    async fn create_team(&self, mut input: CreateTeam) -> AuthResult<Team> {
         let mut core = values([
             (
                 "id",
                 json!(input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())),
             ),
-            ("name", json!(input.name)),
             ("organization_id", json!(input.organization_id)),
             (
                 "created_at",
@@ -32,8 +34,16 @@ impl<S: better_auth_core::AuthSchema, O: crate::SeaOrmOrganizationSchema> TeamSt
             ),
             ("member_count", json!(0)),
         ]);
+        if let Some(name) = input.name.json()? {
+            let _ = core.insert("name".into(), name);
+        }
         if let Some(updated_at) = input.updated_at {
             let _ = core.insert("updated_at".into(), json!(updated_at));
+        }
+        for (public, stored) in [("createdAt", "created_at"), ("updatedAt", "updated_at")] {
+            if let Some(value) = input.additional_fields.remove(public) {
+                let _ = core.insert(stored.into(), value);
+            }
         }
         models::insert::<O::Team, _>(
             self.connection(),
@@ -47,6 +57,16 @@ impl<S: better_auth_core::AuthSchema, O: crate::SeaOrmOrganizationSchema> TeamSt
         let config = self.organization_fields()?.team;
         models::find::<O::Team, _>(self.connection(), id)
             .await?
+            .map(|row| row.record(&config))
+            .transpose()
+    }
+    async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<Team>> {
+        let config = self.organization_fields()?.team;
+        Entity::<O::Team>::find()
+            .filter(super::value_filter::equals(O::Team::column("id")?, id))
+            .one(self.connection())
+            .await
+            .map_err(map_db_err)?
             .map(|row| row.record(&config))
             .transpose()
     }
@@ -94,18 +114,20 @@ impl<S: better_auth_core::AuthSchema, O: crate::SeaOrmOrganizationSchema> TeamSt
             .map_err(map_db_err)?;
         let config = self.organization_fields()?.invitation;
         let pending = Entity::<O::Invitation>::find()
-            .filter(O::Invitation::column("organization_id")?.eq(team.organization_id))
+            .filter(
+                O::Invitation::column("organization_id")?.eq(team.organization_id.typed()?.clone()),
+            )
             .filter(O::Invitation::column("status")?.eq("pending"))
             .all(&tx)
             .await
             .map_err(map_db_err)?;
         // Upstream projects every pending row before filtering expiration or updating team IDs.
         let pending = models::project::<O::Invitation>(pending, &config)?;
-        for row in pending
-            .into_iter()
-            .filter(|row| row.expires_at > Utc::now())
-        {
-            if let Some(ids) = row.team_id.as_ref() {
+        for row in pending {
+            if *row.expires_at.typed()? <= Utc::now() {
+                continue;
+            }
+            if let Some(ids) = row.team_id.typed()? {
                 let retained: Vec<_> = ids.split(',').filter(|team_id| *team_id != id).collect();
                 if retained.len() != ids.split(',').count() {
                     let _ = models::update::<O::Invitation, _>(
@@ -208,8 +230,16 @@ impl<S: better_auth_core::AuthSchema, O: crate::SeaOrmOrganizationSchema> TeamSt
             .count(&tx)
             .await
             .map_err(map_db_err)?;
-        if maximum.is_some_and(|limit| count >= limit as u64) {
-            tx.rollback().await.map_err(map_db_err)?;
+        if !super::team_capacity::reserve::<O::Team, _>(
+            &tx,
+            team_id,
+            count,
+            maximum,
+            &self.organization_fields()?.team,
+        )
+        .await?
+        {
+            tx.commit().await.map_err(map_db_err)?;
             return Ok(None);
         }
         let member = models::insert::<O::TeamMember, _>(
@@ -230,15 +260,6 @@ impl<S: better_auth_core::AuthSchema, O: crate::SeaOrmOrganizationSchema> TeamSt
             &Default::default(),
         )
         .await?;
-        let _ = Entity::<O::Team>::update_many()
-            .col_expr(
-                O::Team::column("member_count")?,
-                Expr::value((count + 1) as i64),
-            )
-            .filter(O::Team::column("id")?.eq(team_id))
-            .exec(&tx)
-            .await
-            .map_err(map_db_err)?;
         tx.commit().await.map_err(map_db_err)?;
         Ok(Some(member))
     }
@@ -253,23 +274,19 @@ impl<S: better_auth_core::AuthSchema, O: crate::SeaOrmOrganizationSchema> TeamSt
             .exec(&tx)
             .await
             .map_err(map_db_err)?;
-        let _ = Entity::<O::TeamMember>::delete_many()
+        let deleted = Entity::<O::TeamMember>::delete_many()
             .filter(O::TeamMember::column("team_id")?.eq(team_id))
             .filter(O::TeamMember::column("user_id")?.eq(user_id))
             .exec(&tx)
             .await
             .map_err(map_db_err)?;
-        let count = Entity::<O::TeamMember>::find()
-            .filter(O::TeamMember::column("team_id")?.eq(team_id))
-            .count(&tx)
-            .await
-            .map_err(map_db_err)?;
-        let _ = Entity::<O::Team>::update_many()
-            .col_expr(O::Team::column("member_count")?, Expr::value(count as i64))
-            .filter(O::Team::column("id")?.eq(team_id))
-            .exec(&tx)
-            .await
-            .map_err(map_db_err)?;
+        super::team_capacity::release::<O::Team, _>(
+            &tx,
+            team_id,
+            deleted.rows_affected,
+            &self.organization_fields()?.team,
+        )
+        .await?;
         tx.commit().await.map_err(map_db_err)
     }
 }

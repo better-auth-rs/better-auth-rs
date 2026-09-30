@@ -16,7 +16,8 @@ pub mod organization {
         pub logo: Option<String>,
         pub metadata: Option<Json>,
         pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        #[sea_orm(column_name = "updated_at")]
+        pub auth_updated_at: DateTimeUtc,
         #[serde(rename = "storedLabel")]
         #[sea_orm(column_name = "physical_label")]
         pub stored_label: Option<String>,
@@ -127,6 +128,7 @@ pub mod team {
         pub organization_id: String,
         pub created_at: DateTimeUtc,
         pub updated_at: Option<DateTimeUtc>,
+        #[sea_orm(column_name = "member_count")]
         pub member_count: i64,
         #[serde(rename = "storedLabel")]
         #[sea_orm(column_name = "physical_label")]

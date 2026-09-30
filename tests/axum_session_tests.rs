@@ -59,7 +59,8 @@ fn request(token: &str) -> Parts {
 async fn extractors_reject_expired_sessions() {
     for optional in [false, true] {
         let (_database, auth, token) = setup().await;
-        auth.store()
+        let _ = auth
+            .store()
             .update_session_expiry(&token, Utc::now() - Duration::seconds(1))
             .await
             .unwrap();
@@ -111,7 +112,8 @@ async fn extractors_propagate_database_failure() {
 async fn extractor_refreshes_valid_sessions_through_session_manager() {
     let (_database, auth, token) = setup().await;
     let previous_expiry = Utc::now() + Duration::minutes(1);
-    auth.store()
+    let _ = auth
+        .store()
         .update_session_expiry(&token, previous_expiry)
         .await
         .unwrap();

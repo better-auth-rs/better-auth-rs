@@ -19,7 +19,7 @@ async fn refreshed_request() -> (SessionManager<BundledSchema>, AuthRequest, Ses
         .await
         .unwrap();
     let session = manager.create_session(&user, None, None).await.unwrap();
-    manager
+    let _ = manager
         .database
         .update_session_expiry(session.token(), Utc::now() + Duration::hours(1))
         .await

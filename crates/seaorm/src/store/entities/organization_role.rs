@@ -21,11 +21,11 @@ impl From<Model> for better_auth_core::OrganizationRole {
         Self {
             additional_fields: Default::default(),
             id: model.id,
-            organization_id: model.organization_id,
-            role: model.role,
-            permission: model.permission,
-            created_at: model.created_at,
-            updated_at: model.updated_at,
+            organization_id: model.organization_id.into(),
+            role: model.role.into(),
+            permission: model.permission.into(),
+            created_at: model.created_at.into(),
+            updated_at: model.updated_at.into(),
         }
     }
 }

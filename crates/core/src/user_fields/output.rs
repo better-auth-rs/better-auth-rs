@@ -34,7 +34,16 @@ impl UserView {
         config: &super::UserConfig,
         metadata: &MetadataMap,
     ) -> AuthResult<Self> {
-        Self::project(user, config, metadata, true)
+        Self::project(user, config, metadata, true, true)
+    }
+
+    pub fn with_fields_for_adapter<T: AuthUser>(
+        user: &T,
+        config: &super::UserConfig,
+        metadata: &MetadataMap,
+        supports_native_json: bool,
+    ) -> AuthResult<Self> {
+        Self::project(user, config, metadata, true, supports_native_json)
     }
 
     /// Apply adapter transforms and active schemas without removing application-only fields.
@@ -44,7 +53,16 @@ impl UserView {
         config: &super::UserConfig,
         metadata: &MetadataMap,
     ) -> AuthResult<Self> {
-        Self::project(user, config, metadata, false)
+        Self::project(user, config, metadata, false, true)
+    }
+
+    pub fn with_internal_fields_for_adapter<T: AuthUser>(
+        user: &T,
+        config: &super::UserConfig,
+        metadata: &MetadataMap,
+        supports_native_json: bool,
+    ) -> AuthResult<Self> {
+        Self::project(user, config, metadata, false, supports_native_json)
     }
 
     fn project<T: AuthUser>(
@@ -52,6 +70,7 @@ impl UserView {
         config: &super::UserConfig,
         metadata: &MetadataMap,
         public: bool,
+        supports_native_json: bool,
     ) -> AuthResult<Self> {
         let mut view = Self::from(user);
         view.visible_fields = Some(
@@ -76,11 +95,7 @@ impl UserView {
                         .as_ref()
                         .and_then(|model| model.get(field.field_name.as_ref().unwrap_or(name)))
                         .cloned();
-                    if let Some(transform) = &field.output_transform {
-                        transform(value)?
-                    } else {
-                        value
-                    }
+                    field.adapter_output(value, supports_native_json)?
                 };
                 if let Some(mut value) = value {
                     field.normalize_date(&mut value)?;

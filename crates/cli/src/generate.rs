@@ -1,6 +1,5 @@
-use crate::schema_config::{Entity, SchemaConfig};
+use crate::schema_config::{Entity, SchemaConfig, model_name};
 use better_auth_schema_registry::{self as registry, EntityRole, ExtraEntitySchema};
-use heck::ToLowerCamelCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
@@ -57,16 +56,16 @@ pub(crate) fn generate_schema(plugins: &[String], config: &SchemaConfig) -> Resu
             Some(role) => registry::core_fields(role),
             None => entity.fields,
         };
-        let configured = config.0.get(&entity.mod_name.to_lower_camel_case());
+        let configured = config.0.get(&model_name(entity.mod_name));
         definitions.push(Entity::resolve(entity, fields, configured)?);
     }
     for name in config.0.keys() {
         if !definitions
             .iter()
-            .any(|entity| entity.name.to_lower_camel_case() == *name)
+            .any(|entity| model_name(entity.name) == *name)
         {
             return Err(format!(
-                "schema model `{name}` requires the organization plugin"
+                "schema model `{name}` requires its plugin to be enabled"
             ));
         }
     }
@@ -91,6 +90,36 @@ pub(crate) fn generate_schema(plugins: &[String], config: &SchemaConfig) -> Resu
                     organization::Model, member::Model, invitation::Model,
                     team::Model, team_member::Model, organization_role::Model
                 >;
+            }
+        });
+    let plugin_models = [("api_key", "ApiKey"), ("device_code", "DeviceCode"), ("passkey", "Passkey"), ("two_factor", "TwoFactor"), ("jwk", "Jwk"), ("wallet_address", "WalletAddress")]
+        .map(|(name, role)| {
+            let module = format_ident!("{name}");
+            let role = format_ident!("{role}");
+            if definitions.iter().any(|entity| entity.name == name) {
+                quote!(#module::Model)
+            } else {
+                quote!(<better_auth::seaorm::PluginModels as better_auth::seaorm::SeaOrmPluginSchema>::#role)
+            }
+        });
+    let plugin_schema = definitions
+        .iter()
+        .any(|entity| {
+            matches!(
+                entity.role,
+                Some(
+                    EntityRole::ApiKey
+                        | EntityRole::DeviceCode
+                        | EntityRole::Passkey
+                        | EntityRole::TwoFactor
+                        | EntityRole::Jwk
+                        | EntityRole::WalletAddress
+                )
+            )
+        })
+        .then(|| {
+            quote! {
+                pub type AppPluginSchema = better_auth::seaorm::PluginModels<#(#plugin_models),*>;
             }
         });
     let arrays = [("StringArray", quote!(String)), ("NumberArray", quote!(f64))].into_iter().filter_map(|(name, element)| {
@@ -118,6 +147,7 @@ pub(crate) fn generate_schema(plugins: &[String], config: &SchemaConfig) -> Resu
         #(#arrays)*
         #(#entities)*
         #organization_schema
+        #plugin_schema
 
         pub struct AppAuthSchema;
 

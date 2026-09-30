@@ -71,25 +71,56 @@ pub(super) fn generate(
         }
         assignments.push(quote!(#(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(#core_root::serde_json::from_value(value)?),));
         if is_core {
-            if matches!(name.as_str(), "member_count" | "membership_key") {
+            if name == "member_count" {
+                continue;
+            }
+            if matches!(name.as_str(), "auth_updated_at" | "membership_key") {
                 output_values.push(quote!(let _ = projected.remove(#public_name);));
                 continue;
             }
-            let original = if name == "status" {
-                quote!(#core_root::serde_json::from_value(#core_root::serde_json::Value::String(self.#ident.clone()))
-                    .map_err(|error| #core_root::AuthError::config(format!("Organization invitation status is incompatible with its typed model: {error}")))?)
-            } else {
-                quote!(self.#ident.to_owned())
-            };
-            output_values.push(quote! {
-                let #ident = if fields.additional_fields.contains_key(#public_name) && #public_name != "id" {
-                    #core_root::serde_json::from_value(projected.remove(#public_name).unwrap_or(#core_root::serde_json::Value::Null))
-                        .map_err(|error| #core_root::AuthError::config(format!("Organization field {} output is incompatible with its typed model: {error}", #public_name)))?
+            if role == EntityRole::TeamMember {
+                output.push(quote!(#ident: self.#ident.to_owned()));
+                continue;
+            }
+            if name == "id" {
+                output_values.push(quote!(let _ = projected.remove(#public_name);));
+                output.push(quote!(#ident: self.#ident.to_owned()));
+                continue;
+            }
+            if matches!(name.as_str(), "created_at" | "updated_at" | "expires_at") {
+                output_values.push(quote! {
+                    let value = projected.remove(#public_name);
+                    let #ident = if fields.additional_fields.get(#public_name).is_some_and(|field| !matches!(field.field_type, #core_root::user_fields::UserFieldType::Date)) {
+                        value.map(#core_root::SchemaValue::Dynamic).unwrap_or_default()
+                    } else {
+                        #core_root::SchemaValue::from_json(value)
+                    };
+                });
+            } else if matches!(
+                (role, name.as_str()),
+                (EntityRole::Organization, "metadata")
+                    | (EntityRole::OrganizationRole, "permission")
+            ) {
+                let unconfigured = if role == EntityRole::Organization
+                    && matches!(&field.ty, syn::Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "Option"))
+                {
+                    quote!(#core_root::SchemaValue::Typed(self.#ident.as_ref().map(#core_root::serde_json::to_value).transpose()?))
                 } else {
-                    let _ = projected.remove(#public_name);
-                    #original
+                    quote!(#core_root::SchemaValue::from_json(value))
                 };
-            });
+                output_values.push(quote! {
+                    let value = projected.remove(#public_name);
+                    let #ident = if fields.additional_fields.contains_key(#public_name) {
+                        value.map(#core_root::SchemaValue::Dynamic).unwrap_or_default()
+                    } else {
+                        #unconfigured
+                    };
+                });
+            } else {
+                output_values.push(quote! {
+                    let #ident = #core_root::SchemaValue::from_json(projected.remove(#public_name));
+                });
+            }
             output.push(quote!(#ident));
         }
     }

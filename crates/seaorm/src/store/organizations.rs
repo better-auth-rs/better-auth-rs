@@ -10,15 +10,15 @@ use better_auth_core::{
     AuthError, AuthResult, organization_fields::OrganizationFields, store::OrganizationStore,
 };
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, TransactionTrait,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait};
 use serde_json::json;
 
 #[async_trait]
-impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationStore for SeaOrmStore<S, O> {
+impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> OrganizationStore
+    for SeaOrmStore<S, O, P>
+{
     fn configure_organization_fields(&self, fields: OrganizationFields) -> AuthResult<()> {
-        let fields = fields.into_storage()?;
+        let mut fields = fields.into_storage();
         models::validate_fields::<O::Organization>("organization", &fields.organization)?;
         models::validate_fields::<O::Member>("member", &fields.member)?;
         models::validate_fields::<O::Invitation>("invitation", &fields.invitation)?;
@@ -26,6 +26,15 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationStore for SeaOrmSto
         models::validate_fields::<O::OrganizationRole>(
             "organizationRole",
             &fields.organization_role,
+        )?;
+        let backend = self.connection().get_database_backend();
+        models::configure_json_fields::<O::Organization>(&mut fields.organization, backend)?;
+        models::configure_json_fields::<O::Member>(&mut fields.member, backend)?;
+        models::configure_json_fields::<O::Invitation>(&mut fields.invitation, backend)?;
+        models::configure_json_fields::<O::Team>(&mut fields.team, backend)?;
+        models::configure_json_fields::<O::OrganizationRole>(
+            &mut fields.organization_role,
+            backend,
         )?;
         *self
             .organization_fields
@@ -42,24 +51,39 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationStore for SeaOrmSto
                 "id",
                 json!(org.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())),
             ),
-            ("name", json!(org.name)),
-            ("slug", json!(org.slug)),
             ("created_at", json!(now)),
-            ("updated_at", json!(now)),
+            ("auth_updated_at", json!(now)),
         ]);
-        if let Some(logo) = org.logo {
-            let _ = core.insert("logo".into(), json!(logo));
+        for (name, value) in [
+            ("name", org.name.json()?),
+            ("slug", org.slug.json()?),
+            ("logo", org.logo.json()?),
+        ] {
+            if let Some(value) = value {
+                let _ = core.insert(name.into(), value);
+            }
         }
-        if config.additional_fields.contains_key("updatedAt") {
-            let _ = core.remove("updated_at");
+        let overridden_metadata = config.additional_fields.contains_key("metadata");
+        if overridden_metadata
+            && let Some(value) =
+                better_auth_core::organization_fields::metadata_input(org.metadata.json()?, true)
+        {
+            let _ = core.insert("metadata".into(), value);
         }
         let mut active =
             models::active::<O::Organization>(core, org.additional_fields, &config, true)?;
         // Native JSON retains SQL NULL separately from a stored JSON null value.
-        active.set(
-            O::Organization::column("metadata")?,
-            sea_orm::Value::Json(org.metadata.map(Box::new)),
-        );
+        let metadata = match org.metadata {
+            better_auth_core::SchemaValue::Typed(value) => value,
+            better_auth_core::SchemaValue::Dynamic(value) => Some(value),
+            better_auth_core::SchemaValue::Undefined => None,
+        };
+        if !overridden_metadata {
+            active.set(
+                O::Organization::column("metadata")?,
+                sea_orm::Value::Json(metadata.map(Box::new)),
+            );
+        }
         active
             .insert(self.connection())
             .await
@@ -75,10 +99,35 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationStore for SeaOrmSto
             .transpose()
     }
 
-    async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>> {
-        let config = self.organization_fields()?.organization;
+    async fn get_organization_by_id_value(
+        &self,
+        id: &serde_json::Value,
+    ) -> AuthResult<Option<Organization>> {
         Entity::<O::Organization>::find()
-            .filter(O::Organization::column("slug")?.eq(slug))
+            .filter(super::value_filter::equals(
+                O::Organization::column("id")?,
+                id,
+            ))
+            .one(self.connection())
+            .await
+            .map_err(map_db_err)?
+            .map(|row| row.record(&self.organization_fields()?.organization))
+            .transpose()
+    }
+
+    async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>> {
+        self.get_organization_by_slug_value(&json!(slug)).await
+    }
+
+    async fn get_organization_by_slug_value(
+        &self,
+        slug: &serde_json::Value,
+    ) -> AuthResult<Option<Organization>> {
+        let config = self.organization_fields()?.organization;
+        let column = O::Organization::column("slug")?;
+        let filter = super::value_filter::equals(column, slug);
+        Entity::<O::Organization>::find()
+            .filter(filter)
             .one(self.connection())
             .await
             .map_err(map_db_err)?
@@ -104,10 +153,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationStore for SeaOrmSto
         update: UpdateOrganization,
     ) -> AuthResult<Organization> {
         let config = self.organization_fields()?.organization;
-        let mut core = Default::default();
-        if !config.additional_fields.contains_key("updatedAt") {
-            core = values([("updated_at", json!(Utc::now()))]);
-        }
+        let mut core = values([("auth_updated_at", json!(Utc::now()))]);
         for (name, value) in [
             ("id", update.id.as_ref().map(|v| json!(v))),
             ("name", update.name.map(|v| json!(v))),
@@ -119,9 +165,18 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationStore for SeaOrmSto
                 let _ = core.insert(name.into(), value);
             }
         }
+        let overridden_metadata = config.additional_fields.contains_key("metadata");
+        if overridden_metadata
+            && let Some(value) = better_auth_core::organization_fields::metadata_input(
+                update.metadata.clone(),
+                false,
+            )
+        {
+            let _ = core.insert("metadata".into(), value);
+        }
         let mut active =
             models::active::<O::Organization>(core, update.additional_fields, &config, false)?;
-        if let Some(metadata) = update.metadata {
+        if !overridden_metadata && let Some(metadata) = update.metadata {
             active.set(
                 O::Organization::column("metadata")?,
                 sea_orm::Value::Json(Some(Box::new(metadata))),
@@ -168,15 +223,24 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationStore for SeaOrmSto
                 .map_err(map_db_err)?,
             &config.member,
         )?;
-        let ids = members.into_iter().map(|member| member.organization_id);
-        models::project::<O::Organization>(
+        let ids = members
+            .iter()
+            .map(|member| member.organization_id.typed().cloned())
+            .collect::<AuthResult<Vec<_>>>()?;
+        let organizations = models::project::<O::Organization>(
             Entity::<O::Organization>::find()
-                .filter(O::Organization::column("id")?.is_in(ids))
-                .order_by_asc(O::Organization::column("created_at")?)
+                .filter(O::Organization::column("id")?.is_in(ids.clone()))
                 .all(self.connection())
                 .await
                 .map_err(map_db_err)?,
             &config.organization,
-        )
+        )?
+        .into_iter()
+        .map(|organization| (organization.id.clone(), organization))
+        .collect::<std::collections::HashMap<_, _>>();
+        Ok(ids
+            .into_iter()
+            .filter_map(|id| organizations.get(&id).cloned())
+            .collect())
     }
 }

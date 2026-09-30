@@ -1,4 +1,4 @@
-use super::{UserConfig, UserFieldType};
+use super::{UserConfig, UserFieldConfig, UserFieldType};
 use crate::{AuthError, AuthResult};
 use serde_json::{Map, Value};
 
@@ -26,16 +26,6 @@ impl UserConfig {
         storage: &Map<String, Value>,
     ) -> AuthResult<Map<String, Value>> {
         let transformed = self.output_fields_inner(storage, true)?;
-        for name in core.keys() {
-            if name != "id"
-                && self.additional_fields.contains_key(name)
-                && !transformed.contains_key(name)
-            {
-                return Err(AuthError::config(format!(
-                    "Organization built-in field {name} output is undefined; typed fields require a compatible value"
-                )));
-            }
-        }
         core.retain(|name, _| name == "id" || !self.additional_fields.contains_key(name));
         core.extend(transformed);
         Ok(core)
@@ -51,63 +41,17 @@ impl UserConfig {
         let mut parsed = Map::new();
         let mut errors = Vec::new();
         for (name, field) in &self.additional_fields {
-            if !field.input {
-                continue;
-            }
-            let value = input.get(name);
-            if value.is_none() && (partial || field.required == Some(false)) {
-                continue;
-            }
-            if value == Some(&Value::Null) && field.required == Some(false) {
-                let _ = parsed.insert(name.clone(), Value::Null);
-                continue;
-            }
-            let location = format!("{prefix}.{name}");
-            let expected = match &field.field_type {
-                UserFieldType::Enum(_) => {
-                    if let Some(value) = value {
-                        let _ = parsed.insert(name.clone(), value.clone());
-                    }
-                    continue;
+            match field.validate_organization_input(
+                input.get(name),
+                &format!("{prefix}.{name}"),
+                partial,
+            ) {
+                Ok(Some(value)) => {
+                    let _ = parsed.insert(name.clone(), value);
                 }
-                UserFieldType::String => "string",
-                UserFieldType::Number => "number",
-                UserFieldType::Boolean => "boolean",
-                UserFieldType::Date => "date",
-                UserFieldType::Json => "json",
-                UserFieldType::StringArray | UserFieldType::NumberArray => "array",
-            };
-            let valid = match (&field.field_type, value) {
-                (UserFieldType::String, Some(Value::String(_)))
-                | (UserFieldType::Number, Some(Value::Number(_)))
-                | (UserFieldType::Boolean, Some(Value::Bool(_)))
-                | (UserFieldType::Json, Some(_)) => true,
-                (
-                    UserFieldType::StringArray | UserFieldType::NumberArray,
-                    Some(Value::Array(values)),
-                ) => {
-                    let item_type = if matches!(field.field_type, UserFieldType::StringArray) {
-                        "string"
-                    } else {
-                        "number"
-                    };
-                    for (index, value) in values.iter().enumerate() {
-                        if type_name(Some(value)) != item_type {
-                            errors.push(invalid_type(
-                                &format!("{location}.{index}"),
-                                item_type,
-                                Some(value),
-                            ));
-                        }
-                    }
-                    true
-                }
-                _ => false,
-            };
-            if !valid {
-                errors.push(invalid_type(&location, expected, value));
-            } else if let Some(value) = value {
-                let _ = parsed.insert(name.clone(), value.clone());
+                Ok(None) => {}
+                Err(AuthError::FieldInput { message, .. }) => errors.push(message),
+                Err(error) => return Err(error),
             }
         }
         if errors.is_empty() {
@@ -156,6 +100,75 @@ impl UserConfig {
                 .get(name)
                 .is_none_or(|field| field.returned)
         });
+    }
+}
+
+impl UserFieldConfig {
+    /// Validate one Organization field without applying adapter defaults or transforms.
+    pub fn validate_organization_input(
+        &self,
+        value: Option<&Value>,
+        location: &str,
+        partial: bool,
+    ) -> AuthResult<Option<Value>> {
+        if !self.input || value.is_none() && (partial || self.required == Some(false)) {
+            return Ok(None);
+        }
+        if value == Some(&Value::Null) && self.required == Some(false) {
+            return Ok(Some(Value::Null));
+        }
+        let expected = match &self.field_type {
+            UserFieldType::Enum(_) => return Ok(value.cloned()),
+            UserFieldType::String => "string",
+            UserFieldType::Number => "number",
+            UserFieldType::Boolean => "boolean",
+            UserFieldType::Date => "date",
+            UserFieldType::Json => "json",
+            UserFieldType::StringArray | UserFieldType::NumberArray => "array",
+        };
+        let mut errors = Vec::new();
+        let valid = match (&self.field_type, value) {
+            (UserFieldType::String, Some(Value::String(_)))
+            | (UserFieldType::Number, Some(Value::Number(_)))
+            | (UserFieldType::Boolean, Some(Value::Bool(_)))
+            | (UserFieldType::Json, Some(_)) => true,
+            (
+                UserFieldType::StringArray | UserFieldType::NumberArray,
+                Some(Value::Array(values)),
+            ) => {
+                let item_type = if matches!(self.field_type, UserFieldType::StringArray) {
+                    "string"
+                } else {
+                    "number"
+                };
+                for (index, value) in values.iter().enumerate() {
+                    if type_name(Some(value)) != item_type {
+                        errors.push(invalid_type(
+                            &format!("{location}.{index}"),
+                            item_type,
+                            Some(value),
+                        ));
+                    }
+                }
+                true
+            }
+            _ => false,
+        };
+        if !valid {
+            errors.push(if matches!(self.field_type, UserFieldType::Json) {
+                format!("[{location}] Invalid input")
+            } else {
+                invalid_type(location, expected, value)
+            });
+        }
+        if errors.is_empty() {
+            Ok(value.cloned())
+        } else {
+            Err(AuthError::FieldInput {
+                code: "VALIDATION_ERROR",
+                message: errors.join("; "),
+            })
+        }
     }
 }
 

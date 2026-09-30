@@ -80,8 +80,14 @@ pub(crate) async fn has_permission_core(
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
-    let has_all_permissions =
-        check_permissions(member.role(), &org_id, &body.permissions, config, ctx).await?;
+    let has_all_permissions = check_permissions(
+        member.role().typed()?,
+        &org_id,
+        &body.permissions,
+        config,
+        ctx,
+    )
+    .await?;
 
     Ok(HasPermissionResponse {
         success: has_all_permissions,

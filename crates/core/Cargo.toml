@@ -16,7 +16,7 @@ async-trait = { workspace = true }
 
 # Serialization
 serde = { workspace = true }
-serde_json = { workspace = true, features = ["preserve_order"] }
+serde_json = { workspace = true, features = ["preserve_order", "raw_value"] }
 
 # Error handling
 thiserror = { workspace = true }
@@ -53,6 +53,7 @@ sha2.workspace = true
 josekit.workspace = true
 percent-encoding = "2.3.2"
 better-auth-schema-registry.workspace = true
+indexmap = { workspace = true }
 
 [features]
 default = []

@@ -1,4 +1,5 @@
 //! Organization teams and dynamic access-control records.
+use crate::SchemaValue;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -10,12 +11,16 @@ pub struct Team {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub id: String,
-    pub name: String,
-    pub organization_id: String,
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
-    #[serde(serialize_with = "crate::utils::date::serialize_option")]
-    pub updated_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub name: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub organization_id: SchemaValue<String>,
+    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub created_at: SchemaValue<DateTime<Utc>>,
+    #[serde(serialize_with = "crate::schema_value::serialize_optional_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub updated_at: SchemaValue<Option<DateTime<Utc>>>,
 }
 
 /// Data required to create a team.
@@ -26,14 +31,14 @@ pub struct CreateTeam {
     /// Validated application input before adapter transforms.
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub updated_at: Option<DateTime<Utc>>,
-    pub name: String,
+    pub name: SchemaValue<String>,
     pub organization_id: String,
 }
 
 /// Mutable team fields. Team IDs cannot be changed.
 #[derive(Debug, Clone, Default)]
 pub struct UpdateTeam {
-    pub name: Option<String>,
+    pub name: Option<SchemaValue<String>>,
     pub organization_id: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<Option<DateTime<Utc>>>,
@@ -60,13 +65,18 @@ pub struct OrganizationRole {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub id: String,
-    pub organization_id: String,
-    pub role: String,
-    pub permission: serde_json::Value,
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
-    #[serde(serialize_with = "crate::utils::date::serialize_option")]
-    pub updated_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub organization_id: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub role: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub permission: SchemaValue<serde_json::Value>,
+    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub created_at: SchemaValue<DateTime<Utc>>,
+    #[serde(serialize_with = "crate::schema_value::serialize_optional_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub updated_at: SchemaValue<Option<DateTime<Utc>>>,
 }
 
 /// Data required to create a dynamic role.

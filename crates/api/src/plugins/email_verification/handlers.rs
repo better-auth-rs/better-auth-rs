@@ -105,14 +105,11 @@ where
     U: AuthUser,
     S: AuthSession,
 {
-    let current_session = current_session
-        .map(|(user, session)| {
-            Ok::<_, AuthError>((
-                ctx.user_view(&user)?,
-                SessionView::with_fields(&session, &ctx.config.session)?,
-            ))
-        })
-        .transpose()?;
+    let current_session = if let Some((user, session)) = current_session {
+        Some((ctx.user_view(&user)?, ctx.session_view(&session).await?))
+    } else {
+        None
+    };
 
     let claims = match decode_email_verification_token(&ctx.config.secret, &query.token) {
         Ok(claims) => claims,
@@ -203,10 +200,7 @@ where
                             .await
                             .map_err(SessionIssueError::into_auth_error)?
                             .session;
-                        (
-                            ctx.user_view(&user)?,
-                            SessionView::with_fields(&session, &ctx.config.session)?,
-                        )
+                        (ctx.user_view(&user)?, ctx.session_view(&session).await?)
                     }
                 };
 

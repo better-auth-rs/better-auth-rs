@@ -60,7 +60,7 @@ The CLI generates core entities, plugin fields and tables, unique indexes, and f
 
 Call the generated `create_auth_tables(&database).await?` from the application's initial migration. The function creates tables in an empty database and fails when a table already exists. The function does not compare schemas, alter existing tables, or track migration versions. Use your application's versioned SeaORM migrations for later changes, including plugin additions.
 
-The application owns the generated source. The four core entities can be customized through the public schema traits. Organization also supports application-owned models. Other plugin tables use fixed library entity names and columns; preserve their generated database schema.
+The application owns the generated source. The four core entities use `AuthSchema`. Organization tables use `SeaOrmOrganizationSchema`. API keys, device codes, passkeys, two-factor credentials, JWT keys, and wallet addresses use `SeaOrmPluginSchema`. Table and column attributes on the selected models control all store operations, including conditional updates and transactions.
 
 For application-owned entities, bind the four model types with `AuthSchema`:
 
@@ -78,6 +78,30 @@ pub struct AppAuthSchema;
 Each model must implement its corresponding auth entity trait. You may place each binding in a separate `#[auth(...)]` attribute. Each binding must appear exactly once.
 
 Auth responses serialize timestamps as UTC ISO 8601 strings with three fractional digits, matching the upstream JavaScript client. Stored database timestamps retain their original precision.
+
+## Map plugin tables and columns
+
+Use upstream model names in `--schema-config`: `apikey`, `deviceCode`, `passkey`, `twoFactor`, `jwks`, and `walletAddress`. Enable the corresponding plugins when generating the schema. For example:
+
+```json
+{
+  "apikey": { "modelName": "machine_credentials", "fields": { "key": "credential_hash", "referenceId": "owner_id" } },
+  "deviceCode": { "modelName": "device_authorizations", "fields": { "userCode": "activation_code" } },
+  "passkey": { "fields": { "credentialID": "credential_id" } },
+  "user": { "fields": { "twoFactorEnabled": "otp_enabled" } }
+}
+```
+
+Bind the generated models when constructing the store:
+
+```rust,ignore
+let store = SeaOrmStore::<auth_schema::AppAuthSchema>::new(config, database)
+    .with_plugin_schema::<auth_schema::AppPluginSchema>();
+```
+
+For existing entities, derive `AuthEntity` with role `api_key`, `device_code`, `passkey`, `two_factor`, `jwk`, or `wallet_address`. Keep the required Rust field names and types; use SeaORM `table_name` and `column_name` attributes for SQL names. Select models with `PluginModels<ApiKey, DeviceCode, Passkey, TwoFactor, Jwk, WalletAddress>`, or implement `SeaOrmPluginSchema`. Omitted `PluginModels` parameters use the bundled models. `with_plugin_schema` and `with_organization_schema` preserve each other's bindings.
+
+The generated migration maps indexes and foreign keys to the selected table and column names. Apply these names in application-owned migrations too. The library's bundled migration only manages bundled tables.
 
 ## Organization models
 
@@ -103,11 +127,15 @@ better-auth-rs generate --plugins organization --schema-config organization-sche
 }
 ```
 
-The configuration accepts `organization`, `member`, `invitation`, `team`, `teamMember`, and `organizationRole`. Each model supports `modelName` and `fields` mappings. Core field keys use upstream camelCase names. Rust core fields retain their snake_case names. The `session` entry supports only `activeOrganizationId` and `activeTeamId` column mappings. Primary key names remain `id`.
+The configuration accepts `organization`, `member`, `invitation`, `team`, `teamMember`, and `organizationRole`. Each model supports `modelName` and `fields` mappings. Core field keys use upstream camelCase names. Rust core fields retain their snake_case names. The `user`, `session`, `account`, and `verification` entries also support table and column mappings, including fields from enabled plugins. Primary key names remain `id`.
 
 All Organization models except `teamMember` support `additionalFields`. Supported types are `string`, `number`, `boolean`, `date`, `json`, `string[]`, `number[]`, and string arrays that define enum values. Array fields use transparent typed JSON wrappers. Enum fields use `String` storage; the CLI does not generate enum validation. For new fields, only `required: true` generates a nonnullable column. Omitted or false `required` generates an `Option` field. New organization role fields always remain nullable because upstream makes these fields optional when constructing the role update endpoint. `unique: true` generates a unique index.
 
-An additional field with a built-in public name, such as `name`, `logo`, or `createdAt`, updates the existing generated field. The CLI preserves the core Rust type and storage nullability. Omitted `required` preserves that nullability; an explicit incompatible value fails generation. Changing a core type, redefining JSON-backed `metadata` or `permission`, or redefining internal `memberCount` or organization `updatedAt` also fails generation. A built-in override replaces its `fields` mapping: `fieldName` selects the SQL column and Serde serialization name, and omitting `fieldName` restores the default column. Its `unique` setting replaces the single-column index; necessary composite identity constraints remain. An `id` override must retain the string type; its other policies do not change the generated primary key or column.
+An additional field with a built-in public name, such as `name`, `logo`, or `createdAt`, replaces that field's generated type and nullability. Only `required: true` generates a nonnullable column; organization role fields remain nullable. A built-in override also replaces its `fields` mapping: `fieldName` selects the SQL column and Serde serialization name, and omitting `fieldName` restores the default column. Its `unique` setting replaces the single-column index; necessary composite identity constraints remain. The adapter owns `id`; an additional-field declaration does not change its type, column, or primary key.
+
+Organization records expose replaceable built-in fields as `SchemaValue<T>`. `Typed(T)` contains the default Rust type, `Dynamic(Value)` preserves another JSON type, and `Undefined` omits the field during serialization. Use `.typed()?` when an operation requires the default type and `.json()?` when an application accepts the configured type. Use `.into()` to construct a default value. Output transforms may return `None` to omit a field without removing the stored value. A timestamp replaced with a string retains that string without date normalization.
+
+Organization `updatedAt` is an application field; the bundled store keeps its internal timestamp separate. Team `memberCount` remains the upstream internal counter. Ordinary team responses remove the counter, while full organization queries retain the adapter's projected counter.
 
 The JSON configuration describes storage. The CLI does not generate SQL defaults, validators, transforms, or callback configuration. Additional field runtime metadata may appear in this JSON but does not configure the plugin. Configure the matching public names, types, and `field_name` in `OrganizationConfig.schema` with `UserFieldConfig`. `field_name` accepts the Rust field name or its Serde serialization name; SeaORM's `column_name` attribute controls the SQL column name. For example:
 
@@ -179,12 +207,20 @@ The canonical worked example is [`examples/postgres_usage.rs`](../../../../examp
 
 ## Testing
 
-Run `devenv shell -- ./scripts/consumer-check.sh` to generate fresh schemas and test an independent consumer against the public package. The check creates SQLite tables, registers and signs in a user, protects an Axum route, creates an API key, and enables TOTP. A second schema verifies all six Organization model mappings, additional field storage types, partial updates, and organization deletion. Database constraint checks cover uniqueness and foreign keys.
+Run `devenv shell -- ./scripts/consumer-check.sh` to generate fresh schemas and test an independent consumer against the public package. The check creates SQLite tables, registers and signs in a user, protects an Axum route, creates an API key, and enables TOTP. A second schema verifies all six Organization model mappings, additional field storage types, partial updates, and organization deletion. A third schema renames every field in all six plugin tables and maps user, session, account, and verification columns. Tests exercise authentication, TOTP, API key quota consumption, device claims, passkey updates, JWT keys, and wallet chain lookup. Database constraint checks cover uniqueness and foreign keys.
 
 Internal behavior tests also use a bundled schema. Dual-server and client SDK compatibility checks compare behavior with the TypeScript reference server.
 
 ## Notes
 
 - Custom stores must report uniqueness conflicts as `DatabaseError::UniqueConstraint`. Device code generation retries only that error, up to three attempts.
+- Custom stores expose JSON adapter behavior through `UserStore::supports_native_json`, inherited by `AuthStore`. Return `false` when field callbacks receive JSON text, as with SQLite; return `true` for native JSON, as with PostgreSQL. The secondary storage facade forwards the database capability.
+- `AuthEntity` supplies `SeaOrmUserModel::native_json_field` and `SeaOrmSessionModel::native_json_field` from column definitions. Handwritten models must return `true` for serialized application field names backed by JSON columns. This preserves native JSON objects in typed models while the output boundary supplies adapter text to callbacks.
 - Better Auth no longer owns a public SeaORM migration path. Auth and app tables should be migrated together by the host application.
-- `MemoryCacheAdapter` and the optional asynchronous `RedisAdapter` are standalone cache utilities. Neither adapter is connected to session persistence. `RedisAdapter::clear` clears the selected Redis database.
+- `MemoryCacheAdapter` and the optional asynchronous `RedisAdapter` implement `SecondaryStorage`. Install an adapter with `BetterAuth::secondary_storage` to enable session persistence. `RedisAdapter::clear` clears the selected Redis database.
+
+## Secondary Session and Verification Storage
+
+Install `MemoryCacheAdapter`, `RedisAdapter`, or an application implementation through `BetterAuth::secondary_storage`. The runtime uses the backend for sessions and verification values. Set `session.store_session_in_database` and `verification.store_in_database` to retain database persistence. Database transactions publish new session cache entries after commit; rolled-back transactions publish none.
+
+`AuthEntity` generates runtime hydration for custom session and verification models. The application retains typed model fields and does not need to deserialize the user model. Handwritten model implementations must provide the corresponding runtime hydration methods before enabling secondary storage. See [Secondary Storage](/docs/concepts/secondary-storage) for fallback rules and `VerificationIdentifierConfig` migration behavior.

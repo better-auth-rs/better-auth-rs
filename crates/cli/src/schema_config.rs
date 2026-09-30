@@ -15,7 +15,7 @@ pub(crate) struct ModelConfig {
     #[serde(default)]
     pub fields: BTreeMap<String, String>,
     #[serde(default)]
-    pub additional_fields: BTreeMap<String, AdditionalField>,
+    pub additional_fields: indexmap::IndexMap<String, AdditionalField>,
 }
 
 #[derive(Deserialize)]
@@ -83,7 +83,16 @@ impl SchemaConfig {
         for (name, model) in &self.0 {
             if !matches!(
                 name.as_str(),
-                "session"
+                "user"
+                    | "account"
+                    | "verification"
+                    | "apikey"
+                    | "deviceCode"
+                    | "passkey"
+                    | "twoFactor"
+                    | "jwks"
+                    | "walletAddress"
+                    | "session"
                     | "organization"
                     | "member"
                     | "invitation"
@@ -93,13 +102,12 @@ impl SchemaConfig {
             ) {
                 return Err(format!("unknown schema model `{name}`"));
             }
-            if matches!(name.as_str(), "session" | "teamMember")
-                && !model.additional_fields.is_empty()
+            if !matches!(
+                name.as_str(),
+                "organization" | "member" | "invitation" | "team" | "organizationRole"
+            ) && !model.additional_fields.is_empty()
             {
                 return Err(format!("`{name}` does not support additionalFields"));
-            }
-            if name == "session" && model.model_name.is_some() {
-                return Err("the Organization schema cannot rename the session model".to_owned());
             }
         }
         Ok(())
@@ -145,18 +153,18 @@ impl Entity {
                     .fields
                     .iter_mut()
                     .find(|field| {
-                        !field.primary_key && field.ident.to_string().to_lower_camel_case() == *name
+                        !field.primary_key
+                            && (field.ident.to_string().to_lower_camel_case() == *name
+                                || (entity.name == "api_key"
+                                    && name == "key"
+                                    && field.ident == "key_hash")
+                                || (entity.name == "passkey"
+                                    && name == "credentialID"
+                                    && field.ident == "credential_id"))
                     })
                     .ok_or_else(|| {
                         format!("unknown configurable field `{}.{name}`", entity.name)
                     })?;
-                if entity.name == "session"
-                    && !matches!(name.as_str(), "activeOrganizationId" | "activeTeamId")
-                {
-                    return Err(format!(
-                        "`session.{name}` is not an Organization plugin field"
-                    ));
-                }
                 field.column.clone_from(column);
             }
             for (name, field) in &config.additional_fields {
@@ -231,43 +239,17 @@ impl Field {
         config: &AdditionalField,
         model: &str,
     ) -> Result<(), String> {
-        if definition.name == "member_count"
-            || (model == "organization" && definition.name == "updated_at")
-        {
-            return Err(format!(
-                "builtin override `{model}.{}` targets an internal storage field and is unsupported",
-                definition.name.to_lower_camel_case()
-            ));
-        }
-        let nullable = definition.ty.starts_with("Option<");
-        let base_type = definition
-            .ty
-            .strip_prefix("Option<")
-            .and_then(|ty| ty.strip_suffix('>'))
-            .unwrap_or(definition.ty);
-        if base_type == "Json" {
-            return Err(format!(
-                "builtin override `{model}.{}` uses JSON-backed storage and is unsupported",
-                definition.name.to_lower_camel_case()
-            ));
-        }
-        if !matches!(&config.field_type, FieldType::Name(_))
-            || config.field_type.rust_type()? != base_type
-        {
-            return Err(format!(
-                "builtin override `{model}.{}` must preserve its {base_type} type",
-                definition.name.to_lower_camel_case()
-            ));
-        }
         if definition.is_primary_key {
             return Ok(());
         }
-        if config.required.is_some_and(|required| required == nullable) {
-            return Err(format!(
-                "builtin override `{model}.{}` must preserve its storage nullability",
-                definition.name.to_lower_camel_case()
-            ));
-        }
+        let kind = config.field_type.rust_type()?;
+        let kind = if config.required == Some(true) && model != "organization_role" {
+            kind.to_owned()
+        } else {
+            format!("Option<{kind}>")
+        };
+        self.ty = syn::parse_str(&kind)
+            .map_err(|error| format!("invalid built-in field type: {error}"))?;
         self.column = config
             .field_name
             .clone()
@@ -275,5 +257,14 @@ impl Field {
         self.serialized = Some(self.column.clone());
         self.unique = Some(config.unique);
         Ok(())
+    }
+}
+
+/// Match upstream model names where Rust module names differ.
+pub(crate) fn model_name(module: &str) -> String {
+    match module {
+        "api_key" => "apikey".to_owned(),
+        "jwk" => "jwks".to_owned(),
+        name => name.to_lower_camel_case(),
     }
 }

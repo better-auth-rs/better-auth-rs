@@ -5,6 +5,16 @@ use std::sync::{Arc, Mutex};
 
 use crate::error::{AuthError, AuthResult};
 
+/// Shared secondary storage. Values have no expiration when `ttl_seconds` is absent.
+#[async_trait]
+pub trait SecondaryStorage: Send + Sync {
+    async fn get(&self, key: &str) -> AuthResult<Option<serde_json::Value>>;
+    async fn set(&self, key: &str, value: &str, ttl_seconds: Option<u64>) -> AuthResult<()>;
+    async fn delete(&self, key: &str) -> AuthResult<()>;
+    /// Atomically return and delete a value. Verification consumption requires this guarantee.
+    async fn get_and_delete(&self, key: &str) -> AuthResult<Option<serde_json::Value>>;
+}
+
 /// Standalone cache operations; the auth runtime does not install a cache automatically.
 #[async_trait]
 pub trait CacheAdapter: Send + Sync {
@@ -35,7 +45,7 @@ pub struct MemoryCacheAdapter {
 #[derive(Debug, Clone)]
 struct CacheEntry {
     value: String,
-    expires_at: DateTime<Utc>,
+    expires_at: Option<DateTime<Utc>>,
 }
 
 impl MemoryCacheAdapter {
@@ -49,7 +59,7 @@ impl MemoryCacheAdapter {
     fn cleanup_expired(&self) {
         if let Ok(mut data) = self.data.lock() {
             let now = Utc::now();
-            data.retain(|_, entry| entry.expires_at > now);
+            data.retain(|_, entry| entry.expires_at.is_none_or(|expires| expires > now));
         }
     }
 }
@@ -68,7 +78,7 @@ impl CacheAdapter for MemoryCacheAdapter {
         let expires_at = Utc::now() + expires_in;
         let entry = CacheEntry {
             value: value.to_string(),
-            expires_at,
+            expires_at: Some(expires_at),
         };
 
         let mut data = self
@@ -90,7 +100,7 @@ impl CacheAdapter for MemoryCacheAdapter {
         let now = Utc::now();
 
         if let Some(entry) = data.get(key) {
-            if entry.expires_at > now {
+            if entry.expires_at.is_none_or(|expires| expires > now) {
                 Ok(Some(entry.value.clone()))
             } else {
                 Ok(None)
@@ -119,7 +129,7 @@ impl CacheAdapter for MemoryCacheAdapter {
         let now = Utc::now();
 
         if let Some(entry) = data.get(key) {
-            Ok(entry.expires_at > now)
+            Ok(entry.expires_at.is_none_or(|expires| expires > now))
         } else {
             Ok(false)
         }
@@ -132,7 +142,7 @@ impl CacheAdapter for MemoryCacheAdapter {
             .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
 
         if let Some(entry) = data.get_mut(key) {
-            entry.expires_at = Utc::now() + expires_in;
+            entry.expires_at = Some(Utc::now() + expires_in);
         }
 
         Ok(())
@@ -145,6 +155,54 @@ impl CacheAdapter for MemoryCacheAdapter {
             .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
         data.clear();
         Ok(())
+    }
+}
+
+#[async_trait]
+impl SecondaryStorage for MemoryCacheAdapter {
+    async fn get_and_delete(&self, key: &str) -> AuthResult<Option<serde_json::Value>> {
+        let mut data = self
+            .data
+            .lock()
+            .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
+        Ok(data
+            .remove(key)
+            .filter(|entry| entry.expires_at.is_none_or(|expires| expires > Utc::now()))
+            .map(|entry| serde_json::Value::String(entry.value)))
+    }
+
+    async fn get(&self, key: &str) -> AuthResult<Option<serde_json::Value>> {
+        CacheAdapter::get(self, key)
+            .await
+            .map(|value| value.map(serde_json::Value::String))
+    }
+
+    async fn set(&self, key: &str, value: &str, ttl_seconds: Option<u64>) -> AuthResult<()> {
+        let expires_at = ttl_seconds
+            .map(|seconds| {
+                i64::try_from(seconds)
+                    .ok()
+                    .and_then(Duration::try_seconds)
+                    .and_then(|duration| Utc::now().checked_add_signed(duration))
+                    .ok_or_else(|| AuthError::validation("Secondary storage TTL is out of range"))
+            })
+            .transpose()?;
+        let mut data = self
+            .data
+            .lock()
+            .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
+        let _ = data.insert(
+            key.to_owned(),
+            CacheEntry {
+                value: value.to_owned(),
+                expires_at,
+            },
+        );
+        Ok(())
+    }
+
+    async fn delete(&self, key: &str) -> AuthResult<()> {
+        CacheAdapter::delete(self, key).await
     }
 }
 
@@ -208,7 +266,104 @@ pub mod redis_adapter {
             Ok(())
         }
     }
+
+    #[async_trait]
+    impl SecondaryStorage for RedisAdapter {
+        async fn get_and_delete(&self, key: &str) -> AuthResult<Option<serde_json::Value>> {
+            let mut connection = self.connection.clone();
+            let value: Option<String> = redis::cmd("GETDEL")
+                .arg(key)
+                .query_async(&mut connection)
+                .await?;
+            Ok(value.map(serde_json::Value::String))
+        }
+
+        async fn get(&self, key: &str) -> AuthResult<Option<serde_json::Value>> {
+            CacheAdapter::get(self, key)
+                .await
+                .map(|value| value.map(serde_json::Value::String))
+        }
+
+        async fn set(&self, key: &str, value: &str, ttl_seconds: Option<u64>) -> AuthResult<()> {
+            let mut connection = self.connection.clone();
+            if let Some(seconds) = ttl_seconds {
+                connection.set_ex::<_, _, ()>(key, value, seconds).await?;
+            } else {
+                connection.set::<_, _, ()>(key, value).await?;
+            }
+            Ok(())
+        }
+
+        async fn delete(&self, key: &str) -> AuthResult<()> {
+            CacheAdapter::delete(self, key).await
+        }
+    }
 }
 
 #[cfg(feature = "redis-cache")]
 pub use redis_adapter::RedisAdapter;
+
+#[cfg(test)]
+mod tests {
+    use super::{CacheAdapter, MemoryCacheAdapter, SecondaryStorage};
+
+    #[tokio::test]
+    async fn secondary_storage_uses_optional_ttl_and_shares_the_cache_backend() {
+        let cache = MemoryCacheAdapter::new();
+        SecondaryStorage::set(&cache, "entry", "expired", Some(0))
+            .await
+            .unwrap();
+        assert!(
+            SecondaryStorage::get(&cache, "entry")
+                .await
+                .unwrap()
+                .is_none()
+        );
+        SecondaryStorage::set(&cache, "entry", "persistent", None)
+            .await
+            .unwrap();
+        assert_eq!(
+            CacheAdapter::get(&cache, "entry").await.unwrap().as_deref(),
+            Some("persistent")
+        );
+        CacheAdapter::delete(&cache, "entry").await.unwrap();
+        assert!(
+            SecondaryStorage::get(&cache, "entry")
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+    #[tokio::test]
+    async fn concurrent_secondary_consumers_receive_one_value() {
+        let cache = std::sync::Arc::new(MemoryCacheAdapter::new());
+        SecondaryStorage::set(cache.as_ref(), "one-time", "value", None)
+            .await
+            .unwrap();
+        let mut consumers = tokio::task::JoinSet::new();
+        for _ in 0..16 {
+            let cache = cache.clone();
+            consumers.spawn(async move {
+                SecondaryStorage::get_and_delete(cache.as_ref(), "one-time")
+                    .await
+                    .unwrap()
+            });
+        }
+        let mut received = Vec::new();
+        while let Some(result) = consumers.join_next().await {
+            if let Some(value) = result.unwrap() {
+                received.push(value);
+            }
+        }
+        assert_eq!(received, vec![serde_json::Value::String("value".into())]);
+        SecondaryStorage::set(cache.as_ref(), "expired", "value", Some(0))
+            .await
+            .unwrap();
+        assert!(
+            SecondaryStorage::get_and_delete(cache.as_ref(), "expired")
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+}

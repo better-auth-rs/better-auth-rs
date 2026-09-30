@@ -14,6 +14,9 @@
 
 extern crate self as better_auth;
 
+mod api_key_start;
+pub use api_key_start::ApiKeyStart;
+
 pub mod config;
 pub mod email;
 pub mod entity;
@@ -41,7 +44,9 @@ pub use types_team::{
 mod types_plugin;
 pub use types_jwt::{CreateJwk, Jwk};
 pub mod organization_fields;
+pub mod schema_value;
 pub mod user_fields;
+pub use schema_value::SchemaValue;
 #[doc(hidden)]
 pub mod user_query;
 pub mod utils;
@@ -85,8 +90,9 @@ pub use types::{
     Invitation, InvitationStatus, ListUsersParams, Member, OkResponse, Organization, Passkey,
     RateLimitErrorResponse, RequestMeta, StatusMessageResponse, StatusResponse,
     SuccessMessageResponse, SuccessResponse, TwoFactor, UpdateAccount, UpdateApiKey,
-    UpdateDeviceCode, UpdateOrganization, UpdatePasskey, UpdateTwoFactor, UpdateUser,
-    UpdateUserRequest, UpdateUserResponse, ValidationErrorResponse,
+    UpdateDeviceCode, UpdateOrganization, UpdatePasskey, UpdatePasskeyAuthentication,
+    UpdateTwoFactor, UpdateUser, UpdateUserRequest, UpdateUserResponse, ValidationErrorResponse,
+    WalletAddress,
 };
 pub use utils::password::{PasswordHasher, hash_password, verify_password};
 #[doc(hidden)]

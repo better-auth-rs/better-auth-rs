@@ -33,6 +33,10 @@ pub trait SeaOrmUserModel:
     fn name_column() -> Self::Column;
     fn created_at_column() -> Self::Column;
     fn parse_id(id: &str) -> AuthResult<Self::Id>;
+    /// Return whether an application field uses a native JSON column type.
+    fn native_json_field(_name: &str) -> bool {
+        false
+    }
 
     fn new_active(
         id: Option<Self::Id>,
@@ -71,6 +75,10 @@ pub trait SeaOrmSessionModel:
     fn created_at_column() -> Self::Column;
     fn parse_id(id: &str) -> AuthResult<Self::Id>;
     fn parse_user_id(user_id: &str) -> AuthResult<Self::UserId>;
+    /// Return whether an application field uses a native JSON column type.
+    fn native_json_field(_name: &str) -> bool {
+        false
+    }
 
     fn new_active(
         id: Option<Self::Id>,

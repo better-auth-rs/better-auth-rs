@@ -1,13 +1,18 @@
 #!/usr/bin/env bun
+import { mappedPluginSchema, mappedPluginExtras } from "./plugin-schema";
 import { createOrganizationCallbacks } from "./organization-callbacks";
 import { organizationFieldOptions } from "./organization-fields";
 import { organizationCoreFieldOptions } from "./organization-core-fields";
+import { organizationMemberFieldOptions } from "./organization-member-fields";
+import { organizationDynamicFieldOptions } from "./organization-dynamic-fields";
+import { organizationNativeJsonOptions } from "./organization-native-json";
 
 import { Database } from "bun:sqlite";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { apiKey } from "@better-auth/api-key";
+import { createApiKeyCallbacks } from "./api-key-callbacks";
 import { admin, bearer, deviceAuthorization, twoFactor, username } from "better-auth/plugins";
 import { organization } from "better-auth/plugins/organization";
 import { createAccessControl } from "better-auth/plugins/access";
@@ -15,6 +20,9 @@ import { defaultStatements } from "better-auth/plugins/organization/access";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { oAuthProxy } from "better-auth/plugins/oauth-proxy";
 import { createEmailOtpFixture } from "./email-otp";
+import { createSecondaryStorageFixture } from "./secondary-storage";
+import { sessionFieldOptions } from "./session-fields";
+import { createApiKeyStorageFixture } from "./api-key-storage";
 import { createOneTapFixture } from "./one-tap";
 import { createIdentityFixture } from "./identity-routes";
 import { userFields } from "./user-fields";
@@ -52,6 +60,9 @@ const PORT = getPort();
 const jwtFixture = await createJwtFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`);
 const database = new Database(":memory:");
 const identityFixture = createIdentityFixture(database, process.env.COMPAT_PROFILE ?? "");
+const apiKeyStorageFixture = createApiKeyStorageFixture();
+const secondaryFixture = createSecondaryStorageFixture(process.env.COMPAT_PROFILE ?? "", database);
+const apiKeyCallbacks = createApiKeyCallbacks(process.env.COMPAT_PROFILE ?? "");
 const emailOtpFixture = createEmailOtpFixture(database, process.env.COMPAT_PROFILE ?? "");
 const oneTapFixture = createOneTapFixture(process.env.COMPAT_PROFILE ?? "");
 const organizationCallbacks = createOrganizationCallbacks(process.env.COMPAT_PROFILE ?? "");
@@ -277,6 +288,8 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 
 const proxyCase = process.env.COMPAT_PROXY_CASE ? JSON.parse(process.env.COMPAT_PROXY_CASE) : {};
 const authOptions = {
+  secondaryStorage: apiKeyStorageFixture.secondaryStorage,
+  verification: apiKeyStorageFixture.enabled ? { storeInDatabase: true } : undefined,
   baseURL: proxyCase.baseURL ?? `http://localhost:${PORT}`,
   trustedOrigins: proxyCase.trustedOrigins ?? [],
   basePath: "/api/auth",
@@ -312,7 +325,7 @@ const authOptions = {
       }
     },
   },
-  session: ["user-fields", "organization-cache", "jwt-cache", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? {
+  session: apiKeyStorageFixture.enabled ? { storeSessionInDatabase: true } : ["user-fields", "organization-cache", "jwt-cache", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? {
     cookieCache: { enabled: true, strategy: ["jwt-cache", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? "jwt" as const : "compact" as const },
     ...(process.env.COMPAT_PROFILE === "organization-jwt" ? { additionalFields: {
       deviceLabel: { type: "string" as const, required: false },
@@ -397,6 +410,7 @@ const authOptions = {
   },
   plugins: [
     ...jwtFixture.plugins,
+    ...mappedPluginExtras,
     ...(process.env.COMPAT_PROFILE?.startsWith("oauth-proxy") ? [oAuthProxy(process.env.COMPAT_PROXY_OPTIONS ? JSON.parse(process.env.COMPAT_PROXY_OPTIONS) : { productionURL: "https://production.example.com", currentURL: `http://localhost:${PORT}` })] : []),
     ...identityFixture.plugins,
     ...tokenRoutePlugins(process.env.COMPAT_PROFILE ?? "", verificationEmailOutbox),
@@ -404,15 +418,17 @@ const authOptions = {
     ...(process.env.COMPAT_PROFILE?.startsWith("one-tap") ? [oneTapFixture.plugin] : []),
     ...(process.env.COMPAT_PROFILE === "device-bearer" ? [bearer()] : []),
     admin(),
-    apiKey([
+    apiKey(apiKeyCallbacks.configurations ?? [
       { configId: "default", enableMetadata: true, defaultKeyLength: process.env.COMPAT_PROFILE === "api-key-zero" ? 0 : 64 },
       { configId: "secondary", enableMetadata: true },
       { configId: "session", enableSessionForAPIKeys: true, apiKeyHeaders: ["x-api-key", "x-machine-key"] },
       { configId: "shared-first", enableSessionForAPIKeys: true, apiKeyHeaders: "x-shared-key" },
       { configId: "shared-second", enableSessionForAPIKeys: true, apiKeyHeaders: "x-shared-key" },
       { configId: "organization", references: "organization", enableMetadata: true },
-    ]),
+      ...apiKeyStorageFixture.configurations,
+    ], { schema: mappedPluginSchema && { apikey: mappedPluginSchema.apikey } }),
     deviceAuthorization({
+      schema: mappedPluginSchema && { deviceCode: mappedPluginSchema.deviceCode },
       expiresIn: process.env.COMPAT_PROFILE === "device-rate-window" ? "2s" : "30m",
       generateUserCode: process.env.COMPAT_PROFILE === "device-custom"
         ? () => "custom-code"
@@ -437,14 +453,18 @@ const authOptions = {
       ...organizationCallbacks.options,
       ...organizationFieldOptions(process.env.COMPAT_PROFILE ?? ""),
       ...organizationCoreFieldOptions(process.env.COMPAT_PROFILE ?? ""),
+      ...organizationDynamicFieldOptions(process.env.COMPAT_PROFILE ?? ""),
+      ...organizationMemberFieldOptions(process.env.COMPAT_PROFILE ?? ""),
+      ...organizationNativeJsonOptions(process.env.COMPAT_PROFILE ?? ""),
       async sendInvitationEmail({ id, email, role }) {
         await Promise.resolve();
         if (invitationSenderFails) throw new Error("compat invitation sender failure");
         invitationEmailOutbox.push({ id, email, role });
       },
     }),
-    passkey(),
+    passkey({ schema: mappedPluginSchema && { passkey: mappedPluginSchema.passkey } }),
     twoFactor({
+      schema: mappedPluginSchema && { twoFactor: mappedPluginSchema.twoFactor },
       otpOptions: {
         async sendOTP({ user, otp }) {
           if (user.email) {
@@ -480,6 +500,8 @@ const authOptions = {
       ],
     }),
   ],
+  ...secondaryFixture.options,
+  ...sessionFieldOptions(process.env.COMPAT_PROFILE ?? "", secondaryFixture.options.session),
 } as const;
 
 const { runMigrations } = await getMigrations(authOptions);
@@ -509,6 +531,7 @@ const RESET_MODELS = [
 
 async function resetDatabaseState() {
   for (const model of RESET_MODELS) {
+    if (secondaryFixture.skipResetModel(model)) continue;
     await authContext.adapter.deleteMany({
       model,
       where: [],
@@ -531,6 +554,12 @@ const server = Bun.serve({
         return hiddenUserFields.handler(new Request(url, request));
       }
 
+      const secondaryResponse = await secondaryFixture.route(request, auth);
+      if (secondaryResponse) return secondaryResponse;
+      const storageResponse = await apiKeyStorageFixture.handle(request, auth);
+      const callbacksResponse = await apiKeyCallbacks.route(request, auth);
+      if (callbacksResponse) return callbacksResponse;
+      if (storageResponse) return storageResponse;
       const organizationResponse = await organizationCallbacks.route(request);
       if (organizationResponse) return organizationResponse;
       if (url.pathname === "/__test/organization-add-member" && request.method === "POST") {
@@ -574,6 +603,9 @@ const server = Bun.serve({
         identityFixture.reset();
         organizationCallbacks.reset();
         emailOtpFixture.reset();
+        apiKeyStorageFixture.reset();
+        secondaryFixture.reset();
+        apiKeyCallbacks.reset();
         oneTapFixture.reset();
         resetPasswordOutbox.clear();
         verificationEmailOutbox.clear();

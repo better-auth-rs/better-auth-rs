@@ -595,6 +595,7 @@ pub(crate) async fn sign_up_core(
     let transaction_database = database.clone();
     let user_config = ctx.config.user.clone();
     let user_metadata = ctx.metadata.clone();
+    let supports_native_json = database.supports_native_json();
 
     better_auth_core::store::transaction(database.as_ref(), move |tx| {
         let _database = transaction_database.clone();
@@ -640,7 +641,12 @@ pub(crate) async fn sign_up_core(
                 Ok((
                     SignUpResponse {
                         token: Some(token.clone()),
-                        user: UserView::with_fields(&user, &user_config, &user_metadata)?,
+                        user: UserView::with_fields_for_adapter(
+                            &user,
+                            &user_config,
+                            &user_metadata,
+                            supports_native_json,
+                        )?,
                     },
                     Some(token),
                 ))
@@ -648,7 +654,12 @@ pub(crate) async fn sign_up_core(
                 Ok((
                     SignUpResponse {
                         token: None,
-                        user: UserView::with_fields(&user, &user_config, &user_metadata)?,
+                        user: UserView::with_fields_for_adapter(
+                            &user,
+                            &user_config,
+                            &user_metadata,
+                            supports_native_json,
+                        )?,
                     },
                     None,
                 ))

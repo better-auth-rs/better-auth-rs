@@ -669,13 +669,10 @@ async fn test_custom_creator_role_protection() {
 }
 
 #[tokio::test]
-async fn test_invite_member_rejects_empty_role_inputs() {
+async fn test_invite_member_preserves_empty_roles_through_acceptance() {
     let auth = create_test_auth().await;
     let (owner_token, _) =
         signup_user(&auth, "role-owner@example.com", "password123", "Owner").await;
-    let (invitee_token, _) =
-        signup_user(&auth, "role-invitee@example.com", "password123", "Invitee").await;
-    let _ = invitee_token;
 
     let (status, create_body) = send_request(
         &auth,
@@ -693,37 +690,34 @@ async fn test_invite_member_rejects_empty_role_inputs() {
 
     let org_id = create_body["id"].as_str().expect("org id");
 
-    let (status, body) = send_request(
-        &auth,
-        post_json_with_auth(
-            "/organization/invite-member",
-            serde_json::json!({
-                "organizationId": org_id,
-                "email": "role-invitee@example.com",
-                "role": ""
-            }),
-            &owner_token,
-        ),
-    )
-    .await;
-    assert_eq!(
-        status, 400,
-        "empty string role should be rejected: {}",
-        body
-    );
-
-    let (status, body) = send_request(
-        &auth,
-        post_json_with_auth(
-            "/organization/invite-member",
-            serde_json::json!({
-                "organizationId": org_id,
-                "email": "role-invitee@example.com",
-                "role": []
-            }),
-            &owner_token,
-        ),
-    )
-    .await;
-    assert_eq!(status, 400, "empty array role should be rejected: {}", body);
+    for (index, role) in [serde_json::json!(""), serde_json::json!([])]
+        .into_iter()
+        .enumerate()
+    {
+        let email = format!("role-invitee-{index}@example.com");
+        let (invitee_token, _) = signup_user(&auth, &email, "password123", "Invitee").await;
+        let (status, body) = send_request(
+            &auth,
+            post_json_with_auth(
+                "/organization/invite-member",
+                serde_json::json!({"organizationId": org_id, "email": email, "role": role}),
+                &owner_token,
+            ),
+        )
+        .await;
+        assert_eq!(status, 200, "empty role invitation failed: {body}");
+        assert_eq!(body["role"], "");
+        let (status, accepted) = send_request(
+            &auth,
+            post_json_with_auth(
+                "/organization/accept-invitation",
+                serde_json::json!({"invitationId": body["id"]}),
+                &invitee_token,
+            ),
+        )
+        .await;
+        assert_eq!(status, 200, "empty role acceptance failed: {accepted}");
+        assert_eq!(accepted["member"]["role"], "");
+        assert_eq!(accepted["invitation"]["status"], "accepted");
+    }
 }

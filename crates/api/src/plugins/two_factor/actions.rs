@@ -157,14 +157,14 @@ pub(super) async fn disable_core(
 
     if let Some(trust_cookie) = read_signed_cookie(req, TRUST_DEVICE_COOKIE_SUFFIX, ctx)? {
         if let Some((_, trust_identifier)) = trust_cookie.split_once('!')
-            && let Some(verification) = ctx
+            && let Some(_verification) = ctx
                 .database
                 .get_verification_by_identifier(trust_identifier)
                 .await?
         {
             let _ = ctx
                 .database
-                .delete_verification(verification.id().as_ref())
+                .delete_verification_by_identifier(trust_identifier)
                 .await;
         }
         set_cookie_headers.push(clear_cookie_header(&ctx.config, TRUST_DEVICE_COOKIE_SUFFIX));
@@ -321,11 +321,10 @@ pub(super) async fn verify_otp_core(
     if !is_valid {
         let next_value = format!("{}:{}", stored_hash, attempts + 1);
         let expires_at = verification.expires_at();
-        let verification_identifier = verification.identifier().to_string();
         _ = ctx
             .database
             .create_verification(CreateVerification {
-                identifier: verification_identifier,
+                identifier,
                 value: next_value,
                 expires_at,
             })

@@ -44,9 +44,7 @@ pub async fn get_owned_api_key(
 ) -> AuthResult<better_auth_core::ApiKey> {
     use crate::plugins::api_key::{ApiKeyReferences, config_id_matches};
 
-    let api_key = ctx
-        .database
-        .get_api_key_by_id(key_id)
+    let api_key = crate::plugins::api_key::storage::get_by_id(config, ctx, key_id)
         .await?
         .ok_or_else(|| AuthError::not_found("API Key not found"))?;
 
@@ -108,6 +106,7 @@ pub async fn require_org_api_key_permission(
         .unwrap_or_else(|| "owner".to_string());
     if member
         .role
+        .typed()?
         .split(',')
         .map(str::trim)
         .any(|role| role == creator_role)
@@ -135,7 +134,7 @@ pub async fn require_org_api_key_permission(
         ..Default::default()
     };
     let allowed = check_permission(
-        &member.role,
+        member.role.typed()?,
         organization_id,
         "apikey",
         &[action],

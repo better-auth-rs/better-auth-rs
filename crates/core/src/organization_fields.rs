@@ -1,7 +1,19 @@
 //! Field policies shared by organization routes and persistence adapters.
 
-use crate::user_fields::{UserConfig, UserFieldType};
-use better_auth_schema_registry::{EntityRole, core_fields};
+use crate::user_fields::UserConfig;
+
+/// Prepare the Organization adapter's metadata value before database field policies run.
+pub fn metadata_input(value: Option<serde_json::Value>, create: bool) -> Option<serde_json::Value> {
+    let value = value?;
+    if create && !crate::user_fields::is_truthy(&value) {
+        return None;
+    }
+    if create || value.is_object() || value.is_array() || value.is_null() {
+        Some(serde_json::Value::String(value.to_string()))
+    } else {
+        Some(value)
+    }
+}
 
 /// Parse a numeric query string as the upstream adapter's `Number` conversion.
 /// Empty and invalid strings remain strings in the adapter.
@@ -61,81 +73,12 @@ pub struct OrganizationFields {
 }
 
 impl OrganizationFields {
-    /// Validate the caller's schema before applying upstream's eager role partial schema.
-    pub fn into_storage(mut self) -> crate::AuthResult<Self> {
-        self.validate()?;
+    /// Apply the upstream eager partial schema for dynamic-role storage.
+    pub fn into_storage(mut self) -> Self {
         for field in self.organization_role.additional_fields.values_mut() {
             field.required = Some(false);
         }
-        Ok(self)
-    }
-
-    /// Reject built-in overrides that cannot preserve the typed storage contract.
-    pub fn validate(&self) -> crate::AuthResult<()> {
-        for (entity, role, fields) in [
-            ("organization", EntityRole::Organization, &self.organization),
-            ("member", EntityRole::Member, &self.member),
-            ("invitation", EntityRole::Invitation, &self.invitation),
-            ("team", EntityRole::Team, &self.team),
-            (
-                "organizationRole",
-                EntityRole::OrganizationRole,
-                &self.organization_role,
-            ),
-        ] {
-            for field in core_fields(role) {
-                let mut public_name = String::new();
-                let mut uppercase = false;
-                for character in field.name.chars() {
-                    if character == '_' {
-                        uppercase = true;
-                    } else {
-                        public_name.push(if uppercase {
-                            character.to_ascii_uppercase()
-                        } else {
-                            character
-                        });
-                        uppercase = false;
-                    }
-                }
-                if field.name != public_name && fields.additional_fields.contains_key(field.name) {
-                    return Err(crate::AuthError::config(format!(
-                        "Organization schema {entity}.{} must use the public field name {public_name}",
-                        field.name
-                    )));
-                }
-                let Some(policy) = fields.additional_fields.get(&public_name) else {
-                    continue;
-                };
-                if matches!(field.name, "metadata" | "permission" | "member_count")
-                    || (role == EntityRole::Organization && field.name == "updated_at")
-                {
-                    return Err(crate::AuthError::config(format!(
-                        "Organization schema {entity}.{public_name} does not support built-in field policies"
-                    )));
-                }
-                let nullable = field.ty.starts_with("Option<");
-                let field_type = field.ty.trim_start_matches("Option<").trim_end_matches('>');
-                if !matches!(
-                    (field_type, &policy.field_type),
-                    ("String", UserFieldType::String)
-                        | ("DateTimeUtc", UserFieldType::Date)
-                        | ("i64", UserFieldType::Number)
-                ) {
-                    return Err(crate::AuthError::config(format!(
-                        "Organization schema {entity}.{public_name} must preserve the built-in {field_type} field type"
-                    )));
-                }
-                if field.name != "id"
-                    && policy.required.is_some_and(|required| required == nullable)
-                {
-                    return Err(crate::AuthError::config(format!(
-                        "Organization schema {entity}.{public_name} must preserve the built-in field nullability"
-                    )));
-                }
-            }
-        }
-        Ok(())
+        self
     }
 
     /// Return whether all entity policies use only built-in fields.

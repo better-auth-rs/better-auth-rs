@@ -249,25 +249,11 @@ fn coerced_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    fn js_string(value: &serde_json::Value) -> String {
-        match value {
-            serde_json::Value::String(value) => value.clone(),
-            serde_json::Value::Array(values) => values
-                .iter()
-                .map(|value| {
-                    if value.is_null() {
-                        String::new()
-                    } else {
-                        js_string(value)
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(","),
-            serde_json::Value::Object(_) => "[object Object]".to_string(),
-            value => value.to_string(),
-        }
-    }
-    serde_json::Value::deserialize(deserializer).map(|value| Some(js_string(&value)))
+    let value = serde_json::Value::deserialize(deserializer)?;
+    better_auth_core::SchemaValue::<String>::Dynamic(value)
+        .display_string()
+        .map(Some)
+        .map_err(serde::de::Error::custom)
 }
 
 fn validate_prefix(prefix: &str) -> Result<(), validator::ValidationError> {

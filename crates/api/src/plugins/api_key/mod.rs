@@ -9,11 +9,20 @@ use better_auth_core::{AuthContext, AuthError, AuthResult, BeforeRequestAction};
 use better_auth_core::{AuthRequest, AuthResponse};
 
 pub(super) mod handlers;
+pub(crate) mod storage;
+pub use storage::ApiKeyStorage;
+mod callbacks;
 pub(super) mod types;
 mod verification;
 
+pub use callbacks::{
+    ApiKeyDefaultPermissions, ApiKeyEndpoint, ApiKeyGenerator, ApiKeyGetter, ApiKeyPermissions,
+    ApiKeyValidator,
+};
+
 pub use verification::{
-    ApiKeyErrorDetails, ApiKeyValidationError, ApiKeyVerificationError, VerifyApiKey,
+    ApiKeyErrorDetails, ApiKeyErrorMessage, ApiKeyValidationError, ApiKeyVerificationError,
+    VerifyApiKey,
 };
 
 #[cfg(test)]
@@ -240,7 +249,7 @@ pub(super) fn config_id_matches(key_config_id: &str, expected: &str) -> bool {
 }
 
 /// Configuration for the API Key plugin, aligned with the TypeScript `ApiKeyOptions`.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ApiKeyConfig {
     /// Name of this configuration, stored on every key it creates.
     /// Upstream defaults it to `"default"`.
@@ -255,9 +264,17 @@ pub struct ApiKeyConfig {
     pub prefix: Option<String>,
     /// Permissions applied when creation does not supply explicit permissions.
     pub default_permissions: Option<std::collections::HashMap<String, Vec<String>>>,
+    /// Custom credential generator, receiving the resolved length and prefix.
+    pub custom_key_generator: Option<Arc<dyn ApiKeyGenerator>>,
+    /// Dynamic defaults, evaluated even when creation supplies explicit permissions.
+    pub default_permissions_callback: Option<Arc<dyn ApiKeyDefaultPermissions>>,
 
     // -- header --
     pub api_key_headers: Vec<String>,
+    /// Overrides header extraction for session emulation.
+    pub custom_api_key_getter: Option<Arc<dyn ApiKeyGetter>>,
+    /// Validates the presented plaintext credential before normal key validation.
+    pub custom_api_key_validator: Option<Arc<dyn ApiKeyValidator>>,
 
     // -- hashing --
     pub disable_key_hashing: bool,
@@ -286,6 +303,13 @@ pub struct ApiKeyConfig {
 
     // -- session emulation --
     pub enable_session_for_api_keys: bool,
+    /// Persistence mode. Custom storage overrides the global secondary storage.
+    pub storage: ApiKeyStorage,
+    pub custom_storage: Option<Arc<dyn better_auth_core::store::SecondaryStorage>>,
+    /// Keep database rows authoritative and repopulate cache misses.
+    pub fallback_to_database: bool,
+    /// Defer secondary-only usage writes and expired/exhausted key deletion.
+    pub defer_updates: bool,
 }
 
 impl ApiKeyConfig {
@@ -294,6 +318,54 @@ impl ApiKeyConfig {
             self.key_length = 64;
         }
         self
+    }
+}
+
+impl std::fmt::Debug for ApiKeyConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiKeyConfig")
+            .field("config_id", &self.config_id)
+            .field("references", &self.references)
+            .field("key_length", &self.key_length)
+            .field("prefix", &self.prefix)
+            .field("default_permissions", &self.default_permissions)
+            .field("custom_key_generator", &self.custom_key_generator.is_some())
+            .field(
+                "default_permissions_callback",
+                &self.default_permissions_callback.is_some(),
+            )
+            .field(
+                "custom_api_key_getter",
+                &self.custom_api_key_getter.is_some(),
+            )
+            .field(
+                "custom_api_key_validator",
+                &self.custom_api_key_validator.is_some(),
+            )
+            .field("api_key_headers", &self.api_key_headers)
+            .field("disable_key_hashing", &self.disable_key_hashing)
+            .field(
+                "starting_characters_length",
+                &self.starting_characters_length,
+            )
+            .field("store_starting_characters", &self.store_starting_characters)
+            .field("max_prefix_length", &self.max_prefix_length)
+            .field("min_prefix_length", &self.min_prefix_length)
+            .field("max_name_length", &self.max_name_length)
+            .field("min_name_length", &self.min_name_length)
+            .field("require_name", &self.require_name)
+            .field("enable_metadata", &self.enable_metadata)
+            .field("key_expiration", &self.key_expiration)
+            .field("rate_limit", &self.rate_limit)
+            .field(
+                "enable_session_for_api_keys",
+                &self.enable_session_for_api_keys,
+            )
+            .field("storage", &self.storage)
+            .field("custom_storage", &self.custom_storage.is_some())
+            .field("fallback_to_database", &self.fallback_to_database)
+            .field("defer_updates", &self.defer_updates)
+            .finish_non_exhaustive()
     }
 }
 
@@ -349,7 +421,11 @@ impl Default for ApiKeyConfig {
             key_length: 64,
             prefix: None,
             default_permissions: None,
+            custom_key_generator: None,
+            default_permissions_callback: None,
             api_key_headers: vec!["x-api-key".to_string()],
+            custom_api_key_getter: None,
+            custom_api_key_validator: None,
             disable_key_hashing: false,
             starting_characters_length: 6,
             store_starting_characters: true,
@@ -362,6 +438,10 @@ impl Default for ApiKeyConfig {
             key_expiration: KeyExpirationConfig::default(),
             rate_limit: RateLimitDefaults::default(),
             enable_session_for_api_keys: false,
+            storage: ApiKeyStorage::Database,
+            custom_storage: None,
+            fallback_to_database: false,
+            defer_updates: false,
         }
     }
 }
@@ -390,7 +470,11 @@ impl ApiKeyPlugin {
         #[builder(default = 64)] key_length: usize,
         prefix: Option<String>,
         default_permissions: Option<std::collections::HashMap<String, Vec<String>>>,
+        custom_key_generator: Option<Arc<dyn ApiKeyGenerator>>,
+        default_permissions_callback: Option<Arc<dyn ApiKeyDefaultPermissions>>,
         #[builder(default = vec!["x-api-key".to_string()])] api_key_headers: Vec<String>,
+        custom_api_key_getter: Option<Arc<dyn ApiKeyGetter>>,
+        custom_api_key_validator: Option<Arc<dyn ApiKeyValidator>>,
         #[builder(default = false)] disable_key_hashing: bool,
         #[builder(default = 6)] starting_characters_length: usize,
         #[builder(default = true)] store_starting_characters: bool,
@@ -403,6 +487,10 @@ impl ApiKeyPlugin {
         #[builder(default)] key_expiration: KeyExpirationConfig,
         #[builder(default)] rate_limit: RateLimitDefaults,
         #[builder(default = false)] enable_session_for_api_keys: bool,
+        #[builder(default)] storage: ApiKeyStorage,
+        custom_storage: Option<Arc<dyn better_auth_core::store::SecondaryStorage>>,
+        #[builder(default)] fallback_to_database: bool,
+        #[builder(default)] defer_updates: bool,
     ) -> Self {
         Self {
             configurations: vec![
@@ -412,7 +500,11 @@ impl ApiKeyPlugin {
                     key_length,
                     prefix,
                     default_permissions,
+                    custom_key_generator,
+                    default_permissions_callback,
                     api_key_headers,
+                    custom_api_key_getter,
+                    custom_api_key_validator,
                     disable_key_hashing,
                     starting_characters_length,
                     store_starting_characters,
@@ -425,6 +517,10 @@ impl ApiKeyPlugin {
                     key_expiration,
                     rate_limit,
                     enable_session_for_api_keys,
+                    storage,
+                    custom_storage,
+                    fallback_to_database,
+                    defer_updates,
                 }
                 .normalized(),
             ],
@@ -444,7 +540,7 @@ impl ApiKeyPlugin {
     pub(super) fn generate_key(
         config: &ApiKeyConfig,
         custom_prefix: Option<&str>,
-    ) -> (String, String, String) {
+    ) -> (String, String) {
         // Match TS: generateRandomString(length, "a-z", "A-Z") — alpha only
         const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
         let mut rng = rand::thread_rng();
@@ -461,18 +557,13 @@ impl ApiKeyPlugin {
         let prefix = custom_prefix.or(config.prefix.as_deref()).unwrap_or("");
         let full_key = format!("{}{}", prefix, raw);
 
-        // TS computes start from the full key (including prefix):
-        //   start = key.substring(0, charactersLength)
-        let start_len = config.starting_characters_length;
-        let start: String = full_key.chars().take(start_len).collect();
-
         let hash = if config.disable_key_hashing {
             full_key.clone()
         } else {
             Self::hash_key(&full_key)
         };
 
-        (full_key, hash, start)
+        (full_key, hash)
     }
 
     pub(super) fn hash_key(key: &str) -> String {
@@ -622,7 +713,7 @@ impl ApiKeyPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = create_key_core(&body, user.id(), self, ctx).await?;
+        let response = create_key_core(&body, user.id(), self, ctx, Some(req)).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 

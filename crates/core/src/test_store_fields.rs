@@ -25,15 +25,126 @@ fn object(value: &impl Serialize) -> AuthResult<Map<String, Value>> {
     }
 }
 
-fn decode_record<T: DeserializeOwned>(
-    role: EntityRole,
-    mut fields: Map<String, Value>,
+pub(super) trait MemoryOrganizationRecord: Serialize + DeserializeOwned {
+    fn preserve_schema_values(
+        &mut self,
+        fields: &crate::user_fields::UserConfig,
+        raw: &Map<String, Value>,
+    );
+}
+
+macro_rules! record_values {
+    ($record:ty, dates [$($date:ident => $date_name:literal),*], json [$($json:ident => $json_name:literal),*]) => {
+        impl MemoryOrganizationRecord for $record {
+            fn preserve_schema_values(&mut self, fields: &crate::user_fields::UserConfig, raw: &Map<String, Value>) {
+                $(if fields.additional_fields.get($date_name).is_some_and(|field| !matches!(field.field_type, crate::user_fields::UserFieldType::Date)) {
+                    self.$date = raw.get($date_name).cloned().map(crate::SchemaValue::Dynamic).unwrap_or_default();
+                })*
+                $(if fields.additional_fields.contains_key($json_name) {
+                    self.$json = raw.get($json_name).cloned().map(crate::SchemaValue::Dynamic).unwrap_or_default();
+                })*
+            }
+        }
+    };
+}
+record_values!(Organization, dates [created_at => "createdAt"], json [metadata => "metadata"]);
+record_values!(Member, dates [created_at => "createdAt"], json []);
+record_values!(Invitation, dates [created_at => "createdAt", expires_at => "expiresAt"], json []);
+record_values!(crate::Team, dates [created_at => "createdAt", updated_at => "updatedAt"], json []);
+record_values!(crate::OrganizationRole, dates [created_at => "createdAt", updated_at => "updatedAt"], json [permission => "permission"]);
+
+fn decode_record<T: MemoryOrganizationRecord>(
+    schema: &crate::user_fields::UserConfig,
+    fields: Map<String, Value>,
 ) -> AuthResult<T> {
-    if role == EntityRole::Organization {
-        // Organization's custom deserializer requires the key; callers restore native JSON afterward.
-        fields.entry("metadata".to_owned()).or_insert(Value::Null);
-    }
-    serde_json::from_value(Value::Object(fields)).map_err(Into::into)
+    let mut record: T = serde_json::from_value(Value::Object(fields.clone()))?;
+    record.preserve_schema_values(schema, &fields);
+    Ok(record)
+}
+
+#[tokio::test]
+async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
+    use crate::{
+        CreateTeam,
+        organization_fields::OrganizationFields,
+        store::TeamStore,
+        user_fields::{UserFieldConfig, UserFieldType},
+    };
+    use serde_json::json;
+    let mut fields = OrganizationFields::default();
+    let _ = fields.team.additional_fields.insert(
+        "createdAt".into(),
+        UserFieldConfig {
+            input_transform: Some(Arc::new(|_| Ok(Some(json!("2000-01-02T03:04:05+02:00"))))),
+            ..Default::default()
+        },
+    );
+    let _ = fields.team.additional_fields.insert(
+        "memberCount".into(),
+        UserFieldConfig {
+            field_type: UserFieldType::Number,
+            default_value: Some(json!(17)),
+            input_transform: Some(Arc::new(|value| {
+                assert_eq!(value, Some(json!(0)));
+                Ok(Some(json!(2)))
+            })),
+            ..Default::default()
+        },
+    );
+    let store = MemoryStore::new(test_config());
+    store.configure_organization_fields(fields).unwrap();
+    let team = store
+        .create_team(CreateTeam {
+            name: "Team".into(),
+            organization_id: "org".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        team.created_at.json().unwrap(),
+        Some(json!("2000-01-02T03:04:05+02:00"))
+    );
+    assert_eq!(
+        store.list_organization_teams("org").await.unwrap()[0].created_at,
+        team.created_at
+    );
+    assert_eq!(team.additional_fields["memberCount"], 2);
+    assert!(
+        store
+            .add_team_member(&team.id, "user", Some(2))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        store
+            .add_team_member(&team.id, "user", Some(3))
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(
+        store
+            .get_team(&team.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .additional_fields["memberCount"]
+            .as_f64(),
+        Some(3.0)
+    );
+    store.remove_team_member(&team.id, "user").await.unwrap();
+    assert_eq!(
+        store
+            .get_team(&team.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .additional_fields["memberCount"]
+            .as_f64(),
+        Some(2.0)
+    );
 }
 
 impl MemoryStore {
@@ -49,7 +160,7 @@ impl MemoryStore {
         }
     }
 
-    pub(super) fn store_record<T: Serialize + DeserializeOwned>(
+    pub(super) fn store_record<T: MemoryOrganizationRecord>(
         &self,
         role: EntityRole,
         value: T,
@@ -93,16 +204,21 @@ impl MemoryStore {
             if core_names.contains(name) {
                 if let Some(value) = stored.remove(storage_name) {
                     let _ = record.insert(name.clone(), value);
+                } else if create {
+                    let _ = record.insert(name.clone(), Value::Null);
                 }
             } else if create {
                 stored.entry(storage_name.clone()).or_insert(Value::Null);
             }
         }
         record.extend(stored);
-        decode_record(role, record)
+        if create && role == EntityRole::Organization {
+            record.entry("logo".to_owned()).or_insert(Value::Null);
+        }
+        decode_record(&schema, record)
     }
 
-    pub(super) fn output_record<T: Serialize + DeserializeOwned>(
+    pub(super) fn output_record<T: MemoryOrganizationRecord>(
         &self,
         role: EntityRole,
         value: T,
@@ -129,7 +245,7 @@ impl MemoryStore {
                 );
             }
         }
-        decode_record(role, schema.organization_output_fields(core, &storage)?)
+        decode_record(&schema, schema.organization_output_fields(core, &storage)?)
     }
 }
 
@@ -210,11 +326,14 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
     store.configure_organization_fields(config).unwrap();
     let mut create = CreateOrganization::new("original", "original");
     create.id = Some("chosen-id".into());
-    create.metadata = Some(Value::Null);
+    create.metadata = Some(Value::Null).into();
     let organization = store.create_organization(create).await.unwrap();
     assert_eq!(organization.id, "chosen-id");
     assert_eq!(organization.name, "original:in:out");
-    assert_eq!(organization.logo.as_deref(), Some("default-logo"));
+    assert_eq!(
+        organization.logo.typed().unwrap().as_deref(),
+        Some("default-logo")
+    );
     assert_eq!(organization.metadata, Some(Value::Null));
     assert!(organization.additional_fields.is_empty());
     assert_eq!(
@@ -262,6 +381,8 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
             .await
             .unwrap()
             .logo
+            .typed()
+            .unwrap()
             .is_none()
     );
     let member = store
@@ -323,7 +444,6 @@ async fn invalid_builtin_transform_cannot_partially_update_a_memory_record() {
         organization_fields::OrganizationFields,
         user_fields::{UserConfig, UserFieldConfig},
     };
-    use serde_json::json;
     let store = MemoryStore::new(test_config());
     let organization = store
         .create_organization(CreateOrganization::new("original", "original"))
@@ -335,7 +455,9 @@ async fn invalid_builtin_transform_cannot_partially_update_a_memory_record() {
                 additional_fields: [(
                     "name".into(),
                     UserFieldConfig {
-                        input_transform: Some(Arc::new(|_| Ok(Some(json!(12))))),
+                        input_transform: Some(Arc::new(|_| {
+                            Err(AuthError::bad_request("transform failed"))
+                        })),
                         ..Default::default()
                     },
                 )]
@@ -360,4 +482,63 @@ async fn invalid_builtin_transform_cannot_partially_update_a_memory_record() {
     let state = store.lock();
     assert_eq!(state.organizations[&organization.id].name, "original");
     assert_eq!(state.organizations[&organization.id].slug, "original");
+}
+
+#[tokio::test]
+async fn memory_core_fields_keep_dynamic_values_and_output_omission() {
+    use crate::{
+        SchemaValue, organization_fields::OrganizationFields, user_fields::UserFieldConfig,
+    };
+    use serde_json::json;
+    let store = MemoryStore::new(test_config());
+    let mut fields = OrganizationFields::default();
+    fields.organization.additional_fields.insert(
+        "name".into(),
+        UserFieldConfig {
+            input_transform: Some(Arc::new(|_| Ok(Some(json!(12))))),
+            ..Default::default()
+        },
+    );
+    store.configure_organization_fields(fields.clone()).unwrap();
+    let mut input = CreateOrganization::new("original", "original");
+    input.slug = SchemaValue::Dynamic(json!(42));
+    let organization = store.create_organization(input).await.unwrap();
+    assert_eq!(organization.name.json().unwrap(), Some(json!(12)));
+    assert_eq!(
+        store
+            .get_organization_by_slug_value(&json!(42))
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        organization.id
+    );
+    assert!(
+        store
+            .get_organization_by_slug_value(&json!("42"))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    fields
+        .organization
+        .additional_fields
+        .get_mut("name")
+        .unwrap()
+        .output_transform = Some(Arc::new(|_| Ok(None)));
+    store.configure_organization_fields(fields).unwrap();
+    let omitted = store
+        .get_organization_by_id(&organization.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(omitted.name.is_undefined());
+    assert!(serde_json::to_value(omitted).unwrap().get("name").is_none());
+    assert_eq!(
+        store.lock().organizations[&organization.id]
+            .name
+            .json()
+            .unwrap(),
+        Some(json!(12))
+    );
 }

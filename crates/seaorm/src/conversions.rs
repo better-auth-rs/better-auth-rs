@@ -14,12 +14,11 @@ impl From<&entities::organization::Model> for Organization {
         Self {
             additional_fields: Default::default(),
             id: model.id.clone(),
-            name: model.name.clone(),
-            slug: model.slug.clone(),
-            logo: model.logo.clone(),
-            metadata: model.metadata.clone(),
-            created_at: model.created_at,
-            updated_at: model.updated_at,
+            name: model.name.clone().into(),
+            slug: model.slug.clone().into(),
+            logo: model.logo.clone().into(),
+            metadata: model.metadata.clone().into(),
+            created_at: model.created_at.into(),
         }
     }
 }
@@ -29,10 +28,10 @@ impl From<&entities::member::Model> for Member {
         Self {
             additional_fields: Default::default(),
             id: model.id.clone(),
-            organization_id: model.organization_id.clone(),
-            user_id: model.user_id.clone(),
-            role: model.role.clone(),
-            created_at: model.created_at,
+            organization_id: model.organization_id.clone().into(),
+            user_id: model.user_id.clone().into(),
+            role: model.role.clone().into(),
+            created_at: model.created_at.into(),
         }
     }
 }
@@ -42,14 +41,14 @@ impl From<&entities::invitation::Model> for Invitation {
         Self {
             additional_fields: Default::default(),
             id: model.id.clone(),
-            organization_id: model.organization_id.clone(),
-            email: model.email.clone(),
-            role: model.role.clone(),
-            status: InvitationStatus::from(model.status.clone()),
-            inviter_id: model.inviter_id.clone(),
-            team_id: model.team_id.clone(),
-            expires_at: model.expires_at,
-            created_at: model.created_at,
+            organization_id: model.organization_id.clone().into(),
+            email: model.email.clone().into(),
+            role: model.role.clone().into(),
+            status: InvitationStatus::from(model.status.clone()).into(),
+            inviter_id: model.inviter_id.clone().into(),
+            team_id: model.team_id.clone().into(),
+            expires_at: model.expires_at.into(),
+            created_at: model.created_at.into(),
         }
     }
 }
@@ -75,7 +74,7 @@ impl From<&entities::api_key::Model> for ApiKey {
         Self {
             id: model.id.clone(),
             name: model.name.clone(),
-            start: model.start.clone(),
+            start: model.start.clone().map(Into::into),
             prefix: model.prefix.clone(),
             key_hash: model.key_hash.clone(),
             reference_id: model.reference_id.clone(),

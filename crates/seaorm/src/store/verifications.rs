@@ -19,7 +19,8 @@ use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
 mod concurrency_tests;
 
 #[async_trait]
-impl<S, O: crate::SeaOrmOrganizationSchema> VerificationStore<S> for SeaOrmStore<S, O>
+impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> VerificationStore<S>
+    for SeaOrmStore<S, O, P>
 where
     S: AuthSchema + Send + Sync,
     S::Verification: SeaOrmVerificationModel,
@@ -102,26 +103,45 @@ where
         &self,
         mut verification: CreateVerification,
     ) -> AuthResult<S::Verification> {
+        self.before_create_runtime_verification(&mut verification)
+            .await?;
+        let now = Utc::now();
+        let verification = S::Verification::new_active(None, verification, now)
+            .insert(self.connection())
+            .await
+            .map_err(map_db_err)?;
+        self.after_create_runtime_verification(&verification)
+            .await?;
+        Ok(verification)
+    }
+
+    async fn before_create_runtime_verification(
+        &self,
+        verification: &mut CreateVerification,
+    ) -> AuthResult<()> {
         let hook_context = self.hook_context(None);
         for hook in self.hooks() {
             if hook
-                .before_create_verification(&mut verification, &hook_context)
+                .before_create_verification(verification, &hook_context)
                 .await?
                 .is_cancelled()
             {
                 return Err(cancelled_by_hook("verification creation"));
             }
         }
-        let now = Utc::now();
-        let verification = S::Verification::new_active(None, verification, now)
-            .insert(self.connection())
-            .await
-            .map_err(map_db_err)?;
+        Ok(())
+    }
+
+    async fn after_create_runtime_verification(
+        &self,
+        verification: &S::Verification,
+    ) -> AuthResult<()> {
+        let hook_context = self.hook_context(None);
         for hook in self.hooks() {
-            hook.after_create_verification(&verification, &hook_context)
+            hook.after_create_verification(verification, &hook_context)
                 .await?;
         }
-        Ok(verification)
+        Ok(())
     }
 
     async fn get_verification(
@@ -174,11 +194,23 @@ where
         identifier: &str,
         value: &str,
     ) -> AuthResult<Option<S::Verification>> {
-        self.consume_latest_verification(identifier, Some(value))
-            .await
+        Ok(self
+            .consume_latest_verification(identifier, Some(value))
+            .await?
+            .filter(|value| value.expires_at() >= Utc::now()))
     }
 
     async fn consume_verification_by_identifier(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<S::Verification>> {
+        Ok(self
+            .consume_latest_verification(identifier, None)
+            .await?
+            .filter(|value| value.expires_at() >= Utc::now()))
+    }
+
+    async fn consume_verification_including_expired(
         &self,
         identifier: &str,
     ) -> AuthResult<Option<S::Verification>> {
@@ -222,18 +254,40 @@ where
     }
 
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
-        <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
-            .filter(
-                <S::Verification as SeaOrmVerificationModel>::expires_at_column().lt(Utc::now()),
-            )
+        let now = Utc::now();
+        let filter = <S::Verification as SeaOrmVerificationModel>::expires_at_column().lt(now);
+        let records = <S::Verification as SeaOrmVerificationModel>::Entity::find()
+            .filter(filter.clone())
+            .all(self.connection())
+            .await
+            .map_err(map_db_err)?;
+        let context = self.hook_context(None);
+        for record in &records {
+            for hook in self.hooks() {
+                if hook
+                    .before_delete_verification(record, &context)
+                    .await?
+                    .is_cancelled()
+                {
+                    return Ok(0);
+                }
+            }
+        }
+        let deleted = <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
+            .filter(filter)
             .exec(self.connection())
             .await
-            .map(|result| result.rows_affected as usize)
-            .map_err(map_db_err)
+            .map_err(map_db_err)?;
+        for record in &records {
+            for hook in self.hooks() {
+                hook.after_delete_verification(record, &context).await?;
+            }
+        }
+        Ok(deleted.rows_affected as usize)
     }
 }
 
-impl<S, O: crate::SeaOrmOrganizationSchema> SeaOrmStore<S, O>
+impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
     S: AuthSchema + Send + Sync,
     S::Verification: SeaOrmVerificationModel,
@@ -311,6 +365,6 @@ where
             hook.after_delete_verification(&model, &hook_context)
                 .await?;
         }
-        Ok((model.expires_at() >= Utc::now()).then_some(model))
+        Ok(Some(model))
     }
 }

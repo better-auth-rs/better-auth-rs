@@ -13,7 +13,7 @@ use std::borrow::Cow;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
-use crate::types::InvitationStatus;
+use crate::{SchemaValue, types::InvitationStatus};
 
 /// Trait representing a user entity.
 ///
@@ -64,6 +64,21 @@ pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static 
 
 /// Trait representing a session entity.
 pub trait AuthSession: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    /// Already projected fields from a cached session view.
+    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        None
+    }
+    /// Whether this model can be constructed from secondary storage without a database row.
+    const SUPPORTS_RUNTIME_HYDRATION: bool = false;
+    /// Construct the typed model from canonical core fields and serialized application fields.
+    fn from_runtime_fields(
+        _fields: serde_json::Map<String, serde_json::Value>,
+    ) -> crate::AuthResult<Self> {
+        Err(crate::AuthError::config(
+            "This auth model does not support secondary storage hydration",
+        ))
+    }
+
     /// Plugin fields that the entity and store can read and persist.
     ///
     /// `AuthEntity` derives this list. Manual implementations must declare each
@@ -133,12 +148,11 @@ pub trait AuthOrganization: Clone + Send + Sync + Serialize + std::fmt::Debug + 
     }
 
     fn id(&self) -> Cow<'_, str>;
-    fn name(&self) -> &str;
-    fn slug(&self) -> &str;
-    fn logo(&self) -> Option<&str>;
-    fn metadata(&self) -> Option<&serde_json::Value>;
-    fn created_at(&self) -> DateTime<Utc>;
-    fn updated_at(&self) -> DateTime<Utc>;
+    fn name(&self) -> &SchemaValue<String>;
+    fn slug(&self) -> &SchemaValue<String>;
+    fn logo(&self) -> &SchemaValue<Option<String>>;
+    fn metadata(&self) -> &SchemaValue<Option<serde_json::Value>>;
+    fn created_at(&self) -> &SchemaValue<DateTime<Utc>>;
 }
 
 /// Trait representing an organization member entity.
@@ -149,10 +163,10 @@ pub trait AuthMember: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stati
     }
 
     fn id(&self) -> Cow<'_, str>;
-    fn organization_id(&self) -> Cow<'_, str>;
-    fn user_id(&self) -> Cow<'_, str>;
-    fn role(&self) -> &str;
-    fn created_at(&self) -> DateTime<Utc>;
+    fn organization_id(&self) -> &SchemaValue<String>;
+    fn user_id(&self) -> &SchemaValue<String>;
+    fn role(&self) -> &SchemaValue<String>;
+    fn created_at(&self) -> &SchemaValue<DateTime<Utc>>;
 }
 
 /// Trait representing an invitation entity.
@@ -163,31 +177,40 @@ pub trait AuthInvitation: Clone + Send + Sync + Serialize + std::fmt::Debug + 's
     }
 
     fn id(&self) -> Cow<'_, str>;
-    fn organization_id(&self) -> Cow<'_, str>;
-    fn email(&self) -> &str;
-    fn role(&self) -> &str;
-    fn status(&self) -> &InvitationStatus;
-    fn inviter_id(&self) -> Cow<'_, str>;
-    fn expires_at(&self) -> DateTime<Utc>;
-    fn created_at(&self) -> DateTime<Utc>;
+    fn organization_id(&self) -> &SchemaValue<String>;
+    fn email(&self) -> &SchemaValue<String>;
+    fn role(&self) -> &SchemaValue<String>;
+    fn status(&self) -> &SchemaValue<InvitationStatus>;
+    fn inviter_id(&self) -> &SchemaValue<String>;
+    fn expires_at(&self) -> &SchemaValue<DateTime<Utc>>;
+    fn created_at(&self) -> &SchemaValue<DateTime<Utc>>;
 
     /// Check if the invitation is still pending.
     fn is_pending(&self) -> bool {
-        *self.status() == InvitationStatus::Pending
+        self.status() == &SchemaValue::Typed(InvitationStatus::Pending)
     }
 
     /// Check if the invitation has expired.
-    fn is_expired(&self) -> bool {
-        self.expires_at() < Utc::now()
+    fn is_expired(&self) -> crate::AuthResult<bool> {
+        Ok(*self.expires_at().typed()? < Utc::now())
     }
     /// Comma-separated invited team identifiers.
-    fn team_id(&self) -> Option<&str> {
-        None
-    }
+    fn team_id(&self) -> &SchemaValue<Option<String>>;
 }
 
 /// Trait representing a verification token entity.
 pub trait AuthVerification: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    /// Whether this model can be constructed from secondary storage without a database row.
+    const SUPPORTS_RUNTIME_HYDRATION: bool = false;
+    /// Construct the typed model from canonical core fields and serialized application fields.
+    fn from_runtime_fields(
+        _fields: serde_json::Map<String, serde_json::Value>,
+    ) -> crate::AuthResult<Self> {
+        Err(crate::AuthError::config(
+            "This auth model does not support secondary storage hydration",
+        ))
+    }
+
     fn id(&self) -> Cow<'_, str>;
     fn identifier(&self) -> &str;
     fn value(&self) -> &str;
@@ -213,7 +236,7 @@ pub trait AuthTwoFactor: Clone + Send + Sync + Serialize + std::fmt::Debug + 'st
 pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
     fn id(&self) -> Cow<'_, str>;
     fn name(&self) -> Option<&str>;
-    fn start(&self) -> Option<&str>;
+    fn start(&self) -> Option<Cow<'_, crate::ApiKeyStart>>;
     fn prefix(&self) -> Option<&str>;
     fn key_hash(&self) -> &str;
     /// Owner of the key — a user id, or an organization id when the key's

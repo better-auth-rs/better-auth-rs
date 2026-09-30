@@ -1,8 +1,10 @@
 //! Application user fields at the input, storage, and public output boundaries.
 
 use crate::{AuthError, AuthResult};
+use indexmap::IndexMap;
 use serde_json::{Map, Value};
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
+mod adapter;
 mod organization;
 mod output;
 
@@ -83,11 +85,11 @@ impl Default for UserFieldConfig {
 #[derive(Clone, Default)]
 pub struct UserConfig {
     /// Public field names and their storage/input/output policies.
-    pub additional_fields: BTreeMap<String, UserFieldConfig>,
+    pub additional_fields: IndexMap<String, UserFieldConfig>,
 }
 
 impl UserFieldConfig {
-    fn normalize_date(&self, value: &mut Value) -> AuthResult<()> {
+    pub(crate) fn normalize_date(&self, value: &mut Value) -> AuthResult<()> {
         if matches!(self.field_type, UserFieldType::Date) && value.is_string() {
             let date: chrono::DateTime<chrono::Utc> = serde_json::from_value(value.clone())?;
             *value = Value::String(date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
@@ -95,7 +97,7 @@ impl UserFieldConfig {
         Ok(())
     }
 
-    fn default_value(&self) -> Option<Value> {
+    pub(crate) fn default_value(&self) -> Option<Value> {
         self.default_value_fn
             .as_ref()
             .map(|factory| factory())

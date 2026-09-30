@@ -1,0 +1,13 @@
+{
+  "organization": {
+    "additionalFields": {
+      "id": { "type": "number" },
+      "name": { "type": "number", "required": false },
+      "slug": { "type": "number", "required": true },
+      "logo": { "type": "boolean", "required": false },
+      "createdAt": { "type": "string", "required": true },
+      "updatedAt": { "type": "string", "required": false }
+    }
+  },
+  "team": { "additionalFields": { "name": { "type": "json", "required": false } } }
+}

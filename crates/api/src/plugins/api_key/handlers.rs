@@ -104,14 +104,34 @@ impl ApiKeyPlugin {
         body: &CreateKeyRequest,
     ) -> AuthResult<CreateKeyResponse> {
         use validator::Validate as _;
-        body.validate()
-            .map_err(|error| better_auth_core::AuthError::Validation(error.to_string()))?;
-        let user_id = body
-            .user_id
-            .as_deref()
-            .filter(|id| !id.is_empty())
+        let callback_body = serde_json::to_value(body)?;
+        let session = self
+            .authenticate_api_key(
+                super::ApiKeyEndpoint::new(ctx, None, Some("/api-key/create"), &callback_body),
+                ctx,
+            )
+            .await?;
+        body.validate().map_err(|error| {
+            better_auth_core::AuthError::from(better_auth_core::validation_error_response(&error))
+        })?;
+        let config = self.resolve_configuration(body.config_id.as_deref())?;
+        if config.references == super::ApiKeyReferences::User
+            && let Some((session, _)) = &session
+            && body
+                .user_id
+                .as_ref()
+                .is_some_and(|user_id| !user_id.is_empty() && *user_id != session.user_id)
+        {
+            return Err(super::api_key_error(
+                super::ApiKeyErrorCode::UnauthorizedSession,
+            ));
+        }
+        let user_id = session
+            .as_ref()
+            .map(|(session, _)| session.user_id.as_str())
+            .or(body.user_id.as_deref().filter(|id| !id.is_empty()))
             .ok_or_else(|| super::api_key_error(super::ApiKeyErrorCode::UnauthorizedSession))?;
-        create_key_for_user(body, user_id, self, ctx).await
+        create_key_for_user(body, user_id, self, ctx, None).await
     }
 
     /// Update a key on behalf of `body.user_id` from trusted server code.
@@ -122,12 +142,30 @@ impl ApiKeyPlugin {
         body: &UpdateKeyRequest,
     ) -> AuthResult<ApiKeyView> {
         use validator::Validate as _;
-        body.validate()
-            .map_err(|error| better_auth_core::AuthError::Validation(error.to_string()))?;
-        let user_id = body
-            .user_id
-            .as_deref()
-            .filter(|id| !id.is_empty())
+        let callback_body = serde_json::to_value(body)?;
+        let session = self
+            .authenticate_api_key(
+                super::ApiKeyEndpoint::new(ctx, None, Some("/api-key/update"), &callback_body),
+                ctx,
+            )
+            .await?;
+        body.validate().map_err(|error| {
+            better_auth_core::AuthError::from(better_auth_core::validation_error_response(&error))
+        })?;
+        if let Some((session, _)) = &session
+            && body
+                .user_id
+                .as_ref()
+                .is_some_and(|user_id| !user_id.is_empty() && *user_id != session.user_id)
+        {
+            return Err(super::api_key_error(
+                super::ApiKeyErrorCode::UnauthorizedSession,
+            ));
+        }
+        let user_id = session
+            .as_ref()
+            .map(|(session, _)| session.user_id.as_str())
+            .or(body.user_id.as_deref().filter(|id| !id.is_empty()))
             .ok_or_else(|| super::api_key_error(super::ApiKeyErrorCode::UnauthorizedSession))?;
         update_key_for_user(body, user_id, self, ctx).await
     }
@@ -138,6 +176,7 @@ pub(crate) async fn create_key_core(
     user_id: impl AsRef<str>,
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    request: Option<&better_auth_core::AuthRequest>,
 ) -> AuthResult<CreateKeyResponse> {
     let _ = plugin.resolve_configuration(body.config_id.as_deref())?;
     if body.refill_amount.is_some()
@@ -157,7 +196,7 @@ pub(crate) async fn create_key_core(
             super::ApiKeyErrorCode::UnauthorizedSession,
         ));
     }
-    create_key_for_user(body, user_id.as_ref(), plugin, ctx).await
+    create_key_for_user(body, user_id.as_ref(), plugin, ctx, request).await
 }
 
 async fn create_key_for_user(
@@ -165,6 +204,7 @@ async fn create_key_for_user(
     user_id: &str,
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    request: Option<&better_auth_core::AuthRequest>,
 ) -> AuthResult<CreateKeyResponse> {
     let config = plugin.resolve_configuration(body.config_id.as_deref())?;
     let reference_id = match config.references {
@@ -192,14 +232,60 @@ async fn create_key_for_user(
     ApiKeyPlugin::validate_prefix(config, body.prefix.as_deref())?;
     ApiKeyPlugin::validate_name(config, body.name.as_deref(), true)?;
 
-    let (full_key, hash, start) = ApiKeyPlugin::generate_key(config, body.prefix.as_deref());
+    plugin.maybe_delete_expired(ctx).await;
+    let (full_key, hash) = if let Some(generator) = &config.custom_key_generator {
+        let key = generator
+            .generate(
+                config.key_length,
+                body.prefix
+                    .as_deref()
+                    .filter(|prefix| !prefix.is_empty())
+                    .or(config.prefix.as_deref()),
+            )
+            .await
+            .map_err(|error| super::callbacks::callback_error(error, request))?;
+        let hash = if config.disable_key_hashing {
+            key.clone()
+        } else {
+            ApiKeyPlugin::hash_key(&key)
+        };
+        (key, hash)
+    } else {
+        ApiKeyPlugin::generate_key(config, body.prefix.as_deref())
+    };
+    let start = config.store_starting_characters.then(|| {
+        better_auth_core::ApiKeyStart::prefix(&full_key, config.starting_characters_length)
+    });
+    let dynamic_permissions = if let Some(callback) = &config.default_permissions_callback {
+        let mut callback_body: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_value(serde_json::to_value(body)?)?;
+        let _ = callback_body.insert("remaining".into(), serde_json::to_value(body.remaining)?);
+        let _ = callback_body.insert("expiresIn".into(), serde_json::to_value(body.expires_in)?);
+        let callback_body = serde_json::Value::Object(callback_body);
+        Some(
+            callback
+                .permissions(
+                    &reference_id,
+                    super::ApiKeyEndpoint::new(
+                        ctx,
+                        request,
+                        Some("/api-key/create"),
+                        &callback_body,
+                    ),
+                )
+                .await
+                .map_err(|error| super::callbacks::callback_error(error, request))?,
+        )
+    } else {
+        None
+    };
     let input = CreateApiKey {
         reference_id,
         config_id: config.config_id.clone(),
         name: body.name.clone(),
         prefix: body.prefix.clone().or_else(|| config.prefix.clone()),
         key_hash: hash,
-        start: config.store_starting_characters.then_some(start),
+        start,
         expires_at: expiration_date(effective_expires_in)?,
         remaining: body.remaining,
         rate_limit_enabled: body.rate_limit_enabled.unwrap_or(config.rate_limit.enabled),
@@ -212,6 +298,7 @@ async fn create_key_for_user(
         permissions: body
             .permissions
             .as_ref()
+            .or(dynamic_permissions.as_ref())
             .or(config.default_permissions.as_ref())
             .map(serde_json::to_string)
             .transpose()?,
@@ -222,8 +309,7 @@ async fn create_key_for_user(
             .map(ToString::to_string),
         enabled: true,
     };
-    let api_key = ctx.database.create_api_key(input).await?;
-    plugin.maybe_delete_expired(ctx).await;
+    let api_key = super::storage::create(config, ctx, input).await?;
     let mut api_key = ApiKeyView::from(&api_key);
     // Upstream returns supplied falsy metadata at creation, but stores null.
     api_key.metadata = body.metadata.clone();
@@ -297,10 +383,32 @@ pub(crate) async fn list_keys_core(
         let _ = plugin.resolve_configuration(config_id)?;
     }
 
-    let keys = ctx
-        .database
-        .list_api_keys_by_reference(reference_id)
-        .await?;
+    let configurations = if let Some(id) = config_id {
+        vec![plugin.resolve_configuration(Some(id))?]
+    } else {
+        let mut groups = std::collections::HashSet::new();
+        plugin
+            .configurations
+            .iter()
+            .filter(|config| groups.insert(super::storage::group(config)))
+            .collect()
+    };
+    let mut keys = Vec::new();
+    for config in configurations {
+        let group = super::storage::list(config, ctx, reference_id).await?;
+        let mut group_views: Vec<_> = group.iter().map(ApiKeyView::from).collect();
+        if let Some(sort_by) = query.sort_by.as_deref() {
+            sort_views(&mut group_views, sort_by, query.sort_direction.as_deref());
+        }
+        let mut group: std::collections::HashMap<_, _> =
+            group.into_iter().map(|key| (key.id.clone(), key)).collect();
+        keys.extend(
+            group_views
+                .into_iter()
+                .filter_map(|view| group.remove(&view.id)),
+        );
+    }
+    super::storage::deduplicate(&mut keys);
     let mut views: Vec<ApiKeyView> = keys
         .iter()
         .filter(|key| {
@@ -311,14 +419,12 @@ pub(crate) async fn list_keys_core(
                 .map(|config| config.references)
                 .unwrap_or_default();
             key_references == references
+                && key.reference_id == reference_id
                 && config_id.is_none_or(|id| super::config_id_matches(&key.config_id, id))
         })
         .map(ApiKeyView::from)
         .collect();
 
-    if let Some(sort_by) = query.sort_by.as_deref() {
-        sort_views(&mut views, sort_by, query.sort_direction.as_deref());
-    }
     let total = views.len();
     if let Some(offset) = query.offset {
         views = views.split_off(offset.min(views.len()));
@@ -415,7 +521,7 @@ async fn update_key_for_user(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ApiKeyView> {
     let config = plugin.resolve_configuration(body.config_id.as_deref())?;
-    let _ = helpers::get_owned_api_key(ctx, config, &body.key_id, user_id, "update").await?;
+    let api_key = helpers::get_owned_api_key(ctx, config, &body.key_id, user_id, "update").await?;
     ApiKeyPlugin::validate_name(config, body.name.as_deref(), false)?;
 
     let expires_at = match body.expires_in {
@@ -474,7 +580,7 @@ async fn update_key_for_user(
         expires_at,
         ..Default::default()
     };
-    let updated = ctx.database.update_api_key(&body.key_id, update).await?;
+    let updated = super::storage::update(config, ctx, api_key, update).await?;
     plugin.maybe_delete_expired(ctx).await;
     Ok(ApiKeyView::from(&updated))
 }
@@ -486,9 +592,9 @@ pub(crate) async fn delete_key_core(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<serde_json::Value> {
     let config = plugin.resolve_configuration(body.config_id.as_deref())?;
-    let _ =
+    let api_key =
         helpers::get_owned_api_key(ctx, config, &body.key_id, user_id.as_ref(), "delete").await?;
-    ctx.database.delete_api_key(&body.key_id).await?;
+    super::storage::delete(config, ctx, &api_key).await?;
     plugin.maybe_delete_expired(ctx).await;
     Ok(serde_json::json!({ "success": true }))
 }

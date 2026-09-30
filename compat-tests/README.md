@@ -34,7 +34,11 @@ Route checks require zero missing routes in both configured profiles. The all-in
 
 The `organization-core-fields` profile compares built-in field policies across all five Organization models. The scenarios cover transforms, defaults versus explicit null, base-schema precedence, role visibility, timestamp updates, and caller-supplied IDs. ID policy callbacks fail if either adapter invokes them.
 
-Known option gaps remain outside route coverage: API Key custom generators/getters/validators and dynamic default permissions; API Key secondary/custom storage and database fallback; configurable model and column mappings for plugins other than Organization; and arbitrary Organization built-in type/nullability changes, undefined output, or policies on its native JSON/internal storage fields. Passing the current profiles does not establish these capabilities.
+The option profiles also cover API Key generators, getters, validators, dynamic default permissions, custom/secondary storage, and database fallback. `plugin-schema` verifies model and column mappings through actual plugin operations. Organization dynamic, member, and native-JSON profiles cover replacement types, nullability, omitted output, nested role overrides, and internal team counters. These scenarios verify the pinned upstream release; route inventory alone is not evidence for untested option combinations.
+
+`organization-invitation-teams` verifies replacement `teamId` values through truthiness checks, before-create hook inputs, adapter joining, persistence, and runtime failures without partial writes.
+
+Secondary-storage profiles exercise session snapshots, cache misses, revocation, preserved database rows, transaction rollback, verification updates, and concurrent consumption. Verification identifier profiles cover hashing, custom functions, prefix selection, and legacy plaintext records with and without secondary storage. The three `session-fields` profiles compare defaults, validators, transforms, `onUpdate`, visibility, and JSON fields with database storage, secondary storage, and both together.
 
 The `organization-jwt` profile verifies teams together with asymmetric session caches, JWT callbacks, transformed user fields, and application-owned session fields. It compares complete session and user objects after cryptographic verification. The same profile verifies OIDC mapped field creation and updates.
 

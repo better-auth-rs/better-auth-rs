@@ -49,6 +49,50 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 | `config_id` | `String` | `"default"` | Name of this configuration, stored on every key it creates |
 | `references` | `ApiKeyReferences` | `User` | Whether keys belong to the signed-in user or to an organization |
 
+### Application Callbacks
+
+Each configuration accepts `Arc` implementations of `ApiKeyGenerator`, `ApiKeyGetter`, `ApiKeyValidator`, and `ApiKeyDefaultPermissions`. Register them with `custom_key_generator`, `custom_api_key_getter`, `custom_api_key_validator`, and `default_permissions_callback` respectively. The getter is synchronous; the other callbacks are async.
+
+The generator receives the resolved length and prefix. Its result is the complete credential, including any prefix; the plugin then hashes the result and records its starting characters. Dynamic permissions receive the owning user or organization ID and run even when creation supplies explicit permissions. Explicit permissions replace the callback result.
+
+Starting characters use UTF-16 code units, matching JavaScript `substring`. `ApiKeyStart` preserves a surrogate split at the boundary: use `as_utf16()` for exact units and `to_utf8()` for a fallible `String` conversion. Its JSON serialization preserves unpaired surrogates, including secondary-storage round trips. Serialize typed responses directly; `serde_json::Value` cannot represent these strings. Disabling `store_starting_characters` skips prefix extraction.
+
+SQLite model reads match the pinned Bun adapter: each invalid WTF-8 byte becomes U+FFFD, so a split surrogate produces three replacement characters. The stored SQLite byte encoding is not promised to match its nonstandard WTF-8 bytes. PostgreSQL and MySQL use one replacement character per unpaired surrogate, matching the UTF-8 Buffer encoding in [pg](https://github.com/brianc/node-postgres/blob/master/packages/pg-protocol/src/buffer-writer.ts) and [mysql2](https://github.com/sidorares/node-mysql2/blob/master/lib/parsers/string.js). Those driver boundaries are verified by source and a Node Buffer probe; the executable dual-server cases cover SQLite and secondary storage.
+
+`ApiKeyEndpoint` exposes the request, endpoint path, parsed body, authentication configuration, runtime extensions, plugin metadata, and API key and organization adapters. Requestless server calls have no HTTP request. Server-only verification has no matcher path; its handler uses `virtual:`, or `/` after session authentication. Callback errors retain their status and response body through `AuthError::from(AuthResponse)`. Ordinary callback failures produce an empty HTTP `500` response; requestless APIs preserve the original error. A getter failure in the hook matcher uses the upstream matcher error response.
+
+A configured getter replaces that configuration's header lookup. Returning `None` does not fall back to its headers. Session authentication calls the getter once in the hook matcher and again in the handler. These hooks also run for native creation, update, and verification; a getter can therefore authenticate and consume a credential during a requestless call. Verification then consumes its own credential separately.
+
+Scoped verification calls its validator before lookup and propagates callback errors. Unscoped verification first finds the credential, then calls the owning configuration's validator inside the verification error boundary. Session authentication calls the selected validator before lookup. Validators run before enabled, expiration, permission, and quota checks.
+
+### Storage
+
+API keys use the database by default. Set `storage: ApiKeyStorage::SecondaryStorage` to use the shared secondary storage. A configuration's `custom_storage` takes precedence over the shared backend. `MemoryCacheAdapter` and the optional `RedisAdapter` implement `SecondaryStorage`; applications can implement its async `get`, `set`, `delete`, and atomic `get_and_delete` methods. `set` receives an optional TTL in seconds. No TTL means persistent storage.
+
+```rust
+use std::sync::Arc;
+use better_auth::plugins::api_key::{ApiKeyPlugin, ApiKeyStorage};
+use better_auth::store::MemoryCacheAdapter;
+
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
+    .secondary_storage(Arc::new(MemoryCacheAdapter::new()))
+    .plugin(ApiKeyPlugin::builder()
+        .storage(ApiKeyStorage::SecondaryStorage)
+        .fallback_to_database(true)
+        .build())
+    .build()
+    .await?;
+```
+
+`fallback_to_database` keeps database rows authoritative. A cache miss loads the database row and restores both cache indexes. Writes update the database before refreshing the cache. Cache I/O errors propagate; the runtime does not treat an I/O failure as a miss. Verification consumes quota atomically in the database and then refreshes the cache. A cache write failure can therefore follow a successful database mutation. If a database row disappears after a cached ownership lookup, update returns the unchanged cached snapshot, matching the upstream null-update result.
+
+Without database fallback, the backend stores the full key under `api-key:<hash>` and `api-key:by-id:<id>`. The `api-key:by-ref:<referenceId>` entry stores the owner's key IDs without a TTL. Key entries use the remaining expiration time rounded down to whole seconds; a nonpositive TTL is omitted, matching upstream. Listing ignores entries whose key records have expired. Reference-list mutations are serialized within the process. Quota consumption uses the upstream read/merge/write behavior and does not provide cross-request atomic enforcement. A rate-limit rejection in this mode occurs before the quota write.
+
+Database fallback invalidates the reference list on writes and rebuilds the list from database rows. Sharing one backend between configurations with and without fallback also shares these indexes, including this upstream invalidation behavior. Listing groups configurations by storage backend, removes duplicate IDs, and applies configuration and ownership filters before pagination.
+
+`defer_updates` returns secondary-only usage results before writing the updated snapshot. It also defers expiration and exhausted-key deletion. Background failures are logged, matching the upstream policy for these operations. Database quota consumption remains synchronous. Installing the shared backend also enables [secondary session and verification storage](/docs/concepts/secondary-storage). Use the global session and verification configuration to retain database persistence. A configuration-specific `custom_storage` does not install a global backend.
+
 ### Named Configurations and Organization-Owned Keys
 
 A plugin instance holds one or more configurations. Each is identified by its `config_id`, and clients select one by sending `configId`. Creation, lookup, update, and deletion use the `"default"` configuration when `configId` is absent. Listing without `configId` includes all registered configurations for the requested owner type. Register additional configurations with `configuration`:
@@ -204,9 +248,9 @@ api_keys.update(user_id, &key.id, UpdateKeyOptions {
 
 The lower-level `ApiKeyPlugin::create_key`, `update_key`, and `verify_api_key` methods remain available for callers that already manage an `AuthContext` and wire request DTOs.
 
-Verification checks configuration, expiration, permissions, quota, and rate limits. A permission mismatch does not consume quota. To match Better Auth 1.7.6, a rate-limit rejection consumes quota before returning `RATE_LIMITED`; `details.tryAgainIn` uses milliseconds. Expired keys and exhausted keys without a refill amount are deleted during verification.
+Verification checks configuration, expiration, permissions, quota, and rate limits. A permission mismatch does not consume quota. In database and database-fallback modes, a rate-limit rejection consumes quota before returning `RATE_LIMITED`, matching Better Auth 1.7.6; `details.tryAgainIn` uses milliseconds. Expired keys and exhausted keys without a refill amount are deleted during verification.
 
-Handle `ApiKeyVerificationError::Validation` as a rejected credential and propagate `ApiKeyVerificationError::Internal` as an infrastructure failure. The successful result includes `reference_id`, `config_id`, permissions, and updated counters. It omits the plaintext key and stored hash.
+`ApiKeyVerificationError` preserves credential rejections (`Validation`), application API errors caught during unscoped verification (`Rejected`), infrastructure failures (`Internal`), and errors outside the verification boundary (`Endpoint`). Use `into_response()` to reproduce the upstream server endpoint's response: caught failures return a `valid: false` envelope, while endpoint failures retain their original status and body. Some upstream rejection messages contain an error-code object instead of a string; `ApiKeyErrorMessage` preserves both forms. The successful result includes `reference_id`, `config_id`, permissions, and updated counters. It omits the plaintext key and stored hash.
 
 Pass `config_id` when a route accepts credentials from one configuration. Without that field, lookup uses the default configuration's hashing setting, then validates against the configuration that issued the key.
 

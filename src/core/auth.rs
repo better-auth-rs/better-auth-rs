@@ -41,6 +41,7 @@ pub struct BetterAuth<S: AuthSchema> {
 pub struct AuthBuilder<S: AuthSchema> {
     config: AuthConfig,
     store: Option<Arc<dyn AuthStore<S>>>,
+    secondary_storage: Option<Arc<dyn better_auth_core::store::SecondaryStorage>>,
     plugins: Vec<Box<dyn AuthPlugin<S>>>,
     csrf_config: Option<CsrfConfig>,
     rate_limit_config: Option<RateLimitConfig>,
@@ -54,6 +55,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
         Self {
             config,
             store: None,
+            secondary_storage: None,
             plugins: Vec::new(),
             csrf_config: None,
             rate_limit_config: None,
@@ -75,6 +77,15 @@ impl<S: AuthSchema> AuthBuilder<S> {
     /// Set the shared auth store implementation using an existing [`Arc`].
     pub fn store_arc(mut self, store: Arc<dyn AuthStore<S>>) -> Self {
         self.store = Some(store);
+        self
+    }
+
+    /// Install shared secondary storage for authentication plugins.
+    pub fn secondary_storage(
+        mut self,
+        storage: Arc<dyn better_auth_core::store::SecondaryStorage>,
+    ) -> Self {
+        self.secondary_storage = Some(storage);
         self
     }
 
@@ -131,6 +142,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
             .ok_or_else(|| AuthError::config("Auth store not configured"))?;
 
         let mut init_context = AuthInitContext::new(config.clone(), store.clone());
+        init_context.secondary_storage = self.secondary_storage;
 
         // Initialize all plugins.
         for plugin in &self.plugins {
@@ -139,10 +151,28 @@ impl<S: AuthSchema> AuthBuilder<S> {
 
         let init_parts = init_context.into_parts();
 
+        let store: Arc<dyn AuthStore<S>> = if let Some(secondary) = &init_parts.secondary_storage {
+            Arc::new(better_auth_core::store::secondary::SecondaryStore::new(
+                store,
+                secondary.clone(),
+                config.clone(),
+                init_parts.metadata.clone(),
+            )?)
+        } else {
+            Arc::new(
+                better_auth_core::store::secondary::SecondaryStore::without_secondary(
+                    store,
+                    config.clone(),
+                    init_parts.metadata.clone(),
+                ),
+            )
+        };
+
         // Create context
         let mut context =
             AuthContext::with_metadata(config.clone(), store.clone(), init_parts.metadata);
         context.password_policy = init_parts.password_policy;
+        context.secondary_storage = init_parts.secondary_storage;
         context.extensions = init_parts.extensions;
         context.email_verification_policy = init_parts.email_verification_policy;
         let session_manager = context.session_manager();

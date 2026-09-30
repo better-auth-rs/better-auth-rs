@@ -27,8 +27,8 @@ async fn store() -> SeaOrmStore<BundledSchema> {
                 id: Some(id.into()),
                 name: id.into(),
                 slug: id.into(),
-                logo: None,
-                metadata: None,
+                logo: None.into(),
+                metadata: None.into(),
             })
             .await
             .unwrap();
@@ -44,6 +44,105 @@ async fn store() -> SeaOrmStore<BundledSchema> {
             .unwrap();
     }
     store
+}
+
+#[tokio::test]
+async fn json_policies_keep_native_model_values_and_transform_each_read_once() {
+    use better_auth_core::{
+        organization_fields::OrganizationFields,
+        user_fields::{UserFieldConfig, UserFieldType},
+    };
+    use sea_orm::EntityTrait;
+    use serde_json::{Value, json};
+    let store = store().await;
+    let mut fields = OrganizationFields::default();
+    fields.organization_role.additional_fields.insert(
+        "permission".into(),
+        UserFieldConfig {
+            field_type: UserFieldType::Json,
+            input_transform: Some(Arc::new(|value| {
+                value
+                    .map(|value| {
+                        let value: Value = match value {
+                            Value::String(value) => serde_json::from_str(&value)?,
+                            value => value,
+                        };
+                        serde_json::from_str(&value.to_string().replace("source", "stored"))
+                            .map_err(Into::into)
+                    })
+                    .transpose()
+            })),
+            output_transform: Some(Arc::new(|value| {
+                Ok(value.map(|value| {
+                    json!(
+                        value
+                            .as_str()
+                            .expect("SQLite JSON callbacks receive text")
+                            .replace("stored", "visible")
+                    )
+                }))
+            })),
+            ..Default::default()
+        },
+    );
+    store.configure_organization_fields(fields).unwrap();
+    let created = store
+        .create_organization_role(CreateOrganizationRole {
+            organization_id: "org-a".into(),
+            role: "json-role".into(),
+            permission: json!({"source":["read"]}),
+            additional_fields: Default::default(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        created.permission.json().unwrap(),
+        Some(json!({"visible":["read"]}))
+    );
+    let row = super::entities::organization_role::Entity::find_by_id(&created.id)
+        .one(store.connection())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.permission, json!({"stored":["read"]}));
+    assert_eq!(
+        store
+            .get_organization_role(&created.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .permission,
+        created.permission
+    );
+    let updated = store
+        .update_organization_role(
+            &created.id,
+            UpdateOrganizationRole {
+                permission: Some(json!({"source":["write"]})),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        updated.permission.json().unwrap(),
+        Some(json!({"visible":["write"]}))
+    );
+    let row = super::entities::organization_role::Entity::find_by_id(&created.id)
+        .one(store.connection())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.permission, json!({"stored":["write"]}));
+    assert_eq!(
+        store
+            .get_organization_role(&created.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .permission,
+        updated.permission
+    );
 }
 
 #[tokio::test]
@@ -149,7 +248,7 @@ async fn dynamic_roles_persist_json_and_organization_deletion_cascades() {
         .await
         .unwrap();
     assert_eq!(updated.permission, serde_json::json!({"team": ["update"]}));
-    assert!(updated.updated_at.is_some());
+    assert!(updated.updated_at.typed().unwrap().is_some());
     let team = store
         .create_team(CreateTeam {
             name: "a".into(),
@@ -230,7 +329,7 @@ async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full()
             .accept_invitation_with_teams(
                 &invitation.id,
                 "user-b",
-                session.token(),
+                Some(session.token()),
                 true,
                 Some(1).into()
             )
@@ -262,14 +361,14 @@ async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full()
         store.accept_invitation_with_teams(
             &invitation.id,
             "user-b",
-            session.token(),
+            Some(session.token()),
             true,
             Some(1).into()
         ),
         store.accept_invitation_with_teams(
             &invitation.id,
             "user-b",
-            session.token(),
+            Some(session.token()),
             true,
             Some(1).into()
         )
@@ -322,7 +421,13 @@ async fn single_team_invitation_captures_cookie_before_switching_organization() 
     input.team_id = Some(team.id.clone());
     let invitation = store.create_invitation(input).await.unwrap();
     let (member, accepted, snapshot) = store
-        .accept_invitation_with_teams(&invitation.id, "user-b", session.token(), true, None.into())
+        .accept_invitation_with_teams(
+            &invitation.id,
+            "user-b",
+            Some(session.token()),
+            true,
+            None.into(),
+        )
         .await
         .unwrap();
     assert_eq!(member.organization_id, "org-a");
@@ -400,7 +505,7 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
         .accept_invitation_with_teams(
             &invitation.id,
             "user-b",
-            session.token(),
+            Some(session.token()),
             true,
             TeamMemberLimits::Resolver(&limits),
         )
@@ -436,7 +541,7 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
         .accept_invitation_with_teams(
             &invitation.id,
             "user-b",
-            session.token(),
+            Some(session.token()),
             true,
             TeamMemberLimits::Resolver(&limits),
         )

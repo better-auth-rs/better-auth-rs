@@ -1,7 +1,7 @@
 use base64::Engine;
 use better_auth_core::entity::{AuthPasskey, AuthSession, AuthUser, AuthVerification};
 use better_auth_core::types::UpdatePasskeyAuthentication;
-use better_auth_core::wire::{PasskeyView, SessionView};
+use better_auth_core::wire::PasskeyView;
 use better_auth_core::{AuthContext, AuthError, AuthResult, CreatePasskey, CreateVerification};
 use chrono::{Duration, Utc};
 use serde_json::{Value, json};
@@ -454,7 +454,7 @@ pub(super) async fn verify_authentication_core(
 
     Ok(PasskeyHandlerOutcome::Success((
         serde_json::to_value(SessionResponse {
-            session: SessionView::with_fields(&session, &ctx.config.session)?,
+            session: ctx.session_view(&session).await?,
             user: ctx.user_view(&user)?,
         })?,
         session.token().to_string(),

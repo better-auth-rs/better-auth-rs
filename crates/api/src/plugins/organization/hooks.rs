@@ -112,14 +112,19 @@ pub struct OrganizationMemberDraft {
 
     pub organization_id: String,
     pub user_id: String,
-    pub role: String,
+    pub role: better_auth_core::SchemaValue<String>,
     /// Server-side addMember input; team assignment is handled separately from this record.
     pub team_id: Option<String>,
     /// The hook starts without a timestamp; the adapter always generates the stored value.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 impl OrganizationMemberDraft {
-    pub(crate) fn into_create(self) -> CreateMember {
+    pub(crate) fn into_create(mut self) -> CreateMember {
+        if let Some(team_id) = self.team_id {
+            let _ = self
+                .additional_fields
+                .insert("teamId".into(), team_id.into());
+        }
         CreateMember {
             organization_id: self.organization_id,
             user_id: self.user_id,
@@ -135,7 +140,7 @@ pub struct OrganizationTeamDraft {
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 
     pub id: Option<String>,
-    pub name: String,
+    pub name: better_auth_core::SchemaValue<String>,
     pub organization_id: String,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// None leaves the route default; Some(None) explicitly clears the timestamp.
@@ -143,10 +148,16 @@ pub struct OrganizationTeamDraft {
 }
 impl OrganizationTeamDraft {
     pub(crate) fn into_create(
-        self,
+        mut self,
         created_at: chrono::DateTime<chrono::Utc>,
         updated_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> CreateTeam {
+        if self.created_at.is_some() {
+            let _ = self.additional_fields.remove("createdAt");
+        }
+        if self.updated_at.is_some() {
+            let _ = self.additional_fields.remove("updatedAt");
+        }
         CreateTeam {
             additional_fields: self.additional_fields,
             id: self.id,
@@ -168,28 +179,44 @@ pub struct OrganizationInvitationDraft {
     pub email: String,
     pub role: String,
     pub inviter_id: String,
-    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub status: Option<better_auth_core::InvitationStatus>,
-    pub expires_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: better_auth_core::SchemaValue<chrono::DateTime<chrono::Utc>>,
+    pub status: better_auth_core::SchemaValue<better_auth_core::InvitationStatus>,
+    pub expires_at: better_auth_core::SchemaValue<chrono::DateTime<chrono::Utc>>,
     /// Informational first-team alias. Upstream ignores returned changes to this field.
-    pub team_id: Option<String>,
+    pub team_id: better_auth_core::SchemaValue<String>,
     /// Destination teams used by the adapter after the hook.
-    pub team_ids: Vec<String>,
+    pub team_ids: better_auth_core::SchemaValue<Vec<String>>,
 }
 impl OrganizationInvitationDraft {
-    pub(crate) fn into_create(self, expires_at: chrono::DateTime<chrono::Utc>) -> CreateInvitation {
-        CreateInvitation {
+    pub(crate) fn into_create(
+        mut self,
+        expires_at: chrono::DateTime<chrono::Utc>,
+        inviter_id: &str,
+    ) -> AuthResult<CreateInvitation> {
+        for (name, value) in [
+            ("createdAt", self.created_at.json()?),
+            ("status", self.status.json()?),
+            ("expiresAt", self.expires_at.json()?),
+        ] {
+            if let Some(value) = value {
+                let _ = self.additional_fields.insert(name.into(), value);
+            }
+        }
+        if self.inviter_id != inviter_id {
+            let _ = self.additional_fields.remove("inviterId");
+        }
+        Ok(CreateInvitation {
             additional_fields: self.additional_fields,
             id: self.id,
-            created_at: self.created_at,
-            status: self.status,
+            created_at: None,
+            status: None,
             organization_id: self.organization_id,
             email: self.email,
             role: self.role,
             inviter_id: self.inviter_id,
-            expires_at: self.expires_at.unwrap_or(expires_at),
-            team_id: (!self.team_ids.is_empty()).then(|| self.team_ids.join(",")),
-        }
+            expires_at,
+            team_id: super::input::join_invitation_teams(&self.team_ids)?,
+        })
     }
 }
 

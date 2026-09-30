@@ -105,7 +105,10 @@ async fn team_deletion_updates_only_live_invitations_in_its_organization() {
     );
     for id in [expired, other_org] {
         let invitation = store.get_invitation_by_id(&id).await.unwrap().unwrap();
-        assert_eq!(invitation.team_id.as_deref(), Some(team.as_str()));
+        assert_eq!(
+            invitation.team_id.typed().unwrap().as_deref(),
+            Some(team.as_str())
+        );
         assert_eq!(
             invitation.additional_fields.get("marker"),
             Some(&json!("created"))
@@ -167,7 +170,7 @@ async fn failed_acceptance_compensates_invitation_updates_without_committing_mem
             .accept_invitation_with_teams(
                 &id,
                 "recipient",
-                session.token(),
+                Some(session.token()),
                 teams_enabled,
                 Some(0).into(),
             )
@@ -261,7 +264,13 @@ async fn claim_output_and_compensation_errors_preserve_the_upstream_failure_stag
             .await
             .unwrap();
         let error = store
-            .accept_invitation_with_teams(&id, "recipient", session.token(), true, Some(0).into())
+            .accept_invitation_with_teams(
+                &id,
+                "recipient",
+                Some(session.token()),
+                true,
+                Some(0).into(),
+            )
             .await
             .unwrap_err();
         assert!(error.to_string().contains(if claim_output_failure {
@@ -360,7 +369,10 @@ async fn team_deletion_rolls_back_read_and_update_output_errors() {
         assert_eq!(store.list_team_members(&team_id).await.unwrap().len(), 1);
         for id in live {
             let row = store.get_invitation_by_id(&id).await.unwrap().unwrap();
-            assert_eq!(row.team_id.as_deref(), Some(team_id.as_str()));
+            assert_eq!(
+                row.team_id.typed().unwrap().as_deref(),
+                Some(team_id.as_str())
+            );
             assert_eq!(row.additional_fields.get("marker"), Some(&json!("created")));
         }
     }

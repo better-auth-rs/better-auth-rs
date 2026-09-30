@@ -84,7 +84,8 @@ export function normalizeClientValue(value: unknown, key = "", baseURL?: string,
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => normalizeClientValue(item, "", baseURL, generated));
+    const itemKey = key === "teamIds" ? "teamId" : "";
+    return value.map((item) => normalizeClientValue(item, itemKey, baseURL, generated));
   }
 
   if (typeof value === "object") {

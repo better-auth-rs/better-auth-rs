@@ -627,6 +627,7 @@ dependencies = [
  "glob-match",
  "hkdf 0.12.4",
  "hmac 0.12.1",
+ "indexmap 2.14.2",
  "josekit",
  "jsonwebtoken",
  "percent-encoding",

@@ -21,6 +21,8 @@ pub struct Model {
     pub active: bool,
     pub device_label: Option<String>,
     pub internal_note: Option<String>,
+    pub validated_label: Option<String>,
+    pub settings: Option<Json>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

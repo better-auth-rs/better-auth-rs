@@ -1,6 +1,5 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::types::WalletAddress;
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 use better_auth_core::{
@@ -295,18 +294,11 @@ impl SiwePlugin {
                 let identifier = format!("siwe-email-claim-{email}");
                 let reserved = ctx
                     .database
-                    .reserve_verification(
-                        &{
-                            use sha2::Digest;
-                            URL_SAFE_NO_PAD
-                                .encode(sha2::Sha256::digest(format!("reserve:{identifier}")))
-                        },
-                        CreateVerification {
-                            identifier: identifier.clone(),
-                            value: address.clone(),
-                            expires_at: Utc::now() + Duration::minutes(1),
-                        },
-                    )
+                    .reserve_verification_value(CreateVerification {
+                        identifier: identifier.clone(),
+                        value: address.clone(),
+                        expires_at: Utc::now() + Duration::minutes(1),
+                    })
                     .await;
                 let reserved = match reserved {
                     Ok(reserved) => reserved,

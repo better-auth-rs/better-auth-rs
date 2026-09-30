@@ -10,6 +10,7 @@ pub struct Model {
     pub organization_id: String,
     pub created_at: DateTimeUtc,
     pub updated_at: Option<DateTimeUtc>,
+    #[sea_orm(column_name = "member_count")]
     pub member_count: i64,
 }
 
@@ -21,10 +22,10 @@ impl From<Model> for better_auth_core::Team {
         Self {
             additional_fields: Default::default(),
             id: model.id,
-            name: model.name,
-            organization_id: model.organization_id,
-            created_at: model.created_at,
-            updated_at: model.updated_at,
+            name: model.name.into(),
+            organization_id: model.organization_id.into(),
+            created_at: model.created_at.into(),
+            updated_at: model.updated_at.into(),
         }
     }
 }

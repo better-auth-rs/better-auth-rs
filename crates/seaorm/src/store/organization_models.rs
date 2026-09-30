@@ -12,6 +12,32 @@ pub(super) fn values<const N: usize>(fields: [(&str, Value); N]) -> Map<String, 
         .collect()
 }
 
+pub(super) fn configure_json_fields<M: SeaOrmOrganizationModel>(
+    config: &mut UserConfig,
+    backend: sea_orm::DbBackend,
+) -> AuthResult<()> {
+    let native_json = config
+        .additional_fields
+        .iter()
+        .filter(|(name, _)| name.as_str() != "id")
+        .map(|(name, field)| {
+            let name = field.field_name.as_deref().unwrap_or(name);
+            let column = M::column(name)?;
+            Ok((
+                name.to_owned(),
+                matches!(
+                    column.def().get_column_type(),
+                    sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
+                ),
+            ))
+        })
+        .collect::<AuthResult<std::collections::BTreeMap<_, _>>>()?;
+    super::json_fields::configure_json_fields(config, backend, |name| {
+        native_json.get(name) == Some(&true)
+    });
+    Ok(())
+}
+
 pub(super) fn active<M: SeaOrmOrganizationModel>(
     core: Map<String, Value>,
     input: Map<String, Value>,

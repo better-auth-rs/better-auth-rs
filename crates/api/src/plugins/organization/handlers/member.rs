@@ -14,12 +14,13 @@ use crate::plugins::organization::types::{
 };
 use crate::plugins::organization::{OrganizationConfig, hooks::*};
 
-fn has_role(member: &impl AuthMember, role: &str) -> bool {
-    member
+fn has_role(member: &impl AuthMember, role: &str) -> AuthResult<bool> {
+    Ok(member
         .role()
+        .typed()?
         .split(',')
         .map(str::trim)
-        .any(|candidate| candidate == role)
+        .any(|candidate| candidate == role))
 }
 
 // ---------------------------------------------------------------------------
@@ -83,8 +84,8 @@ pub(crate) async fn list_members_core(
         .await?;
     let user_ids = members_raw
         .iter()
-        .map(|member| member.user_id.clone())
-        .collect::<Vec<_>>();
+        .map(|member| member.user_id.typed().cloned())
+        .collect::<AuthResult<Vec<_>>>()?;
     let users_by_id = ctx
         .database
         .list_users_by_ids(&user_ids)
@@ -94,7 +95,7 @@ pub(crate) async fn list_members_core(
         .collect::<HashMap<_, _>>();
     let mut members = Vec::with_capacity(members_raw.len());
     for member in &members_raw {
-        if let Some(user_info) = users_by_id.get(&member.user_id) {
+        if let Some(user_info) = users_by_id.get(member.user_id.typed()?) {
             members.push(MemberResponse::from_member_and_user(member, user_info));
         }
     }
@@ -132,12 +133,12 @@ pub(crate) async fn get_active_member_role_core(
             .await?
             .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
         return Ok(GetActiveMemberRoleResponse {
-            role: target_member.role().to_string(),
+            role: target_member.role().typed()?.to_string(),
         });
     }
 
     Ok(GetActiveMemberRoleResponse {
-        role: requester_member.role().to_string(),
+        role: requester_member.role().typed()?.to_string(),
     })
 }
 
@@ -173,19 +174,21 @@ pub(crate) async fn remove_member_core(
             .await?
             .ok_or_else(|| AuthError::bad_request("Member not found"))?
     };
-    let is_self_removal = target_member.user_id() == user.id();
+    let is_self_removal = target_member.user_id().typed()?.as_str() == user.id();
 
-    if has_role(&target_member, &config.creator_role) {
-        if !has_role(&requester_member, &config.creator_role) {
+    if has_role(&target_member, &config.creator_role)? {
+        if !has_role(&requester_member, &config.creator_role)? {
             return Err(AuthError::bad_request(
                 "You cannot leave the organization as the only owner",
             ));
         }
         let all_members = ctx.database.list_organization_members(&org_id).await?;
-        let owner_count = all_members
-            .iter()
-            .filter(|candidate| has_role(*candidate, &config.creator_role))
-            .count();
+        let owner_count =
+            all_members
+                .iter()
+                .try_fold(0, |count, candidate| -> AuthResult<usize> {
+                    Ok(count + usize::from(has_role(candidate, &config.creator_role)?))
+                })?;
 
         if owner_count <= 1 {
             return Err(AuthError::bad_request(
@@ -195,7 +198,7 @@ pub(crate) async fn remove_member_core(
     }
 
     if !check_permission(
-        requester_member.role(),
+        requester_member.role().typed()?,
         &org_id,
         "member",
         &["delete"],
@@ -221,14 +224,10 @@ pub(crate) async fn remove_member_core(
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
     let target_user = ctx
         .database
-        .get_user_by_id(&target_member.user_id)
+        .get_user_by_id(target_member.user_id.typed()?)
         .await?
         .ok_or_else(|| AuthError::bad_request("User not found"))?;
-    let user_view = better_auth_core::wire::UserView::with_internal_fields(
-        &target_user,
-        &ctx.config.user,
-        &ctx.metadata,
-    )?;
+    let user_view = ctx.internal_user_view(&target_user)?;
     let event = OrganizationMemberEvent {
         member: &target_member,
         user: &user_view,
@@ -278,9 +277,9 @@ pub(crate) async fn update_member_role_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
-    if !has_role(&requester_member, &config.creator_role)
+    if !has_role(&requester_member, &config.creator_role)?
         && !check_permission(
-            requester_member.role(),
+            requester_member.role().typed()?,
             &org_id,
             "member",
             &["update"],
@@ -300,14 +299,14 @@ pub(crate) async fn update_member_role_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
-    if target_member.organization_id() != org_id {
+    if target_member.organization_id().typed()? != &org_id {
         return Err(AuthError::forbidden(
             "You are not allowed to update this member",
         ));
     }
 
-    let requester_is_owner = has_role(&requester_member, &config.creator_role);
-    let target_is_owner = has_role(&target_member, &config.creator_role);
+    let requester_is_owner = has_role(&requester_member, &config.creator_role)?;
+    let target_is_owner = has_role(&target_member, &config.creator_role)?;
     let new_role = body.role.joined();
     let new_role_contains_owner = new_role
         .split(',')
@@ -322,10 +321,12 @@ pub(crate) async fn update_member_role_core(
 
     if target_is_owner && requester_member.id() == target_member.id() && !new_role_contains_owner {
         let all_members = ctx.database.list_organization_members(&org_id).await?;
-        let owner_count = all_members
-            .iter()
-            .filter(|candidate| has_role(*candidate, &config.creator_role))
-            .count();
+        let owner_count =
+            all_members
+                .iter()
+                .try_fold(0, |count, candidate| -> AuthResult<usize> {
+                    Ok(count + usize::from(has_role(candidate, &config.creator_role)?))
+                })?;
 
         if owner_count <= 1 {
             return Err(AuthError::bad_request(
@@ -364,14 +365,10 @@ pub(crate) async fn update_member_role_core(
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
     let target_user = ctx
         .database
-        .get_user_by_id(&target_member.user_id)
+        .get_user_by_id(target_member.user_id.typed()?)
         .await?
         .ok_or_else(|| AuthError::bad_request("User not found"))?;
-    let user_view = better_auth_core::wire::UserView::with_internal_fields(
-        &target_user,
-        &ctx.config.user,
-        &ctx.metadata,
-    )?;
+    let user_view = ctx.internal_user_view(&target_user)?;
     let event = OrganizationMemberEvent {
         member: &target_member,
         user: &user_view,
@@ -396,7 +393,7 @@ pub(crate) async fn update_member_role_core(
     if let Some(hooks) = &config.hooks {
         hooks
             .after_update_member_role(
-                &target_member.role,
+                target_member.role.typed()?,
                 OrganizationMemberEvent {
                     member: &updated,
                     ..event

@@ -3,6 +3,7 @@
     "configuration",
     "plugins",
     "database",
+    "secondary-storage",
     "middleware",
     "hooks",
     "users-accounts",

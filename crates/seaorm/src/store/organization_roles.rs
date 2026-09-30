@@ -14,22 +14,42 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 use serde_json::json;
 
 #[async_trait]
-impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationRoleStore for SeaOrmStore<S, O> {
+impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> OrganizationRoleStore
+    for SeaOrmStore<S, O, P>
+{
     async fn create_organization_role(
         &self,
-        input: CreateOrganizationRole,
+        mut input: CreateOrganizationRole,
     ) -> AuthResult<OrganizationRole> {
+        let config = self.organization_fields()?.organization_role;
+        let permission = if config.additional_fields.contains_key("permission") {
+            json!(input.permission.to_string())
+        } else {
+            input.permission
+        };
+        let mut core = values([
+            ("id", json!(uuid::Uuid::new_v4().to_string())),
+            ("organizationId", json!(input.organization_id)),
+            ("role", json!(input.role)),
+            ("permission", permission),
+            ("createdAt", json!(Utc::now())),
+        ]);
+        for name in [
+            "organizationId",
+            "role",
+            "permission",
+            "createdAt",
+            "updatedAt",
+        ] {
+            if let Some(value) = input.additional_fields.remove(name) {
+                let _ = core.insert(name.into(), value);
+            }
+        }
         models::insert::<O::OrganizationRole, _>(
             self.connection(),
-            values([
-                ("id", json!(uuid::Uuid::new_v4().to_string())),
-                ("organization_id", json!(input.organization_id)),
-                ("role", json!(input.role)),
-                ("permission", input.permission),
-                ("created_at", json!(Utc::now())),
-            ]),
+            core,
             input.additional_fields,
-            &self.organization_fields()?.organization_role,
+            &config,
         )
         .await
     }
@@ -57,27 +77,46 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationRoleStore for SeaOr
     async fn update_organization_role(
         &self,
         id: &str,
-        input: UpdateOrganizationRole,
+        mut input: UpdateOrganizationRole,
     ) -> AuthResult<OrganizationRole> {
         let config = self.organization_fields()?.organization_role;
         let mut core = Default::default();
         if !config.additional_fields.contains_key("updatedAt") {
-            core = values([("updated_at", json!(Utc::now()))]);
+            core = values([("updatedAt", json!(Utc::now()))]);
         }
         if let Some(role) = input.role {
             let _ = core.insert("role".into(), json!(role));
         }
         if let Some(permission) = input.permission {
-            let _ = core.insert("permission".into(), permission);
+            let value = if config.additional_fields.contains_key("permission") {
+                json!(permission.to_string())
+            } else {
+                permission
+            };
+            let _ = core.insert("permission".into(), value);
         }
-        models::update::<O::OrganizationRole, _>(
-            self.connection(),
-            id,
-            core,
-            input.additional_fields,
-            &config,
-        )
-        .await
+        for name in ["id", "organizationId", "role", "createdAt", "updatedAt"] {
+            if let Some(value) = input.additional_fields.remove(name) {
+                let _ = core.entry(name).or_insert(value);
+            }
+        }
+        let updated_id = core
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(id)
+            .to_owned();
+        let active =
+            models::active::<O::OrganizationRole>(core, input.additional_fields, &config, false)?;
+        let _ = Entity::<O::OrganizationRole>::update_many()
+            .set(active)
+            .filter(O::OrganizationRole::column("id")?.eq(id))
+            .exec(self.connection())
+            .await
+            .map_err(map_db_err)?;
+        models::find::<O::OrganizationRole, _>(self.connection(), &updated_id)
+            .await?
+            .ok_or_else(|| better_auth_core::AuthError::not_found("Role not found"))?
+            .record(&config)
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {
         let _ = Entity::<O::OrganizationRole>::delete_many()

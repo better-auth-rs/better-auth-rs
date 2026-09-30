@@ -1,3 +1,4 @@
+use better_auth_core::store::VerificationSessionCleanup;
 use better_auth_core::{AuthResult, AuthUser, UpdateUser};
 use chrono::Utc;
 use sea_orm::{
@@ -8,14 +9,19 @@ use sea_orm::{
 use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
 use crate::schema::{AuthSchema, SeaOrmAccountModel, SeaOrmSessionModel, SeaOrmUserModel};
 
-impl<S, O: crate::SeaOrmOrganizationSchema> SeaOrmStore<S, O>
+impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
     S: AuthSchema,
     S::User: SeaOrmUserModel,
     S::Account: SeaOrmAccountModel,
     S::Session: SeaOrmSessionModel,
 {
-    pub(super) async fn verify_unproven_user(&self, user_id: &str) -> AuthResult<Option<S::User>> {
+    pub(super) async fn verify_unproven_user(
+        &self,
+        user_id: &str,
+        database_sessions: bool,
+        session_cleanup: Option<&dyn VerificationSessionCleanup>,
+    ) -> AuthResult<Option<S::User>> {
         let tx = self
             .connection()
             .begin_with_options(TransactionOptions {
@@ -44,11 +50,15 @@ where
                 .all(&tx)
                 .await
                 .map_err(map_db_err)?;
-            let sessions = <S::Session as SeaOrmSessionModel>::Entity::find()
-                .filter(S::Session::user_id_column().eq(S::Session::parse_user_id(user_id)?))
-                .all(&tx)
-                .await
-                .map_err(map_db_err)?;
+            let sessions = if database_sessions {
+                <S::Session as SeaOrmSessionModel>::Entity::find()
+                    .filter(S::Session::user_id_column().eq(S::Session::parse_user_id(user_id)?))
+                    .all(&tx)
+                    .await
+                    .map_err(map_db_err)?
+            } else {
+                Vec::new()
+            };
             for account in &accounts {
                 for hook in self.hooks() {
                     if hook
@@ -89,14 +99,20 @@ where
                 .exec(&tx)
                 .await
                 .map_err(map_db_err)?;
-            let _ = <S::Session as SeaOrmSessionModel>::Entity::delete_many()
-                .filter(S::Session::user_id_column().eq(S::Session::parse_user_id(user_id)?))
-                .exec(&tx)
-                .await
-                .map_err(map_db_err)?;
+            if database_sessions {
+                let _ = <S::Session as SeaOrmSessionModel>::Entity::delete_many()
+                    .filter(S::Session::user_id_column().eq(S::Session::parse_user_id(user_id)?))
+                    .exec(&tx)
+                    .await
+                    .map_err(map_db_err)?;
+            }
             let mut active = user.into_active_model();
             S::User::apply_update(&mut active, update, Utc::now());
             let user = active.update(&tx).await.map_err(map_db_err)?;
+            // External revocation must succeed before the database publishes verified ownership.
+            if let Some(cleanup) = session_cleanup {
+                cleanup.revoke().await?;
+            }
             revoked = Some((accounts, sessions));
             Ok(Some(user))
         }

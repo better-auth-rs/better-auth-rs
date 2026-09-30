@@ -8,6 +8,7 @@ mod device_codes;
 pub mod entities;
 mod identity_schema;
 mod invitations;
+mod json_fields;
 mod jwks;
 mod members;
 mod migrator;
@@ -16,13 +17,16 @@ mod organization_models;
 mod organization_roles;
 mod organizations;
 mod passkeys;
+mod plugin_models;
 mod sessions;
+mod team_capacity;
 mod team_invitation;
 mod teams;
 mod two_factor;
 mod two_factor_security;
 mod user_verification;
 mod users;
+mod value_filter;
 mod verifications;
 mod wallets;
 
@@ -55,16 +59,19 @@ use crate::schema::{AuthSchema, SeaOrmAccountModel, SeaOrmSessionModel, SeaOrmUs
 pub struct SeaOrmStore<
     S: AuthSchema,
     O: crate::SeaOrmOrganizationSchema = crate::OrganizationModels,
+    P: crate::SeaOrmPluginSchema = crate::PluginModels,
 > {
     config: Arc<AuthConfig>,
     db: DatabaseConnection,
     hooks: Vec<Arc<dyn SeaOrmHooks<S>>>,
     organization_fields:
         Arc<std::sync::RwLock<better_auth_core::organization_fields::OrganizationFields>>,
-    _schema: PhantomData<(S, O)>,
+    _schema: PhantomData<(S, O, P)>,
 }
 
-impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema> Clone for SeaOrmStore<S, O> {
+impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> Clone
+    for SeaOrmStore<S, O, P>
+{
     fn clone(&self) -> Self {
         Self {
             config: self.config.clone(),
@@ -89,9 +96,24 @@ impl<S: AuthSchema> SeaOrmStore<S> {
     }
 }
 
-impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema> SeaOrmStore<S, O> {
+impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
+    SeaOrmStore<S, O, P>
+{
     /// Bind application-owned organization models while retaining core auth models and hooks.
-    pub fn with_organization_schema<T: crate::SeaOrmOrganizationSchema>(self) -> SeaOrmStore<S, T> {
+    pub fn with_organization_schema<T: crate::SeaOrmOrganizationSchema>(
+        self,
+    ) -> SeaOrmStore<S, T, P> {
+        SeaOrmStore {
+            config: self.config,
+            db: self.db,
+            hooks: self.hooks,
+            organization_fields: self.organization_fields,
+            _schema: PhantomData,
+        }
+    }
+
+    /// Bind application-owned plugin models while retaining core and organization models.
+    pub fn with_plugin_schema<T: crate::SeaOrmPluginSchema>(self) -> SeaOrmStore<S, O, T> {
         SeaOrmStore {
             config: self.config,
             db: self.db,
@@ -149,19 +171,33 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema> SeaOrmStore<S, O> {
     }
 }
 
-struct SeaOrmTransaction<'a, S: AuthSchema, O: crate::SeaOrmOrganizationSchema> {
-    store: &'a SeaOrmStore<S, O>,
+struct SeaOrmTransaction<
+    'a,
+    S: AuthSchema,
+    O: crate::SeaOrmOrganizationSchema,
+    P: crate::SeaOrmPluginSchema,
+> {
+    store: &'a SeaOrmStore<S, O, P>,
     tx: &'a DatabaseTransaction,
 }
 
 #[async_trait]
-impl<S, O: crate::SeaOrmOrganizationSchema> AuthTransaction<S> for SeaOrmTransaction<'_, S, O>
+impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> AuthTransaction<S>
+    for SeaOrmTransaction<'_, S, O, P>
 where
     S: AuthSchema,
     S::User: SeaOrmUserModel,
     S::Account: SeaOrmAccountModel,
     S::Session: SeaOrmSessionModel,
 {
+    async fn before_create_runtime_session(
+        &self,
+        session: &mut better_auth_core::CreateSession,
+    ) -> AuthResult<()> {
+        self.store
+            .before_runtime_session_in_tx(session, Some(self.tx))
+            .await
+    }
     async fn create_user(&self, create_user: better_auth_core::CreateUser) -> AuthResult<S::User> {
         self.store.create_user_in_tx(self.tx, create_user).await
     }
@@ -186,7 +222,8 @@ where
 }
 
 #[async_trait]
-impl<S, O: crate::SeaOrmOrganizationSchema> TransactionStore<S> for SeaOrmStore<S, O>
+impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> TransactionStore<S>
+    for SeaOrmStore<S, O, P>
 where
     S: AuthSchema,
     S::User: SeaOrmUserModel,

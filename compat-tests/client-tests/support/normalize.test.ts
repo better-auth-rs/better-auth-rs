@@ -48,3 +48,13 @@ test("OIDC nonce entropy is normalized while absent or empty nonce remains obser
   expect(clientDiffs({ location: `${location}random-left` }, { location }).length).toBeGreaterThan(0);
   expect(clientDiffs({ location: `${location}random-left` }, { location: "https://issuer.example/authorize" }).length).toBeGreaterThan(0);
 });
+
+test("team ID arrays retain membership, order and raw replacement values", () => {
+  const left = { teams: [{ id: "one" }, { id: "two" }], hook: { teamIds: ["one", "two"] } };
+  expect(clientDiffs(left, { teams: [{ id: "a" }, { id: "b" }], hook: { teamIds: ["a", "b"] } })).toEqual([]);
+  for (const teamIds of [["b", "a"], ["a"], ["a", "unknown"], 0, null]) {
+    expect(clientDiffs(left, { teams: [{ id: "a" }, { id: "b" }], hook: { teamIds } }).length).toBeGreaterThan(0);
+  }
+  expect(clientDiffs({ teamIds: [7] }, { teamIds: [8] }).length).toBeGreaterThan(0);
+  expect(clientDiffs({ teamIds: [""] }, { teamIds: ["a"] }).length).toBeGreaterThan(0);
+});

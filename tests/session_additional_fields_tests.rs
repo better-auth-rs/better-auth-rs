@@ -99,6 +99,7 @@ async fn update_session_persists_only_allowed_fields_and_returns_the_configured_
             field_name: Some("internalNote".into()),
             input: false,
             returned: false,
+            ..Default::default()
         },
     );
     let _ = config

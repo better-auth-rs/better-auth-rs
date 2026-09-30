@@ -1,27 +1,29 @@
+use crate::SchemaValue;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::Value;
 use std::borrow::Cow;
 use uuid::Uuid;
 
 use crate::entity::{AuthInvitation, AuthMember, AuthOrganization};
 
 fn serialize_json_option_as_string<S>(
-    value: &Option<serde_json::Value>,
+    value: &SchemaValue<Option<serde_json::Value>>,
     serializer: S,
 ) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
     match value {
-        Some(inner) => serializer
+        SchemaValue::Typed(Some(inner)) => serializer
             .serialize_some(&serde_json::to_string(inner).map_err(serde::ser::Error::custom)?),
-        None => serializer.serialize_none(),
+        value => value.serialize(serializer),
     }
 }
 
 fn deserialize_json_option_from_string<'de, D>(
     deserializer: D,
-) -> Result<Option<serde_json::Value>, D::Error>
+) -> Result<SchemaValue<Option<serde_json::Value>>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -42,6 +44,7 @@ where
             },
         })
         .transpose()
+        .map(SchemaValue::Typed)
 }
 
 /// Organization entity - matches OpenAPI schema
@@ -51,21 +54,22 @@ pub struct Organization {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub id: String,
-    pub name: String,
-    pub slug: String,
-    pub logo: Option<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub name: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub slug: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub logo: SchemaValue<Option<String>>,
     #[serde(
         serialize_with = "serialize_json_option_as_string",
-        deserialize_with = "deserialize_json_option_from_string",
-        skip_serializing_if = "Option::is_none"
+        deserialize_with = "deserialize_json_option_from_string"
     )]
-    pub metadata: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub metadata: SchemaValue<Option<serde_json::Value>>,
     #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub updated_at: DateTime<Utc>,
+    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub created_at: SchemaValue<DateTime<Utc>>,
 }
 
 /// Organization member
@@ -76,13 +80,17 @@ pub struct Member {
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub id: String,
     #[serde(rename = "organizationId")]
-    pub organization_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub organization_id: SchemaValue<String>,
     #[serde(rename = "userId")]
-    pub user_id: String,
-    pub role: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub user_id: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub role: SchemaValue<String>,
     #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
+    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub created_at: SchemaValue<DateTime<Utc>>,
 }
 
 /// Invitation status
@@ -124,33 +132,62 @@ pub struct Invitation {
     /// Application fields projected by the configured invitation schema.
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
-    #[serde(rename = "teamId", default, skip_serializing_if = "Option::is_none")]
-    pub team_id: Option<String>,
+    #[serde(rename = "teamId")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub team_id: SchemaValue<Option<String>>,
     pub id: String,
     #[serde(rename = "organizationId")]
-    pub organization_id: String,
-    pub email: String,
-    pub role: String,
-    pub status: InvitationStatus,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub organization_id: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub email: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub role: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub status: SchemaValue<InvitationStatus>,
     #[serde(rename = "inviterId")]
-    pub inviter_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub inviter_id: SchemaValue<String>,
     #[serde(rename = "expiresAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub expires_at: DateTime<Utc>,
+    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub expires_at: SchemaValue<DateTime<Utc>>,
     #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
+    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub created_at: SchemaValue<DateTime<Utc>>,
 }
 
 impl Invitation {
     /// Check if the invitation is still pending
     pub fn is_pending(&self) -> bool {
-        self.status == InvitationStatus::Pending
+        self.status == SchemaValue::Typed(InvitationStatus::Pending)
     }
 
     /// Check if the invitation has expired
-    pub fn is_expired(&self) -> bool {
-        self.expires_at < Utc::now()
+    pub fn is_expired(&self) -> crate::AuthResult<bool> {
+        let timestamp = match &self.expires_at {
+            SchemaValue::Typed(value) => return Ok(*value < Utc::now()),
+            SchemaValue::Dynamic(Value::Null) => Some(0.0),
+            SchemaValue::Dynamic(Value::Bool(value)) => Some(f64::from(u8::from(*value))),
+            SchemaValue::Dynamic(Value::Number(value)) => value.as_f64(),
+            SchemaValue::Dynamic(Value::String(_) | Value::Array(_)) => {
+                let value = self.expires_at.display_string()?;
+                if value
+                    .trim_matches(|ch: char| {
+                        (ch.is_whitespace() && ch != '\u{85}') || ch == '\u{feff}'
+                    })
+                    .is_empty()
+                {
+                    Some(0.0)
+                } else {
+                    crate::organization_fields::numeric_filter(&value)
+                }
+            }
+            SchemaValue::Dynamic(Value::Object(_)) | SchemaValue::Undefined => None,
+        };
+        // Upstream compares the replacement value with a Date, which coerces to milliseconds.
+        Ok(timestamp.is_some_and(|value| value < Utc::now().timestamp_millis() as f64))
     }
 }
 
@@ -160,10 +197,10 @@ pub struct CreateOrganization {
     /// Validated application input before adapter transforms.
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub id: Option<String>,
-    pub name: String,
-    pub slug: String,
-    pub logo: Option<String>,
-    pub metadata: Option<serde_json::Value>,
+    pub name: SchemaValue<String>,
+    pub slug: SchemaValue<String>,
+    pub logo: SchemaValue<Option<String>>,
+    pub metadata: SchemaValue<Option<serde_json::Value>>,
 }
 
 impl CreateOrganization {
@@ -171,20 +208,20 @@ impl CreateOrganization {
         Self {
             id: Some(Uuid::new_v4().to_string()),
             additional_fields: Default::default(),
-            name: name.into(),
-            slug: slug.into(),
-            logo: None,
-            metadata: None,
+            name: name.into().into(),
+            slug: slug.into().into(),
+            logo: SchemaValue::Undefined,
+            metadata: SchemaValue::Undefined,
         }
     }
 
     pub fn with_logo(mut self, logo: impl Into<String>) -> Self {
-        self.logo = Some(logo.into());
+        self.logo = Some(logo.into()).into();
         self
     }
 
     pub fn with_metadata(mut self, metadata: serde_json::Value) -> Self {
-        self.metadata = Some(metadata);
+        self.metadata = Some(metadata).into();
         self
     }
 }
@@ -209,7 +246,7 @@ pub struct CreateMember {
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub organization_id: String,
     pub user_id: String,
-    pub role: String,
+    pub role: SchemaValue<String>,
 }
 
 impl CreateMember {
@@ -222,7 +259,7 @@ impl CreateMember {
             organization_id: organization_id.into(),
             additional_fields: Default::default(),
             user_id: user_id.into(),
-            role: role.into(),
+            role: role.into().into(),
         }
     }
 }
@@ -271,12 +308,11 @@ impl<T: AuthOrganization> From<&T> for Organization {
         Self {
             additional_fields: organization.projected_fields().cloned().unwrap_or_default(),
             id: organization.id().into_owned(),
-            name: organization.name().to_owned(),
-            slug: organization.slug().to_owned(),
-            logo: organization.logo().map(str::to_owned),
-            metadata: organization.metadata().cloned(),
-            created_at: organization.created_at(),
-            updated_at: organization.updated_at(),
+            name: organization.name().clone(),
+            slug: organization.slug().clone(),
+            logo: organization.logo().clone(),
+            metadata: organization.metadata().clone(),
+            created_at: organization.created_at().clone(),
         }
     }
 }
@@ -289,23 +325,20 @@ impl AuthOrganization for Organization {
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &SchemaValue<String> {
         &self.name
     }
-    fn slug(&self) -> &str {
+    fn slug(&self) -> &SchemaValue<String> {
         &self.slug
     }
-    fn logo(&self) -> Option<&str> {
-        self.logo.as_deref()
+    fn logo(&self) -> &SchemaValue<Option<String>> {
+        &self.logo
     }
-    fn metadata(&self) -> Option<&serde_json::Value> {
-        self.metadata.as_ref()
+    fn metadata(&self) -> &SchemaValue<Option<serde_json::Value>> {
+        &self.metadata
     }
-    fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
-    }
-    fn updated_at(&self) -> DateTime<Utc> {
-        self.updated_at
+    fn created_at(&self) -> &SchemaValue<DateTime<Utc>> {
+        &self.created_at
     }
 }
 
@@ -317,17 +350,17 @@ impl AuthMember for Member {
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
     }
-    fn organization_id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.organization_id)
+    fn organization_id(&self) -> &SchemaValue<String> {
+        &self.organization_id
     }
-    fn user_id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.user_id)
+    fn user_id(&self) -> &SchemaValue<String> {
+        &self.user_id
     }
-    fn role(&self) -> &str {
+    fn role(&self) -> &SchemaValue<String> {
         &self.role
     }
-    fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
+    fn created_at(&self) -> &SchemaValue<DateTime<Utc>> {
+        &self.created_at
     }
 }
 
@@ -336,10 +369,10 @@ impl<T: AuthMember> From<&T> for Member {
         Self {
             additional_fields: member.projected_fields().cloned().unwrap_or_default(),
             id: member.id().into_owned(),
-            organization_id: member.organization_id().into_owned(),
-            user_id: member.user_id().into_owned(),
-            role: member.role().to_owned(),
-            created_at: member.created_at(),
+            organization_id: member.organization_id().clone(),
+            user_id: member.user_id().clone(),
+            role: member.role().clone(),
+            created_at: member.created_at().clone(),
         }
     }
 }
@@ -349,32 +382,32 @@ impl AuthInvitation for Invitation {
         Some(&self.additional_fields)
     }
 
-    fn team_id(&self) -> Option<&str> {
-        self.team_id.as_deref()
+    fn team_id(&self) -> &SchemaValue<Option<String>> {
+        &self.team_id
     }
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
     }
-    fn organization_id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.organization_id)
+    fn organization_id(&self) -> &SchemaValue<String> {
+        &self.organization_id
     }
-    fn email(&self) -> &str {
+    fn email(&self) -> &SchemaValue<String> {
         &self.email
     }
-    fn role(&self) -> &str {
+    fn role(&self) -> &SchemaValue<String> {
         &self.role
     }
-    fn status(&self) -> &InvitationStatus {
+    fn status(&self) -> &SchemaValue<InvitationStatus> {
         &self.status
     }
-    fn inviter_id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.inviter_id)
+    fn inviter_id(&self) -> &SchemaValue<String> {
+        &self.inviter_id
     }
-    fn expires_at(&self) -> DateTime<Utc> {
-        self.expires_at
+    fn expires_at(&self) -> &SchemaValue<DateTime<Utc>> {
+        &self.expires_at
     }
-    fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
+    fn created_at(&self) -> &SchemaValue<DateTime<Utc>> {
+        &self.created_at
     }
 }
 
@@ -383,14 +416,14 @@ impl<T: AuthInvitation> From<&T> for Invitation {
         Self {
             additional_fields: invitation.projected_fields().cloned().unwrap_or_default(),
             id: invitation.id().into_owned(),
-            organization_id: invitation.organization_id().into_owned(),
-            email: invitation.email().to_owned(),
-            role: invitation.role().to_owned(),
+            organization_id: invitation.organization_id().clone(),
+            email: invitation.email().clone(),
+            role: invitation.role().clone(),
             status: invitation.status().clone(),
-            inviter_id: invitation.inviter_id().into_owned(),
-            team_id: invitation.team_id().map(str::to_owned),
-            expires_at: invitation.expires_at(),
-            created_at: invitation.created_at(),
+            inviter_id: invitation.inviter_id().clone(),
+            team_id: invitation.team_id().clone(),
+            expires_at: invitation.expires_at().clone(),
+            created_at: invitation.created_at().clone(),
         }
     }
 }

@@ -336,13 +336,11 @@ pub(crate) async fn list_user_sessions_core(
     body: &UserIdRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ListSessionsResponse<SessionView>> {
-    let session_manager = ctx.session_manager();
-    let sessions = session_manager.list_user_sessions(&body.user_id).await?;
     Ok(ListSessionsResponse {
-        sessions: sessions
-            .iter()
-            .map(|session| SessionView::with_fields(session, &ctx.config.session))
-            .collect::<AuthResult<_>>()?,
+        sessions: ctx
+            .session_manager()
+            .list_user_session_views(&body.user_id)
+            .await?,
     })
 }
 
@@ -475,7 +473,7 @@ pub(crate) async fn impersonate_user_core(
     let session = ctx.database.create_session(create_session).await?;
     let token = session.token().to_string();
     let response = SessionUserResponse {
-        session: SessionView::with_fields(&session, &ctx.config.session)?,
+        session: ctx.session_view(&session).await?,
         user: ctx.user_view(&target)?,
     };
 
@@ -498,9 +496,9 @@ pub(crate) async fn stop_impersonating_core(
         .await?
         .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_USER))?;
 
-    let admin_session = ctx
+    let (admin_session, snapshot) = ctx
         .database
-        .get_session(&admin_cookie.session_token)
+        .get_session_snapshot(&admin_cookie.session_token)
         .await?
         .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION))?;
 
@@ -513,8 +511,14 @@ pub(crate) async fn stop_impersonating_core(
         .await?;
 
     let token = admin_session.token().to_string();
+    let session = if let Some(mut data) = snapshot {
+        data.session.filter_returned_fields(&ctx.config.session);
+        data.session
+    } else {
+        ctx.session_view(&admin_session).await?
+    };
     let response = SessionUserResponse {
-        session: SessionView::with_fields(&admin_session, &ctx.config.session)?,
+        session,
         user: ctx.user_view(&admin_user)?,
     };
 

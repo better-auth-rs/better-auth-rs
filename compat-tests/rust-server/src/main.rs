@@ -7,13 +7,15 @@ use axum::{
 mod oauth_proxy;
 mod organization_callbacks;
 mod organization_core_fields;
+mod organization_dynamic_fields;
 mod organization_fields;
+mod organization_member_fields;
+mod organization_native_json;
 use better_auth::__private_core::AuthContext as InternalAuthContext;
 use better_auth::integrations::axum::AxumIntegration;
 use better_auth::middleware::RateLimitConfig;
 use better_auth::plugins::api_key::{
-    ApiKeyConfig, ApiKeyReferences, ApiKeyVerificationError, CreateKeyRequest, UpdateKeyRequest,
-    VerifyApiKey,
+    ApiKeyConfig, ApiKeyReferences, CreateKeyRequest, UpdateKeyRequest, VerifyApiKey,
 };
 use better_auth::plugins::{
     AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, DeviceAuthorizationPlugin,
@@ -47,11 +49,16 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
+mod api_key_callbacks;
+mod api_key_storage;
 mod email_otp;
 mod identity_routes;
 mod jwt_fixture;
 mod oidc;
 mod one_tap;
+mod plugin_schema;
+mod secondary_storage;
+mod session_fields;
 mod token_routes;
 mod user_fields;
 
@@ -189,7 +196,16 @@ fn default_github_profile() -> GitHubProfile {
 }
 
 async fn reset_database_state(database: &DatabaseConnection) -> Result<(), DbErr> {
+    if organization_member_fields::enabled(&std::env::var("COMPAT_PROFILE").unwrap_or_default()) {
+        organization_member_fields::reset(database).await?;
+    }
+    if std::env::var("COMPAT_PROFILE").as_deref() == Ok("organization-dynamic-fields") {
+        organization_dynamic_fields::reset(database).await?;
+    }
     organization_fields::reset(database).await?;
+    if std::env::var("COMPAT_PROFILE").as_deref() == Ok("plugin-schema") {
+        plugin_schema::reset(database).await?;
+    }
     device_code::Entity::delete_many().exec(database).await?;
     passkey::Entity::delete_many().exec(database).await?;
     api_key::Entity::delete_many().exec(database).await?;
@@ -644,10 +660,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
         );
     }
+    secondary_storage::SecondaryFixture::configure(&device_profile, &mut config);
+    session_fields::configure(&device_profile, &mut config);
     let database = Database::connect("sqlite::memory:").await?;
     better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database).await?;
     user_fields::add_columns(&database).await?;
     organization_fields::create_tables(&database).await?;
+    if organization_member_fields::enabled(&device_profile) {
+        organization_member_fields::create_tables(&database).await?;
+    }
+    if device_profile == "organization-dynamic-fields" {
+        organization_dynamic_fields::create_tables(&database).await?;
+    }
+    if device_profile == "plugin-schema" {
+        plugin_schema::create_tables(&database).await?;
+    }
     let disabled_user_router = if device_profile == "user-fields" {
         user_fields::disabled_router(config.clone(), database.clone()).await?
     } else {
@@ -667,10 +694,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let github_profile = Arc::new(Mutex::new(default_github_profile()));
     let social_id_token_valid = Arc::new(Mutex::new(true));
 
-    let store = SeaOrmStore::<TestSchema>::new(config.clone(), database);
+    let secondary_fixture =
+        secondary_storage::SecondaryFixture::new(&device_profile, database.clone());
+    let store = SeaOrmStore::<TestSchema>::new(config.clone(), database)
+        .with_hooks(secondary_fixture.hooks());
     let store: Arc<dyn better_auth::store::AuthStore<TestSchema>> =
         if device_profile == "organization-fields" {
             Arc::new(store.with_organization_schema::<organization_fields::models::Models>())
+        } else if organization_member_fields::enabled(&device_profile) {
+            Arc::new(store.with_organization_schema::<organization_member_fields::Models>())
+        } else if device_profile == "organization-dynamic-fields" {
+            Arc::new(store.with_organization_schema::<organization_dynamic_fields::Models>())
+        } else if device_profile == "plugin-schema" {
+            Arc::new(store.with_plugin_schema::<plugin_schema::Models>())
         } else {
             Arc::new(store)
         };
@@ -683,6 +719,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         reset_database.clone(),
     )));
     let email_otp_fixture = email_otp::EmailOtpFixture::default();
+    let api_key_storage_fixture = api_key_storage::ApiKeyStorageFixture::default();
+    let api_key_callbacks = api_key_callbacks::ApiKeyCallbacks::default();
     let one_tap_fixture = one_tap::OneTapFixture::default();
     let one_tap_router = one_tap_fixture.router();
     let email_otp_router = email_otp_fixture.router(Arc::new(SeaOrmStore::<TestSchema>::new(
@@ -816,6 +854,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if device_profile == "organization-core-fields" {
         organization_core_fields::configure(&mut organization_config);
     }
+    if organization_member_fields::enabled(&device_profile) {
+        organization_member_fields::configure(&mut organization_config, &device_profile);
+    }
+    if device_profile == "organization-dynamic-fields" {
+        organization_dynamic_fields::configure(&mut organization_config);
+    }
+    if device_profile.starts_with("organization-native-json") {
+        organization_native_json::configure(&mut organization_config, &device_profile);
+    }
     let organization_plugin = organization_callbacks.apply(
         OrganizationPlugin::with_config(organization_config).custom_send_invitation_email(
             Arc::new(CompatInvitationSender {
@@ -824,6 +871,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
         ),
     );
+    let api_key_plugin = if device_profile == "api-key-storage" {
+        api_key_storage_fixture.plugin(api_key_plugin)
+    } else {
+        api_key_plugin
+    };
+    let api_key_plugin = api_key_callbacks.apply(&device_profile, api_key_plugin);
+    if device_profile == "api-key-storage" {
+        config.session.store_session_in_database = true;
+        config.verification.store_in_database = true;
+    }
     let builder = AuthBuilder::<TestSchema>::new(config)
         .store_arc(store)
         .rate_limit(RateLimitConfig::new().enabled(matches!(
@@ -881,6 +938,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         builder
     };
+    let builder = if device_profile == "plugin-schema" {
+        builder.plugin(better_auth::plugins::JwtPlugin::new())
+    } else {
+        builder
+    };
     let builder = token_routes::add_plugins(builder, &device_profile, verification_outbox.clone());
     let builder = if [
         "jwt-ps256",
@@ -907,7 +969,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         builder
     };
+    let builder = if device_profile == "api-key-storage" {
+        builder.secondary_storage(api_key_storage_fixture.secondary_storage())
+    } else {
+        builder
+    };
+    let builder = if let Some(storage) = secondary_fixture.storage() {
+        builder.secondary_storage(storage)
+    } else {
+        builder
+    };
     let auth = Arc::new(builder.build().await?);
+    let secondary_router = secondary_fixture.router(auth.clone());
+    let api_key_storage_router = api_key_storage_fixture.router(auth.clone());
+    let api_key_callbacks_router = api_key_callbacks.router(auth.clone(), api_key_plugin.clone());
 
     let auth_router = auth.clone().axum_router();
     let jwt_router = jwt_fixture.router(auth.clone());
@@ -978,7 +1053,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 async move {
                     let ctx = auth.context();
                     match plugin.create_key(ctx, &body).await {
-                        Ok(key) => Json(serde_json::to_value(key).unwrap()).into_response(),
+                        Ok(key) => Json(key).into_response(),
                         Err(error) => (
                             axum::http::StatusCode::from_u16(error.status_code()).unwrap(),
                             Json(serde_json::json!({ "message": error.to_string() })),
@@ -996,7 +1071,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 async move {
                     let ctx = auth.context();
                     match plugin.update_key(ctx, &body).await {
-                        Ok(key) => Json(serde_json::to_value(key).unwrap()).into_response(),
+                        Ok(key) => Json(key).into_response(),
                         Err(error) => (
                             axum::http::StatusCode::from_u16(error.status_code()).unwrap(),
                             Json(serde_json::json!({ "message": error.to_string() })),
@@ -1020,24 +1095,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     };
                     match plugin.verify_api_key(&input, ctx).await {
                         Ok(key) => {
-                            Json(serde_json::json!({ "valid": true, "error": null, "key": key }))
-                                .into_response()
-                        }
-                        Err(ApiKeyVerificationError::Validation(error)) => {
-                            Json(serde_json::json!({
-                                "valid": false, "error": error, "key": null,
-                            }))
+                            #[derive(serde::Serialize)]
+                            struct VerifiedKey<T> {
+                                valid: bool,
+                                error: Option<()>,
+                                key: T,
+                            }
+                            Json(VerifiedKey {
+                                valid: true,
+                                error: None,
+                                key,
+                            })
                             .into_response()
                         }
-                        Err(ApiKeyVerificationError::Internal(error)) => {
-                            tracing::error!(%error, "API key verification failed");
-                            (
-                                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(serde_json::json!({
-                                    "message": error.to_string(),
-                                })),
-                            )
-                                .into_response()
+                        Err(error) => {
+                            let response = error.into_response().unwrap();
+                            (axum::http::StatusCode::from_u16(response.status).unwrap(),
+                                [(axum::http::header::CONTENT_TYPE, "application/json")], response.body).into_response()
                         }
                     }
                 }
@@ -1211,6 +1285,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             post(move || {
                 let identity_fixture = identity_fixture.clone();
                 let email_otp_fixture = email_otp_fixture.clone();
+                let api_key_storage_fixture = api_key_storage_fixture.clone();
+                let secondary_fixture = secondary_fixture.clone();
+                let api_key_callbacks = api_key_callbacks.clone();
                 let one_tap_fixture = one_tap_fixture.clone();
                 let organization_callbacks = organization_callbacks.clone();
                 let reset_outbox = reset_outbox_for_reset.clone();
@@ -1235,6 +1312,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     reset_outbox.lock().await.clear();
                     identity_fixture.reset().await;
                     email_otp_fixture.reset().await;
+                    api_key_storage_fixture.reset();
+                    secondary_fixture.reset();
+                    api_key_callbacks.reset().await;
                     one_tap_fixture.reset().await;
                     organization_callbacks.reset().await;
                     verification_outbox.lock().await.clear();
@@ -1789,6 +1869,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(auth)
         .merge(oauth_proxy::router(reset_database.clone()))
         .merge(email_otp_router)
+        .merge(api_key_storage_router)
+        .merge(secondary_router)
+        .merge(api_key_callbacks_router)
         .merge(jwt_router)
         .merge(one_tap_router)
         .merge(organization_callbacks_router)

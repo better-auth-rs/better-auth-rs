@@ -53,10 +53,10 @@ async fn add_member_validates_fields_before_queries_and_limit_callbacks() {
     );
     let plugin = OrganizationPlugin::with_config(config);
     let valid = AddMemberInput {
-        user_id: user.id,
-        organization_id: Some(organization.id),
-        role: RoleInput::One("member".into()),
-        team_id: None,
+        user_id: user.id.into(),
+        organization_id: organization.id.into(),
+        role: RoleInput::One("member".into()).into(),
+        team_id: Default::default(),
         additional_fields: json!({"label":"valid"}).as_object().unwrap().clone(),
     };
     for (input, message) in [
@@ -69,7 +69,7 @@ async fn add_member_validates_fields_before_queries_and_limit_callbacks() {
         ),
         (
             AddMemberInput {
-                role: RoleInput::Many(vec!["member".into()]),
+                role: RoleInput::Many(vec!["member".into()]).into(),
                 ..valid.clone()
             },
             "[body.role] Invalid input: expected string, received array",

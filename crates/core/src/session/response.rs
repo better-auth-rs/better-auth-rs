@@ -81,12 +81,23 @@ impl<S: AuthSchema> SessionManager<S> {
                     .as_ref()
                     .is_some_and(|cache| cache.enabled)
                 && let Some(token) = verify_cookie_value(&signed_token, &self.config.secret)
-                && let Some(session) = self.database.get_session(&token).await?
-                && let Some(user) = self.database.get_user_by_id(&session.user_id()).await?
+                && let Some((session, cached_data)) =
+                    self.database.get_session_snapshot(&token).await?
             {
-                let data = crate::session::SessionData {
-                    session: self.session_view(&session)?,
-                    user: self.user_view(&user)?,
+                let data = if let Some(mut data) = cached_data {
+                    data.user = self.user_view(&data.user)?;
+                    data.session.filter_returned_fields(&self.config.session);
+                    data
+                } else {
+                    let user = self
+                        .database
+                        .get_user_by_id(&session.user_id())
+                        .await?
+                        .ok_or(crate::AuthError::UserNotFound)?;
+                    crate::session::SessionData {
+                        session: self.session_view(&session).await?,
+                        user: self.user_view(&user)?,
+                    }
                 };
                 self.write_cache(req, &data, dont_remember).await?;
                 for (name, value) in req.take_response_headers()? {

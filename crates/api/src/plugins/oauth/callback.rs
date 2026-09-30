@@ -177,7 +177,9 @@ pub(super) async fn handle_callback(
 
             let payload: OAuthStatePayload = serde_json::from_str(verification.value())
                 .map_err(|error| AuthError::internal(format!("Invalid state payload: {error}")))?;
-            ctx.database.delete_verification(&verification.id()).await?;
+            ctx.database
+                .delete_verification_by_identifier(&format!("oauth:{state_param}"))
+                .await?;
             payload
         }
         better_auth_core::OAuthStateStrategy::Cookie => {

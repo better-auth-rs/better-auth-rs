@@ -80,16 +80,54 @@ impl crate::store::JwksStore for MemoryStore {
 #[derive(Default)]
 pub(crate) struct MemoryStore {
     state: Mutex<State>,
+    verification_lock: tokio::sync::Mutex<()>,
+    session_config: crate::config::SessionConfig,
     organization_fields: std::sync::RwLock<crate::organization_fields::OrganizationFields>,
 }
 
 impl MemoryStore {
-    pub(crate) fn new(_config: Arc<AuthConfig>) -> Self {
-        Self::default()
+    pub(crate) fn new(config: Arc<AuthConfig>) -> Self {
+        Self {
+            session_config: config.session.clone(),
+            ..Self::default()
+        }
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
         self.state.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    async fn verify_unproven_user(
+        &self,
+        user_id: &str,
+        database_sessions: bool,
+        session_cleanup: Option<&dyn crate::store::VerificationSessionCleanup>,
+    ) -> AuthResult<Option<UserView>> {
+        let _verification = self.verification_lock.lock().await;
+        let user = self.lock().users.get(user_id).cloned();
+        let Some(user) = user else {
+            return Ok(None);
+        };
+        if user.email_verified {
+            return Ok(Some(user));
+        }
+        if let Some(cleanup) = session_cleanup {
+            cleanup.revoke().await?;
+        }
+        let mut state = self.lock();
+        state
+            .accounts
+            .retain(|_, account| account.user_id != user_id);
+        if database_sessions {
+            state
+                .sessions
+                .retain(|_, session| session.user_id != user_id);
+        }
+        if let Some(user) = state.users.get_mut(user_id) {
+            user.email_verified = true;
+            user.updated_at = Utc::now();
+        }
+        Ok(state.users.get(user_id).cloned())
     }
 }
 
@@ -104,7 +142,14 @@ impl MemoryStore {
         let metadata = value.metadata.clone();
         let mut output: Organization =
             self.output_record(better_auth_schema_registry::EntityRole::Organization, value)?;
-        output.metadata = metadata;
+        if !self
+            .organization_fields()
+            .organization
+            .additional_fields
+            .contains_key("metadata")
+        {
+            output.metadata = metadata;
+        }
         Ok(output)
     }
     fn output_member(&self, value: Member) -> AuthResult<Member> {
@@ -148,27 +193,28 @@ impl AuthTransaction<BundledSchema> for MemoryTransaction<'_> {
 
 #[async_trait]
 impl UserStore<BundledSchema> for MemoryStore {
+    async fn verify_user_with_cleanup(
+        &self,
+        user_id: &str,
+        cleanup: crate::store::VerificationCleanup,
+        sessions: Option<&dyn crate::store::VerificationSessionCleanup>,
+    ) -> AuthResult<Option<UserView>> {
+        self.verify_unproven_user(
+            user_id,
+            matches!(
+                cleanup,
+                crate::store::VerificationCleanup::AccountsAndSessions
+            ),
+            sessions,
+        )
+        .await
+    }
+
     async fn verify_user_and_revoke_unproven_access(
         &self,
         user_id: &str,
     ) -> AuthResult<Option<UserView>> {
-        let mut state = self.lock();
-        let Some(user) = state.users.get(user_id) else {
-            return Ok(None);
-        };
-        if !user.email_verified {
-            state
-                .accounts
-                .retain(|_, account| account.user_id != user_id);
-            state
-                .sessions
-                .retain(|_, session| session.user_id != user_id);
-            if let Some(user) = state.users.get_mut(user_id) {
-                user.email_verified = true;
-                user.updated_at = Utc::now();
-            }
-        }
-        Ok(state.users.get(user_id).cloned())
+        self.verify_unproven_user(user_id, true, None).await
     }
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<UserView> {
         let now = Utc::now();
@@ -206,6 +252,14 @@ impl UserStore<BundledSchema> for MemoryStore {
 
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<UserView>> {
         Ok(self.lock().users.get(id).cloned())
+    }
+    async fn get_user_by_id_value(&self, id: &serde_json::Value) -> AuthResult<Option<UserView>> {
+        Ok(self
+            .lock()
+            .users
+            .values()
+            .find(|user| serde_json::json!(user.id) == *id)
+            .cloned())
     }
 
     async fn list_users_by_ids(&self, ids: &[String]) -> AuthResult<Vec<UserView>> {
@@ -547,6 +601,16 @@ impl VerificationStore<BundledSchema> for MemoryStore {
         &self,
         identifier: &str,
     ) -> AuthResult<Option<VerificationView>> {
+        Ok(self
+            .consume_verification_including_expired(identifier)
+            .await?
+            .filter(|value| value.expires_at >= Utc::now()))
+    }
+
+    async fn consume_verification_including_expired(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<VerificationView>> {
         let mut state = self.lock();
         let found = state
             .verifications
@@ -557,7 +621,7 @@ impl VerificationStore<BundledSchema> for MemoryStore {
         state
             .verifications
             .retain(|_, verification| verification.identifier != identifier);
-        Ok(found.filter(|verification| verification.expires_at >= Utc::now()))
+        Ok(found)
     }
 
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {

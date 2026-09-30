@@ -29,7 +29,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 
 ## Opaque Session Tokens
 
-Better Auth stores opaque session tokens in the database. Browser cookies contain the token and an HMAC-SHA256 signature:
+Better Auth stores opaque session tokens in the configured session storage. The database is the default. Browser cookies contain the token and an HMAC-SHA256 signature:
 
 ```http
 Cookie: better-auth.session_token=session_abc123.signature
@@ -63,10 +63,10 @@ Session lists preserve the storage adapter's result order, matching upstream. Cl
 ## Session Lifecycle
 
 1. A session is created after successful authentication.
-2. The opaque token and session metadata are stored in the database.
+2. The opaque token and session metadata are stored in the database or configured secondary backend.
 3. The token is returned to the client and usually set as a cookie.
-4. Authenticated requests resolve the token through a valid cookie cache or the database.
-5. Database reads reject expired or revoked sessions. A valid cookie cache remains usable until its cache or session expiry.
+4. Authenticated requests resolve the token through a valid cookie cache or the configured session storage.
+5. Session storage reads reject expired or revoked sessions. A valid cookie cache remains usable until its cache or session expiry.
 
 ## Refresh Behavior
 
@@ -98,6 +98,12 @@ config.session.cookie_same_site = SameSite::Lax;
 
 A `disableRefresh=true` query parameter prevents refresh for the request. Sessions created with `rememberMe: false` expire in the database after 24 hours. These sessions use browser-session cookies and a signed `dont_remember` marker; requests with this marker do not refresh the session automatically. Remembered sessions use the configured `expires_in` lifetime. `/get-session` responses include `Cache-Control: no-store` and `Pragma: no-cache`.
 
+## Secondary Storage
+
+`BetterAuth::secondary_storage` installs a backend for server-side session and user snapshots. Sessions use that backend by default. Set `session.store_session_in_database = true` to retain database rows and permit fallback on a missing cache entry. Set `session.preserve_session_in_database = true` to keep expired audit rows after revocation and disable that fallback. Malformed cached JSON never restores a session through database fallback.
+
+Database transactions publish cached sessions only after commit. User updates through the authentication store refresh cached user snapshots. See [Secondary Storage](/docs/concepts/secondary-storage) for backend methods, atomic verification consumption, and model hydration requirements.
+
 ## Cookie Cache
 
 Enable a signed or encrypted session cache to avoid a database read on each request:
@@ -115,7 +121,7 @@ config.session.cookie_cache = Some(CookieCacheConfig {
 
 `Compact` uses HMAC-SHA256, `Jwt` uses HS256, and `Jwe` uses A256CBC-HS512 encryption. Register `JwtPlugin::new().session_cookie_cache(true)` with the `Jwt` strategy to use the plugin's asymmetric signing keys instead of HS256. See [JWT](../plugins/jwt) for the cache token's issuer, audience, and purpose checks. Each cache is bound to its signed session token and configuration version. Large values use numbered cookie chunks. Authentication writes the cache, and sign-out clears its chunks.
 
-Use `disableCookieCache=true` to read the database immediately. Session listing and revocation also require a database read. Changing `version` invalidates previously issued caches. This configuration uses a persistent session store; stateless cache refresh is not exposed.
+Use `disableCookieCache=true` to read the authoritative session storage immediately. Session listing and revocation also use that storage. Changing `version` invalidates previously issued caches. This configuration uses a persistent session store; stateless cache refresh is not exposed.
 
 ## Using Sessions in Axum Handlers
 
@@ -142,7 +148,7 @@ Use `OptionalSession<AppAuthSchema>` for routes that should work for both authen
 
 The request body must be a JSON object with `Content-Type: application/json`. Body validation runs before session authentication. A body with a missing or unsupported media type returns 415.
 
-Add columns to the application-owned session entity and migrate the database before configuring those fields. `AuthEntity` generates the update mapping and retains database defaults for new sessions.
+Add columns to the application-owned session entity and migrate the database before configuring those fields. `AuthEntity` generates the storage mapping. `SessionFieldConfig` is an alias of `UserFieldConfig`; session fields support constant defaults, default factories, validators, input/output transforms, and `on_update`.
 
 ```rust
 use better_auth::config::SessionFieldConfig;
@@ -154,6 +160,10 @@ config.session.additional_fields.insert("label".into(), SessionFieldConfig {
 ```
 
 `field_name` identifies the field in the model's serialized representation. The public field name is the map key. For manually implemented `SeaOrmSessionModel` types, implement `apply_fields` to persist the configured fields.
+
+Custom `SessionStore` implementations return the updated model from `update_session_expiry`. The runtime uses that result for the refresh response so database transforms run once even when secondary storage is enabled.
+
+Session creation evaluates configured defaults before persistence. A public update runs the validator, or the input transform when no validator exists. A database write then applies the adapter input transform and `on_update`; database reads apply the output transform. A cached session already contains its public field values, so cache reads do not repeat adapter transforms. With secondary storage alone, session creation uses defaults and updates use the route parser without database transforms. With both storage modes enabled, an update response reflects the database result, while subsequent cache reads reflect the cached update, matching Better Auth 1.7.6.
 
 ## Two-Factor Interaction
 

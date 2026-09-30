@@ -238,14 +238,18 @@ pub(crate) async fn find_session<S: AuthSchema>(
     ctx: &AuthContext<S>,
     token: &str,
 ) -> AuthResult<Option<(SessionView, UserView)>> {
-    let Some(session) = ctx.database.get_session(token).await? else {
+    let Some((session, snapshot)) = ctx.database.get_session_snapshot(token).await? else {
         return Ok(None);
     };
+    if let Some(mut data) = snapshot {
+        data.session.filter_returned_fields(&ctx.config.session);
+        return Ok(Some((data.session, ctx.user_view(&data.user)?)));
+    }
     let Some(user) = ctx.database.get_user_by_id(&session.user_id()).await? else {
         return Ok(None);
     };
     Ok(Some((
-        SessionView::with_fields(&session, &ctx.config.session)?,
+        ctx.session_view(&session).await?,
         ctx.user_view(&user)?,
     )))
 }

@@ -147,7 +147,10 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     let organization = store.create_organization(input).await.unwrap();
     assert_eq!(organization.id, "actual-organization");
     assert_eq!(organization.name, "Acme:in:out");
-    assert_eq!(organization.logo.as_deref(), Some("default-logo"));
+    assert_eq!(
+        organization.logo.typed().unwrap().as_deref(),
+        Some("default-logo")
+    );
     assert!(!organization.additional_fields.contains_key("name"));
     assert_eq!(
         fixture::models::organization::Entity::find_by_id(&organization.id)
@@ -277,7 +280,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
 }
 
 #[tokio::test]
-async fn builtin_output_type_errors_and_core_column_remaps_fail_explicitly() {
+async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_explicitly() {
     let mut config = OrganizationConfig::default();
     fixture::configure(&mut config);
     let store = store(config.clone()).await;
@@ -310,15 +313,17 @@ async fn builtin_output_type_errors_and_core_column_remaps_fail_explicitly() {
     store
         .configure_organization_fields(config.schema.clone())
         .unwrap();
-    let error = store
+    let organization = store
         .create_organization(CreateOrganization::new("Saved", "saved"))
         .await
-        .unwrap_err();
-    assert!(
-        error.to_string().contains("name output is incompatible"),
-        "{error}"
-    );
-    let _ = config.schema.organization.additional_fields.remove("name");
+        .unwrap();
+    assert_eq!(organization.name.json().unwrap(), Some(json!(12)));
+    assert_eq!(serde_json::to_value(&organization).unwrap()["name"], 12);
+    let _ = config
+        .schema
+        .organization
+        .additional_fields
+        .shift_remove("name");
     store
         .configure_organization_fields(config.schema.clone())
         .unwrap();
@@ -339,12 +344,23 @@ async fn builtin_output_type_errors_and_core_column_remaps_fail_explicitly() {
     store
         .configure_organization_fields(config.schema.clone())
         .unwrap();
-    let error = store.get_organization_by_slug("saved").await.unwrap_err();
+    let organization = store
+        .get_organization_by_slug("saved")
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(organization.logo.is_undefined());
     assert!(
-        error.to_string().contains("logo output is undefined"),
-        "{error}"
+        serde_json::to_value(&organization)
+            .unwrap()
+            .get("logo")
+            .is_none()
     );
-    let _ = config.schema.organization.additional_fields.remove("logo");
+    let _ = config
+        .schema
+        .organization
+        .additional_fields
+        .shift_remove("logo");
     let _ = config.schema.invitation.additional_fields.insert(
         "status".into(),
         UserFieldConfig {
@@ -354,7 +370,7 @@ async fn builtin_output_type_errors_and_core_column_remaps_fail_explicitly() {
         },
     );
     store.configure_organization_fields(config.schema).unwrap();
-    let error = store
+    let invitation = store
         .create_invitation(CreateInvitation::new(
             &organization.id,
             "recipient@example.com",
@@ -363,10 +379,112 @@ async fn builtin_output_type_errors_and_core_column_remaps_fail_explicitly() {
             chrono::Utc::now() + chrono::Duration::days(1),
         ))
         .await
-        .unwrap_err();
-    assert!(
-        error.to_string().contains("status output is incompatible"),
-        "{error}"
+        .unwrap();
+    assert_eq!(
+        invitation.status.json().unwrap(),
+        Some(json!("unrecognized"))
+    );
+    assert_eq!(
+        fixture::models::invitation::Entity::find_by_id(&invitation.id)
+            .one(store.connection())
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        "pending"
     );
     fixture::reset(store.connection()).await.unwrap();
+}
+
+#[tokio::test]
+async fn team_capacity_uses_the_transformed_durable_counter() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let inputs = Arc::new(AtomicUsize::new(0));
+    let observed = inputs.clone();
+    let mut config = OrganizationConfig::default();
+    fixture::configure(&mut config);
+    let _ = config.schema.team.additional_fields.insert(
+        "memberCount".into(),
+        UserFieldConfig {
+            field_type: UserFieldType::Number,
+            required: Some(false),
+            default_value: Some(json!(17)),
+            input_transform: Some(Arc::new(move |value| {
+                let _ = observed.fetch_add(1, Ordering::SeqCst);
+                assert_eq!(value, Some(json!(0)));
+                Ok(Some(json!(2)))
+            })),
+            output_transform: Some(Arc::new(|value| {
+                Ok(value.map(|value| json!(value.as_i64().unwrap() + 10)))
+            })),
+            ..Default::default()
+        },
+    );
+    let store = store(config).await;
+    let organization = store
+        .create_organization(CreateOrganization::new("Capacity", "capacity"))
+        .await
+        .unwrap();
+    let team = store
+        .create_team(CreateTeam {
+            name: "Team".into(),
+            organization_id: organization.id.clone(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(inputs.load(Ordering::SeqCst), 1);
+    assert_eq!(team.additional_fields["memberCount"], 12);
+    assert!(
+        store
+            .add_team_member(&team.id, "owner", Some(2))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(store.list_team_members(&team.id).await.unwrap().is_empty());
+    let member = store
+        .add_team_member(&team.id, "owner", Some(3))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        store
+            .get_team(&team.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .additional_fields["memberCount"],
+        13
+    );
+    assert_eq!(
+        store
+            .add_team_member(&team.id, "owner", Some(3))
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        member.id
+    );
+    store.remove_team_member(&team.id, "owner").await.unwrap();
+    store.remove_team_member(&team.id, "owner").await.unwrap();
+    assert_eq!(
+        store
+            .get_team(&team.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .additional_fields["memberCount"],
+        12
+    );
+    assert_eq!(inputs.load(Ordering::SeqCst), 3);
+    assert_eq!(
+        fixture::models::team::Entity::find_by_id(&team.id)
+            .one(store.connection())
+            .await
+            .unwrap()
+            .unwrap()
+            .member_count,
+        2
+    );
 }

@@ -392,6 +392,8 @@ async fn full_client_compat() {
 #[tokio::test]
 #[ignore = "starts external TS and Rust servers for each configuration"]
 async fn configuration_client_compat() {
+    let selected = std::env::var("COMPAT_TEST_PROFILE").ok();
+    let mut matched = false;
     for profile in [
         "organization-callbacks",
         "organization-custom-team",
@@ -402,9 +404,26 @@ async fn configuration_client_compat() {
         "organization-no-ac",
         "organization-fields",
         "organization-core-fields",
+        "organization-dynamic-fields",
+        "organization-member-fields",
+        "organization-invitation-teams",
+        "organization-native-json",
+        "organization-native-json-object",
+        "verification-identifiers",
         "organization-invitation-options",
         "organization-invitation-unverified",
         "api-key-zero",
+        "api-key-storage",
+        "secondary-session-only",
+        "session-fields",
+        "session-fields-cache",
+        "session-fields-database",
+        "secondary-session-database",
+        "secondary-session-preserved",
+        "secondary-verification-only",
+        "secondary-verification-database",
+        "api-key-callbacks",
+        "plugin-schema",
         "device-custom",
         "device-collision",
         "device-rate-limit",
@@ -442,9 +461,13 @@ async fn configuration_client_compat() {
         "jwt-remote",
         "jwt-cache",
     ] {
-        if std::env::var("COMPAT_TEST_PROFILE").is_ok_and(|selected| selected != profile) {
+        if selected
+            .as_ref()
+            .is_some_and(|selected| selected != profile)
+        {
             continue;
         }
+        matched = true;
         if profile == "oauth-proxy-env" {
             let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!(
                 "../compat-tests/client-tests/tests/config/oauth-proxy-env/cases.json"
@@ -462,4 +485,5 @@ async fn configuration_client_compat() {
             run_client_compat_profile(&[&format!("./tests/config/{profile}/")], profile).await;
         }
     }
+    assert!(matched, "No configuration profile matched {selected:?}");
 }

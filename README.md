@@ -77,7 +77,7 @@ The [quick-start guide](docs/content/docs/quick-start.mdx) includes sign-up and 
 
 ## Plugins and features
 
-Plugins include email/password, username, sessions, password management, email verification, email OTP, phone numbers, anonymous accounts, SIWE, Magic Link, one-time tokens, multiple sessions, JWT, OAuth, One Tap, OAuth Proxy, organizations, two-factor authentication, passkeys, API keys, and admin. Enable username with `EmailPasswordPlugin::username(true)`. Generate fields and tables for each selected plugin; startup rejects missing entity fields. See [database integration](docs/content/docs/concepts/database.mdx).
+Plugins include email/password, username, sessions, password management, email verification, email OTP, phone numbers, anonymous accounts, SIWE, Magic Link, one-time tokens, multiple sessions, JWT, OAuth, One Tap, OAuth Proxy, organizations, two-factor authentication, passkeys, API keys, and admin. Enable username with `EmailPasswordPlugin::username(true)`. Generate fields and tables for each selected plugin; startup rejects missing entity fields. Bind generated custom plugin tables with `with_plugin_schema::<AppPluginSchema>()`. See [database integration](docs/content/docs/concepts/database.mdx).
 
 Configure Generic OAuth or OIDC with `OAuthPlugin::add_generic_provider` and `GenericOAuthConfig`. OIDC discovery supplies endpoints and JWKS; set `require_id_token_verification: true` to require verification capability. The [OAuth guide](docs/content/docs/plugins/oauth.mdx) covers client authentication, profile mapping, sign-up restrictions, and email verification. Signature verification requires OpenSSL 3.0 or newer; the complete ML-DSA algorithm set requires OpenSSL 3.5 or newer.
 
@@ -95,6 +95,7 @@ The [organization plugin](docs/content/docs/plugins/organization.mdx) supports o
 
 - [Installation](docs/content/docs/installation.mdx) and [Axum integration](docs/content/docs/integrations/axum.mdx)
 - [API key server API](docs/content/docs/plugins/api-key.mdx) and [database hooks](docs/content/docs/concepts/hooks.mdx)
+- [Secondary storage](docs/content/docs/concepts/secondary-storage.mdx) for sessions, one-time verification values, and API keys
 - [Examples](examples/README.md), [contributing](CONTRIBUTING.md), and [alignment roadmap](ROADMAP.md)
 - [Compatibility harness](compat-tests/README.md); upstream behavior remains the source of truth
 

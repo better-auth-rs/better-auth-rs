@@ -53,6 +53,7 @@ pub enum SessionRead {
 
 /// Session manager handles session creation, validation, and cleanup
 pub struct SessionManager<S: AuthSchema> {
+    secondary_storage: bool,
     user_metadata: crate::plugin::MetadataMap,
     config: Arc<AuthConfig>,
     database: Arc<dyn AuthStore<S>>,
@@ -62,6 +63,7 @@ pub struct SessionManager<S: AuthSchema> {
 impl<S: AuthSchema> Clone for SessionManager<S> {
     fn clone(&self) -> Self {
         Self {
+            secondary_storage: self.secondary_storage,
             user_metadata: self.user_metadata.clone(),
             config: self.config.clone(),
             database: self.database.clone(),
@@ -73,6 +75,7 @@ impl<S: AuthSchema> Clone for SessionManager<S> {
 impl<S: AuthSchema> SessionManager<S> {
     pub fn new(config: Arc<AuthConfig>, database: Arc<dyn AuthStore<S>>) -> Self {
         Self {
+            secondary_storage: false,
             config,
             database,
             user_metadata: Default::default(),
@@ -86,12 +89,34 @@ impl<S: AuthSchema> SessionManager<S> {
         self
     }
 
-    fn user_view(&self, user: &impl AuthUser) -> AuthResult<UserView> {
-        UserView::with_fields(user, &self.config.user, &self.user_metadata)
+    pub(crate) fn with_secondary_storage(mut self, enabled: bool) -> Self {
+        self.secondary_storage = enabled;
+        self
     }
 
-    fn session_view(&self, session: &impl AuthSession) -> AuthResult<SessionView> {
-        let mut view = SessionView::with_fields(session, &self.config.session)?;
+    fn user_view(&self, user: &impl AuthUser) -> AuthResult<UserView> {
+        UserView::with_fields_for_adapter(
+            user,
+            &self.config.user,
+            &self.user_metadata,
+            self.database.supports_native_json(),
+        )
+    }
+
+    pub async fn session_view(&self, session: &impl AuthSession) -> AuthResult<SessionView> {
+        if self.secondary_storage
+            && !self.config.session.store_session_in_database
+            && let Some((_, Some(mut data))) =
+                self.database.get_session_snapshot(session.token()).await?
+        {
+            data.session.filter_returned_fields(&self.config.session);
+            return Ok(data.session);
+        }
+        let mut view = SessionView::with_fields_for_adapter(
+            session,
+            &self.config.session,
+            self.database.supports_native_json(),
+        )?;
         view.visible_fields = Some(
             [
                 ("admin.enabled", "impersonatedBy"),
@@ -167,10 +192,11 @@ impl<S: AuthSchema> SessionManager<S> {
         }
         if self.needs_refresh(&session) {
             let new_expires_at = Utc::now() + self.config.session.expires_in;
-            self.database
+            return self
+                .database
                 .update_session_expiry(token, new_expires_at)
-                .await?;
-            return self.database.get_session(token).await;
+                .await
+                .map(Some);
         }
         Ok(Some(session))
     }
@@ -242,6 +268,10 @@ impl<S: AuthSchema> SessionManager<S> {
                 && payload.data.session.expires_at >= Utc::now()
             {
                 payload.data.user.filter_cached_fields(&self.config.user);
+                payload
+                    .data
+                    .session
+                    .filter_returned_fields(&self.config.session);
                 return Ok(SessionResolution {
                     data: Some(payload.data),
                     needs_refresh: None,
@@ -250,8 +280,8 @@ impl<S: AuthSchema> SessionManager<S> {
             cookie_cache::clear(req, &self.config)?;
         }
         let is_post = req.path().ends_with("/get-session") && req.method() == &HttpMethod::Post;
-        let stored = self.database.get_session(&token).await?;
-        let Some(session) = stored else {
+        let stored = self.database.get_session_snapshot(&token).await?;
+        let Some((session, cached_data)) = stored else {
             self.clear_cookies(req)?;
             return Ok(none());
         };
@@ -262,13 +292,19 @@ impl<S: AuthSchema> SessionManager<S> {
             }
             return Ok(none());
         }
-        let Some(user) = self.database.get_user_by_id(&session.user_id()).await? else {
-            self.clear_cookies(req)?;
-            return Ok(none());
-        };
-        let mut data = SessionData {
-            session: self.session_view(&session)?,
-            user: self.user_view(&user)?,
+        let mut data = if let Some(mut data) = cached_data {
+            data.user = self.user_view(&data.user)?;
+            data.session.filter_returned_fields(&self.config.session);
+            data
+        } else {
+            let Some(user) = self.database.get_user_by_id(&session.user_id()).await? else {
+                self.clear_cookies(req)?;
+                return Ok(none());
+            };
+            SessionData {
+                session: self.session_view(&session).await?,
+                user: self.user_view(&user)?,
+            }
         };
         let dont_remember = self.dont_remember(req);
         if dont_remember || query_flag(req, "disableRefresh") {
@@ -286,7 +322,7 @@ impl<S: AuthSchema> SessionManager<S> {
             });
         }
         if needs_refresh {
-            match self
+            let updated = match self
                 .database
                 .update_session_expiry(&token, Utc::now() + self.config.session.expires_in)
                 .await
@@ -296,12 +332,8 @@ impl<S: AuthSchema> SessionManager<S> {
                     return Err(failed_session_update());
                 }
                 result => result?,
-            }
-            let Some(updated) = self.database.get_session(&token).await? else {
-                self.clear_cookies(req)?;
-                return Err(failed_session_update());
             };
-            data.session = self.session_view(&updated)?;
+            data.session = self.session_view(&updated).await?;
             req.append_response_header("Set-Cookie", create_session_cookie(&token, &self.config))?;
         }
         self.write_cache(req, &data, false).await?;
@@ -393,6 +425,31 @@ impl<S: AuthSchema> SessionManager<S> {
             .collect();
 
         Ok(active_sessions)
+    }
+
+    /// Project active sessions while preserving cached undefined application fields.
+    pub async fn list_user_session_views(
+        &self,
+        user_id: impl AsRef<str>,
+    ) -> AuthResult<Vec<SessionView>> {
+        self.database
+            .get_user_session_snapshots(user_id.as_ref())
+            .await?
+            .into_iter()
+            .filter(|(session, _)| session.expires_at() > Utc::now() && session.active())
+            .map(|(session, cached)| {
+                if let Some(mut view) = cached {
+                    view.filter_returned_fields(&self.config.session);
+                    Ok(view)
+                } else {
+                    SessionView::with_fields_for_adapter(
+                        &session,
+                        &self.config.session,
+                        self.database.supports_native_json(),
+                    )
+                }
+            })
+            .collect()
     }
 
     /// Revoke a specific session by token
@@ -722,7 +779,7 @@ mod tests {
 
         // Move the stored expiry back so the refresh is observable.
         let stale = session.expires_at() - Duration::minutes(30);
-        db.update_session_expiry(&token, stale).await.unwrap();
+        let _ = db.update_session_expiry(&token, stale).await.unwrap();
 
         let returned = mgr
             .get_session(&token)

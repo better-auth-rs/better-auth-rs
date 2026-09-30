@@ -8,14 +8,22 @@ use better_auth_schema_registry::EntityRole;
 use serde_json::{Map, json};
 #[async_trait]
 impl TeamStore for MemoryStore {
-    async fn create_team(&self, input: CreateTeam) -> AuthResult<Team> {
+    async fn create_team(&self, mut input: CreateTeam) -> AuthResult<Team> {
         let team = Team {
-            additional_fields: Default::default(),
+            additional_fields: [("memberCount".into(), json!(0))].into_iter().collect(),
             id: input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             name: input.name,
-            organization_id: input.organization_id,
-            created_at: input.created_at.unwrap_or_else(Utc::now),
-            updated_at: input.updated_at,
+            organization_id: (input.organization_id).into(),
+            created_at: input
+                .additional_fields
+                .remove("createdAt")
+                .map(|value| crate::SchemaValue::from_json(Some(value)))
+                .unwrap_or_else(|| input.created_at.unwrap_or_else(Utc::now).into()),
+            updated_at: input
+                .additional_fields
+                .remove("updatedAt")
+                .map(|value| crate::SchemaValue::from_json(Some(value)))
+                .unwrap_or_else(|| input.updated_at.into()),
         };
         let team: Team =
             self.store_record(EntityRole::Team, team, None, input.additional_fields)?;
@@ -26,6 +34,15 @@ impl TeamStore for MemoryStore {
         self.lock()
             .teams
             .get(id)
+            .cloned()
+            .map(|value| self.output_team(value))
+            .transpose()
+    }
+    async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<Team>> {
+        self.lock()
+            .teams
+            .values()
+            .find(|team| json!(team.id) == *id)
             .cloned()
             .map(|value| self.output_team(value))
             .transpose()
@@ -81,11 +98,11 @@ impl TeamStore for MemoryStore {
             .map(|invitation| self.output_invitation(invitation))
             .collect::<AuthResult<Vec<_>>>()?;
         let mut updates = Vec::new();
-        for invitation in pending
-            .into_iter()
-            .filter(|row| row.expires_at > Utc::now())
-        {
-            let Some(ids) = invitation.team_id.as_ref() else {
+        for invitation in pending {
+            if *invitation.expires_at.typed()? <= Utc::now() {
+                continue;
+            }
+            let Some(ids) = invitation.team_id.typed()?.as_ref() else {
                 continue;
             };
             let retained: Vec<_> = ids.split(',').filter(|team_id| *team_id != id).collect();
@@ -122,17 +139,28 @@ impl TeamStore for MemoryStore {
         Ok(())
     }
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<Team>> {
-        let mut teams: Vec<_> = self
+        let teams: Vec<_> = self
             .lock()
             .teams
             .values()
             .filter(|team| team.organization_id == organization_id)
             .cloned()
             .collect();
-        teams.sort_by_key(|team| team.created_at);
-        teams
+        let mut dated = teams
             .into_iter()
-            .map(|value| self.output_team(value))
+            .map(|value| {
+                Ok((
+                    value.created_at.json()?.unwrap_or(serde_json::Value::Null),
+                    value,
+                ))
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        dated.sort_by(|(left, _), (right, _)| {
+            super::organization::compare_member_values(left, right)
+        });
+        dated
+            .into_iter()
+            .map(|(_, value)| self.output_team(value))
             .collect()
     }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<Team>> {
@@ -183,14 +211,15 @@ impl TeamStore for MemoryStore {
         {
             return Ok(Some(member.clone()));
         }
-        if maximum.is_some_and(|max| {
-            state
-                .team_members
-                .iter()
-                .filter(|member| member.team_id == team_id)
-                .count()
-                >= max
-        }) {
+        let actual = state
+            .team_members
+            .iter()
+            .filter(|member| member.team_id == team_id)
+            .count();
+        let (team, reserved) =
+            self.reserve_team_seat(state.teams.get(team_id).unwrap().clone(), actual, maximum)?;
+        state.teams.insert(team_id.to_owned(), team);
+        if !reserved {
             return Ok(None);
         }
         let member = TeamMember {
@@ -203,17 +232,84 @@ impl TeamStore for MemoryStore {
         Ok(Some(member))
     }
     async fn remove_team_member(&self, team_id: &str, user_id: &str) -> AuthResult<()> {
-        self.lock()
+        let mut state = self.lock();
+        let deleted = state
+            .team_members
+            .iter()
+            .filter(|member| member.team_id == team_id && member.user_id == user_id)
+            .count();
+        if let Some(team) = state.teams.get(team_id).cloned() {
+            let team = self.release_team_seats(team, deleted)?;
+            state.teams.insert(team_id.to_owned(), team);
+        }
+        state
             .team_members
             .retain(|member| member.team_id != team_id || member.user_id != user_id);
         Ok(())
     }
 }
+fn member_count(team: &Team) -> AuthResult<Option<f64>> {
+    match team.additional_fields.get("memberCount") {
+        Some(serde_json::Value::Null) | None => Ok(None),
+        Some(serde_json::Value::Number(value)) => value
+            .as_f64()
+            .map(Some)
+            .ok_or_else(|| AuthError::internal("Team memberCount is outside the numeric range")),
+        _ => Err(AuthError::internal(
+            "Team memberCount must be numeric for this operation",
+        )),
+    }
+}
+
+impl MemoryStore {
+    pub(super) fn reserve_team_seat(
+        &self,
+        mut team: Team,
+        actual: usize,
+        maximum: Option<usize>,
+    ) -> AuthResult<(Team, bool)> {
+        let synchronized: Team = self.store_record(
+            EntityRole::Team,
+            team.clone(),
+            Some(
+                [("memberCount".into(), json!(actual))]
+                    .into_iter()
+                    .collect(),
+            ),
+            Map::new(),
+        )?;
+        let mut count = member_count(&team)?;
+        if count.is_some_and(|count| count < actual as f64) {
+            team = synchronized;
+            let _ = self.output_team(team.clone())?;
+            count = member_count(&team)?;
+        }
+        if maximum.is_some_and(|maximum| count.is_none_or(|count| count >= maximum as f64)) {
+            return Ok((team, false));
+        }
+        team.additional_fields
+            .insert("memberCount".into(), json!(count.map(|count| count + 1.0)));
+        let _ = self.output_team(team.clone())?;
+        Ok((team, true))
+    }
+
+    pub(super) fn release_team_seats(&self, mut team: Team, deleted: usize) -> AuthResult<Team> {
+        if deleted > 0
+            && let Some(count) = member_count(&team)?.filter(|count| *count >= deleted as f64)
+        {
+            team.additional_fields
+                .insert("memberCount".into(), json!(count - deleted as f64));
+            let _ = self.output_team(team.clone())?;
+        }
+        Ok(team)
+    }
+}
+
 #[async_trait]
 impl OrganizationRoleStore for MemoryStore {
     async fn create_organization_role(
         &self,
-        input: CreateOrganizationRole,
+        mut input: CreateOrganizationRole,
     ) -> AuthResult<OrganizationRole> {
         let mut state = self.lock();
         if state
@@ -223,15 +319,40 @@ impl OrganizationRoleStore for MemoryStore {
         {
             return Err(AuthError::bad_request("Role already exists"));
         }
-        let role = OrganizationRole {
+        let permission = if self
+            .organization_fields()
+            .organization_role
+            .additional_fields
+            .contains_key("permission")
+        {
+            crate::SchemaValue::Dynamic(json!(input.permission.to_string()))
+        } else {
+            input.permission.into()
+        };
+        let mut role = OrganizationRole {
             additional_fields: Default::default(),
             id: uuid::Uuid::new_v4().to_string(),
-            organization_id: input.organization_id,
-            role: input.role,
-            permission: input.permission,
-            created_at: Utc::now(),
-            updated_at: None,
+            organization_id: (input.organization_id).into(),
+            role: (input.role).into(),
+            permission,
+            created_at: (Utc::now()).into(),
+            updated_at: (None).into(),
         };
+        if let Some(value) = input.additional_fields.remove("organizationId") {
+            role.organization_id = crate::SchemaValue::from_json(Some(value));
+        }
+        if let Some(value) = input.additional_fields.remove("role") {
+            role.role = crate::SchemaValue::from_json(Some(value));
+        }
+        if let Some(value) = input.additional_fields.remove("permission") {
+            role.permission = crate::SchemaValue::Dynamic(value);
+        }
+        if let Some(value) = input.additional_fields.remove("createdAt") {
+            role.created_at = crate::SchemaValue::from_json(Some(value));
+        }
+        if let Some(value) = input.additional_fields.remove("updatedAt") {
+            role.updated_at = crate::SchemaValue::from_json(Some(value));
+        }
         let role: OrganizationRole = self.store_record(
             EntityRole::OrganizationRole,
             role,
@@ -255,30 +376,51 @@ impl OrganizationRoleStore for MemoryStore {
         &self,
         organization_id: &str,
     ) -> AuthResult<Vec<OrganizationRole>> {
-        let mut roles: Vec<_> = self
+        let roles: Vec<_> = self
             .lock()
             .organization_roles
             .values()
             .filter(|role| role.organization_id == organization_id)
             .cloned()
             .collect();
-        roles.sort_by_key(|role| role.created_at);
-        roles
+        let mut dated = roles
             .into_iter()
-            .map(|value| self.output_organization_role(value))
+            .map(|value| {
+                Ok((
+                    value.created_at.json()?.unwrap_or(serde_json::Value::Null),
+                    value,
+                ))
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        dated.sort_by(|(left, _), (right, _)| {
+            super::organization::compare_member_values(left, right)
+        });
+        dated
+            .into_iter()
+            .map(|(_, value)| self.output_organization_role(value))
             .collect()
     }
     async fn update_organization_role(
         &self,
         id: &str,
-        update: UpdateOrganizationRole,
+        mut update: UpdateOrganizationRole,
     ) -> AuthResult<OrganizationRole> {
         let mut patch = Map::new();
         if let Some(name) = update.role {
             let _ = patch.insert("role".into(), json!(name));
         }
         if let Some(permission) = update.permission {
-            let _ = patch.insert("permission".into(), permission);
+            let value = if self
+                .organization_fields()
+                .organization_role
+                .additional_fields
+                .contains_key("permission")
+            {
+                json!(permission.to_string())
+            } else {
+                permission
+            };
+            let _ = patch.insert("permission".into(), value);
         }
         if !self
             .organization_fields()
@@ -289,17 +431,27 @@ impl OrganizationRoleStore for MemoryStore {
             let _ = patch.insert("updatedAt".into(), json!(Utc::now()));
         }
         let mut state = self.lock();
+        for name in ["id", "organizationId", "role", "createdAt", "updatedAt"] {
+            if let Some(value) = update.additional_fields.remove(name) {
+                let _ = patch.entry(name).or_insert(value);
+            }
+        }
         let role = state
             .organization_roles
-            .get_mut(id)
+            .get(id)
+            .cloned()
             .ok_or_else(|| AuthError::not_found("Role not found"))?;
-        *role = self.store_record(
+        let role: OrganizationRole = self.store_record(
             EntityRole::OrganizationRole,
-            role.clone(),
+            role,
             Some(patch),
             update.additional_fields,
         )?;
-        self.output_organization_role(role.clone())
+        let _ = state.organization_roles.remove(id);
+        let _ = state
+            .organization_roles
+            .insert(role.id.clone(), role.clone());
+        self.output_organization_role(role)
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {
         self.lock().organization_roles.remove(id);
@@ -460,7 +612,10 @@ async fn memory_team_deletion_rolls_back_invitation_output_errors() {
         assert_eq!(store.list_team_members(&team.id).await.unwrap().len(), 1);
         for id in live {
             let row = store.get_invitation_by_id(&id).await.unwrap().unwrap();
-            assert_eq!(row.team_id.as_deref(), Some(team.id.as_str()));
+            assert_eq!(
+                row.team_id.typed().unwrap().as_deref(),
+                Some(team.id.as_str())
+            );
             assert_eq!(row.additional_fields.get("marker"), Some(&json!("created")));
         }
     }

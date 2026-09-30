@@ -11,8 +11,10 @@ use syn::{DeriveInput, parse_macro_input};
 /// # Usage
 ///
 /// Annotate a SeaORM `Model` struct with `#[derive(AuthEntity)]` and
-/// `#[auth(role = "...")]` where role is one of `user`, `session`, `account`,
-/// or `verification`.
+/// `#[auth(role = "...")]`. Core roles are `user`, `session`, `account`, and `verification`.
+/// Organization roles are `organization`, `member`, `invitation`, `team`, `team_member`, and `organization_role`.
+/// Plugin roles are `api_key`, `device_code`, `passkey`, `two_factor`, `jwk`, and `wallet_address`.
+/// Table and column mappings use SeaORM's `table_name` and `column_name` attributes.
 ///
 /// ```ignore
 /// #[derive(DeriveEntityModel, AuthEntity)]

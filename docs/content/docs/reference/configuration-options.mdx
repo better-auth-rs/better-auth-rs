@@ -16,6 +16,7 @@ This page documents the public configuration types in `crates/core/src/config.rs
 | `trusted_origins` | `Vec<String>` | `[]` | Origins trusted for CSRF/origin checks |
 | `disabled_paths` | `Vec<String>` | `[]` | Routes that should behave as disabled |
 | `session` | `SessionConfig` | see below | Session token and cookie behavior |
+| `verification` | `VerificationConfig` | see below | Verification persistence and identifier policies |
 | `jwt` | `JwtConfig` | see below | Optional JWT behavior |
 | `password` | `PasswordConfig` | see below | Password policy and Argon2 settings |
 | `account` | `AccountConfig` | see below | OAuth/account-linking behavior |
@@ -27,6 +28,8 @@ This page documents the public configuration types in `crates/core/src/config.rs
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `expires_in` | `chrono::Duration` | `7 days` | Session lifetime |
+| `store_session_in_database` | `bool` | `false` | Retain database sessions when secondary storage is installed |
+| `preserve_session_in_database` | `bool` | `false` | Expire revoked database rows and disable cache-miss database fallback |
 | `update_age` | `Option<chrono::Duration>` | `Some(1 day)` | Age threshold before refreshing a session |
 | `disable_session_refresh` | `bool` | `false` | Disable automatic refresh entirely |
 | `defer_session_refresh` | `bool` | `false` | Defer GET refresh and return `needsRefresh`; POST performs the refresh. POST returns 405 when disabled |
@@ -37,13 +40,25 @@ This page documents the public configuration types in `crates/core/src/config.rs
 | `cookie_same_site` | `SameSite` | `Lax` | SameSite policy |
 | `cookie_cache` | `Option<CookieCacheConfig>` | `None` | Optional cookie-backed session cache |
 | `bearer` | `Option<BearerConfig>` | `None` | Enable Bearer authentication; `require_signature` rejects unsigned tokens |
-| `additional_fields` | `BTreeMap<String, SessionFieldConfig>` | Empty | Application session fields and their input/output permissions |
+| `additional_fields` | `IndexMap<String, SessionFieldConfig>` | Empty | Session field defaults, validators, transforms, update generators, mappings, and visibility |
 
 Refresh semantics:
 
 - `update_age = Some(duration)`: refresh only when older than `duration`.
 - `update_age = None`: refresh on every access.
 - `disable_session_refresh = true`: never refresh automatically.
+
+## VerificationConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `store_in_database` | `bool` | `false` | Keep database verification rows when secondary storage is installed |
+| `disable_cleanup` | `bool` | `false` | Disable automatic expired-row deletion during database lookup |
+| `store_identifier` | `VerificationIdentifierConfig` | Plain, no overrides | Identifier storage strategy |
+
+`VerificationIdentifierConfig.default` selects `Plain`, `Hashed`, or `Custom(Arc<dyn VerificationIdentifierHasher>)`. `overrides` is an ordered vector of `(prefix, strategy)` pairs; the first matching prefix wins. `Hashed` uses unpadded URL-safe SHA-256. `Custom` calls the asynchronous `hash` method. Read and consume operations can migrate from existing plaintext identifiers; update and deletion address only the configured representation.
+
+Without secondary storage, session and verification data remain in the database regardless of the persistence flags. Install a backend through `BetterAuth::secondary_storage`. See [Secondary Storage](/docs/concepts/secondary-storage) for atomic consumption, TTL, fallback, and model hydration requirements.
 
 ## CookieCacheConfig
 

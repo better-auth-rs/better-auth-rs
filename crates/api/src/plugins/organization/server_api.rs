@@ -12,12 +12,26 @@ mod input_tests;
 pub struct AddMemberInput {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
-    pub user_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub organization_id: Option<String>,
-    pub role: RoleInput,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub team_id: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+    )]
+    pub user_id: better_auth_core::SchemaValue<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+    )]
+    pub organization_id: better_auth_core::SchemaValue<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+    )]
+    pub role: better_auth_core::SchemaValue<RoleInput>,
+    #[serde(
+        default,
+        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+    )]
+    pub team_id: better_auth_core::SchemaValue<String>,
 }
 
 impl OrganizationPlugin {
@@ -28,41 +42,59 @@ impl OrganizationPlugin {
         request: Option<&AuthRequest>,
         ctx: &AuthContext<S>,
     ) -> AuthResult<Member> {
-        let additional_fields = super::fields::parse_input(
+        use super::input::BaseField;
+        let raw = serde_json::to_value(&input)?;
+        let validated = super::input::validate(
             &self.config.schema.member,
-            &input,
-            &input.additional_fields,
-            "body",
-            false,
+            raw.as_object()
+                .cloned()
+                .ok_or_else(|| AuthError::config("Member input must be an object"))?,
+            &[
+                ("userId", BaseField::CoercedString, true),
+                ("role", BaseField::Roles, true),
+                ("organizationId", BaseField::String, false),
+                ("teamId", BaseField::String, false),
+            ],
         )?;
+        let input: AddMemberInput = serde_json::from_value(serde_json::Value::Object(validated))?;
+        let additional_fields = input.additional_fields.clone();
+        let user_id = input
+            .user_id
+            .json()?
+            .filter(better_auth_core::user_fields::is_truthy);
         // Upstream permits a supplied user ID even when session lookup fails.
-        let session = match request {
-            Some(request) => super::handlers::require_session(request, ctx).await.ok(),
-            None => None,
+        let session = match (request, user_id.is_some()) {
+            (Some(request), true) => super::handlers::require_session(request, ctx).await.ok(),
+            _ => None,
         };
-        let org_id = input
+        let org_value = input
             .organization_id
-            .as_deref()
-            .filter(|id| !id.is_empty())
+            .json()?
+            .filter(better_auth_core::user_fields::is_truthy)
             .or_else(|| {
                 session
                     .as_ref()
                     .and_then(|(_, session)| session.active_organization_id())
+                    .map(|id| serde_json::json!(id))
             })
             .ok_or_else(|| AuthError::bad_request("No active organization"))?;
-        if input.team_id.is_some() && !self.config.teams.enabled {
+        let team_value = input
+            .team_id
+            .json()?
+            .filter(better_auth_core::user_fields::is_truthy);
+        if team_value.is_some() && !self.config.teams.enabled {
             return Err(AuthError::bad_request("Teams are not enabled"));
         }
         let user = ctx
             .database
-            .get_user_by_id(&input.user_id)
+            .get_user_by_id_value(&user_id.ok_or_else(|| AuthError::bad_request("User not found"))?)
             .await?
             .ok_or_else(|| AuthError::bad_request("User not found"))?;
         if let Some(email) = user.email()
             && let Some(existing) = ctx.database.get_user_by_email(email).await?
             && ctx
                 .database
-                .get_member(org_id, &existing.id())
+                .get_member_value(&org_value, &serde_json::json!(existing.id()))
                 .await?
                 .is_some()
         {
@@ -70,22 +102,29 @@ impl OrganizationPlugin {
                 "User is already a member of this organization",
             ));
         }
-        if let Some(team_id) = &input.team_id {
-            let _ = super::handlers::team::find_team(team_id, org_id, ctx).await?;
-        }
-        let count = ctx.database.list_organization_members(org_id).await?.len();
+        let team = if let Some(team_id) = &team_value {
+            let team = ctx
+                .database
+                .get_team_value(team_id)
+                .await?
+                .ok_or_else(|| AuthError::bad_request("Team not found"))?;
+            if team.organization_id.json()?.as_ref() != Some(&org_value) {
+                return Err(AuthError::bad_request("Team not found"));
+            }
+            Some(team)
+        } else {
+            None
+        };
         let organization = ctx
             .database
-            .get_organization_by_id(org_id)
+            .get_organization_by_id_value(&org_value)
             .await?
             .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+        let org_id = organization.id.as_str();
+        let count = ctx.database.list_organization_members(org_id).await?.len();
         let organization_view =
             crate::plugins::organization::fields::organization(&organization, ctx);
-        let user_view = better_auth_core::wire::UserView::with_internal_fields(
-            &user,
-            &ctx.config.user,
-            &ctx.metadata,
-        )?;
+        let user_view = ctx.internal_user_view(&user)?;
         let event = OrganizationUser {
             user: &user_view,
             organization: &organization_view,
@@ -100,23 +139,21 @@ impl OrganizationPlugin {
         let mut data = OrganizationMemberDraft {
             additional_fields,
             organization_id: org_id.to_owned(),
-            user_id: input.user_id.clone(),
-            role: input.role.joined(),
-            team_id: input.team_id.clone(),
+            user_id: user.id().into_owned(),
+            role: super::input::parse_roles(&input.role)?,
+            team_id: team.as_ref().map(|team| team.id.clone()),
             created_at: None,
         };
         if let Some(hooks) = &self.config.hooks {
             hooks.before_add_member(&mut data, event).await?;
         }
         let member = ctx.database.create_member(data.into_create()).await?;
-        if let Some(team_id) = input.team_id {
+        if let Some(team) = team {
+            let team_id = team.id;
             let result = async {
                 let maximum = if let Some((actor, session)) = &session {
                     let user_view = ctx.user_view(actor)?;
-                    let session_view = better_auth_core::wire::SessionView::with_fields(
-                        session,
-                        &ctx.config.session,
-                    )?;
+                    let session_view = ctx.session_view(session).await?;
                     self.config
                         .team_member_limit(OrganizationTeamMemberLimit {
                             team_id: &team_id,
@@ -139,7 +176,7 @@ impl OrganizationPlugin {
                 };
                 let _ = ctx
                     .database
-                    .add_team_member(&team_id, &input.user_id, maximum)
+                    .add_team_member(&team_id, &user.id(), maximum)
                     .await?
                     .ok_or_else(|| AuthError::forbidden("Team member limit reached"))?;
                 AuthResult::Ok(())

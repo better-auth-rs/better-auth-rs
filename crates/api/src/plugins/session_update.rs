@@ -2,10 +2,8 @@ use super::json_body;
 use super::json_body::is_truthy;
 use better_auth_core::session::SessionData;
 use better_auth_core::utils::cookie_utils::create_session_cookie_with_max_age;
-use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, SessionView,
-};
-use serde_json::{Map, Value};
+use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema};
+use serde_json::Value;
 
 pub(super) async fn handle(
     req: &AuthRequest,
@@ -52,25 +50,11 @@ pub(super) async fn handle(
             return field_not_allowed(name);
         }
     }
-    let mut fields = Map::new();
-    for (name, field) in &ctx.config.session.additional_fields {
-        if protected_fields.contains(&name.as_str()) {
-            continue;
-        }
-        let Some(value) = body.get(name) else {
-            continue;
-        };
-        if !field.input {
-            if is_truthy(value) {
-                return field_not_allowed(name);
-            }
-            continue;
-        }
-        let _ = fields.insert(
-            field.field_name.as_ref().unwrap_or(name).clone(),
-            value.clone(),
-        );
-    }
+    let mut schema = ctx.config.session.field_schema();
+    schema
+        .additional_fields
+        .retain(|name, _| !protected_fields.contains(&name.as_str()));
+    let fields = schema.parse_input(&body, false)?;
     if fields.is_empty() {
         return Ok(AuthResponse::json(
             400,
@@ -90,7 +74,7 @@ pub(super) async fn handle(
         });
     };
     let data = SessionData {
-        session: SessionView::with_fields(&updated, &ctx.config.session)?,
+        session: ctx.session_view(&updated).await?,
         user,
     };
     let manager = ctx.session_manager();

@@ -4,6 +4,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 pub mod cache;
+pub mod secondary;
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
@@ -15,7 +16,7 @@ use crate::types::{
     UpdateOrganization, UpdatePasskeyAuthentication, UpdateUser,
 };
 
-pub use cache::{CacheAdapter, MemoryCacheAdapter};
+pub use cache::{CacheAdapter, MemoryCacheAdapter, SecondaryStorage};
 
 #[cfg(feature = "redis-cache")]
 pub use cache::RedisAdapter;
@@ -29,13 +30,50 @@ pub type TransactionWork<S> =
 
 #[async_trait]
 pub trait AuthTransaction<S: AuthSchema>: Send + Sync {
+    /// Run session creation hooks before creating a session outside the database.
+    async fn before_create_runtime_session(&self, _session: &mut CreateSession) -> AuthResult<()> {
+        Ok(())
+    }
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<S::User>;
     async fn create_account(&self, create_account: CreateAccount) -> AuthResult<S::Account>;
     async fn create_session(&self, create_session: CreateSession) -> AuthResult<S::Session>;
 }
 
+/// Persistent records invalidated when an unverified user proves email ownership.
+#[derive(Debug, Clone, Copy)]
+pub enum VerificationCleanup {
+    /// Remove accounts; the runtime owns session revocation.
+    Accounts,
+    /// Remove accounts and database sessions.
+    AccountsAndSessions,
+}
+
+/// Revoke external sessions while the user verification transaction remains uncommitted.
+#[async_trait]
+pub trait VerificationSessionCleanup: Send + Sync {
+    /// Revoke the captured sessions. An error must abort the verification transaction.
+    async fn revoke(&self) -> AuthResult<()>;
+}
+
 #[async_trait]
 pub trait UserStore<S: AuthSchema>: Send + Sync {
+    /// Return whether the database adapter preserves native JSON at field-policy boundaries.
+    fn supports_native_json(&self) -> bool {
+        true
+    }
+    /// Verify ownership after revoking accounts and the selected session storage.
+    /// Run external cleanup only for the unverified user while holding the verification lock.
+    /// Complete cleanup before commit; roll back database changes if cleanup fails.
+    async fn verify_user_with_cleanup(
+        &self,
+        _user_id: &str,
+        _cleanup: VerificationCleanup,
+        _sessions: Option<&dyn VerificationSessionCleanup>,
+    ) -> AuthResult<Option<S::User>> {
+        Err(AuthError::config(
+            "The store must support pre-commit session cleanup during user verification",
+        ))
+    }
     /// Atomically verify an unverified user after deleting every existing account and session.
     /// Already verified users retain their accounts and sessions.
     async fn verify_user_and_revoke_unproven_access(
@@ -44,6 +82,16 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
     ) -> AuthResult<Option<S::User>>;
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<S::User>;
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<S::User>>;
+    /// Query an ID supplied through a replacement organization schema.
+    async fn get_user_by_id_value(&self, id: &serde_json::Value) -> AuthResult<Option<S::User>> {
+        let id = id.as_str().ok_or_else(|| {
+            crate::AuthError::config(
+                "The store must support dynamic user ID queries for this schema",
+            )
+        })?;
+        self.get_user_by_id(id).await
+    }
+
     /// Fetch multiple users by id.
     ///
     /// Implementations may return rows in any order. Callers must remap by id
@@ -85,6 +133,35 @@ impl From<Option<usize>> for TeamMemberLimits<'_> {
 
 #[async_trait]
 pub trait SessionStore<S: AuthSchema>: Send + Sync {
+    /// Run session creation hooks when secondary storage owns the session.
+    async fn before_create_runtime_session(&self, _session: &mut CreateSession) -> AuthResult<()> {
+        Ok(())
+    }
+    /// Run creation hooks after secondary storage contains the committed session.
+    async fn after_create_runtime_session(&self, _session: &S::Session) -> AuthResult<()> {
+        Ok(())
+    }
+    /// End a live session while retaining its database row for audit.
+    async fn end_session(&self, token: &str) -> AuthResult<()> {
+        let now = chrono::Utc::now();
+        if let Some(session) = self.get_session(token).await?
+            && crate::entity::AuthSession::expires_at(&session) > now
+        {
+            let _ = self.update_session_expiry(token, now).await?;
+        }
+        Ok(())
+    }
+    /// Read a session and an optional cached user projection in one storage operation.
+    async fn get_session_snapshot(
+        &self,
+        token: &str,
+    ) -> AuthResult<Option<(S::Session, Option<crate::session::SessionData>)>> {
+        Ok(self
+            .get_session(token)
+            .await?
+            .map(|session| (session, None)))
+    }
+
     /// Claim an invitation, then create its member and enabled team memberships in one transaction.
     /// If that transaction fails, restore a still-accepted invitation to pending through the adapter.
     /// Return the created member, claimed invitation, and optional single-team cookie snapshot.
@@ -93,7 +170,7 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         &self,
         invitation_id: &str,
         user_id: &str,
-        session_token: &str,
+        session_token: Option<&str>,
         teams_enabled: bool,
         maximum: TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Invitation, Option<S::Session>)>;
@@ -106,11 +183,24 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         fields: serde_json::Map<String, serde_json::Value>,
     ) -> AuthResult<Option<S::Session>>;
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<S::Session>>;
+    /// List stored sessions with optional secondary projections that preserve absent fields.
+    async fn get_user_session_snapshots(
+        &self,
+        user_id: &str,
+    ) -> AuthResult<Vec<(S::Session, Option<crate::wire::SessionView>)>> {
+        Ok(self
+            .get_user_sessions(user_id)
+            .await?
+            .into_iter()
+            .map(|session| (session, None))
+            .collect())
+    }
+
     async fn update_session_expiry(
         &self,
         token: &str,
         expires_at: chrono::DateTime<chrono::Utc>,
-    ) -> AuthResult<()>;
+    ) -> AuthResult<S::Session>;
     async fn delete_session(&self, token: &str) -> AuthResult<()>;
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()>;
     async fn delete_expired_sessions(&self) -> AuthResult<usize>;
@@ -141,6 +231,34 @@ pub trait AccountStore<S: AuthSchema>: Send + Sync {
 
 #[async_trait]
 pub trait VerificationStore<S: AuthSchema>: Send + Sync {
+    /// Reserve an identifier with the upstream deterministic SHA-256 primary key.
+    async fn reserve_verification_value(
+        &self,
+        verification: CreateVerification,
+    ) -> AuthResult<bool> {
+        use base64::Engine;
+        use sha2::{Digest, Sha256};
+        let id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(Sha256::digest(format!(
+            "reserve:{}",
+            verification.identifier
+        )));
+        self.reserve_verification(&id, verification).await
+    }
+
+    /// Run verification creation hooks when secondary storage owns the record.
+    async fn before_create_runtime_verification(
+        &self,
+        _verification: &mut CreateVerification,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+    /// Run creation hooks after secondary storage contains the verification.
+    async fn after_create_runtime_verification(
+        &self,
+        _verification: &S::Verification,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
     /// Insert a deterministic primary key. Return false when the reservation already exists.
     async fn reserve_verification(
         &self,
@@ -187,6 +305,16 @@ pub trait VerificationStore<S: AuthSchema>: Send + Sync {
         &self,
         identifier: &str,
     ) -> AuthResult<Option<S::Verification>>;
+    /// Atomically consume the latest row and invalidate all rows for the identifier, including expired rows.
+    /// Runtime storage uses the raw expiry to invalidate migrated cache entries before rejecting expired values.
+    async fn consume_verification_including_expired(
+        &self,
+        _identifier: &str,
+    ) -> AuthResult<Option<S::Verification>> {
+        Err(crate::AuthError::config(
+            "The store must support raw atomic verification consumption for runtime storage",
+        ))
+    }
     async fn delete_verification(&self, id: &str) -> AuthResult<()>;
     async fn delete_expired_verifications(&self) -> AuthResult<usize>;
 }
@@ -230,7 +358,32 @@ pub trait OrganizationStore: Send + Sync {
     }
     async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Organization>;
     async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>>;
+    /// Query an ID supplied through a replacement organization schema.
+    async fn get_organization_by_id_value(
+        &self,
+        id: &serde_json::Value,
+    ) -> AuthResult<Option<Organization>> {
+        let id = id.as_str().ok_or_else(|| {
+            crate::AuthError::config(
+                "The store must support dynamic organization ID queries for this schema",
+            )
+        })?;
+        self.get_organization_by_id(id).await
+    }
+
     async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>>;
+    /// Look up a slug whose type was replaced by an application schema.
+    async fn get_organization_by_slug_value(
+        &self,
+        slug: &serde_json::Value,
+    ) -> AuthResult<Option<Organization>> {
+        let slug = slug.as_str().ok_or_else(|| {
+            crate::AuthError::config(
+                "The store must support organization slug values for this schema",
+            )
+        })?;
+        self.get_organization_by_slug(slug).await
+    }
     /// Fetch multiple organizations by id.
     ///
     /// Implementations may return rows in any order. Callers must remap by id
@@ -249,6 +402,25 @@ pub trait OrganizationStore: Send + Sync {
 pub trait MemberStore: Send + Sync {
     async fn create_member(&self, member: CreateMember) -> AuthResult<Member>;
     async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>>;
+    /// Query member references supplied through a replacement organization schema.
+    async fn get_member_value(
+        &self,
+        organization_id: &serde_json::Value,
+        user_id: &serde_json::Value,
+    ) -> AuthResult<Option<Member>> {
+        let organization_id = organization_id.as_str().ok_or_else(|| {
+            crate::AuthError::config(
+                "The store must support dynamic member reference queries for this schema",
+            )
+        })?;
+        let user_id = user_id.as_str().ok_or_else(|| {
+            crate::AuthError::config(
+                "The store must support dynamic member reference queries for this schema",
+            )
+        })?;
+        self.get_member(organization_id, user_id).await
+    }
+
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>>;
     async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member>;
     async fn delete_member(&self, member_id: &str) -> AuthResult<()>;
@@ -455,6 +627,15 @@ pub trait WalletStore: Send + Sync {
 pub trait TeamStore: Send + Sync {
     async fn create_team(&self, input: crate::CreateTeam) -> AuthResult<crate::Team>;
     async fn get_team(&self, id: &str) -> AuthResult<Option<crate::Team>>;
+    /// Query an ID supplied by a replacement Organization field schema.
+    async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<crate::Team>> {
+        match id.as_str() {
+            Some(id) => self.get_team(id).await,
+            None => Err(crate::AuthError::config(
+                "This store does not support dynamic team IDs",
+            )),
+        }
+    }
     async fn update_team(&self, id: &str, update: crate::UpdateTeam) -> AuthResult<crate::Team>;
     async fn delete_team(&self, id: &str) -> AuthResult<()>;
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<crate::Team>>;

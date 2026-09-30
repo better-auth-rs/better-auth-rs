@@ -12,36 +12,49 @@ use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder}
 use serde_json::json;
 
 #[async_trait]
-impl<S: AuthSchema, O: SeaOrmOrganizationSchema> InvitationStore for SeaOrmStore<S, O> {
-    async fn create_invitation(&self, input: CreateInvitation) -> AuthResult<Invitation> {
+impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> InvitationStore
+    for SeaOrmStore<S, O, P>
+{
+    async fn create_invitation(&self, mut input: CreateInvitation) -> AuthResult<Invitation> {
         let config = self.organization_fields()?.invitation;
+        let mut core = values([
+            (
+                "id",
+                json!(input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())),
+            ),
+            ("organization_id", json!(input.organization_id)),
+            ("email", json!(input.email)),
+            ("role", json!(input.role)),
+            (
+                "status",
+                json!(
+                    input
+                        .status
+                        .unwrap_or(InvitationStatus::Pending)
+                        .to_string()
+                ),
+            ),
+            ("inviter_id", json!(input.inviter_id)),
+            ("team_id", json!(input.team_id)),
+            ("expires_at", json!(input.expires_at)),
+            (
+                "created_at",
+                json!(input.created_at.unwrap_or_else(Utc::now)),
+            ),
+        ]);
+        for (public, stored) in [
+            ("status", "status"),
+            ("createdAt", "created_at"),
+            ("expiresAt", "expires_at"),
+            ("inviterId", "inviter_id"),
+        ] {
+            if let Some(value) = input.additional_fields.remove(public) {
+                let _ = core.insert(stored.into(), value);
+            }
+        }
         models::insert::<O::Invitation, _>(
             self.connection(),
-            values([
-                (
-                    "id",
-                    json!(input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())),
-                ),
-                ("organization_id", json!(input.organization_id)),
-                ("email", json!(input.email)),
-                ("role", json!(input.role)),
-                (
-                    "status",
-                    json!(
-                        input
-                            .status
-                            .unwrap_or(InvitationStatus::Pending)
-                            .to_string()
-                    ),
-                ),
-                ("inviter_id", json!(input.inviter_id)),
-                ("team_id", json!(input.team_id)),
-                ("expires_at", json!(input.expires_at)),
-                (
-                    "created_at",
-                    json!(input.created_at.unwrap_or_else(Utc::now)),
-                ),
-            ]),
+            core,
             input.additional_fields,
             &config,
         )
@@ -178,10 +191,10 @@ mod tests {
             .create_organization(CreateOrganization {
                 additional_fields: Default::default(),
                 id: Some(org_id.to_string()),
-                name: "Org".to_string(),
-                slug: "org".to_string(),
-                logo: None,
-                metadata: None,
+                name: "Org".to_string().into(),
+                slug: "org".to_string().into(),
+                logo: None.into(),
+                metadata: None.into(),
             })
             .await
             .expect("organization should be created");
@@ -245,10 +258,10 @@ mod tests {
             .create_organization(CreateOrganization {
                 additional_fields: Default::default(),
                 id: Some(org_id.to_string()),
-                name: "Org".to_string(),
-                slug: "org-second".to_string(),
-                logo: None,
-                metadata: None,
+                name: "Org".to_string().into(),
+                slug: "org-second".to_string().into(),
+                logo: None.into(),
+                metadata: None.into(),
             })
             .await
             .expect("organization should be created");

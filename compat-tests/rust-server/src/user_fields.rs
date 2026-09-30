@@ -225,6 +225,12 @@ pub async fn add_columns(
     database
         .execute_unprepared("ALTER TABLE sessions ADD COLUMN internal_note TEXT")
         .await?;
+    database
+        .execute_unprepared("ALTER TABLE sessions ADD COLUMN validated_label TEXT")
+        .await?;
+    database
+        .execute_unprepared("ALTER TABLE sessions ADD COLUMN settings TEXT")
+        .await?;
     Ok(())
 }
 

@@ -1,6 +1,9 @@
 //! Common traits and data types used by handlers, tests, hooks, and direct dispatch.
 
-pub use crate::{AuthBuilder, AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
+pub use crate::{
+    ApiKeyStart, AuthBuilder, AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth,
+    SchemaValue,
+};
 pub use better_auth_core::entity::{
     AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,
     AuthSession, AuthTwoFactor, AuthUser, AuthVerification, MemberUserView,
@@ -16,5 +19,6 @@ pub use better_auth_core::types::{
 pub use better_auth_core::wire::{AccountView, SessionView, UserView, VerificationView};
 
 pub use better_auth_core::{
-    CreateOrganizationRole, CreateTeam, OrganizationRole, Team, TeamMember, UpdateOrganizationRole,
+    CreateJwk, CreateOrganizationRole, CreateTeam, Jwk, OrganizationRole, Team, TeamMember,
+    UpdateOrganizationRole, UpdatePasskeyAuthentication, WalletAddress,
 };

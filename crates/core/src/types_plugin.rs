@@ -169,7 +169,7 @@ pub struct UpdateDeviceCode {
 pub struct ApiKey {
     pub id: String,
     pub name: Option<String>,
-    pub start: Option<String>,
+    pub start: Option<crate::ApiKeyStart>,
     pub prefix: Option<String>,
     /// SHA-256 hash of the key (column name: `key` in SQL)
     #[serde(rename = "key")]
@@ -217,7 +217,7 @@ pub struct CreateApiKey {
     pub name: Option<String>,
     pub prefix: Option<String>,
     pub key_hash: String,
-    pub start: Option<String>,
+    pub start: Option<crate::ApiKeyStart>,
     pub expires_at: Option<String>,
     pub remaining: Option<f64>,
     pub rate_limit_enabled: bool,
@@ -307,8 +307,8 @@ impl AuthApiKey for ApiKey {
     fn name(&self) -> Option<&str> {
         self.name.as_deref()
     }
-    fn start(&self) -> Option<&str> {
-        self.start.as_deref()
+    fn start(&self) -> Option<Cow<'_, crate::ApiKeyStart>> {
+        self.start.as_ref().map(Cow::Borrowed)
     }
     fn prefix(&self) -> Option<&str> {
         self.prefix.as_deref()
@@ -374,7 +374,7 @@ impl<T: AuthApiKey> From<&T> for ApiKey {
         Self {
             id: api_key.id().into_owned(),
             name: api_key.name().map(str::to_owned),
-            start: api_key.start().map(str::to_owned),
+            start: api_key.start().map(Cow::into_owned),
             prefix: api_key.prefix().map(str::to_owned),
             key_hash: api_key.key_hash().to_owned(),
             reference_id: api_key.reference_id().into_owned(),

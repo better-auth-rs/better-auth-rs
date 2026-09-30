@@ -4,6 +4,7 @@
 //! Each view implements its corresponding `Auth*` entity trait, allowing it
 //! to be used in trait-generic framework code (hooks, helpers).
 
+use crate::SchemaValue;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize, Serializer};
 use std::borrow::Cow;
@@ -216,22 +217,47 @@ impl<T: AuthSession> From<&T> for SessionView {
 }
 
 impl SessionView {
+    /// Apply current public visibility without materializing absent cached fields.
+    pub fn filter_returned_fields(&mut self, config: &crate::config::SessionConfig) {
+        self.additional_fields.retain(|name, _| {
+            config
+                .additional_fields
+                .get(name)
+                .is_none_or(|field| field.returned)
+        });
+    }
+
     /// Apply configured field visibility to a serialized application session model.
     pub fn with_fields<T: AuthSession>(
         session: &T,
         config: &crate::config::SessionConfig,
     ) -> crate::AuthResult<Self> {
+        Self::with_fields_for_adapter(session, config, true)
+    }
+
+    pub fn with_fields_for_adapter<T: AuthSession>(
+        session: &T,
+        config: &crate::config::SessionConfig,
+        supports_native_json: bool,
+    ) -> crate::AuthResult<Self> {
         let mut view = Self::from(session);
         if !config.additional_fields.is_empty() {
             let model = serde_json::to_value(session)?;
             for (name, field) in &config.additional_fields {
-                if field.returned {
+                let value = if let Some(fields) = session.projected_fields() {
+                    fields.get(name).cloned()
+                } else {
                     let value = model
                         .get(field.field_name.as_deref().unwrap_or(name))
                         .or_else(|| model.get(name))
-                        .cloned()
-                        .unwrap_or(serde_json::Value::Null);
-                    let _ = view.additional_fields.insert(name.clone(), value);
+                        .cloned();
+                    field.adapter_output(value, supports_native_json)?
+                };
+                if let Some(mut value) = value {
+                    field.normalize_date(&mut value)?;
+                    if field.returned {
+                        let _ = view.additional_fields.insert(name.clone(), value);
+                    }
                 }
             }
         }
@@ -346,6 +372,18 @@ impl AuthUser for UserView {
 }
 
 impl AuthSession for SessionView {
+    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        Some(&self.additional_fields)
+    }
+    const SUPPORTS_RUNTIME_HYDRATION: bool = true;
+    fn from_runtime_fields(
+        fields: serde_json::Map<String, serde_json::Value>,
+    ) -> crate::AuthResult<Self> {
+        let mut session: Self = serde_json::from_value(serde_json::Value::Object(fields))?;
+        session.active = true;
+        Ok(session)
+    }
+
     const PLUGIN_FIELDS: &'static [&'static str] = &[
         "impersonated_by",
         "active_organization_id",
@@ -432,6 +470,13 @@ impl AuthAccount for AccountView {
 }
 
 impl AuthVerification for VerificationView {
+    const SUPPORTS_RUNTIME_HYDRATION: bool = true;
+    fn from_runtime_fields(
+        fields: serde_json::Map<String, serde_json::Value>,
+    ) -> crate::AuthResult<Self> {
+        Ok(serde_json::from_value(serde_json::Value::Object(fields))?)
+    }
+
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
     }
@@ -457,16 +502,16 @@ impl AuthVerification for VerificationView {
 // ---------------------------------------------------------------------------
 
 fn serialize_json_option_as_string<S>(
-    value: &Option<serde_json::Value>,
+    value: &SchemaValue<Option<serde_json::Value>>,
     serializer: S,
 ) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
     match value {
-        Some(inner) => serializer
+        SchemaValue::Typed(Some(inner)) => serializer
             .serialize_some(&serde_json::to_string(inner).map_err(serde::ser::Error::custom)?),
-        None => serializer.serialize_none(),
+        value => value.serialize(serializer),
     }
 }
 
@@ -477,20 +522,19 @@ pub struct OrganizationView {
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 
     pub id: String,
-    pub name: String,
-    pub slug: String,
-    pub logo: Option<String>,
-    #[serde(
-        serialize_with = "serialize_json_option_as_string",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub metadata: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub name: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub slug: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub logo: SchemaValue<Option<String>>,
+    #[serde(serialize_with = "serialize_json_option_as_string")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub metadata: SchemaValue<Option<serde_json::Value>>,
     #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub updated_at: DateTime<Utc>,
+    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub created_at: SchemaValue<DateTime<Utc>>,
 }
 
 impl<T: AuthOrganization> From<&T> for OrganizationView {
@@ -498,12 +542,11 @@ impl<T: AuthOrganization> From<&T> for OrganizationView {
         Self {
             additional_fields: org.projected_fields().cloned().unwrap_or_default(),
             id: org.id().into_owned(),
-            name: org.name().to_owned(),
-            slug: org.slug().to_owned(),
-            logo: org.logo().map(str::to_owned),
-            metadata: org.metadata().cloned(),
-            created_at: org.created_at(),
-            updated_at: org.updated_at(),
+            name: org.name().clone(),
+            slug: org.slug().clone(),
+            logo: org.logo().clone(),
+            metadata: org.metadata().clone(),
+            created_at: org.created_at().clone(),
         }
     }
 }
@@ -514,22 +557,30 @@ pub struct InvitationView {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 
-    #[serde(rename = "teamId", default, skip_serializing_if = "Option::is_none")]
-    pub team_id: Option<String>,
+    #[serde(rename = "teamId")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub team_id: SchemaValue<Option<String>>,
     pub id: String,
     #[serde(rename = "organizationId")]
-    pub organization_id: String,
-    pub email: String,
-    pub role: String,
-    pub status: InvitationStatus,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub organization_id: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub email: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub role: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub status: SchemaValue<InvitationStatus>,
     #[serde(rename = "inviterId")]
-    pub inviter_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub inviter_id: SchemaValue<String>,
     #[serde(rename = "expiresAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub expires_at: DateTime<Utc>,
+    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub expires_at: SchemaValue<DateTime<Utc>>,
     #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
+    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub created_at: SchemaValue<DateTime<Utc>>,
 }
 
 impl<T: AuthInvitation> From<&T> for InvitationView {
@@ -537,14 +588,14 @@ impl<T: AuthInvitation> From<&T> for InvitationView {
         Self {
             additional_fields: inv.projected_fields().cloned().unwrap_or_default(),
             id: inv.id().into_owned(),
-            organization_id: inv.organization_id().into_owned(),
-            email: inv.email().to_owned(),
-            role: inv.role().to_owned(),
+            organization_id: inv.organization_id().clone(),
+            email: inv.email().clone(),
+            role: inv.role().clone(),
             status: inv.status().clone(),
-            inviter_id: inv.inviter_id().into_owned(),
-            team_id: inv.team_id().map(str::to_owned),
-            expires_at: inv.expires_at(),
-            created_at: inv.created_at(),
+            inviter_id: inv.inviter_id().clone(),
+            team_id: inv.team_id().clone(),
+            expires_at: inv.expires_at().clone(),
+            created_at: inv.created_at().clone(),
         }
     }
 }
@@ -602,7 +653,7 @@ impl<T: AuthPasskey> From<&T> for PasskeyView {
 pub struct ApiKeyView {
     pub id: String,
     pub name: Option<String>,
-    pub start: Option<String>,
+    pub start: Option<crate::ApiKeyStart>,
     pub prefix: Option<String>,
     #[serde(rename = "referenceId")]
     pub reference_id: String,
@@ -660,7 +711,7 @@ impl<T: AuthApiKey> From<&T> for ApiKeyView {
         Self {
             id: ak.id().into_owned(),
             name: ak.name().map(str::to_owned),
-            start: ak.start().map(str::to_owned),
+            start: ak.start().map(std::borrow::Cow::into_owned),
             prefix: ak.prefix().map(str::to_owned),
             reference_id: ak.reference_id().into_owned(),
             config_id: ak.config_id().into_owned(),

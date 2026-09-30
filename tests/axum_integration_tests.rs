@@ -329,7 +329,8 @@ async fn session_extractors_verify_signed_cookies_and_reject_expired_sessions() 
             .unwrap();
         assert_eq!(response.status(), expected);
     }
-    auth.store()
+    let _ = auth
+        .store()
         .update_session_expiry(&token, chrono::Utc::now() - chrono::Duration::seconds(1))
         .await
         .unwrap();

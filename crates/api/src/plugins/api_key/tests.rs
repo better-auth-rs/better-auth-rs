@@ -124,7 +124,11 @@ async fn verify_key(
             "error": error,
             "key": null,
         }),
-        Err(ApiKeyVerificationError::Internal(error)) => panic!("Verification failed: {error}"),
+        Err(
+            ApiKeyVerificationError::Internal(error)
+            | ApiKeyVerificationError::Endpoint(error)
+            | ApiKeyVerificationError::Rejected(error),
+        ) => panic!("Verification failed: {error}"),
     }
 }
 

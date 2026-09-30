@@ -1,0 +1,134 @@
+{
+  "apikey": {
+    "modelName": "mapped_api_key",
+    "fields": {
+      "name": "stored_name",
+      "start": "stored_start",
+      "prefix": "stored_prefix",
+      "key": "stored_key_hash",
+      "referenceId": "stored_reference_id",
+      "configId": "stored_config_id",
+      "refillInterval": "stored_refill_interval",
+      "refillAmount": "stored_refill_amount",
+      "lastRefillAt": "stored_last_refill_at",
+      "enabled": "stored_enabled",
+      "rateLimitEnabled": "stored_rate_limit_enabled",
+      "rateLimitTimeWindow": "stored_rate_limit_time_window",
+      "rateLimitMax": "stored_rate_limit_max",
+      "requestCount": "stored_request_count",
+      "remaining": "stored_remaining",
+      "lastRequest": "stored_last_request",
+      "expiresAt": "stored_expires_at",
+      "createdAt": "stored_created_at",
+      "updatedAt": "stored_updated_at",
+      "permissions": "stored_permissions",
+      "metadata": "stored_metadata"
+    }
+  },
+  "deviceCode": {
+    "modelName": "mapped_device_code",
+    "fields": {
+      "deviceCode": "stored_device_code",
+      "userCode": "stored_user_code",
+      "userId": "stored_user_id",
+      "expiresAt": "stored_expires_at",
+      "status": "stored_status",
+      "lastPolledAt": "stored_last_polled_at",
+      "pollingInterval": "stored_polling_interval",
+      "clientId": "stored_client_id",
+      "scope": "stored_scope"
+    }
+  },
+  "passkey": {
+    "modelName": "mapped_passkey",
+    "fields": {
+      "name": "stored_name",
+      "publicKey": "stored_public_key",
+      "userId": "stored_user_id",
+      "credentialID": "stored_credential_id",
+      "counter": "stored_counter",
+      "deviceType": "stored_device_type",
+      "backedUp": "stored_backed_up",
+      "transports": "stored_transports",
+      "credential": "stored_credential",
+      "aaguid": "stored_aaguid",
+      "createdAt": "stored_created_at",
+      "updatedAt": "stored_updated_at"
+    }
+  },
+  "twoFactor": {
+    "modelName": "mapped_two_factor",
+    "fields": {
+      "secret": "stored_secret",
+      "backupCodes": "stored_backup_codes",
+      "userId": "stored_user_id",
+      "verified": "stored_verified",
+      "failedVerificationCount": "stored_failed_verification_count",
+      "lockedUntil": "stored_locked_until",
+      "createdAt": "stored_created_at",
+      "updatedAt": "stored_updated_at"
+    }
+  },
+  "jwks": {
+    "modelName": "mapped_jwk",
+    "fields": {
+      "publicKey": "stored_public_key",
+      "privateKey": "stored_private_key",
+      "createdAt": "stored_created_at",
+      "expiresAt": "stored_expires_at",
+      "alg": "stored_alg",
+      "crv": "stored_crv"
+    }
+  },
+  "walletAddress": {
+    "modelName": "mapped_wallet_address",
+    "fields": {
+      "userId": "stored_user_id",
+      "address": "stored_address",
+      "chainId": "stored_chain_id",
+      "isPrimary": "stored_is_primary",
+      "createdAt": "stored_created_at"
+    }
+  },
+  "user": {
+    "modelName": "mapped_user",
+    "fields": {
+      "email": "login_email",
+      "twoFactorEnabled": "otp_enabled",
+      "username": "login_name",
+      "displayUsername": "display_name",
+      "phoneNumber": "telephone",
+      "phoneNumberVerified": "telephone_verified",
+      "isAnonymous": "guest",
+      "role": "access_role",
+      "banned": "suspended",
+      "banReason": "suspension_reason",
+      "banExpires": "suspension_until"
+    }
+  },
+  "session": {
+    "modelName": "mapped_session",
+    "fields": {
+      "token": "session_secret",
+      "userId": "subject",
+      "impersonatedBy": "actor"
+    }
+  },
+  "account": {
+    "modelName": "mapped_account",
+    "fields": {
+      "userId": "subject",
+      "accountId": "provider_subject",
+      "providerId": "provider",
+      "password": "password_hash"
+    }
+  },
+  "verification": {
+    "modelName": "mapped_verification",
+    "fields": {
+      "identifier": "lookup_key",
+      "value": "proof",
+      "expiresAt": "expiration"
+    }
+  }
+}

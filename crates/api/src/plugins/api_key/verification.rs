@@ -6,7 +6,7 @@ use better_auth_core::{
 };
 use serde::Serialize;
 
-use super::{ApiKeyErrorCode, ApiKeyPlugin, ApiKeyReferences, config_id_matches};
+use super::{ApiKeyEndpoint, ApiKeyErrorCode, ApiKeyPlugin, ApiKeyReferences, config_id_matches};
 
 /// Inputs for server-only API key verification. Verification consumes one use.
 pub struct VerifyApiKey<'a> {
@@ -28,11 +28,32 @@ pub struct ApiKeyErrorDetails {
 
 /// An API key rejection with the upstream error code and response fields.
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum ApiKeyErrorMessage {
+    /// A public error message.
+    Text(String),
+    /// Upstream returns its complete error constant on selected verification failures.
+    Code {
+        code: ApiKeyErrorCode,
+        message: String,
+    },
+}
+
+impl std::fmt::Display for ApiKeyErrorMessage {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text(message) | Self::Code { message, .. } => formatter.write_str(message),
+        }
+    }
+}
+
+/// An API key rejection with the upstream error code and response fields.
+#[derive(Debug, Serialize)]
 pub struct ApiKeyValidationError {
     /// Stable upstream API key error code.
     pub code: ApiKeyErrorCode,
     /// Upstream error message.
-    pub message: String,
+    pub message: ApiKeyErrorMessage,
     /// Rate-limit timing, when the rejection is a rate limit.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<ApiKeyErrorDetails>,
@@ -42,7 +63,18 @@ impl ApiKeyValidationError {
     fn new(code: ApiKeyErrorCode) -> Self {
         Self {
             code,
-            message: code.message().to_owned(),
+            message: ApiKeyErrorMessage::Text(code.message().to_owned()),
+            details: None,
+        }
+    }
+
+    fn invalid_constant(code: ApiKeyErrorCode) -> Self {
+        Self {
+            code,
+            message: ApiKeyErrorMessage::Code {
+                code: ApiKeyErrorCode::InvalidApiKey,
+                message: ApiKeyErrorCode::InvalidApiKey.message().to_owned(),
+            },
             details: None,
         }
     }
@@ -65,15 +97,21 @@ impl ApiKeyValidationError {
 pub enum ApiKeyVerificationError {
     /// The credential or its permissions, quota, or configuration was rejected.
     Validation(ApiKeyValidationError),
+    /// An application API error caught by unscoped verification, including its complete response body.
+    Rejected(AuthError),
     /// An internal operation failed. The original typed error is preserved.
     Internal(AuthError),
+    /// An endpoint hook or scoped validator failed before the verification catch boundary.
+    Endpoint(AuthError),
 }
 
 impl std::fmt::Display for ApiKeyVerificationError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Validation(error) => formatter.write_str(&error.message),
-            Self::Internal(error) => write!(formatter, "API key verification failed: {error}"),
+            Self::Validation(error) => write!(formatter, "{}", error.message),
+            Self::Internal(error) | Self::Endpoint(error) | Self::Rejected(error) => {
+                write!(formatter, "API key verification failed: {error}")
+            }
         }
     }
 }
@@ -81,9 +119,35 @@ impl std::fmt::Display for ApiKeyVerificationError {
 impl std::error::Error for ApiKeyVerificationError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Internal(error) => Some(error),
+            Self::Internal(error) | Self::Endpoint(error) | Self::Rejected(error) => Some(error),
             Self::Validation(_) => None,
         }
+    }
+}
+
+impl ApiKeyVerificationError {
+    /// Render the server-only endpoint's upstream response while retaining typed errors until this boundary.
+    pub fn into_response(self) -> AuthResult<AuthResponse> {
+        let error = match self {
+            Self::Endpoint(error) => return Ok(error.to_auth_response()),
+            Self::Rejected(error) => {
+                let body: serde_json::Value =
+                    serde_json::from_slice(&error.to_auth_response().body)?;
+                return Ok(AuthResponse::json(
+                    200,
+                    &serde_json::json!({"valid":false,"error":body,"key":null}),
+                )?);
+            }
+            Self::Validation(error) => error,
+            Self::Internal(error) => {
+                tracing::error!(%error, "Failed to validate API key");
+                ApiKeyValidationError::invalid_constant(ApiKeyErrorCode::InvalidApiKey)
+            }
+        };
+        Ok(AuthResponse::json(
+            200,
+            &serde_json::json!({"valid":false,"error":error,"key":null}),
+        )?)
     }
 }
 
@@ -113,6 +177,48 @@ impl ApiKeyPlugin {
         input: &VerifyApiKey<'_>,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> Result<ApiKeyView, ApiKeyVerificationError> {
+        let mut body = serde_json::Map::from_iter([("key".into(), input.key.into())]);
+        if let Some(config_id) = input.config_id {
+            let _ = body.insert("configId".into(), config_id.into());
+        }
+        if let Some(permissions) = input.permissions {
+            let _ = body.insert("permissions".into(), permissions.clone());
+        }
+        let body = serde_json::Value::Object(body);
+        let endpoint = ApiKeyEndpoint::new(ctx, None, None, &body);
+        let session = self
+            .authenticate_api_key(endpoint, ctx)
+            .await
+            .map_err(ApiKeyVerificationError::Endpoint)?;
+        let endpoint = ApiKeyEndpoint {
+            path: Some(if session.is_some() { "/" } else { "virtual:" }),
+            ..endpoint
+        };
+        let config = self
+            .resolve_configuration(input.config_id)
+            .map_err(ApiKeyVerificationError::Endpoint)?;
+        if input.config_id.is_some()
+            && let Some(validator) = &config.custom_api_key_validator
+            && !validator
+                .validate(input.key, endpoint)
+                .await
+                .map_err(ApiKeyVerificationError::Endpoint)?
+        {
+            return Err(ApiKeyVerificationError::Validation(
+                ApiKeyValidationError::invalid_constant(ApiKeyErrorCode::KeyNotFound),
+            ));
+        }
+        self.validate_api_key(input, ctx, endpoint, input.config_id.is_none())
+            .await
+    }
+
+    async fn validate_api_key(
+        &self,
+        input: &VerifyApiKey<'_>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+        endpoint: ApiKeyEndpoint<'_>,
+        run_custom_validator: bool,
+    ) -> Result<ApiKeyView, ApiKeyVerificationError> {
         let lookup_config = self
             .resolve_configuration(input.config_id)
             .map_err(|_| ApiKeyErrorCode::NoDefaultConfiguration)?;
@@ -121,9 +227,7 @@ impl ApiKeyPlugin {
         } else {
             Self::hash_key(input.key)
         };
-        let api_key = ctx
-            .database
-            .get_api_key_by_hash(&hashed)
+        let api_key = super::storage::get_by_hash(lookup_config, ctx, &hashed)
             .await?
             .ok_or(ApiKeyErrorCode::InvalidApiKey)?;
 
@@ -137,6 +241,20 @@ impl ApiKeyPlugin {
             .resolve_configuration(Some(&api_key.config_id))
             .map_err(|_| ApiKeyErrorCode::NoDefaultConfiguration)?;
 
+        if run_custom_validator && let Some(validator) = &config.custom_api_key_validator {
+            match validator.validate(input.key, endpoint).await {
+                Ok(true) => {}
+                Ok(false) => return Err(ApiKeyErrorCode::KeyNotFound.into()),
+                Err(
+                    error @ (AuthError::Internal(_)
+                    | AuthError::Database(_)
+                    | AuthError::Config(_)
+                    | AuthError::Serialization(_)),
+                ) => return Err(ApiKeyVerificationError::Internal(error)),
+                Err(error) => return Err(ApiKeyVerificationError::Rejected(error)),
+            }
+        }
+
         if !api_key.enabled {
             return Err(ApiKeyErrorCode::KeyDisabled.into());
         }
@@ -145,7 +263,7 @@ impl ApiKeyPlugin {
                 AuthError::internal(format!("Invalid stored API key expiration: {error}"))
             })?;
             if chrono::Utc::now() > expiration {
-                ctx.database.delete_api_key(&api_key.id).await?;
+                super::storage::delete_for_verification(config, ctx, &api_key).await?;
                 return Err(ApiKeyErrorCode::KeyExpired.into());
             }
         }
@@ -158,11 +276,7 @@ impl ApiKeyPlugin {
             }
         }
 
-        let updated = match ctx
-            .database
-            .consume_api_key_usage(&api_key.id, config.rate_limit.enabled)
-            .await?
-        {
+        let updated = match super::storage::consume(config, ctx, &api_key).await? {
             ConsumeApiKeyResult::Allowed(key) => key,
             ConsumeApiKeyResult::RateLimited { try_again_in } => {
                 let mut error = ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited);
@@ -181,90 +295,44 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<Option<BeforeRequestAction>> {
-        let Some((config, key)) = self
-            .configurations
-            .iter()
-            .filter(|config| config.enable_session_for_api_keys)
-            .find_map(|config| {
-                config.api_key_headers.iter().find_map(|header| {
-                    req.headers
-                        .get(&header.to_ascii_lowercase())
-                        .filter(|key| !key.is_empty())
-                        .map(|key| (config, key))
-                })
-            })
-        else {
-            return Ok(None);
-        };
-
-        if key.encode_utf16().count() < config.key_length {
-            return Ok(Some(BeforeRequestAction::Respond(AuthResponse::json(
-                403,
-                &ApiKeyValidationError::new(ApiKeyErrorCode::InvalidApiKey),
-            )?)));
-        }
-        let input = VerifyApiKey {
-            key,
-            config_id: Some(&config.config_id),
-            permissions: None,
-        };
-        let view = match self.verify_api_key(&input, ctx).await {
-            Ok(view) => view,
-            Err(ApiKeyVerificationError::Validation(error)) => {
-                return Ok(Some(BeforeRequestAction::Respond(error.response()?)));
+        let body = match req.body.as_deref().filter(|body| !body.is_empty()) {
+            Some(body)
+                if req.headers.iter().any(|(name, value)| {
+                    name.eq_ignore_ascii_case("content-type")
+                        && value
+                            .to_ascii_lowercase()
+                            .contains("application/x-www-form-urlencoded")
+                }) =>
+            {
+                serde_json::Value::Object(
+                    url::form_urlencoded::parse(body)
+                        .map(|(name, value)| {
+                            (
+                                name.into_owned(),
+                                serde_json::Value::String(value.into_owned()),
+                            )
+                        })
+                        .collect(),
+                )
             }
-            Err(ApiKeyVerificationError::Internal(error)) => return Err(error),
+            Some(body) => crate::plugins::json_body::decode(body).map_err(AuthError::from)?,
+            None => serde_json::Value::Null,
         };
-        self.maybe_delete_expired(ctx).await;
-
-        if config.references != ApiKeyReferences::User {
-            return Ok(Some(BeforeRequestAction::Respond(
-                ApiKeyValidationError::new(ApiKeyErrorCode::InvalidReferenceIdFromApiKey)
-                    .response()?,
-            )));
-        }
-        let Some(user) = ctx.database.get_user_by_id(&view.reference_id).await? else {
-            return Ok(Some(BeforeRequestAction::Respond(
-                ApiKeyValidationError::new(ApiKeyErrorCode::InvalidReferenceIdFromApiKey)
-                    .response()?,
-            )));
-        };
-
-        let now = chrono::Utc::now();
-        let expires_at = match view.expires_at {
-            Some(value) => chrono::DateTime::parse_from_rfc3339(&value)
-                .map_err(|error| {
-                    AuthError::internal(format!("Invalid stored API key expiration: {error}"))
-                })?
-                .with_timezone(&chrono::Utc),
-            // Upstream passes its session lifetime in seconds to getDate(..., "ms").
-            None => {
-                now + chrono::Duration::milliseconds(ctx.config.session.expires_in.num_seconds())
+        let endpoint = ApiKeyEndpoint::new(ctx, Some(req), Some(req.path()), &body);
+        let (session, user) = match self.authenticate_api_key(endpoint, ctx).await {
+            Ok(Some(session)) => session,
+            Ok(None) => return Ok(None),
+            Err(error @ AuthError::Response(_)) => {
+                return Ok(Some(BeforeRequestAction::Respond(error.to_auth_response())));
             }
-        };
-        let meta = better_auth_core::RequestMeta::from_request(req);
-        let session = SessionView {
-            visible_fields: None,
-            id: view.id,
-            token: key.to_owned(),
-            user_id: user.id().into_owned(),
-            created_at: now,
-            updated_at: now,
-            expires_at,
-            ip_address: meta.ip_address,
-            user_agent: meta.user_agent,
-            impersonated_by: None,
-            active_organization_id: None,
-            active_team_id: None,
-            active: true,
-            additional_fields: Default::default(),
+            Err(error) => return Err(error),
         };
         // Upstream answers this path in its hook before the route method gate.
         if req.path() == "/get-session" {
             return Ok(Some(BeforeRequestAction::Respond(AuthResponse::json(
                 200,
                 &serde_json::json!({
-                    "user": ctx.user_view(&user)?,
+                    "user": user,
                     "session": {
                         "id": session.id,
                         "token": session.token,
@@ -281,5 +349,145 @@ impl ApiKeyPlugin {
         Ok(Some(BeforeRequestAction::InjectSession {
             session: Box::new(session),
         }))
+    }
+
+    pub(super) async fn authenticate_api_key(
+        &self,
+        endpoint: ApiKeyEndpoint<'_>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> AuthResult<Option<(SessionView, better_auth_core::wire::UserView)>> {
+        // Upstream invokes extraction once in the hook matcher, then again in its handler.
+        match self.find_session_key(endpoint) {
+            Ok(None) => return Ok(None),
+            Ok(Some(_)) => {}
+            Err(error) => {
+                tracing::error!(%error, "API key hook matcher failed");
+                return Err(AuthResponse::json(500, &serde_json::json!({
+                    "message": "An error occurred during hook matcher execution. Check the logs for more details."
+                }))?.into());
+            }
+        }
+        let endpoint = ApiKeyEndpoint {
+            path: endpoint.path.or(Some("/")),
+            ..endpoint
+        };
+        let Some((config, key)) = self
+            .find_session_key(endpoint)
+            .map_err(|error| super::callbacks::callback_error(error, endpoint.request))?
+        else {
+            return Err(AuthError::internal(
+                "API key getter stopped matching during hook execution",
+            ));
+        };
+        if key.encode_utf16().count() < config.key_length {
+            return Err(AuthResponse::json(
+                403,
+                &ApiKeyValidationError::new(ApiKeyErrorCode::InvalidApiKey),
+            )?
+            .into());
+        }
+        if let Some(validator) = &config.custom_api_key_validator
+            && !validator
+                .validate(&key, endpoint)
+                .await
+                .map_err(|error| super::callbacks::callback_error(error, endpoint.request))?
+        {
+            return Err(AuthResponse::json(
+                403,
+                &ApiKeyValidationError::new(ApiKeyErrorCode::InvalidApiKey),
+            )?
+            .into());
+        }
+        let input = VerifyApiKey {
+            key: &key,
+            config_id: Some(&config.config_id),
+            permissions: None,
+        };
+        let view = match self.validate_api_key(&input, ctx, endpoint, false).await {
+            Ok(view) => view,
+            Err(ApiKeyVerificationError::Validation(error)) => {
+                return Err(error.response()?.into());
+            }
+            Err(
+                ApiKeyVerificationError::Internal(error)
+                | ApiKeyVerificationError::Endpoint(error)
+                | ApiKeyVerificationError::Rejected(error),
+            ) => return Err(error),
+        };
+        self.maybe_delete_expired(ctx).await;
+
+        if config.references != ApiKeyReferences::User {
+            return Err(
+                ApiKeyValidationError::new(ApiKeyErrorCode::InvalidReferenceIdFromApiKey)
+                    .response()?
+                    .into(),
+            );
+        }
+        let Some(user) = ctx.database.get_user_by_id(&view.reference_id).await? else {
+            return Err(
+                ApiKeyValidationError::new(ApiKeyErrorCode::InvalidReferenceIdFromApiKey)
+                    .response()?
+                    .into(),
+            );
+        };
+
+        let now = chrono::Utc::now();
+        let expires_at = match view.expires_at {
+            Some(value) => chrono::DateTime::parse_from_rfc3339(&value)
+                .map_err(|error| {
+                    AuthError::internal(format!("Invalid stored API key expiration: {error}"))
+                })?
+                .with_timezone(&chrono::Utc),
+            // Upstream passes its session lifetime in seconds to getDate(..., "ms").
+            None => {
+                now + chrono::Duration::milliseconds(ctx.config.session.expires_in.num_seconds())
+            }
+        };
+        let meta = endpoint
+            .request
+            .map(better_auth_core::RequestMeta::from_request);
+        let session = SessionView {
+            visible_fields: None,
+            id: view.id,
+            token: key.to_owned(),
+            user_id: user.id().into_owned(),
+            created_at: now,
+            updated_at: now,
+            expires_at,
+            ip_address: meta.as_ref().and_then(|meta| meta.ip_address.clone()),
+            user_agent: meta.and_then(|meta| meta.user_agent),
+            impersonated_by: None,
+            active_organization_id: None,
+            active_team_id: None,
+            active: true,
+            additional_fields: Default::default(),
+        };
+        Ok(Some((session, ctx.user_view(&user)?)))
+    }
+
+    fn find_session_key(
+        &self,
+        endpoint: ApiKeyEndpoint<'_>,
+    ) -> AuthResult<Option<(&super::ApiKeyConfig, String)>> {
+        for config in &self.configurations {
+            if !config.enable_session_for_api_keys {
+                continue;
+            }
+            let key = if let Some(getter) = &config.custom_api_key_getter {
+                getter.get(endpoint)?
+            } else {
+                config.api_key_headers.iter().find_map(|header| {
+                    endpoint
+                        .request
+                        .and_then(|request| request.headers.get(&header.to_ascii_lowercase()))
+                        .filter(|key| !key.is_empty())
+                        .cloned()
+                })
+            };
+            if let Some(key) = key.filter(|key| !key.is_empty()) {
+                return Ok(Some((config, key)));
+            }
+        }
+        Ok(None)
     }
 }

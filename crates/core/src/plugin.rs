@@ -19,6 +19,7 @@ pub struct AuthInitParts {
     pub email_verification_policy: crate::email::EmailVerificationRuntimePolicy,
     pub metadata: MetadataMap,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
+    pub secondary_storage: Option<Arc<dyn crate::store::SecondaryStorage>>,
     pub password_policy: crate::utils::password::PasswordRuntimePolicy,
 }
 
@@ -168,6 +169,7 @@ pub struct AuthInitContext<S: AuthSchema> {
     pub config: Arc<AuthConfig>,
     pub database: Arc<dyn AuthStore<S>>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
+    pub secondary_storage: Option<Arc<dyn crate::store::SecondaryStorage>>,
     pub password_policy: crate::utils::password::PasswordRuntimePolicy,
     pub metadata: MetadataMap,
 }
@@ -179,6 +181,7 @@ pub struct AuthContext<S: AuthSchema> {
     pub config: Arc<AuthConfig>,
     pub database: Arc<dyn AuthStore<S>>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
+    pub secondary_storage: Option<Arc<dyn crate::store::SecondaryStorage>>,
     pub password_policy: crate::utils::password::PasswordRuntimePolicy,
     pub metadata: MetadataMap,
 }
@@ -223,6 +226,7 @@ impl<S: AuthSchema> AuthInitContext<S> {
             config,
             database,
             email_provider,
+            secondary_storage: None,
             password_policy,
             metadata: MetadataMap::new(),
         }
@@ -242,6 +246,7 @@ impl<S: AuthSchema> AuthInitContext<S> {
             email_verification_policy: self.email_verification_policy,
             metadata: self.metadata,
             email_provider: self.email_provider,
+            secondary_storage: self.secondary_storage,
             password_policy: self.password_policy,
         }
     }
@@ -257,6 +262,7 @@ impl<S: AuthSchema> AuthContext<S> {
             config,
             database,
             email_provider,
+            secondary_storage: None,
             password_policy,
             metadata: MetadataMap::new(),
         }
@@ -275,6 +281,7 @@ impl<S: AuthSchema> AuthContext<S> {
             config,
             database,
             email_provider,
+            secondary_storage: None,
             password_policy,
             metadata,
         }
@@ -298,6 +305,7 @@ impl<S: AuthSchema> AuthContext<S> {
     /// Create a `SessionManager` from this context's config and database.
     pub fn session_manager(&self) -> crate::session::SessionManager<S> {
         crate::session::SessionManager::new(self.config.clone(), self.database.clone())
+            .with_secondary_storage(self.secondary_storage.is_some())
             .with_user_metadata(self.metadata.clone())
             .with_cookie_signer(
                 self.extensions
@@ -311,7 +319,33 @@ impl<S: AuthSchema> AuthContext<S> {
         &self,
         user: &impl crate::entity::AuthUser,
     ) -> AuthResult<crate::wire::UserView> {
-        crate::wire::UserView::with_fields(user, &self.config.user, &self.metadata)
+        crate::wire::UserView::with_fields_for_adapter(
+            user,
+            &self.config.user,
+            &self.metadata,
+            self.database.supports_native_json(),
+        )
+    }
+
+    /// Keep hidden user fields available to trusted callbacks.
+    pub fn internal_user_view(
+        &self,
+        user: &impl crate::entity::AuthUser,
+    ) -> AuthResult<crate::wire::UserView> {
+        crate::wire::UserView::with_internal_fields_for_adapter(
+            user,
+            &self.config.user,
+            &self.metadata,
+            self.database.supports_native_json(),
+        )
+    }
+
+    /// Preserve cached session fields without repeating database output transforms.
+    pub async fn session_view(
+        &self,
+        session: &impl crate::entity::AuthSession,
+    ) -> AuthResult<crate::wire::SessionView> {
+        self.session_manager().session_view(session).await
     }
 
     /// Validate public user fields, including proof and privilege fields owned by active plugins.

@@ -30,8 +30,11 @@ pub(crate) fn parse(req: &AuthRequest) -> Result<Option<Value>, AuthResponse> {
         };
         return Err(error_response(415, "UNSUPPORTED_MEDIA_TYPE", &message));
     }
+    decode(bytes).map(Some)
+}
+
+pub(crate) fn decode(bytes: &[u8]) -> Result<Value, AuthResponse> {
     serde_json::from_slice(bytes)
-        .map(Some)
         .map_err(|_| error_response(400, "BAD_REQUEST", "Invalid JSON in request body"))
 }
 

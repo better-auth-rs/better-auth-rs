@@ -229,7 +229,7 @@ impl AnonymousPlugin {
         ) else {
             return Ok(());
         };
-        let Some(session) = ctx.database.get_session(&token).await? else {
+        let Some((session, snapshot)) = ctx.database.get_session_snapshot(&token).await? else {
             return Ok(());
         };
         let Some(user) = ctx.database.get_user_by_id(&session.user_id()).await? else {
@@ -253,15 +253,15 @@ impl AnonymousPlugin {
                         .await?
                         .filter(|user| user.is_anonymous() == Some(true))
                     {
-                        ctx.database
-                            .get_user_sessions(&user_id)
+                        ctx.session_manager()
+                            .list_user_session_views(&user_id)
                             .await?
                             .into_iter()
                             .find(|session| session.expires_at() > chrono::Utc::now())
                             .map(|session| {
                                 Ok::<_, AuthError>(better_auth_core::session::SessionData {
                                     user: ctx.user_view(&user)?,
-                                    session: SessionView::from(&session),
+                                    session,
                                 })
                             })
                             .transpose()?
@@ -280,11 +280,17 @@ impl AnonymousPlugin {
             return Ok(());
         }
         if let Some(callback) = &self.on_link_account {
+            let new_session = if let Some(mut data) = snapshot {
+                data.session.filter_returned_fields(&ctx.config.session);
+                data.session
+            } else {
+                ctx.session_view(&session).await?
+            };
             callback(AnonymousLink {
                 anonymous_user: previous.user.clone(),
                 anonymous_session: previous.session,
                 new_user: ctx.user_view(&user)?,
-                new_session: SessionView::from(&session),
+                new_session,
                 request: req.clone(),
             })
             .await?;

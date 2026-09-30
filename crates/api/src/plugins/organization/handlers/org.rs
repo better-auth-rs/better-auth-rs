@@ -35,12 +35,13 @@ fn validate_metadata_input(value: Option<&serde_json::Value>, path: &str) -> Aut
     Ok(())
 }
 
-fn has_role(member: &impl AuthMember, role: &str) -> bool {
-    member
+fn has_role(member: &impl AuthMember, role: &str) -> AuthResult<bool> {
+    Ok(member
         .role()
+        .typed()?
         .split(',')
         .map(str::trim)
-        .any(|candidate| candidate == role)
+        .any(|candidate| candidate == role))
 }
 
 // ---------------------------------------------------------------------------
@@ -79,7 +80,7 @@ pub(crate) async fn create_organization_core(
 
     if ctx
         .database
-        .get_organization_by_slug(&body.slug)
+        .get_organization_by_slug_value(&body.slug.json()?.unwrap_or(serde_json::Value::Null))
         .await?
         .is_some()
     {
@@ -95,10 +96,7 @@ pub(crate) async fn create_organization_core(
             .map(str::to_owned),
         name: body.name.clone(),
         slug: body.slug.clone(),
-        logo: match &body.logo {
-            NullableStringField::Value(value) => Some(value.clone()),
-            NullableStringField::Missing | NullableStringField::Null => None,
-        },
+        logo: body.logo.clone(),
         metadata: body.metadata.clone(),
     };
 
@@ -107,10 +105,14 @@ pub(crate) async fn create_organization_core(
             .before_create_organization(&mut org_data, &user_view)
             .await?;
     }
-    org_data.metadata = org_data
-        .metadata
-        .filter(better_auth_core::user_fields::is_truthy);
-    let organization = ctx.database.create_organization(org_data).await?;
+    org_data.metadata = better_auth_core::SchemaValue::from_json(
+        org_data
+            .metadata
+            .json()?
+            .filter(better_auth_core::user_fields::is_truthy),
+    );
+    let mut organization = ctx.database.create_organization(org_data).await?;
+    organization.metadata = super::super::native_json::metadata(organization.metadata, true)?;
     let organization_view =
         crate::plugins::organization::fields::created_organization(&organization, ctx);
 
@@ -123,7 +125,7 @@ pub(crate) async fn create_organization_core(
         role: if config.creator_role.is_empty() {
             "owner".into()
         } else {
-            config.creator_role.clone()
+            config.creator_role.clone().into()
         },
     };
 
@@ -156,7 +158,7 @@ pub(crate) async fn create_organization_core(
         let mut team_data = OrganizationTeamDraft {
             additional_fields: Default::default(),
             id: None,
-            name: organization.name.clone(),
+            name: organization.name.display_string()?.into(),
             organization_id: organization.id.clone(),
             created_at: None,
             updated_at: None,
@@ -196,9 +198,16 @@ pub(crate) async fn create_organization_core(
     if let Some(hooks) = &config.hooks {
         hooks.after_create_organization(event).await?;
     }
+    let mut response = CreatedOrganizationResponse::from_organization(&organization);
+    if let Some(serde_json::Value::String(value)) = response.metadata.json()?
+        && !value.is_empty()
+    {
+        response.metadata =
+            better_auth_core::SchemaValue::Dynamic(super::super::native_json::parse_json(&value)?);
+    }
     Ok((
         CreateOrganizationResponse {
-            organization: CreatedOrganizationResponse::from_organization(&organization),
+            organization: response,
             members: vec![BasicMemberResponse::from_member(&member)],
         },
         default_team_id,
@@ -238,7 +247,7 @@ pub(crate) async fn update_organization_core(
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
     if !check_permission(
-        member.role(),
+        member.role().typed()?,
         &org_id,
         "organization",
         &["update"],
@@ -282,10 +291,11 @@ pub(crate) async fn update_organization_core(
             .before_update_organization(&mut update_data, actor)
             .await?;
     }
-    let updated = ctx
+    let mut updated = ctx
         .database
         .update_organization(&org_id, update_data)
         .await?;
+    updated.metadata = super::super::native_json::metadata(updated.metadata, false)?;
 
     if let Some(hooks) = &config.hooks {
         hooks
@@ -321,7 +331,7 @@ pub(crate) async fn delete_organization_core(
         .ok_or_else(|| AuthError::bad_request("User is not a member of the organization"))?;
 
     if !check_permission(
-        member.role(),
+        member.role().typed()?,
         &body.organization_id,
         "organization",
         &["delete"],
@@ -433,8 +443,8 @@ pub(crate) async fn get_full_organization_core(
         .await?;
     let user_ids = members_raw
         .iter()
-        .map(|member| member.user_id.clone())
-        .collect::<Vec<_>>();
+        .map(|member| member.user_id.typed().cloned())
+        .collect::<AuthResult<Vec<_>>>()?;
     let users_by_id = ctx
         .database
         .list_users_by_ids(&user_ids)
@@ -445,7 +455,7 @@ pub(crate) async fn get_full_organization_core(
     let mut members = Vec::with_capacity(members_raw.len());
 
     for member in &members_raw {
-        if let Some(user_info) = users_by_id.get(&member.user_id) {
+        if let Some(user_info) = users_by_id.get(member.user_id.typed()?) {
             members.push(MemberResponse::from_member_and_user(member, user_info));
         }
     }
@@ -455,11 +465,7 @@ pub(crate) async fn get_full_organization_core(
     let teams = if config.teams.enabled {
         let mut teams = Vec::new();
         for team in ctx.database.list_organization_teams(&org_id).await? {
-            let member_count = ctx.database.list_team_members(&team.id).await?.len();
-            teams.push(crate::plugins::organization::types::FullOrganizationTeam {
-                team,
-                member_count,
-            });
+            teams.push(crate::plugins::organization::types::FullOrganizationTeam { team });
         }
         Some(teams)
     } else {
@@ -558,15 +564,17 @@ pub(crate) async fn leave_organization_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
-    if has_role(&member, &config.creator_role) {
+    if has_role(&member, &config.creator_role)? {
         let all_members = ctx
             .database
             .list_organization_members(&body.organization_id)
             .await?;
-        let owner_count = all_members
-            .iter()
-            .filter(|candidate| has_role(*candidate, &config.creator_role))
-            .count();
+        let owner_count =
+            all_members
+                .iter()
+                .try_fold(0, |count, candidate| -> AuthResult<usize> {
+                    Ok(count + usize::from(has_role(candidate, &config.creator_role)?))
+                })?;
 
         if owner_count <= 1 {
             return Err(AuthError::bad_request(
@@ -602,31 +610,52 @@ pub async fn handle_create_organization(
     let mut body: CreateOrganizationRequest = req
         .body_as_json()
         .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;
-    if let Err(mut errors) = validator::Validate::validate(&body) {
-        errors.errors_mut().retain(|name, _| {
-            !config
-                .schema
-                .organization
-                .additional_fields
-                .get(name.as_ref())
-                .is_some_and(|field| field.input)
-        });
-        if !errors.is_empty() {
-            return Ok(better_auth_core::error::validation_error_response(&errors));
+    let mut schema = config.schema.organization.clone();
+    for (name, required) in [("name", true), ("slug", true), ("logo", false)] {
+        if !schema
+            .additional_fields
+            .get(name)
+            .is_some_and(|field| field.input)
+        {
+            let _ = schema.additional_fields.insert(
+                name.into(),
+                better_auth_core::user_fields::UserFieldConfig {
+                    required: Some(required),
+                    ..Default::default()
+                },
+            );
         }
     }
-    validate_metadata_input(body.metadata.as_ref(), "body.metadata")?;
+    if !config
+        .schema
+        .organization
+        .additional_fields
+        .get("metadata")
+        .is_some_and(|field| field.input)
+    {
+        validate_metadata_input(body.metadata.json()?.as_ref(), "body.metadata")?;
+    }
     body.additional_fields = crate::plugins::organization::fields::parse_input(
-        &config.schema.organization,
+        &schema,
         &body,
         &body.additional_fields,
         "body",
         false,
     )?;
-    if body.logo == NullableStringField::Null {
-        let _ = body
+    for (name, value) in [("name", &body.name), ("slug", &body.slug)] {
+        if !config
+            .schema
+            .organization
             .additional_fields
-            .insert("logo".into(), serde_json::Value::Null);
+            .get(name)
+            .is_some_and(|field| field.input)
+            && value.typed()?.is_empty()
+        {
+            return Err(AuthError::FieldInput {
+                code: "VALIDATION_ERROR",
+                message: format!("[body.{name}] Too small: expected string to have >=1 characters"),
+            });
+        }
     }
     let (response, default_team_id) =
         create_organization_core(&body, &user, config, ctx, Some(req)).await?;
@@ -657,10 +686,28 @@ pub async fn handle_update_organization(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let mut body: UpdateOrganizationRequest = match better_auth_core::validate_request_body(req) {
-        Ok(v) => v,
-        Err(resp) => return Ok(resp),
+    let raw: serde_json::Value = req
+        .body_as_json()
+        .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;
+    let base = better_auth_core::user_fields::UserConfig {
+        additional_fields: [("name", true), ("slug", true), ("logo", false)]
+            .into_iter()
+            .map(|(name, required)| {
+                (
+                    name.to_owned(),
+                    better_auth_core::user_fields::UserFieldConfig {
+                        required: Some(required),
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect(),
     };
+    if let Some(data) = raw.get("data").and_then(serde_json::Value::as_object) {
+        let _ = base.parse_organization_input(data, "body.data", true)?;
+    }
+    let mut body: UpdateOrganizationRequest = serde_json::from_value(raw)
+        .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;
     validate_metadata_input(body.data.metadata.as_ref(), "body.data.metadata")?;
     let mut schema = config.schema.organization.clone();
     // The upstream update schema applies base fields after additional fields.
@@ -856,10 +903,10 @@ mod tests {
             .create_organization(CreateOrganization {
                 additional_fields: Default::default(),
                 id: None,
-                name: "Existing".to_string(),
-                slug: "existing".to_string(),
-                logo: None,
-                metadata: None,
+                name: "Existing".to_string().into(),
+                slug: "existing".to_string().into(),
+                logo: None.into(),
+                metadata: None.into(),
             })
             .await
             .expect("organization should be created");
@@ -950,10 +997,10 @@ mod tests {
             .create_organization(CreateOrganization {
                 additional_fields: Default::default(),
                 id: None,
-                name: "Team".to_string(),
-                slug: "team".to_string(),
-                logo: None,
-                metadata: None,
+                name: "Team".to_string().into(),
+                slug: "team".to_string().into(),
+                logo: None.into(),
+                metadata: None.into(),
             })
             .await
             .expect("organization should be created");
@@ -962,7 +1009,7 @@ mod tests {
                 additional_fields: Default::default(),
                 organization_id: organization.id.clone(),
                 user_id: user.id.clone(),
-                role: config.creator_role.clone(),
+                role: config.creator_role.clone().into(),
             })
             .await
             .expect("owner member should be created");
@@ -973,7 +1020,7 @@ mod tests {
                 additional_fields: Default::default(),
                 organization_id: organization.id.clone(),
                 user_id: extra_user.id.clone(),
-                role: "member".to_string(),
+                role: "member".into(),
             })
             .await
             .expect("extra member should be created");

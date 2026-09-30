@@ -5,6 +5,89 @@ use better_auth_core::{
 };
 use serde_json::Value;
 
+pub(super) fn shape_session_teams(
+    value: &mut Box<serde_json::value::RawValue>,
+    enabled: bool,
+) -> better_auth_core::AuthResult<bool> {
+    use serde_json::value::{RawValue, to_raw_value};
+    use std::collections::{BTreeMap, btree_map::Entry};
+
+    // Other plugins can return JSON strings with unpaired UTF-16 surrogates.
+    // Inspect session structure without decoding unrelated string values.
+    match value.get().as_bytes().first() {
+        Some(b'[') => {
+            let mut sessions: Vec<Box<RawValue>> = serde_json::from_str(value.get())?;
+            let mut changed = false;
+            for session in &mut sessions {
+                changed |= shape_session_teams(session, enabled)?;
+            }
+            if changed {
+                *value = to_raw_value(&sessions)?;
+            }
+            Ok(changed)
+        }
+        Some(b'{') => {
+            let mut fields: BTreeMap<String, Box<RawValue>> = serde_json::from_str(value.get())?;
+            let mut changed = false;
+            if ["id", "token", "expiresAt", "userId"]
+                .iter()
+                .all(|key| fields.contains_key(*key))
+            {
+                if enabled {
+                    if let Entry::Vacant(entry) = fields.entry("activeTeamId".into()) {
+                        let _ = entry.insert(to_raw_value(&Value::Null)?);
+                        changed = true;
+                    }
+                } else {
+                    changed = fields.remove("activeTeamId").is_some();
+                }
+            } else {
+                for key in ["session", "sessions"] {
+                    if let Some(session) = fields.get_mut(key) {
+                        changed |= shape_session_teams(session, enabled)?;
+                    }
+                }
+            }
+            if changed {
+                *value = to_raw_value(&fields)?;
+            }
+            Ok(changed)
+        }
+        _ => Ok(false),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::value::RawValue;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn session_shaping_preserves_unpaired_surrogates_in_unrelated_fields() {
+        let mut value = RawValue::from_string(
+            r#"{"session":{"id":"s","token":"t","expiresAt":"date","userId":"u","label":"\ud83d"},"other":"\udc00"}"#.into(),
+        )
+        .unwrap();
+        assert!(shape_session_teams(&mut value, true).unwrap());
+        let fields: BTreeMap<String, Box<RawValue>> = serde_json::from_str(value.get()).unwrap();
+        assert_eq!(fields["other"].get(), r#""\udc00""#);
+        let session: BTreeMap<String, Box<RawValue>> =
+            serde_json::from_str(fields["session"].get()).unwrap();
+        assert_eq!(session["label"].get(), r#""\ud83d""#);
+        assert_eq!(session["activeTeamId"].get(), "null");
+
+        assert!(shape_session_teams(&mut value, false).unwrap());
+        assert!(!value.get().contains("activeTeamId"));
+        assert!(!shape_session_teams(&mut value, false).unwrap());
+
+        let raw = r#"{"start":"\ud83d"}"#;
+        let mut value = RawValue::from_string(raw.into()).unwrap();
+        assert!(!shape_session_teams(&mut value, true).unwrap());
+        assert_eq!(value.get(), raw);
+    }
+}
+
 pub(super) fn parse_input<T: serde::Serialize>(
     schema: &better_auth_core::user_fields::UserConfig,
     body: &T,
@@ -40,11 +123,12 @@ pub(super) fn created_organization(
     ctx: &AuthContext<impl AuthSchema>,
 ) -> OrganizationResponse {
     let mut response = self::organization(organization, ctx);
-    response.metadata = organization.metadata().cloned();
+    response.metadata = organization.metadata().clone();
     response
 }
 
 pub(super) fn team(mut team: Team, ctx: &AuthContext<impl AuthSchema>) -> Team {
+    let _ = team.additional_fields.remove("memberCount");
     if let Some(fields) = ctx.extensions.get::<OrganizationFields>() {
         fields
             .team
@@ -88,7 +172,22 @@ pub(super) fn filter_response(path: &str, value: &mut Value, fields: &Organizati
         | "/organization/update-team"
         | "/organization/list-teams"
         | "/organization/list-user-teams"
-        | "/organization/set-active-team" => filter(value, &fields.team),
+        | "/organization/set-active-team" => {
+            match value {
+                Value::Object(team) => {
+                    let _ = team.remove("memberCount");
+                }
+                Value::Array(teams) => {
+                    for team in teams {
+                        if let Some(team) = team.as_object_mut() {
+                            let _ = team.remove("memberCount");
+                        }
+                    }
+                }
+                _ => {}
+            }
+            filter(value, &fields.team);
+        }
         _ => {}
     }
 }

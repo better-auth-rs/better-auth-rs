@@ -8,6 +8,10 @@ use syn::{
 #[path = "organization_model.rs"]
 mod organization_model;
 use organization_model::generate as gen_organization_model;
+#[path = "plugin_model.rs"]
+mod plugin_model;
+#[path = "runtime_hydration.rs"]
+mod runtime_hydration;
 
 fn serde_serialized_name(attrs: &[Attribute], key: &str) -> syn::Result<Option<String>> {
     for attr in attrs.iter().filter(|attr| attr.path().is_ident("serde")) {
@@ -134,7 +138,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
         .collect();
 
     let ident = &input.ident;
-    let extra_updates = (|| -> syn::Result<Vec<TokenStream>> {
+    let extra_updates = (|| -> syn::Result<(Vec<TokenStream>, Vec<TokenStream>)> {
         let rule = serde_serialized_name(&input.attrs, "rename_all")?
             .map(|rule| {
                 serde_rename_rule::RenameRule::from_rename_all_str(&rule)
@@ -142,6 +146,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             })
             .transpose()?;
         let mut updates = Vec::new();
+        let mut json_columns = Vec::new();
         for field in &fields.named {
             let Some(ident) = &field.ident else {
                 continue;
@@ -160,12 +165,28 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                     #core_root::serde_json::from_value(value)?,
                 ),
             });
+            let column = format_ident!(
+                "{}",
+                serde_rename_rule::RenameRule::PascalCase.apply_to_field(&ident.to_string())
+            );
+            json_columns.push(quote! {
+                #name => matches!(#seaorm_root::sea_orm::ColumnTrait::def(&Column::#column).get_column_type(), #seaorm_root::sea_orm::ColumnType::Json | #seaorm_root::sea_orm::ColumnType::JsonBinary),
+            });
         }
-        Ok(updates)
+        Ok((updates, json_columns))
     })();
-    let extra_updates = match extra_updates {
+    let (extra_updates, json_columns) = match extra_updates {
         Ok(updates) => updates,
         Err(error) => return error.to_compile_error(),
+    };
+
+    let hydration = if matches!(role, EntityRole::Session | EntityRole::Verification) {
+        match runtime_hydration::generate(input, fields, &all_known, &core_root) {
+            Ok(methods) => methods,
+            Err(error) => return error.to_compile_error(),
+        }
+    } else {
+        TokenStream::new()
     };
 
     match role {
@@ -174,20 +195,31 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             &has,
             &extra_not_set,
             &extra_updates,
+            &json_columns,
             &seaorm_root,
             &core_root,
         ),
         EntityRole::Session => gen_session(
             ident,
+            &hydration,
             &has,
             &extra_not_set,
             &extra_updates,
-            &seaorm_root,
-            &core_root,
+            &json_columns,
+            (&seaorm_root, &core_root),
         ),
         EntityRole::Account => gen_account(ident, &extra_not_set, &seaorm_root, &core_root),
         EntityRole::Verification => {
-            gen_verification(ident, &extra_not_set, &seaorm_root, &core_root)
+            gen_verification(ident, &hydration, &extra_not_set, &seaorm_root, &core_root)
+        }
+        role @ (EntityRole::ApiKey
+        | EntityRole::DeviceCode
+        | EntityRole::Passkey
+        | EntityRole::TwoFactor
+        | EntityRole::Jwk
+        | EntityRole::WalletAddress) => {
+            plugin_model::generate(input, fields, role, &seaorm_root, &core_root)
+                .unwrap_or_else(syn::Error::into_compile_error)
         }
         role => gen_organization_model(input, fields, role, &seaorm_root, &core_root)
             .unwrap_or_else(|error| error.to_compile_error()),
@@ -199,6 +231,7 @@ fn gen_user(
     has: &dyn Fn(&str) -> bool,
     extras: &[TokenStream],
     extra_updates: &[TokenStream],
+    json_columns: &[TokenStream],
     seaorm_root: &TokenStream,
     core_root: &TokenStream,
 ) -> TokenStream {
@@ -307,6 +340,9 @@ fn gen_user(
         }
 
         impl #seaorm_root::SeaOrmUserModel for #ident {
+            fn native_json_field(name: &str) -> bool {
+                match name { #(#json_columns)* _ => false }
+            }
             fn apply_fields(active: &mut Self::ActiveModel, fields: #core_root::serde_json::Map<::std::string::String, #core_root::serde_json::Value>) -> #core_root::AuthResult<()> {
                 for (name, value) in fields {
                     match name.as_str() {
@@ -498,11 +534,12 @@ fn plugin_update_fields_user(
 
 fn gen_session(
     ident: &Ident,
+    hydration: &TokenStream,
     has: &dyn Fn(&str) -> bool,
     extras: &[TokenStream],
     extra_updates: &[TokenStream],
-    seaorm_root: &TokenStream,
-    core_root: &TokenStream,
+    json_columns: &[TokenStream],
+    (seaorm_root, core_root): (&TokenStream, &TokenStream),
 ) -> TokenStream {
     let plugin_fields: Vec<_> = registry::plugin_field_names(EntityRole::Session)
         .into_iter()
@@ -578,6 +615,7 @@ fn gen_session(
 
     quote! {
         impl #core_root::entity::AuthSession for #ident {
+            #hydration
             const PLUGIN_FIELDS: &'static [&'static str] = &[#(#plugin_fields),*];
             fn id(&self) -> ::std::borrow::Cow<'_, str> { ::std::borrow::Cow::Borrowed(&self.id) }
             fn expires_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.expires_at }
@@ -594,6 +632,9 @@ fn gen_session(
         }
 
         impl #seaorm_root::SeaOrmSessionModel for #ident {
+            fn native_json_field(name: &str) -> bool {
+                match name { #(#json_columns)* _ => false }
+            }
             type Id = ::std::string::String;
             type UserId = ::std::string::String;
             type Entity = Entity;
@@ -773,6 +814,7 @@ fn gen_account(
 
 fn gen_verification(
     ident: &Ident,
+    hydration: &TokenStream,
     extras: &[TokenStream],
     seaorm_root: &TokenStream,
     core_root: &TokenStream,
@@ -780,6 +822,7 @@ fn gen_verification(
     // Verification has no plugin-optional fields.
     quote! {
         impl #core_root::entity::AuthVerification for #ident {
+            #hydration
             fn id(&self) -> ::std::borrow::Cow<'_, str> { ::std::borrow::Cow::Borrowed(&self.id) }
             fn identifier(&self) -> &str { &self.identifier }
             fn value(&self) -> &str { &self.value }
@@ -839,6 +882,12 @@ fn parse_role(input: &DeriveInput) -> Result<EntityRole, syn::Error> {
                     "session" => EntityRole::Session,
                     "account" => EntityRole::Account,
                     "verification" => EntityRole::Verification,
+                    "api_key" => EntityRole::ApiKey,
+                    "device_code" => EntityRole::DeviceCode,
+                    "passkey" => EntityRole::Passkey,
+                    "two_factor" => EntityRole::TwoFactor,
+                    "jwk" => EntityRole::Jwk,
+                    "wallet_address" => EntityRole::WalletAddress,
                     "organization" => EntityRole::Organization,
                     "member" => EntityRole::Member,
                     "invitation" => EntityRole::Invitation,

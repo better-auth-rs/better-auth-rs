@@ -1,0 +1,61 @@
+---
+title: Secondary Storage
+description: Session, verification, and API key persistence with an application cache.
+---
+
+Install a shared backend with `BetterAuth::secondary_storage`. `MemoryCacheAdapter` and the optional `RedisAdapter` implement `SecondaryStorage`. The same backend also serves API key configurations that select secondary storage.
+
+```rust
+use std::sync::Arc;
+use better_auth::store::MemoryCacheAdapter;
+
+config.session.store_session_in_database = true;
+config.verification.store_in_database = true;
+
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
+    .secondary_storage(Arc::new(MemoryCacheAdapter::new()))
+    .build()
+    .await?;
+```
+
+`SecondaryStorage::set` accepts an optional TTL in seconds. An absent TTL means no expiry. Implement `get_and_delete` as one atomic operation; a separate read and delete permits replay of verification tokens. Redis uses `GETDEL`. Backend errors propagate. Invalid cached JSON follows the upstream cache-miss rules described below.
+
+### Sessions
+
+With a secondary backend, sessions use the cache by default. Set `session.store_session_in_database` to retain database rows. A missing cache entry falls back to the database only when this setting is enabled and `preserve_session_in_database` is disabled. Malformed cached session JSON returns no session even when database fallback is enabled.
+
+Each session token stores a session and user snapshot. `active-sessions-<userId>` stores the token list and expiration times. Listing sessions reads this index and the cached records. Updating a user through the authentication store refreshes cached user snapshots. A direct database update does not refresh the cache.
+
+Set `session.preserve_session_in_database` with database session storage to retain ended rows. Revocation removes the cache entry and expires the database row without changing `updatedAt`. Database fallback remains disabled, so a retained row cannot restore a revoked session. Repeated revocation does not repeat delete hooks.
+
+Session creation runs database create hooks in both storage modes. Pure-cache creation requires runtime hydration for the application's session model. `AuthEntity` supplies hydration without requiring the application's user model to implement `Deserialize`. Handwritten session and verification models must implement their `from_runtime_fields` method and declare hydration support. Initialization rejects unsupported models. Custom stores must implement `verify_user_with_cleanup` and invoke `VerificationSessionCleanup::revoke` only for the unverified user while holding the verification lock. The callback must complete before committing verified ownership. A cache deletion failure rolls back the database transaction so a later proof can finish cleanup. Partial cache deletions remain revoked. After hooks run after commit and propagate their original errors; session revocation has already completed. A concurrent late proof retains sessions created after successful verification.
+
+A database transaction queues session cache writes until commit. Rollback creates no cached session. If a cache write fails after commit, the error propagates unless database session fallback is enabled. That fallback mode logs the mirror failure and retains the committed database session, matching upstream.
+
+### Verification values
+
+With a secondary backend, verification values use the cache by default. Set `verification.store_in_database` to keep database rows authoritative for atomic consumption. Pure-cache consumption uses `get_and_delete`; concurrent consumers can redeem a token only once. Database consumption atomically removes the latest row and invalidates older rows with the same identifier, then removes the cached representation. Expired values are consumed but cannot authorize an operation.
+
+Lookup can fall back from malformed or missing cached verification JSON to a database record when database storage is enabled. A database lookup also removes expired verification rows unless `verification.disable_cleanup` is enabled. This cleanup runs delete hooks. Reserving a verification value requires database storage because reservation uses a deterministic primary key for first-writer-wins insertion.
+
+Pure-cache storage supports lookup, update, deletion, and consumption by identifier. Database-only operations that search by value or delete by an unknown row ID return an explicit configuration error. Authentication flows use identifier-based operations.
+
+### Identifier storage
+
+Identifier policies apply with or without secondary storage:
+
+```rust
+use better_auth::config::{
+    VerificationIdentifierConfig, VerificationIdentifierStorage,
+};
+
+config.verification.store_identifier = VerificationIdentifierConfig {
+    default: VerificationIdentifierStorage::Hashed,
+    overrides: vec![("public:".into(), VerificationIdentifierStorage::Plain)],
+};
+```
+
+`Hashed` stores an unpadded URL-safe SHA-256 digest. `Custom` accepts an asynchronous `VerificationIdentifierHasher`. Ordered prefix overrides use the first matching prefix. Hash errors abort the operation.
+
+Reads and atomic consumption try the transformed identifier before the original plaintext identifier to support migration. Updates and ordinary deletion affect only the transformed identifier. Pure-cache consumption removes both cached representations. Database consumption deletes rows for the representation it consumed; a separate legacy plaintext database row remains until consumed or removed. These boundaries match Better Auth 1.7.6.

@@ -11,7 +11,8 @@ pub struct Model {
     pub logo: Option<String>,
     pub metadata: Option<Json>,
     pub created_at: DateTimeUtc,
-    pub updated_at: DateTimeUtc,
+    #[sea_orm(column_name = "updated_at")]
+    pub auth_updated_at: DateTimeUtc,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

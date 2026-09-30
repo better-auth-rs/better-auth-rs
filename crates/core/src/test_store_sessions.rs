@@ -2,13 +2,30 @@ use super::*;
 use better_auth_schema_registry::EntityRole;
 use serde_json::{Map, json};
 
+impl MemoryStore {
+    fn output_session(&self, mut session: SessionView) -> AuthResult<SessionView> {
+        let mut output = Map::new();
+        for (name, field) in &self.session_config.additional_fields {
+            let value = session
+                .additional_fields
+                .get(field.field_name.as_ref().unwrap_or(name))
+                .cloned();
+            if let Some(value) = field.adapter_output(value, true)? {
+                let _ = output.insert(name.clone(), value);
+            }
+        }
+        session.additional_fields = output;
+        Ok(session)
+    }
+}
+
 #[async_trait]
 impl SessionStore<BundledSchema> for MemoryStore {
     async fn accept_invitation_with_teams(
         &self,
         invitation_id: &str,
         user_id: &str,
-        session_token: &str,
+        session_token: Option<&str>,
         teams_enabled: bool,
         maximum: crate::store::TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
@@ -36,6 +53,7 @@ impl SessionStore<BundledSchema> for MemoryStore {
             let mut limits = std::collections::HashMap::new();
             for team_id in invitation_snapshot
                 .team_id
+                .typed()?
                 .as_deref()
                 .filter(|_| teams_enabled)
                 .unwrap_or("")
@@ -80,13 +98,14 @@ impl SessionStore<BundledSchema> for MemoryStore {
                 .ok_or_else(|| AuthError::bad_request("Invitation not found"))?;
             let team_ids: Vec<_> = invitation
                 .team_id
+                .typed()?
                 .as_deref()
                 .filter(|_| teams_enabled)
                 .unwrap_or("")
                 .split(',')
                 .filter(|id| !id.is_empty())
                 .collect();
-            if !state.sessions.contains_key(session_token) {
+            if session_token.is_some_and(|token| !state.sessions.contains_key(token)) {
                 return Err(AuthError::SessionNotFound);
             }
             if state.members.values().any(|member| {
@@ -94,6 +113,7 @@ impl SessionStore<BundledSchema> for MemoryStore {
             }) {
                 return Err(AuthError::bad_request("User is already a member"));
             }
+            let mut reserved_teams = HashMap::new();
             for team_id in &team_ids {
                 if !state
                     .teams
@@ -106,25 +126,32 @@ impl SessionStore<BundledSchema> for MemoryStore {
                     .team_members
                     .iter()
                     .any(|member| member.team_id == *team_id && member.user_id == user_id)
-                    && limits[*team_id].is_some_and(|limit| {
-                        state
-                            .team_members
-                            .iter()
-                            .filter(|member| member.team_id == *team_id)
-                            .count()
-                            >= limit
-                    })
+                    && !reserved_teams.contains_key(*team_id)
                 {
-                    return Err(AuthError::forbidden("Team member limit reached"));
+                    let actual = state
+                        .team_members
+                        .iter()
+                        .filter(|member| member.team_id == *team_id)
+                        .count();
+                    let (team, reserved) = self.reserve_team_seat(
+                        state.teams.get(*team_id).unwrap().clone(),
+                        actual,
+                        limits[*team_id],
+                    )?;
+                    if !reserved {
+                        return Err(AuthError::forbidden("Team member limit reached"));
+                    }
+                    reserved_teams.insert((*team_id).to_owned(), team);
                 }
             }
+            let organization_id = invitation.organization_id.typed()?.clone();
             let member = Member {
                 additional_fields: Default::default(),
                 id: uuid::Uuid::new_v4().to_string(),
-                organization_id: invitation.organization_id.clone(),
-                user_id: user_id.to_owned(),
-                role: invitation.role,
-                created_at: Utc::now(),
+                organization_id: (invitation.organization_id.clone()).into(),
+                user_id: (user_id.to_owned()).into(),
+                role: (invitation.role).into(),
+                created_at: (Utc::now()).into(),
             };
             let member: Member = self.store_record(EntityRole::Member, member, None, Map::new())?;
             let member_output = self.output_member(member.clone())?;
@@ -142,7 +169,11 @@ impl SessionStore<BundledSchema> for MemoryStore {
                     });
                 }
             }
+            state.teams.extend(reserved_teams);
             state.members.insert(member.id.clone(), member.clone());
+            let Some(session_token) = session_token else {
+                return Ok((member_output, None));
+            };
             let session = state.sessions.get_mut(session_token).unwrap();
             let cookie_session = if let [team_id] = team_ids.as_slice() {
                 session.active_team_id = Some((*team_id).to_owned());
@@ -151,7 +182,7 @@ impl SessionStore<BundledSchema> for MemoryStore {
             } else {
                 None
             };
-            session.active_organization_id = Some(invitation.organization_id);
+            session.active_organization_id = Some(organization_id);
             session.updated_at = Utc::now();
             Ok((member_output, cookie_session))
         }
@@ -206,14 +237,22 @@ impl SessionStore<BundledSchema> for MemoryStore {
             active_organization_id: create_session.active_organization_id,
             active_team_id: None,
             active: true,
-            additional_fields: Default::default(),
+            additional_fields: self
+                .session_config
+                .field_schema()
+                .storage_fields(self.session_config.default_fields(), true)?,
         };
         self.lock().sessions.insert(token, session.clone());
-        Ok(session)
+        self.output_session(session)
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<SessionView>> {
-        Ok(self.lock().sessions.get(token).cloned())
+        self.lock()
+            .sessions
+            .get(token)
+            .cloned()
+            .map(|session| self.output_session(session))
+            .transpose()
     }
 
     async fn update_session_fields(
@@ -225,30 +264,39 @@ impl SessionStore<BundledSchema> for MemoryStore {
         let Some(session) = data.sessions.get_mut(token) else {
             return Ok(None);
         };
-        session.additional_fields.extend(fields);
+        session.additional_fields.extend(
+            self.session_config
+                .field_schema()
+                .storage_fields(fields, false)?,
+        );
         session.updated_at = Utc::now();
-        Ok(Some(session.clone()))
+        self.output_session(session.clone()).map(Some)
     }
 
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<SessionView>> {
-        Ok(self
-            .lock()
+        self.lock()
             .sessions
             .values()
             .filter(|session| session.user_id == user_id)
             .cloned()
-            .collect())
+            .map(|session| self.output_session(session))
+            .collect()
     }
 
     async fn update_session_expiry(
         &self,
         token: &str,
         expires_at: DateTime<Utc>,
-    ) -> AuthResult<()> {
+    ) -> AuthResult<SessionView> {
         if let Some(session) = self.lock().sessions.get_mut(token) {
             session.expires_at = expires_at;
             session.updated_at = Utc::now();
-            Ok(())
+            session.additional_fields.extend(
+                self.session_config
+                    .field_schema()
+                    .storage_fields(Default::default(), false)?,
+            );
+            self.output_session(session.clone())
         } else {
             Err(AuthError::SessionNotFound)
         }
@@ -288,7 +336,12 @@ impl SessionStore<BundledSchema> for MemoryStore {
             .ok_or(AuthError::SessionNotFound)?;
         session.active_organization_id = organization_id.map(str::to_owned);
         session.updated_at = Utc::now();
-        Ok(session.clone())
+        session.additional_fields.extend(
+            self.session_config
+                .field_schema()
+                .storage_fields(Default::default(), false)?,
+        );
+        self.output_session(session.clone())
     }
     async fn update_session_active_team(
         &self,
@@ -302,7 +355,12 @@ impl SessionStore<BundledSchema> for MemoryStore {
             .ok_or(AuthError::SessionNotFound)?;
         session.active_team_id = team_id.map(str::to_owned);
         session.updated_at = Utc::now();
-        Ok(session.clone())
+        session.additional_fields.extend(
+            self.session_config
+                .field_schema()
+                .storage_fields(Default::default(), false)?,
+        );
+        self.output_session(session.clone())
     }
 }
 
@@ -383,7 +441,7 @@ async fn invitation_fields_update_atomically_with_team_membership() {
             .accept_invitation_with_teams(
                 &invitation.id,
                 "member",
-                &session.token,
+                Some(&session.token),
                 true,
                 TeamMemberLimits::Fixed(None)
             )
@@ -411,7 +469,7 @@ async fn invitation_fields_update_atomically_with_team_membership() {
         .accept_invitation_with_teams(
             &invitation.id,
             "member",
-            &session.token,
+            Some(&session.token),
             true,
             TeamMemberLimits::Fixed(None),
         )

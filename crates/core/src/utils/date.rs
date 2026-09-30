@@ -18,6 +18,28 @@ pub fn serialize_option<S: Serializer>(
         .serialize(serializer)
 }
 
+/// Normalize overflowing calendar components without JavaScript's special handling of years 0–99.
+/// `month` is zero-based; `milliseconds` is the offset from midnight on the selected day.
+pub fn normalize_components(
+    year: i64,
+    month: i64,
+    day: i64,
+    milliseconds: i64,
+) -> Option<DateTime<Utc>> {
+    let year = year.checked_add(month.div_euclid(12))?;
+    let month = month.rem_euclid(12) + 1;
+    let start =
+        chrono::NaiveDate::from_ymd_opt(i32::try_from(year).ok()?, u32::try_from(month).ok()?, 1)?
+            .and_hms_opt(0, 0, 0)?;
+    let milliseconds = day
+        .checked_sub(1)?
+        .checked_mul(86_400_000)?
+        .checked_add(milliseconds)?;
+    start
+        .checked_add_signed(chrono::Duration::try_milliseconds(milliseconds)?)
+        .map(|date| date.and_utc())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

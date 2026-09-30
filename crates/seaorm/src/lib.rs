@@ -8,6 +8,8 @@ mod entity;
 mod error;
 pub mod hooks;
 pub mod organization_schema;
+pub mod plugin_schema;
+pub use plugin_schema::{PluginModels, SeaOrmPluginModel, SeaOrmPluginSchema};
 pub mod schema;
 pub use organization_schema::{
     OrganizationModels, SeaOrmOrganizationModel, SeaOrmOrganizationSchema,
@@ -30,3 +32,6 @@ pub use store::SeaOrmStore;
 pub use better_auth_core as __private_core;
 #[doc(hidden)]
 pub use sea_orm as __private_seaorm;
+
+#[doc(hidden)]
+pub use chrono as __private_chrono;

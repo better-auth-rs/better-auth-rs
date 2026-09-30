@@ -416,14 +416,12 @@ impl AdminPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let session_manager = ctx.session_manager();
-        let token = session_manager
-            .extract_session_token(req)
-            .ok_or(AuthError::Unauthenticated)?;
         let session = session_manager
-            .get_session(&token)
+            .resolve(req, better_auth_core::session::SessionRead::Authoritative)
             .await?
-            .ok_or(AuthError::Unauthenticated)?;
-        let session = SessionView::with_fields(&session, &ctx.config.session)?;
+            .data
+            .ok_or(AuthError::Unauthenticated)?
+            .session;
         if session.impersonated_by.is_none() {
             return Err(AuthError::bad_request("You are not impersonating anyone"));
         }

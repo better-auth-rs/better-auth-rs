@@ -16,7 +16,30 @@ use crate::plugins::organization::{OrganizationConfig, rbac::check_permission};
 type Permissions = HashMap<String, Vec<String>>;
 
 // Preserve request order because upstream returns missingPermissions in that order.
-struct RequestedPermissions(Vec<(String, Vec<String>)>);
+struct RequestedPermissions(Vec<(String, serde_json::Value)>);
+
+impl RequestedPermissions {
+    fn dynamic(value: &serde_json::Value) -> Self {
+        use serde_json::Value;
+        Self(match value {
+            Value::Object(fields) => fields
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+            Value::Array(values) => values
+                .iter()
+                .enumerate()
+                .map(|(index, value)| (index.to_string(), value.clone()))
+                .collect(),
+            Value::String(value) => value
+                .chars()
+                .enumerate()
+                .map(|(index, value)| (index.to_string(), json!(value.to_string())))
+                .collect(),
+            _ => Vec::new(),
+        })
+    }
+}
 
 impl<'de> Deserialize<'de> for RequestedPermissions {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
@@ -31,8 +54,8 @@ impl<'de> Deserialize<'de> for RequestedPermissions {
                 mut map: M,
             ) -> Result<Self::Value, M::Error> {
                 let mut permissions = Vec::new();
-                while let Some(entry) = map.next_entry()? {
-                    permissions.push(entry);
+                while let Some((key, actions)) = map.next_entry::<String, Vec<String>>()? {
+                    permissions.push((key, json!(actions)));
                 }
                 Ok(RequestedPermissions(permissions))
             }
@@ -75,8 +98,6 @@ struct UpdateRole {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RoleUpdate {
-    #[serde(flatten)]
-    additional_fields: serde_json::Map<String, serde_json::Value>,
     #[serde(default)]
     role_name: OptionalField<String>,
     #[serde(default)]
@@ -235,7 +256,7 @@ async fn authorize_member(
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
     let permission = if action == "list" { "read" } else { action };
     if !check_permission(
-        &member.role,
+        member.role.typed()?,
         organization_id,
         "ac",
         &[permission],
@@ -246,7 +267,7 @@ async fn authorize_member(
     {
         return Err(role_error(action));
     }
-    Ok((organization_id.to_owned(), member.role))
+    Ok((organization_id.to_owned(), member.role.typed()?.clone()))
 }
 
 async fn select_role(
@@ -299,17 +320,36 @@ async fn validate_permissions(
     }
     let mut missing = Vec::new();
     for (resource, actions) in &permission.0 {
+        let actions = match actions {
+            serde_json::Value::Array(actions) => actions.clone(),
+            serde_json::Value::String(actions) => actions
+                .chars()
+                .map(|value| json!(value.to_string()))
+                .collect(),
+            _ => {
+                return Err(AuthError::internal(
+                    "Role permission actions are not iterable",
+                ));
+            }
+        };
         for requested in actions {
-            if !check_permission(
-                member_role,
-                organization_id,
-                resource,
-                &[requested],
-                config,
-                ctx,
-            )
-            .await?
-            {
+            let allowed = if let Some(requested) = requested.as_str() {
+                check_permission(
+                    member_role,
+                    organization_id,
+                    resource,
+                    &[requested],
+                    config,
+                    ctx,
+                )
+                .await?
+            } else {
+                false
+            };
+            if !allowed {
+                let requested =
+                    better_auth_core::SchemaValue::<serde_json::Value>::Dynamic(requested)
+                        .display_string()?;
                 missing.push(format!("{resource}:{requested}"));
             }
         }
@@ -402,7 +442,7 @@ pub async fn handle_role_request(
             }
             unused_name(&name, &organization_id, config, ctx).await?;
             let permission = serde_json::to_value(body.permission)?;
-            let role = ctx
+            let mut role = ctx
                 .database
                 .create_organization_role(CreateOrganizationRole {
                     additional_fields,
@@ -411,6 +451,7 @@ pub async fn handle_role_request(
                     permission: permission.clone(),
                 })
                 .await?;
+            role.permission = permission.clone().into();
             AuthResponse::json(
                 200,
                 &json!({"success":true,"roleData":role,"statements":permission}),
@@ -437,14 +478,22 @@ pub async fn handle_role_request(
             )
             .await?;
             if action == "list" {
-                AuthResponse::json(
-                    200,
-                    &ctx.database
-                        .list_organization_roles(&organization_id)
-                        .await?,
-                )?
+                let roles = ctx
+                    .database
+                    .list_organization_roles(&organization_id)
+                    .await?
+                    .into_iter()
+                    .map(|mut role| {
+                        role.permission =
+                            super::super::native_json::permission(&role.permission)?.into();
+                        Ok(role)
+                    })
+                    .collect::<AuthResult<Vec<_>>>()?;
+                AuthResponse::json(200, &roles)?
             } else {
-                AuthResponse::json(200, &select_role(&selector, &organization_id, ctx).await?)?
+                let mut role = select_role(&selector, &organization_id, ctx).await?;
+                role.permission = super::super::native_json::permission(&role.permission)?.into();
+                AuthResponse::json(200, &role)?
             }
         }
         (HttpMethod::Post, "/organization/delete-role") => {
@@ -475,12 +524,16 @@ pub async fn handle_role_request(
                 });
             }
             let role = select_role(&selector, &organization_id, ctx).await?;
+            let _ = super::super::native_json::permission(&role.permission)?;
             if ctx
                 .database
                 .list_organization_members(&organization_id)
                 .await?
                 .iter()
-                .any(|member| member.role.split(',').any(|name| name.trim() == role.role))
+                .map(|member| member.role.typed())
+                .collect::<AuthResult<Vec<_>>>()?
+                .iter()
+                .any(|member_role| member_role.split(',').any(|name| role.role == name.trim()))
             {
                 return Err(AuthError::Upstream {
                     status: 400,
@@ -492,7 +545,28 @@ pub async fn handle_role_request(
             AuthResponse::json(200, &json!({"success":true}))?
         }
         (HttpMethod::Post, "/organization/update-role") => {
-            let body: UpdateRole = match better_auth_core::validate_request_body(req) {
+            let mut schema = config.schema.organization_role.clone();
+            for field in schema.additional_fields.values_mut() {
+                field.required = Some(false);
+            }
+            let raw: serde_json::Value =
+                serde_json::from_slice(req.body.as_deref().unwrap_or(b"null"))?;
+            let mut parsed_request = req.clone();
+            let overrides_permission = schema
+                .additional_fields
+                .get("permission")
+                .is_some_and(|field| field.input);
+            if overrides_permission {
+                let mut input = raw.clone();
+                if let Some(data) = input
+                    .get_mut("data")
+                    .and_then(serde_json::Value::as_object_mut)
+                {
+                    let _ = data.remove("permission");
+                }
+                parsed_request.body = Some(serde_json::to_vec(&input)?);
+            }
+            let body: UpdateRole = match better_auth_core::validate_request_body(&parsed_request) {
                 Ok(body) => body,
                 Err(response) => return Ok(Some(response)),
             };
@@ -509,6 +583,23 @@ pub async fn handle_role_request(
                     "[body.data.roleName] Invalid input: expected string, received null",
                 );
             }
+            let raw_data = raw
+                .get("data")
+                .and_then(serde_json::Value::as_object)
+                .ok_or_else(|| AuthError::bad_request("Expected role update data"))?;
+            let mut fields = schema.parse_organization_input(raw_data, "body.data", true)?;
+            let requested = body.data.permission.into_option();
+            let permission = if overrides_permission {
+                fields.remove("permission")
+            } else {
+                requested.as_ref().map(serde_json::to_value).transpose()?
+            }
+            .filter(better_auth_core::user_fields::is_truthy);
+            let requested = requested.unwrap_or_else(|| {
+                RequestedPermissions::dynamic(
+                    permission.as_ref().unwrap_or(&serde_json::Value::Null),
+                )
+            });
             let _ = require_ac(config)?;
             let (organization_id, member_role) = authorize_member(
                 req,
@@ -518,10 +609,20 @@ pub async fn handle_role_request(
                 ctx,
             )
             .await?;
-            let role = select_role(&body.selector, &organization_id, ctx).await?;
-            if let OptionalField::Value(permission) = &body.data.permission
+            let mut role = select_role(&body.selector, &organization_id, ctx).await?;
+            role.permission = if role
+                .permission
+                .json()?
+                .as_ref()
+                .is_some_and(better_auth_core::user_fields::is_truthy)
+            {
+                super::super::native_json::permission(&role.permission)?.into()
+            } else {
+                better_auth_core::SchemaValue::Undefined
+            };
+            if permission.is_some()
                 && let Some(response) = validate_permissions(
-                    permission,
+                    &requested,
                     &member_role,
                     &organization_id,
                     "update",
@@ -541,18 +642,6 @@ pub async fn handle_role_request(
             if let Some(name) = &name {
                 unused_name(name, &organization_id, config, ctx).await?;
             }
-            let mut schema = config.schema.organization_role.clone();
-            for field in schema.additional_fields.values_mut() {
-                field.required = Some(false);
-            }
-            let fields =
-                schema.parse_organization_input(&body.data.additional_fields, "body.data", true)?;
-            let permission = body
-                .data
-                .permission
-                .into_option()
-                .map(serde_json::to_value)
-                .transpose()?;
             let _ = ctx
                 .database
                 .update_organization_role(
@@ -566,12 +655,37 @@ pub async fn handle_role_request(
                 .await?;
             // The endpoint merges raw input into the old snapshot; adapter transforms remain in storage.
             let mut updated = role;
+            if let Some(value) = fields
+                .remove("id")
+                .and_then(|value| value.as_str().map(str::to_owned))
+            {
+                updated.id = value;
+            }
+            if let Some(value) = fields.remove("organizationId") {
+                updated.organization_id = better_auth_core::SchemaValue::Dynamic(value);
+            }
+            if let Some(value) = fields.remove("role") {
+                updated.role = better_auth_core::SchemaValue::Dynamic(value);
+            }
+            if let Some(value) = fields.remove("createdAt") {
+                updated.created_at = better_auth_core::SchemaValue::Dynamic(value);
+            }
+            if let Some(value) = fields.remove("updatedAt") {
+                updated.updated_at = better_auth_core::SchemaValue::Dynamic(value);
+            }
             updated.additional_fields.extend(fields);
             if let Some(name) = name {
-                updated.role = name;
+                updated.role = name.into();
             }
             if let Some(permission) = permission {
-                updated.permission = permission;
+                updated.permission = permission.into();
+            } else if !updated
+                .permission
+                .json()?
+                .as_ref()
+                .is_some_and(better_auth_core::user_fields::is_truthy)
+            {
+                updated.permission = serde_json::Value::Null.into();
             }
             AuthResponse::json(200, &json!({"success":true,"roleData":updated}))?
         }
@@ -608,8 +722,8 @@ mod tests {
                 id: None,
                 name: "Roles".into(),
                 slug: "roles".into(),
-                logo: None,
-                metadata: None,
+                logo: None.into(),
+                metadata: None.into(),
             })
             .await
             .unwrap();

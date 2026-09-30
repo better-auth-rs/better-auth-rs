@@ -56,7 +56,9 @@ pub mod server_api;
 pub mod store;
 pub mod wire;
 
-pub use better_auth_core::{AuthConfig, AuthError, AuthResult, AuthSchema};
+pub use better_auth_core::{
+    ApiKeyStart, AuthConfig, AuthError, AuthResult, AuthSchema, SchemaValue,
+};
 pub use core::{AuthBuilder, BetterAuth};
 
 #[doc(hidden)]

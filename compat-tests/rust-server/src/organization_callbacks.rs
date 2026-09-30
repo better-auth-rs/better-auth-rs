@@ -250,7 +250,7 @@ impl OrganizationPolicy for OrganizationCallbacks {
         .await?;
         ctx.teams
             .create_team(CreateTeam {
-                name: format!("custom:{}", organization.name),
+                name: format!("custom:{}", organization.name.display_string()?).into(),
                 organization_id: organization.id.clone(),
                 ..Default::default()
             })
@@ -267,16 +267,20 @@ impl OrganizationHooks for OrganizationCallbacks {
         user: &UserView,
     ) -> AuthResult<()> {
         let mut organization = json!({"id":data.id,"name":data.name,"slug":data.slug});
-        put_optional(&mut organization, "metadata", data.metadata.as_ref());
+        put_optional(
+            &mut organization,
+            "metadata",
+            data.metadata.json()?.as_ref(),
+        );
         self.record(
             "beforeCreateOrganization",
             json!({"organization":organization,"user":user}),
             None,
         )
         .await?;
-        data.name = format!("hook:{}", data.name);
+        data.name = format!("hook:{}", data.name.display_string()?).into();
         if let Some(metadata) = self.state.lock().await.metadata_override.clone() {
-            data.metadata = Some(metadata);
+            data.metadata = Some(metadata).into();
         }
         Ok(())
     }
@@ -313,7 +317,7 @@ impl OrganizationHooks for OrganizationCallbacks {
             data.logo = Some(None);
         }
         if let Some(metadata) = self.state.lock().await.metadata_override.clone() {
-            data.metadata = Some(metadata);
+            data.metadata = Some(metadata).into();
         }
         Ok(())
     }
@@ -409,8 +413,8 @@ impl OrganizationHooks for OrganizationCallbacks {
         event: OrganizationUser<'_>,
     ) -> AuthResult<()> {
         let mut invitation = json!({"id":data.id,"organizationId":data.organization_id,"email":data.email,"role":data.role,"teamId":data.team_id,"status":data.status});
-        put_optional(&mut invitation, "createdAt", data.created_at);
-        put_optional(&mut invitation, "expiresAt", data.expires_at);
+        put_optional(&mut invitation, "createdAt", data.created_at.json()?);
+        put_optional(&mut invitation, "expiresAt", data.expires_at.json()?);
         self.record(
             "beforeCreateInvitation",
             json!({"invitation":invitation,"organization":event.organization,"user":event.user}),
@@ -486,7 +490,7 @@ impl OrganizationHooks for OrganizationCallbacks {
             None,
         )
         .await?;
-        data.name = format!("team:{}", data.name);
+        data.name = format!("team:{}", data.name.display_string()?).into();
         Ok(())
     }
     async fn after_create_team(&self, event: OrganizationTeamEvent<'_>) -> AuthResult<()> {
@@ -501,8 +505,8 @@ impl OrganizationHooks for OrganizationCallbacks {
         self.record("beforeUpdateTeam", team_event(event), None)
             .await?;
         if let Some(name) = &mut updates.name {
-            if !name.is_empty() {
-                *name = format!("updated:{name}");
+            if !name.display_string()?.is_empty() {
+                *name = format!("updated:{}", name.display_string()?).into();
             }
         }
         Ok(())

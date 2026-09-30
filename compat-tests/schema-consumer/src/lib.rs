@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
+    mod dynamic_fields;
     mod organization;
+    mod plugins;
 
     use std::sync::Arc;
 
@@ -70,7 +72,8 @@ mod tests {
             BetterAuth::<generated::AppAuthSchema>::new(config.clone())
                 .store(
                     SeaOrmStore::<generated::AppAuthSchema>::new(config, database.clone())
-                        .with_organization_schema::<generated::AppOrganizationSchema>(),
+                        .with_organization_schema::<generated::AppOrganizationSchema>()
+                        .with_plugin_schema::<generated::AppPluginSchema>(),
                 )
                 .plugin(EmailPasswordPlugin::new().enable_signup(true))
                 .plugin(SessionManagementPlugin::new())

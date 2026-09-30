@@ -1,6 +1,8 @@
 mod fields;
 pub mod handlers;
 pub mod hooks;
+mod input;
+mod native_json;
 mod policy;
 mod server_api;
 pub use better_auth_core::organization_fields::OrganizationFields;
@@ -265,7 +267,6 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         &self,
         ctx: &mut better_auth_core::AuthInitContext<S>,
     ) -> better_auth_core::AuthResult<()> {
-        self.config.schema.validate()?;
         ctx.database
             .configure_organization_fields(self.config.schema.clone())?;
         ctx.extensions.insert(self.config.schema.clone());
@@ -368,11 +369,14 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
             return Ok(());
         }
         let mut value = serde_json::from_slice(&response.body)?;
-        shape_session_teams(&mut value, self.config.teams.enabled);
-        if response.status < 400 {
+        let changed = fields::shape_session_teams(&mut value, self.config.teams.enabled)?;
+        if response.status < 400 && req.path().starts_with("/organization/") {
+            let mut value = serde_json::from_str(value.get())?;
             fields::filter_response(req.path(), &mut value, &self.config.schema);
+            response.body = serde_json::to_vec(&value)?;
+        } else if changed {
+            response.body = serde_json::to_vec(&value)?;
         }
-        response.body = serde_json::to_vec(&value)?;
         Ok(())
     }
 
@@ -479,38 +483,6 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
                 Ok(response)
             })
             .transpose()
-    }
-}
-
-fn shape_session_teams(value: &mut serde_json::Value, enabled: bool) {
-    match value {
-        serde_json::Value::Array(sessions) => {
-            for session in sessions {
-                shape_session_teams(session, enabled);
-            }
-        }
-        serde_json::Value::Object(fields) => {
-            if fields.contains_key("id")
-                && fields.contains_key("token")
-                && fields.contains_key("expiresAt")
-                && fields.contains_key("userId")
-            {
-                if enabled {
-                    let _ = fields
-                        .entry("activeTeamId")
-                        .or_insert(serde_json::Value::Null);
-                } else {
-                    let _ = fields.remove("activeTeamId");
-                }
-            } else {
-                for key in ["session", "sessions"] {
-                    if let Some(session) = fields.get_mut(key) {
-                        shape_session_teams(session, enabled);
-                    }
-                }
-            }
-        }
-        _ => {}
     }
 }
 

@@ -626,6 +626,7 @@ dependencies = [
  "better-auth-schema-registry",
  "clap",
  "heck 0.5.0",
+ "indexmap 2.14.2",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -649,6 +650,7 @@ dependencies = [
  "glob-match",
  "hkdf",
  "hmac",
+ "indexmap 2.14.2",
  "josekit",
  "jsonwebtoken",
  "percent-encoding",
@@ -3900,9 +3902,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.149"
+version = "1.0.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
+checksum = "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
 dependencies = [
  "indexmap 2.14.2",
  "itoa",

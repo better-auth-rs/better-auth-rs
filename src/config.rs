@@ -7,3 +7,8 @@ pub use better_auth_core::config::{
     SessionConfig, SessionFieldConfig, UserConfig, UserFieldConfig, UserFieldTransform,
     UserFieldType, UserFieldValidator, core_paths, extract_origin,
 };
+
+pub use better_auth_core::config::{
+    VerificationConfig, VerificationIdentifierConfig, VerificationIdentifierHasher,
+    VerificationIdentifierStorage,
+};

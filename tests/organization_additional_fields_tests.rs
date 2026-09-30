@@ -100,7 +100,7 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
         .accept_invitation_with_teams(
             &invitation.id,
             "recipient",
-            session.token(),
+            Some(session.token()),
             true,
             Some(1).into(),
         )
@@ -189,54 +189,39 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
 }
 
 #[tokio::test]
-async fn organization_field_configuration_rejects_incompatible_policies_and_missing_columns_at_startup()
+async fn organization_field_configuration_accepts_replacement_policies_and_rejects_invalid_mappings()
  {
     use better_auth::{
         BetterAuth, config::UserFieldConfig, plugins::organization::OrganizationPlugin,
     };
 
     for (entity, name, storage, expected) in [
-        (
-            "organization",
-            "metadata",
-            None,
-            "organization.metadata does not support",
-        ),
+        ("organization", "metadata", None, None),
         (
             "member",
             "user_id",
             None,
-            "must use the public field name userId",
+            Some("maps to a different typed field user_id"),
         ),
-        (
-            "invitation",
-            "expiresAt",
-            None,
-            "must preserve the built-in DateTimeUtc field type",
-        ),
+        ("invitation", "expiresAt", None, None),
         (
             "team",
             "organizationId",
             Some("name"),
-            "maps to a different typed field name",
+            Some("maps to a different typed field name"),
         ),
-        (
-            "organizationRole",
-            "permission",
-            None,
-            "organizationRole.permission does not support",
-        ),
+        ("organizationRole", "permission", None, None),
         (
             "organization",
             "label",
             Some("name"),
-            "maps to a different typed field name",
+            Some("maps to a different typed field name"),
         ),
         (
             "organization",
             "label",
             Some("unmappedLabel"),
-            "Unknown organization model column: unmappedLabel",
+            Some("Unknown organization model column: unmappedLabel"),
         ),
     ] {
         let db = Database::connect("sqlite::memory:").await.unwrap();
@@ -260,16 +245,24 @@ async fn organization_field_configuration_rejects_incompatible_policies_and_miss
                 ..Default::default()
             },
         );
-        let error = BetterAuth::<BundledSchema>::new(config)
+        let result = BetterAuth::<BundledSchema>::new(config)
             .store(store)
             .plugin(OrganizationPlugin::with_config(options))
             .build()
-            .await
-            .err()
-            .expect("invalid field configuration must fail before handling requests");
-        assert!(
-            error.to_string().contains(expected),
-            "{entity}.{name}: {error}"
-        );
+            .await;
+        if let Some(expected) = expected {
+            let error = result
+                .err()
+                .expect("invalid field configuration must fail before handling requests");
+            assert!(
+                error.to_string().contains(expected),
+                "{entity}.{name}: {error}"
+            );
+        } else {
+            assert!(
+                result.is_ok(),
+                "replacement policy must initialize: {entity}.{name}"
+            );
+        }
     }
 }

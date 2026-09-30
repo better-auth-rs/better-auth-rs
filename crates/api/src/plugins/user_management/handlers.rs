@@ -217,7 +217,9 @@ pub(crate) async fn delete_user_callback_core(
         }
 
         perform_user_deletion(current_user, config, ctx).await?;
-        ctx.database.delete_verification(&verification.id()).await?;
+        ctx.database
+            .delete_verification_by_identifier(&format!("delete-account-{token}"))
+            .await?;
 
         return Ok(SuccessMessageResponse {
             success: true,

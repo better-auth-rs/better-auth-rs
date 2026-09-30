@@ -219,7 +219,7 @@ async fn deferred_get_reports_refresh_and_post_updates_storage_and_cookie() {
     cfg.session.cookie_cache = None;
     let (manager, data) = setup(cfg).await;
     let stale = Utc::now() + Duration::hours(1);
-    manager
+    let _ = manager
         .database
         .update_session_expiry(&data.session.token, stale)
         .await
@@ -257,7 +257,7 @@ async fn deferred_get_reports_refresh_and_post_updates_storage_and_cookie() {
 async fn disable_refresh_and_dont_remember_do_not_extend_expiry() {
     let (manager, data) = setup(AuthConfig::new("fixture-secret-at-least-32-characters")).await;
     let stale = Utc::now() + Duration::hours(1);
-    manager
+    let _ = manager
         .database
         .update_session_expiry(&data.session.token, stale)
         .await

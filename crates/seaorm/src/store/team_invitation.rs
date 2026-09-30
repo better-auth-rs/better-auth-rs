@@ -12,7 +12,7 @@ use sea_orm::{
 };
 use serde_json::json;
 
-impl<S, O: crate::SeaOrmOrganizationSchema> SeaOrmStore<S, O>
+impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
     S: AuthSchema,
     S::Session: SeaOrmSessionModel,
@@ -21,7 +21,7 @@ where
         &self,
         invitation_id: &str,
         user_id: &str,
-        session_token: &str,
+        session_token: Option<&str>,
         teams_enabled: bool,
         maximum: better_auth_core::store::TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, better_auth_core::Invitation, Option<S::Session>)> {
@@ -78,7 +78,7 @@ where
         &self,
         invitation: &Invitation,
         user_id: &str,
-        session_token: &str,
+        session_token: Option<&str>,
         teams_enabled: bool,
         maximum: better_auth_core::store::TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Option<S::Session>)> {
@@ -87,6 +87,7 @@ where
         let result = async {
             let team_ids: Vec<_> = invitation
                 .team_id
+                .typed()?
                 .as_deref()
                 .filter(|_| teams_enabled)
                 .unwrap_or("")
@@ -100,7 +101,10 @@ where
                         Expr::col(O::Team::column("member_count")?),
                     )
                     .filter(O::Team::column("id")?.eq(*team_id))
-                    .filter(O::Team::column("organization_id")?.eq(&invitation.organization_id))
+                    .filter(
+                        O::Team::column("organization_id")?
+                            .eq(invitation.organization_id.typed()?.clone()),
+                    )
                     .exec(&tx)
                     .await
                     .map_err(map_db_err)?;
@@ -120,7 +124,15 @@ where
                         .count(&tx)
                         .await
                         .map_err(map_db_err)?;
-                    if maximum.is_some_and(|maximum| count >= maximum as u64) {
+                    if !super::team_capacity::reserve::<O::Team, _>(
+                        &tx,
+                        team_id,
+                        count,
+                        maximum,
+                        &config.team,
+                    )
+                    .await?
+                    {
                         return Err(AuthError::forbidden("Team member limit reached"));
                     }
                     let _ = models::insert::<O::TeamMember, _>(
@@ -141,15 +153,6 @@ where
                         &Default::default(),
                     )
                     .await?;
-                    let _ = Entity::<O::Team>::update_many()
-                        .col_expr(
-                            O::Team::column("member_count")?,
-                            Expr::value((count + 1) as i64),
-                        )
-                        .filter(O::Team::column("id")?.eq(*team_id))
-                        .exec(&tx)
-                        .await
-                        .map_err(map_db_err)?;
                 }
             }
             let member = models::insert::<O::Member, _>(
@@ -165,6 +168,9 @@ where
                 &config.member,
             )
             .await?;
+            let Some(session_token) = session_token else {
+                return Ok((member, None));
+            };
             let session = <S::Session as SeaOrmSessionModel>::Entity::find()
                 .filter(S::Session::token_column().eq(session_token))
                 .one(&tx)
@@ -174,6 +180,7 @@ where
             let mut active = session.into_active_model();
             let cookie_session = if let [team_id] = team_ids.as_slice() {
                 S::Session::set_active_team_id(&mut active, Some((*team_id).to_owned()));
+                self.apply_session_field_updates(&mut active)?;
                 S::Session::set_updated_at(&mut active, Utc::now());
                 let updated = active.update(&tx).await.map_err(map_db_err)?;
                 active = updated.clone().into_active_model();
@@ -183,8 +190,9 @@ where
             };
             S::Session::set_active_organization_id(
                 &mut active,
-                Some(invitation.organization_id.clone()),
+                Some(invitation.organization_id.typed()?.clone()),
             );
+            self.apply_session_field_updates(&mut active)?;
             S::Session::set_updated_at(&mut active, Utc::now());
             let _ = active.update(&tx).await.map_err(map_db_err)?;
             Ok((member, cookie_session))

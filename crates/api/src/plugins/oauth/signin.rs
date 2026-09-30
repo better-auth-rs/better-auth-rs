@@ -246,7 +246,9 @@ pub(super) async fn process_oauth_sign_in(
                 });
 
         return Ok(ProcessOAuthUserResult {
-            session: SessionView::with_fields(&issued.session, &ctx.config.session)
+            session: ctx
+                .session_view(&issued.session)
+                .await
                 .map_err(|error| error.to_string())?,
             user: ctx
                 .user_view(&issued.user)
@@ -362,7 +364,9 @@ pub(super) async fn process_oauth_sign_in(
             .then(|| AccountCookiePayload::from_account(&created_account));
 
         Ok(ProcessOAuthUserResult {
-            session: SessionView::with_fields(&issued.session, &ctx.config.session)
+            session: ctx
+                .session_view(&issued.session)
+                .await
                 .map_err(|error| error.to_string())?,
             user: ctx
                 .user_view(&issued.user)
@@ -428,7 +432,9 @@ pub(super) async fn process_oauth_sign_in(
             .then(|| AccountCookiePayload::from_account(&created_account));
 
         Ok(ProcessOAuthUserResult {
-            session: SessionView::with_fields(&issued.session, &ctx.config.session)
+            session: ctx
+                .session_view(&issued.session)
+                .await
                 .map_err(|error| error.to_string())?,
             user: ctx
                 .user_view(&issued.user)

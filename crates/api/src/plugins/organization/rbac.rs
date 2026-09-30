@@ -270,8 +270,17 @@ pub(crate) async fn check_permissions(
             .list_organization_roles(organization_id)
             .await?
         {
-            let stored: Statements = serde_json::from_value(row.permission)?;
-            let statements = roles.entry(row.role).or_default();
+            let role = row.role.display_string()?;
+            let stored: Statements = match serde_json::from_value(super::native_json::permission(
+                &row.permission,
+            )?) {
+                Ok(stored) => stored,
+                Err(error) => {
+                    tracing::error!(%error, role, "Invalid permissions for organization role");
+                    return Err(better_auth_core::AuthResponse::json(500, &serde_json::json!({"message": format!("Invalid permissions for role {role}")}))?.into());
+                }
+            };
+            let statements = roles.entry(role).or_default();
             for (resource, actions) in stored {
                 let allowed = statements.entry(resource).or_default();
                 for action in actions {

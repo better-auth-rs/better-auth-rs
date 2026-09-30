@@ -33,7 +33,11 @@ pub(crate) fn routes() -> Vec<AuthRoute> {
 struct CreateBody {
     #[serde(flatten)]
     additional_fields: serde_json::Map<String, serde_json::Value>,
-    name: String,
+    #[serde(
+        default,
+        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+    )]
+    name: better_auth_core::SchemaValue<String>,
     #[serde(
         default,
         deserialize_with = "deserialize_nullable_string_field",
@@ -67,10 +71,9 @@ struct UpdateData {
     additional_fields: serde_json::Map<String, serde_json::Value>,
     #[serde(
         default,
-        deserialize_with = "deserialize_nullable_string_field",
-        skip_serializing_if = "NullableStringField::is_missing"
+        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
     )]
-    name: NullableStringField,
+    name: better_auth_core::SchemaValue<String>,
     #[serde(
         default,
         deserialize_with = "deserialize_nullable_string_field",
@@ -88,6 +91,24 @@ fn optional_string(value: NullableStringField, path: &str) -> AuthResult<Option<
             message: format!("[{path}] Invalid input: expected string, received null"),
         }),
     }
+}
+
+fn input_schema(config: &OrganizationConfig) -> better_auth_core::user_fields::UserConfig {
+    let mut schema = config.schema.team.clone();
+    if !schema
+        .additional_fields
+        .get("name")
+        .is_some_and(|field| field.input)
+    {
+        let _ = schema.additional_fields.insert(
+            "name".into(),
+            better_auth_core::user_fields::UserFieldConfig {
+                required: Some(true),
+                ..Default::default()
+            },
+        );
+    }
+    schema
 }
 #[derive(Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
@@ -126,7 +147,7 @@ async fn authorize(
         .await?
         .ok_or_else(|| AuthError::forbidden(message))?;
     if !check_permission(
-        &member.role,
+        member.role.typed()?,
         org_id,
         permission.0,
         &[permission.1],
@@ -147,8 +168,7 @@ pub(crate) async fn handle_team_request(
 ) -> AuthResult<Option<AuthResponse>> {
     let (user, session) = require_session(req, ctx).await?;
     let user_view = ctx.user_view(&user)?;
-    let session_view =
-        better_auth_core::wire::SessionView::with_fields(&session, &ctx.config.session)?;
+    let session_view = ctx.session_view(&session).await?;
     let actor = OrganizationSession {
         user: &user_view,
         session: &session_view,
@@ -165,7 +185,7 @@ pub(crate) async fn handle_team_request(
         (HttpMethod::Post, "/organization/create-team") => {
             let body = body!(CreateBody);
             let additional_fields = crate::plugins::organization::fields::parse_input(
-                &config.schema.team,
+                &input_schema(config),
                 &body,
                 &body.additional_fields,
                 "body",
@@ -248,13 +268,13 @@ pub(crate) async fn handle_team_request(
         (HttpMethod::Post, "/organization/update-team") => {
             let body = body!(UpdateBody);
             let additional_fields = crate::plugins::organization::fields::parse_input(
-                &config.schema.team,
+                &input_schema(config),
                 &body.data,
                 &body.data.additional_fields,
                 "body.data",
                 true,
             )?;
-            let name = optional_string(body.data.name, "body.data.name")?;
+            let name = (!body.data.name.is_undefined()).then_some(body.data.name);
             let organization_id =
                 optional_string(body.data.organization_id, "body.data.organizationId")?;
             let org =
@@ -454,7 +474,7 @@ pub(crate) async fn handle_team_request(
                 for team in ctx.database.list_user_teams(target).await? {
                     if ctx
                         .database
-                        .get_member(&team.organization_id, target)
+                        .get_member(team.organization_id.typed()?, target)
                         .await?
                         .is_some()
                     {
@@ -479,7 +499,7 @@ pub(crate) async fn handle_team_request(
                 .ok_or_else(|| AuthError::bad_request("Team not found"))?;
             if ctx
                 .database
-                .get_member(&team.organization_id, &user.id())
+                .get_member(team.organization_id.typed()?, &user.id())
                 .await?
                 .is_none()
                 || ctx
@@ -541,11 +561,7 @@ pub(crate) async fn handle_team_request(
                 .get_user_by_id(&body.user_id)
                 .await?
                 .ok_or_else(|| AuthError::bad_request("User not found"))?;
-            let target_view = better_auth_core::wire::UserView::with_internal_fields(
-                &target_user,
-                &ctx.config.user,
-                &ctx.metadata,
-            )?;
+            let target_view = ctx.internal_user_view(&target_user)?;
             let target = OrganizationTeamMemberTarget {
                 team: &team,
                 organization: &organization_view,
@@ -644,8 +660,8 @@ mod tests {
                 id: None,
                 name: "Teams".into(),
                 slug: "teams".into(),
-                logo: None,
-                metadata: None,
+                logo: None.into(),
+                metadata: None.into(),
             })
             .await
             .unwrap();
@@ -716,7 +732,10 @@ mod tests {
         .await
         .unwrap()
         .unwrap();
-        assert_eq!(full.teams.unwrap()[0].member_count, 1);
+        assert_eq!(
+            full.teams.unwrap()[0].team.additional_fields["memberCount"].as_f64(),
+            Some(1.0)
+        );
         let foreign_org = ctx
             .database
             .create_organization(CreateOrganization {
@@ -724,8 +743,8 @@ mod tests {
                 id: None,
                 name: "Foreign".into(),
                 slug: "foreign-teams".into(),
-                logo: None,
-                metadata: None,
+                logo: None.into(),
+                metadata: None.into(),
             })
             .await
             .unwrap();

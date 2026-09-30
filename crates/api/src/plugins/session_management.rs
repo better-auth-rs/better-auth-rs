@@ -122,11 +122,7 @@ pub(crate) async fn list_sessions_core(
     user_id: impl AsRef<str>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<SessionView>> {
-    let sessions = ctx.session_manager().list_user_sessions(user_id).await?;
-    sessions
-        .iter()
-        .map(|session| SessionView::with_fields(session, &ctx.config.session))
-        .collect()
+    ctx.session_manager().list_user_session_views(user_id).await
 }
 
 pub(crate) async fn revoke_session_core(

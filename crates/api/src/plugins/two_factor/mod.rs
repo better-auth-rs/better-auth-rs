@@ -329,7 +329,7 @@ pub(crate) async fn inspect_trusted_device(
     }
 
     ctx.database
-        .delete_verification(verification.id().as_ref())
+        .delete_verification_by_identifier(trust_identifier)
         .await?;
 
     let rotated_cookie = create_trust_device_cookie_header(user, ctx).await?;
@@ -635,7 +635,7 @@ async fn resolve_two_factor_state<S: better_auth_core::AuthSchema>(
         .ok_or_else(|| AuthError::authentication_failed("Invalid two factor cookie"))?;
     if verification.expires_at() <= Utc::now() {
         ctx.database
-            .delete_verification(verification.id().as_ref())
+            .delete_verification_by_identifier(&identifier)
             .await?;
         return Err(AuthError::authentication_failed(
             "Invalid two factor cookie",

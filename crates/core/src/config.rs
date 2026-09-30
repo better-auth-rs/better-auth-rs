@@ -1,3 +1,4 @@
+mod verification;
 use crate::email::EmailProvider;
 use crate::error::AuthError;
 pub use crate::user_fields::{
@@ -6,6 +7,9 @@ pub use crate::user_fields::{
 use chrono::Duration;
 use std::collections::HashMap;
 use std::sync::Arc;
+pub use verification::{
+    VerificationIdentifierConfig, VerificationIdentifierHasher, VerificationIdentifierStorage,
+};
 
 /// Well-known core route paths.
 ///
@@ -479,6 +483,8 @@ pub struct AuthConfig {
     pub disabled_paths: Vec<String>,
     /// Session configuration
     pub session: SessionConfig,
+    /// Verification persistence when secondary storage is installed.
+    pub verification: VerificationConfig,
     /// Application user field configuration.
     pub user: UserConfig,
 
@@ -547,9 +553,25 @@ pub enum OAuthStateStrategy {
     Database,
 }
 
+/// Verification persistence with secondary storage. Without secondary storage, the database remains authoritative.
+#[derive(Debug, Clone, Default)]
+pub struct VerificationConfig {
+    /// Identifier transformation with ordered prefix overrides and plain-data read migration.
+    pub store_identifier: VerificationIdentifierConfig,
+    /// Persist verification records in the database and use database atomic consumption.
+    pub store_in_database: bool,
+    /// Do not delete expired database verification records during a lookup.
+    pub disable_cleanup: bool,
+}
+
 /// Session-specific configuration
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SessionConfig {
+    /// Persist sessions in the database as well as secondary storage.
+    pub store_session_in_database: bool,
+    /// Keep ended database sessions for audit and disable database fallback on cache misses.
+    pub preserve_session_in_database: bool,
+
     /// Session expiration duration
     pub expires_in: Duration,
 
@@ -589,27 +611,25 @@ pub struct SessionConfig {
     pub bearer: Option<BearerConfig>,
 
     /// Application session fields accepted by `/update-session` and included in session responses.
-    pub additional_fields: std::collections::BTreeMap<String, SessionFieldConfig>,
+    pub additional_fields: indexmap::IndexMap<String, SessionFieldConfig>,
 }
 
-/// Access rules for an application-owned session model field.
-#[derive(Debug, Clone)]
-pub struct SessionFieldConfig {
-    /// Serialized model field name. `None` uses the public field name.
-    pub field_name: Option<String>,
-    /// Whether clients may update the field.
-    pub input: bool,
-    /// Whether session responses include the field.
-    pub returned: bool,
-}
+/// Session fields use the same validation, defaults, transforms, and visibility as user fields.
+pub type SessionFieldConfig = UserFieldConfig;
 
-impl Default for SessionFieldConfig {
-    fn default() -> Self {
-        Self {
-            field_name: None,
-            input: true,
-            returned: true,
+impl SessionConfig {
+    pub fn field_schema(&self) -> UserConfig {
+        UserConfig {
+            additional_fields: self.additional_fields.clone(),
         }
+    }
+
+    /// Evaluate creation defaults without validating or transforming session input.
+    pub fn default_fields(&self) -> serde_json::Map<String, serde_json::Value> {
+        self.additional_fields
+            .iter()
+            .filter_map(|(name, field)| field.default_value().map(|value| (name.clone(), value)))
+            .collect()
     }
 }
 
@@ -862,6 +882,7 @@ impl Default for AuthConfig {
             trusted_origins: Vec::new(),
             disabled_paths: Vec::new(),
             session: SessionConfig::default(),
+            verification: VerificationConfig::default(),
             user: UserConfig::default(),
             jwt: JwtConfig::default(),
             password: PasswordConfig::default(),
@@ -875,6 +896,8 @@ impl Default for AuthConfig {
 impl Default for SessionConfig {
     fn default() -> Self {
         Self {
+            store_session_in_database: false,
+            preserve_session_in_database: false,
             expires_in: Duration::hours(24 * 7),   // 7 days
             update_age: Some(Duration::hours(24)), // refresh once per day
             disable_session_refresh: false,
