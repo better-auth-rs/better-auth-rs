@@ -23,28 +23,8 @@ where
     S: AuthSchema + Send + Sync,
 {
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
-        let counter = i64::try_from(input.counter)
-            .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
-
-        P::Passkey::active(Map::from_iter([
-            ("id".to_owned(), json!(Uuid::new_v4().to_string())),
-            ("name".to_owned(), json!(input.name)),
-            ("public_key".to_owned(), json!(input.public_key)),
-            ("user_id".to_owned(), json!(input.user_id)),
-            ("credential_id".to_owned(), json!(input.credential_id)),
-            ("counter".to_owned(), json!(counter)),
-            ("device_type".to_owned(), json!(input.device_type)),
-            ("backed_up".to_owned(), json!(input.backed_up)),
-            ("transports".to_owned(), json!(input.transports)),
-            ("credential".to_owned(), json!(input.credential)),
-            ("aaguid".to_owned(), json!(input.aaguid)),
-            ("created_at".to_owned(), json!(Utc::now())),
-            ("updated_at".to_owned(), json!(Utc::now())),
-        ]))?
-        .insert(self.connection())
-        .await
-        .map_err(map_db_err)?
-        .record()
+        self.create_passkey_with_connection(self.connection(), input)
+            .await
     }
 
     async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>> {
@@ -141,5 +121,38 @@ where
             .await
             .map(|_| ())
             .map_err(map_db_err)
+    }
+}
+
+impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
+    SeaOrmStore<S, O, P>
+{
+    pub(super) async fn create_passkey_with_connection(
+        &self,
+        connection: &impl sea_orm::ConnectionTrait,
+        input: CreatePasskey,
+    ) -> AuthResult<Passkey> {
+        let counter = i64::try_from(input.counter)
+            .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
+
+        P::Passkey::active(Map::from_iter([
+            ("id".to_owned(), json!(Uuid::new_v4().to_string())),
+            ("name".to_owned(), json!(input.name)),
+            ("public_key".to_owned(), json!(input.public_key)),
+            ("user_id".to_owned(), json!(input.user_id)),
+            ("credential_id".to_owned(), json!(input.credential_id)),
+            ("counter".to_owned(), json!(counter)),
+            ("device_type".to_owned(), json!(input.device_type)),
+            ("backed_up".to_owned(), json!(input.backed_up)),
+            ("transports".to_owned(), json!(input.transports)),
+            ("credential".to_owned(), json!(input.credential)),
+            ("aaguid".to_owned(), json!(input.aaguid)),
+            ("created_at".to_owned(), json!(Utc::now())),
+            ("updated_at".to_owned(), json!(Utc::now())),
+        ]))?
+        .insert(connection)
+        .await
+        .map_err(map_db_err)?
+        .record()
     }
 }

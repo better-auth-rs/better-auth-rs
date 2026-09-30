@@ -13,10 +13,13 @@ export async function createJwtFixture(profile: string, baseURL: string) {
   }
   const options: Parameters<typeof jwt>[0] = {
     jwks: { keyPairConfigs: [{ alg: "PS256" }, { alg: "ES512" }] },
+    ...(profile === "jwt-claims" ? { jwt: { audience: ["service-a", "service-b"], expirationTime: 2000000000.5 } } : {}),
+    ...(profile === "jwt-date" ? { jwt: { audience: ["service-a", "service-b"], expirationTime: new Date(2000000000123) } } : {}),
+    ...(profile === "jwt-relative" ? { jwt: { audience: ["service-a", "service-b"], expirationTime: "1.5s" } } : {}),
     ...(profile === "jwt-ps256" ? { jwks: { keyPairConfig: { alg: "PS256", modulusLength: 3072 } } } : {}),
     ...(profile === "jwt-es512" ? { jwks: { keyPairConfig: { alg: "ES512" } } } : {}),
     ...(profile === "jwt-advanced" ? { jwt: { definePayload: ({ user, session }) => ({ sessionId: session.id, userId: user.id, sessionUserId: session.userId, userAgent: session.userAgent }), getSubject: ({ session }) => session.id } } : {}),
-    ...(profile === "jwt-cache" ? { sessionCookieCache: true, jwt: { issuer: "ordinary-issuer", audience: "ordinary-audience" } } : {}),
+    ...(["jwt-cache", "cookie-version-plugin-jwt"].includes(profile) ? { sessionCookieCache: true, jwt: { issuer: "ordinary-issuer", audience: "ordinary-audience" } } : {}),
     ...(profile === "organization-jwt" ? { sessionCookieCache: true, jwt: { definePayload: ({ user, session }) => ({ user, session }), getSubject: ({ session }) => session.id } } : {}),
     ...(profile === "jwt-remote" ? {
       jwks: { remoteUrl: `${baseURL}/__test/jwt/remote-jwks`, keyPairConfig: { alg: "EdDSA" } },
@@ -28,7 +31,7 @@ export async function createJwtFixture(profile: string, baseURL: string) {
       } },
     } : {}),
   };
-  const plugins = (profile === "organization-jwt" || profile.startsWith("jwt-") && !["jwt-rs256", "jwt-es256", "jwt-identity"].includes(profile)) ? [jwt(options), {
+  const plugins = (["organization-jwt", "cookie-version-plugin-jwt"].includes(profile) || profile.startsWith("jwt-") && !["jwt-rs256", "jwt-es256", "jwt-identity"].includes(profile)) ? [jwt(options), {
     id: "jwt-fixture",
     endpoints: {
       compatSignJwt: createAuthEndpoint.serverOnly({ method: "POST" }, async (ctx) => ({ token: await signJWT(ctx, { options, payload: ctx.body.payload, signingKeyId: ctx.body.kid, signingAlgorithm: ctx.body.alg, header: ctx.body.header }) })),

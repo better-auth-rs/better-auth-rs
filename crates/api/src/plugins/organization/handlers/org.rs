@@ -257,7 +257,7 @@ pub(crate) async fn update_organization_core(
     .await?
     {
         return Err(AuthError::forbidden(
-            "You don't have permission to update this organization",
+            "You are not allowed to update this organization",
         ));
     }
 
@@ -341,7 +341,7 @@ pub(crate) async fn delete_organization_core(
     .await?
     {
         return Err(AuthError::forbidden(
-            "You don't have permission to delete this organization",
+            "You are not allowed to delete this organization",
         ));
     }
 
@@ -851,7 +851,6 @@ fn parse_query<T: Default + serde::de::DeserializeOwned>(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
 
     use better_auth_core::types::{CreateOrganization, CreateUser, HttpMethod};
     use chrono::Duration;
@@ -874,7 +873,7 @@ mod tests {
             invitation_expires_in: 60 * 60 * 48,
             invitation_limit: Some(100),
             disable_organization_deletion: false,
-            roles: HashMap::new(),
+            roles: None,
             send_invitation_email: None,
             ..Default::default()
         }

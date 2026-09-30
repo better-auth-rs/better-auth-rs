@@ -346,7 +346,10 @@ pub(crate) async fn update_member_role_core(
         .into_iter()
         .filter(|role| {
             !["owner", "admin", "member"].contains(role)
-                && !config.roles.contains_key(*role)
+                && !config
+                    .roles
+                    .as_ref()
+                    .is_some_and(|roles| roles.contains_key(*role))
                 && !dynamic_roles.iter().any(|stored| stored.role == *role)
         })
         .collect::<Vec<_>>();

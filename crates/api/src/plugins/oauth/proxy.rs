@@ -637,6 +637,7 @@ impl OAuthProxyPlugin {
             &user,
             &tokens,
             super::signin::OAuthSignInOptions {
+                request: req,
                 disable_sign_up: profile.disable_sign_up.unwrap_or(false),
                 callback_url: &profile.callback_url,
                 email_verification: ctx

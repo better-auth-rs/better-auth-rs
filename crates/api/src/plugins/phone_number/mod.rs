@@ -18,6 +18,11 @@ use super::helpers::{
     SessionIssueError, apply_default_role, get_credential_account, issue_user_session_with_lifetime,
 };
 
+mod callbacks;
+use crate::plugins::endpoint_context::EndpointContext;
+use callbacks::Delivery;
+pub use callbacks::{PhoneCallbackFuture, PhoneNumberCallbacks};
+
 type CallbackFuture<T> = Pin<Box<dyn Future<Output = AuthResult<T>> + Send>>;
 type OtpSender = dyn Fn(PhoneOtp, AuthRequest) -> CallbackFuture<()> + Send + Sync;
 type OtpVerifier = dyn Fn(PhoneOtp, AuthRequest) -> CallbackFuture<bool> + Send + Sync;
@@ -243,17 +248,44 @@ impl PhoneNumberPlugin {
         req: &AuthRequest,
         otp: PhoneOtp,
     ) -> AuthResult<()> {
-        if let Some(verify) = &self.verify_otp {
-            if !verify(otp.clone(), req.clone()).await? {
-                return Err(error(400, "INVALID_OTP", "Invalid OTP"));
-            }
-            ctx.database
-                .delete_verification_by_identifier(&otp.phone_number)
-                .await?;
-            Ok(())
+        let endpoint = EndpointContext::new(
+            Some(req),
+            json!({"phoneNumber":otp.phone_number,"code":otp.code}),
+            ctx,
+        );
+        self.consume_with_context(&endpoint, otp).await
+    }
+    async fn consume_with_context<S: AuthSchema>(
+        &self,
+        endpoint: &EndpointContext<'_, S>,
+        otp: PhoneOtp,
+    ) -> AuthResult<()> {
+        let ctx = endpoint.auth;
+        let verified = if let Some(verify) = ctx
+            .extensions
+            .get::<Arc<PhoneNumberCallbacks<S>>>()
+            .and_then(|callbacks| callbacks.verify.as_ref())
+        {
+            Some(verify(&otp, endpoint).await?)
+        } else if let Some(verify) = &self.verify_otp {
+            let request = endpoint
+                .request
+                .ok_or_else(|| AuthError::config("Legacy phone callbacks require a request"))?;
+            Some(verify(otp.clone(), request.clone()).await?)
         } else {
-            self.verify_stored_otp(ctx, &otp.phone_number, &otp.code)
-                .await
+            None
+        };
+        match verified {
+            Some(false) => Err(error(400, "INVALID_OTP", "Invalid OTP")),
+            Some(true) => {
+                ctx.database
+                    .delete_verification_by_identifier(&otp.phone_number)
+                    .await
+            }
+            None => {
+                self.verify_stored_otp(ctx, &otp.phone_number, &otp.code)
+                    .await
+            }
         }
     }
     async fn send(
@@ -266,18 +298,23 @@ impl PhoneNumberPlugin {
             Err(response) => return Ok(response),
         };
         let phone = string(&body, "phoneNumber");
-        let sender = self
-            .send_otp
-            .as_ref()
-            .ok_or_else(|| error(501, "SEND_OTP_NOT_IMPLEMENTED", "sendOTP not implemented"))?;
+        if !self.has_sender(ctx, Delivery::Verification) {
+            return Err(error(
+                501,
+                "SEND_OTP_NOT_IMPLEMENTED",
+                "sendOTP not implemented",
+            ));
+        }
+        let endpoint = EndpointContext::new(Some(req), parsed_body(&body, &["phoneNumber"]), ctx);
         self.validate(phone).await?;
         let code = self.save_otp(ctx, phone.to_owned(), true).await?;
-        sender(
+        self.deliver(
             PhoneOtp {
                 phone_number: phone.to_owned(),
                 code,
             },
-            req.clone(),
+            &endpoint,
+            Delivery::Verification,
         )
         .await?;
         Ok(AuthResponse::json(200, &json!({"message":"code sent"}))?)
@@ -296,9 +333,9 @@ impl PhoneNumberPlugin {
             Err(response) => return Ok(response),
         };
         let phone = string(&body, "phoneNumber");
-        self.consume_otp(
-            ctx,
-            req,
+        let mut endpoint = EndpointContext::new(Some(req), body.clone(), ctx);
+        self.consume_with_context(
+            &endpoint,
             PhoneOtp {
                 phone_number: phone.to_owned(),
                 code: string(&body, "code").to_owned(),
@@ -370,16 +407,15 @@ impl PhoneNumberPlugin {
         } else {
             return Err(error(500, "FAILED_TO_UPDATE_USER", "Failed to update user"));
         };
-        if let Some(callback) = &self.callback_on_verification {
-            callback(
-                PhoneVerification {
-                    phone_number: phone.to_owned(),
-                    user: ctx.user_view(&user)?,
-                },
-                req.clone(),
-            )
-            .await?;
-        }
+        endpoint.session = existing_session.clone();
+        self.notify_verified(
+            PhoneVerification {
+                phone_number: phone.to_owned(),
+                user: ctx.internal_user_view(&user)?,
+            },
+            &endpoint,
+        )
+        .await?;
         if let Some((_, session)) = existing_session {
             return Ok(AuthResponse::json(
                 200,
@@ -414,15 +450,26 @@ impl PhoneNumberPlugin {
             .ok_or_else(invalid_credentials)?;
         if self.require_verification && user.phone_number_verified() != Some(true) {
             let code = self.save_otp(ctx, phone.to_owned(), false).await?;
-            if let Some(sender) = &self.send_otp {
-                sender(
-                    PhoneOtp {
-                        phone_number: phone.to_owned(),
-                        code,
-                    },
-                    req.clone(),
-                )
-                .await?;
+            if self.has_sender(ctx, Delivery::Verification) {
+                let endpoint = EndpointContext::new(
+                    Some(req),
+                    parsed_body(&body, &["phoneNumber", "password", "rememberMe"]),
+                    ctx,
+                );
+                // Upstream treats sign-in delivery as a background notification.
+                if let Err(error) = self
+                    .deliver(
+                        PhoneOtp {
+                            phone_number: phone.to_owned(),
+                            code,
+                        },
+                        &endpoint,
+                        Delivery::Verification,
+                    )
+                    .await
+                {
+                    tracing::error!(plugin = "phone-number", %error, "Failed to run background task");
+                }
             }
             return Err(error(
                 401,
@@ -500,17 +547,23 @@ impl PhoneNumberPlugin {
         let code = self
             .save_otp(ctx, format!("{phone}-request-password-reset"), true)
             .await?;
-        if user.is_some()
-            && let Some(sender) = &self.send_password_reset_otp
-        {
-            sender(
-                PhoneOtp {
-                    phone_number: phone.to_owned(),
-                    code,
-                },
-                req.clone(),
-            )
-            .await?;
+        if user.is_some() && self.has_sender(ctx, Delivery::PasswordReset) {
+            let endpoint =
+                EndpointContext::new(Some(req), parsed_body(&body, &["phoneNumber"]), ctx);
+            // Upstream logs reset notification failures and still reports success.
+            if let Err(error) = self
+                .deliver(
+                    PhoneOtp {
+                        phone_number: phone.to_owned(),
+                        code,
+                    },
+                    &endpoint,
+                    Delivery::PasswordReset,
+                )
+                .await
+            {
+                tracing::error!(plugin = "phone-number", %error, "Failed to run background task");
+            }
         }
         Ok(AuthResponse::json(200, &json!({"status":true}))?)
     }
@@ -643,6 +696,18 @@ fn body(req: &AuthRequest, strings: &[&str], booleans: &[&str]) -> Result<Value,
     } else {
         Err(super::json_body::validation_error(&errors.join("; ")))
     }
+}
+
+fn parsed_body(body: &Value, fields: &[&str]) -> Value {
+    Value::Object(
+        fields
+            .iter()
+            .filter_map(|field| {
+                body.get(*field)
+                    .map(|value| ((*field).to_owned(), value.clone()))
+            })
+            .collect(),
+    )
 }
 
 fn string<'a>(body: &'a Value, key: &str) -> &'a str {

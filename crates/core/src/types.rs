@@ -23,7 +23,7 @@ pub use super::types_plugin::{
 };
 
 /// HTTP method enumeration
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum HttpMethod {
     Get,
     Post,

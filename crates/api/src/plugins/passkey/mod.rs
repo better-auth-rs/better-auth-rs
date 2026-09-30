@@ -3,6 +3,12 @@ use better_auth_core::{AuthRequest, AuthResponse};
 
 use better_auth_core::utils::cookie_utils::create_session_cookie;
 
+mod callbacks;
+mod options;
+mod registration;
+pub use callbacks::*;
+pub use options::*;
+
 pub(super) mod handlers;
 pub(super) mod types;
 pub(super) mod webauthn;
@@ -26,10 +32,18 @@ pub struct PasskeyPlugin {
 pub struct PasskeyConfig {
     #[config(default = String::new())]
     pub rp_id: String,
-    #[config(default = "Better Auth".to_string())]
-    pub rp_name: String,
     #[config(default = String::new())]
-    pub origin: String,
+    pub rp_name: String,
+    #[config(default = PasskeyOrigins::default(), skip)]
+    pub origin: PasskeyOrigins,
+    #[config(default = AuthenticatorSelection::default())]
+    pub authenticator_selection: AuthenticatorSelection,
+    #[config(default = "better-auth-passkey".to_owned())]
+    pub web_authn_challenge_cookie: String,
+    #[config(default = PasskeyRegistrationOptions::default())]
+    pub registration: PasskeyRegistrationOptions,
+    #[config(default = PasskeyAuthenticationOptions::default())]
+    pub authentication: PasskeyAuthenticationOptions,
     #[config(default = 300)]
     pub challenge_ttl_secs: i64,
 }
@@ -37,6 +51,10 @@ pub struct PasskeyConfig {
 // -- Plugin --
 
 impl PasskeyPlugin {
+    pub fn origin(mut self, origin: impl Into<PasskeyOrigins>) -> Self {
+        self.config.origin = origin.into();
+        self
+    }
     // -- Handlers (delegate to core functions) --
 
     /// GET /passkey/generate-register-options
@@ -45,11 +63,17 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
         let passkey_name = req.query.get("name").map(|s| s.as_str());
         let authenticator_attachment = req.query.get("authenticatorAttachment").map(|s| s.as_str());
+        if authenticator_attachment
+            .is_some_and(|value| !matches!(value, "platform" | "cross-platform"))
+        {
+            return Err(AuthError::FieldInput { code: "VALIDATION_ERROR", message: "[query.authenticatorAttachment] Invalid option: expected one of \"platform\"|\"cross-platform\"".into() });
+        }
+        let user = registration::resolve_user(ctx, req, &self.config).await?;
         let (result, cookie_header) = generate_register_options_core(
             &user,
+            req,
             passkey_name,
             authenticator_attachment,
             &self.config,
@@ -65,14 +89,23 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
-        let body: VerifyRegistrationRequest = match better_auth_core::validate_request_body(req) {
+        let body = match VerifyRegistrationRequest::parse(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        match verify_registration_core(&body, req, &user, &self.config, ctx).await? {
-            PasskeyHandlerOutcome::Success(result) => {
-                AuthResponse::json(200, &result).map_err(AuthError::from)
+        let user = if self.config.registration.require_session {
+            registration::registration_session(ctx, req, &self.config).await?
+        } else {
+            None
+        };
+        match registration::verify_registration_core(body, req, user, &self.config, ctx).await? {
+            PasskeyHandlerOutcome::Success((result, token)) => {
+                let response = AuthResponse::json(200, &result)?;
+                Ok(match token {
+                    Some(token) => response
+                        .with_header("Set-Cookie", create_session_cookie(&token, &ctx.config)),
+                    None => response,
+                })
             }
             PasskeyHandlerOutcome::Response(response) => Ok(response),
         }
@@ -84,9 +117,9 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let maybe_user = ctx.require_session(req).await.ok().map(|(u, _)| u);
+        let maybe_user = registration::optional_session(ctx, req).await?;
         let (result, cookie_header) =
-            generate_authenticate_options_core(maybe_user.as_ref(), &self.config, ctx).await?;
+            generate_authenticate_options_core(maybe_user.as_ref(), req, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &result)?.with_header("Set-Cookie", cookie_header))
     }
 
@@ -96,7 +129,7 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body: VerifyAuthenticationRequest = match better_auth_core::validate_request_body(req) {
+        let body = match VerifyAuthenticationRequest::parse(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };

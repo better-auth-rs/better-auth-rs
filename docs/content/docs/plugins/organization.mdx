@@ -53,6 +53,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 | `teams` | `OrganizationTeamsConfig` | Disabled | Team creation, membership, and limits |
 | `dynamic_access_control` | `bool` | `false` | Enable persisted organization roles |
 | `ac` | `Option<HashMap<String, Vec<String>>>` | `None` | Allowed resource statements for dynamic roles |
+| `roles` | `Option<HashMap<String, RolePermissions>>` | `None` | `None` uses default roles; `Some` replaces them, including an empty map that grants no static permissions |
 | `maximum_roles_per_organization` | `Option<usize>` | `None` | Maximum persisted roles per organization |
 
 Configure invitation delivery with `OrganizationPlugin::custom_send_invitation_email(Arc<dyn SendInvitationEmail>)`. Implement `SendInvitationEmail::send` using the invitation, organization, member, inviter, and optional HTTP request in `InvitationEmail`. The plugin logs delivery failures and still returns the stored invitation, matching upstream behavior.

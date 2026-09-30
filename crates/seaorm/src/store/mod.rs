@@ -190,6 +190,48 @@ where
     S::Account: SeaOrmAccountModel,
     S::Session: SeaOrmSessionModel,
 {
+    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<S::User>> {
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        let id = S::User::parse_id(id)?;
+        <S::User as SeaOrmUserModel>::Entity::find()
+            .filter(<S::User as SeaOrmUserModel>::id_column().eq(id))
+            .one(self.tx)
+            .await
+            .map_err(map_db_err)
+    }
+    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<S::User>> {
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        <S::User as SeaOrmUserModel>::Entity::find()
+            .filter(
+                <S::User as SeaOrmUserModel>::email_column()
+                    .eq(crate::utils::email::normalize_user_email(email)),
+            )
+            .one(self.tx)
+            .await
+            .map_err(map_db_err)
+    }
+    async fn update_user(
+        &self,
+        id: &str,
+        update: better_auth_core::UpdateUser,
+    ) -> AuthResult<S::User> {
+        self.store
+            .update_user_with_connection(self.tx, Some(self.tx), id, update)
+            .await
+    }
+    async fn delete_user(&self, id: &str) -> AuthResult<()> {
+        self.store
+            .delete_user_with_connection(self.tx, Some(self.tx), id)
+            .await
+    }
+    async fn create_passkey(
+        &self,
+        input: better_auth_core::CreatePasskey,
+    ) -> AuthResult<better_auth_core::Passkey> {
+        self.store
+            .create_passkey_with_connection(self.tx, input)
+            .await
+    }
     async fn before_create_runtime_session(
         &self,
         session: &mut better_auth_core::CreateSession,

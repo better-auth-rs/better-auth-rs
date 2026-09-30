@@ -20,10 +20,13 @@ fn verification_url(base_url: &str, token: &str, callback_url: Option<&str>) -> 
 pub(super) async fn send_verification_email_core<U: AuthUser>(
     body: &SendVerificationEmailRequest,
     current_user: Option<&U>,
+    request: Option<&better_auth_core::AuthRequest>,
     config: &EmailVerificationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
-    if config.send_verification_email.is_none() {
+    if config.send_verification_email.is_none()
+        && !crate::plugins::email_otp::callbacks::overrides_verification(ctx)
+    {
         return Err(AuthError::bad_request("Verification email isn't enabled"));
     }
 
@@ -46,7 +49,16 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
             )?;
             let url = verification_url(&ctx.config.base_url, &token, body.callback_url.as_deref());
             let user = ctx.user_view(user)?;
-            if let Some(ref sender) = config.send_verification_email {
+            if config.send_verification_email.is_none()
+                && crate::plugins::email_otp::callbacks::overrides_verification(ctx)
+            {
+                crate::plugins::email_otp::callbacks::send_verification_override(
+                    &body.email,
+                    request,
+                    ctx,
+                )
+                .await?;
+            } else if let Some(ref sender) = config.send_verification_email {
                 sender.send(&user, &url, &token).await?;
             }
         }
@@ -76,7 +88,16 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
             )?;
             let url = verification_url(&ctx.config.base_url, &token, body.callback_url.as_deref());
             let user = ctx.user_view(&user)?;
-            if let Some(ref sender) = config.send_verification_email {
+            if config.send_verification_email.is_none()
+                && crate::plugins::email_otp::callbacks::overrides_verification(ctx)
+            {
+                crate::plugins::email_otp::callbacks::send_verification_override(
+                    &body.email,
+                    request,
+                    ctx,
+                )
+                .await?;
+            } else if let Some(ref sender) = config.send_verification_email {
                 sender.send(&user, &url, &token).await?;
             }
         }

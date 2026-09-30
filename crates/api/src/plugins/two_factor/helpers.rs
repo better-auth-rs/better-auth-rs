@@ -1,22 +1,4 @@
 use super::*;
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
-
-pub(super) fn hash_otp(code: &str) -> AuthResult<String> {
-    let salt = SaltString::generate(&mut OsRng);
-    Argon2::default()
-        .hash_password(code.as_bytes(), &salt)
-        .map(|hash| hash.to_string())
-        .map_err(|error| AuthError::PasswordHash(format!("Failed to hash OTP: {error}")))
-}
-
-pub(super) fn verify_otp(code: &str, hash: &str) -> AuthResult<bool> {
-    let hash = PasswordHash::new(hash)
-        .map_err(|error| AuthError::PasswordHash(format!("Invalid OTP hash: {error}")))?;
-    Ok(Argon2::default()
-        .verify_password(code.as_bytes(), &hash)
-        .is_ok())
-}
-
 pub(super) fn build_totp(
     config: &TwoFactorConfig,
     secret: &str,
@@ -26,14 +8,21 @@ pub(super) fn build_totp(
 ) -> AuthResult<TOTP> {
     let issuer = request_issuer
         .map(str::to_owned)
-        .or_else(|| config.issuer.clone())
         .unwrap_or_else(|| ctx.config.app_name.clone());
     let account_name = user.email().unwrap_or("user").to_string();
     TOTP::new(
         Algorithm::SHA1,
-        config.totp_digits,
+        if config.totp_digits == 0 {
+            6
+        } else {
+            config.totp_digits
+        },
         1,
-        config.totp_period,
+        if config.totp_period == 0 {
+            30
+        } else {
+            config.totp_period
+        },
         secret.as_bytes().to_vec(),
         Some(issuer),
         account_name,
@@ -44,12 +33,34 @@ pub(super) fn build_totp(
 pub(super) async fn verify_user_password(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     user: &impl AuthUser,
-    password: &str,
+    password: Option<&str>,
+    allow_passwordless: bool,
+    hash_missing_password: bool,
 ) -> AuthResult<()> {
-    let stored_hash = get_credential_password_hash(ctx, user)
-        .await?
+    let stored_hash = get_credential_password_hash(ctx, user).await?;
+    if allow_passwordless && stored_hash.as_deref().is_none_or(str::is_empty) {
+        return Ok(());
+    }
+    let password = password
+        .filter(|password| !password.is_empty())
         .ok_or_else(|| AuthError::bad_request("Invalid password"))?;
-    match better_auth_core::verify_password(None, password, &stored_hash).await {
+    if password.encode_utf16().count() > ctx.password_policy.max_length {
+        return Err(AuthError::bad_request("Password too long"));
+    }
+    let Some(stored_hash) = stored_hash.filter(|hash| !hash.is_empty()) else {
+        if hash_missing_password {
+            _ = better_auth_core::hash_password(ctx.password_policy.hasher.as_ref(), password)
+                .await?;
+        }
+        return Err(AuthError::bad_request("Invalid password"));
+    };
+    match better_auth_core::verify_password(
+        ctx.password_policy.hasher.as_ref(),
+        password,
+        &stored_hash,
+    )
+    .await
+    {
         Ok(()) => Ok(()),
         Err(AuthError::InvalidCredentials) => Err(AuthError::bad_request("Invalid password")),
         Err(error) => Err(error),
@@ -62,29 +73,6 @@ pub(super) fn generate_secret() -> String {
         .take(32)
         .map(char::from)
         .collect()
-}
-
-pub(super) fn generate_backup_codes() -> Vec<String> {
-    (0..DEFAULT_BACKUP_CODE_COUNT)
-        .map(|_| {
-            rand::thread_rng()
-                .sample_iter(&Alphanumeric)
-                .take(DEFAULT_BACKUP_CODE_LENGTH)
-                .map(char::from)
-                .collect::<String>()
-        })
-        .map(|code| format!("{}-{}", &code[..5], &code[5..]))
-        .collect()
-}
-
-pub(super) fn decrypt_backup_codes(
-    backup_codes: &str,
-    secret: &str,
-) -> AuthResult<Option<Vec<String>>> {
-    let decrypted = decrypt_value(secret, backup_codes)?;
-    serde_json::from_str(&decrypted)
-        .ok()
-        .map_or(Ok(None), |codes| Ok(Some(codes)))
 }
 
 pub(super) fn otp_verification_identifier(key: &str) -> String {
@@ -207,49 +195,21 @@ pub(super) fn verify_signature(secret: &str, value: &str, signature: &str) -> Au
     Ok(mac.verify_slice(&decoded).is_ok())
 }
 
-pub(super) fn derive_encryption_key(secret: &str) -> AuthResult<Key<Aes256Gcm>> {
-    let hkdf = Hkdf::<Sha256>::new(None, secret.as_bytes());
-    let mut okm = [0u8; 32];
-    hkdf.expand(ENCRYPTION_INFO, &mut okm).map_err(|error| {
-        AuthError::internal(format!("Failed to derive encryption key: {}", error))
-    })?;
-    Ok(okm.into())
-}
-
 pub(super) fn encrypt_value(secret: &str, plaintext: &str) -> AuthResult<String> {
-    let cipher = Aes256Gcm::new(&derive_encryption_key(secret)?);
-    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-    let ciphertext = cipher
-        .encrypt(&nonce, plaintext.as_bytes())
-        .map_err(|error| {
-            AuthError::internal(format!("Failed to encrypt two-factor data: {}", error))
-        })?;
-    let mut output = nonce.to_vec();
-    output.extend_from_slice(&ciphertext);
-    Ok(URL_SAFE_NO_PAD.encode(output))
+    crate::plugins::symmetric::encrypt(secret, plaintext)
 }
 
 pub(super) fn decrypt_value(secret: &str, encrypted: &str) -> AuthResult<String> {
-    let cipher = Aes256Gcm::new(&derive_encryption_key(secret)?);
-    let bytes = URL_SAFE_NO_PAD.decode(encrypted).map_err(|error| {
-        AuthError::internal(format!(
-            "Failed to decode encrypted two-factor data: {}",
-            error
-        ))
-    })?;
-    let Some((nonce_bytes, ciphertext)) = bytes.split_first_chunk::<12>() else {
-        return Err(AuthError::internal(
-            "Encrypted two-factor payload is missing the nonce",
-        ));
-    };
-    let nonce = Nonce::from(*nonce_bytes);
-    let plaintext = cipher.decrypt(&nonce, ciphertext).map_err(|error| {
-        AuthError::internal(format!("Failed to decrypt two-factor data: {}", error))
-    })?;
-    String::from_utf8(plaintext).map_err(|error| {
-        AuthError::internal(format!(
-            "Two-factor plaintext is not valid UTF-8: {}",
-            error
-        ))
-    })
+    crate::plugins::symmetric::decrypt(secret, encrypted)
+}
+
+pub(super) fn require_totp(config: &TwoFactorConfig) -> AuthResult<()> {
+    if config.totp_disabled {
+        return Err(AuthError::Upstream {
+            status: 400,
+            code: "TOTP_NOT_CONFIGURED",
+            message: "totp isn't configured",
+        });
+    }
+    Ok(())
 }

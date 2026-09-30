@@ -6,6 +6,8 @@ use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+pub(crate) mod callbacks;
+pub use callbacks::{EmailOtpCallbackFuture, EmailOtpCallbacks};
 mod handlers;
 mod otp;
 mod request;
@@ -151,12 +153,7 @@ better_auth_core::impl_auth_plugin! {
     }
     extra {
         async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
-            if self.config.override_default_email_verification {
-                ctx.email_verification_policy.override_sender = Some(Arc::new(otp::VerificationSender {
-                    config: self.config.clone(),
-                    context: AuthContext::new(ctx.config.clone(), ctx.database.clone()),
-                }));
-            }
+            ctx.extensions.insert(self.config.clone());
             Ok(())
         }
         fn rate_limits(&self) -> AuthResult<Vec<(String, better_auth_core::middleware::EndpointRateLimit)>> {
@@ -169,8 +166,10 @@ better_auth_core::impl_auth_plugin! {
             if self.config.send_verification_on_sign_up && !self.config.override_default_email_verification && req.path().starts_with("/sign-up") && response.status == 200 {
                 let body: serde_json::Value = serde_json::from_slice(&response.body)?;
                 if let Some(email) = body.get("user").and_then(|user| user.get("email")).and_then(serde_json::Value::as_str) {
-                    let otp = self.create_otp(ctx, email, EmailOtpType::EmailVerification, &EmailOtpType::EmailVerification.identifier(email)).await?;
-                    self.deliver(email, otp, EmailOtpType::EmailVerification).await?;
+                    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(Some(req), req.body_as_json()?, ctx);
+                    endpoint.response = Some(response);
+                    let otp = self.create_otp(&endpoint, email, EmailOtpType::EmailVerification, &EmailOtpType::EmailVerification.identifier(email)).await?;
+                    self.deliver(&endpoint, email, otp, EmailOtpType::EmailVerification).await?;
                 }
             }
             Ok(())

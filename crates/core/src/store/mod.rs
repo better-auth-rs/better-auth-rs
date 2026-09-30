@@ -34,6 +34,11 @@ pub trait AuthTransaction<S: AuthSchema>: Send + Sync {
     async fn before_create_runtime_session(&self, _session: &mut CreateSession) -> AuthResult<()> {
         Ok(())
     }
+    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<S::User>>;
+    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<S::User>>;
+    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<S::User>;
+    async fn delete_user(&self, id: &str) -> AuthResult<()>;
+    async fn create_passkey(&self, passkey: CreatePasskey) -> AuthResult<Passkey>;
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<S::User>;
     async fn create_account(&self, create_account: CreateAccount) -> AuthResult<S::Account>;
     async fn create_session(&self, create_session: CreateSession) -> AuthResult<S::Session>;

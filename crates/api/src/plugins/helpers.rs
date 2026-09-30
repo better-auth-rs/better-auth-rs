@@ -114,11 +114,11 @@ pub async fn require_org_api_key_permission(
         return Ok(());
     }
 
-    let custom_roles: HashMap<String, RolePermissions> = ctx
+    let custom_roles: Option<HashMap<String, RolePermissions>> = ctx
         .get_metadata(METADATA_ROLES)
         .map(|value| serde_json::from_value(value.clone()))
         .transpose()?
-        .unwrap_or_default();
+        .flatten();
 
     let config = OrganizationConfig {
         roles: custom_roles,
@@ -278,29 +278,43 @@ pub(crate) async fn issue_user_session_with_lifetime<S: better_auth_core::AuthSc
     user_agent: Option<String>,
     expires_in: chrono::Duration,
 ) -> Result<IssuedSession<S>, SessionIssueError> {
-    let mut user = ctx
-        .database
-        .get_user_by_id(user_id)
-        .await?
-        .ok_or(AuthError::UserNotFound)?;
+    let user = session_user(ctx, user_id, None).await?;
+
+    let session = ctx
+        .session_manager()
+        .create_session_with_lifetime(&user, ip_address, user_agent, expires_in)
+        .await?;
+
+    Ok(IssuedSession { user, session })
+}
+
+/// Resolve the user and apply session admission through the active transaction.
+pub(crate) async fn session_user<S: better_auth_core::AuthSchema>(
+    ctx: &AuthContext<S>,
+    user_id: &str,
+    transaction: Option<&dyn better_auth_core::store::AuthTransaction<S>>,
+) -> Result<S::User, SessionIssueError> {
+    let mut user = match transaction {
+        Some(tx) => tx.get_user_by_id(user_id).await?,
+        None => ctx.database.get_user_by_id(user_id).await?,
+    }
+    .ok_or(AuthError::UserNotFound)?;
 
     if admin_plugin_enabled(ctx) && user.banned() {
         if user
             .ban_expires()
             .is_some_and(|expires| expires <= Utc::now())
         {
-            user = ctx
-                .database
-                .update_user(
-                    user_id,
-                    UpdateUser {
-                        banned: Some(false),
-                        ban_reason: None,
-                        ban_expires: None,
-                        ..Default::default()
-                    },
-                )
-                .await?;
+            let update = UpdateUser {
+                banned: Some(false),
+                ban_reason: None,
+                ban_expires: None,
+                ..Default::default()
+            };
+            user = match transaction {
+                Some(tx) => tx.update_user(user_id, update).await?,
+                None => ctx.database.update_user(user_id, update).await?,
+            };
         } else {
             return Err(SessionIssueError::Banned {
                 message: admin_banned_user_message(ctx).unwrap_or_else(|| {
@@ -310,12 +324,7 @@ pub(crate) async fn issue_user_session_with_lifetime<S: better_auth_core::AuthSc
         }
     }
 
-    let session = ctx
-        .session_manager()
-        .create_session_with_lifetime(&user, ip_address, user_agent, expires_in)
-        .await?;
-
-    Ok(IssuedSession { user, session })
+    Ok(user)
 }
 
 /// Parse a cookie value from the request's `Cookie` header.

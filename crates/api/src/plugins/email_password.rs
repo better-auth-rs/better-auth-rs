@@ -7,8 +7,7 @@ use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{
-    AuthRequest, AuthResponse, CreateAccount, CreateSession, CreateUser, ErrorCodeMessageResponse,
-    HttpMethod, RequestMeta,
+    AuthRequest, AuthResponse, ErrorCodeMessageResponse, HttpMethod, RequestMeta,
 };
 
 use super::{email_verification::EmailVerificationPlugin, two_factor};
@@ -22,10 +21,11 @@ use better_auth_core::utils::username::{
 };
 use better_auth_core::wire::UserView;
 
-use crate::plugins::helpers::{
-    SessionIssueError, apply_default_role, apply_user_create_fields,
-    issue_user_session_with_lifetime,
-};
+use crate::plugins::helpers::{SessionIssueError, issue_user_session_with_lifetime};
+
+mod signup;
+use signup::sign_up_core;
+pub use signup::{CustomSyntheticUser, OnExistingUserSignUp, SyntheticUserInput};
 
 const MESSAGE_INVALID_USERNAME_OR_PASSWORD: &str = "Invalid username or password";
 const MESSAGE_EMAIL_NOT_VERIFIED: &str = "Email not verified";
@@ -78,6 +78,10 @@ pub struct EmailPasswordConfig {
     pub auto_sign_in: bool,
     /// Custom password hasher. When `None`, the default Argon2 hasher is used.
     pub password_hasher: Option<Arc<dyn PasswordHasher>>,
+    /// Notify the application after a protected duplicate signup hashes its password.
+    pub on_existing_user_sign_up: Option<Arc<dyn OnExistingUserSignUp>>,
+    /// Customize enumeration-safe signup responses without creating an account.
+    pub custom_synthetic_user: Option<Arc<CustomSyntheticUser>>,
 }
 
 impl std::fmt::Debug for EmailPasswordConfig {
@@ -101,7 +105,6 @@ impl std::fmt::Debug for EmailPasswordConfig {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[expect(dead_code, reason = "fields deserialized from request body")]
 pub(crate) struct SignUpRequest {
     #[validate(length(min = 1, message = "Name is required"))]
     name: String,
@@ -109,6 +112,7 @@ pub(crate) struct SignUpRequest {
     email: String,
     #[validate(length(min = 1, message = "Password is required"))]
     password: String,
+    image: Option<String>,
     username: Option<String>,
     #[serde(rename = "displayUsername")]
     display_username: Option<String>,
@@ -252,6 +256,18 @@ impl EmailPasswordPlugin {
         self
     }
 
+    /// Set the notification for a duplicate signup protected against enumeration.
+    pub fn on_existing_user_sign_up(mut self, callback: Arc<dyn OnExistingUserSignUp>) -> Self {
+        self.config.on_existing_user_sign_up = Some(callback);
+        self
+    }
+
+    /// Customize synthetic users returned by enumeration-safe signup.
+    pub fn custom_synthetic_user(mut self, callback: Arc<CustomSyntheticUser>) -> Self {
+        self.config.custom_synthetic_user = Some(callback);
+        self
+    }
+
     async fn handle_sign_up(
         &self,
         req: &AuthRequest,
@@ -323,8 +339,7 @@ impl EmailPasswordPlugin {
             }
         }
 
-        let meta = RequestMeta::from_request(req);
-        let (response, session_token) = sign_up_core(&signup_req, &self.config, &meta, ctx).await?;
+        let (response, session_token) = sign_up_core(&signup_req, &self.config, req, ctx).await?;
 
         if let Some(token) = session_token {
             let cookie_header = create_session_cookie(&token, &ctx.config);
@@ -539,136 +554,6 @@ impl EmailPasswordPlugin {
 // Core functions — framework-agnostic business logic
 // ---------------------------------------------------------------------------
 
-/// Core sign-up logic.
-///
-/// Returns `(response, Option<session_token>)`. The session token is present
-/// only when `auto_sign_in` is true.
-pub(crate) async fn sign_up_core(
-    body: &SignUpRequest,
-    config: &EmailPasswordConfig,
-    meta: &RequestMeta,
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(SignUpResponse<UserView>, Option<String>)> {
-    if !config.enable_signup {
-        return Err(AuthError::forbidden("User registration is not enabled"));
-    }
-
-    password_utils::validate_password(
-        &body.password,
-        config.password_min_length,
-        config.password_max_length,
-        ctx,
-    )?;
-
-    // Check if user already exists
-    if ctx.database.get_user_by_email(&body.email).await?.is_some() {
-        // TS returns 422 UNPROCESSABLE_ENTITY for duplicate email
-        return Err(AuthError::UnprocessableEntity(
-            "User already exists. Use another email.".to_string(),
-        ));
-    }
-
-    // Hash password
-    let password_hash =
-        password_utils::hash_password(config.password_hasher.as_ref(), &body.password).await?;
-
-    let mut create_user = CreateUser::new()
-        .with_email(&body.email)
-        .with_name(&body.name);
-    apply_user_create_fields(ctx, &body.additional_fields, &mut create_user).await?;
-    apply_default_role(ctx, &mut create_user);
-    if config.username {
-        if let Some(ref username) = body.username {
-            create_user = create_user.with_username(normalize_username(username));
-        }
-        if let Some(ref display_username) = body.display_username {
-            create_user.display_username = Some(display_username.clone());
-        } else if let Some(ref username) = body.username {
-            create_user.display_username = Some(username.clone());
-        }
-    }
-    let auto_sign_in = config.auto_sign_in;
-    let expires_in = ctx.config.session.expires_in;
-    let ip_address = meta.ip_address.clone();
-    let user_agent = meta.user_agent.clone();
-    let database = ctx.database.clone();
-    let transaction_database = database.clone();
-    let user_config = ctx.config.user.clone();
-    let user_metadata = ctx.metadata.clone();
-    let supports_native_json = database.supports_native_json();
-
-    better_auth_core::store::transaction(database.as_ref(), move |tx| {
-        let _database = transaction_database.clone();
-        Box::pin(async move {
-            let user = match tx.create_user(create_user).await {
-                Ok(user) => user,
-                Err(AuthError::Database(_)) => {
-                    return Err(AuthError::UnprocessableEntity(
-                        "Failed to create user".to_string(),
-                    ));
-                }
-                Err(error) => return Err(error),
-            };
-
-            let _ = tx
-                .create_account(CreateAccount {
-                    user_id: user.id().to_string(),
-                    account_id: user.id().to_string(),
-                    provider_id: "credential".to_string(),
-                    access_token: None,
-                    refresh_token: None,
-                    id_token: None,
-                    access_token_expires_at: None,
-                    refresh_token_expires_at: None,
-                    scope: None,
-                    password: Some(password_hash.clone()),
-                })
-                .await?;
-
-            if auto_sign_in {
-                let session = tx
-                    .create_session(CreateSession {
-                        user_id: user.id().to_string(),
-                        expires_at: chrono::Utc::now() + expires_in,
-                        ip_address,
-                        user_agent,
-                        impersonated_by: None,
-                        active_organization_id: None,
-                    })
-                    .await?;
-                let token = session.token().to_string();
-
-                Ok((
-                    SignUpResponse {
-                        token: Some(token.clone()),
-                        user: UserView::with_fields_for_adapter(
-                            &user,
-                            &user_config,
-                            &user_metadata,
-                            supports_native_json,
-                        )?,
-                    },
-                    Some(token),
-                ))
-            } else {
-                Ok((
-                    SignUpResponse {
-                        token: None,
-                        user: UserView::with_fields_for_adapter(
-                            &user,
-                            &user_config,
-                            &user_metadata,
-                            supports_native_json,
-                        )?,
-                    },
-                    None,
-                ))
-            }
-        })
-    })
-    .await
-}
-
 async fn load_credential_password_hash(
     user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
@@ -685,11 +570,11 @@ async fn load_credential_password_hash(
 async fn verify_user_password(
     user: &impl AuthUser,
     password: &str,
-    config: &EmailPasswordConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<()> {
     let stored_hash = load_credential_password_hash(user, ctx).await?;
-    password_utils::verify_password(config.password_hasher.as_ref(), password, &stored_hash).await
+    password_utils::verify_password(ctx.password_policy.hasher.as_ref(), password, &stored_hash)
+        .await
 }
 
 /// Shared sign-in finalization logic after user lookup and credential verification.
@@ -721,7 +606,7 @@ async fn finalize_sign_in_with_user_core(
     // Send verification email on sign-in if configured
     if let Some(ev) = email_verification
         && let Err(e) = ev
-            .send_verification_on_sign_in(&user, callback_url, ctx)
+            .send_verification_on_sign_in_with_request(&user, callback_url, Some(req), ctx)
             .await
     {
         tracing::warn!(
@@ -777,13 +662,33 @@ pub(crate) async fn sign_in_core(
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SignInCoreResult<UserView>> {
+    ctx.password_policy.validate_max_length(&body.password)?;
+    let verification = EmailVerificationPlugin::from_context(ctx);
+    let email_verification = email_verification.or(verification.as_ref());
     let user = ctx
         .database
         .get_user_by_email(&body.email)
         .await?
         .ok_or(AuthError::InvalidCredentials)?;
 
-    verify_user_password(&user, &body.password, config, ctx).await?;
+    verify_user_password(&user, &body.password, ctx).await?;
+
+    if (config.require_email_verification
+        || email_verification.is_some_and(EmailVerificationPlugin::is_verification_required))
+        && !user.email_verified()
+    {
+        if let Some(verification) = email_verification {
+            verification
+                .send_verification_on_sign_in_with_request(
+                    &user,
+                    body.callback_url.as_deref(),
+                    Some(req),
+                    ctx,
+                )
+                .await?;
+        }
+        return Err(AuthError::forbidden(MESSAGE_EMAIL_NOT_VERIFIED));
+    }
 
     finalize_sign_in_with_user_core(
         req,
@@ -807,32 +712,43 @@ pub(crate) async fn sign_in_username_core(
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> Result<SignInCoreResult<UserView>, SignInUsernameFailure> {
+    ctx.password_policy
+        .validate_max_length(&body.password)
+        .map_err(SignInUsernameFailure::Auth)?;
+    let verification = EmailVerificationPlugin::from_context(ctx);
+    let email_verification = email_verification.or(verification.as_ref());
     let Some(user) = ctx
         .database
         .get_user_by_username(normalized_username)
         .await
         .map_err(SignInUsernameFailure::Auth)?
     else {
-        let _ = password_utils::hash_password(config.password_hasher.as_ref(), &body.password)
+        let _ = password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.password)
             .await
             .map_err(SignInUsernameFailure::Auth)?;
         return Err(SignInUsernameFailure::InvalidUsernameOrPassword);
     };
 
-    verify_user_password(&user, &body.password, config, ctx)
+    verify_user_password(&user, &body.password, ctx)
         .await
         .map_err(|error| match error {
             AuthError::InvalidCredentials => SignInUsernameFailure::InvalidUsernameOrPassword,
             other => SignInUsernameFailure::Auth(other),
         })?;
 
-    if let Some(ev) = email_verification
-        && ev.is_verification_required()
+    if (config.require_email_verification
+        || email_verification.is_some_and(EmailVerificationPlugin::is_verification_required))
         && !user.email_verified()
     {
-        if let Err(error) = ev
-            .send_verification_on_sign_in(&user, body.callback_url.as_deref(), ctx)
-            .await
+        if let Some(ev) = email_verification
+            && let Err(error) = ev
+                .send_verification_on_sign_in_with_request(
+                    &user,
+                    body.callback_url.as_deref(),
+                    Some(req),
+                    ctx,
+                )
+                .await
         {
             tracing::warn!(
                 error = %error,
@@ -871,6 +787,8 @@ impl Default for EmailPasswordConfig {
             password_max_length: 128,
             auto_sign_in: true,
             password_hasher: None,
+            on_existing_user_sign_up: None,
+            custom_synthetic_user: None,
         }
     }
 }
@@ -944,11 +862,23 @@ mod tests {
     type TestSchema =
         better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
-    async fn create_test_context() -> AuthContext<TestSchema> {
+    async fn create_test_context(plugin: &EmailPasswordPlugin) -> AuthContext<TestSchema> {
         let config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
         let config = Arc::new(config);
         let database = crate::plugins::test_helpers::create_test_database().await;
-        AuthContext::new(config, database)
+        let mut init = better_auth_core::AuthInitContext::new(config.clone(), database.clone());
+        plugin.on_init(&mut init).await.unwrap();
+        let parts = init.into_parts();
+        AuthContext {
+            config,
+            database,
+            extensions: parts.extensions,
+            email_verification_policy: parts.email_verification_policy,
+            email_provider: parts.email_provider,
+            secondary_storage: parts.secondary_storage,
+            password_policy: parts.password_policy,
+            metadata: parts.metadata,
+        }
     }
 
     fn create_signup_request(email: &str, password: &str) -> AuthRequest {
@@ -970,7 +900,7 @@ mod tests {
     #[tokio::test]
     async fn test_auto_sign_in_false_returns_no_session() {
         let plugin = EmailPasswordPlugin::new().auto_sign_in(false);
-        let ctx = create_test_context().await;
+        let ctx = create_test_context(&plugin).await;
 
         let req = create_signup_request("auto@example.com", "Password123!");
         let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
@@ -997,7 +927,7 @@ mod tests {
     #[tokio::test]
     async fn test_auto_sign_in_true_returns_session() {
         let plugin = EmailPasswordPlugin::new(); // default auto_sign_in=true
-        let ctx = create_test_context().await;
+        let ctx = create_test_context(&plugin).await;
 
         let req = create_signup_request("autotrue@example.com", "Password123!");
         let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
@@ -1022,7 +952,7 @@ mod tests {
     #[tokio::test]
     async fn test_password_max_length_rejection() {
         let plugin = EmailPasswordPlugin::new().password_max_length(128);
-        let ctx = create_test_context().await;
+        let ctx = create_test_context(&plugin).await;
 
         // Password of exactly 129 chars should be rejected
         let long_password = format!("A1!{}", "a".repeat(126)); // 129 chars total
@@ -1055,7 +985,7 @@ mod tests {
 
         let hasher: Arc<dyn PasswordHasher> = Arc::new(TestHasher);
         let plugin = EmailPasswordPlugin::new().password_hasher(hasher);
-        let ctx = create_test_context().await;
+        let ctx = create_test_context(&plugin).await;
 
         // Sign up with custom hasher
         let req = create_signup_request("hasher@example.com", "Password123!");
@@ -1137,7 +1067,7 @@ mod tests {
         let plugin = EmailPasswordPlugin::new()
             .username(true)
             .password_hasher(hasher);
-        let ctx = create_test_context().await;
+        let ctx = create_test_context(&plugin).await;
 
         let signup_body = serde_json::json!({
             "email": "username-counter@example.com",
@@ -1195,7 +1125,7 @@ mod tests {
     #[tokio::test]
     async fn test_is_username_available_fresh() {
         let plugin = EmailPasswordPlugin::new().username(true);
-        let ctx = create_test_context().await;
+        let ctx = create_test_context(&plugin).await;
 
         let body = serde_json::json!({ "username": "fresh_user" });
         let req = AuthRequest::from_parts(
@@ -1220,7 +1150,7 @@ mod tests {
     #[tokio::test]
     async fn test_is_username_available_taken() {
         let plugin = EmailPasswordPlugin::new().username(true);
-        let ctx = create_test_context().await;
+        let ctx = create_test_context(&plugin).await;
 
         // Sign up a user with a username
         let signup_body = serde_json::json!({
@@ -1262,7 +1192,7 @@ mod tests {
     #[tokio::test]
     async fn test_is_username_available_too_short() {
         let plugin = EmailPasswordPlugin::new().username(true);
-        let ctx = create_test_context().await;
+        let ctx = create_test_context(&plugin).await;
 
         let body = serde_json::json!({ "username": "ab" });
         let req = AuthRequest::from_parts(
@@ -1287,7 +1217,7 @@ mod tests {
     #[tokio::test]
     async fn test_is_username_available_invalid_chars() {
         let plugin = EmailPasswordPlugin::new().username(true);
-        let ctx = create_test_context().await;
+        let ctx = create_test_context(&plugin).await;
 
         let body = serde_json::json!({ "username": "bad user!" });
         let req = AuthRequest::from_parts(

@@ -1,3 +1,4 @@
+mod cookie_cache;
 mod verification;
 use crate::email::EmailProvider;
 use crate::error::AuthError;
@@ -5,6 +6,7 @@ pub use crate::user_fields::{
     UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType, UserFieldValidator,
 };
 use chrono::Duration;
+pub use cookie_cache::{CookieCacheVersion, CookieCacheVersionCallback};
 use std::collections::HashMap;
 use std::sync::Arc;
 pub use verification::{
@@ -713,8 +715,8 @@ pub struct CookieCacheConfig {
     /// Strategy used to protect the cached cookie value.
     pub strategy: CookieCacheStrategy,
 
-    /// Cache format version. Changing this value invalidates older caches.
-    pub version: String,
+    /// Cache version evaluated against the session and user on writes and cache reads.
+    pub version: CookieCacheVersion,
 }
 
 /// Strategy for signing / encrypting the cookie cache.
@@ -734,7 +736,7 @@ impl Default for CookieCacheConfig {
             enabled: false,
             max_age: Duration::minutes(5),
             strategy: CookieCacheStrategy::Compact,
-            version: "1".to_string(),
+            version: "1".into(),
         }
     }
 }

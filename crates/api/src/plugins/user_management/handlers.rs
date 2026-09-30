@@ -122,6 +122,7 @@ pub(crate) async fn delete_user_core(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessMessageResponse> {
     if let Some(password) = body.password.as_deref() {
+        ctx.password_policy.validate_max_length(password)?;
         let account = ctx
             .database
             .get_user_accounts(&user.id())
@@ -132,7 +133,7 @@ pub(crate) async fn delete_user_core(
         let stored_hash = account
             .password()
             .ok_or_else(|| AuthError::bad_request("Credential account not found"))?;
-        password_utils::verify_password(None, password, stored_hash)
+        password_utils::verify_password(ctx.password_policy.hasher.as_ref(), password, stored_hash)
             .await
             .map_err(|_| AuthError::bad_request("Invalid password"))?;
     }

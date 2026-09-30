@@ -79,7 +79,7 @@ pub(crate) async fn invite_member_core(
     .await?
     {
         return Err(AuthError::forbidden(
-            "You don't have permission to invite members",
+            "You are not allowed to invite users to this organization",
         ));
     }
 
@@ -98,7 +98,13 @@ pub(crate) async fn invite_member_core(
         Vec::new()
     };
     let mut valid_roles: Vec<&str> = vec!["owner", "admin", "member"];
-    valid_roles.extend(config.roles.keys().map(String::as_str));
+    valid_roles.extend(
+        config
+            .roles
+            .iter()
+            .flat_map(|roles| roles.keys())
+            .map(String::as_str),
+    );
     for role in &dynamic_roles {
         valid_roles.push(role.role.typed()?.as_str());
     }

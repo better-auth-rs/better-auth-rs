@@ -5,7 +5,7 @@ Authentication for Rust with Axum integration and application-owned SeaORM entit
 > [!WARNING]
 > Version `1.0.0-alpha.3` is in development. Public Rust APIs and database schemas can change between alpha releases.
 
-Sessions use signed cookies. Enable `SessionConfig.bearer` explicitly for Authorization header authentication; see the [session guide](docs/content/docs/authentication/sessions.mdx) for cache and application field configuration.
+Sessions use signed cookies. Enable `SessionConfig.bearer` explicitly for Authorization header authentication; see the [session guide](docs/content/docs/authentication/sessions.mdx) for cache and application field configuration. Use [Custom Session](docs/content/docs/plugins/custom-session.mdx) to transform public session responses with typed application context.
 
 Configure application user fields with `AuthConfig.user.additional_fields` and matching application-owned entity columns. See [user fields](docs/content/docs/concepts/users-accounts.mdx) for input validation, defaults, transforms, and public visibility.
 

@@ -1,5 +1,11 @@
 //! Built-in plugins and plugin-specific configuration modules.
 
+pub use better_auth_api::plugins::endpoint_context;
+
+pub use better_auth_api::plugins::{
+    CustomSessionCallback, CustomSessionInput, CustomSessionPlugin, custom_session,
+};
+
 pub use better_auth_api::OAuthPlugin;
 pub use better_auth_api::plugins::email_verification::SendVerificationEmail;
 pub use better_auth_api::plugins::password_management::SendResetPassword;
@@ -22,8 +28,8 @@ pub use better_auth_api::plugins::{
     SendMagicLink, TokenStorage, email_otp, magic_link, multi_session, one_time_token,
 };
 pub use better_auth_api::plugins::{
-    JwtAlgorithm, JwtCallbackFuture, JwtCustomSign, JwtDefinePayload, JwtGetSubject,
-    JwtKeyPairConfig, JwtPlugin, JwtPluginConfig, JwtSigningOptions, jwt,
+    JwtAlgorithm, JwtAudience, JwtCallbackFuture, JwtCustomSign, JwtDefinePayload, JwtExpiration,
+    JwtGetSubject, JwtKeyPairConfig, JwtPlugin, JwtPluginConfig, JwtSigningOptions, jwt,
 };
 pub use better_auth_api::plugins::{OAuthProxyConfig, OAuthProxyPlugin};
 pub use better_auth_api::plugins::{OneTapConfig, OneTapPlugin, one_tap};

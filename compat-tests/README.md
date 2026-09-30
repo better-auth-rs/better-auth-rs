@@ -40,6 +40,12 @@ The option profiles also cover API Key generators, getters, validators, dynamic 
 
 Secondary-storage profiles exercise session snapshots, cache misses, revocation, preserved database rows, transaction rollback, verification updates, and concurrent consumption. Verification identifier profiles cover hashing, custom functions, prefix selection, and legacy plaintext records with and without secondary storage. The three `session-fields` profiles compare defaults, validators, transforms, `onUpdate`, visibility, and JSON fields with database storage, secondary storage, and both together.
 
+The four `cookie-version-*` profiles compare asynchronous version callbacks, hidden-field visibility, invalidation after revocation, and callback failures for Compact, JWT, JWE, and plugin-signed JWT caches against the upstream runtime.
+
+The `jwt-claims`, `jwt-date`, and `jwt-relative` profiles verify signatures, audience-array intersection, payload overrides, fractional NumericDate values, and relative-duration rounding. Every observed issuer must equal its runtime's base URL before comparison normalizes the local test ports.
+
+The three `custom-session*` profiles cover typed callback store access, original internal authentication, null results, nested read errors, callback rejection, response headers and cache cookies. A two-callback barrier proves concurrent list execution. A delayed side effect proves another callback's rejection does not cancel pending work. The deferred profile verifies the refresh signal and the GET-only override.
+
 The `organization-jwt` profile verifies teams together with asymmetric session caches, JWT callbacks, transformed user fields, and application-owned session fields. It compares complete session and user objects after cryptographic verification. The same profile verifies OIDC mapped field creation and updates.
 
 The Cargo runner builds the Rust fixture before starting either server. Health deadlines measure server startup, not compilation or Cargo lock waits.
@@ -162,3 +168,9 @@ COMPAT_TEST_PROFILE=organization-no-ac devenv shell -- cargo test --locked --tes
 ```
 
 The `aligned-rs` and `all-in` OpenAPI profiles enable teams and dynamic roles. Both profiles require zero route gaps.
+
+The `organization-empty-roles` profile preserves the distinction between omitted roles and an explicit empty role map. The owner receives no default permissions, denied mutations retain upstream error codes, and the organization remains unchanged.
+
+The eight `two-factor-*` option profiles verify passwordless management and per-factor overrides, disabled TOTP, server-only TOTP generation, digit counts and periods, plain/hashed/encrypted/custom OTP storage, OTP attempt limits, custom backup generation, and backup-code storage. Scenarios decrypt actual persisted secrets and backup codes with the pinned upstream crypto implementation. Custom-codec failure, duplicate backup codes, OTP exhaustion, and replay remain observable.
+
+The `two-factor-context` profile installs only the context-aware sender. The callback reads the typed store and observes validated input, request headers, and the resolved session. The scenario verifies rejected unauthenticated requests, input filtering, and delivery errors after OTP persistence.

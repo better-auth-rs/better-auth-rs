@@ -61,17 +61,22 @@ fn key_id(key: &[u8]) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(thumbprint))
 }
 
-pub(super) fn payload(
+pub(super) async fn payload(
     data: &SessionData,
+    config: &AuthConfig,
     cache: &CookieCacheConfig,
     dont_remember: bool,
 ) -> AuthResult<(serde_json::Map<String, Value>, i64)> {
     let now = Utc::now();
+    let version = cache.version.resolve(data).await?;
+    let mut public = data.clone();
+    public.user.filter_cached_fields(&config.user);
+    public.session.filter_returned_fields(&config.session);
     let mut payload = serde_json::Map::new();
-    let _ = payload.insert("session".into(), serde_json::to_value(&data.session)?);
-    let _ = payload.insert("user".into(), serde_json::to_value(&data.user)?);
+    let _ = payload.insert("session".into(), serde_json::to_value(&public.session)?);
+    let _ = payload.insert("user".into(), serde_json::to_value(&public.user)?);
     let _ = payload.insert("updatedAt".into(), now.timestamp_millis().into());
-    let _ = payload.insert("version".into(), cache.version.clone().into());
+    let _ = payload.insert("version".into(), version.into());
     for value in payload.values_mut() {
         normalize_dates(value);
     }
@@ -83,14 +88,14 @@ pub(super) fn payload(
     Ok((payload, max_age))
 }
 
-pub(super) fn encode(
+pub(super) async fn encode(
     data: &SessionData,
     config: &AuthConfig,
     cache: &CookieCacheConfig,
     dont_remember: bool,
 ) -> AuthResult<String> {
     let now = Utc::now();
-    let (payload, max_age) = payload(data, cache, dont_remember)?;
+    let (payload, max_age) = payload(data, config, cache, dont_remember).await?;
     match cache.strategy {
         CookieCacheStrategy::Compact => {
             let expires_at = now.timestamp_millis()
@@ -250,7 +255,7 @@ pub(super) fn clear(req: &AuthRequest, config: &AuthConfig) -> AuthResult<()> {
     Ok(())
 }
 
-pub(super) fn write(
+pub(super) async fn write(
     req: &AuthRequest,
     data: &SessionData,
     config: &AuthConfig,
@@ -267,7 +272,7 @@ pub(super) fn write(
     };
     let value = match signed {
         Some(value) => value,
-        None => encode(data, config, cache, dont_remember)?,
+        None => encode(data, config, cache, dont_remember).await?,
     };
     let name = related_cookie_name(config, "session_data");
     let max_age = (!dont_remember).then_some(cache.max_age.num_seconds());

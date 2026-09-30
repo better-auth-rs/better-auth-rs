@@ -234,6 +234,7 @@ fn run_bun_phase_suite(
     let output = Command::new("bun")
         .arg("test")
         .args(paths)
+        .env("COMPAT_PROFILE", profile)
         .current_dir(project_root().join("compat-tests/client-tests"))
         .env("AUTH_BASE_URL_TS", format!("http://localhost:{ts_port}"))
         .env("COMPAT_OIDC_URL", oidc_url)
@@ -418,6 +419,36 @@ async fn configuration_client_compat() {
         "session-fields",
         "session-fields-cache",
         "session-fields-database",
+        "cookie-version-compact",
+        "cookie-version-jwt",
+        "cookie-version-jwe",
+        "cookie-version-plugin-jwt",
+        "jwt-claims",
+        "jwt-date",
+        "jwt-relative",
+        "password-policy",
+        "signup-enumeration",
+        "signup-verification",
+        "signup-synthetic",
+        "organization-empty-roles",
+        "custom-session",
+        "custom-session-list",
+        "custom-session-deferred",
+        "otp-callbacks",
+        "otp-callbacks-override",
+        "passkey-options",
+        "passkey-first",
+        "passkey-no-resolver",
+        "passkey-stale",
+        "two-factor-options",
+        "two-factor-context",
+        "two-factor-plain",
+        "two-factor-hashed",
+        "two-factor-encrypted",
+        "two-factor-custom",
+        "two-factor-custom-encrypted",
+        "two-factor-disabled",
+        "two-factor-password-policy",
         "secondary-session-database",
         "secondary-session-preserved",
         "secondary-verification-only",
@@ -481,6 +512,10 @@ async fn configuration_client_compat() {
                 )
                 .await;
             }
+        } else if profile.starts_with("custom-session") {
+            run_client_compat_profile(&["./tests/config/custom-session/"], profile).await;
+        } else if profile.starts_with("two-factor-") && profile != "two-factor-context" {
+            run_client_compat_profile(&["./tests/config/two-factor-options/"], profile).await;
         } else {
             run_client_compat_profile(&[&format!("./tests/config/{profile}/")], profile).await;
         }

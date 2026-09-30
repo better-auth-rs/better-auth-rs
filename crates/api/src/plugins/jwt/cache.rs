@@ -58,7 +58,7 @@ impl<S: AuthSchema> SessionCookieSigner for CookieSigner<S> {
             &keys,
             self.plugin.config.algorithm,
             self.issuer(),
-            AUDIENCE,
+            &[AUDIENCE],
             15,
         );
         Ok(payload.filter(|payload| {

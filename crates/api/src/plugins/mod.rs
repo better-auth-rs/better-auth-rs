@@ -2,10 +2,12 @@ pub mod account_management;
 pub mod admin;
 pub mod anonymous;
 pub mod api_key;
+pub mod custom_session;
 pub mod device_authorization;
 pub mod email_otp;
 pub mod email_password;
 pub mod email_verification;
+pub mod endpoint_context;
 pub mod helpers;
 mod json_body;
 pub mod jwt;
@@ -184,6 +186,7 @@ pub use account_management::AccountManagementPlugin;
 pub use admin::{AdminConfig, AdminPlugin, RolePermissions};
 pub use api_key::{ApiKeyConfig, ApiKeyPlugin};
 pub use better_auth_core::PasswordHasher;
+pub use custom_session::{CustomSessionCallback, CustomSessionInput, CustomSessionPlugin};
 pub use device_authorization::DeviceAuthorizationPlugin;
 pub use email_otp::{
     EmailOtpCodec, EmailOtpConfig, EmailOtpGenerator, EmailOtpMessage, EmailOtpPlugin,
@@ -194,8 +197,8 @@ pub use email_verification::{
     EmailVerificationConfig, EmailVerificationHook, EmailVerificationPlugin, SendVerificationEmail,
 };
 pub use jwt::{
-    JwtAlgorithm, JwtCallbackFuture, JwtCustomSign, JwtDefinePayload, JwtGetSubject,
-    JwtKeyPairConfig, JwtPlugin, JwtPluginConfig, JwtSigningOptions,
+    JwtAlgorithm, JwtAudience, JwtCallbackFuture, JwtCustomSign, JwtDefinePayload, JwtExpiration,
+    JwtGetSubject, JwtKeyPairConfig, JwtPlugin, JwtPluginConfig, JwtSigningOptions,
 };
 pub use magic_link::{MagicLinkConfig, MagicLinkMessage, MagicLinkPlugin, SendMagicLink};
 pub use multi_session::{MultiSessionConfig, MultiSessionPlugin};

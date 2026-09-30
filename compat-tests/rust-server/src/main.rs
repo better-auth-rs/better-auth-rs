@@ -51,6 +51,14 @@ use tokio::sync::Mutex;
 
 mod api_key_callbacks;
 mod api_key_storage;
+mod cookie_version;
+mod custom_session;
+mod otp_callbacks;
+mod passkey_options;
+mod two_factor_options;
+mod two_factor_context;
+mod password_policy;
+mod signup_enumeration;
 mod email_otp;
 mod identity_routes;
 mod jwt_fixture;
@@ -633,7 +641,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if matches!(
         device_profile.as_str(),
-        "organization-callbacks" | "organization-custom-team"
+        "organization-callbacks" | "organization-custom-team" | "two-factor-context"
     ) {
         config.user.additional_fields.insert(
             "secretNote".into(),
@@ -662,6 +670,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     secondary_storage::SecondaryFixture::configure(&device_profile, &mut config);
     session_fields::configure(&device_profile, &mut config);
+    signup_enumeration::configure(&device_profile, &mut config);
+    let cookie_version_fixture = cookie_version::CookieVersionFixture::default();
+    cookie_version_fixture.configure(&device_profile, &mut config);
+    let cookie_version_router = cookie_version_fixture.router();
+    let passkey_options = passkey_options::PasskeyOptions::new(&device_profile);
+    passkey_options.configure(&mut config);
+    let custom_session = custom_session::CustomSessionFixture::new(&device_profile);
+    custom_session.configure(&mut config);
+    let custom_session_router = custom_session.router();
     let database = Database::connect("sqlite::memory:").await?;
     better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database).await?;
     user_fields::add_columns(&database).await?;
@@ -686,6 +703,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let verification_outbox = Arc::new(Mutex::new(HashMap::new()));
     let change_email_outbox = Arc::new(Mutex::new(HashMap::new()));
     let two_factor_otp_outbox = Arc::new(Mutex::new(HashMap::new()));
+    let two_factor_context = two_factor_context::TwoFactorContextFixture::default();
+    let two_factor_context_router = two_factor_context.router();
     let invitation_email_outbox = Arc::new(Mutex::new(Vec::new()));
     let invitation_sender_fails = Arc::new(Mutex::new(false));
     let reset_password_mode = Arc::new(Mutex::new(ResetPasswordMode::Capture));
@@ -697,7 +716,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let secondary_fixture =
         secondary_storage::SecondaryFixture::new(&device_profile, database.clone());
     let store = SeaOrmStore::<TestSchema>::new(config.clone(), database)
-        .with_hooks(secondary_fixture.hooks());
+        .with_hooks(if passkey_options.enabled() { vec![passkey_options.hooks()] } else { secondary_fixture.hooks() });
     let store: Arc<dyn better_auth::store::AuthStore<TestSchema>> =
         if device_profile == "organization-fields" {
             Arc::new(store.with_organization_schema::<organization_fields::models::Models>())
@@ -710,6 +729,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             Arc::new(store)
         };
+    let passkey_options_router = passkey_options.router(store.clone());
     let organization_callbacks =
         organization_callbacks::OrganizationCallbacks::new(&device_profile);
     let organization_callbacks_router = organization_callbacks.router();
@@ -719,6 +739,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         reset_database.clone(),
     )));
     let email_otp_fixture = email_otp::EmailOtpFixture::default();
+    let otp_callbacks = otp_callbacks::OtpCallbacksFixture::default();
+    let otp_callbacks_router = otp_callbacks.router();
     let api_key_storage_fixture = api_key_storage::ApiKeyStorageFixture::default();
     let api_key_callbacks = api_key_callbacks::ApiKeyCallbacks::default();
     let one_tap_fixture = one_tap::OneTapFixture::default();
@@ -727,10 +749,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.clone(),
         reset_database.clone(),
     )));
-    let two_factor_plugin =
-        TwoFactorPlugin::new().custom_send_otp(Arc::new(CompatTwoFactorOtpSender {
+    let two_factor_plugin = TwoFactorPlugin::with_config(two_factor_options::configure(&device_profile));
+    let two_factor_plugin = if device_profile == "two-factor-context" { two_factor_plugin } else {
+        two_factor_plugin.custom_send_otp(Arc::new(CompatTwoFactorOtpSender {
             outbox: two_factor_otp_outbox.clone(),
-        }));
+        }))
+    };
+    let two_factor_options_router = two_factor_options::router(reset_database.clone(), two_factor_plugin.clone());
     let api_key_plugin = ApiKeyPlugin::builder()
         .enable_metadata(true)
         .key_length(
@@ -851,6 +876,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if device_profile == "organization-fields" {
         organization_fields::configure(&mut organization_config);
     }
+    if device_profile == "organization-empty-roles" {
+        organization_config.roles = Some(HashMap::new());
+    }
     if device_profile == "organization-core-fields" {
         organization_core_fields::configure(&mut organization_config);
     }
@@ -888,9 +916,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "device-rate-limit" | "device-rate-window"
         )))
         .plugin(
-            EmailPasswordPlugin::new()
+            signup_enumeration::plugin(&device_profile, password_policy::configure(&device_profile, EmailPasswordPlugin::new()
                 .enable_signup(true)
-                .username(true),
+                .username(true))),
         )
         .plugin(SessionManagementPlugin::new())
         .plugin(AccountManagementPlugin::new())
@@ -898,7 +926,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .plugin(api_key_plugin.clone())
         .plugin(organization_plugin.clone())
         .plugin(AdminPlugin::new())
-        .plugin(PasskeyPlugin::new())
+        .plugin(passkey_options.apply(PasskeyPlugin::new()))
         .plugin(
             PasswordManagementPlugin::new().send_reset_password(Arc::new(CompatResetSender {
                 outbox: reset_outbox.clone(),
@@ -908,7 +936,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .plugin({
             let plugin = EmailVerificationPlugin::new()
                 .auto_sign_in_after_verification(device_profile == "email-otp-options");
-            if device_profile == "email-otp-reuse" {
+            let plugin = if device_profile == "otp-callbacks-override" { plugin.send_on_sign_up(true) } else { plugin };
+            if matches!(device_profile.as_str(), "email-otp-reuse" | "otp-callbacks-override") {
                 plugin
             } else {
                 plugin.custom_send_verification_email(Arc::new(CompatVerificationSender {
@@ -926,7 +955,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .delete_user_enabled(true)
                 .require_delete_verification(false),
         )
-        .plugin(two_factor_plugin.clone())
+        .plugin(two_factor_context.plugin::<TestSchema>(&device_profile, two_factor_plugin.clone(), two_factor_otp_outbox.clone()))
         .plugin(oidc::configure(mock_oauth_plugin(
             port,
             social_profile.clone(),
@@ -944,6 +973,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         builder
     };
     let builder = token_routes::add_plugins(builder, &device_profile, verification_outbox.clone());
+    let builder = if matches!(device_profile.as_str(), "otp-callbacks" | "otp-callbacks-override") {
+        builder.plugin(otp_callbacks.email(&device_profile)).plugin(otp_callbacks.phone())
+    } else { builder };
+    let builder = if custom_session.enabled() {
+        builder.plugin(better_auth::plugins::MultiSessionPlugin::new()).plugin(custom_session.plugin())
+    } else { builder };
     let builder = if [
         "jwt-ps256",
         "jwt-es512",
@@ -951,6 +986,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "jwt-remote",
         "jwt-cache",
         "organization-jwt",
+        "cookie-version-plugin-jwt",
+        "jwt-claims",
+        "jwt-date",
+        "jwt-relative",
     ]
     .contains(&device_profile.as_str())
     {
@@ -1285,8 +1324,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             post(move || {
                 let identity_fixture = identity_fixture.clone();
                 let email_otp_fixture = email_otp_fixture.clone();
+                let otp_callbacks = otp_callbacks.clone();
                 let api_key_storage_fixture = api_key_storage_fixture.clone();
                 let secondary_fixture = secondary_fixture.clone();
+                let cookie_version_fixture = cookie_version_fixture.clone();
+                let passkey_options = passkey_options.clone();
+                let custom_session = custom_session.clone();
                 let api_key_callbacks = api_key_callbacks.clone();
                 let one_tap_fixture = one_tap_fixture.clone();
                 let organization_callbacks = organization_callbacks.clone();
@@ -1294,6 +1337,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let verification_outbox = verification_outbox_for_reset.clone();
                 let change_email_outbox = change_email_outbox_for_reset.clone();
                 let two_factor_otp_outbox = two_factor_otp_outbox_for_reset.clone();
+                let two_factor_context = two_factor_context.clone();
                 let invitation_email_outbox = invitation_email_outbox_for_reset.clone();
                 let invitation_sender_fails = invitation_sender_fails_for_reset.clone();
                 let reset_mode = reset_mode_for_reset.clone();
@@ -1312,8 +1356,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     reset_outbox.lock().await.clear();
                     identity_fixture.reset().await;
                     email_otp_fixture.reset().await;
+                    otp_callbacks.reset().await;
                     api_key_storage_fixture.reset();
                     secondary_fixture.reset();
+                    cookie_version_fixture.reset();
+                    passkey_options.reset();
+                    custom_session.reset();
+                    two_factor_context.reset();
                     api_key_callbacks.reset().await;
                     one_tap_fixture.reset().await;
                     organization_callbacks.reset().await;
@@ -1869,8 +1918,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(auth)
         .merge(oauth_proxy::router(reset_database.clone()))
         .merge(email_otp_router)
+        .merge(otp_callbacks_router)
         .merge(api_key_storage_router)
         .merge(secondary_router)
+        .merge(cookie_version_router)
+        .merge(passkey_options_router)
+        .merge(custom_session_router)
+        .merge(two_factor_options_router)
+        .merge(two_factor_context_router)
         .merge(api_key_callbacks_router)
         .merge(jwt_router)
         .merge(one_tap_router)

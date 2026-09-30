@@ -72,6 +72,13 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for SessionManagementPlugin 
         req: &AuthRequest,
         ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
+        if req.path() == "/get-session"
+            && let Some(custom) = ctx
+                .extensions
+                .get::<super::custom_session::CustomSessionPlugin<S>>()
+        {
+            return custom.on_request(req, ctx).await;
+        }
         if req.path() == "/get-session" {
             req.append_response_header("Cache-Control", "no-store".into())?;
             req.append_response_header("Pragma", "no-cache".into())?;
@@ -166,7 +173,7 @@ pub(crate) async fn revoke_other_sessions_core(
 // ---------------------------------------------------------------------------
 
 impl SessionManagementPlugin {
-    async fn handle_get_session(
+    pub(crate) async fn handle_get_session(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,

@@ -197,11 +197,10 @@ fn require_ac(config: &OrganizationConfig) -> AuthResult<&Permissions> {
 }
 
 fn predefined(name: &str, config: &OrganizationConfig) -> bool {
-    if config.roles.is_empty() {
-        ["owner", "admin", "member"].contains(&name)
-    } else {
-        config.roles.contains_key(name)
-    }
+    config.roles.as_ref().map_or_else(
+        || ["owner", "admin", "member"].contains(&name),
+        |roles| roles.contains_key(name),
+    )
 }
 
 async fn unused_name(

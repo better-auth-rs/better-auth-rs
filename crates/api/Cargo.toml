@@ -30,9 +30,6 @@ cookie = { workspace = true }
 
 # Data structures
 uuid = { workspace = true }
-
-# Crypto
-argon2 = { workspace = true }
 sha2 = { workspace = true }
 aes-gcm = { workspace = true }
 hkdf = { workspace = true }
@@ -65,6 +62,7 @@ tokio.workspace = true
 thiserror.workspace = true
 openssl = "0.10.81"
 indexmap = { version = "2.14.2", features = ["serde"] }
+futures-util = "0.3.34"
 
 [dev-dependencies]
 tokio = { workspace = true }

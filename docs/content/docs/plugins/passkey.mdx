@@ -29,15 +29,38 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `rp_id` | `String` | `base_url` host | Relying Party ID (your domain) |
-| `rp_name` | `String` | `"Better Auth"` | Relying Party display name |
-| `origin` | `String` | request `Origin` header | Expected origin for WebAuthn responses |
+| `rp_name` | `String` | `AuthConfig.app_name` | Relying Party display name |
+| `origin` | `PasskeyOrigins` | request `Origin` header | Expected origin, or an array of allowed origins |
+| `authenticator_selection` | `AuthenticatorSelection` | resident key and user verification `Preferred` | Browser registration preferences |
+| `web_authn_challenge_cookie` | `String` | `"better-auth-passkey"` | Challenge cookie suffix; the configured cookie prefix still applies |
+| `registration` | `PasskeyRegistrationOptions` | requires a fresh session | Identity resolver, verification hook and registration extensions |
+| `authentication` | `PasskeyAuthenticationOptions` | no hook or extensions | Verification hook and authentication extensions |
 | `challenge_ttl_secs` | `i64` | `300` (5 min) | Challenge expiration in seconds |
 
-<Callout>
-`rp_id` must be an effective domain of `origin`. The plugin rejects mismatched values before generating a challenge.
-</Callout>
+The `origin` builder accepts a string or `Vec<String>`. Each response must match one allowed origin and the configured RP ID. Generation uses the application's base URL when no RP ID is configured.
 
-The plugin follows Better Auth's `userVerification: "preferred"` behavior. Registration and authentication require user presence, but do not require the authenticator's user-verification flag. An authenticator may use a PIN or biometrics without making verification mandatory for subsequent authentication. Challenge, origin, RP ID, signature, and counter checks still apply. Each verification attempt consumes its challenge, including failed attempts.
+`authenticator_selection` controls browser preferences. The `authenticatorAttachment` query parameter overrides the configured attachment. Registration and authentication require user presence, but do not require UV, including when the browser preference is `Required`. Challenge, origin, RP ID, signature and counter checks still apply. Each verification attempt consumes its challenge before cryptographic verification and application hooks.
+
+### Registration and authentication callbacks
+
+The callback types are exported from `better_auth::plugins::passkey`:
+
+- `PasskeyUserResolver::resolve` receives the request and optional `context` query value. It returns `PasskeyRegistrationUser` with an ID, account name and optional display name.
+- `PasskeyRegistrationHook::after_verification` receives the verified registration, resolved user, client response and saved context. It can override the target user ID and the passkey name. A nonempty client name takes precedence over the hook name. Both names are trimmed.
+- `PasskeyAuthenticationHook::after_verification` receives the verified assertion before the adapter updates its counter or creates a session. A rejected hook leaves the stored counter unchanged.
+- `PasskeyExtensionsResolver::extensions` supplies asynchronous extension input. `PasskeyExtensions::Static` accepts a JSON object directly. Registration always includes `credProps: true`; authentication includes extensions only when configured.
+
+Each callback receives a `PasskeyEndpoint` with the request, parsed body, global configuration, application extensions, plugin metadata and a typed user adapter. The user adapter supports lookup by ID or email, creation, update and deletion. These methods use the active transaction during registration. The callback interface does not expose the upstream arbitrary-model adapter.
+
+Application API errors retain their status and body. Ordinary errors in registration verification become `FAILED_TO_VERIFY_REGISTRATION`; ordinary authentication-hook errors become `AUTHENTICATION_FAILED`.
+
+### Passkey-first registration
+
+Set `registration.require_session` to `false` and supply `resolve_user` to start registration without a session. An existing session takes precedence over the resolver. The application must establish which account the registration flow may use; the optional client `context` string is not proof of account ownership.
+
+Send `createSession: true` to `/passkey/verify-registration` to create a session after registration. The registration hook may create the user through `ctx.users` and return that user's ID. The hook, user lookup, passkey insertion and session creation run in one adapter transaction. A failure rolls back database writes, while the consumed challenge remains consumed. The response includes the passkey fields, `session` and `user`, and sets the session cookie. Without `createSession`, callback writes retain the upstream nontransactional behavior.
+
+With the default `require_session: true`, both registration endpoints require a fresh session. The default freshness window is 24 hours. Set `AuthConfig.session.fresh_age` to zero to disable the freshness check.
 
 ## How It Works
 
@@ -125,4 +148,7 @@ const { session } = await verifyRes.json();
 | 400 | Invalid or missing WebAuthn response data |
 | 400 | Invalid or expired challenge |
 | 401 | Not authenticated (for registration/list/delete) |
-| 403 | Passkey not found |
+| 401 | Credential not found during authentication, or registration targets another session user |
+| 403 | Session is not fresh |
+| 404 | Credential not found during management |
+| 500 | Registration verification or an ordinary registration callback failed |

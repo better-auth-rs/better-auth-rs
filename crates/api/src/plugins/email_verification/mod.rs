@@ -79,6 +79,7 @@ better_auth_core::impl_auth_plugin! {
     }
     extra {
         async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+            ctx.extensions.insert(self.config.clone());
             ctx.email_verification_policy.auto_sign_in_after_verification = self.config.auto_sign_in_after_verification;
             ctx.email_verification_policy.before_email_verification = self.config.before_email_verification.clone();
             ctx.email_verification_policy.after_email_verification = self.config.after_email_verification.clone();
@@ -92,6 +93,31 @@ better_auth_core::impl_auth_plugin! {
 // ---------------------------------------------------------------------------
 
 impl EmailVerificationPlugin {
+    pub(crate) fn from_context(
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> Option<Self> {
+        ctx.extensions
+            .get::<EmailVerificationConfig>()
+            .map(|config| Self::with_config(config.clone()))
+    }
+
+    pub(crate) async fn send_verification_on_sign_up(
+        &self,
+        user: &impl AuthUser,
+        required: bool,
+        request: Option<&AuthRequest>,
+        callback_url: Option<&str>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> AuthResult<()> {
+        if self.config.send_on_sign_up.unwrap_or(required)
+            && let Some(email) = user.email()
+        {
+            self.send_verification_email_for_user(user, email, callback_url, request, ctx)
+                .await?;
+        }
+        Ok(())
+    }
+
     async fn handle_send_verification_email(
         &self,
         req: &AuthRequest,
@@ -108,7 +134,8 @@ impl EmailVerificationPlugin {
             config.send_verification_email = ctx.email_verification_policy.override_sender.clone();
         }
         let response =
-            send_verification_email_core(&body, current_user.as_ref(), &config, ctx).await?;
+            send_verification_email_core(&body, current_user.as_ref(), Some(req), &config, ctx)
+                .await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -189,6 +216,7 @@ impl EmailVerificationPlugin {
         user: &impl AuthUser,
         email: &str,
         callback_url: Option<&str>,
+        request: Option<&AuthRequest>,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<()> {
         let verification_token = token::create_email_verification_token(
@@ -206,6 +234,14 @@ impl EmailVerificationPlugin {
             urlencoding::encode(callback_url),
         );
 
+        if self.config.send_verification_email.is_none()
+            && crate::plugins::email_otp::callbacks::overrides_verification(ctx)
+        {
+            return crate::plugins::email_otp::callbacks::send_verification_override(
+                email, request, ctx,
+            )
+            .await;
+        }
         // Use custom sender if configured, otherwise fall back to EmailProvider
         if let Some(custom_sender) = self
             .config
@@ -253,6 +289,17 @@ impl EmailVerificationPlugin {
         callback_url: Option<&str>,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<()> {
+        self.send_verification_on_sign_in_with_request(user, callback_url, None, ctx)
+            .await
+    }
+
+    pub(crate) async fn send_verification_on_sign_in_with_request(
+        &self,
+        user: &impl AuthUser,
+        callback_url: Option<&str>,
+        request: Option<&AuthRequest>,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> AuthResult<()> {
         if !self.config.send_on_sign_in {
             return Ok(());
         }
@@ -262,7 +309,7 @@ impl EmailVerificationPlugin {
         }
 
         if let Some(email) = user.email() {
-            self.send_verification_email_for_user(user, email, callback_url, ctx)
+            self.send_verification_email_for_user(user, email, callback_url, request, ctx)
                 .await?;
         }
 
@@ -275,6 +322,7 @@ impl EmailVerificationPlugin {
         is_register: bool,
         require_verification: bool,
         callback_url: &str,
+        request: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) {
         let should_send = if is_register {
@@ -286,7 +334,13 @@ impl EmailVerificationPlugin {
             && !user.email_verified()
             && let Some(email) = user.email()
             && let Err(error) = self
-                .send_verification_email_for_user(user, email, Some(callback_url), ctx)
+                .send_verification_email_for_user(
+                    user,
+                    email,
+                    Some(callback_url),
+                    Some(request),
+                    ctx,
+                )
                 .await
         {
             // Upstream logs sender failures without changing the OAuth verification decision.

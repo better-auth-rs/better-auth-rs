@@ -240,6 +240,18 @@ impl SessionView {
         config: &crate::config::SessionConfig,
         supports_native_json: bool,
     ) -> crate::AuthResult<Self> {
+        let mut view =
+            Self::with_internal_fields_for_adapter(session, config, supports_native_json)?;
+        view.filter_returned_fields(config);
+        Ok(view)
+    }
+
+    /// Include hidden application fields for trusted callbacks, never for public responses.
+    pub fn with_internal_fields_for_adapter<T: AuthSession>(
+        session: &T,
+        config: &crate::config::SessionConfig,
+        supports_native_json: bool,
+    ) -> crate::AuthResult<Self> {
         let mut view = Self::from(session);
         if !config.additional_fields.is_empty() {
             let model = serde_json::to_value(session)?;
@@ -255,9 +267,7 @@ impl SessionView {
                 };
                 if let Some(mut value) = value {
                     field.normalize_date(&mut value)?;
-                    if field.returned {
-                        let _ = view.additional_fields.insert(name.clone(), value);
-                    }
+                    let _ = view.additional_fields.insert(name.clone(), value);
                 }
             }
         }

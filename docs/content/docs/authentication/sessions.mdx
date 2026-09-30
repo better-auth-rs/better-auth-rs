@@ -123,6 +123,19 @@ config.session.cookie_cache = Some(CookieCacheConfig {
 
 Use `disableCookieCache=true` to read the authoritative session storage immediately. Session listing and revocation also use that storage. Changing `version` invalidates previously issued caches. This configuration uses a persistent session store; stateless cache refresh is not exposed.
 
+Set `version` to a string with `.into()` or use `CookieCacheVersion::dynamic` for an asynchronous callback:
+
+```rust
+use better_auth::config::CookieCacheVersion;
+
+config.session.cookie_cache.as_mut().unwrap().version =
+    CookieCacheVersion::dynamic(|data| async move {
+        Ok(format!("v2:{}", data.user.email_verified))
+    });
+```
+
+The callback receives the snapshot at the cache write or read boundary. New sessions include hidden application fields before cookie filtering. Session lookups and signed cookie reads already contain filtered fields. Hidden fields stay out of the cookie and response. A version mismatch reads the session store; a callback error aborts the request. Compact, JWT, JWE, and plugin-signed JWT caches use the same callback.
+
 ## Using Sessions in Axum Handlers
 
 With the `axum` feature, use the `CurrentSession` extractor to access the authenticated user directly in your handler:

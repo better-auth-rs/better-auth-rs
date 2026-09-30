@@ -9,6 +9,10 @@ The default algorithm is Ed25519 (`EdDSA`). Select `Rs256`, `Ps256`, `Es256`, or
 
 Session tokens contain the user fields, the user ID in `sub`, the issue time in `iat`, and a fifteen-minute `exp`. The issuer and audience default to the configured base URL. Override these values with `.issuer(...)`, `.audience(...)`, and `.expiration_time(chrono::Duration::minutes(5))`.
 
+Audience configuration preserves a single string or an array: `.audience("service-a".into())` and `.audience(vec!["service-a".into(), "service-b".into()].into())` produce the corresponding `aud` claim. Verification requires at least one matching recipient; an empty configured array accepts no token.
+
+`expiration_time` accepts a relative `chrono::Duration`, an absolute `chrono::DateTime<Utc>`, or an absolute `i64` NumericDate in seconds. Use `JwtExpiration::At(serde_json::Number)` for fractional absolute seconds. Absolute dates discard subsecond precision, matching upstream Date values; relative durations round to the nearest second with ties toward positive infinity. An explicit payload `exp` overrides the configured default.
+
 `.rotation_interval(chrono::Duration::days(30))` enables signing key rotation. `.grace_period(...)` controls how long expired public keys remain discoverable; the default is thirty days. Choose a grace period that covers the lifetime of issued tokens. `.jwks_path("/keys")` changes the discovery route. `.disable_setting_jwt_header(true)` suppresses the session response header.
 
 Trusted server code may call `sign` with an application JSON payload. `sign_with_options` accepts `JwtSigningOptions` with an optional `key_id`, `algorithm`, and protected `header`. A pinned key must exist, remain live, and match the requested algorithm. `.key_pair_configs(vec![JwtKeyPairConfig::new(JwtAlgorithm::Ps256)])` permits lazy provisioning for an additional algorithm. An unpinned request prefers the primary algorithm. `create_key_pair` explicitly provisions a key. Concurrent first requests may provision multiple valid keys, as in upstream.

@@ -230,7 +230,7 @@ impl PasswordManagementPlugin {
                 AuthError::AuthenticationFailed("Unauthorized".to_string()).to_auth_response()
             );
         };
-        let response = verify_password_core(&body, &user, &self.config, ctx).await?;
+        let response = verify_password_core(&body, &user, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 

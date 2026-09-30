@@ -104,15 +104,24 @@ impl<S: AuthSchema> SessionManager<S> {
     }
 
     pub async fn session_view(&self, session: &impl AuthSession) -> AuthResult<SessionView> {
+        let mut view = self.internal_session_view(session).await?;
+        view.filter_returned_fields(&self.config.session);
+        Ok(view)
+    }
+
+    /// Include hidden session fields for trusted callbacks before public output filtering.
+    pub async fn internal_session_view(
+        &self,
+        session: &impl AuthSession,
+    ) -> AuthResult<SessionView> {
         if self.secondary_storage
             && !self.config.session.store_session_in_database
-            && let Some((_, Some(mut data))) =
+            && let Some((_, Some(data))) =
                 self.database.get_session_snapshot(session.token()).await?
         {
-            data.session.filter_returned_fields(&self.config.session);
             return Ok(data.session);
         }
-        let mut view = SessionView::with_fields_for_adapter(
+        let mut view = SessionView::with_internal_fields_for_adapter(
             session,
             &self.config.session,
             self.database.supports_native_json(),
@@ -134,6 +143,21 @@ impl<S: AuthSchema> SessionManager<S> {
             .collect(),
         );
         Ok(view)
+    }
+
+    fn internal_user_view(&self, user: &impl AuthUser) -> AuthResult<UserView> {
+        UserView::with_internal_fields_for_adapter(
+            user,
+            &self.config.user,
+            &self.user_metadata,
+            self.database.supports_native_json(),
+        )
+    }
+
+    fn public_data(&self, mut data: SessionData) -> SessionData {
+        data.user.filter_cached_fields(&self.config.user);
+        data.session.filter_returned_fields(&self.config.session);
+        data
     }
 
     /// Install a plugin-provided signer without coupling core to the plugin implementation.
@@ -263,7 +287,11 @@ impl<S: AuthSchema> SessionManager<S> {
             };
             if let Some((mut payload, expires)) = decoded
                 && payload.data.session.token == token
-                && payload.version == cache.version
+                && (if payload.version.is_empty() {
+                    "1"
+                } else {
+                    &payload.version
+                }) == cache.version.resolve(&payload.data).await?
                 && expires >= Utc::now().timestamp_millis()
                 && payload.data.session.expires_at >= Utc::now()
             {
@@ -309,7 +337,7 @@ impl<S: AuthSchema> SessionManager<S> {
         let dont_remember = self.dont_remember(req);
         if dont_remember || query_flag(req, "disableRefresh") {
             return Ok(SessionResolution {
-                data: Some(data),
+                data: Some(self.public_data(data)),
                 needs_refresh: None,
             });
         }
@@ -317,7 +345,7 @@ impl<S: AuthSchema> SessionManager<S> {
         if self.config.session.defer_session_refresh && !is_post {
             self.write_cache(req, &data, false).await?;
             return Ok(SessionResolution {
-                data: Some(data),
+                data: Some(self.public_data(data)),
                 needs_refresh: Some(needs_refresh),
             });
         }
@@ -333,12 +361,12 @@ impl<S: AuthSchema> SessionManager<S> {
                 }
                 result => result?,
             };
-            data.session = self.session_view(&updated).await?;
+            data.session = self.internal_session_view(&updated).await?;
             req.append_response_header("Set-Cookie", create_session_cookie(&token, &self.config))?;
         }
         self.write_cache(req, &data, false).await?;
         Ok(SessionResolution {
-            data: Some(data),
+            data: Some(self.public_data(data)),
             needs_refresh: None,
         })
     }
@@ -358,12 +386,13 @@ impl<S: AuthSchema> SessionManager<S> {
                 .as_ref()
                 .filter(|cache| cache.enabled),
         ) {
-            let (payload, max_age) = cookie_cache::payload(data, cache, dont_remember)?;
+            let (payload, max_age) =
+                cookie_cache::payload(data, &self.config, cache, dont_remember).await?;
             Some(signer.sign(payload, max_age).await?)
         } else {
             None
         };
-        cookie_cache::write(req, data, &self.config, dont_remember, signed)
+        cookie_cache::write(req, data, &self.config, dont_remember, signed).await
     }
 
     /// Read the signed marker for a browser-session-only login.

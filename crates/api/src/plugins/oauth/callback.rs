@@ -333,6 +333,7 @@ pub(super) async fn handle_callback(
         &user_info.user,
         &tokens,
         OAuthSignInOptions {
+            request: req,
             disable_sign_up,
             callback_url: &payload.callback_url,
             email_verification: config.email_verification.as_deref(),

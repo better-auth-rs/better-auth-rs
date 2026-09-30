@@ -23,7 +23,7 @@ impl<S: AuthSchema> VerificationSessionCleanup for CachedVerificationSessions<'_
 }
 
 impl<S: AuthSchema> SecondaryStore<S> {
-    async fn refresh_user_sessions(&self, user: &S::User) -> AuthResult<()> {
+    pub(super) async fn refresh_user_sessions(&self, user: &S::User) -> AuthResult<()> {
         if self.storage.is_none() {
             return Ok(());
         }

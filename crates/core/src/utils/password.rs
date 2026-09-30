@@ -181,6 +181,14 @@ pub type OnPasswordResetCallback = dyn Fn(
     + Send
     + Sync;
 impl PasswordRuntimePolicy {
+    /// Reject overlong credentials before performing a password hash or database lookup.
+    pub fn validate_max_length(&self, password: &str) -> AuthResult<()> {
+        if password.encode_utf16().count() > self.max_length {
+            return Err(AuthError::bad_request("Password too long"));
+        }
+        Ok(())
+    }
+
     pub fn new(config: &crate::config::PasswordConfig) -> Self {
         Self {
             hasher: None,

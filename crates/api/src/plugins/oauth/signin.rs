@@ -12,6 +12,7 @@ use super::state::AccountCookiePayload;
 use crate::plugins::helpers::{SessionIssueError, apply_default_role, issue_user_session};
 
 pub(super) struct OAuthSignInOptions<'a> {
+    pub(super) request: &'a AuthRequest,
     pub(super) disable_sign_up: bool,
     pub(super) callback_url: &'a str,
     pub(super) email_verification:
@@ -37,6 +38,7 @@ impl OAuthSignInOptions<'_> {
                     is_register,
                     required,
                     self.callback_url,
+                    self.request,
                     ctx,
                 )
                 .await;
@@ -463,6 +465,7 @@ pub(crate) async fn sign_in_verified_profile(
         &user,
         &tokens,
         OAuthSignInOptions {
+            request: req,
             disable_sign_up,
             callback_url: "/",
             email_verification: None,

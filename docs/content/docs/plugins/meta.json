@@ -11,6 +11,7 @@
     "magic-link",
     "one-time-token",
     "multi-session",
+    "custom-session",
     "two-factor",
     "organization",
     "admin",

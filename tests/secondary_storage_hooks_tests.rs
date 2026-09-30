@@ -692,3 +692,71 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
     assert_eq!(sessions.len(), 1);
     assert_eq!(sessions.first().unwrap().token(), owner.token());
 }
+
+#[tokio::test]
+async fn transaction_user_changes_refresh_or_revoke_cached_sessions_only_after_commit() {
+    for delete in [false, true] {
+        for commit in [false, true] {
+            let (auth, _, hooks) = setup(false).await;
+            let user = auth
+                .store()
+                .create_user(
+                    CreateUser::new()
+                        .with_email("transaction-user@example.com")
+                        .with_name("Original"),
+                )
+                .await
+                .unwrap();
+            let session = auth
+                .store()
+                .create_session(input(user.id.clone()))
+                .await
+                .unwrap();
+            let token = session.token().to_owned();
+            let user_id = user.id.clone();
+            let cached_token = token.clone();
+            let cache = hooks.cache.clone();
+            let result: AuthResult<()> = transaction(auth.store().as_ref(), move |tx| {
+                Box::pin(async move {
+                    let _ = tx
+                        .update_user(
+                            &user_id,
+                            better_auth::prelude::UpdateUser {
+                                name: Some("Updated".into()),
+                                ..Default::default()
+                            },
+                        )
+                        .await?;
+                    if delete {
+                        tx.delete_user(&user_id).await?;
+                    }
+                    let encoded = cache.get(&cached_token).await?.unwrap();
+                    let cached: serde_json::Value =
+                        serde_json::from_str(encoded.as_str().unwrap())?;
+                    assert_eq!(cached["user"]["name"], "Original");
+                    if commit {
+                        Ok(())
+                    } else {
+                        Err(AuthError::internal("rollback"))
+                    }
+                })
+            })
+            .await;
+            assert_eq!(result.is_ok(), commit);
+            let cached = hooks.cache.get(&token).await.unwrap();
+            let stored = auth.store().get_user_by_id(&user.id).await.unwrap();
+            if delete && commit {
+                assert!(cached.is_none());
+                assert!(stored.is_none());
+                assert!(auth.store().get_session(&token).await.unwrap().is_none());
+            } else {
+                let encoded = cached.unwrap();
+                let cached: serde_json::Value =
+                    serde_json::from_str(encoded.as_str().unwrap()).unwrap();
+                let name = if commit { "Updated" } else { "Original" };
+                assert_eq!(cached["user"]["name"], name);
+                assert_eq!(stored.unwrap().name(), Some(name));
+            }
+        }
+    }
+}

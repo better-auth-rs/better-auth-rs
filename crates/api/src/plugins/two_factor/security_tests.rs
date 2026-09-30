@@ -119,7 +119,7 @@ async fn otp_enrollment_rotates_session_and_does_not_enroll_an_authenticator() {
     let (ctx, user, session) =
         create_test_context_with_credential_user("otp-enrollment@example.com", false).await;
     let body = EnableRequest {
-        password: "password123".into(),
+        password: Some("password123".into()),
         issuer: None,
         method: EnrollmentMethod::Otp,
     };
@@ -171,7 +171,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
     let (ctx, user, session) =
         create_test_context_with_credential_user("totp-enrollment@example.com", false).await;
     let body = EnableRequest {
-        password: "password123".into(),
+        password: Some("password123".into()),
         issuer: None,
         method: EnrollmentMethod::Totp,
     };
@@ -261,7 +261,7 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
     };
     let (enrollment, _) = enable_core(
         &EnableRequest {
-            password: "password123".into(),
+            password: Some("password123".into()),
             issuer: None,
             method: EnrollmentMethod::Totp,
         },

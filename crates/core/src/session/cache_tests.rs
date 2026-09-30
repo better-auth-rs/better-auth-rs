@@ -107,7 +107,9 @@ async fn cache_is_bound_to_session_token_and_signature() {
     ] {
         let (manager, original) = setup(config(strategy)).await;
         let cache = manager.config.session.cookie_cache.as_ref().unwrap();
-        let encoded = cookie_cache::encode(&original, &manager.config, cache, false).unwrap();
+        let encoded = cookie_cache::encode(&original, &manager.config, cache, false)
+            .await
+            .unwrap();
         let user = manager
             .database
             .create_user(CreateUser::new().with_email("other@example.com"))
@@ -153,7 +155,9 @@ async fn cache_is_bound_to_session_token_and_signature() {
 async fn valid_cache_survives_revocation_until_authoritative_read() {
     let (manager, data) = setup(config(CookieCacheStrategy::Compact)).await;
     let cache = manager.config.session.cookie_cache.as_ref().unwrap();
-    let encoded = cookie_cache::encode(&data, &manager.config, cache, false).unwrap();
+    let encoded = cookie_cache::encode(&data, &manager.config, cache, false)
+        .await
+        .unwrap();
     manager
         .database
         .delete_session(&data.session.token)

@@ -67,7 +67,7 @@ Without secondary storage, session and verification data remain in the database 
 | `enabled` | `bool` | `false` | Whether the cache is active |
 | `max_age` | `chrono::Duration` | `5 minutes` | Max age before forcing a DB lookup |
 | `strategy` | `CookieCacheStrategy` | `Compact` | Protection strategy for the cached payload |
-| `version` | `String` | `"1"` | Reject cached payloads with a different version |
+| `version` | `CookieCacheVersion` | `"1".into()` | Constant or asynchronous snapshot version; reject caches with a different version |
 
 `CookieCacheStrategy` variants:
 

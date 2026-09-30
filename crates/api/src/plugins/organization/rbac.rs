@@ -133,12 +133,12 @@ pub fn has_permission(
     role: &str,
     resource: &Resource,
     action: &Action,
-    custom_roles: &HashMap<String, crate::plugins::organization::RolePermissions>,
+    custom_roles: Option<&HashMap<String, crate::plugins::organization::RolePermissions>>,
 ) -> bool {
     let default = default_roles();
 
     // Check custom roles first
-    if let Some(custom_role) = custom_roles.get(role) {
+    if let Some(custom_role) = custom_roles.and_then(|roles| roles.get(role)) {
         let actions = match resource {
             Resource::Organization => &custom_role.organization,
             Resource::Member => &custom_role.member,
@@ -157,7 +157,7 @@ pub fn has_permission(
         return actions.iter().any(|a| a == action_str);
     }
 
-    if !custom_roles.is_empty() {
+    if custom_roles.is_some() {
         return false;
     }
 
@@ -173,8 +173,10 @@ pub fn has_permission(
 
 type Statements = HashMap<String, Vec<String>>;
 
-fn role_statements(roles: &HashMap<String, super::RolePermissions>) -> HashMap<String, Statements> {
-    if roles.is_empty() {
+fn role_statements(
+    roles: Option<&HashMap<String, super::RolePermissions>>,
+) -> HashMap<String, Statements> {
+    let Some(roles) = roles else {
         return default_roles()
             .into_iter()
             .map(|(name, role)| {
@@ -194,7 +196,7 @@ fn role_statements(roles: &HashMap<String, super::RolePermissions>) -> HashMap<S
                 (name, statements)
             })
             .collect();
-    }
+    };
     roles
         .iter()
         .map(|(name, role)| {
@@ -263,7 +265,7 @@ pub(crate) async fn check_permissions(
     config: &super::OrganizationConfig,
     ctx: &better_auth_core::AuthContext<impl better_auth_core::AuthSchema>,
 ) -> better_auth_core::AuthResult<bool> {
-    let mut roles = role_statements(&config.roles);
+    let mut roles = role_statements(config.roles.as_ref());
     if config.dynamic_access_control && config.ac.is_some() {
         for row in ctx
             .database
@@ -321,7 +323,7 @@ pub fn has_permission_any(
     roles_str: &str,
     resource: &Resource,
     action: &Action,
-    custom_roles: &HashMap<String, crate::plugins::organization::RolePermissions>,
+    custom_roles: Option<&HashMap<String, crate::plugins::organization::RolePermissions>>,
 ) -> bool {
     for role in roles_str.split(',').map(|s| s.trim()) {
         if has_permission(role, resource, action, custom_roles) {
@@ -373,96 +375,88 @@ mod tests {
             "owner",
             &Resource::Organization,
             &Action::Delete,
-            &custom
+            Some(&custom)
         ));
         assert!(!has_permission(
             "admin",
             &Resource::Organization,
             &Action::Update,
-            &custom
+            Some(&custom)
         ));
     }
 
     // Upstream reference: packages/better-auth/src/plugins/access/access.test.ts and packages/better-auth/src/plugins/organization/access/statement.ts; adapted to the Rust organization RBAC helpers.
     #[test]
     fn test_owner_has_full_permissions() {
-        let custom = HashMap::new();
-
         assert!(has_permission(
             "owner",
             &Resource::Organization,
             &Action::Update,
-            &custom
+            None
         ));
         assert!(has_permission(
             "owner",
             &Resource::Organization,
             &Action::Delete,
-            &custom
+            None
         ));
         assert!(has_permission(
             "owner",
             &Resource::Member,
             &Action::Create,
-            &custom
+            None
         ));
         assert!(has_permission(
             "owner",
             &Resource::Invitation,
             &Action::Cancel,
-            &custom
+            None
         ));
     }
 
     // Upstream reference: packages/better-auth/src/plugins/access/access.test.ts and packages/better-auth/src/plugins/organization/access/statement.ts; adapted to the Rust organization RBAC helpers.
     #[test]
     fn test_admin_cannot_delete_organization() {
-        let custom = HashMap::new();
-
         assert!(has_permission(
             "admin",
             &Resource::Organization,
             &Action::Update,
-            &custom
+            None
         ));
         assert!(!has_permission(
             "admin",
             &Resource::Organization,
             &Action::Delete,
-            &custom
+            None
         ));
     }
 
     // Upstream reference: packages/better-auth/src/plugins/access/access.test.ts and packages/better-auth/src/plugins/organization/access/statement.ts; adapted to the Rust organization RBAC helpers.
     #[test]
     fn test_member_has_no_permissions() {
-        let custom = HashMap::new();
-
         assert!(!has_permission(
             "member",
             &Resource::Organization,
             &Action::Update,
-            &custom
+            None
         ));
         assert!(!has_permission(
             "member",
             &Resource::Member,
             &Action::Create,
-            &custom
+            None
         ));
     }
 
     // Upstream reference: packages/better-auth/src/plugins/access/access.test.ts and packages/better-auth/src/plugins/organization/access/statement.ts; adapted to the Rust organization RBAC helpers.
     #[test]
     fn test_composite_roles() {
-        let custom = HashMap::new();
-
         // member,admin should have admin permissions
         assert!(has_permission_any(
             "member,admin",
             &Resource::Organization,
             &Action::Update,
-            &custom
+            None
         ));
 
         // member alone should not
@@ -470,7 +464,7 @@ mod tests {
             "member",
             &Resource::Organization,
             &Action::Update,
-            &custom
+            None
         ));
     }
 }

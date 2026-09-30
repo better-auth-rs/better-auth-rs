@@ -93,15 +93,15 @@ pub struct JwtPluginConfig {
     /// Algorithm used for newly generated keys.
     #[config(default = JwtAlgorithm::EdDsa)]
     pub algorithm: JwtAlgorithm,
-    /// Token lifetime.
-    #[config(default = Duration::minutes(15))]
-    pub expiration_time: Duration,
+    /// Relative token lifetime or absolute expiration timestamp.
+    #[config(default = JwtExpiration::After(Duration::minutes(15)), skip)]
+    pub expiration_time: JwtExpiration,
     /// Issuer claim; defaults to the configured base URL.
     #[config(default = None)]
     pub issuer: Option<String>,
     /// Audience claim; defaults to the configured base URL.
     #[config(default = None)]
-    pub audience: Option<String>,
+    pub audience: Option<JwtAudience>,
     /// Lifetime of signing keys; no automatic rotation when absent.
     #[config(default = None)]
     pub rotation_interval: Option<Duration>,
@@ -119,6 +119,14 @@ pub struct JwtPluginConfig {
 /// Issue session JWTs with keys persisted through `JwksStore`.
 pub struct JwtPlugin {
     config: JwtPluginConfig,
+}
+
+impl JwtPlugin {
+    /// Set a relative duration, an absolute date, or a NumericDate in seconds.
+    pub fn expiration_time(mut self, expiration: impl Into<JwtExpiration>) -> Self {
+        self.config.expiration_time = expiration.into();
+        self
+    }
 }
 
 #[async_trait::async_trait]

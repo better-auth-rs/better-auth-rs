@@ -1,0 +1,12 @@
+---
+title: Custom Session
+description: Transform public session responses with typed application context.
+---
+
+Register `CustomSessionPlugin::new(callback)` with an implementation of `CustomSessionCallback<YourSchema>`. The asynchronous callback receives `CustomSessionInput`, the request, and `AuthContext<YourSchema>`. Return the response as a JSON value. `input.data` contains the public user and session; `input.needs_refresh` carries the optional deferred-refresh signal. The context provides typed store access and configured plugin extensions.
+
+The plugin overrides `GET /get-session` regardless of its registration order relative to `SessionManagementPlugin`. A successful transformation preserves the session response headers and cookies. A missing session returns `null` without calling the callback. As in upstream Better Auth, an error reading the underlying session also returns `null`. Callback errors propagate. The override accepts only `GET`, including when deferred session refresh is enabled.
+
+Call `.mutate_list_device_sessions(true)` to apply the callback to each result from `MultiSessionPlugin`. The callbacks run concurrently and the output preserves list order. An error fails the response while other callbacks continue, matching upstream `Promise.all`. Store hooks retain the request context in these tasks.
+
+The callback changes the public response only. Internal authentication, persisted sessions, and cookie-cache contents retain their original shapes. Return `serde_json::to_value(input)?` with added application fields to preserve the default response fields.

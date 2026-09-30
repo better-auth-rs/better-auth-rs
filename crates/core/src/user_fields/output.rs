@@ -16,6 +16,58 @@ const PLUGIN_FIELDS: &[(&str, &[&str])] = &[
 ];
 
 impl UserView {
+    /// Build an enumeration-safe signup response without adapter transforms or persistence.
+    pub fn synthetic_output(
+        data: Map<String, Value>,
+        config: &super::UserConfig,
+        metadata: &MetadataMap,
+    ) -> Map<String, Value> {
+        let mut output = Map::new();
+        for name in [
+            "id",
+            "name",
+            "email",
+            "emailVerified",
+            "image",
+            "createdAt",
+            "updatedAt",
+        ] {
+            if let Some(value) = data.get(name) {
+                let _ = output.insert(name.into(), value.clone());
+            }
+        }
+        for (plugin, names) in PLUGIN_FIELDS {
+            if metadata.get(*plugin).and_then(Value::as_bool) != Some(true) {
+                continue;
+            }
+            for name in *names {
+                let value = data.get(*name).cloned().unwrap_or_else(|| {
+                    if ["isAnonymous", "twoFactorEnabled", "banned"].contains(name) {
+                        Value::Bool(false)
+                    } else {
+                        Value::Null
+                    }
+                });
+                let _ = output.insert((*name).into(), value);
+            }
+        }
+        for (name, field) in &config.additional_fields {
+            if !field.returned {
+                let _ = output.remove(name);
+                continue;
+            }
+            let value = data
+                .get(name)
+                .cloned()
+                .or_else(|| field.default_value())
+                .or_else(|| (field.required != Some(true)).then_some(Value::Null));
+            if let Some(value) = value {
+                let _ = output.insert(name.clone(), value);
+            }
+        }
+        output
+    }
+
     /// Apply current `returned` restrictions to cached fields without repeating adapter transforms.
     /// Upstream keeps fields from disabled plugins until the cache expires or its version changes.
     pub(crate) fn filter_cached_fields(&mut self, config: &super::UserConfig) {

@@ -3,6 +3,7 @@ use super::{
     otp::invalid_otp,
     request::{Body, validate_email},
 };
+use crate::plugins::endpoint_context::EndpointContext;
 use crate::plugins::helpers::{
     SessionIssueError, apply_default_role, apply_user_create_fields, get_credential_account,
     issue_user_session,
@@ -39,7 +40,8 @@ impl EmailOtpPlugin {
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let body = body!(req, ["email", "type"], []);
-        if self.config.sender.is_none() {
+        let endpoint = EndpointContext::new(Some(req), body.callback_body(&["email", "type"]), ctx);
+        if !self.has_sender(ctx) {
             return Err(AuthError::bad_request(
                 "send email verification is not implemented",
             ));
@@ -50,7 +52,7 @@ impl EmailOtpPlugin {
         if kind == EmailOtpType::ChangeEmail {
             return Err(AuthError::bad_request("Invalid OTP type"));
         }
-        let otp = self.resolve_otp(ctx, &email, kind).await?;
+        let otp = self.resolve_otp(&endpoint, &email, kind).await?;
         if ctx.database.get_user_by_email(&email).await?.is_none()
             && !(kind == EmailOtpType::SignIn && !self.config.disable_sign_up)
         {
@@ -59,7 +61,7 @@ impl EmailOtpPlugin {
                 .await?;
             return success();
         }
-        self.deliver(&email, otp, kind).await?;
+        self.deliver(&endpoint, &email, otp, kind).await?;
         success()
     }
 
@@ -170,16 +172,17 @@ impl EmailOtpPlugin {
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let body = body!(req, ["email"], []);
+        let endpoint = EndpointContext::new(Some(req), body.callback_body(&["email"]), ctx);
         let email = body.get("email").to_lowercase();
         let kind = EmailOtpType::ForgetPassword;
-        let otp = self.resolve_otp(ctx, &email, kind).await?;
+        let otp = self.resolve_otp(&endpoint, &email, kind).await?;
         if ctx.database.get_user_by_email(&email).await?.is_none() {
             ctx.database
                 .delete_verification_by_identifier(&kind.identifier(&email))
                 .await?;
             return success();
         }
-        self.deliver(&email, otp, kind).await?;
+        self.deliver(&endpoint, &email, otp, kind).await?;
         success()
     }
 
@@ -266,11 +269,14 @@ impl EmailOtpPlugin {
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let body = body!(req, ["newEmail"], ["otp"]);
-        let (user, _) = ctx
+        let mut endpoint =
+            EndpointContext::new(Some(req), body.callback_body(&["newEmail", "otp"]), ctx);
+        let (user, session) = ctx
             .require_authoritative_session(req)
             .await
             .map_err(session_error)?;
         let (email, new_email) = self.change_addresses(&user, &body)?;
+        endpoint.session = Some((user.clone(), session));
         if self.config.verify_current_email {
             let otp = body
                 .optional("otp")
@@ -286,14 +292,16 @@ impl EmailOtpPlugin {
         }
         let kind = EmailOtpType::ChangeEmail;
         let identifier = kind.identifier(&format!("{email}-{new_email}"));
-        let otp = self.create_otp(ctx, &new_email, kind, &identifier).await?;
+        let otp = self
+            .create_otp(&endpoint, &new_email, kind, &identifier)
+            .await?;
         if ctx.database.get_user_by_email(&new_email).await?.is_some() {
             ctx.database
                 .delete_verification_by_identifier(&identifier)
                 .await?;
             return success();
         }
-        self.deliver(&new_email, otp, kind).await?;
+        self.deliver(&endpoint, &new_email, otp, kind).await?;
         success()
     }
 

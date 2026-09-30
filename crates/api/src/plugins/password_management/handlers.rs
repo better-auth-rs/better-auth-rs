@@ -100,8 +100,8 @@ pub(crate) async fn reset_password_core(
     }
     password_utils::validate_password(
         &body.new_password,
-        ctx.config.password.min_length,
-        ctx.config.password.max_length,
+        ctx.password_policy.min_length,
+        ctx.password_policy.max_length,
         ctx,
     )?;
 
@@ -117,7 +117,8 @@ pub(crate) async fn reset_password_core(
     }
 
     let password_hash =
-        password_utils::hash_password(config.password_hasher.as_ref(), &body.new_password).await?;
+        password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.new_password)
+            .await?;
 
     if let Some(account) = get_credential_account(ctx, &user_id).await? {
         let _ = ctx
@@ -221,29 +222,32 @@ pub(crate) async fn change_password_core(
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(ChangePasswordResponse<UserView>, Option<String>)> {
+    password_utils::validate_password(
+        &body.new_password,
+        ctx.password_policy.min_length,
+        ctx.password_policy.max_length,
+        ctx,
+    )?;
+    ctx.password_policy
+        .validate_max_length(&body.current_password)?;
+    let stored_hash = get_credential_password_hash(ctx, user)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("Credential account not found"))?;
+    let password_hash =
+        password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.new_password)
+            .await?;
     if config.require_current_password {
-        let stored_hash = get_credential_password_hash(ctx, user)
-            .await?
-            .ok_or_else(|| AuthError::bad_request("Credential account not found"))?;
-
         password_utils::verify_password(
-            config.password_hasher.as_ref(),
+            ctx.password_policy.hasher.as_ref(),
             &body.current_password,
             &stored_hash,
         )
         .await
-        .map_err(|_| AuthError::bad_request("Invalid password"))?;
+        .map_err(|error| match error {
+            AuthError::InvalidCredentials => AuthError::bad_request("Invalid password"),
+            other => other,
+        })?;
     }
-
-    password_utils::validate_password(
-        &body.new_password,
-        ctx.config.password.min_length,
-        ctx.config.password.max_length,
-        ctx,
-    )?;
-
-    let password_hash =
-        password_utils::hash_password(config.password_hasher.as_ref(), &body.new_password).await?;
 
     let credential_account = get_credential_account(ctx, user.id())
         .await?
@@ -292,15 +296,15 @@ pub(crate) async fn change_password_core(
 pub(crate) async fn verify_password_core(
     body: &VerifyPasswordRequest,
     user: &impl AuthUser,
-    config: &PasswordManagementConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
+    ctx.password_policy.validate_max_length(&body.password)?;
     let stored_hash = get_credential_password_hash(ctx, user)
         .await?
         .ok_or_else(|| AuthError::bad_request("Invalid password"))?;
 
     password_utils::verify_password(
-        config.password_hasher.as_ref(),
+        ctx.password_policy.hasher.as_ref(),
         &body.password,
         &stored_hash,
     )

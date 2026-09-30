@@ -86,8 +86,8 @@ pub(super) async fn begin_attempt<S: better_auth_core::AuthSchema>(
     let attempts = consumed
         .value()
         .parse::<usize>()
-        .unwrap_or(DEFAULT_OTP_ATTEMPT_LIMIT);
-    if attempts >= DEFAULT_OTP_ATTEMPT_LIMIT {
+        .unwrap_or(CHALLENGE_ATTEMPT_LIMIT);
+    if attempts >= CHALLENGE_ATTEMPT_LIMIT {
         let invalidation = ctx
             .database
             .consume_verification_by_identifier(&pending.key)

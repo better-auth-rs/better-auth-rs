@@ -7,45 +7,11 @@ use hmac::{Hmac, Mac};
 use rand::Rng;
 use sha2::{Digest, Sha256};
 
+use super::EmailOtpCallbacks;
 use super::{EmailOtpMessage, EmailOtpPlugin, EmailOtpStorage, EmailOtpType};
+use crate::plugins::endpoint_context::EndpointContext;
 use crate::plugins::symmetric::{decrypt, encrypt};
-
-pub(super) struct VerificationSender<S: AuthSchema> {
-    pub(super) config: super::EmailOtpConfig,
-    pub(super) context: AuthContext<S>,
-}
-
-#[async_trait::async_trait]
-impl<S: AuthSchema> better_auth_core::email::SendVerificationEmail for VerificationSender<S> {
-    async fn send(
-        &self,
-        user: &better_auth_core::wire::UserView,
-        _url: &str,
-        _token: &str,
-    ) -> AuthResult<()> {
-        let email = user
-            .email
-            .as_deref()
-            .ok_or_else(|| AuthError::bad_request("Invalid email"))?;
-        let plugin = EmailOtpPlugin::with_config(self.config.clone());
-        let kind = EmailOtpType::EmailVerification;
-        let otp = plugin.resolve_otp(&self.context, email, kind).await?;
-        if self
-            .context
-            .database
-            .get_user_by_email(email)
-            .await?
-            .is_none()
-        {
-            self.context
-                .database
-                .delete_verification_by_identifier(&kind.identifier(email))
-                .await?;
-            return Ok(());
-        }
-        plugin.deliver(email, otp, kind).await
-    }
-}
+use std::sync::Arc;
 
 pub(super) fn invalid_otp() -> AuthError {
     AuthError::Upstream {
@@ -77,17 +43,37 @@ impl EmailOtpPlugin {
             self.config.allowed_attempts
         }
     }
-    fn generate(&self, email: &str, kind: EmailOtpType) -> String {
-        self.config
-            .generate_otp
-            .as_ref()
-            .and_then(|generate| generate(email, kind))
-            .filter(|otp| !otp.is_empty())
-            .unwrap_or_else(|| {
-                (0..self.config.otp_length)
-                    .map(|_| char::from(b'0' + rand::thread_rng().gen_range(0..10)))
-                    .collect()
-            })
+    pub(super) fn has_sender<S: AuthSchema>(&self, ctx: &AuthContext<S>) -> bool {
+        self.config.sender.is_some()
+            || ctx
+                .extensions
+                .get::<Arc<EmailOtpCallbacks<S>>>()
+                .is_some_and(|callbacks| callbacks.sender.is_some())
+    }
+    fn generate<S: AuthSchema>(
+        &self,
+        endpoint: &EndpointContext<'_, S>,
+        email: &str,
+        kind: EmailOtpType,
+    ) -> AuthResult<String> {
+        let code = if let Some(generator) = endpoint
+            .auth
+            .extensions
+            .get::<Arc<EmailOtpCallbacks<S>>>()
+            .and_then(|callbacks| callbacks.generator.as_ref())
+        {
+            generator(email, kind, endpoint)?
+        } else {
+            self.config
+                .generate_otp
+                .as_ref()
+                .and_then(|generate| generate(email, kind))
+        };
+        Ok(code.filter(|otp| !otp.is_empty()).unwrap_or_else(|| {
+            (0..self.config.otp_length)
+                .map(|_| char::from(b'0' + rand::thread_rng().gen_range(0..10)))
+                .collect()
+        }))
     }
     async fn store_code(&self, code: &str, secret: &str) -> AuthResult<String> {
         match &self.config.storage {
@@ -121,37 +107,50 @@ impl EmailOtpPlugin {
             .verify_slice(&expected.finalize().into_bytes())
             .is_ok())
     }
-    pub(super) async fn deliver(
+    pub(super) async fn deliver<S: AuthSchema>(
         &self,
+        endpoint: &EndpointContext<'_, S>,
         email: &str,
         otp: String,
         kind: EmailOtpType,
     ) -> AuthResult<()> {
-        let sender =
-            self.config.sender.as_ref().ok_or_else(|| {
-                AuthError::bad_request("send email verification is not implemented")
-            })?;
-        // Upstream runInBackgroundOrAwait logs sender failures without changing the HTTP response.
-        if let Err(error) = sender
-            .send(&EmailOtpMessage {
-                email: email.to_owned(),
-                otp,
-                kind,
-            })
-            .await
+        let message = EmailOtpMessage {
+            email: email.to_owned(),
+            otp,
+            kind,
+        };
+        let result = if let Some(sender) = endpoint
+            .auth
+            .extensions
+            .get::<Arc<EmailOtpCallbacks<S>>>()
+            .and_then(|callbacks| callbacks.sender.as_ref())
         {
+            sender(&message, endpoint).await
+        } else {
+            self.config
+                .sender
+                .as_ref()
+                .ok_or_else(|| {
+                    AuthError::bad_request("send email verification is not implemented")
+                })?
+                .send(&message)
+                .await
+        };
+        // Upstream logs notification failures without changing the endpoint result.
+        if let Err(error) = result {
             tracing::error!(plugin = "email-otp", %error, "Failed to run background task");
         }
         Ok(())
     }
     pub(super) async fn create_otp(
         &self,
-        ctx: &AuthContext<impl AuthSchema>,
+        endpoint: &EndpointContext<'_, impl AuthSchema>,
         email: &str,
         kind: EmailOtpType,
         identifier: &str,
     ) -> AuthResult<String> {
-        let otp = self.generate(email, kind);
+        let ctx = endpoint.auth;
+        let otp = self.generate(endpoint, email, kind)?;
         let stored = self.store_code(&otp, &ctx.config.secret).await?;
         let _ = ctx
             .database
@@ -165,10 +164,11 @@ impl EmailOtpPlugin {
     }
     pub(super) async fn resolve_otp(
         &self,
-        ctx: &AuthContext<impl AuthSchema>,
+        endpoint: &EndpointContext<'_, impl AuthSchema>,
         email: &str,
         kind: EmailOtpType,
     ) -> AuthResult<String> {
+        let ctx = endpoint.auth;
         let identifier = kind.identifier(email);
         if self.config.reuse_otp
             && let Some(existing) = ctx
@@ -194,7 +194,7 @@ impl EmailOtpPlugin {
                 return Ok(otp);
             }
         }
-        self.create_otp(ctx, email, kind, &identifier).await
+        self.create_otp(endpoint, email, kind, &identifier).await
     }
     pub(super) async fn verify_otp(
         &self,

@@ -73,11 +73,11 @@ pub(super) async fn handle(
             message: "Failed to get session",
         });
     };
-    let data = SessionData {
-        session: ctx.session_view(&updated).await?,
+    let manager = ctx.session_manager();
+    let mut data = SessionData {
+        session: manager.internal_session_view(&updated).await?,
         user,
     };
-    let manager = ctx.session_manager();
     let dont_remember = manager.dont_remember(req);
     req.append_response_header(
         "Set-Cookie",
@@ -88,6 +88,7 @@ pub(super) async fn handle(
         ),
     )?;
     manager.write_cache(req, &data, dont_remember).await?;
+    data.session.filter_returned_fields(&ctx.config.session);
     Ok(AuthResponse::json(
         200,
         &serde_json::json!({ "session": data.session }),

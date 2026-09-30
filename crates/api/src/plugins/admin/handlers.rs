@@ -170,7 +170,8 @@ pub(crate) async fn create_user_core(
         .as_deref()
         .filter(|password| !password.is_empty())
     {
-        let password_hash = better_auth_core::hash_password(None, password).await?;
+        let password_hash =
+            better_auth_core::hash_password(ctx.password_policy.hasher.as_ref(), password).await?;
         let _ = ctx
             .database
             .create_account(CreateAccount {
@@ -577,15 +578,16 @@ pub(crate) async fn set_user_password_core(
     body: &SetUserPasswordRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
-    if body.new_password.len() < ctx.config.password.min_length {
-        return Err(AuthError::bad_request("Password too short"));
-    }
+    better_auth_core::utils::password::validate_password(
+        &body.new_password,
+        ctx.password_policy.min_length,
+        ctx.password_policy.max_length,
+        ctx,
+    )?;
 
-    if body.new_password.len() > 128 {
-        return Err(AuthError::bad_request("Password too long"));
-    }
-
-    let password_hash = better_auth_core::hash_password(None, &body.new_password).await?;
+    let password_hash =
+        better_auth_core::hash_password(ctx.password_policy.hasher.as_ref(), &body.new_password)
+            .await?;
 
     let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
     if let Some(account) = accounts

@@ -1,9 +1,6 @@
-use aes_gcm::aead::{Aead, KeyInit, OsRng};
-use aes_gcm::{AeadCore, Aes256Gcm, Key, Nonce};
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{Duration, Utc};
-use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use rand::Rng;
 use rand::distributions::Alphanumeric;
@@ -31,7 +28,14 @@ use crate::plugins::helpers::{
 
 use super::StatusResponse;
 mod actions;
+mod callbacks;
+pub use callbacks::{TwoFactorCallbackFuture, TwoFactorCallbacks};
 mod helpers;
+mod options;
+mod request;
+pub use options::{
+    BackupCodeOptions, BackupCodeStorage, TwoFactorCipher, TwoFactorHasher, TwoFactorOtpStorage,
+};
 mod security;
 use actions::*;
 use helpers::*;
@@ -47,6 +51,7 @@ const TRUST_DEVICE_COOKIE_SUFFIX: &str = "trust_device";
 const DONT_REMEMBER_COOKIE_SUFFIX: &str = "dont_remember";
 
 const METADATA_ENABLED: &str = "two_factor.enabled";
+const METADATA_TOTP_DISABLED: &str = "two_factor.totp_disabled";
 const METADATA_OTP_ENABLED: &str = "two_factor.otp_enabled";
 const METADATA_TWO_FACTOR_COOKIE_MAX_AGE: &str = "two_factor.two_factor_cookie_max_age";
 const METADATA_TRUST_DEVICE_MAX_AGE: &str = "two_factor.trust_device_max_age";
@@ -55,13 +60,7 @@ const DEFAULT_TWO_FACTOR_COOKIE_MAX_AGE_SECS: i64 = 10 * 60;
 const DEFAULT_TRUST_DEVICE_MAX_AGE_SECS: i64 = 30 * 24 * 60 * 60;
 const DEFAULT_TOTP_PERIOD_SECS: u64 = 30;
 const DEFAULT_TOTP_DIGITS: usize = 6;
-const DEFAULT_OTP_DIGITS: usize = 6;
-const DEFAULT_OTP_LIFETIME_SECS: i64 = 3 * 60;
-const DEFAULT_OTP_ATTEMPT_LIMIT: usize = 5;
-const DEFAULT_BACKUP_CODE_COUNT: usize = 10;
-const DEFAULT_BACKUP_CODE_LENGTH: usize = 10;
-
-const ENCRYPTION_INFO: &[u8] = b"better-auth-two-factor-encryption";
+const CHALLENGE_ATTEMPT_LIMIT: usize = 5;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -82,6 +81,30 @@ pub struct TwoFactorPlugin {
 #[derive(Clone, better_auth_core::PluginConfig)]
 #[plugin(name = "TwoFactorPlugin")]
 pub struct TwoFactorConfig {
+    /// Permit passwordless management only when the user has no credential password.
+    #[config(default = false)]
+    pub allow_passwordless: bool,
+    /// Disable TOTP enrollment, verification and generation.
+    #[config(default = false)]
+    pub totp_disabled: bool,
+    /// Override passwordless policy for reading the TOTP URI.
+    #[config(default = None)]
+    pub totp_allow_passwordless: Option<bool>,
+    /// Number of decimal digits in delivered OTPs.
+    #[config(default = 6)]
+    pub otp_digits: usize,
+    /// Delivered OTP lifetime. Zero uses the upstream three-minute default.
+    #[config(default = Duration::minutes(3))]
+    pub otp_period: Duration,
+    /// Failed OTP attempts before the next request consumes the exhausted code. Zero means five.
+    #[config(default = 5)]
+    pub otp_allowed_attempts: usize,
+    /// Stored OTP representation.
+    #[config(default = TwoFactorOtpStorage::Plain)]
+    pub otp_storage: TwoFactorOtpStorage,
+    /// Backup-code generation, storage and passwordless policy.
+    #[config(default = BackupCodeOptions::default())]
+    pub backup_code_options: BackupCodeOptions,
     /// Account-level protection shared by all sign-in factors and challenges.
     #[config(default = AccountLockout::default())]
     pub account_lockout: AccountLockout,
@@ -157,7 +180,7 @@ enum EnrollmentMethod {
 
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct EnableRequest {
-    password: String,
+    password: Option<String>,
     issuer: Option<String>,
     #[serde(default)]
     method: EnrollmentMethod,
@@ -165,12 +188,12 @@ pub(crate) struct EnableRequest {
 
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct DisableRequest {
-    password: String,
+    password: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct GetTotpUriRequest {
-    password: String,
+    password: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -189,7 +212,7 @@ pub(crate) struct VerifyOtpRequest {
 
 #[derive(Debug, Deserialize, Validate)]
 pub(crate) struct GenerateBackupCodesRequest {
-    password: String,
+    password: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -391,11 +414,15 @@ pub(crate) async fn begin_sign_in_challenge(
     // TOTP is per-user: only offered once the user has a stored secret. OTP is
     // server-level: offered whenever a sender is configured.
     let mut two_factor_methods = Vec::new();
-    if ctx
-        .database
-        .get_two_factor_by_user_id(user.id().as_ref())
-        .await?
-        .is_some_and(|factor| factor.verified)
+    if !ctx
+        .get_metadata(METADATA_TOTP_DISABLED)
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+        && ctx
+            .database
+            .get_two_factor_by_user_id(user.id().as_ref())
+            .await?
+            .is_some_and(|factor| factor.verified)
     {
         two_factor_methods.push("totp");
     }
@@ -417,6 +444,30 @@ pub(crate) async fn begin_sign_in_challenge(
 }
 
 impl TwoFactorPlugin {
+    /// Generate a TOTP from a supplied secret in trusted server code.
+    pub fn generate_totp(&self, secret: &str) -> AuthResult<String> {
+        require_totp(&self.config)?;
+        totp_rs::TOTP::new_unchecked(
+            Algorithm::SHA1,
+            if self.config.totp_digits == 0 {
+                6
+            } else {
+                self.config.totp_digits
+            },
+            1,
+            if self.config.totp_period == 0 {
+                30
+            } else {
+                self.config.totp_period
+            },
+            secret.as_bytes().to_vec(),
+            None,
+            String::new(),
+        )
+        .generate_current()
+        .map_err(|error| AuthError::internal(format!("Generate TOTP: {error}")))
+    }
+
     /// Install a custom OTP sender.
     pub fn custom_send_otp(mut self, sender: Arc<dyn SendTwoFactorOtp>) -> Self {
         self.config.send_otp = Some(sender);
@@ -433,7 +484,7 @@ impl TwoFactorPlugin {
         user_id: &str,
         ctx: &AuthContext<S>,
     ) -> AuthResult<Vec<String>> {
-        view_backup_codes_core(user_id, ctx).await
+        view_backup_codes_core(user_id, &self.config.backup_code_options, ctx).await
     }
 }
 
@@ -456,9 +507,10 @@ better_auth_core::impl_auth_plugin! {
         ) -> better_auth_core::AuthResult<()> {
             S::User::require_plugin_fields("two-factor", &["two_factor_enabled"])?;
             ctx.set_metadata(METADATA_ENABLED, serde_json::Value::Bool(true));
+            ctx.set_metadata(METADATA_TOTP_DISABLED, serde_json::Value::Bool(self.config.totp_disabled));
             ctx.set_metadata(
                 METADATA_OTP_ENABLED,
-                serde_json::Value::Bool(self.config.send_otp.is_some()),
+                serde_json::Value::Bool(self.config.send_otp.is_some() || ctx.extensions.get::<Arc<TwoFactorCallbacks<S>>>().is_some_and(|callbacks| callbacks.sender.is_some())),
             );
             ctx.set_metadata(
                 METADATA_TWO_FACTOR_COOKIE_MAX_AGE,
@@ -480,7 +532,8 @@ impl TwoFactorPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, session) = ctx.require_session(req).await?;
-        let body: EnableRequest = match better_auth_core::validate_request_body(req) {
+        let body: EnableRequest = match request::password(req, self.config.allow_passwordless, true)
+        {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
@@ -500,12 +553,14 @@ impl TwoFactorPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, session) = ctx.require_session(req).await?;
-        let body: DisableRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body: DisableRequest =
+            match request::password(req, self.config.allow_passwordless, false) {
+                Ok(v) => v,
+                Err(resp) => return Ok(resp),
+            };
 
-        let (response, set_cookie_headers) = disable_core(&body, &user, &session, req, ctx).await?;
+        let (response, set_cookie_headers) =
+            disable_core(&body, &user, &session, req, &self.config, ctx).await?;
         let mut auth_response = AuthResponse::json(200, &response)?;
         for cookie in set_cookie_headers {
             auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
@@ -519,7 +574,13 @@ impl TwoFactorPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-        let body: GetTotpUriRequest = match better_auth_core::validate_request_body(req) {
+        let body: GetTotpUriRequest = match request::password(
+            req,
+            self.config
+                .totp_allow_passwordless
+                .unwrap_or(self.config.allow_passwordless),
+            false,
+        ) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
@@ -580,12 +641,19 @@ impl TwoFactorPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-        let body: GenerateBackupCodesRequest = match better_auth_core::validate_request_body(req) {
+        let body: GenerateBackupCodesRequest = match request::password(
+            req,
+            self.config
+                .backup_code_options
+                .allow_passwordless
+                .unwrap_or(self.config.allow_passwordless),
+            false,
+        ) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
 
-        let response = generate_backup_codes_core(&body, &user, ctx).await?;
+        let response = generate_backup_codes_core(&body, &user, &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -650,7 +718,7 @@ async fn resolve_two_factor_state<S: better_auth_core::AuthSchema>(
     let dont_remember = read_signed_cookie(req, DONT_REMEMBER_COOKIE_SUFFIX, ctx)?.is_some();
 
     Ok(ResolvedTwoFactorState::Pending(PendingTwoFactorState {
-        user: ctx.user_view(&user)?,
+        user: ctx.internal_user_view(&user)?,
         key: identifier,
         dont_remember,
     }))

@@ -22,6 +22,14 @@ import { oAuthProxy } from "better-auth/plugins/oauth-proxy";
 import { createEmailOtpFixture } from "./email-otp";
 import { createSecondaryStorageFixture } from "./secondary-storage";
 import { sessionFieldOptions } from "./session-fields";
+import { createCookieVersionFixture } from "./cookie-version";
+import { passwordPolicyOptions } from "./password-policy";
+import { signupEnumerationOptions } from "./signup-enumeration";
+import { createPasskeyOptions } from "./passkey-options";
+import { createCustomSessionFixture } from "./custom-session";
+import { createOtpCallbacksFixture } from "./otp-callbacks";
+import { createTwoFactorContextFixture } from "./two-factor-context";
+import { twoFactorOptions, twoFactorOptionsState } from "./two-factor-options";
 import { createApiKeyStorageFixture } from "./api-key-storage";
 import { createOneTapFixture } from "./one-tap";
 import { createIdentityFixture } from "./identity-routes";
@@ -62,6 +70,12 @@ const database = new Database(":memory:");
 const identityFixture = createIdentityFixture(database, process.env.COMPAT_PROFILE ?? "");
 const apiKeyStorageFixture = createApiKeyStorageFixture();
 const secondaryFixture = createSecondaryStorageFixture(process.env.COMPAT_PROFILE ?? "", database);
+const cookieVersionFixture = createCookieVersionFixture(process.env.COMPAT_PROFILE ?? "");
+const signupEnumeration = signupEnumerationOptions(process.env.COMPAT_PROFILE ?? "");
+const passkeyOptions = createPasskeyOptions(process.env.COMPAT_PROFILE ?? "");
+const customSessionFixture = createCustomSessionFixture(process.env.COMPAT_PROFILE ?? "");
+const otpCallbacks = createOtpCallbacksFixture(process.env.COMPAT_PROFILE ?? "");
+const twoFactorConfig = twoFactorOptions(process.env.COMPAT_PROFILE ?? "");
 const apiKeyCallbacks = createApiKeyCallbacks(process.env.COMPAT_PROFILE ?? "");
 const emailOtpFixture = createEmailOtpFixture(database, process.env.COMPAT_PROFILE ?? "");
 const oneTapFixture = createOneTapFixture(process.env.COMPAT_PROFILE ?? "");
@@ -70,6 +84,7 @@ const resetPasswordOutbox = new Map<string, { url: string; token: string }>();
 const verificationEmailOutbox = new Map<string, { url: string; token: string; metadata?: Record<string, unknown> }>();
 const changeEmailOutbox = new Map<string, { newEmail: string; url: string; token: string }>();
 const twoFactorOtpOutbox = new Map<string, { otp: string }>();
+const twoFactorContext = createTwoFactorContextFixture(twoFactorOtpOutbox);
 const invitationEmailOutbox: { id: string; email: string; role: string }[] = [];
 let invitationSenderFails = false;
 let resetPasswordMode: "capture" | "throw" = "capture";
@@ -308,10 +323,13 @@ const authOptions = {
         resetPasswordOutbox.set(user.email, { url, token });
       }
     },
+    ...passwordPolicyOptions(process.env.COMPAT_PROFILE ?? ""),
+    ...signupEnumeration?.emailAndPassword,
   },
   emailVerification: {
+    ...(process.env.COMPAT_PROFILE === "otp-callbacks-override" ? { sendOnSignUp: true } : {}),
     autoSignInAfterVerification: process.env.COMPAT_PROFILE === "email-otp-options",
-    sendVerificationEmail: process.env.COMPAT_PROFILE === "email-otp-reuse" ? undefined : async ({
+    sendVerificationEmail: ["email-otp-reuse", "otp-callbacks-override"].includes(process.env.COMPAT_PROFILE ?? "") ? undefined : async ({
       user,
       url,
       token,
@@ -333,7 +351,7 @@ const authOptions = {
     } } : {}),
   } : undefined,
   user: {
-    additionalFields: ["user-fields", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? userFields : ["organization-callbacks", "organization-custom-team"].includes(process.env.COMPAT_PROFILE ?? "") ? { secretNote: { type: "string", required: false, returned: false, defaultValue: "hidden" } } : undefined,
+    additionalFields: signupEnumeration?.userFields ?? cookieVersionFixture.userFields ?? (["user-fields", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? userFields : ["organization-callbacks", "organization-custom-team", "two-factor-context"].includes(process.env.COMPAT_PROFILE ?? "") ? { secretNote: { type: "string", required: false, returned: false, defaultValue: "hidden" } } : undefined),
     changeEmail: {
       enabled: true,
       async sendChangeEmailConfirmation({
@@ -414,6 +432,8 @@ const authOptions = {
     ...(process.env.COMPAT_PROFILE?.startsWith("oauth-proxy") ? [oAuthProxy(process.env.COMPAT_PROXY_OPTIONS ? JSON.parse(process.env.COMPAT_PROXY_OPTIONS) : { productionURL: "https://production.example.com", currentURL: `http://localhost:${PORT}` })] : []),
     ...identityFixture.plugins,
     ...tokenRoutePlugins(process.env.COMPAT_PROFILE ?? "", verificationEmailOutbox),
+    ...customSessionFixture.plugins,
+    ...(["otp-callbacks", "otp-callbacks-override"].includes(process.env.COMPAT_PROFILE ?? "") ? otpCallbacks.plugins : []),
     ...(process.env.COMPAT_PROFILE?.startsWith("email-otp") || process.env.COMPAT_PROFILE === "user-fields" ? [emailOtpFixture.plugin] : []),
     ...(process.env.COMPAT_PROFILE?.startsWith("one-tap") ? [oneTapFixture.plugin] : []),
     ...(process.env.COMPAT_PROFILE === "device-bearer" ? [bearer()] : []),
@@ -440,6 +460,7 @@ const authOptions = {
           : undefined,
     }),
     organization({
+      ...(process.env.COMPAT_PROFILE === "organization-empty-roles" ? { roles: {} } : {}),
       ...(["organization-invitation-options", "organization-invitation-unverified"].includes(process.env.COMPAT_PROFILE ?? "") ? {
         cancelPendingInvitationsOnReInvite: true,
         requireEmailVerificationOnInvitation: process.env.COMPAT_PROFILE === "organization-invitation-options",
@@ -462,15 +483,18 @@ const authOptions = {
         invitationEmailOutbox.push({ id, email, role });
       },
     }),
-    passkey({ schema: mappedPluginSchema && { passkey: mappedPluginSchema.passkey } }),
+    passkey({ schema: mappedPluginSchema && { passkey: mappedPluginSchema.passkey }, ...passkeyOptions.options }),
     twoFactor({
       schema: mappedPluginSchema && { twoFactor: mappedPluginSchema.twoFactor },
+      ...twoFactorConfig,
       otpOptions: {
+        ...twoFactorConfig.otpOptions,
         async sendOTP({ user, otp }) {
           if (user.email) {
             twoFactorOtpOutbox.set(user.email, { otp });
           }
         },
+        ...(process.env.COMPAT_PROFILE === "two-factor-context" ? { sendOTP: twoFactorContext.sendOTP } : {}),
       },
     }),
     username(),
@@ -502,6 +526,9 @@ const authOptions = {
   ],
   ...secondaryFixture.options,
   ...sessionFieldOptions(process.env.COMPAT_PROFILE ?? "", secondaryFixture.options.session),
+  ...cookieVersionFixture.options,
+  ...passkeyOptions.authOptions,
+  ...customSessionFixture.options,
 } as const;
 
 const { runMigrations } = await getMigrations(authOptions);
@@ -556,6 +583,18 @@ const server = Bun.serve({
 
       const secondaryResponse = await secondaryFixture.route(request, auth);
       if (secondaryResponse) return secondaryResponse;
+      const cookieVersionResponse = await cookieVersionFixture.route(request);
+      if (cookieVersionResponse) return cookieVersionResponse;
+      const passkeyOptionsResponse = await passkeyOptions.route(request, auth);
+      if (passkeyOptionsResponse) return passkeyOptionsResponse;
+      const customSessionResponse = await customSessionFixture.route(request);
+      if (customSessionResponse) return customSessionResponse;
+      if (url.pathname === "/__test/two-factor-options" && request.method === "GET") {
+        return jsonResponse(twoFactorOptionsState(database, url.searchParams.get("userId")!));
+      }
+      if (url.pathname === "/__test/generate-totp" && request.method === "POST") {
+        return jsonResponse(await auth.api.generateTOTP({ body: await readJson(request) }));
+      }
       const storageResponse = await apiKeyStorageFixture.handle(request, auth);
       const callbacksResponse = await apiKeyCallbacks.route(request, auth);
       if (callbacksResponse) return callbacksResponse;
@@ -571,6 +610,10 @@ const server = Bun.serve({
       if (identityResponse) return identityResponse;
       const emailOtpResponse = await emailOtpFixture.handle(request);
       if (emailOtpResponse) return emailOtpResponse;
+      const otpCallbacksResponse = await otpCallbacks.handle(request);
+      if (otpCallbacksResponse) return otpCallbacksResponse;
+      const twoFactorContextResponse = await twoFactorContext.handle(request);
+      if (twoFactorContextResponse) return twoFactorContextResponse;
       const oneTapResponse = await oneTapFixture.handle(request);
       if (oneTapResponse) return oneTapResponse;
 
@@ -603,8 +646,13 @@ const server = Bun.serve({
         identityFixture.reset();
         organizationCallbacks.reset();
         emailOtpFixture.reset();
+        otpCallbacks.reset();
+        twoFactorContext.reset();
         apiKeyStorageFixture.reset();
         secondaryFixture.reset();
+        cookieVersionFixture.reset();
+        passkeyOptions.reset();
+        customSessionFixture.reset();
         apiKeyCallbacks.reset();
         oneTapFixture.reset();
         resetPasswordOutbox.clear();

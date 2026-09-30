@@ -1,12 +1,11 @@
-use base64::Engine;
 use better_auth_core::entity::{AuthPasskey, AuthSession, AuthUser, AuthVerification};
 use better_auth_core::types::UpdatePasskeyAuthentication;
 use better_auth_core::wire::PasskeyView;
-use better_auth_core::{AuthContext, AuthError, AuthResult, CreatePasskey, CreateVerification};
+use better_auth_core::{AuthContext, AuthError, AuthResult, CreateVerification};
 use chrono::{Duration, Utc};
 use serde_json::{Value, json};
 use uuid::Uuid;
-use webauthn_rs_core::proto::{COSEAlgorithm, PublicKeyCredential, RegisterPublicKeyCredential};
+use webauthn_rs_core::proto::{COSEAlgorithm, PublicKeyCredential};
 
 use crate::plugins::StatusResponse;
 use crate::plugins::helpers::{SessionIssueError, issue_user_session};
@@ -14,18 +13,18 @@ use crate::plugins::helpers::{SessionIssueError, issue_user_session};
 use super::PasskeyConfig;
 use super::types::{
     DeletePasskeyRequest, PasskeyResponse, SessionResponse, UpdatePasskeyRequest,
-    VerifyAuthenticationRequest, VerifyRegistrationRequest,
+    VerifyAuthenticationRequest,
 };
 use super::webauthn::{
-    AuthenticationChallenge, RegistrationChallenge, StoredAuthenticationState, StoredPasskey,
+    AuthenticationChallenge, RegistrationChallenge, StoredAuthenticationState,
     StoredRegistrationState, VERIFICATION_POLICY, authentication_options_json, build_webauthn,
     challenge_cookie_name, create_challenge_cookie, credential_id_from_authentication,
-    decode_challenge_cookie, decode_credential_id, extract_registration_metadata,
-    generate_ts_user_handle, get_cookie_value, parse_stored_passkey, parse_transports_csv,
-    registration_options_json, resolve_origin, snapshot_passkey, transports_to_csv,
+    decode_challenge_cookie, decode_credential_id, generate_ts_user_handle, get_cookie_value,
+    parse_stored_passkey, parse_transports_csv, registration_options_json, resolve_origins,
+    snapshot_passkey,
 };
 
-fn response_message<T>(status: u16, message: &str) -> PasskeyHandlerResult<T> {
+pub(super) fn response_message<T>(status: u16, message: &str) -> PasskeyHandlerResult<T> {
     Ok(PasskeyHandlerOutcome::Response(
         better_auth_core::AuthResponse::json(
             status,
@@ -38,12 +37,6 @@ fn response_message<T>(status: u16, message: &str) -> PasskeyHandlerResult<T> {
     ))
 }
 
-fn response_null<T>(status: u16) -> PasskeyHandlerResult<T> {
-    Ok(PasskeyHandlerOutcome::Response(
-        better_auth_core::AuthResponse::json(status, &Value::Null).map_err(AuthError::from)?,
-    ))
-}
-
 pub(super) type PasskeyHandlerResult<T> = AuthResult<PasskeyHandlerOutcome<T>>;
 
 pub(super) enum PasskeyHandlerOutcome<T> {
@@ -51,38 +44,28 @@ pub(super) enum PasskeyHandlerOutcome<T> {
     Response(better_auth_core::AuthResponse),
 }
 
-fn generation_origin(
-    config: &PasskeyConfig,
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> String {
-    if config.origin.is_empty() {
-        ctx.config.base_url.clone()
-    } else {
-        config.origin.clone()
-    }
-}
-
-fn passkey_registration_failure<T>() -> PasskeyHandlerResult<T> {
-    response_message(500, "Failed to verify registration")
-}
-
 fn passkey_authentication_failure<T>() -> PasskeyHandlerResult<T> {
     response_message(400, "Authentication failed")
 }
 
 fn passkey_not_found<T>() -> PasskeyHandlerResult<T> {
-    response_message(403, "Passkey not found")
+    response_message(401, "Passkey not found")
 }
 
 pub(super) async fn generate_register_options_core(
-    user: &impl AuthUser,
+    user: &super::PasskeyRegistrationUser,
+    req: &better_auth_core::AuthRequest,
     passkey_name: Option<&str>,
     authenticator_attachment: Option<&str>,
     config: &PasskeyConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(Value, String)> {
-    let webauthn = build_webauthn(config, &ctx.config, &generation_origin(config, ctx))?;
-    let existing_passkeys = ctx.database.list_passkeys_by_user(&user.id()).await?;
+    let webauthn = build_webauthn(
+        config,
+        &ctx.config,
+        std::slice::from_ref(&ctx.config.base_url),
+    )?;
+    let existing_passkeys = ctx.database.list_passkeys_by_user(&user.id).await?;
     let exclude_credentials = existing_passkeys
         .iter()
         .filter_map(|passkey| decode_credential_id(passkey.credential_id()).ok())
@@ -104,15 +87,24 @@ pub(super) async fn generate_register_options_core(
         .collect::<Vec<_>>();
 
     let user_name = passkey_name
-        .map(str::to_string)
-        .or_else(|| user.email().map(str::to_string))
-        .unwrap_or_else(|| user.id().into_owned());
+        .filter(|name| !name.is_empty())
+        .unwrap_or(&user.name);
     let user_display_name = user
-        .email()
-        .map(str::to_string)
-        .unwrap_or_else(|| user.id().into_owned());
+        .display_name
+        .as_deref()
+        .filter(|name| !name.is_empty())
+        .unwrap_or(&user.name);
+    let users = super::callbacks::Users {
+        ctx,
+        transaction: None,
+    };
+    let extensions = super::registration::resolve_extensions(
+        &config.registration.extensions,
+        super::PasskeyEndpoint::new(ctx, req, &Value::Null, &users),
+    )
+    .await?;
     let builder = webauthn
-        .new_challenge_register_builder(Uuid::new_v4().as_bytes(), &user_name, &user_display_name)
+        .new_challenge_register_builder(Uuid::new_v4().as_bytes(), user_name, user_display_name)
         .map_err(|error| {
             AuthError::internal(format!("Failed to generate register options: {error}"))
         })?
@@ -132,7 +124,8 @@ pub(super) async fn generate_register_options_core(
     let token = Uuid::new_v4().to_string();
     let expires_at = Utc::now() + Duration::seconds(config.challenge_ttl_secs);
     let serialized_state = serde_json::to_string(&StoredRegistrationState {
-        user_id: user.id().to_string(),
+        user: user.clone(),
+        context: req.query.get("context").cloned(),
         state: RegistrationChallenge { rs: state },
     })?;
     let _ = ctx
@@ -144,11 +137,13 @@ pub(super) async fn generate_register_options_core(
         })
         .await?;
 
-    let cookie = create_challenge_cookie(&ctx.config, config.challenge_ttl_secs, &token)?;
+    let cookie = create_challenge_cookie(&ctx.config, config, &token)?;
     let mut response = registration_options_json(
         options,
         &generate_ts_user_handle(),
         authenticator_attachment,
+        &config.authenticator_selection,
+        extensions,
     )?;
     if let Some(object) = response.as_object_mut() {
         let _ = object.insert(
@@ -161,10 +156,15 @@ pub(super) async fn generate_register_options_core(
 
 pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
     maybe_user: Option<&U>,
+    req: &better_auth_core::AuthRequest,
     config: &PasskeyConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(Value, String)> {
-    let webauthn = build_webauthn(config, &ctx.config, &generation_origin(config, ctx))?;
+    let webauthn = build_webauthn(
+        config,
+        &ctx.config,
+        std::slice::from_ref(&ctx.config.base_url),
+    )?;
 
     let stored_passkeys = if let Some(user) = maybe_user {
         ctx.database.list_passkeys_by_user(&user.id()).await?
@@ -192,13 +192,20 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
         })
         .collect::<Vec<_>>();
 
+    let users = super::callbacks::Users {
+        ctx,
+        transaction: None,
+    };
+    let extensions = super::registration::resolve_extensions(
+        &config.authentication.extensions,
+        super::PasskeyEndpoint::new(ctx, req, &Value::Null, &users),
+    )
+    .await?;
     let discoverable = parsed_passkeys.is_empty();
     let (options, state) = webauthn
         .new_challenge_authenticate_builder(parsed_passkeys, Some(VERIFICATION_POLICY))
         .and_then(|builder| {
-            webauthn.generate_challenge_authenticate(
-                builder.allow_backup_eligible_upgrade(!discoverable),
-            )
+            webauthn.generate_challenge_authenticate(builder.allow_backup_eligible_upgrade(true))
         })
         .map_err(|error| {
             AuthError::internal(format!("Failed to generate authenticate options: {error}"))
@@ -221,8 +228,8 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
         })
         .await?;
 
-    let cookie = create_challenge_cookie(&ctx.config, config.challenge_ttl_secs, &token)?;
-    let mut response = authentication_options_json(options)?;
+    let cookie = create_challenge_cookie(&ctx.config, config, &token)?;
+    let mut response = authentication_options_json(options, extensions)?;
     if let Some(object) = response.as_object_mut() {
         if allow_credentials_json.is_empty() {
             let _ = object.remove("allowCredentials");
@@ -236,98 +243,6 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
     Ok((response, cookie))
 }
 
-pub(super) async fn verify_registration_core(
-    body: &VerifyRegistrationRequest,
-    req: &better_auth_core::AuthRequest,
-    user: &impl AuthUser,
-    config: &PasskeyConfig,
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> PasskeyHandlerResult<Value> {
-    let Some(origin) = resolve_origin(config, req) else {
-        return response_null(400);
-    };
-
-    let Some(cookie_value) = get_cookie_value(req, &challenge_cookie_name(&ctx.config)) else {
-        return response_message(400, "Challenge not found");
-    };
-    let token = match decode_challenge_cookie(&ctx.config, &cookie_value) {
-        Ok(token) => token,
-        Err(_) => return response_message(400, "Challenge not found"),
-    };
-
-    let Some(verification) = ctx
-        .database
-        .consume_verification_by_identifier(&token)
-        .await?
-    else {
-        return response_message(400, "Challenge not found");
-    };
-
-    let stored_state: StoredRegistrationState = match serde_json::from_str(verification.value()) {
-        Ok(state) => state,
-        Err(_) => return passkey_registration_failure(),
-    };
-    if stored_state.user_id != user.id() {
-        return response_message(403, "You are not allowed to register this passkey");
-    }
-
-    let registration: RegisterPublicKeyCredential =
-        match serde_json::from_value(body.response.clone()) {
-            Ok(registration) => registration,
-            Err(_) => return passkey_registration_failure(),
-        };
-
-    let webauthn = match build_webauthn(config, &ctx.config, &origin) {
-        Ok(webauthn) => webauthn,
-        Err(_) => return passkey_registration_failure(),
-    };
-    let verified_passkey =
-        match webauthn.register_credential(&registration, &stored_state.state.rs, None) {
-            Ok(cred) => StoredPasskey { cred },
-            Err(_) => return passkey_registration_failure(),
-        };
-    let snapshot = match snapshot_passkey(&verified_passkey) {
-        Ok(snapshot) => snapshot,
-        Err(_) => return passkey_registration_failure(),
-    };
-    let metadata = match extract_registration_metadata(&registration) {
-        Ok(metadata) => metadata,
-        Err(_) => return passkey_registration_failure(),
-    };
-
-    let transports = registration.response.transports.as_ref().map(|transports| {
-        transports
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-    });
-
-    let passkey = match ctx
-        .database
-        .create_passkey(CreatePasskey {
-            user_id: user.id().to_string(),
-            name: body.name.clone(),
-            credential_id: base64::engine::general_purpose::URL_SAFE_NO_PAD
-                .encode(verified_passkey.cred.cred_id.as_ref()),
-            public_key: metadata.public_key,
-            counter: snapshot.counter,
-            device_type: snapshot.device_type().to_string(),
-            backed_up: snapshot.backed_up,
-            transports: transports_to_csv(&transports),
-            credential: snapshot.serialized,
-            aaguid: metadata.aaguid,
-        })
-        .await
-    {
-        Ok(passkey) => passkey,
-        Err(_) => return passkey_registration_failure(),
-    };
-
-    Ok(PasskeyHandlerOutcome::Success(serde_json::to_value(
-        PasskeyView::from(&passkey),
-    )?))
-}
-
 pub(super) async fn verify_authentication_core(
     body: &VerifyAuthenticationRequest,
     req: &better_auth_core::AuthRequest,
@@ -336,11 +251,12 @@ pub(super) async fn verify_authentication_core(
     user_agent: Option<String>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> PasskeyHandlerResult<(Value, String)> {
-    let Some(origin) = resolve_origin(config, req) else {
+    let Some(origin) = resolve_origins(config, req) else {
         return response_message(400, "origin missing");
     };
 
-    let Some(cookie_value) = get_cookie_value(req, &challenge_cookie_name(&ctx.config)) else {
+    let Some(cookie_value) = get_cookie_value(req, &challenge_cookie_name(&ctx.config, config))
+    else {
         return response_message(400, "Challenge not found");
     };
     let token = match decode_challenge_cookie(&ctx.config, &cookie_value) {
@@ -358,7 +274,7 @@ pub(super) async fn verify_authentication_core(
 
     let stored_state: StoredAuthenticationState = match serde_json::from_str(verification.value()) {
         Ok(state) => state,
-        Err(_) => return passkey_authentication_failure(),
+        Err(_) => return response_message(400, "Challenge not found"),
     };
     let authentication: PublicKeyCredential = match serde_json::from_value(body.response.clone()) {
         Ok(authentication) => authentication,
@@ -386,17 +302,20 @@ pub(super) async fn verify_authentication_core(
         Err(_) => return passkey_authentication_failure(),
     };
 
-    let authentication_result = match stored_state {
-        StoredAuthenticationState::Passkey { state } => {
-            webauthn.authenticate_credential(&authentication, &state.ast)
-        }
-        StoredAuthenticationState::Discoverable { mut state } => {
-            state
-                .ast
-                .set_allowed_credentials(vec![stored_passkey.cred.clone()]);
-            webauthn.authenticate_credential(&authentication, &state.ast)
-        }
+    let mut state = match stored_state {
+        StoredAuthenticationState::Passkey { state }
+        | StoredAuthenticationState::Discoverable { state } => state,
     };
+    let Some(flags) = authentication.response.authenticator_data.get(32) else {
+        return passkey_authentication_failure();
+    };
+    // Upstream checks backup flags within the signed assertion, independently of stored flags.
+    let mut verification_credential = stored_passkey.cred.clone();
+    verification_credential.backup_eligible = flags & 0x08 != 0;
+    state
+        .ast
+        .set_allowed_credentials(vec![verification_credential]);
+    let authentication_result = webauthn.authenticate_credential(&authentication, &state.ast);
     let authentication_result = match authentication_result {
         Ok(result) => result,
         Err(_) => return passkey_authentication_failure(),
@@ -410,9 +329,45 @@ pub(super) async fn verify_authentication_core(
     if (counter > 0 || passkey.counter() > 0) && counter <= passkey.counter() {
         return passkey_authentication_failure();
     }
+    if let Some(hook) = &config.authentication.after_verification {
+        let verification = super::PasskeyAuthenticationVerification {
+            verified: true,
+            authentication_info: super::PasskeyAuthenticationInfo {
+                credential_id: credential_id.clone(),
+                new_counter: counter,
+                user_verified: authentication_result.user_verified(),
+                credential_device_type: if authentication_result.backup_eligible() {
+                    "multiDevice"
+                } else {
+                    "singleDevice"
+                },
+                credential_backed_up: authentication_result.backup_state(),
+                origin: super::webauthn::client_origin(
+                    authentication.response.client_data_json.as_ref(),
+                )?,
+                rp_id: super::webauthn::rp_id(config, &ctx.config)?,
+                authenticator_extension_results: super::webauthn::authentication_extensions(
+                    authentication.response.authenticator_data.as_ref(),
+                )?,
+            },
+        };
+        let users = super::callbacks::Users {
+            ctx,
+            transaction: None,
+        };
+        let parsed_body = serde_json::to_value(body)?;
+        if let Err(error) = hook
+            .after_verification(
+                super::PasskeyEndpoint::new(ctx, req, &parsed_body, &users),
+                &verification,
+                &body.response,
+            )
+            .await
+        {
+            return Err(super::registration::verification_error(error, false));
+        }
+    }
     stored_passkey.cred.counter = authentication_result.counter();
-    stored_passkey.cred.backup_state = authentication_result.backup_state();
-    stored_passkey.cred.backup_eligible = authentication_result.backup_eligible();
 
     let snapshot = match snapshot_passkey(&stored_passkey) {
         Ok(snapshot) => snapshot,

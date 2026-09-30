@@ -157,9 +157,9 @@ pub struct OrganizationConfig {
     /// Disable organization deletion (default: false)
     #[config(default = false)]
     pub disable_organization_deletion: bool,
-    /// Static role definitions. A nonempty map replaces default permission definitions.
-    #[config(default = HashMap::new(), skip)]
-    pub roles: HashMap<String, RolePermissions>,
+    /// Static role definitions. An explicit map, including an empty map, replaces defaults.
+    #[config(default = None, skip)]
+    pub roles: Option<HashMap<String, RolePermissions>>,
     /// Optional delivery callback used for new and resent invitations.
     #[config(default = None, skip)]
     pub send_invitation_email: Option<Arc<dyn SendInvitationEmail>>,

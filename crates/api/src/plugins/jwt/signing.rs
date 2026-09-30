@@ -46,7 +46,7 @@ impl JwtPlugin {
         options: &JwtSigningOptions,
         ctx: &AuthContext<S>,
     ) -> AuthResult<String> {
-        self.default_claims(&mut payload, ctx);
+        self.default_claims(&mut payload, ctx)?;
         if let Some(callback) = &self.config.custom_sign {
             return callback(payload, options.clone()).await;
         }
@@ -136,16 +136,13 @@ impl JwtPlugin {
         &self,
         payload: &mut Map<String, Value>,
         ctx: &AuthContext<S>,
-    ) {
+    ) -> AuthResult<()> {
         let issued = payload
             .get("iat")
-            .and_then(Value::as_i64)
-            .unwrap_or_else(|| Utc::now().timestamp());
+            .and_then(Value::as_f64)
+            .unwrap_or_else(|| Utc::now().timestamp() as f64);
         for (claim, default) in [
-            (
-                "exp",
-                Value::from(issued + self.config.expiration_time.num_seconds()),
-            ),
+            ("exp", self.config.expiration_time.claim(issued)),
             (
                 "iss",
                 self.config
@@ -157,17 +154,16 @@ impl JwtPlugin {
             ),
             (
                 "aud",
-                self.config
-                    .audience
-                    .as_ref()
-                    .unwrap_or(&ctx.config.base_url)
-                    .clone()
-                    .into(),
+                match &self.config.audience {
+                    Some(audience) => serde_json::to_value(audience)?,
+                    None => ctx.config.base_url.clone().into(),
+                },
             ),
         ] {
             if payload.get(claim).is_none_or(Value::is_null) {
                 let _ = payload.insert(claim.to_owned(), default);
             }
         }
+        Ok(())
     }
 }

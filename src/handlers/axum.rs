@@ -79,11 +79,14 @@ impl<T: AuthSchema> AxumIntegration for Arc<BetterAuth<T>> {
         if !disabled_paths.contains(&core_paths::UPDATE_USER.to_string()) {
             router = router.route(core_paths::UPDATE_USER, post(create_plugin_handler::<T>()));
         }
-        // Register plugin routes
+        // One Axum route dispatches through all matching plugins.
+        let mut registered = std::collections::HashSet::new();
         for plugin in self.plugins() {
             for route in plugin.routes() {
                 // Skip disabled paths
-                if disabled_paths.contains(&route.path) {
+                if disabled_paths.contains(&route.path)
+                    || !registered.insert((route.method.clone(), route.path.clone()))
+                {
                     continue;
                 }
 

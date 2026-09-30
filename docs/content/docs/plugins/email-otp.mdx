@@ -53,3 +53,22 @@ New-user sign-in accepts the enabled username plugin's `username` and `displayUs
 Email changes are disabled by default. Enable `.change_email(true)` and, if required, `.verify_current_email(true)`. Current-email verification uses an `email-verification` code. The new-email code is bound to both addresses and requires an authoritative session.
 
 Each public route supplies a default rate limit of three requests per sixty seconds. Application rate-limit overrides take precedence. Global rate limiting must be enabled for these limits to apply.
+
+## Typed callback context
+
+Call `.callbacks::<AppSchema>(EmailOtpCallbacks::default().generate(...).send(...))` after configuring the plugin. `AppSchema` is the schema supplied to the auth builder. Each callback receives `EndpointContext`, which exposes the parsed `body`, endpoint `path`, original optional `request`, and the complete `AuthContext<AppSchema>` through `auth`. The signup after hook also supplies the completed `response`.
+
+```rust
+use better_auth::plugins::email_otp::{EmailOtpCallbacks, EmailOtpPlugin};
+
+let plugin = EmailOtpPlugin::new().callbacks::<AppSchema>(
+    EmailOtpCallbacks::default().send(|message, endpoint| Box::pin(async move {
+        let user = endpoint.auth.database.get_user_by_email(&message.email).await?;
+        send_mail(&message.email, &message.otp, user).await
+    })),
+);
+```
+
+The generator returns `AuthResult<Option<String>>`; generator errors propagate on direct OTP endpoints. The sender returns a boxed borrowing future, so database calls use the active typed store. Context callbacks override their corresponding legacy callbacks. The legacy sender and generator remain available when context is unnecessary.
+
+The default-email override keeps the original request but supplies the OTP endpoint's synthetic `{ email, type }` input. Upstream invokes the entire overridden endpoint as a background notification, so errors from that dispatch are logged. This policy does not suppress database errors on direct OTP endpoints.

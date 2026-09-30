@@ -6,7 +6,7 @@ use axum::{
 };
 use better_auth::{
     AuthConfig, BetterAuth,
-    plugins::{JwtAlgorithm, JwtKeyPairConfig, JwtPlugin, JwtSigningOptions},
+    plugins::{JwtAlgorithm, JwtExpiration, JwtKeyPairConfig, JwtPlugin, JwtSigningOptions},
 };
 use better_auth_core::{AuthContext, AuthPlugin, AuthRequest, HttpMethod};
 use better_auth_seaorm::{Database, SeaOrmStore};
@@ -40,10 +40,13 @@ impl JwtFixture {
             JwtKeyPairConfig::new(JwtAlgorithm::Es512),
         ]);
         match self.profile.as_str() {
+            "jwt-claims" => plugin.audience(vec!["service-a".into(), "service-b".into()].into()).expiration_time(JwtExpiration::At("2000000000.5".parse().unwrap())),
+            "jwt-date" => plugin.audience(vec!["service-a".into(), "service-b".into()].into()).expiration_time(chrono::DateTime::from_timestamp(2_000_000_000, 123_000_000).unwrap()),
+            "jwt-relative" => plugin.audience(vec!["service-a".into(), "service-b".into()].into()).expiration_time(chrono::Duration::milliseconds(1500)),
             "organization-jwt" => plugin.session_cookie_cache(true).define_payload(Arc::new(|session| Box::pin(async move { Ok(serde_json::from_value(session)?) }))).get_subject(Arc::new(|session| Box::pin(async move { Ok(session["session"]["id"].as_str().unwrap().to_owned()) }))),
             "jwt-ps256" => plugin.algorithm(JwtAlgorithm::Ps256).modulus_length(3072),
             "jwt-es512" => plugin.algorithm(JwtAlgorithm::Es512),
-            "jwt-cache" => plugin.session_cookie_cache(true).issuer("ordinary-issuer".into()).audience("ordinary-audience".into()),
+            "jwt-cache" | "cookie-version-plugin-jwt" => plugin.session_cookie_cache(true).issuer("ordinary-issuer".into()).audience("ordinary-audience".into()),
             "jwt-advanced" => plugin.define_payload(Arc::new(|session| Box::pin(async move { Ok(serde_json::from_value(json!({"sessionId": session["session"]["id"], "userId": session["user"]["id"], "sessionUserId": session["session"]["userId"], "userAgent": session["session"]["userAgent"]}))?) }))).get_subject(Arc::new(|session| Box::pin(async move { Ok(session["session"]["id"].as_str().unwrap().to_owned()) }))),
             "jwt-remote" => {
                 let remote = self.remote.clone();

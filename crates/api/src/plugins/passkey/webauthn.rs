@@ -3,8 +3,6 @@ use std::time::Duration;
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE, URL_SAFE_NO_PAD};
 use better_auth_core::{AuthConfig, AuthError, AuthRequest, AuthResult};
-use chrono::Utc;
-use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -19,7 +17,6 @@ use webauthn_rs_core::proto::{
 
 use super::PasskeyConfig;
 
-pub(super) const PASSKEY_CHALLENGE_COOKIE_NAME: &str = "better-auth-passkey";
 const OPTIONS_TIMEOUT_MS: u64 = 60_000;
 const GENERATED_USER_ID_LENGTH: usize = 32;
 const GENERATED_USER_ID_ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
@@ -28,6 +25,8 @@ const GENERATED_USER_ID_ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789
 pub(super) struct RegisteredPasskeyMetadata {
     pub public_key: String,
     pub aaguid: Option<String>,
+    pub fmt: String,
+    pub extensions: Option<Value>,
 }
 
 #[derive(Debug)]
@@ -50,7 +49,8 @@ impl PasskeySnapshot {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct StoredRegistrationState {
-    pub user_id: String,
+    pub user: super::PasskeyRegistrationUser,
+    pub context: Option<String>,
     pub state: RegistrationChallenge,
 }
 
@@ -77,18 +77,14 @@ pub(crate) enum StoredAuthenticationState {
     Discoverable { state: AuthenticationChallenge },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct ChallengeCookieClaims {
-    token: String,
-    exp: usize,
-    iat: usize,
-}
-
-pub(super) fn resolve_origin(config: &PasskeyConfig, req: &AuthRequest) -> Option<String> {
-    if config.origin.is_empty() {
-        req.headers.get("origin").cloned()
-    } else {
-        Some(config.origin.clone())
+pub(super) fn resolve_origins(config: &PasskeyConfig, req: &AuthRequest) -> Option<Vec<String>> {
+    match &config.origin {
+        super::PasskeyOrigins::Request => req
+            .headers
+            .get("origin")
+            .filter(|value| !value.is_empty())
+            .map(|value| vec![value.clone()]),
+        super::PasskeyOrigins::Explicit(origins) => Some(origins.clone()),
     }
 }
 
@@ -104,47 +100,50 @@ pub(super) fn get_cookie_value(req: &AuthRequest, name: &str) -> Option<String> 
         .next()
 }
 
-pub(super) fn challenge_cookie_name(auth_config: &AuthConfig) -> String {
-    auth_config
-        .session
-        .cookie_name
-        .strip_suffix("session_token")
-        .map(|prefix| format!("{prefix}{PASSKEY_CHALLENGE_COOKIE_NAME}"))
-        .unwrap_or_else(|| PASSKEY_CHALLENGE_COOKIE_NAME.to_string())
+pub(super) fn challenge_cookie_name(auth_config: &AuthConfig, config: &PasskeyConfig) -> String {
+    better_auth_core::utils::cookie_utils::related_cookie_name(
+        auth_config,
+        &config.web_authn_challenge_cookie,
+    )
 }
 
 pub(super) fn build_webauthn(
     config: &PasskeyConfig,
     auth_config: &AuthConfig,
-    origin: &str,
+    origins: &[String],
 ) -> AuthResult<WebauthnCore> {
-    let rp_id = if config.rp_id.is_empty() {
-        Url::parse(&auth_config.base_url)
-            .ok()
-            .and_then(|url| url.host_str().map(str::to_owned))
-            .ok_or_else(|| AuthError::config("Missing passkey RP ID".to_string()))?
+    let rp_id = rp_id(config, auth_config)?;
+    let origins = origins
+        .iter()
+        .map(|origin| {
+            Url::parse(origin)
+                .map_err(|error| AuthError::bad_request(format!("Invalid passkey origin: {error}")))
+        })
+        .collect::<AuthResult<Vec<_>>>()?;
+    let rp_name = if config.rp_name.is_empty() {
+        &auth_config.app_name
     } else {
-        config.rp_id.clone()
+        &config.rp_name
     };
-    let parsed_origin = Url::parse(origin)
-        .map_err(|error| AuthError::bad_request(format!("Invalid passkey origin: {error}")))?;
-
-    if !parsed_origin
-        .domain()
-        .is_some_and(|domain| domain == rp_id || domain.ends_with(&format!(".{rp_id}")))
-    {
-        return Err(AuthError::config(
-            "Passkey RP ID must be an effective domain of the origin",
-        ));
-    }
     Ok(WebauthnCore::new_unsafe_experts_only(
-        &config.rp_name,
+        rp_name,
         &rp_id,
-        vec![parsed_origin],
+        origins,
         Duration::from_millis(OPTIONS_TIMEOUT_MS),
         Some(false),
         Some(false),
     ))
+}
+
+pub(super) fn rp_id(config: &PasskeyConfig, auth_config: &AuthConfig) -> AuthResult<String> {
+    if config.rp_id.is_empty() {
+        Url::parse(&auth_config.base_url)
+            .ok()
+            .and_then(|url| url.host_str().map(str::to_owned))
+            .ok_or_else(|| AuthError::config("Missing passkey RP ID"))
+    } else {
+        Ok(config.rp_id.clone())
+    }
 }
 
 // Better Auth treats UV as a UI preference and permits absent UV after verified registration.
@@ -153,24 +152,15 @@ pub(super) const VERIFICATION_POLICY: UserVerificationPolicy =
 
 pub(super) fn create_challenge_cookie(
     auth_config: &AuthConfig,
-    ttl_secs: i64,
+    config: &PasskeyConfig,
     token: &str,
 ) -> AuthResult<String> {
-    let now = Utc::now();
-    let claims = ChallengeCookieClaims {
-        token: token.to_string(),
-        exp: (now + chrono::Duration::seconds(ttl_secs)).timestamp() as usize,
-        iat: now.timestamp() as usize,
-    };
-    let signed = encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(auth_config.secret.as_bytes()),
-    )?;
+    let signed =
+        better_auth_core::utils::cookie_utils::sign_cookie_value(token, &auth_config.secret);
     Ok(better_auth_core::utils::cookie_utils::create_cookie(
-        &challenge_cookie_name(auth_config),
+        &challenge_cookie_name(auth_config, config),
         &signed,
-        ttl_secs,
+        config.challenge_ttl_secs,
         auth_config,
     ))
 }
@@ -179,15 +169,8 @@ pub(super) fn decode_challenge_cookie(
     auth_config: &AuthConfig,
     raw_cookie: &str,
 ) -> AuthResult<String> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.validate_exp = true;
-    Ok(decode::<ChallengeCookieClaims>(
-        raw_cookie,
-        &DecodingKey::from_secret(auth_config.secret.as_bytes()),
-        &validation,
-    )?
-    .claims
-    .token)
+    better_auth_core::utils::cookie_utils::verify_cookie_value(raw_cookie, &auth_config.secret)
+        .ok_or(AuthError::Unauthenticated)
 }
 
 pub(super) fn generate_ts_user_handle() -> String {
@@ -207,6 +190,8 @@ pub(super) fn registration_options_json(
     options: CreationChallengeResponse,
     generated_user_handle: &str,
     authenticator_attachment: Option<&str>,
+    config: &super::AuthenticatorSelection,
+    extensions: Option<serde_json::Map<String, Value>>,
 ) -> AuthResult<Value> {
     let mut value = serde_json::to_value(options.public_key)?;
     let Some(root) = value.as_object_mut() else {
@@ -238,32 +223,25 @@ pub(super) fn registration_options_json(
         ]),
     );
 
-    let selection = root
-        .entry("authenticatorSelection".to_string())
-        .or_insert_with(|| json!({}));
-    let Some(selection) = selection.as_object_mut() else {
-        return Err(AuthError::internal(
-            "Passkey registration options missing authenticatorSelection object",
-        ));
-    };
-    let _ = selection.insert(
-        "userVerification".to_string(),
-        Value::String("preferred".to_string()),
-    );
-    let _ = selection.insert(
-        "residentKey".to_string(),
-        Value::String("preferred".to_string()),
-    );
-    let _ = selection.insert("requireResidentKey".to_string(), Value::Bool(false));
-    if let Some(authenticator_attachment) = authenticator_attachment {
-        let _ = selection.insert(
-            "authenticatorAttachment".to_string(),
-            Value::String(authenticator_attachment.to_string()),
-        );
+    let mut selection = serde_json::Map::from_iter([
+        ("residentKey".into(), json!("preferred")),
+        ("userVerification".into(), json!("preferred")),
+    ]);
+    if let Value::Object(config) = serde_json::to_value(config)? {
+        selection.extend(config);
     }
+    let require_resident_key =
+        selection.get("residentKey").and_then(Value::as_str) == Some("required");
+    let _ = selection.insert("requireResidentKey".into(), require_resident_key.into());
+    if let Some(attachment) = authenticator_attachment {
+        let _ = selection.insert("authenticatorAttachment".into(), attachment.into());
+    }
+    let _ = root.insert("authenticatorSelection".into(), selection.into());
 
     let _ = root.insert("hints".to_string(), Value::Array(Vec::new()));
-    let _ = root.insert("extensions".to_string(), json!({ "credProps": true }));
+    let mut extensions = extensions.unwrap_or_default();
+    let _ = extensions.insert("credProps".into(), true.into());
+    let _ = root.insert("extensions".into(), extensions.into());
     let _ = root.insert(
         "timeout".to_string(),
         Value::Number(OPTIONS_TIMEOUT_MS.into()),
@@ -271,7 +249,10 @@ pub(super) fn registration_options_json(
     Ok(value)
 }
 
-pub(super) fn authentication_options_json(options: RequestChallengeResponse) -> AuthResult<Value> {
+pub(super) fn authentication_options_json(
+    options: RequestChallengeResponse,
+    extensions: Option<serde_json::Map<String, Value>>,
+) -> AuthResult<Value> {
     let mut value = serde_json::to_value(options.public_key)?;
     let Some(root) = value.as_object_mut() else {
         return Err(AuthError::internal(
@@ -288,6 +269,9 @@ pub(super) fn authentication_options_json(options: RequestChallengeResponse) -> 
     }
 
     let _ = root.remove("extensions");
+    if let Some(extensions) = extensions {
+        let _ = root.insert("extensions".into(), extensions.into());
+    }
     let _ = root.insert(
         "timeout".to_string(),
         Value::Number(OPTIONS_TIMEOUT_MS.into()),
@@ -374,7 +358,30 @@ pub(super) fn extract_registration_metadata(
         .get(..public_key_length)
         .ok_or_else(|| AuthError::internal("Credential public key length is invalid"))?;
 
+    let extensions = if auth_data.get(32).is_some_and(|flags| flags & 0x80 != 0) {
+        Some(
+            serde_cbor_2::from_slice(
+                credential_public_key
+                    .get(public_key_length..)
+                    .ok_or_else(|| AuthError::internal("Invalid authenticator extension offset"))?,
+            )
+            .map_err(|error| {
+                AuthError::internal(format!("Invalid authenticator extensions: {error}"))
+            })?,
+        )
+    } else {
+        None
+    };
+    let fmt = attestation_map
+        .get(&serde_cbor_2::Value::Text("fmt".into()))
+        .and_then(|value| match value {
+            serde_cbor_2::Value::Text(value) => Some(value.clone()),
+            _ => None,
+        })
+        .ok_or_else(|| AuthError::internal("Attestation object missing format"))?;
     Ok(RegisteredPasskeyMetadata {
+        fmt,
+        extensions,
         public_key: STANDARD.encode(public_key),
         aaguid: Uuid::from_slice(aaguid_bytes)
             .ok()
@@ -382,21 +389,8 @@ pub(super) fn extract_registration_metadata(
     })
 }
 
-pub(super) fn transports_to_csv(transports: &Option<Vec<String>>) -> Option<String> {
-    transports
-        .as_ref()
-        .filter(|transports| !transports.is_empty())
-        .map(|transports| transports.join(","))
-}
-
 pub(super) fn parse_transports_csv(transports: Option<&str>) -> Option<Vec<String>> {
-    transports.map(|transports| {
-        transports
-            .split(',')
-            .filter(|transport| !transport.is_empty())
-            .map(str::to_string)
-            .collect()
-    })
+    transports.map(|transports| transports.split(',').map(str::to_string).collect())
 }
 
 pub(super) fn credential_id_from_authentication(
@@ -408,4 +402,29 @@ pub(super) fn credential_id_from_authentication(
 
     let raw_id: &Base64UrlSafeData = &authentication.raw_id;
     Ok(URL_SAFE_NO_PAD.encode(raw_id.as_ref()))
+}
+
+pub(super) fn client_origin(client_data: &[u8]) -> AuthResult<String> {
+    #[derive(Deserialize)]
+    struct ClientData {
+        origin: String,
+    }
+    Ok(serde_json::from_slice::<ClientData>(client_data)?.origin)
+}
+
+pub(super) fn authentication_extensions(auth_data: &[u8]) -> AuthResult<Option<Value>> {
+    if auth_data.get(32).is_some_and(|flags| flags & 0x80 != 0) {
+        Ok(Some(
+            serde_cbor_2::from_slice(
+                auth_data
+                    .get(37..)
+                    .ok_or_else(|| AuthError::internal("Missing authenticator extensions"))?,
+            )
+            .map_err(|error| {
+                AuthError::internal(format!("Invalid authenticator extensions: {error}"))
+            })?,
+        ))
+    } else {
+        Ok(None)
+    }
 }

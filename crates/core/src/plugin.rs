@@ -186,6 +186,21 @@ pub struct AuthContext<S: AuthSchema> {
     pub metadata: MetadataMap,
 }
 
+impl<S: AuthSchema> Clone for AuthContext<S> {
+    fn clone(&self) -> Self {
+        Self {
+            extensions: self.extensions.clone(),
+            email_verification_policy: self.email_verification_policy.clone(),
+            config: self.config.clone(),
+            database: self.database.clone(),
+            email_provider: self.email_provider.clone(),
+            secondary_storage: self.secondary_storage.clone(),
+            password_policy: self.password_policy.clone(),
+            metadata: self.metadata.clone(),
+        }
+    }
+}
+
 impl AuthRoute {
     pub fn new(
         method: HttpMethod,

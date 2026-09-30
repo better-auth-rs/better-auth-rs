@@ -28,7 +28,7 @@ use std::sync::Arc;
 let auth = BetterAuth::<AppAuthSchema>::new(config)
     .store(store)
     .plugin(
-        TwoFactorPlugin::new().with_config(TwoFactorConfig {
+        TwoFactorPlugin::with_config(TwoFactorConfig {
             issuer: Some("My App".to_string()),
             skip_verification_on_enable: false,
             two_factor_cookie_max_age: 600,
@@ -37,6 +37,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
             totp_digits: 6,
             send_otp: None,
             account_lockout: Default::default(),
+            ..Default::default()
         })
     )
     .build()
@@ -53,6 +54,22 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 | `totp_digits` | `usize` | `6` | Number of digits in TOTP code |
 | `send_otp` | `Option<Arc<dyn SendTwoFactorOtp>>` | `None` | Callback used by `/two-factor/send-otp`. |
 | `account_lockout` | `AccountLockout` | Enabled, 10 failures, 900 seconds | Shared failure budget across sign-in factors and challenges. |
+| `allow_passwordless` | `bool` | `false` | Make management passwords optional for accounts without a credential password. Credential accounts still require their password. |
+| `totp_disabled` | `bool` | `false` | Disable TOTP enrollment, verification, URI lookup, and server-only generation. OTP and backup-code flows remain available. |
+| `totp_allow_passwordless` | `Option<bool>` | `None` | Override the global policy for TOTP URI lookup. |
+| `otp_digits` | `usize` | `6` | Delivered OTP length. |
+| `otp_period` | `chrono::Duration` | Three minutes | Delivered OTP lifetime. Zero selects the upstream default. |
+| `otp_allowed_attempts` | `usize` | `5` | Failed attempts before the next verification consumes the exhausted OTP. Zero selects five. |
+| `otp_storage` | `TwoFactorOtpStorage` | `Plain` | Plaintext, SHA-256 hash, shared symmetric encryption, custom async hashing, or custom async encryption. |
+| `backup_code_options` | `BackupCodeOptions` | Ten codes, ten characters, encrypted | Configure amount, length, custom generation, storage, and passwordless regeneration. |
+
+`BackupCodeOptions::storage` accepts `Plain`, `Encrypted`, or `Custom(Arc<dyn TwoFactorCipher>)`. The custom cipher receives the serialized JSON array. Generated codes contain a separator after the first five characters; `length` counts random characters, and zero `amount` produces no codes. A custom generator returns the complete list. Redeeming a duplicated custom code removes every matching entry.
+
+`TwoFactorOtpStorage::Hashed` stores the unpadded base64url SHA-256 digest. `CustomHash` accepts an asynchronous callback; `CustomEncryption` and custom backup storage use `TwoFactorCipher::encrypt` and `decrypt`. The default encrypted TOTP secret and backup codes use the shared upstream-compatible symmetric format. Codec failures propagate, and OTP verification consumes the proof before decoding.
+
+The server-only `TwoFactorPlugin::generate_totp(secret)` returns a code using the configured digits and period. No public `/totp/generate` route is registered. The enrollment `issuer` applies to enrollment URIs; the later URI lookup uses `app_name`, matching upstream's separate TOTP option scope.
+
+Use `TwoFactorPlugin::callbacks(TwoFactorCallbacks::<AppAuthSchema>::default().send(...))` for delivery callbacks that need the endpoint context. The callback receives the user, OTP, and `EndpointContext`, including validated input, original request, typed store, and any session already resolved by the endpoint. A pending sign-in challenge has no completed session. This callback takes precedence over `custom_send_otp` and can be configured without a legacy sender. Delivery errors are logged after OTP persistence and do not change the successful send response, matching upstream.
 
 ## How It Works
 

@@ -45,6 +45,15 @@ impl Body {
         }
         Ok(Self(body.clone()))
     }
+    pub(super) fn callback_body(&self, fields: &[&str]) -> Value {
+        Value::Object(
+            self.0
+                .iter()
+                .filter(|(key, _)| fields.contains(&key.as_str()))
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+        )
+    }
     pub(super) fn get(&self, field: &str) -> &str {
         self.optional(field).unwrap_or_default()
     }

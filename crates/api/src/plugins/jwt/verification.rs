@@ -17,12 +17,11 @@ impl JwtPlugin {
         let issuer = issuer
             .or(self.config.issuer.as_deref())
             .unwrap_or(&ctx.config.base_url);
-        let audience = self
-            .config
-            .audience
-            .as_deref()
-            .unwrap_or(&ctx.config.base_url);
-        let verified = verify_local(token, &keys, self.config.algorithm, issuer, audience, 0);
+        let audience = self.config.audience.as_ref().map_or_else(
+            || vec![ctx.config.base_url.as_str()],
+            JwtAudience::recipients,
+        );
+        let verified = verify_local(token, &keys, self.config.algorithm, issuer, &audience, 0);
         Ok(verified.filter(|payload| {
             payload
                 .get("sub")
@@ -42,7 +41,7 @@ pub(super) fn verify_local(
     keys: &[better_auth_core::Jwk],
     default_algorithm: JwtAlgorithm,
     issuer: &str,
-    audience: &str,
+    audience: &[&str],
     tolerance: i64,
 ) -> Option<Map<String, Value>> {
     let header = protected_header(token)?;
@@ -68,10 +67,14 @@ pub(super) fn verify_local(
         return None;
     }
     let aud = claims.get("aud")?;
-    if aud.as_str() != Some(audience)
+    if !aud.as_str().is_some_and(|value| audience.contains(&value))
         && !aud.as_array().is_some_and(|values| {
             values.iter().all(Value::is_string)
-                && values.iter().any(|value| value.as_str() == Some(audience))
+                && values.iter().any(|value| {
+                    value
+                        .as_str()
+                        .is_some_and(|value| audience.contains(&value))
+                })
         })
     {
         return None;

@@ -425,6 +425,7 @@ async fn verify_id_token(
 }
 
 async fn sign_in_with_id_token_core(
+    req: &AuthRequest,
     body: &SocialSignInRequest,
     id_token: &OAuthIdTokenRequest,
     provider: &ResolvedProvider,
@@ -474,6 +475,7 @@ async fn sign_in_with_id_token_core(
             ..Default::default()
         },
         OAuthSignInOptions {
+            request: req,
             disable_sign_up: provider.config.disable_implicit_sign_up
                 && !body.request_sign_up.unwrap_or(false)
                 || provider.config.disable_sign_up,
@@ -865,7 +867,8 @@ pub(crate) async fn handle_social_sign_in(
                 code: "PROVIDER_NOT_FOUND",
                 message: "Provider not found",
             })?;
-        return sign_in_with_id_token_core(&body, id_token, provider, config, &meta, ctx).await;
+        return sign_in_with_id_token_core(req, &body, id_token, provider, config, &meta, ctx)
+            .await;
     }
 
     let flow = social_sign_in_core(req, &body, config, ctx).await?;

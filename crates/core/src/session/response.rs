@@ -85,8 +85,7 @@ impl<S: AuthSchema> SessionManager<S> {
                     self.database.get_session_snapshot(&token).await?
             {
                 let data = if let Some(mut data) = cached_data {
-                    data.user = self.user_view(&data.user)?;
-                    data.session.filter_returned_fields(&self.config.session);
+                    data.user = self.internal_user_view(&data.user)?;
                     data
                 } else {
                     let user = self
@@ -95,8 +94,8 @@ impl<S: AuthSchema> SessionManager<S> {
                         .await?
                         .ok_or(crate::AuthError::UserNotFound)?;
                     crate::session::SessionData {
-                        session: self.session_view(&session).await?,
-                        user: self.user_view(&user)?,
+                        session: self.internal_session_view(&session).await?,
+                        user: self.internal_user_view(&user)?,
                     }
                 };
                 self.write_cache(req, &data, dont_remember).await?;
