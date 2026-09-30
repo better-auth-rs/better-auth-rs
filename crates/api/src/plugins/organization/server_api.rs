@@ -2,15 +2,21 @@ use super::{OrganizationPlugin, hooks::*, types::RoleInput};
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResult, AuthSchema, Member};
 
+#[cfg(test)]
+#[path = "server_api_input_tests.rs"]
+mod input_tests;
+
 /// Trusted server-side member creation. This endpoint has no HTTP route upstream.
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddMemberInput {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub user_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub organization_id: Option<String>,
     pub role: RoleInput,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub team_id: Option<String>,
 }
 
@@ -22,6 +28,13 @@ impl OrganizationPlugin {
         request: Option<&AuthRequest>,
         ctx: &AuthContext<S>,
     ) -> AuthResult<Member> {
+        let additional_fields = super::fields::parse_input(
+            &self.config.schema.member,
+            &input,
+            &input.additional_fields,
+            "body",
+            false,
+        )?;
         // Upstream permits a supplied user ID even when session lookup fails.
         let session = match request {
             Some(request) => super::handlers::require_session(request, ctx).await.ok(),
@@ -85,11 +98,7 @@ impl OrganizationPlugin {
             });
         }
         let mut data = OrganizationMemberDraft {
-            additional_fields: self.config.schema.member.parse_organization_input(
-                &input.additional_fields,
-                "body",
-                false,
-            )?,
+            additional_fields,
             organization_id: org_id.to_owned(),
             user_id: input.user_id.clone(),
             role: input.role.joined(),

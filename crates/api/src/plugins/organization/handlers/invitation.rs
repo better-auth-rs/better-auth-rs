@@ -207,7 +207,11 @@ pub(crate) async fn invite_member_core(
         let mut draft = OrganizationInvitationDraft {
             additional_fields: body.additional_fields.clone(),
             team_id: team_ids.first().map(|id| (*id).to_owned()),
-            id: None,
+            id: body
+                .additional_fields
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned),
             created_at: None,
             status: None,
             organization_id: org_id,
@@ -652,7 +656,9 @@ pub async fn handle_invite_member(
         Ok(value) => value,
         Err(response) => return Ok(response),
     };
-    body.additional_fields = config.schema.invitation.parse_organization_input(
+    body.additional_fields = crate::plugins::organization::fields::parse_input(
+        &config.schema.invitation,
+        &body,
         &body.additional_fields,
         "body",
         false,

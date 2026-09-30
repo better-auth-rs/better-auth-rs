@@ -75,7 +75,7 @@ pub(crate) struct Field {
     pub registry_column: Option<&'static str>,
     pub serialized: Option<String>,
     pub primary_key: bool,
-    pub unique: bool,
+    pub unique: Option<bool>,
 }
 
 impl SchemaConfig {
@@ -131,7 +131,7 @@ impl Entity {
                         registry_column: Some(field.column_name.unwrap_or(field.name)),
                         serialized: None,
                         primary_key: field.is_primary_key,
-                        unique: false,
+                        unique: None,
                     })
                 })
                 .collect::<Result<_, String>>()?,
@@ -160,6 +160,14 @@ impl Entity {
                 field.column.clone_from(column);
             }
             for (name, field) in &config.additional_fields {
+                if let Some((definition, existing)) = fields
+                    .iter()
+                    .zip(&mut entity.fields)
+                    .find(|(definition, _)| definition.name.to_lower_camel_case() == *name)
+                {
+                    existing.apply_builtin_override(definition, field, entity.name)?;
+                    continue;
+                }
                 let rust_name = name.to_snake_case();
                 let ident = syn::parse_str(&rust_name)
                     .or_else(|_| syn::parse_str(&format!("{rust_name}_")))
@@ -182,7 +190,7 @@ impl Entity {
                     registry_column: None,
                     serialized: Some(column),
                     primary_key: false,
-                    unique: field.unique,
+                    unique: Some(field.unique),
                 });
             }
         }
@@ -213,5 +221,59 @@ impl Entity {
             .iter()
             .find(|field| field.registry_column == Some(registry_column))
             .map(|field| field.column.as_str())
+    }
+}
+
+impl Field {
+    fn apply_builtin_override(
+        &mut self,
+        definition: &FieldDef,
+        config: &AdditionalField,
+        model: &str,
+    ) -> Result<(), String> {
+        if definition.name == "member_count"
+            || (model == "organization" && definition.name == "updated_at")
+        {
+            return Err(format!(
+                "builtin override `{model}.{}` targets an internal storage field and is unsupported",
+                definition.name.to_lower_camel_case()
+            ));
+        }
+        let nullable = definition.ty.starts_with("Option<");
+        let base_type = definition
+            .ty
+            .strip_prefix("Option<")
+            .and_then(|ty| ty.strip_suffix('>'))
+            .unwrap_or(definition.ty);
+        if base_type == "Json" {
+            return Err(format!(
+                "builtin override `{model}.{}` uses JSON-backed storage and is unsupported",
+                definition.name.to_lower_camel_case()
+            ));
+        }
+        if !matches!(&config.field_type, FieldType::Name(_))
+            || config.field_type.rust_type()? != base_type
+        {
+            return Err(format!(
+                "builtin override `{model}.{}` must preserve its {base_type} type",
+                definition.name.to_lower_camel_case()
+            ));
+        }
+        if definition.is_primary_key {
+            return Ok(());
+        }
+        if config.required.is_some_and(|required| required == nullable) {
+            return Err(format!(
+                "builtin override `{model}.{}` must preserve its storage nullability",
+                definition.name.to_lower_camel_case()
+            ));
+        }
+        self.column = config
+            .field_name
+            .clone()
+            .unwrap_or_else(|| definition.column_name.unwrap_or(definition.name).to_owned());
+        self.serialized = Some(self.column.clone());
+        self.unique = Some(config.unique);
+        Ok(())
     }
 }

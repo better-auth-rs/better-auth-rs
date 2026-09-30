@@ -88,10 +88,17 @@ pub(crate) async fn create_organization_core(
 
     let mut org_data = CreateOrganization {
         additional_fields: body.additional_fields.clone(),
-        id: None,
+        id: body
+            .additional_fields
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned),
         name: body.name.clone(),
         slug: body.slug.clone(),
-        logo: body.logo.clone(),
+        logo: match &body.logo {
+            NullableStringField::Value(value) => Some(value.clone()),
+            NullableStringField::Missing | NullableStringField::Null => None,
+        },
         metadata: body.metadata.clone(),
     };
 
@@ -205,6 +212,22 @@ pub(crate) async fn update_organization_core(
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<CreatedOrganizationResponse> {
+    let nonempty = |field: &NullableStringField, name: &str| -> AuthResult<Option<String>> {
+        let message = match field {
+            NullableStringField::Missing => return Ok(None),
+            NullableStringField::Value(value) if !value.is_empty() => {
+                return Ok(Some(value.clone()));
+            }
+            NullableStringField::Value(_) => "Too small: expected string to have >=1 characters",
+            NullableStringField::Null => "Invalid input: expected string, received null",
+        };
+        Err(AuthError::FieldInput {
+            code: "VALIDATION_ERROR",
+            message: format!("[body.data.{name}] {message}"),
+        })
+    };
+    let name = nonempty(&body.data.name, "name")?;
+    let slug = nonempty(&body.data.slug, "slug")?;
     let org_id =
         resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
 
@@ -229,7 +252,7 @@ pub(crate) async fn update_organization_core(
         ));
     }
 
-    if let Some(ref new_slug) = body.data.slug
+    if let Some(ref new_slug) = slug
         && let Some(existing) = ctx.database.get_organization_by_slug(new_slug).await?
         && existing.id() != org_id
     {
@@ -238,8 +261,8 @@ pub(crate) async fn update_organization_core(
 
     let mut update_data = UpdateOrganization {
         additional_fields: body.data.additional_fields.clone(),
-        name: body.data.name.clone(),
-        slug: body.data.slug.clone(),
+        name,
+        slug,
         logo: match &body.data.logo {
             NullableStringField::Missing => None,
             NullableStringField::Null => Some(None),
@@ -576,16 +599,35 @@ pub async fn handle_create_organization(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let mut body: CreateOrganizationRequest = match better_auth_core::validate_request_body(req) {
-        Ok(v) => v,
-        Err(resp) => return Ok(resp),
-    };
+    let mut body: CreateOrganizationRequest = req
+        .body_as_json()
+        .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;
+    if let Err(mut errors) = validator::Validate::validate(&body) {
+        errors.errors_mut().retain(|name, _| {
+            !config
+                .schema
+                .organization
+                .additional_fields
+                .get(name.as_ref())
+                .is_some_and(|field| field.input)
+        });
+        if !errors.is_empty() {
+            return Ok(better_auth_core::error::validation_error_response(&errors));
+        }
+    }
     validate_metadata_input(body.metadata.as_ref(), "body.metadata")?;
-    body.additional_fields = config.schema.organization.parse_organization_input(
+    body.additional_fields = crate::plugins::organization::fields::parse_input(
+        &config.schema.organization,
+        &body,
         &body.additional_fields,
         "body",
         false,
     )?;
+    if body.logo == NullableStringField::Null {
+        let _ = body
+            .additional_fields
+            .insert("logo".into(), serde_json::Value::Null);
+    }
     let (response, default_team_id) =
         create_organization_core(&body, &user, config, ctx, Some(req)).await?;
     if !body.keep_current_active_organization.unwrap_or(false) {
@@ -620,11 +662,13 @@ pub async fn handle_update_organization(
         Err(resp) => return Ok(resp),
     };
     validate_metadata_input(body.data.metadata.as_ref(), "body.data.metadata")?;
-    body.data.additional_fields = config.schema.organization.parse_organization_input(
-        &body.data.additional_fields,
-        "body.data",
-        true,
-    )?;
+    let mut schema = config.schema.organization.clone();
+    // The upstream update schema applies base fields after additional fields.
+    schema
+        .additional_fields
+        .retain(|name, _| !matches!(name.as_str(), "name" | "slug" | "logo" | "metadata"));
+    body.data.additional_fields =
+        schema.parse_organization_input(&body.data.additional_fields, "body.data", true)?;
     let updated = update_organization_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &updated)?)
 }

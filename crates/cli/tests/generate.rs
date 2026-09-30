@@ -80,6 +80,34 @@ fn invalid_schema_configuration_preserves_existing_output() {
             r#"{"teamMember":{"additionalFields":{"label":{"type":"string"}}}}"#,
             "does not support additionalFields",
         ),
+        (
+            r#"{"organization":{"additionalFields":{"name":{"type":"number","required":true}}}}"#,
+            "must preserve its String type",
+        ),
+        (
+            r#"{"organization":{"additionalFields":{"name":{"type":"string","required":false}}}}"#,
+            "must preserve its storage nullability",
+        ),
+        (
+            r#"{"organization":{"additionalFields":{"logo":{"type":"string","required":true}}}}"#,
+            "must preserve its storage nullability",
+        ),
+        (
+            r#"{"organization":{"additionalFields":{"metadata":{"type":"string"}}}}"#,
+            "uses JSON-backed storage and is unsupported",
+        ),
+        (
+            r#"{"organizationRole":{"additionalFields":{"permission":{"type":"json"}}}}"#,
+            "uses JSON-backed storage and is unsupported",
+        ),
+        (
+            r#"{"organization":{"additionalFields":{"updatedAt":{"type":"date","required":true}}}}"#,
+            "targets an internal storage field and is unsupported",
+        ),
+        (
+            r#"{"organization":{"additionalFields":{"id":{"type":"number"}}}}"#,
+            "must preserve its String type",
+        ),
     ] {
         fs::write(&config, schema).unwrap();
         let result = Command::new(env!("CARGO_BIN_EXE_better-auth-rs"))

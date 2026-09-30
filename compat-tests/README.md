@@ -32,6 +32,10 @@ Passkey scenarios use an ES256 software authenticator. JWT and One Tap scenarios
 
 Route checks require zero missing routes in both configured profiles. The all-in profile must match the empty backlog in `deferred-routes.txt`; new gaps and stale backlog entries fail. Route coverage does not establish support for every plugin option or server-only API.
 
+The `organization-core-fields` profile compares built-in field policies across all five Organization models. The scenarios cover transforms, defaults versus explicit null, base-schema precedence, role visibility, timestamp updates, and caller-supplied IDs. ID policy callbacks fail if either adapter invokes them.
+
+Known option gaps remain outside route coverage: API Key custom generators/getters/validators and dynamic default permissions; API Key secondary/custom storage and database fallback; configurable model and column mappings for plugins other than Organization; and arbitrary Organization built-in type/nullability changes, undefined output, or policies on its native JSON/internal storage fields. Passing the current profiles does not establish these capabilities.
+
 The `organization-jwt` profile verifies teams together with asymmetric session caches, JWT callbacks, transformed user fields, and application-owned session fields. It compares complete session and user objects after cryptographic verification. The same profile verifies OIDC mapped field creation and updates.
 
 The Cargo runner builds the Rust fixture before starting either server. Health deadlines measure server startup, not compilation or Cargo lock waits.

@@ -27,7 +27,6 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationRoleStore for SeaOr
                 ("role", json!(input.role)),
                 ("permission", input.permission),
                 ("created_at", json!(Utc::now())),
-                ("updated_at", json!(null)),
             ]),
             input.additional_fields,
             &self.organization_fields()?.organization_role,
@@ -60,7 +59,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationRoleStore for SeaOr
         id: &str,
         input: UpdateOrganizationRole,
     ) -> AuthResult<OrganizationRole> {
-        let mut core = values([("updated_at", json!(Utc::now()))]);
+        let config = self.organization_fields()?.organization_role;
+        let mut core = Default::default();
+        if !config.additional_fields.contains_key("updatedAt") {
+            core = values([("updated_at", json!(Utc::now()))]);
+        }
         if let Some(role) = input.role {
             let _ = core.insert("role".into(), json!(role));
         }
@@ -72,7 +75,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationRoleStore for SeaOr
             id,
             core,
             input.additional_fields,
-            &self.organization_fields()?.organization_role,
+            &config,
         )
         .await
     }

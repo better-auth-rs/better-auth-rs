@@ -19,22 +19,25 @@ impl<S: better_auth_core::AuthSchema, O: crate::SeaOrmOrganizationSchema> TeamSt
     for SeaOrmStore<S, O>
 {
     async fn create_team(&self, input: CreateTeam) -> AuthResult<Team> {
+        let mut core = values([
+            (
+                "id",
+                json!(input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())),
+            ),
+            ("name", json!(input.name)),
+            ("organization_id", json!(input.organization_id)),
+            (
+                "created_at",
+                json!(input.created_at.unwrap_or_else(Utc::now)),
+            ),
+            ("member_count", json!(0)),
+        ]);
+        if let Some(updated_at) = input.updated_at {
+            let _ = core.insert("updated_at".into(), json!(updated_at));
+        }
         models::insert::<O::Team, _>(
             self.connection(),
-            values([
-                (
-                    "id",
-                    json!(input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())),
-                ),
-                ("name", json!(input.name)),
-                ("organization_id", json!(input.organization_id)),
-                (
-                    "created_at",
-                    json!(input.created_at.unwrap_or_else(Utc::now)),
-                ),
-                ("updated_at", json!(input.updated_at)),
-                ("member_count", json!(0)),
-            ]),
+            core,
             input.additional_fields,
             &self.organization_fields()?.team,
         )
@@ -48,10 +51,13 @@ impl<S: better_auth_core::AuthSchema, O: crate::SeaOrmOrganizationSchema> TeamSt
             .transpose()
     }
     async fn update_team(&self, id: &str, update: UpdateTeam) -> AuthResult<Team> {
-        let mut core = values([(
-            "updated_at",
-            json!(update.updated_at.unwrap_or_else(|| Some(Utc::now()))),
-        )]);
+        let config = self.organization_fields()?.team;
+        let mut core = Default::default();
+        if let Some(updated_at) = update.updated_at {
+            core = values([("updated_at", json!(updated_at))]);
+        } else if !config.additional_fields.contains_key("updatedAt") {
+            core = values([("updated_at", json!(Utc::now()))]);
+        }
         for (name, value) in [
             ("name", update.name.map(|v| json!(v))),
             ("organization_id", update.organization_id.map(|v| json!(v))),
@@ -66,7 +72,7 @@ impl<S: better_auth_core::AuthSchema, O: crate::SeaOrmOrganizationSchema> TeamSt
             id,
             core,
             update.additional_fields,
-            &self.organization_fields()?.team,
+            &config,
         )
         .await
     }

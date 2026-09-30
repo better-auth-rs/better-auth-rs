@@ -3,6 +3,44 @@ use crate::{AuthError, AuthResult};
 use serde_json::{Map, Value};
 
 impl UserConfig {
+    /// Apply configured policies once to logical core fields and application fields.
+    /// The adapter owns `id`; custom field attributes cannot replace its policy.
+    pub fn organization_storage_fields(
+        &self,
+        core: Map<String, Value>,
+        extras: Map<String, Value>,
+        create: bool,
+    ) -> AuthResult<Map<String, Value>> {
+        let mut output = core.clone();
+        output.retain(|name, _| name == "id" || !self.additional_fields.contains_key(name));
+        let mut input = extras;
+        input.extend(core);
+        output.extend(self.storage_fields_inner(input, create, true)?);
+        Ok(output)
+    }
+
+    /// Merge transformed storage fields into the public logical core fields.
+    pub fn organization_output_fields(
+        &self,
+        mut core: Map<String, Value>,
+        storage: &Map<String, Value>,
+    ) -> AuthResult<Map<String, Value>> {
+        let transformed = self.output_fields_inner(storage, true)?;
+        for name in core.keys() {
+            if name != "id"
+                && self.additional_fields.contains_key(name)
+                && !transformed.contains_key(name)
+            {
+                return Err(AuthError::config(format!(
+                    "Organization built-in field {name} output is undefined; typed fields require a compatible value"
+                )));
+            }
+        }
+        core.retain(|name, _| name == "id" || !self.additional_fields.contains_key(name));
+        core.extend(transformed);
+        Ok(core)
+    }
+
     /// Validate Organization route fields without applying adapter defaults or transforms.
     pub fn parse_organization_input(
         &self,
@@ -84,8 +122,19 @@ impl UserConfig {
 
     /// Apply the adapter's field mapping and output transforms before route visibility filtering.
     pub fn output_fields(&self, storage: &Map<String, Value>) -> AuthResult<Map<String, Value>> {
+        self.output_fields_inner(storage, false)
+    }
+
+    fn output_fields_inner(
+        &self,
+        storage: &Map<String, Value>,
+        preserve_id: bool,
+    ) -> AuthResult<Map<String, Value>> {
         let mut output = Map::new();
         for (name, field) in &self.additional_fields {
+            if preserve_id && name == "id" {
+                continue;
+            }
             let mut value = storage
                 .get(field.field_name.as_ref().unwrap_or(name))
                 .cloned();

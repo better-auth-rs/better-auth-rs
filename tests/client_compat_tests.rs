@@ -401,6 +401,7 @@ async fn configuration_client_compat() {
         "organization-limits",
         "organization-no-ac",
         "organization-fields",
+        "organization-core-fields",
         "organization-invitation-options",
         "organization-invitation-unverified",
         "api-key-zero",

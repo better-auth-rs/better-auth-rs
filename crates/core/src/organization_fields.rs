@@ -1,6 +1,6 @@
 //! Field policies shared by organization routes and persistence adapters.
 
-use crate::user_fields::UserConfig;
+use crate::user_fields::{UserConfig, UserFieldType};
 use better_auth_schema_registry::{EntityRole, core_fields};
 
 /// Parse a numeric query string as the upstream adapter's `Number` conversion.
@@ -61,7 +61,16 @@ pub struct OrganizationFields {
 }
 
 impl OrganizationFields {
-    /// Reject additional fields that would redefine typed built-in fields.
+    /// Validate the caller's schema before applying upstream's eager role partial schema.
+    pub fn into_storage(mut self) -> crate::AuthResult<Self> {
+        self.validate()?;
+        for field in self.organization_role.additional_fields.values_mut() {
+            field.required = Some(false);
+        }
+        Ok(self)
+    }
+
+    /// Reject built-in overrides that cannot preserve the typed storage contract.
     pub fn validate(&self) -> crate::AuthResult<()> {
         for (entity, role, fields) in [
             ("organization", EntityRole::Organization, &self.organization),
@@ -89,12 +98,40 @@ impl OrganizationFields {
                         uppercase = false;
                     }
                 }
-                for name in [field.name, &public_name] {
-                    if fields.additional_fields.contains_key(name) {
-                        return Err(crate::AuthError::config(format!(
-                            "Organization schema {entity}.{name} redefines a built-in field; additional fields must use new names"
-                        )));
-                    }
+                if field.name != public_name && fields.additional_fields.contains_key(field.name) {
+                    return Err(crate::AuthError::config(format!(
+                        "Organization schema {entity}.{} must use the public field name {public_name}",
+                        field.name
+                    )));
+                }
+                let Some(policy) = fields.additional_fields.get(&public_name) else {
+                    continue;
+                };
+                if matches!(field.name, "metadata" | "permission" | "member_count")
+                    || (role == EntityRole::Organization && field.name == "updated_at")
+                {
+                    return Err(crate::AuthError::config(format!(
+                        "Organization schema {entity}.{public_name} does not support built-in field policies"
+                    )));
+                }
+                let nullable = field.ty.starts_with("Option<");
+                let field_type = field.ty.trim_start_matches("Option<").trim_end_matches('>');
+                if !matches!(
+                    (field_type, &policy.field_type),
+                    ("String", UserFieldType::String)
+                        | ("DateTimeUtc", UserFieldType::Date)
+                        | ("i64", UserFieldType::Number)
+                ) {
+                    return Err(crate::AuthError::config(format!(
+                        "Organization schema {entity}.{public_name} must preserve the built-in {field_type} field type"
+                    )));
+                }
+                if field.name != "id"
+                    && policy.required.is_some_and(|required| required == nullable)
+                {
+                    return Err(crate::AuthError::config(format!(
+                        "Organization schema {entity}.{public_name} must preserve the built-in field nullability"
+                    )));
                 }
             }
         }

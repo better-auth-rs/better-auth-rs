@@ -194,8 +194,20 @@ impl UserConfig {
         input: Map<String, Value>,
         create: bool,
     ) -> AuthResult<Map<String, Value>> {
+        self.storage_fields_inner(input, create, false)
+    }
+
+    fn storage_fields_inner(
+        &self,
+        input: Map<String, Value>,
+        create: bool,
+        preserve_id: bool,
+    ) -> AuthResult<Map<String, Value>> {
         let mut output = Map::new();
         for (name, field) in &self.additional_fields {
+            if preserve_id && name == "id" {
+                continue;
+            }
             let mut value = input.get(name).cloned().or_else(|| {
                 if create {
                     field.default_value()

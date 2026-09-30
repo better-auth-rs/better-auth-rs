@@ -28,12 +28,19 @@ where
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
+#[serde(untagged)]
 pub enum NullableStringField {
     #[default]
     Missing,
     Null,
     Value(String),
+}
+
+impl NullableStringField {
+    pub(crate) fn is_missing(&self) -> bool {
+        matches!(self, Self::Missing)
+    }
 }
 
 pub(crate) fn deserialize_nullable_string_field<'de, D>(
@@ -49,7 +56,7 @@ where
     })
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum RoleInput {
     One(String),
@@ -87,7 +94,7 @@ fn deserialize_present_metadata<'de, D: serde::Deserializer<'de>>(
     serde_json::Value::deserialize(deserializer).map(Some)
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct CreateOrganizationRequest {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
@@ -96,8 +103,17 @@ pub struct CreateOrganizationRequest {
     pub name: String,
     #[validate(length(min = 1, max = 100, message = "Slug must be 1-100 characters"))]
     pub slug: String,
-    pub logo: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_present_metadata")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_nullable_string_field",
+        skip_serializing_if = "NullableStringField::is_missing"
+    )]
+    pub logo: NullableStringField,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_metadata",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub metadata: Option<serde_json::Value>,
     #[serde(rename = "keepCurrentActiveOrganization")]
     pub keep_current_active_organization: Option<bool>,
@@ -108,8 +124,10 @@ pub struct UpdateOrganizationData {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 
-    pub name: Option<String>,
-    pub slug: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_nullable_string_field")]
+    pub name: NullableStringField,
+    #[serde(default, deserialize_with = "deserialize_nullable_string_field")]
+    pub slug: NullableStringField,
     #[serde(default, deserialize_with = "deserialize_nullable_string_field")]
     pub logo: NullableStringField,
     #[serde(default, deserialize_with = "deserialize_present_metadata")]
@@ -166,7 +184,7 @@ pub struct GetFullOrganizationQuery {
     pub members_limit: Option<usize>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct InviteMemberRequest {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
@@ -174,9 +192,9 @@ pub struct InviteMemberRequest {
     #[validate(email(message = "Invalid email address"))]
     pub email: String,
     pub role: RoleInput,
-    #[serde(rename = "organizationId")]
+    #[serde(rename = "organizationId", skip_serializing_if = "Option::is_none")]
     pub organization_id: Option<String>,
-    #[serde(rename = "teamId")]
+    #[serde(rename = "teamId", skip_serializing_if = "Option::is_none")]
     pub team_id: Option<RoleInput>,
     /// Renew and send an existing pending invitation.
     #[serde(default)]

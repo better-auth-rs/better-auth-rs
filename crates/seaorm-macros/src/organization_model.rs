@@ -32,6 +32,9 @@ pub(super) fn generate(
     let mut columns = Vec::new();
     let mut serialized_columns = Vec::new();
     let mut core_columns = Vec::new();
+    let mut core_names = Vec::new();
+    let mut core_values = Vec::new();
+    let mut output_values = Vec::new();
     let mut assignments = Vec::new();
     let mut output = Vec::new();
     for field in &fields.named {
@@ -46,49 +49,85 @@ pub(super) fn generate(
             "{}",
             serde_rename_rule::RenameRule::PascalCase.apply_to_field(&name)
         );
-        let aliases = if name == serialized {
-            quote!(#name)
+        let is_core = core_fields.contains(&name.as_str());
+        let public_name = if is_core {
+            serde_rename_rule::RenameRule::CamelCase.apply_to_field(&name)
         } else {
-            quote!(#name | #serialized)
+            serialized.clone()
         };
-        columns.push(quote!(#aliases => Ok(Column::#column),));
+        let mut aliases = vec![name.clone(), serialized.clone(), public_name.clone()];
+        aliases.sort();
+        aliases.dedup();
+        columns.push(quote!(#(#aliases)|* => Ok(Column::#column),));
         serialized_columns.push(quote!(Column::#column => #serialized,));
-        if core_fields.contains(&name.as_str()) {
+        if is_core {
             core_columns.push(quote!(Column::#column));
+            core_names.push(quote!(Column::#column => Some(#public_name),));
+            core_values.push(
+                quote!((#public_name.to_owned(), #core_root::serde_json::to_value(&self.#ident)?)),
+            );
+        } else {
+            core_names.push(quote!(Column::#column => None,));
         }
-        assignments.push(quote!(#aliases => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(#core_root::serde_json::from_value(value)?),));
-        if core_fields.contains(&name.as_str())
-            && !matches!(name.as_str(), "member_count" | "membership_key")
-        {
-            if name == "status" {
-                output.push(quote!(#ident: self.#ident.to_owned().into()));
-            } else {
-                output.push(quote!(#ident: self.#ident.to_owned()));
+        assignments.push(quote!(#(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(#core_root::serde_json::from_value(value)?),));
+        if is_core {
+            if matches!(name.as_str(), "member_count" | "membership_key") {
+                output_values.push(quote!(let _ = projected.remove(#public_name);));
+                continue;
             }
+            let original = if name == "status" {
+                quote!(#core_root::serde_json::from_value(#core_root::serde_json::Value::String(self.#ident.clone()))
+                    .map_err(|error| #core_root::AuthError::config(format!("Organization invitation status is incompatible with its typed model: {error}")))?)
+            } else {
+                quote!(self.#ident.to_owned())
+            };
+            output_values.push(quote! {
+                let #ident = if fields.additional_fields.contains_key(#public_name) && #public_name != "id" {
+                    #core_root::serde_json::from_value(projected.remove(#public_name).unwrap_or(#core_root::serde_json::Value::Null))
+                        .map_err(|error| #core_root::AuthError::config(format!("Organization field {} output is incompatible with its typed model: {error}", #public_name)))?
+                } else {
+                    let _ = projected.remove(#public_name);
+                    #original
+                };
+            });
+            output.push(quote!(#ident));
         }
     }
     let ident = &input.ident;
     let extras = if role == EntityRole::TeamMember {
         quote!()
     } else {
-        quote!(additional_fields: fields.output_fields(&storage)?,)
+        quote!(additional_fields: projected,)
     };
     let projection = if role == EntityRole::TeamMember {
-        quote!(let _ = fields;)
+        quote! {
+            let mut projected = #core_root::serde_json::Map::new();
+            #(#output_values)*
+        }
     } else {
         quote! {
             let model = #core_root::serde_json::to_value(self)?;
             let model = model.as_object().ok_or_else(|| #core_root::AuthError::config("Organization models must serialize as objects"))?;
+            let core = #core_root::serde_json::Map::from_iter([#(#core_values),*]);
             let mut storage = #core_root::serde_json::Map::new();
             for (name, field) in &fields.additional_fields {
+                if name == "id" { continue; }
                 let storage_name = field.field_name.as_deref().unwrap_or(name);
-                let serialized_name = match Self::column(storage_name)? {
-                    #(#serialized_columns)*
+                let column = Self::column(storage_name)?;
+                let value = if let Some(core_name) = Self::core_field_name(&column) {
+                    core.get(core_name)
+                } else {
+                    let serialized_name = match column {
+                        #(#serialized_columns)*
+                    };
+                    model.get(serialized_name)
                 };
-                if let Some(value) = model.get(serialized_name) {
+                if let Some(value) = value {
                     let _ = storage.insert(storage_name.to_owned(), value.clone());
                 }
             }
+            let mut projected = fields.organization_output_fields(core, &storage)?;
+            #(#output_values)*
         }
     };
     Ok(quote! {
@@ -102,6 +141,9 @@ pub(super) fn generate(
             }
             fn is_core_column(column: &Column) -> bool {
                 matches!(column, #(#core_columns)|*)
+            }
+            fn core_field_name(column: &Column) -> Option<&'static str> {
+                match column { #(#core_names)* }
             }
             fn record(&self, fields: &#core_root::user_fields::UserConfig) -> #core_root::AuthResult<Self::Record> {
                 #projection

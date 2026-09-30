@@ -20,6 +20,8 @@ use crate::types::{
     UpdateOrganization, UpdatePasskeyAuthentication, UpdateUser,
 };
 use crate::wire::{AccountView, SessionView, UserView, VerificationView};
+#[path = "test_store_fields.rs"]
+mod fields;
 #[path = "test_store_organization.rs"]
 mod organization;
 #[path = "test_store_sessions.rs"]
@@ -98,55 +100,30 @@ impl MemoryStore {
             .unwrap_or_else(|error| error.into_inner())
             .clone()
     }
-    fn create_fields(
-        schema: &crate::user_fields::UserConfig,
-        input: serde_json::Map<String, serde_json::Value>,
-    ) -> AuthResult<serde_json::Map<String, serde_json::Value>> {
-        let mut stored = schema.storage_fields(input, true)?;
-        for (name, field) in &schema.additional_fields {
-            stored
-                .entry(field.field_name.as_ref().unwrap_or(name).clone())
-                .or_insert(serde_json::Value::Null);
-        }
-        Ok(stored)
+    fn output_organization(&self, value: Organization) -> AuthResult<Organization> {
+        let metadata = value.metadata.clone();
+        let mut output: Organization =
+            self.output_record(better_auth_schema_registry::EntityRole::Organization, value)?;
+        output.metadata = metadata;
+        Ok(output)
     }
-    fn output_organization(&self, mut value: Organization) -> AuthResult<Organization> {
-        value.additional_fields = self
-            .organization_fields()
-            .organization
-            .output_fields(&value.additional_fields)?;
-        Ok(value)
+    fn output_member(&self, value: Member) -> AuthResult<Member> {
+        self.output_record(better_auth_schema_registry::EntityRole::Member, value)
     }
-    fn output_member(&self, mut value: Member) -> AuthResult<Member> {
-        value.additional_fields = self
-            .organization_fields()
-            .member
-            .output_fields(&value.additional_fields)?;
-        Ok(value)
+    fn output_invitation(&self, value: Invitation) -> AuthResult<Invitation> {
+        self.output_record(better_auth_schema_registry::EntityRole::Invitation, value)
     }
-    fn output_invitation(&self, mut value: Invitation) -> AuthResult<Invitation> {
-        value.additional_fields = self
-            .organization_fields()
-            .invitation
-            .output_fields(&value.additional_fields)?;
-        Ok(value)
-    }
-    fn output_team(&self, mut value: crate::Team) -> AuthResult<crate::Team> {
-        value.additional_fields = self
-            .organization_fields()
-            .team
-            .output_fields(&value.additional_fields)?;
-        Ok(value)
+    fn output_team(&self, value: crate::Team) -> AuthResult<crate::Team> {
+        self.output_record(better_auth_schema_registry::EntityRole::Team, value)
     }
     fn output_organization_role(
         &self,
-        mut value: crate::OrganizationRole,
+        value: crate::OrganizationRole,
     ) -> AuthResult<crate::OrganizationRole> {
-        value.additional_fields = self
-            .organization_fields()
-            .organization_role
-            .output_fields(&value.additional_fields)?;
-        Ok(value)
+        self.output_record(
+            better_auth_schema_registry::EntityRole::OrganizationRole,
+            value,
+        )
     }
 }
 

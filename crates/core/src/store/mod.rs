@@ -215,6 +215,7 @@ pub struct ListOrganizationMembersParams {
 #[async_trait]
 pub trait OrganizationStore: Send + Sync {
     /// Register the Organization plugin's field policies before serving requests.
+    /// Stores must call `OrganizationFields::into_storage` before saving the configuration.
     fn configure_organization_fields(
         &self,
         fields: crate::organization_fields::OrganizationFields,

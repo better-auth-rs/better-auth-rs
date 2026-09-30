@@ -68,6 +68,21 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
     .into_iter()
     .map(|(name, field_type)| (name.to_owned(), optional(field_type)))
     .collect();
+    organization.schema.organization.additional_fields.insert(
+        "name".to_owned(),
+        UserFieldConfig {
+            field_name: Some("organization_name".to_owned()),
+            required: Some(true),
+            ..Default::default()
+        },
+    );
+    organization.schema.organization.additional_fields.insert(
+        "logo".to_owned(),
+        UserFieldConfig {
+            field_name: Some("logo_url".to_owned()),
+            ..optional(UserFieldType::String)
+        },
+    );
     organization
         .schema
         .organization
@@ -134,7 +149,7 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
         &router,
         "/auth/organization/create",
         json!({
-            "name":"Mapped organization", "slug":"mapped", "label":"stored",
+            "name":"Mapped organization", "slug":"mapped", "label":"stored", "logo":"https://example.com/logo.svg",
         "category":"small",
             "tags":["one","two"], "scores":[1.25,2.5], "payload":{"nested":true},
             "enabled":true, "score":4.5
@@ -150,6 +165,7 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
         .unwrap()
         .unwrap();
     assert_eq!(row.name, "Mapped organization");
+    assert_eq!(row.logo.as_deref(), Some("https://example.com/logo.svg"));
     assert_eq!(row.label.as_deref(), Some("stored"));
     assert_eq!(row.category.as_deref(), Some("small"));
     assert_eq!(
@@ -262,6 +278,10 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
 
     for (statement, expected) in [
         (
+            "INSERT INTO app_organizations (id, organization_name, slug, created_at, updated_at) SELECT 'duplicate-name', organization_name, 'different-slug', created_at, updated_at FROM app_organizations LIMIT 1",
+            "UNIQUE constraint failed: app_organizations.organization_name",
+        ),
+        (
             "UPDATE app_members SET workspace_id = 'missing'",
             "FOREIGN KEY constraint failed",
         ),
@@ -273,6 +293,11 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
         let error = database.execute_unprepared(statement).await.unwrap_err();
         assert!(error.to_string().contains(expected), "{error}");
     }
+    database.execute_unprepared("INSERT INTO app_organizations (id, organization_name, slug, created_at, updated_at) SELECT 'duplicate-slug', 'Different name', slug, created_at, updated_at FROM app_organizations LIMIT 1").await.unwrap();
+    database
+        .execute_unprepared("DELETE FROM app_organizations WHERE id = 'duplicate-slug'")
+        .await
+        .unwrap();
     post(
         &router,
         "/auth/organization/delete",

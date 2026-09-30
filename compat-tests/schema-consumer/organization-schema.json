@@ -2,8 +2,13 @@
   "session": { "fields": { "activeOrganizationId": "selected_workspace", "activeTeamId": "selected_group" } },
   "organization": {
     "modelName": "app_organizations",
-    "fields": { "name": "organization_name", "slug": "organization_slug", "metadata": "organization_metadata" },
+    "fields": { "name": "discarded_name", "slug": "discarded_slug", "createdAt": "discarded_created_at", "metadata": "organization_metadata" },
     "additionalFields": {
+      "id": { "type": "string", "required": false, "fieldName": "ignored_id", "defaultValue": "ignored-id" },
+      "name": { "type": "string", "required": true, "fieldName": "organization_name", "unique": true, "defaultValue": "ignored-name" },
+      "slug": { "type": "string", "required": true },
+      "logo": { "type": "string", "required": false, "fieldName": "logo_url" },
+      "createdAt": { "type": "date", "required": true },
       "label": { "type": "string", "fieldName": "stored_label", "required": false },
       "category": { "type": ["small", "large"], "required": false },
       "joinedAt": { "type": "date", "required": false },
@@ -17,7 +22,10 @@
   "member": {
     "modelName": "app_members",
     "fields": { "organizationId": "workspace_id", "userId": "subject_id", "role": "access_role" },
-    "additionalFields": { "badge": { "type": "string", "required": false } }
+    "additionalFields": {
+      "organizationId": { "type": "string", "required": true, "fieldName": "workspace_id" },
+      "badge": { "type": "string", "required": false }
+    }
   },
   "invitation": {
     "modelName": "app_invitations",

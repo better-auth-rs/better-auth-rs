@@ -232,13 +232,14 @@ fn gen_indexes(entity: &Entity) -> Vec<TokenStream> {
             Some((columns, index.unique))
         })
         .collect();
-    indexes.extend(
-        entity
-            .fields
-            .iter()
-            .filter(|field| field.unique)
-            .map(|field| (vec![field.column.as_str()], true)),
-    );
+    for field in &entity.fields {
+        if let Some(unique) = field.unique {
+            indexes.retain(|(columns, _)| columns.as_slice() != [field.column.as_str()]);
+            if unique {
+                indexes.push((vec![field.column.as_str()], true));
+            }
+        }
+    }
     indexes.into_iter().map(|(columns, unique)| {
         let name = format!("idx_{table}_{}", columns.join("_"));
         let columns = columns.iter().map(|column| quote! { .col(Alias::new(#column)) });

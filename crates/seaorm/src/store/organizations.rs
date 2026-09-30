@@ -18,7 +18,7 @@ use serde_json::json;
 #[async_trait]
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationStore for SeaOrmStore<S, O> {
     fn configure_organization_fields(&self, fields: OrganizationFields) -> AuthResult<()> {
-        fields.validate()?;
+        let fields = fields.into_storage()?;
         models::validate_fields::<O::Organization>("organization", &fields.organization)?;
         models::validate_fields::<O::Member>("member", &fields.member)?;
         models::validate_fields::<O::Invitation>("invitation", &fields.invitation)?;
@@ -37,22 +37,24 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationStore for SeaOrmSto
     async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Organization> {
         let config = self.organization_fields()?.organization;
         let now = Utc::now();
-        let mut active = models::active::<O::Organization>(
-            values([
-                (
-                    "id",
-                    json!(org.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())),
-                ),
-                ("name", json!(org.name)),
-                ("slug", json!(org.slug)),
-                ("logo", json!(org.logo)),
-                ("created_at", json!(now)),
-                ("updated_at", json!(now)),
-            ]),
-            org.additional_fields,
-            &config,
-            true,
-        )?;
+        let mut core = values([
+            (
+                "id",
+                json!(org.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())),
+            ),
+            ("name", json!(org.name)),
+            ("slug", json!(org.slug)),
+            ("created_at", json!(now)),
+            ("updated_at", json!(now)),
+        ]);
+        if let Some(logo) = org.logo {
+            let _ = core.insert("logo".into(), json!(logo));
+        }
+        if config.additional_fields.contains_key("updatedAt") {
+            let _ = core.remove("updated_at");
+        }
+        let mut active =
+            models::active::<O::Organization>(core, org.additional_fields, &config, true)?;
         // Native JSON retains SQL NULL separately from a stored JSON null value.
         active.set(
             O::Organization::column("metadata")?,
@@ -102,7 +104,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema> OrganizationStore for SeaOrmSto
         update: UpdateOrganization,
     ) -> AuthResult<Organization> {
         let config = self.organization_fields()?.organization;
-        let mut core = values([("updated_at", json!(Utc::now()))]);
+        let mut core = Default::default();
+        if !config.additional_fields.contains_key("updatedAt") {
+            core = values([("updated_at", json!(Utc::now()))]);
+        }
         for (name, value) in [
             ("id", update.id.as_ref().map(|v| json!(v))),
             ("name", update.name.map(|v| json!(v))),

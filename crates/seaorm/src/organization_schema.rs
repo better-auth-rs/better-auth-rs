@@ -25,6 +25,8 @@ pub trait SeaOrmOrganizationModel:
     fn column(name: &str) -> AuthResult<Self::Column>;
     /// Return whether the column stores a typed built-in field.
     fn is_core_column(column: &Self::Column) -> bool;
+    /// Return the canonical public name of a built-in column.
+    fn core_field_name(column: &Self::Column) -> Option<&'static str>;
     /// Read built-in fields with their public wire names.
     fn record(&self, fields: &UserConfig) -> AuthResult<Self::Record>;
     /// Assign typed fields in an insert or update.

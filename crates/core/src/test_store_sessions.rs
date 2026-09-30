@@ -1,4 +1,6 @@
 use super::*;
+use better_auth_schema_registry::EntityRole;
+use serde_json::{Map, json};
 
 #[async_trait]
 impl SessionStore<BundledSchema> for MemoryStore {
@@ -10,10 +12,6 @@ impl SessionStore<BundledSchema> for MemoryStore {
         teams_enabled: bool,
         maximum: crate::store::TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
-        let fields = self
-            .organization_fields()
-            .invitation
-            .storage_fields(Default::default(), false)?;
         let invitation_snapshot = {
             let mut state = self.lock();
             let invitation = state
@@ -21,8 +19,16 @@ impl SessionStore<BundledSchema> for MemoryStore {
                 .get_mut(invitation_id)
                 .filter(|invitation| invitation.is_pending())
                 .ok_or_else(|| AuthError::bad_request("Invitation not found"))?;
-            invitation.status = InvitationStatus::Accepted;
-            invitation.additional_fields.extend(fields);
+            *invitation = self.store_record(
+                EntityRole::Invitation,
+                invitation.clone(),
+                Some(
+                    [("status".into(), json!(InvitationStatus::Accepted))]
+                        .into_iter()
+                        .collect(),
+                ),
+                Map::new(),
+            )?;
             invitation.clone()
         };
         let accepted = self.output_invitation(invitation_snapshot.clone())?;
@@ -112,16 +118,15 @@ impl SessionStore<BundledSchema> for MemoryStore {
                     return Err(AuthError::forbidden("Team member limit reached"));
                 }
             }
-            let member_fields =
-                Self::create_fields(&self.organization_fields().member, Default::default())?;
             let member = Member {
-                additional_fields: member_fields,
+                additional_fields: Default::default(),
                 id: uuid::Uuid::new_v4().to_string(),
                 organization_id: invitation.organization_id.clone(),
                 user_id: user_id.to_owned(),
                 role: invitation.role,
                 created_at: Utc::now(),
             };
+            let member: Member = self.store_record(EntityRole::Member, member, None, Map::new())?;
             let member_output = self.output_member(member.clone())?;
             for team_id in &team_ids {
                 if !state
@@ -154,21 +159,27 @@ impl SessionStore<BundledSchema> for MemoryStore {
         match result {
             Ok((member, session)) => Ok((member, accepted, session)),
             Err(error) => {
-                let fields = self
-                    .organization_fields()
-                    .invitation
-                    .storage_fields(Default::default(), false)?;
                 let restored = {
                     let mut state = self.lock();
-                    state
+                    if let Some(invitation) = state
                         .invitations
                         .get_mut(invitation_id)
                         .filter(|invitation| invitation.status == InvitationStatus::Accepted)
-                        .map(|invitation| {
-                            invitation.status = InvitationStatus::Pending;
-                            invitation.additional_fields.extend(fields);
-                            invitation.clone()
-                        })
+                    {
+                        *invitation = self.store_record(
+                            EntityRole::Invitation,
+                            invitation.clone(),
+                            Some(
+                                [("status".into(), json!(InvitationStatus::Pending))]
+                                    .into_iter()
+                                    .collect(),
+                            ),
+                            Map::new(),
+                        )?;
+                        Some(invitation.clone())
+                    } else {
+                        None
+                    }
                 };
                 if let Some(restored) = restored {
                     let _ = self.output_invitation(restored)?;

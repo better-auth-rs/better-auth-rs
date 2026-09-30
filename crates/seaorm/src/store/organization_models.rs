@@ -13,13 +13,22 @@ pub(super) fn values<const N: usize>(fields: [(&str, Value); N]) -> Map<String, 
 }
 
 pub(super) fn active<M: SeaOrmOrganizationModel>(
-    mut core: Map<String, Value>,
+    core: Map<String, Value>,
     input: Map<String, Value>,
     config: &UserConfig,
     create: bool,
 ) -> AuthResult<M::ActiveModel> {
-    core.extend(config.storage_fields(input, create)?);
-    M::active(core)
+    let core = core
+        .into_iter()
+        .map(|(name, value)| {
+            let column = M::column(&name)?;
+            Ok((
+                M::core_field_name(&column).unwrap_or(&name).to_owned(),
+                value,
+            ))
+        })
+        .collect::<AuthResult<Map<_, _>>>()?;
+    M::active(config.organization_storage_fields(core, input, create)?)
 }
 
 pub(super) async fn insert<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
@@ -79,11 +88,20 @@ pub(super) fn validate_fields<M: SeaOrmOrganizationModel>(
     fields: &UserConfig,
 ) -> AuthResult<()> {
     for (name, field) in &fields.additional_fields {
+        if name == "id" {
+            continue;
+        }
         let storage_name = field.field_name.as_deref().unwrap_or(name);
         let column = M::column(storage_name)?;
-        if M::is_core_column(&column) {
+        let logical = M::column(name)
+            .ok()
+            .and_then(|column| M::core_field_name(&column));
+        let stored = M::core_field_name(&column);
+        if logical.is_some_and(|public| public != name)
+            || ((logical.is_some() || stored.is_some()) && logical != stored)
+        {
             return Err(AuthError::config(format!(
-                "Organization schema {entity}.{name} maps to built-in column {storage_name}; additional fields must use new columns"
+                "Organization schema {entity}.{name} maps to a different typed field {storage_name}; built-in policies must use the same column"
             )));
         }
     }

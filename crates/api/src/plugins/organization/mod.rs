@@ -266,11 +266,8 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         ctx: &mut better_auth_core::AuthInitContext<S>,
     ) -> better_auth_core::AuthResult<()> {
         self.config.schema.validate()?;
-        let mut fields = self.config.schema.clone();
-        for field in fields.organization_role.additional_fields.values_mut() {
-            field.required = Some(false);
-        }
-        ctx.database.configure_organization_fields(fields)?;
+        ctx.database
+            .configure_organization_fields(self.config.schema.clone())?;
         ctx.extensions.insert(self.config.schema.clone());
 
         S::Session::require_plugin_fields("organization", &["active_organization_id"])?;

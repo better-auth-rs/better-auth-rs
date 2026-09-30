@@ -1,4 +1,6 @@
 use super::*;
+use better_auth_schema_registry::EntityRole;
+use serde_json::{Map, json};
 
 fn compare_member_values(
     left: &serde_json::Value,
@@ -25,7 +27,7 @@ impl OrganizationStore for MemoryStore {
         &self,
         fields: crate::organization_fields::OrganizationFields,
     ) -> AuthResult<()> {
-        fields.validate()?;
+        let fields = fields.into_storage()?;
         *self
             .organization_fields
             .write()
@@ -42,10 +44,7 @@ impl OrganizationStore for MemoryStore {
             return Err(AuthError::bad_request("Organization already exists"));
         }
         let org = Organization {
-            additional_fields: Self::create_fields(
-                &self.organization_fields().organization,
-                input.additional_fields,
-            )?,
+            additional_fields: Default::default(),
             id: input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             name: input.name,
             slug: input.slug,
@@ -54,6 +53,10 @@ impl OrganizationStore for MemoryStore {
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
+        let metadata = org.metadata.clone();
+        let mut org: Organization =
+            self.store_record(EntityRole::Organization, org, None, input.additional_fields)?;
+        org.metadata = metadata;
         state.organizations.insert(org.id.clone(), org.clone());
         self.output_organization(org)
     }
@@ -88,36 +91,40 @@ impl OrganizationStore for MemoryStore {
         id: &str,
         update: UpdateOrganization,
     ) -> AuthResult<Organization> {
-        let fields = self
-            .organization_fields()
-            .organization
-            .storage_fields(update.additional_fields, false)?;
         let mut state = self.lock();
-        let org = state
+        let mut org = state
             .organizations
-            .get_mut(id)
+            .get(id)
+            .cloned()
             .ok_or_else(|| AuthError::not_found("Organization not found"))?;
-        org.additional_fields.extend(fields);
+        let mut patch = Map::new();
         if let Some(name) = update.name {
-            org.name = name;
+            let _ = patch.insert("name".into(), json!(name));
         }
         if let Some(slug) = update.slug {
-            org.slug = slug;
+            let _ = patch.insert("slug".into(), json!(slug));
         }
         if let Some(logo) = update.logo {
-            org.logo = logo;
+            let _ = patch.insert("logo".into(), json!(logo));
+        }
+        if let Some(created_at) = update.created_at {
+            let _ = patch.insert("createdAt".into(), json!(created_at));
+        }
+        if let Some(new_id) = update.id {
+            let _ = patch.insert("id".into(), json!(new_id));
         }
         if let Some(metadata) = update.metadata {
             org.metadata = Some(metadata);
         }
-        if let Some(created_at) = update.created_at {
-            org.created_at = created_at;
-        }
-        if let Some(new_id) = update.id {
-            org.id = new_id;
-        }
         org.updated_at = Utc::now();
-        let result = org.clone();
+        let metadata = org.metadata.clone();
+        let mut result: Organization = self.store_record(
+            EntityRole::Organization,
+            org,
+            Some(patch),
+            update.additional_fields,
+        )?;
+        result.metadata = metadata;
         state.organizations.remove(id);
         state
             .organizations
@@ -169,16 +176,15 @@ impl MemberStore for MemoryStore {
             return Err(AuthError::bad_request("User is already a member"));
         }
         let member = Member {
-            additional_fields: Self::create_fields(
-                &self.organization_fields().member,
-                input.additional_fields,
-            )?,
+            additional_fields: Default::default(),
             id: uuid::Uuid::new_v4().to_string(),
             organization_id: input.organization_id,
             user_id: input.user_id,
             role: input.role,
             created_at: Utc::now(),
         };
+        let member: Member =
+            self.store_record(EntityRole::Member, member, None, input.additional_fields)?;
         state.members.insert(member.id.clone(), member.clone());
         self.output_member(member)
     }
@@ -200,17 +206,17 @@ impl MemberStore for MemoryStore {
             .transpose()
     }
     async fn update_member_role(&self, id: &str, role: &str) -> AuthResult<Member> {
-        let fields = self
-            .organization_fields()
-            .member
-            .storage_fields(Default::default(), false)?;
         let mut state = self.lock();
         let member = state
             .members
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Member not found"))?;
-        member.additional_fields.extend(fields);
-        member.role = role.to_owned();
+        *member = self.store_record(
+            EntityRole::Member,
+            member.clone(),
+            Some([("role".into(), json!(role))].into_iter().collect()),
+            Map::new(),
+        )?;
         self.output_member(member.clone())
     }
     async fn delete_member(&self, id: &str) -> AuthResult<()> {
@@ -370,10 +376,7 @@ impl MemberStore for MemoryStore {
 impl InvitationStore for MemoryStore {
     async fn create_invitation(&self, input: CreateInvitation) -> AuthResult<Invitation> {
         let invitation = Invitation {
-            additional_fields: Self::create_fields(
-                &self.organization_fields().invitation,
-                input.additional_fields,
-            )?,
+            additional_fields: Default::default(),
             id: input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             organization_id: input.organization_id,
             email: input.email,
@@ -384,6 +387,12 @@ impl InvitationStore for MemoryStore {
             expires_at: input.expires_at,
             created_at: input.created_at.unwrap_or_else(Utc::now),
         };
+        let invitation: Invitation = self.store_record(
+            EntityRole::Invitation,
+            invitation,
+            None,
+            input.additional_fields,
+        )?;
         self.lock()
             .invitations
             .insert(invitation.id.clone(), invitation.clone());
@@ -420,17 +429,17 @@ impl InvitationStore for MemoryStore {
         id: &str,
         status: InvitationStatus,
     ) -> AuthResult<Invitation> {
-        let fields = self
-            .organization_fields()
-            .invitation
-            .storage_fields(Default::default(), false)?;
         let mut state = self.lock();
         let invitation = state
             .invitations
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Invitation not found"))?;
-        invitation.additional_fields.extend(fields);
-        invitation.status = status;
+        *invitation = self.store_record(
+            EntityRole::Invitation,
+            invitation.clone(),
+            Some([("status".into(), json!(status))].into_iter().collect()),
+            Map::new(),
+        )?;
         self.output_invitation(invitation.clone())
     }
     async fn update_invitation_expiry(
@@ -438,17 +447,21 @@ impl InvitationStore for MemoryStore {
         id: &str,
         expires_at: DateTime<Utc>,
     ) -> AuthResult<Invitation> {
-        let fields = self
-            .organization_fields()
-            .invitation
-            .storage_fields(Default::default(), false)?;
         let mut state = self.lock();
         let invitation = state
             .invitations
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Invitation not found"))?;
-        invitation.additional_fields.extend(fields);
-        invitation.expires_at = expires_at;
+        *invitation = self.store_record(
+            EntityRole::Invitation,
+            invitation.clone(),
+            Some(
+                [("expiresAt".into(), json!(expires_at))]
+                    .into_iter()
+                    .collect(),
+            ),
+            Map::new(),
+        )?;
         self.output_invitation(invitation.clone())
     }
     async fn list_organization_invitations(&self, org: &str) -> AuthResult<Vec<Invitation>> {

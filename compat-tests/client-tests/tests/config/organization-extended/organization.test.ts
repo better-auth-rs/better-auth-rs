@@ -26,7 +26,9 @@ compatScenario("enabled teams preserve membership identity, active sessions and 
   expect(asArray(full.teams).map((value) => asRecord(value).id)).toEqual([defaultTeam.id]);
   const invitation = asRecord(await call("owner", "invite-member", { organizationId, email: member.email, role: "member" }));
   await call("member", "accept-invitation", { invitationId: invitation.id });
-  const team = asRecord(await call("owner", "create-team", { organizationId, name: "Engineering" }));
+  const ignoredId = ctx.uniqueToken("unconfigured-team-id");
+  const team = asRecord(await call("owner", "create-team", { organizationId, name: "Engineering", id: ignoredId }));
+  expect(team.id).not.toBe(ignoredId);
   expect(team.organizationId).toBe(organizationId);
   const teamId = team.id;
   const memberId = member.signup.data!.user.id;

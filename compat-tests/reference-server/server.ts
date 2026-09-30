@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { createOrganizationCallbacks } from "./organization-callbacks";
 import { organizationFieldOptions } from "./organization-fields";
+import { organizationCoreFieldOptions } from "./organization-core-fields";
 
 import { Database } from "bun:sqlite";
 import { passkey } from "@better-auth/passkey";
@@ -435,6 +436,7 @@ const authOptions = {
       } : {}),
       ...organizationCallbacks.options,
       ...organizationFieldOptions(process.env.COMPAT_PROFILE ?? ""),
+      ...organizationCoreFieldOptions(process.env.COMPAT_PROFILE ?? ""),
       async sendInvitationEmail({ id, email, role }) {
         await Promise.resolve();
         if (invitationSenderFails) throw new Error("compat invitation sender failure");

@@ -7,7 +7,12 @@ use validator::Validate;
 
 use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::hooks::*;
+use crate::plugins::organization::types::{NullableStringField, deserialize_nullable_string_field};
 use crate::plugins::organization::{OrganizationConfig, rbac::check_permission};
+
+#[cfg(test)]
+#[path = "team_input_tests.rs"]
+mod input_tests;
 
 pub(crate) fn routes() -> Vec<AuthRoute> {
     vec![
@@ -23,13 +28,18 @@ pub(crate) fn routes() -> Vec<AuthRoute> {
     ]
 }
 
-#[derive(Deserialize, Validate)]
+#[derive(Deserialize, serde::Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
 struct CreateBody {
     #[serde(flatten)]
     additional_fields: serde_json::Map<String, serde_json::Value>,
     name: String,
-    organization_id: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_nullable_string_field",
+        skip_serializing_if = "NullableStringField::is_missing"
+    )]
+    organization_id: NullableStringField,
 }
 #[derive(Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
@@ -50,13 +60,34 @@ struct UpdateBody {
     team_id: String,
     data: UpdateData,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct UpdateData {
     #[serde(flatten)]
     additional_fields: serde_json::Map<String, serde_json::Value>,
-    name: Option<String>,
-    organization_id: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_nullable_string_field",
+        skip_serializing_if = "NullableStringField::is_missing"
+    )]
+    name: NullableStringField,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_nullable_string_field",
+        skip_serializing_if = "NullableStringField::is_missing"
+    )]
+    organization_id: NullableStringField,
+}
+
+fn optional_string(value: NullableStringField, path: &str) -> AuthResult<Option<String>> {
+    match value {
+        NullableStringField::Missing => Ok(None),
+        NullableStringField::Value(value) => Ok(Some(value)),
+        NullableStringField::Null => Err(AuthError::FieldInput {
+            code: "VALIDATION_ERROR",
+            message: format!("[{path}] Invalid input: expected string, received null"),
+        }),
+    }
 }
 #[derive(Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
@@ -133,8 +164,16 @@ pub(crate) async fn handle_team_request(
     let response = match (req.method(), req.path()) {
         (HttpMethod::Post, "/organization/create-team") => {
             let body = body!(CreateBody);
-            let org = resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx)
-                .await?;
+            let additional_fields = crate::plugins::organization::fields::parse_input(
+                &config.schema.team,
+                &body,
+                &body.additional_fields,
+                "body",
+                false,
+            )?;
+            let organization_id = optional_string(body.organization_id, "body.organizationId")?;
+            let org =
+                resolve_organization_id(organization_id.as_deref(), None, &session, ctx).await?;
             if ctx.database.get_member(&org, &user.id()).await?.is_none() {
                 return Err(AuthError::forbidden(
                     "You are not allowed to invite users to this organization",
@@ -175,12 +214,11 @@ pub(crate) async fn handle_team_request(
                 crate::plugins::organization::fields::organization(&organization, ctx);
             let created_at = chrono::Utc::now();
             let mut data = OrganizationTeamDraft {
-                additional_fields: config.schema.team.parse_organization_input(
-                    &body.additional_fields,
-                    "body",
-                    false,
-                )?,
-                id: None,
+                id: additional_fields
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned),
+                additional_fields,
                 name: body.name,
                 organization_id: org,
                 created_at: None,
@@ -209,9 +247,18 @@ pub(crate) async fn handle_team_request(
         }
         (HttpMethod::Post, "/organization/update-team") => {
             let body = body!(UpdateBody);
+            let additional_fields = crate::plugins::organization::fields::parse_input(
+                &config.schema.team,
+                &body.data,
+                &body.data.additional_fields,
+                "body.data",
+                true,
+            )?;
+            let name = optional_string(body.data.name, "body.data.name")?;
+            let organization_id =
+                optional_string(body.data.organization_id, "body.data.organizationId")?;
             let org =
-                resolve_organization_id(body.data.organization_id.as_deref(), None, &session, ctx)
-                    .await?;
+                resolve_organization_id(organization_id.as_deref(), None, &session, ctx).await?;
             authorize(
                 &user.id(),
                 &org,
@@ -235,12 +282,8 @@ pub(crate) async fn handle_team_request(
                 organization: &organization_view,
             };
             let mut updates = better_auth_core::UpdateTeam {
-                additional_fields: config.schema.team.parse_organization_input(
-                    &body.data.additional_fields,
-                    "body.data",
-                    true,
-                )?,
-                name: body.data.name,
+                additional_fields,
+                name,
                 ..Default::default()
             };
             if let Some(hooks) = &config.hooks {

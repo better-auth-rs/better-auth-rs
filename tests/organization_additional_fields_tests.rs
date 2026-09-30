@@ -189,37 +189,48 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
 }
 
 #[tokio::test]
-async fn organization_field_configuration_rejects_core_overrides_and_missing_columns_at_startup() {
+async fn organization_field_configuration_rejects_incompatible_policies_and_missing_columns_at_startup()
+ {
     use better_auth::{
         BetterAuth, config::UserFieldConfig, plugins::organization::OrganizationPlugin,
     };
 
     for (entity, name, storage, expected) in [
-        ("organization", "name", None, "organization.name redefines"),
-        ("member", "userId", None, "member.userId redefines"),
+        (
+            "organization",
+            "metadata",
+            None,
+            "organization.metadata does not support",
+        ),
+        (
+            "member",
+            "user_id",
+            None,
+            "must use the public field name userId",
+        ),
         (
             "invitation",
             "expiresAt",
             None,
-            "invitation.expiresAt redefines",
+            "must preserve the built-in DateTimeUtc field type",
         ),
         (
             "team",
             "organizationId",
-            None,
-            "team.organizationId redefines",
+            Some("name"),
+            "maps to a different typed field name",
         ),
         (
             "organizationRole",
             "permission",
             None,
-            "organizationRole.permission redefines",
+            "organizationRole.permission does not support",
         ),
         (
             "organization",
             "label",
             Some("name"),
-            "maps to built-in column name",
+            "maps to a different typed field name",
         ),
         (
             "organization",

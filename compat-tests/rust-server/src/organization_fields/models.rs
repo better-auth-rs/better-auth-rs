@@ -12,6 +12,7 @@ pub mod organization {
         #[sea_orm(column_name = "physical_name")]
         pub name: String,
         pub slug: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
         pub logo: Option<String>,
         pub metadata: Option<Json>,
         pub created_at: DateTimeUtc,

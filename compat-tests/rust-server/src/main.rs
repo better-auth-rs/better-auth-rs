@@ -6,6 +6,7 @@ use axum::{
 };
 mod oauth_proxy;
 mod organization_callbacks;
+mod organization_core_fields;
 mod organization_fields;
 use better_auth::__private_core::AuthContext as InternalAuthContext;
 use better_auth::integrations::axum::AxumIntegration;
@@ -811,6 +812,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     if device_profile == "organization-fields" {
         organization_fields::configure(&mut organization_config);
+    }
+    if device_profile == "organization-core-fields" {
+        organization_core_fields::configure(&mut organization_config);
     }
     let organization_plugin = organization_callbacks.apply(
         OrganizationPlugin::with_config(organization_config).custom_send_invitation_email(

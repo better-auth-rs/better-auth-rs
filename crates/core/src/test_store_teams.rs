@@ -4,20 +4,21 @@ use crate::{
     UpdateTeam,
     store::{OrganizationRoleStore, TeamStore},
 };
+use better_auth_schema_registry::EntityRole;
+use serde_json::{Map, json};
 #[async_trait]
 impl TeamStore for MemoryStore {
     async fn create_team(&self, input: CreateTeam) -> AuthResult<Team> {
         let team = Team {
-            additional_fields: Self::create_fields(
-                &self.organization_fields().team,
-                input.additional_fields,
-            )?,
+            additional_fields: Default::default(),
             id: input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             name: input.name,
             organization_id: input.organization_id,
             created_at: input.created_at.unwrap_or_else(Utc::now),
             updated_at: input.updated_at,
         };
+        let team: Team =
+            self.store_record(EntityRole::Team, team, None, input.additional_fields)?;
         self.lock().teams.insert(team.id.clone(), team.clone());
         self.output_team(team)
     }
@@ -30,26 +31,37 @@ impl TeamStore for MemoryStore {
             .transpose()
     }
     async fn update_team(&self, id: &str, update: UpdateTeam) -> AuthResult<Team> {
-        let fields = self
+        let mut patch = Map::new();
+        if let Some(name) = update.name {
+            let _ = patch.insert("name".into(), json!(name));
+        }
+        if let Some(organization_id) = update.organization_id {
+            let _ = patch.insert("organizationId".into(), json!(organization_id));
+        }
+        if let Some(created_at) = update.created_at {
+            let _ = patch.insert("createdAt".into(), json!(created_at));
+        }
+        if let Some(updated_at) = update.updated_at {
+            let _ = patch.insert("updatedAt".into(), json!(updated_at));
+        } else if !self
             .organization_fields()
             .team
-            .storage_fields(update.additional_fields, false)?;
+            .additional_fields
+            .contains_key("updatedAt")
+        {
+            let _ = patch.insert("updatedAt".into(), json!(Utc::now()));
+        }
         let mut state = self.lock();
         let team = state
             .teams
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Team not found"))?;
-        team.additional_fields.extend(fields);
-        if let Some(name) = update.name {
-            team.name = name;
-        }
-        if let Some(organization_id) = update.organization_id {
-            team.organization_id = organization_id;
-        }
-        if let Some(created_at) = update.created_at {
-            team.created_at = created_at;
-        }
-        team.updated_at = update.updated_at.unwrap_or_else(|| Some(Utc::now()));
+        *team = self.store_record(
+            EntityRole::Team,
+            team.clone(),
+            Some(patch),
+            update.additional_fields,
+        )?;
         self.output_team(team.clone())
     }
     async fn delete_team(&self, id: &str) -> AuthResult<()> {
@@ -85,12 +97,19 @@ impl TeamStore for MemoryStore {
                 .get(&invitation.id)
                 .cloned()
                 .ok_or_else(|| AuthError::not_found("Invitation not found"))?;
-            updated.team_id = (!retained.is_empty()).then(|| retained.join(","));
-            updated.additional_fields.extend(
-                self.organization_fields()
-                    .invitation
-                    .storage_fields(Default::default(), false)?,
-            );
+            updated = self.store_record(
+                EntityRole::Invitation,
+                updated,
+                Some(
+                    [(
+                        "teamId".into(),
+                        json!((!retained.is_empty()).then(|| retained.join(","))),
+                    )]
+                    .into_iter()
+                    .collect(),
+                ),
+                Map::new(),
+            )?;
             let _ = self.output_invitation(updated.clone())?;
             updates.push(updated);
         }
@@ -205,10 +224,7 @@ impl OrganizationRoleStore for MemoryStore {
             return Err(AuthError::bad_request("Role already exists"));
         }
         let role = OrganizationRole {
-            additional_fields: Self::create_fields(
-                &self.organization_fields().organization_role,
-                input.additional_fields,
-            )?,
+            additional_fields: Default::default(),
             id: uuid::Uuid::new_v4().to_string(),
             organization_id: input.organization_id,
             role: input.role,
@@ -216,6 +232,12 @@ impl OrganizationRoleStore for MemoryStore {
             created_at: Utc::now(),
             updated_at: None,
         };
+        let role: OrganizationRole = self.store_record(
+            EntityRole::OrganizationRole,
+            role,
+            None,
+            input.additional_fields,
+        )?;
         state
             .organization_roles
             .insert(role.id.clone(), role.clone());
@@ -251,23 +273,32 @@ impl OrganizationRoleStore for MemoryStore {
         id: &str,
         update: UpdateOrganizationRole,
     ) -> AuthResult<OrganizationRole> {
-        let fields = self
+        let mut patch = Map::new();
+        if let Some(name) = update.role {
+            let _ = patch.insert("role".into(), json!(name));
+        }
+        if let Some(permission) = update.permission {
+            let _ = patch.insert("permission".into(), permission);
+        }
+        if !self
             .organization_fields()
             .organization_role
-            .storage_fields(update.additional_fields, false)?;
+            .additional_fields
+            .contains_key("updatedAt")
+        {
+            let _ = patch.insert("updatedAt".into(), json!(Utc::now()));
+        }
         let mut state = self.lock();
         let role = state
             .organization_roles
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Role not found"))?;
-        role.additional_fields.extend(fields);
-        if let Some(name) = update.role {
-            role.role = name;
-        }
-        if let Some(permission) = update.permission {
-            role.permission = permission;
-        }
-        role.updated_at = Some(Utc::now());
+        *role = self.store_record(
+            EntityRole::OrganizationRole,
+            role.clone(),
+            Some(patch),
+            update.additional_fields,
+        )?;
         self.output_organization_role(role.clone())
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {
