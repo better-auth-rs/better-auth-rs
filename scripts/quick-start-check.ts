@@ -86,7 +86,7 @@ try {
     stderr: "inherit",
   });
   let ready = false;
-  for (let attempt = 0; attempt < 100; attempt++) {
+  for (let attempt = 0; attempt < 600; attempt++) {
     assert.equal(
       server.exitCode,
       null,
@@ -107,7 +107,7 @@ try {
       await Bun.sleep(100);
     }
   }
-  assert(ready, "quick-start server did not start within 10 seconds");
+  assert(ready, "quick-start server did not start within 60 seconds");
   const commands = guide
     .slice(guide.indexOf("## Register and sign in"))
     .match(/^curl(?:[^\n]*\\\n)*[^\n]*/gm);

@@ -71,19 +71,32 @@ impl OAuthPlugin {
 
     pub fn add_provider(mut self, name: &str, provider: OAuthProvider) -> Self {
         let _ = self.config.providers.insert(name.to_string(), provider);
+        self.resolved = OnceCell::new();
         self
     }
 
     /// Register a generic OAuth/OIDC provider, resolving discovery during initialization.
     pub fn add_generic_provider(mut self, name: &str, config: GenericOAuthConfig) -> Self {
         let _ = self.generic.insert(name.to_owned(), config);
+        self.resolved = OnceCell::new();
         self
     }
 
     /// Attach the email verification sender and OAuth sign-up/sign-in policy.
     pub fn with_email_verification(mut self, plugin: Arc<EmailVerificationPlugin>) -> Self {
         self.email_verification = Some(plugin);
+        self.resolved = OnceCell::new();
         self
+    }
+
+    /// Resolve discovery and report whether a provider is available for authentication.
+    ///
+    /// Discovery results are cached and reused during auth initialization. Providers
+    /// skipped after discovery failure return `false`; invalid static configuration
+    /// returns an error. This does not contact token, userinfo, or JWKS endpoints.
+    /// Configuring the plugin after this call invalidates the cached resolution.
+    pub async fn has_provider(&self, name: &str) -> AuthResult<bool> {
+        Ok(self.resolved_config().await?.providers.contains_key(name))
     }
 
     async fn resolved_config(&self) -> AuthResult<&Arc<resolved::ResolvedOAuthConfig>> {
@@ -193,3 +206,6 @@ fn extract_provider_from_callback(path: &str) -> String {
 
 #[cfg(test)]
 mod generic_signin_tests;
+
+#[cfg(test)]
+mod readiness_tests;

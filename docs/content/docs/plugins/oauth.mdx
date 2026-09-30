@@ -70,6 +70,22 @@ await authClient.linkSocial({ provider: "oidc", callbackURL: "/settings" });
 
 Discovery runs when the auth instance initializes. Explicit `authorization_url`, `token_url`, `user_info_url`, and `end_session_endpoint` values override discovered endpoints. OIDC providers also request `openid`. For an OAuth provider without discovery, configure the endpoints directly.
 
+Discovery failures can skip a provider while allowing the auth instance to initialize, matching upstream. If a provider is required, check the configured plugin before registering it:
+
+```rust
+let oauth = OAuthPlugin::new().add_generic_provider("oidc", provider_config);
+if !oauth.has_provider("oidc").await? {
+    return Err(better_auth::AuthError::config("Required OIDC provider is unavailable").into());
+}
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
+    .plugin(oauth)
+    .build()
+    .await?;
+```
+
+`has_provider` resolves and caches discovery. Auth initialization reuses the result. The method reports the available provider set, propagates invalid static configuration, and does not contact token, userinfo, or JWKS endpoints. Finish configuring the plugin before checking; subsequent configuration changes invalidate the cached result.
+
 Set `require_id_token_verification: true` when using ID tokens for identity. Discovery must supply an issuer and a JWKS URI. Received ID tokens are checked for signature, issuer, audience, expiration, and the authorization request's nonce. Without discovery verification, Generic OAuth retains upstream's unverified ID-token decoding behavior. This option requires verification capability; a provider may still return an access token and use its userinfo endpoint without an ID token.
 
 OIDC signature verification requires OpenSSL 3.0 or newer. OpenSSL 3.5 or newer is required for the complete ML-DSA algorithm set. The development shell supplies the native dependencies.
