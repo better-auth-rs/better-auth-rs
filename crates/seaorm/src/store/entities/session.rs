@@ -16,6 +16,7 @@ pub struct Model {
     pub user_id: String,
     pub impersonated_by: Option<String>,
     pub active_organization_id: Option<String>,
+    pub active_team_id: Option<String>,
     pub active: bool,
 }
 

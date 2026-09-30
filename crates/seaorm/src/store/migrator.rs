@@ -21,6 +21,7 @@ impl MigratorTrait for AuthMigrator {
             Box::new(super::two_factor_security::TwoFactorSecurity),
             Box::new(super::identity_schema::IdentitySchema),
             Box::new(super::jwks::JwtKeys),
+            Box::new(super::organization_extensions::OrganizationExtensions),
         ]
     }
 

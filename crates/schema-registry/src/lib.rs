@@ -252,7 +252,10 @@ static PLUGINS: &[PluginSchema] = &[
     PluginSchema {
         name: "organization",
         user_fields: &[],
-        session_fields: &[f!("active_organization_id", "Option<String>")],
+        session_fields: &[
+            f!("active_organization_id", "Option<String>"),
+            f!("active_team_id", "Option<String>"),
+        ],
         extra_entities: &[
             ExtraEntitySchema {
                 mod_name: "organization",
@@ -291,8 +294,46 @@ static PLUGINS: &[PluginSchema] = &[
                     f!("role", "String"),
                     f!("status", "String"),
                     f!("inviter_id", "String"),
+                    f!("team_id", "Option<String>"),
                     f!("expires_at", "DateTimeUtc"),
                     f!("created_at", "DateTimeUtc"),
+                ],
+            },
+            ExtraEntitySchema {
+                mod_name: "team",
+                table_name: "team",
+                role: None,
+                fields: &[
+                    pk!("id", "String"),
+                    f!("name", "String"),
+                    f!("organization_id", "String"),
+                    f!("created_at", "DateTimeUtc"),
+                    f!("updated_at", "Option<DateTimeUtc>"),
+                    f!("member_count", "i64"),
+                ],
+            },
+            ExtraEntitySchema {
+                mod_name: "team_member",
+                table_name: "team_member",
+                role: None,
+                fields: &[
+                    pk!("id", "String"),
+                    f!("team_id", "String"),
+                    f!("user_id", "String"),
+                    f!("created_at", "DateTimeUtc"),
+                ],
+            },
+            ExtraEntitySchema {
+                mod_name: "organization_role",
+                table_name: "organization_role",
+                role: None,
+                fields: &[
+                    pk!("id", "String"),
+                    f!("organization_id", "String"),
+                    f!("role", "String"),
+                    f!("permission", "Json"),
+                    f!("created_at", "DateTimeUtc"),
+                    f!("updated_at", "Option<DateTimeUtc>"),
                 ],
             },
         ],
@@ -416,6 +457,9 @@ pub fn entity_indexes(table: &str) -> &'static [IndexDef] {
             index!("expires_at"),
         ],
         "organization" => &[unique!("slug")],
+        "team" => &[index!("organization_id")],
+        "team_member" => &[unique!("team_id", "user_id"), index!("user_id")],
+        "organization_role" => &[index!("organization_id"), index!("role")],
         "member" => &[unique!("organization_id", "user_id"), index!("user_id")],
         "invitation" => &[index!("organization_id"), index!("email"), index!("status")],
         "api_keys" => &[unique!("key"), index!("reference_id"), index!("config_id")],
@@ -431,6 +475,9 @@ pub fn entity_foreign_keys(table: &str) -> &'static [(&'static str, &'static str
         "sessions" | "accounts" | "two_factor" | "device_code" | "passkeys" | "wallet_address" => {
             &[("user_id", "users")]
         }
+        "team" => &[("organization_id", "organization")],
+        "team_member" => &[("team_id", "team"), ("user_id", "users")],
+        "organization_role" => &[("organization_id", "organization")],
         "member" => &[("organization_id", "organization"), ("user_id", "users")],
         "invitation" => &[("organization_id", "organization"), ("inviter_id", "users")],
         // API key references can identify either users or organizations.

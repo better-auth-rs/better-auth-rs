@@ -650,7 +650,7 @@ async fn resolve_two_factor_state<S: better_auth_core::AuthSchema>(
     let dont_remember = read_signed_cookie(req, DONT_REMEMBER_COOKIE_SUFFIX, ctx)?.is_some();
 
     Ok(ResolvedTwoFactorState::Pending(PendingTwoFactorState {
-        user: UserView::from(&user),
+        user: ctx.user_view(&user)?,
         key: identifier,
         dont_remember,
     }))
@@ -692,9 +692,9 @@ async fn verify_existing_session_factor(
                 // TS keeps the verify response on the pre-update snapshot even
                 // though the re-issued session already observes 2FA as enabled.
                 user: if enrollment == Some(EnrollmentMethod::Otp) {
-                    UserView::from(&updated_user)
+                    ctx.user_view(&updated_user)?
                 } else {
-                    UserView::from(&user)
+                    ctx.user_view(&user)?
                 },
             },
             vec![create_session_cookie(issued.session.token(), &ctx.config)],
@@ -704,7 +704,7 @@ async fn verify_existing_session_factor(
     Ok((
         SessionTokenResponse {
             token: Some(session.token().to_string()),
-            user: UserView::from(&user),
+            user: ctx.user_view(&user)?,
         },
         Vec::new(),
     ))
@@ -774,7 +774,7 @@ async fn finalize_pending_two_factor<S: better_auth_core::AuthSchema>(
     Ok((
         SessionTokenResponse {
             token: Some(issued.session.token().to_string()),
-            user: UserView::from(&issued.user),
+            user: ctx.user_view(&issued.user)?,
         },
         set_cookie_headers,
     ))

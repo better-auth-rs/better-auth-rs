@@ -59,6 +59,17 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
 
 #[async_trait]
 pub trait SessionStore<S: AuthSchema>: Send + Sync {
+    /// Accept an invitation and reserve all invited team seats in one transaction.
+    /// Return the member and, for one invited team, the session snapshot before changing its active organization.
+    /// The organization plugin uses that snapshot for the upstream cookie-cache write order.
+    /// Return the single-team cookie snapshot captured before updating the active organization.
+    async fn accept_invitation_with_teams(
+        &self,
+        invitation_id: &str,
+        user_id: &str,
+        session_token: &str,
+        maximum: Option<usize>,
+    ) -> AuthResult<(Member, Option<S::Session>)>;
     async fn create_session(&self, create_session: CreateSession) -> AuthResult<S::Session>;
     async fn get_session(&self, token: &str) -> AuthResult<Option<S::Session>>;
     /// Persist application session fields and update the modification timestamp.
@@ -76,6 +87,11 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
     async fn delete_session(&self, token: &str) -> AuthResult<()>;
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()>;
     async fn delete_expired_sessions(&self) -> AuthResult<usize>;
+    async fn update_session_active_team(
+        &self,
+        token: &str,
+        team_id: Option<&str>,
+    ) -> AuthResult<S::Session>;
     async fn update_session_active_organization(
         &self,
         token: &str,
@@ -393,12 +409,60 @@ pub trait WalletStore: Send + Sync {
     ) -> AuthResult<crate::types::WalletAddress>;
 }
 
+/// Persistence for organization teams and team membership.
+#[async_trait]
+pub trait TeamStore: Send + Sync {
+    async fn create_team(&self, input: crate::CreateTeam) -> AuthResult<crate::Team>;
+    async fn get_team(&self, id: &str) -> AuthResult<Option<crate::Team>>;
+    async fn update_team(&self, id: &str, name: &str) -> AuthResult<crate::Team>;
+    async fn delete_team(&self, id: &str) -> AuthResult<()>;
+    async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<crate::Team>>;
+    async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<crate::Team>>;
+    async fn get_team_member(
+        &self,
+        team_id: &str,
+        user_id: &str,
+    ) -> AuthResult<Option<crate::TeamMember>>;
+    async fn list_team_members(&self, team_id: &str) -> AuthResult<Vec<crate::TeamMember>>;
+    /// Atomically return an existing membership or reserve capacity and create one.
+    /// Return None when the maximum member count is reached.
+    async fn add_team_member(
+        &self,
+        team_id: &str,
+        user_id: &str,
+        maximum: Option<usize>,
+    ) -> AuthResult<Option<crate::TeamMember>>;
+    async fn remove_team_member(&self, team_id: &str, user_id: &str) -> AuthResult<()>;
+}
+
+/// Persistence for organization-scoped dynamic roles.
+#[async_trait]
+pub trait OrganizationRoleStore: Send + Sync {
+    async fn create_organization_role(
+        &self,
+        input: crate::CreateOrganizationRole,
+    ) -> AuthResult<crate::OrganizationRole>;
+    async fn get_organization_role(&self, id: &str) -> AuthResult<Option<crate::OrganizationRole>>;
+    async fn list_organization_roles(
+        &self,
+        organization_id: &str,
+    ) -> AuthResult<Vec<crate::OrganizationRole>>;
+    async fn update_organization_role(
+        &self,
+        id: &str,
+        update: crate::UpdateOrganizationRole,
+    ) -> AuthResult<crate::OrganizationRole>;
+    async fn delete_organization_role(&self, id: &str) -> AuthResult<()>;
+}
+
 pub trait AuthStore<S: AuthSchema>:
     UserStore<S>
     + SessionStore<S>
     + AccountStore<S>
     + VerificationStore<S>
     + OrganizationStore
+    + TeamStore
+    + OrganizationRoleStore
     + MemberStore
     + InvitationStore
     + TwoFactorStore
@@ -421,6 +485,8 @@ where
         + AccountStore<S>
         + VerificationStore<S>
         + OrganizationStore
+        + TeamStore
+        + OrganizationRoleStore
         + MemberStore
         + InvitationStore
         + TwoFactorStore

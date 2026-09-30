@@ -7,6 +7,14 @@ use thiserror::Error;
 /// matching the better-auth OpenAPI spec: `{ "message": "..." }`.
 #[derive(Error, Debug)]
 pub enum AuthError {
+    /// Public schema error with a field-specific message.
+    #[error("{message}")]
+    FieldInput {
+        /// Upstream schema error code.
+        code: &'static str,
+        /// Validation message safe to return to the caller.
+        message: String,
+    },
     /// A documented upstream API error whose message is safe to return publicly.
     #[error("{message}")]
     Upstream {
@@ -103,6 +111,7 @@ impl AuthError {
     /// HTTP status code for this error.
     pub fn status_code(&self) -> u16 {
         match self {
+            Self::FieldInput { .. } => 400,
             Self::Upstream { status, .. } => *status,
             // 400
             Self::BadRequest(_) | Self::InvalidRequest(_) | Self::Validation(_) => 400,
@@ -161,6 +170,7 @@ impl AuthError {
     pub fn error_payload(&self) -> (u16, Option<String>, String) {
         let status = self.status_code();
         let (code, message) = match self {
+            Self::FieldInput { code, message } => (Some((*code).to_owned()), message.clone()),
             Self::Upstream { code, message, .. } => {
                 (Some((*code).to_owned()), (*message).to_owned())
             }

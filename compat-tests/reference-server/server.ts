@@ -7,12 +7,16 @@ import { getMigrations } from "better-auth/db/migration";
 import { apiKey } from "@better-auth/api-key";
 import { admin, bearer, deviceAuthorization, twoFactor, username } from "better-auth/plugins";
 import { organization } from "better-auth/plugins/organization";
+import { createAccessControl } from "better-auth/plugins/access";
+import { defaultStatements } from "better-auth/plugins/organization/access";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { oAuthProxy } from "better-auth/plugins/oauth-proxy";
 import { createEmailOtpFixture } from "./email-otp";
 import { createOneTapFixture } from "./one-tap";
 import { createIdentityFixture } from "./identity-routes";
+import { userFields } from "./user-fields";
 import { tokenRoutePlugins } from "./token-routes";
+import { createJwtFixture } from "./jwt-fixture";
 
 function getPort() {
   const idx = process.argv.indexOf("--port");
@@ -42,6 +46,7 @@ function hasOwn(obj: unknown, key: string) {
 }
 
 const PORT = getPort();
+const jwtFixture = await createJwtFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`);
 const database = new Database(":memory:");
 const identityFixture = createIdentityFixture(database, process.env.COMPAT_PROFILE ?? "");
 const emailOtpFixture = createEmailOtpFixture(database, process.env.COMPAT_PROFILE ?? "");
@@ -171,8 +176,9 @@ const oidcProviders = oidcBaseURL ? [
   },
   {
     providerId: "oidc-mapped", discoveryUrl: `${oidcBaseURL}/discovery/valid`,
+    overrideUserInfo: process.env.COMPAT_PROFILE === "organization-jwt",
     accountSubject: ({ profile }: { profile: Record<string, unknown> }) => String(profile.external_subject),
-    mapProfileToUser: () => ({ name: "Mapped OIDC User", emailVerified: false, image: null }),
+    mapProfileToUser: (profile: Record<string, unknown>) => ({ name: "Mapped OIDC User", emailVerified: false, image: null, department: "identity", alias: profile.picture ? "picture" : "plain", internalCode: "untrusted", secretNote: "provider-private" }),
   },
   {
     providerId: "oidc-parameters", discoveryUrl: `${oidcBaseURL}/discovery/headers`,
@@ -300,7 +306,15 @@ const authOptions = {
       }
     },
   },
+  session: ["user-fields", "organization-cache", "jwt-cache", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? {
+    cookieCache: { enabled: true, strategy: ["jwt-cache", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? "jwt" as const : "compact" as const },
+    ...(process.env.COMPAT_PROFILE === "organization-jwt" ? { additionalFields: {
+      deviceLabel: { type: "string" as const, required: false },
+      internalNote: { type: "string" as const, required: false, input: false, returned: false },
+    } } : {}),
+  } : undefined,
   user: {
+    additionalFields: ["user-fields", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? userFields : undefined,
     changeEmail: {
       enabled: true,
       async sendChangeEmailConfirmation({
@@ -376,10 +390,11 @@ const authOptions = {
     },
   },
   plugins: [
-    ...(process.env.COMPAT_PROFILE?.startsWith("oauth-proxy") ? [oAuthProxy({ productionURL: "https://production.example.com", currentURL: `http://localhost:${PORT}` })] : []),
+    ...jwtFixture.plugins,
+    ...(process.env.COMPAT_PROFILE?.startsWith("oauth-proxy") ? [oAuthProxy(process.env.COMPAT_PROXY_OPTIONS ? JSON.parse(process.env.COMPAT_PROXY_OPTIONS) : { productionURL: "https://production.example.com", currentURL: `http://localhost:${PORT}` })] : []),
     ...identityFixture.plugins,
     ...tokenRoutePlugins(process.env.COMPAT_PROFILE ?? "", verificationEmailOutbox),
-    ...(process.env.COMPAT_PROFILE?.startsWith("email-otp") ? [emailOtpFixture.plugin] : []),
+    ...(process.env.COMPAT_PROFILE?.startsWith("email-otp") || process.env.COMPAT_PROFILE === "user-fields" ? [emailOtpFixture.plugin] : []),
     ...(process.env.COMPAT_PROFILE?.startsWith("one-tap") ? [oneTapFixture.plugin] : []),
     ...(process.env.COMPAT_PROFILE === "device-bearer" ? [bearer()] : []),
     admin(),
@@ -403,6 +418,11 @@ const authOptions = {
           : undefined,
     }),
     organization({
+      ...(process.env.COMPAT_PROFILE?.startsWith("organization-") ? {
+        teams: { enabled: true, ...(process.env.COMPAT_PROFILE === "organization-limits" ? { defaultTeam: { enabled: false }, maximumTeams: 2, maximumMembersPerTeam: 1, allowRemovingAllTeams: true } : {}) },
+        dynamicAccessControl: { enabled: true, ...(process.env.COMPAT_PROFILE === "organization-limits" ? { maximumRolesPerOrganization: 1 } : {}) },
+        ...(process.env.COMPAT_PROFILE === "organization-no-ac" ? {} : { ac: createAccessControl(defaultStatements) }),
+      } : {}),
       async sendInvitationEmail({ id, email, role }) {
         await Promise.resolve();
         if (invitationSenderFails) throw new Error("compat invitation sender failure");
@@ -452,11 +472,18 @@ const { runMigrations } = await getMigrations(authOptions);
 await runMigrations();
 
 const auth = betterAuth(authOptions);
+const disabledUserPlugins = process.env.COMPAT_PROFILE === "user-fields"
+  ? betterAuth({ ...authOptions, plugins: [] }) : undefined;
+const hiddenUserFields = process.env.COMPAT_PROFILE === "user-fields"
+  ? betterAuth({ ...authOptions, plugins: [], user: { ...authOptions.user, additionalFields: {
+    ...userFields, department: { ...userFields.department, returned: false }, alias: { ...userFields.alias, returned: false },
+  } } }) : undefined;
 const authContext = await auth.$context;
 const RESET_MODELS = [
   "deviceCode",
   "passkey",
   "apikey",
+  ...(process.env.COMPAT_PROFILE?.startsWith("organization-") ? ["teamMember", "team", "organizationRole"] : []),
   "invitation",
   "member",
   "organization",
@@ -481,7 +508,18 @@ const server = Bun.serve({
     try {
       const url = new URL(request.url);
 
+      if (disabledUserPlugins && url.pathname === "/__test/disabled/get-session") {
+        url.pathname = "/api/auth/get-session";
+        return disabledUserPlugins.handler(new Request(url, request));
+      }
+      if (hiddenUserFields && url.pathname === "/__test/hidden/get-session") {
+        url.pathname = "/api/auth/get-session";
+        return hiddenUserFields.handler(new Request(url, request));
+      }
+
       const identityResponse = await identityFixture.handle(request);
+      const jwtResponse = await jwtFixture.handle(request, auth);
+      if (jwtResponse) return jwtResponse;
       if (identityResponse) return identityResponse;
       const emailOtpResponse = await emailOtpFixture.handle(request);
       if (emailOtpResponse) return emailOtpResponse;

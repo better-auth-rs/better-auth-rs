@@ -78,9 +78,10 @@ pub async fn require_org_api_key_permission(
     action: &str,
 ) -> AuthResult<()> {
     use crate::plugins::api_key::{ApiKeyErrorCode, api_key_error};
-    use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
+    use crate::plugins::organization::rbac::check_permission;
     use crate::plugins::organization::{
-        METADATA_CREATOR_ROLE, METADATA_ENABLED, METADATA_ROLES, RolePermissions,
+        METADATA_AC, METADATA_CREATOR_ROLE, METADATA_DYNAMIC_ACCESS_CONTROL, METADATA_ENABLED,
+        METADATA_ROLES, OrganizationConfig, RolePermissions,
     };
     use std::collections::HashMap;
 
@@ -116,12 +117,32 @@ pub async fn require_org_api_key_permission(
 
     let custom_roles: HashMap<String, RolePermissions> = ctx
         .get_metadata(METADATA_ROLES)
-        .and_then(|value| serde_json::from_value(value.clone()).ok())
+        .map(|value| serde_json::from_value(value.clone()))
+        .transpose()?
         .unwrap_or_default();
 
-    let allowed = Action::parse(action)
-        .map(|action| has_permission_any(&member.role, &Resource::ApiKey, &action, &custom_roles))
-        .unwrap_or(false);
+    let config = OrganizationConfig {
+        roles: custom_roles,
+        dynamic_access_control: ctx
+            .get_metadata(METADATA_DYNAMIC_ACCESS_CONTROL)
+            .and_then(serde_json::Value::as_bool)
+            == Some(true),
+        ac: ctx
+            .get_metadata(METADATA_AC)
+            .map(|value| serde_json::from_value(value.clone()))
+            .transpose()?
+            .flatten(),
+        ..Default::default()
+    };
+    let allowed = check_permission(
+        &member.role,
+        organization_id,
+        "apikey",
+        &[action],
+        &config,
+        ctx,
+    )
+    .await?;
 
     if allowed {
         Ok(())
@@ -343,79 +364,6 @@ pub fn delete_session_cookie_headers(config: &better_auth_core::AuthConfig) -> V
     }
 
     cookies
-}
-
-/// Select enabled plugin defaults for public users and signed user claims.
-pub(crate) fn user_plugin_defaults(
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> Vec<(&'static str, serde_json::Value)> {
-    [
-        ("anonymous.enabled", "isAnonymous", serde_json::json!(false)),
-        (
-            "phone-number.enabled",
-            "phoneNumber",
-            serde_json::Value::Null,
-        ),
-        (
-            "phone-number.enabled",
-            "phoneNumberVerified",
-            serde_json::Value::Null,
-        ),
-    ]
-    .into_iter()
-    .filter(|(plugin, _, _)| {
-        ctx.get_metadata(plugin)
-            .and_then(serde_json::Value::as_bool)
-            == Some(true)
-    })
-    .map(|(_, field, value)| (field, value))
-    .collect()
-}
-
-/// Add plugin defaults to public user objects without changing unrelated payloads.
-pub(crate) fn add_user_response_fields(
-    response: &mut better_auth_core::AuthResponse,
-    defaults: &[(&str, serde_json::Value)],
-) -> AuthResult<()> {
-    fn visit(value: &mut serde_json::Value, defaults: &[(&str, serde_json::Value)]) {
-        match value {
-            serde_json::Value::Object(fields) => {
-                if fields.contains_key("id")
-                    && fields.contains_key("emailVerified")
-                    && fields.contains_key("createdAt")
-                {
-                    for (key, value) in defaults {
-                        let _ = fields
-                            .entry((*key).to_owned())
-                            .or_insert_with(|| value.clone());
-                    }
-                } else {
-                    for key in ["user", "users", "member", "members", "sessions"] {
-                        if let Some(value) = fields.get_mut(key) {
-                            visit(value, defaults);
-                        }
-                    }
-                }
-            }
-            serde_json::Value::Array(values) => {
-                for value in values {
-                    visit(value, defaults);
-                }
-            }
-            _ => {}
-        }
-    }
-    if response
-        .headers
-        .get("content-type")
-        .is_some_and(|value| value.starts_with("application/json"))
-        && !response.body.is_empty()
-    {
-        let mut value = serde_json::from_slice(&response.body)?;
-        visit(&mut value, defaults);
-        response.body = serde_json::to_vec(&value)?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]

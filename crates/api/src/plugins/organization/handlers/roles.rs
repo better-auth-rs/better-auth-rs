@@ -1,0 +1,665 @@
+//! Persisted organization access-control roles.
+
+use std::collections::HashMap;
+
+use better_auth_core::types::{
+    CreateOrganizationRole, HttpMethod, OrganizationRole, UpdateOrganizationRole,
+};
+use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema};
+use serde::Deserialize;
+use serde_json::json;
+use validator::Validate;
+
+use super::require_session;
+use crate::plugins::organization::{OrganizationConfig, rbac::check_permission};
+
+type Permissions = HashMap<String, Vec<String>>;
+
+// Preserve request order because upstream returns missingPermissions in that order.
+struct RequestedPermissions(Vec<(String, Vec<String>)>);
+
+impl<'de> Deserialize<'de> for RequestedPermissions {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = RequestedPermissions;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("an object mapping resources to action arrays")
+            }
+            fn visit_map<M: serde::de::MapAccess<'de>>(
+                self,
+                mut map: M,
+            ) -> Result<Self::Value, M::Error> {
+                let mut permissions = Vec::new();
+                while let Some(entry) = map.next_entry()? {
+                    permissions.push(entry);
+                }
+                Ok(RequestedPermissions(permissions))
+            }
+        }
+        deserializer.deserialize_map(Visitor)
+    }
+}
+
+impl serde::Serialize for RequestedPermissions {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_map(self.0.iter().map(|(resource, actions)| (resource, actions)))
+    }
+}
+
+#[derive(Deserialize, Validate)]
+#[serde(rename_all = "camelCase")]
+struct CreateRole {
+    organization_id: Option<String>,
+    role: String,
+    permission: RequestedPermissions,
+}
+
+#[derive(Default, Deserialize, Validate)]
+#[serde(rename_all = "camelCase")]
+struct RoleSelector {
+    organization_id: Option<String>,
+    role_name: Option<String>,
+    role_id: Option<String>,
+}
+
+#[derive(Deserialize, Validate)]
+struct UpdateRole {
+    #[serde(flatten)]
+    selector: RoleSelector,
+    data: RoleUpdate,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RoleUpdate {
+    #[serde(default)]
+    role_name: OptionalField<String>,
+    #[serde(default)]
+    permission: OptionalField<RequestedPermissions>,
+}
+
+#[derive(Default)]
+enum OptionalField<T> {
+    #[default]
+    Missing,
+    Null,
+    Value(T),
+}
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for OptionalField<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match Option::<T>::deserialize(deserializer)? {
+            Some(value) => Self::Value(value),
+            None => Self::Null,
+        })
+    }
+}
+impl<T> OptionalField<T> {
+    fn into_option(self) -> Option<T> {
+        match self {
+            Self::Value(value) => Some(value),
+            _ => None,
+        }
+    }
+}
+
+fn selector_error(selector: &RoleSelector, location: &str) -> Option<String> {
+    if selector
+        .role_name
+        .as_ref()
+        .is_some_and(|name| !name.is_empty())
+        || selector.role_id.as_ref().is_some_and(|id| !id.is_empty())
+    {
+        return None;
+    }
+    let field = if selector.role_name.as_deref() == Some("") {
+        Some("roleName")
+    } else if selector.role_id.as_deref() == Some("") {
+        Some("roleId")
+    } else {
+        None
+    };
+    Some(match field {
+        Some(field) => {
+            format!("[{location}.{field}] Too small: expected string to have >=1 characters")
+        }
+        None => format!("[{location}] Invalid input"),
+    })
+}
+
+fn validation(message: &str) -> AuthResult<Option<AuthResponse>> {
+    Ok(Some(AuthResponse::json(
+        400,
+        &json!({"code":"VALIDATION_ERROR", "message":message}),
+    )?))
+}
+
+fn role_error(action: &str) -> AuthError {
+    let (code, message) = match action {
+        "create" => (
+            "YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE",
+            "You are not allowed to create a role",
+        ),
+        "update" => (
+            "YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE",
+            "You are not allowed to update a role",
+        ),
+        "delete" => (
+            "YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE",
+            "You are not allowed to delete a role",
+        ),
+        "list" => (
+            "YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE",
+            "You are not allowed to list a role",
+        ),
+        _ => (
+            "YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE",
+            "You are not allowed to read a role",
+        ),
+    };
+    AuthError::Upstream {
+        status: 403,
+        code,
+        message,
+    }
+}
+
+fn require_ac(config: &OrganizationConfig) -> AuthResult<&Permissions> {
+    config.ac.as_ref().ok_or(AuthError::Upstream {
+        status: 501, code: "MISSING_AC_INSTANCE",
+        message: "Dynamic Access Control requires a pre-defined ac instance on the server auth plugin. Read server logs for more information",
+    })
+}
+
+fn predefined(name: &str, config: &OrganizationConfig) -> bool {
+    if config.roles.is_empty() {
+        ["owner", "admin", "member"].contains(&name)
+    } else {
+        config.roles.contains_key(name)
+    }
+}
+
+async fn unused_name(
+    name: &str,
+    organization_id: &str,
+    config: &OrganizationConfig,
+    ctx: &AuthContext<impl AuthSchema>,
+) -> AuthResult<()> {
+    if predefined(name, config)
+        || ctx
+            .database
+            .list_organization_roles(organization_id)
+            .await?
+            .iter()
+            .any(|role| role.role == name)
+    {
+        return Err(AuthError::Upstream {
+            status: 400,
+            code: "ROLE_NAME_IS_ALREADY_TAKEN",
+            message: "That role name is already taken",
+        });
+    }
+    Ok(())
+}
+
+async fn authorize_member(
+    req: &AuthRequest,
+    organization_id: Option<&str>,
+    action: &str,
+    config: &OrganizationConfig,
+    ctx: &AuthContext<impl AuthSchema>,
+) -> AuthResult<(String, String)> {
+    let (user, session) = require_session(req, ctx).await?;
+    let organization_id = organization_id
+        .or(session.active_organization_id.as_deref())
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| {
+            if action == "create" {
+                AuthError::Upstream {
+                    status: 400,
+                    code: "YOU_MUST_BE_IN_AN_ORGANIZATION_TO_CREATE_A_ROLE",
+                    message: "You must be in an organization to create a role",
+                }
+            } else {
+                AuthError::bad_request("No active organization")
+            }
+        })?;
+    let member = ctx
+        .database
+        .get_member(organization_id, &user.id)
+        .await?
+        .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
+    let permission = if action == "list" { "read" } else { action };
+    if !check_permission(
+        &member.role,
+        organization_id,
+        "ac",
+        &[permission],
+        config,
+        ctx,
+    )
+    .await?
+    {
+        return Err(role_error(action));
+    }
+    Ok((organization_id.to_owned(), member.role))
+}
+
+async fn select_role(
+    selector: &RoleSelector,
+    organization_id: &str,
+    ctx: &AuthContext<impl AuthSchema>,
+) -> AuthResult<OrganizationRole> {
+    let role = ctx
+        .database
+        .list_organization_roles(organization_id)
+        .await?
+        .into_iter()
+        .find(|role| {
+            if let Some(name) = selector
+                .role_name
+                .as_deref()
+                .filter(|name| !name.is_empty())
+            {
+                role.role == name
+            } else {
+                selector.role_id.as_ref().is_some_and(|id| role.id == *id)
+            }
+        });
+    role.ok_or(AuthError::Upstream {
+        status: 400,
+        code: "ROLE_NOT_FOUND",
+        message: "Role not found",
+    })
+}
+
+async fn validate_permissions(
+    permission: &RequestedPermissions,
+    member_role: &str,
+    organization_id: &str,
+    action: &str,
+    config: &OrganizationConfig,
+    ctx: &AuthContext<impl AuthSchema>,
+) -> AuthResult<Option<AuthResponse>> {
+    let ac = require_ac(config)?;
+    if permission
+        .0
+        .iter()
+        .any(|(resource, _)| !ac.contains_key(resource))
+    {
+        return Err(AuthError::Upstream {
+            status: 400,
+            code: "INVALID_RESOURCE",
+            message: "The provided permission includes an invalid resource",
+        });
+    }
+    let mut missing = Vec::new();
+    for (resource, actions) in &permission.0 {
+        for requested in actions {
+            if !check_permission(
+                member_role,
+                organization_id,
+                resource,
+                &[requested],
+                config,
+                ctx,
+            )
+            .await?
+            {
+                missing.push(format!("{resource}:{requested}"));
+            }
+        }
+    }
+    if missing.is_empty() {
+        return Ok(None);
+    }
+    let (status, code, message) = role_error(action).error_payload();
+    Ok(Some(AuthResponse::json(
+        status,
+        &json!({"code":code,"message":message,"missingPermissions":missing}),
+    )?))
+}
+
+/// Dispatch the enabled dynamic-role endpoints.
+pub async fn handle_role_request(
+    req: &AuthRequest,
+    ctx: &AuthContext<impl AuthSchema>,
+    config: &OrganizationConfig,
+) -> AuthResult<Option<AuthResponse>> {
+    // Authentication precedes body validation in the upstream organization middleware.
+    let (_, session) = require_session(req, ctx).await?;
+    let response = match (req.method(), req.path()) {
+        (HttpMethod::Post, "/organization/create-role") => {
+            let body: CreateRole = match better_auth_core::validate_request_body(req) {
+                Ok(body) => body,
+                Err(response) => return Ok(Some(response)),
+            };
+            let _ = require_ac(config)?;
+            if body
+                .organization_id
+                .as_deref()
+                .or(session.active_organization_id.as_deref())
+                .is_none_or(str::is_empty)
+            {
+                return Err(AuthError::Upstream {
+                    status: 400,
+                    code: "YOU_MUST_BE_IN_AN_ORGANIZATION_TO_CREATE_A_ROLE",
+                    message: "You must be in an organization to create a role",
+                });
+            }
+            let name = body.role.to_lowercase();
+            // Predefined names are rejected before membership and permission checks.
+            if predefined(&name, config) {
+                return Err(AuthError::Upstream {
+                    status: 400,
+                    code: "ROLE_NAME_IS_ALREADY_TAKEN",
+                    message: "That role name is already taken",
+                });
+            }
+            let (organization_id, member_role) =
+                authorize_member(req, body.organization_id.as_deref(), "create", config, ctx)
+                    .await?;
+            let count = ctx
+                .database
+                .list_organization_roles(&organization_id)
+                .await?
+                .len();
+            if config
+                .maximum_roles_per_organization
+                .is_some_and(|limit| count >= limit)
+            {
+                return Err(AuthError::Upstream {
+                    status: 400,
+                    code: "TOO_MANY_ROLES",
+                    message: "This organization has too many roles",
+                });
+            }
+            if let Some(response) = validate_permissions(
+                &body.permission,
+                &member_role,
+                &organization_id,
+                "create",
+                config,
+                ctx,
+            )
+            .await?
+            {
+                return Ok(Some(response));
+            }
+            unused_name(&name, &organization_id, config, ctx).await?;
+            let permission = serde_json::to_value(body.permission)?;
+            let role = ctx
+                .database
+                .create_organization_role(CreateOrganizationRole {
+                    organization_id,
+                    role: name,
+                    permission: permission.clone(),
+                })
+                .await?;
+            AuthResponse::json(
+                200,
+                &json!({"success":true,"roleData":role,"statements":permission}),
+            )?
+        }
+        (HttpMethod::Get, "/organization/list-roles" | "/organization/get-role") => {
+            let selector: RoleSelector = serde_json::from_value(serde_json::to_value(&req.query)?)?;
+            let action = if req.path().ends_with("list-roles") {
+                "list"
+            } else {
+                "read"
+            };
+            if action == "read"
+                && let Some(message) = selector_error(&selector, "query")
+            {
+                return validation(&message);
+            }
+            let (organization_id, _) = authorize_member(
+                req,
+                selector.organization_id.as_deref(),
+                action,
+                config,
+                ctx,
+            )
+            .await?;
+            if action == "list" {
+                AuthResponse::json(
+                    200,
+                    &ctx.database
+                        .list_organization_roles(&organization_id)
+                        .await?,
+                )?
+            } else {
+                AuthResponse::json(200, &select_role(&selector, &organization_id, ctx).await?)?
+            }
+        }
+        (HttpMethod::Post, "/organization/delete-role") => {
+            let selector: RoleSelector = match better_auth_core::validate_request_body(req) {
+                Ok(body) => body,
+                Err(response) => return Ok(Some(response)),
+            };
+            if let Some(message) = selector_error(&selector, "body") {
+                return validation(&message);
+            }
+            let (organization_id, _) = authorize_member(
+                req,
+                selector.organization_id.as_deref(),
+                "delete",
+                config,
+                ctx,
+            )
+            .await?;
+            if selector
+                .role_name
+                .as_deref()
+                .is_some_and(|name| predefined(name, config))
+            {
+                return Err(AuthError::Upstream {
+                    status: 400,
+                    code: "CANNOT_DELETE_A_PRE_DEFINED_ROLE",
+                    message: "Cannot delete a pre-defined role",
+                });
+            }
+            let role = select_role(&selector, &organization_id, ctx).await?;
+            if ctx
+                .database
+                .list_organization_members(&organization_id)
+                .await?
+                .iter()
+                .any(|member| member.role.split(',').any(|name| name.trim() == role.role))
+            {
+                return Err(AuthError::Upstream {
+                    status: 400,
+                    code: "ROLE_IS_ASSIGNED_TO_MEMBERS",
+                    message: "Cannot delete a role that is assigned to members. Please reassign the members to a different role first",
+                });
+            }
+            ctx.database.delete_organization_role(&role.id).await?;
+            AuthResponse::json(200, &json!({"success":true}))?
+        }
+        (HttpMethod::Post, "/organization/update-role") => {
+            let body: UpdateRole = match better_auth_core::validate_request_body(req) {
+                Ok(body) => body,
+                Err(response) => return Ok(Some(response)),
+            };
+            if let Some(message) = selector_error(&body.selector, "body") {
+                return validation(&message);
+            }
+            if matches!(body.data.permission, OptionalField::Null) {
+                return validation(
+                    "[body.data.permission] Invalid input: expected record, received null",
+                );
+            }
+            if matches!(body.data.role_name, OptionalField::Null) {
+                return validation(
+                    "[body.data.roleName] Invalid input: expected string, received null",
+                );
+            }
+            let _ = require_ac(config)?;
+            let (organization_id, member_role) = authorize_member(
+                req,
+                body.selector.organization_id.as_deref(),
+                "update",
+                config,
+                ctx,
+            )
+            .await?;
+            let role = select_role(&body.selector, &organization_id, ctx).await?;
+            if let OptionalField::Value(permission) = &body.data.permission
+                && let Some(response) = validate_permissions(
+                    permission,
+                    &member_role,
+                    &organization_id,
+                    "update",
+                    config,
+                    ctx,
+                )
+                .await?
+            {
+                return Ok(Some(response));
+            }
+            let name = body
+                .data
+                .role_name
+                .into_option()
+                .filter(|name| !name.is_empty())
+                .map(|name| name.to_lowercase());
+            if let Some(name) = &name {
+                unused_name(name, &organization_id, config, ctx).await?;
+            }
+            let mut updated = ctx
+                .database
+                .update_organization_role(
+                    &role.id,
+                    UpdateOrganizationRole {
+                        role: name,
+                        permission: body
+                            .data
+                            .permission
+                            .into_option()
+                            .map(serde_json::to_value)
+                            .transpose()?,
+                    },
+                )
+                .await?;
+            // Upstream returns the pre-update record merged with requested fields, while the adapter updates its timestamp.
+            updated.updated_at = role.updated_at;
+            AuthResponse::json(200, &json!({"success":true,"roleData":updated}))?
+        }
+        _ => return Ok(None),
+    };
+    Ok(Some(response))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::test_helpers::{
+        create_auth_json_request_no_query, create_test_context, create_user_and_session,
+    };
+    use better_auth_core::{CreateMember, CreateOrganization, CreateUser};
+    use chrono::Duration;
+
+    #[tokio::test]
+    async fn persisted_roles_authorize_only_their_tenant_and_cannot_escalate() {
+        let ctx = create_test_context().await;
+        let (user, session) = create_user_and_session(
+            &ctx,
+            CreateUser {
+                email: Some("role-admin@example.com".into()),
+                ..Default::default()
+            },
+            Duration::hours(1),
+        )
+        .await;
+        let org = ctx
+            .database
+            .create_organization(CreateOrganization {
+                id: None,
+                name: "Roles".into(),
+                slug: "roles".into(),
+                logo: None,
+                metadata: None,
+            })
+            .await
+            .unwrap();
+        ctx.database
+            .create_member(CreateMember {
+                organization_id: org.id.clone(),
+                user_id: user.id.clone(),
+                role: "admin".into(),
+            })
+            .await
+            .unwrap();
+        let config = OrganizationConfig {
+            dynamic_access_control: true,
+            ac: Some(HashMap::from([(
+                "organization".into(),
+                vec!["update".into(), "delete".into()],
+            )])),
+            ..Default::default()
+        };
+        let request = |permission| {
+            create_auth_json_request_no_query(
+                HttpMethod::Post,
+                "/organization/create-role",
+                Some(&session.token),
+                Some(json!({"organizationId":org.id,"role":"Editor","permission":permission})),
+            )
+        };
+        let denied =
+            handle_role_request(&request(json!({"organization":["delete"]})), &ctx, &config)
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(denied.status, 403);
+        let denied: serde_json::Value = serde_json::from_slice(&denied.body).unwrap();
+        assert_eq!(denied["missingPermissions"], json!(["organization:delete"]));
+        assert!(
+            ctx.database
+                .list_organization_roles(&org.id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        let created =
+            handle_role_request(&request(json!({"organization":["update"]})), &ctx, &config)
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(created.status, 200);
+        let rows = ctx.database.list_organization_roles(&org.id).await.unwrap();
+        assert_eq!(rows[0].role, "editor");
+        assert!(
+            check_permission(
+                "editor",
+                &org.id,
+                "organization",
+                &["update"],
+                &config,
+                &ctx
+            )
+            .await
+            .unwrap()
+        );
+        assert!(
+            !check_permission(
+                "editor",
+                "other-tenant",
+                "organization",
+                &["update"],
+                &config,
+                &ctx
+            )
+            .await
+            .unwrap()
+        );
+        let duplicate =
+            handle_role_request(&request(json!({"organization":["update"]})), &ctx, &config)
+                .await
+                .unwrap_err();
+        assert_eq!(
+            duplicate.error_payload().1.as_deref(),
+            Some("ROLE_NAME_IS_ALREADY_TAKEN")
+        );
+    }
+}

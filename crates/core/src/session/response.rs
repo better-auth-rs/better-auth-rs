@@ -85,10 +85,10 @@ impl<S: AuthSchema> SessionManager<S> {
                 && let Some(user) = self.database.get_user_by_id(&session.user_id()).await?
             {
                 let data = crate::session::SessionData {
-                    session: crate::wire::SessionView::with_fields(&session, &self.config.session)?,
-                    user: crate::wire::UserView::from(&user),
+                    session: self.session_view(&session)?,
+                    user: self.user_view(&user)?,
                 };
-                self.write_cache(req, &data, dont_remember)?;
+                self.write_cache(req, &data, dont_remember).await?;
                 for (name, value) in req.take_response_headers()? {
                     response.headers.append(name, value);
                 }

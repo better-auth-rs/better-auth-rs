@@ -11,6 +11,17 @@ Generic OAuth/OIDC providers use the same resolved provider configuration and to
 
 `GET /callback/{provider}/oauth-proxy` completes the transfer. `GET /oauth-proxy-callback` retains the upstream deprecated entry point. Both require `callbackURL`; the profile is carried in the encrypted `profile` parameter. The implementation validates the callback origin, provider identity, profile age, and OAuth state before creating a session. The default maximum profile age is sixty seconds; use `.max_age(...)` to change it.
 
-Set `x-skip-oauth-proxy` to bypass proxying for a request. Requests on the configured production origin also use the normal OAuth callback. Without an explicit current URL, only a trusted request host can become the profile receiver; other hosts fall back to the configured base URL.
+Set `x-skip-oauth-proxy` to bypass proxying for a request. Requests on the configured production origin also use the normal OAuth callback. Without an explicit current URL, only a trusted request host can become the profile receiver; other hosts fall back to the hosting environment or configured base URL.
 
-Use application configuration to supply preview and production URLs. Vendor-specific hosting environment discovery is not provided. The compatibility suite verifies both TS-to-Rust and Rust-to-TS profile transfer, database and cookie state, linked accounts, expiry, nonce binding, and replay rejection.
+Current URL resolution follows `better-auth@1.7.6` in this order:
+
+1. A nonempty `.current_url(...)`.
+2. A request host whose origin is trusted by the authentication configuration.
+3. The first nonempty hosting variable: `VERCEL_URL`, `NETLIFY_URL`, `RENDER_URL`, `AWS_LAMBDA_FUNCTION_NAME`, `GOOGLE_CLOUD_FUNCTION_NAME`, then `AZURE_FUNCTION_NAME`.
+4. The configured base URL.
+
+`VERCEL_URL` receives an `https://` prefix. Supply complete URLs for the other variables. If the first selected variable has no valid URL origin, resolution uses the base URL instead of trying another variable. Paths and trailing slashes do not become part of the preview receiver origin. Other platform variables are not used. The Rust request wrapper combines the request host with the configured base URL scheme. Set `.current_url(...)` if the external request uses a different scheme.
+
+Proxy skip checks use `.production_url(...)`, then `BETTER_AUTH_URL`, then the base URL as the production origin. The current origin for this check comes from `.current_url(...)`, the request host, or the hosting variables, in that order. Matching origins or a nonempty `x-skip-oauth-proxy` header bypass proxying. Only an explicit `.production_url(...)` rewrites the provider callback base URL; `BETTER_AUTH_URL` affects the skip check. Empty option strings are treated as absent. Production callback URLs have trailing slashes removed before the auth base path is appended; their configured host spelling and port are preserved.
+
+The compatibility suite starts isolated server processes for platform variables and configuration conflicts. The suite verifies real proxy sign-in, trusted-origin fallback, TS-to-Rust and Rust-to-TS profile transfer, database and cookie state, linked accounts, expiry, nonce binding, and replay rejection. API-key session emulation and later application hooks remain covered by Rust integration tests.

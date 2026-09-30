@@ -270,7 +270,7 @@ pub(super) async fn send_otp_core(
         })
         .await?;
 
-    if let Err(error) = sender.send(&UserView::from(state.user()), &otp).await {
+    if let Err(error) = sender.send(state.user(), &otp).await {
         tracing::warn!(error = %error, "Failed to send two-factor OTP");
     }
 
@@ -432,7 +432,7 @@ pub(super) async fn verify_backup_code_core(
                 Ok((
                     SessionTokenResponse {
                         token: Some(session.token().to_string()),
-                        user: UserView::from(&user),
+                        user: ctx.user_view(&user)?,
                     },
                     Vec::new(),
                 ))

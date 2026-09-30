@@ -2,7 +2,7 @@ import { expect } from "bun:test";
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
 import { compatScenario } from "../support/scenario";
 
-export function jwtScenario(algorithm: "EdDSA" | "RS256" | "ES256", identityDefaults = false) {
+export function jwtScenario(algorithm: "EdDSA" | "RS256" | "ES256" | "PS256" | "ES512", identityDefaults = false) {
   compatScenario(`JWT ${algorithm} signs real session claims with public-only discovery`, async (ctx) => {
     const denied = await ctx.rawRequest({ path: "/api/auth/token" });
     expect(denied.status).toBe(401);
@@ -13,6 +13,8 @@ export function jwtScenario(algorithm: "EdDSA" | "RS256" | "ES256", identityDefa
     expect(keys.keys).toHaveLength(1);
     const key = keys.keys[0]!;
     expect(key.alg).toBe(algorithm);
+    if (algorithm === "PS256") expect(Buffer.from(key.n!, "base64url").length * 8).toBe(3072);
+    if (algorithm === "ES512") expect(key.crv).toBe("P-521");
     expect(typeof key.kid).toBe("string");
     for (const privateField of ["d", "p", "q", "dp", "dq", "qi", "oth", "k"]) expect(key).not.toHaveProperty(privateField);
     const owner = await ctx.actor().client.signUp.email({ email: ctx.uniqueEmail("jwt-owner"), password: "password123", name: "JWT Owner" });

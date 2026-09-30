@@ -40,6 +40,18 @@ pub trait SeaOrmUserModel:
         now: DateTime<Utc>,
     ) -> Self::ActiveModel;
     fn apply_update(active: &mut Self::ActiveModel, update: UpdateUser, now: DateTime<Utc>);
+    /// Persist configured application fields in the same insert or update as core user fields.
+    fn apply_fields(
+        _active: &mut Self::ActiveModel,
+        fields: serde_json::Map<String, serde_json::Value>,
+    ) -> AuthResult<()> {
+        if fields.is_empty() {
+            return Ok(());
+        }
+        Err(better_auth_core::AuthError::config(
+            "The user model does not implement additional fields",
+        ))
+    }
 }
 
 pub trait SeaOrmSessionModel:
@@ -68,6 +80,8 @@ pub trait SeaOrmSessionModel:
     ) -> Self::ActiveModel;
     fn set_expires_at(active: &mut Self::ActiveModel, expires_at: DateTime<Utc>);
     fn set_updated_at(active: &mut Self::ActiveModel, updated_at: DateTime<Utc>);
+    /// Persist the active team after plugin field validation.
+    fn set_active_team_id(_active: &mut Self::ActiveModel, _team_id: Option<String>) {}
     fn set_active_organization_id(active: &mut Self::ActiveModel, organization_id: Option<String>);
     /// Apply fields validated against the application's session configuration.
     fn apply_fields(

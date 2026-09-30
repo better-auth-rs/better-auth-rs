@@ -48,7 +48,12 @@ where
             .as_deref()
             .map(S::User::parse_id)
             .transpose()?;
-        let model = S::User::new_active(user_id, create_user, now);
+        let fields = self
+            .config()
+            .user
+            .storage_fields(std::mem::take(&mut create_user.additional_fields), true)?;
+        let mut model = S::User::new_active(user_id, create_user, now);
+        S::User::apply_fields(&mut model, fields)?;
 
         let user = model.insert(db).await.map_err(map_db_err)?;
         for hook in self.hooks() {
@@ -171,7 +176,12 @@ where
         };
 
         let mut active = model.into_active_model();
+        let fields = self
+            .config()
+            .user
+            .storage_fields(std::mem::take(&mut update.additional_fields), false)?;
         S::User::apply_update(&mut active, update, Utc::now());
+        S::User::apply_fields(&mut active, fields)?;
 
         let user = active.update(self.connection()).await.map_err(map_db_err)?;
         for hook in self.hooks() {

@@ -245,7 +245,33 @@ async fn build_docs_auth() -> Result<BetterAuth<BundledSchema>, DynError> {
         .plugin(DeviceAuthorizationPlugin::new())
         .plugin(ApiKeyPlugin::builder().build())
         .plugin(TwoFactorPlugin::new())
-        .plugin(OrganizationPlugin::new())
+        .plugin(OrganizationPlugin::with_config(
+            better_auth::plugins::organization::OrganizationConfig {
+                teams: better_auth::plugins::organization::OrganizationTeamsConfig {
+                    enabled: true,
+                    ..Default::default()
+                },
+                dynamic_access_control: true,
+                ac: Some(
+                    [
+                        ("organization", vec!["update", "delete"]),
+                        ("member", vec!["create", "update", "delete"]),
+                        ("invitation", vec!["create", "cancel"]),
+                        ("team", vec!["create", "update", "delete"]),
+                        ("ac", vec!["create", "read", "update", "delete"]),
+                    ]
+                    .into_iter()
+                    .map(|(resource, actions)| {
+                        (
+                            resource.to_owned(),
+                            actions.into_iter().map(str::to_owned).collect(),
+                        )
+                    })
+                    .collect(),
+                ),
+                ..Default::default()
+            },
+        ))
         .plugin(
             PasskeyPlugin::new()
                 .rp_id("localhost")

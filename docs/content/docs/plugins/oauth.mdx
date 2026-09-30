@@ -94,6 +94,8 @@ Use `authorization_url_params` for additional authorization parameters, `token_u
 
 Generic OAuth reads an ID-token profile when it contains `sub` and `email`, then falls back to the userinfo endpoint. `get_user_info` accepts a `GenericOAuthUserInfoHandler` for a custom raw profile. `map_profile_to_user` accepts an `OAuthProfileMapper` to return local user fields independently of account identity.
 
+Set `OAuthProfile.additional_fields` to supply configured application user fields. Sign-up and profile updates apply the shared user schema, including input transforms, defaults, and protected-field filtering. OAuth Proxy preserves these mapped fields through its encrypted callback. Raw provider claims remain separate from mapped application fields.
+
 For `OAuthProfile.name` and `OAuthProfile.image`, `None` preserves the provider value, `Some(None)` clears the value, and `Some(Some(value))` replaces it. Other optional mapper fields preserve the provider value when omitted. Set `override_user_info: true` to update an existing user's profile on sign-in.
 
 The account subject comes from the original profile's `sub` for OIDC or `id` for OAuth. Implement `OAuthAccountSubject` through `account_subject` for providers with another stable identifier. Mapped user fields cannot change that identifier. `/account-info` fetches the profile for an existing linked account and keeps the stored account subject.

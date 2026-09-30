@@ -5,7 +5,7 @@ description: User entities, account linking, and management endpoints.
 
 ## User Entity
 
-The `User` struct represents a registered user:
+Authentication reads application-owned user entities through `AuthUser`. Public responses use `UserView` and the active user schema.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -21,9 +21,40 @@ The `User` struct represents a registered user:
 | `banReason` | `Option<String>` | Ban reason |
 | `banExpires` | `Option<DateTime>` | Ban expiration |
 | `twoFactorEnabled` | `bool` | 2FA status |
-| `metadata` | `HashMap` | Arbitrary key-value data |
+| `metadata` | `serde_json::Value` | Internal application data; not returned by default |
 | `createdAt` | `DateTime` | Creation timestamp |
 | `updatedAt` | `DateTime` | Last update timestamp |
+
+## Application User Fields
+
+Register application fields in `AuthConfig.user.additional_fields`. Add matching fields to the application-owned user entity and apply a database migration. `AuthEntity` writes these fields in the same insert or update as the core user fields. `field_name` selects the entity's Serde serialization name; the public API continues to use the configuration key.
+
+```rust
+use better_auth::config::{UserFieldConfig, UserFieldType};
+use serde_json::json;
+
+config.user.additional_fields.insert("department".into(), UserFieldConfig {
+    field_type: UserFieldType::String,
+    required: true,
+    ..Default::default()
+});
+config.user.additional_fields.insert("internalCode".into(), UserFieldConfig {
+    input: false,
+    returned: false,
+    default_value: Some(json!("unassigned")),
+    ..Default::default()
+});
+```
+
+`required` rejects missing public creation input without a default. Updates leave missing fields unchanged. `input: false` rejects truthy client values; during creation, a configured default replaces supplied values. `returned: false` hides the field from public user responses, session caches, and JWT user claims. Administrator routes can set configured fields without public input restrictions. Application metadata and permissions are not rewritten by user projection.
+
+Use `validator` for synchronous input validation or normalization. The validator returns `AuthResult<Value>`; a failure becomes `VALIDATION_ERROR`. Use `default_value_fn` for dynamic creation defaults. Use `on_update` to produce a value when a database update omits the field. Use `input_transform` and `output_transform` for transformations. Transform callbacks take and return `Option<Value>`: `None` means undefined, while `Some(Value::Null)` means explicit null.
+
+As in the upstream adapter, public input transforms run at both the route and storage boundaries. A validator replaces the route transform, but the storage transform still runs. Missing optional fields reach the storage input transform during creation. Database reads apply output transforms once; cache reads preserve the transformed values. Date fields use RFC 3339 strings and normalize to millisecond UTC timestamps. The entity column types determine storage representation for strings, numbers, booleans, JSON, arrays, and enums. An enum declaration alone does not validate allowed values; configure a validator when validation is required.
+
+Plugin fields are projected from the active plugin schema. Disabling Anonymous, Phone Number, Username, Admin, or Two Factor hides stored plugin fields on database reads. An existing signed session cache preserves its previous plugin fields until expiry or a cache version change, matching upstream. Current `returned: false` restrictions apply even to existing caches. Change `session.cookie_cache.version` when a configuration change must invalidate cached user shapes immediately.
+
+Custom stores must apply `UserConfig::storage_fields` before persistence. Custom endpoints must return `AuthContext::user_view` rather than serialize storage models. `UserView::from` is an unconfigured internal conversion. Generic OAuth and OIDC pass `OAuthProfile.additional_fields` through `UserConfig::parse_provider_input` before persistence. Custom provider integrations must use the same boundary. Raw OAuth provider response data is not mapped user input.
 
 ## Account Entity
 

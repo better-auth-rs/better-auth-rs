@@ -246,7 +246,7 @@ pub(crate) async fn find_session<S: AuthSchema>(
     };
     Ok(Some((
         SessionView::with_fields(&session, &ctx.config.session)?,
-        UserView::from(&user),
+        ctx.user_view(&user)?,
     )))
 }
 

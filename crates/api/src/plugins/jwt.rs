@@ -12,8 +12,14 @@ use josekit::{
 };
 use serde_json::{Map, Value, json};
 
+mod cache;
+mod options;
+mod signing;
+mod verification;
+pub use options::*;
+
 /// Supported asymmetric signing algorithms.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum JwtAlgorithm {
     /// Ed25519, the upstream default.
     #[default]
@@ -22,6 +28,10 @@ pub enum JwtAlgorithm {
     Rs256,
     /// ECDSA P-256 with SHA-256.
     Es256,
+    /// ECDSA P-521 with SHA-512.
+    Es512,
+    /// RSA PSS with SHA-256.
+    Ps256,
 }
 
 impl JwtAlgorithm {
@@ -30,20 +40,24 @@ impl JwtAlgorithm {
             Self::EdDsa => "EdDSA",
             Self::Rs256 => "RS256",
             Self::Es256 => "ES256",
+            Self::Es512 => "ES512",
+            Self::Ps256 => "PS256",
         }
     }
     fn curve(self) -> Option<&'static str> {
         match self {
             Self::EdDsa => Some("Ed25519"),
             Self::Es256 => Some("P-256"),
-            Self::Rs256 => None,
+            Self::Es512 => Some("P-521"),
+            Self::Rs256 | Self::Ps256 => None,
         }
     }
-    fn generate(self) -> Result<Jwk, josekit::JoseError> {
+    fn generate(self, modulus_length: u32) -> Result<Jwk, josekit::JoseError> {
         match self {
             Self::EdDsa => Jwk::generate_ed_key(jwk::Ed25519),
-            Self::Rs256 => Jwk::generate_rsa_key(2048),
+            Self::Rs256 | Self::Ps256 => Jwk::generate_rsa_key(modulus_length),
             Self::Es256 => Jwk::generate_ec_key(jwk::P_256),
+            Self::Es512 => Jwk::generate_ec_key(jwk::P_521),
         }
     }
 }
@@ -52,6 +66,27 @@ impl JwtAlgorithm {
 #[derive(Clone, better_auth_core::PluginConfig)]
 #[plugin(name = "JwtPlugin")]
 pub struct JwtPluginConfig {
+    /// Use locally managed keys for JWT session cookie caches.
+    #[config(default = false)]
+    pub session_cookie_cache: bool,
+    /// RSA modulus length for the primary algorithm.
+    #[config(default = 2048)]
+    pub modulus_length: u32,
+    /// Additional algorithms that explicit signing requests may provision.
+    #[config(default = Vec::new())]
+    pub key_pair_configs: Vec<JwtKeyPairConfig>,
+    /// Remote discovery URL. Disables local discovery; does not change the verifier's adapter.
+    #[config(default = None)]
+    pub remote_url: Option<String>,
+    /// Application-managed signing callback. Requires `remote_url`.
+    #[config(default = None)]
+    pub custom_sign: Option<JwtCustomSign>,
+    /// Session payload callback, before default claims and subject selection.
+    #[config(default = None)]
+    pub define_payload: Option<JwtDefinePayload>,
+    /// Session subject callback.
+    #[config(default = None)]
+    pub get_subject: Option<JwtGetSubject>,
     /// Public discovery path.
     #[config(default = "/jwks".to_owned())]
     pub jwks_path: String,
@@ -97,11 +132,44 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
             AuthRoute::get("/token", "getJSONWebToken"),
         ]
     }
-    async fn on_init(&self, _ctx: &mut AuthInitContext<S>) -> AuthResult<()> {
+    async fn on_init(&self, ctx: &mut AuthInitContext<S>) -> AuthResult<()> {
+        if self.config.custom_sign.is_some() && self.config.remote_url.is_none() {
+            return Err(AuthError::config("custom_sign requires remote_url"));
+        }
         if !self.config.jwks_path.starts_with('/') || self.config.jwks_path.contains("..") {
             return Err(AuthError::config(
                 "jwks_path must start with '/' and must not contain '..'",
             ));
+        }
+        if self.config.session_cookie_cache {
+            if !ctx
+                .config
+                .session
+                .cookie_cache
+                .as_ref()
+                .is_some_and(|cache| {
+                    matches!(
+                        cache.strategy,
+                        better_auth_core::config::CookieCacheStrategy::Jwt
+                    )
+                })
+            {
+                return Err(AuthError::config(
+                    "session_cookie_cache requires the JWT cookie cache strategy",
+                ));
+            }
+            if self.config.custom_sign.is_some() {
+                return Err(AuthError::config(
+                    "session_cookie_cache requires locally managed JWT keys",
+                ));
+            }
+            let signer: std::sync::Arc<dyn better_auth_core::session::SessionCookieSigner> =
+                std::sync::Arc::new(cache::CookieSigner {
+                    plugin: Self::with_config(self.config.clone()),
+                    config: ctx.config.clone(),
+                    database: ctx.database.clone(),
+                });
+            ctx.extensions.insert(signer);
         }
         Ok(())
     }
@@ -117,7 +185,7 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
             return self.jwks(ctx).await.map(Some);
         }
         if req.path() == "/token" {
-            let (user, _) = ctx
+            let (user, session) = ctx
                 .require_session(req)
                 .await
                 .map_err(|error| match error {
@@ -128,7 +196,9 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
                     },
                     error => error,
                 })?;
-            let token = self.sign_user(serde_json::to_value(user)?, ctx).await?;
+            let token = self
+                .sign_session(json!({"user": user, "session": session}), ctx)
+                .await?;
             return Ok(Some(AuthResponse::json(200, &json!({"token": token}))?));
         }
         Ok(None)
@@ -149,7 +219,9 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
         let Some(user) = body.get("user").filter(|user| user.is_object()) else {
             return Ok(());
         };
-        let token = self.sign_user(user.clone(), ctx).await?;
+        let token = self
+            .sign_session(json!({"user": user, "session": body.get("session")}), ctx)
+            .await?;
         let _ = response.headers.insert("set-auth-jwt", token);
         let mut exposed: Vec<_> = response
             .headers
@@ -178,7 +250,35 @@ impl JwtPlugin {
         &self,
         ctx: &AuthContext<S>,
     ) -> AuthResult<better_auth_core::Jwk> {
-        let mut key = self.config.algorithm.generate().map_err(jose_error)?;
+        self.create_key_pair(
+            JwtKeyPairConfig {
+                algorithm: self.config.algorithm,
+                modulus_length: self.config.modulus_length,
+            },
+            ctx,
+        )
+        .await
+    }
+
+    /// Provision a local key with explicit parameters.
+    pub async fn create_key_pair<S: AuthSchema>(
+        &self,
+        parameters: JwtKeyPairConfig,
+        ctx: &AuthContext<S>,
+    ) -> AuthResult<better_auth_core::Jwk> {
+        if matches!(
+            parameters.algorithm,
+            JwtAlgorithm::Rs256 | JwtAlgorithm::Ps256
+        ) && parameters.modulus_length < 2048
+        {
+            return Err(AuthError::config(
+                "RSA modulus_length must be at least 2048",
+            ));
+        }
+        let mut key = parameters
+            .algorithm
+            .generate(parameters.modulus_length)
+            .map_err(jose_error)?;
         key.set_parameter("use", None).map_err(jose_error)?;
         let public_key = key.to_public_key().map_err(jose_error)?.to_string();
         let private_key = if self.config.disable_private_key_encryption {
@@ -198,13 +298,18 @@ impl JwtPlugin {
                     .rotation_interval
                     .filter(|interval| !interval.is_zero())
                     .map(|interval| Utc::now() + interval),
-                alg: self.config.algorithm.name().to_owned(),
-                crv: self.config.algorithm.curve().map(str::to_owned),
+                alg: parameters.algorithm.name().to_owned(),
+                crv: parameters.algorithm.curve().map(str::to_owned),
             })
             .await
     }
 
     async fn jwks<S: AuthSchema>(&self, ctx: &AuthContext<S>) -> AuthResult<AuthResponse> {
+        if self.config.remote_url.is_some() {
+            let mut response = AuthResponse::new(404);
+            let _ = response.headers.insert("content-type", "application/json");
+            return Ok(response);
+        }
         let mut keys = ctx.database.list_jwks().await?;
         if keys.is_empty() {
             keys.push(self.create_key(ctx).await?);
@@ -227,108 +332,6 @@ impl JwtPlugin {
             public.push(value);
         }
         Ok(AuthResponse::json(200, &json!({"keys": public}))?)
-    }
-
-    async fn sign_user<S: AuthSchema>(
-        &self,
-        user: Value,
-        ctx: &AuthContext<S>,
-    ) -> AuthResult<String> {
-        let mut payload = user
-            .as_object()
-            .cloned()
-            .ok_or_else(|| AuthError::internal("JWT user must be an object"))?;
-        let subject = payload
-            .get("id")
-            .cloned()
-            .ok_or_else(|| AuthError::internal("JWT user must have an ID"))?;
-        for (field, value) in super::helpers::user_plugin_defaults(ctx) {
-            let _ = payload.entry(field.to_owned()).or_insert(value);
-        }
-        let _ = payload
-            .entry("iat")
-            .or_insert_with(|| Utc::now().timestamp().into());
-        let _ = payload.insert("sub".into(), subject);
-        self.sign(payload, ctx).await
-    }
-
-    /// Sign an application payload with the same persisted keys as `/token`.
-    pub async fn sign<S: AuthSchema>(
-        &self,
-        mut payload: Map<String, Value>,
-        ctx: &AuthContext<S>,
-    ) -> AuthResult<String> {
-        let mut keys = ctx.database.list_jwks().await?;
-        keys.retain(|key| key.expires_at.is_none_or(|expiry| expiry > Utc::now()));
-        keys.sort_by_key(|key| std::cmp::Reverse(key.created_at));
-        let key = match keys
-            .iter()
-            .find(|key| {
-                key.alg.as_deref().unwrap_or(self.config.algorithm.name())
-                    == self.config.algorithm.name()
-            })
-            .or(keys.first())
-        {
-            Some(key) => key.clone(),
-            None => self.create_key(ctx).await?,
-        };
-        let private = if self.config.disable_private_key_encryption {
-            key.private_key
-        } else {
-            super::symmetric::decrypt(
-                &ctx.config.secret,
-                &serde_json::from_str::<String>(&key.private_key)?,
-            )?
-        };
-        let private = Jwk::from_bytes(private).map_err(jose_error)?;
-        let algorithm = key.alg.as_deref().unwrap_or(self.config.algorithm.name());
-        let signer: Box<dyn JwsSigner> = match algorithm {
-            "EdDSA" => Box::new(jws::EdDSA.signer_from_jwk(&private).map_err(jose_error)?),
-            "RS256" => Box::new(jws::RS256.signer_from_jwk(&private).map_err(jose_error)?),
-            "ES256" => Box::new(jws::ES256.signer_from_jwk(&private).map_err(jose_error)?),
-            _ => {
-                return Err(AuthError::config(format!(
-                    "Unsupported JWT signing algorithm: {algorithm}"
-                )));
-            }
-        };
-        let issued = payload
-            .get("iat")
-            .and_then(Value::as_i64)
-            .unwrap_or_else(|| Utc::now().timestamp());
-        for (claim, default) in [
-            (
-                "exp",
-                Value::from(issued + self.config.expiration_time.num_seconds()),
-            ),
-            (
-                "iss",
-                self.config
-                    .issuer
-                    .as_ref()
-                    .unwrap_or(&ctx.config.base_url)
-                    .clone()
-                    .into(),
-            ),
-            (
-                "aud",
-                self.config
-                    .audience
-                    .as_ref()
-                    .unwrap_or(&ctx.config.base_url)
-                    .clone()
-                    .into(),
-            ),
-        ] {
-            if payload.get(claim).is_none_or(Value::is_null) {
-                let _ = payload.insert(claim.to_owned(), default);
-            }
-        }
-        let payload = JwtPayload::from_map(payload).map_err(jose_error)?;
-        let mut header = JwsHeader::new();
-        header.set_algorithm(algorithm);
-        header.set_key_id(key.id);
-        josekit::jwt::encode_with_signer(&payload, &header, signer.as_ref()).map_err(jose_error)
     }
 }
 

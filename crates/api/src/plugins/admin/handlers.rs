@@ -124,7 +124,7 @@ pub(crate) async fn set_role_core(
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
     Ok(UserResponse {
-        user: AdminUserView::from(&updated_user),
+        user: ctx.user_view(&updated_user)?,
     })
 }
 
@@ -137,7 +137,7 @@ pub(crate) async fn get_user_core(
         .get_user_by_id(&query.id)
         .await?
         .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
-    Ok(AdminUserView::from(&user))
+    ctx.user_view(&user)
 }
 
 pub(crate) async fn create_user_core(
@@ -157,17 +157,11 @@ pub(crate) async fn create_user_core(
         .map(joined_role)
         .unwrap_or_else(|| config.default_role.clone());
 
-    let metadata = body
-        .data
-        .clone()
-        .map(serde_json::Value::Object)
-        .unwrap_or_else(|| serde_json::json!({}));
-
-    let create_user = better_auth_core::CreateUser::new()
+    let mut create_user = better_auth_core::CreateUser::new()
         .with_email(&body.email)
         .with_name(&body.name)
-        .with_role(role)
-        .with_metadata(metadata);
+        .with_role(role);
+    create_user.additional_fields = body.data.clone().unwrap_or_default();
 
     let user = ctx.database.create_user(create_user).await?;
 
@@ -195,7 +189,7 @@ pub(crate) async fn create_user_core(
     }
 
     Ok(UserResponse {
-        user: AdminUserView::from(&user),
+        user: ctx.user_view(&user)?,
     })
 }
 
@@ -209,7 +203,10 @@ pub(crate) async fn update_user_core(
         return Err(AuthError::bad_request(MESSAGE_NO_DATA_TO_UPDATE));
     }
 
-    let mut update = UpdateUser::default();
+    let mut update = UpdateUser {
+        additional_fields: body.data.clone(),
+        ..Default::default()
+    };
 
     if let Some(value) = body.data.get("role") {
         let permissions =
@@ -258,6 +255,23 @@ pub(crate) async fn update_user_core(
     {
         update.display_username = Some(value.to_string());
     }
+    if ctx.get_metadata("anonymous.enabled") == Some(&serde_json::Value::Bool(true)) {
+        update.is_anonymous = body
+            .data
+            .get("isAnonymous")
+            .and_then(serde_json::Value::as_bool);
+    }
+    if ctx.get_metadata("phone-number.enabled") == Some(&serde_json::Value::Bool(true)) {
+        update.phone_number = body
+            .data
+            .get("phoneNumber")
+            .map(|value| serde_json::from_value(value.clone()))
+            .transpose()?;
+        update.phone_number_verified = body
+            .data
+            .get("phoneNumberVerified")
+            .and_then(serde_json::Value::as_bool);
+    }
     if let Some(value) = body.data.get("banned").and_then(|value| value.as_bool()) {
         update.banned = Some(value);
     }
@@ -286,7 +300,7 @@ pub(crate) async fn update_user_core(
     }
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
-    Ok(AdminUserView::from(&updated_user))
+    ctx.user_view(&updated_user)
 }
 
 pub(crate) async fn list_users_core(
@@ -308,7 +322,10 @@ pub(crate) async fn list_users_core(
 
     let (users, total) = ctx.database.list_users(params).await?;
     Ok(ListUsersResponse {
-        users: users.iter().map(AdminUserView::from).collect(),
+        users: users
+            .iter()
+            .map(|user| ctx.user_view(user))
+            .collect::<AuthResult<_>>()?,
         total,
         limit: query.limit.filter(|limit| *limit > 0),
         offset: query.offset.filter(|offset| *offset > 0),
@@ -370,7 +387,7 @@ pub(crate) async fn ban_user_core(
         .await?;
 
     Ok(UserResponse {
-        user: AdminUserView::from(&updated_user),
+        user: ctx.user_view(&updated_user)?,
     })
 }
 
@@ -393,7 +410,7 @@ pub(crate) async fn unban_user_core(
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
     Ok(UserResponse {
-        user: AdminUserView::from(&updated_user),
+        user: ctx.user_view(&updated_user)?,
     })
 }
 
@@ -459,7 +476,7 @@ pub(crate) async fn impersonate_user_core(
     let token = session.token().to_string();
     let response = SessionUserResponse {
         session: SessionView::with_fields(&session, &ctx.config.session)?,
-        user: UserView::from(&target),
+        user: ctx.user_view(&target)?,
     };
 
     Ok((response, token))
@@ -498,7 +515,7 @@ pub(crate) async fn stop_impersonating_core(
     let token = admin_session.token().to_string();
     let response = SessionUserResponse {
         session: SessionView::with_fields(&admin_session, &ctx.config.session)?,
-        user: UserView::from(&admin_user),
+        user: ctx.user_view(&admin_user)?,
     };
 
     Ok((response, token))

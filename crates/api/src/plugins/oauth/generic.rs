@@ -38,6 +38,8 @@ pub trait GenericOAuthUserInfoHandler: Send + Sync {
 /// Local profile fields; provider account identity is resolved separately.
 #[derive(Debug, Clone, Default)]
 pub struct OAuthProfile {
+    /// Application user fields supplied by the profile mapper.
+    pub additional_fields: serde_json::Map<String, Value>,
     /// Override the provider email.
     pub email: Option<String>,
     /// Override the display name; `Some(None)` clears the provider value.

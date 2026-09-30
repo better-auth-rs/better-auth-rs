@@ -136,7 +136,7 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<(UserView, SessionView)> {
-        ctx.require_session(req).await
+        ctx.require_authoritative_session(req).await
     }
 
     fn authorize(

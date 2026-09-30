@@ -8,6 +8,7 @@ export function tokenRoutePlugins(profile: string, outbox: Map<string, { url: st
       return [jwt({ jwks: { keyPairConfig: { alg: "RS256" } } })];
     case "jwt-es256":
       return [jwt({ jwks: { keyPairConfig: { alg: "ES256" } } })];
+    case "user-fields":
     case "jwt-identity":
       return [jwt(), anonymous(), phoneNumber({ async sendOTP() { throw new Error("JWT claim test does not deliver phone OTPs"); } })];
     case "magic-link":

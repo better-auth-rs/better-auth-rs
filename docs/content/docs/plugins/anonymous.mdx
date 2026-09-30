@@ -21,4 +21,4 @@ An anonymous session cannot create another anonymous session. A successful sign-
 
 Post-link cleanup follows Better Auth: a database deletion failure is logged and does not invalidate the successful sign-in. Explicit deletion returns an error when deletion fails.
 
-Disabling the plugin does not hide an existing stored `isAnonymous` value from Rust's user views. Configuration changes over populated databases differ from upstream output filtering in this case.
+Disabling the plugin hides stored `isAnonymous` values on database reads. Existing signed session caches retain their previous user shape until expiry or a cache version change, matching upstream. See [user field visibility](/docs/concepts/users-accounts).

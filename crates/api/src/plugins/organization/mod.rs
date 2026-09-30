@@ -32,6 +32,7 @@ pub trait SendInvitationEmail: Send + Sync {
 
 /// Permission definitions for a role
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct RolePermissions {
     pub organization: Vec<String>,
     pub member: Vec<String>,
@@ -40,12 +41,50 @@ pub struct RolePermissions {
     /// default statements define none, so only the creator role can manage them
     /// until an application grants this explicitly.
     pub api_key: Vec<String>,
+    pub team: Vec<String>,
+    pub ac: Vec<String>,
+    #[serde(flatten)]
+    pub additional: HashMap<String, Vec<String>>,
+}
+
+/// Team creation and membership limits.
+#[derive(Debug, Clone)]
+pub struct OrganizationTeamsConfig {
+    pub enabled: bool,
+    pub default_team: bool,
+    pub allow_removing_all_teams: bool,
+    pub maximum_teams: Option<usize>,
+    pub maximum_members_per_team: Option<usize>,
+}
+
+impl Default for OrganizationTeamsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            default_team: true,
+            allow_removing_all_teams: false,
+            maximum_teams: None,
+            maximum_members_per_team: None,
+        }
+    }
 }
 
 /// Configuration for the Organization plugin
 #[derive(Clone, better_auth_core::PluginConfig)]
 #[plugin(name = "OrganizationPlugin")]
 pub struct OrganizationConfig {
+    /// Enable teams and configure team limits.
+    #[config(default = OrganizationTeamsConfig::default(), skip)]
+    pub teams: OrganizationTeamsConfig,
+    /// Enable persisted organization roles.
+    #[config(default = false)]
+    pub dynamic_access_control: bool,
+    /// Maximum persisted roles per organization.
+    #[config(default = None)]
+    pub maximum_roles_per_organization: Option<usize>,
+    /// Resource statements for dynamic access control.
+    #[config(default = None, skip)]
+    pub ac: Option<HashMap<String, Vec<String>>>,
     /// Allow users to create organizations (default: true)
     #[config(default = true)]
     pub allow_user_to_create_organization: bool,
@@ -67,7 +106,7 @@ pub struct OrganizationConfig {
     /// Disable organization deletion (default: false)
     #[config(default = false)]
     pub disable_organization_deletion: bool,
-    /// Custom role definitions (extending default roles)
+    /// Static role definitions. A nonempty map replaces default permission definitions.
     #[config(default = HashMap::new(), skip)]
     pub roles: HashMap<String, RolePermissions>,
     /// Optional delivery callback used for new and resent invitations.
@@ -92,6 +131,13 @@ impl std::fmt::Debug for OrganizationConfig {
                 &self.disable_organization_deletion,
             )
             .field("roles", &self.roles)
+            .field("teams", &self.teams)
+            .field("dynamic_access_control", &self.dynamic_access_control)
+            .field(
+                "maximum_roles_per_organization",
+                &self.maximum_roles_per_organization,
+            )
+            .field("ac", &self.ac)
             .field(
                 "send_invitation_email",
                 &self.send_invitation_email.as_ref().map(|_| "custom"),
@@ -106,6 +152,16 @@ pub struct OrganizationPlugin {
 }
 
 impl OrganizationPlugin {
+    /// Configure organization teams.
+    pub fn teams(mut self, teams: OrganizationTeamsConfig) -> Self {
+        self.config.teams = teams;
+        self
+    }
+    /// Configure access-control resource statements.
+    pub fn access_control(mut self, ac: HashMap<String, Vec<String>>) -> Self {
+        self.config.ac = Some(ac);
+        self
+    }
     /// Configure delivery for new and resent invitations.
     pub fn custom_send_invitation_email(mut self, sender: Arc<dyn SendInvitationEmail>) -> Self {
         self.config.send_invitation_email = Some(sender);
@@ -114,6 +170,8 @@ impl OrganizationPlugin {
 }
 
 /// Metadata key announcing that the organization plugin is installed.
+pub(crate) const METADATA_DYNAMIC_ACCESS_CONTROL: &str = "organization.dynamic_access_control";
+pub(crate) const METADATA_AC: &str = "organization.ac";
 pub(crate) const METADATA_ENABLED: &str = "organization.enabled";
 /// Metadata key carrying the configured custom roles, so other plugins can run
 /// the organization's access control without depending on this plugin's config.
@@ -132,6 +190,18 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         ctx: &mut better_auth_core::AuthInitContext<S>,
     ) -> better_auth_core::AuthResult<()> {
         S::Session::require_plugin_fields("organization", &["active_organization_id"])?;
+        if self.config.teams.enabled {
+            S::Session::require_plugin_fields("organization", &["active_team_id"])?;
+        }
+        ctx.set_metadata(
+            METADATA_DYNAMIC_ACCESS_CONTROL,
+            serde_json::json!(self.config.dynamic_access_control),
+        );
+        ctx.set_metadata(METADATA_AC, serde_json::json!(self.config.ac));
+        ctx.set_metadata(
+            "organization.teams_enabled",
+            serde_json::json!(self.config.teams.enabled),
+        );
         ctx.set_metadata(METADATA_ENABLED, serde_json::Value::Bool(true));
         ctx.set_metadata(
             METADATA_ROLES,
@@ -145,7 +215,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
     }
 
     fn routes(&self) -> Vec<AuthRoute> {
-        vec![
+        let mut routes = vec![
             // Organization CRUD
             AuthRoute::post("/organization/create", "create_organization"),
             AuthRoute::post("/organization/update", "update_organization"),
@@ -181,7 +251,45 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
             AuthRoute::post("/organization/cancel-invitation", "cancel_invitation"),
             // Permission check
             AuthRoute::post("/organization/has-permission", "has_permission"),
-        ]
+        ];
+        if self.config.teams.enabled {
+            routes.extend(handlers::team::routes());
+        }
+        if self.config.dynamic_access_control {
+            for (path, method) in [
+                ("create-role", HttpMethod::Post),
+                ("get-role", HttpMethod::Get),
+                ("list-roles", HttpMethod::Get),
+                ("update-role", HttpMethod::Post),
+                ("delete-role", HttpMethod::Post),
+            ] {
+                routes.push(match method {
+                    HttpMethod::Get => AuthRoute::get(format!("/organization/{path}"), path),
+                    _ => AuthRoute::post(format!("/organization/{path}"), path),
+                });
+            }
+        }
+        routes
+    }
+
+    async fn after_request(
+        &self,
+        _req: &AuthRequest,
+        response: &mut AuthResponse,
+        _ctx: &AuthContext<S>,
+    ) -> AuthResult<()> {
+        if !response
+            .headers
+            .get("content-type")
+            .is_some_and(|value| value.starts_with("application/json"))
+            || response.body.is_empty()
+        {
+            return Ok(());
+        }
+        let mut value = serde_json::from_slice(&response.body)?;
+        shape_session_teams(&mut value, self.config.teams.enabled);
+        response.body = serde_json::to_vec(&value)?;
+        Ok(())
     }
 
     async fn on_request(
@@ -189,7 +297,26 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
-        match (req.method(), req.path()) {
+        if self.config.teams.enabled
+            && handlers::team::routes()
+                .iter()
+                .any(|route| route.path == req.path())
+        {
+            return handlers::team::handle_team_request(req, ctx, &self.config).await;
+        }
+        if self.config.dynamic_access_control
+            && matches!(
+                req.path(),
+                "/organization/create-role"
+                    | "/organization/get-role"
+                    | "/organization/list-roles"
+                    | "/organization/update-role"
+                    | "/organization/delete-role"
+            )
+        {
+            return handlers::roles::handle_role_request(req, ctx, &self.config).await;
+        }
+        let response: AuthResult<Option<AuthResponse>> = match (req.method(), req.path()) {
             // Organization CRUD
             (HttpMethod::Post, "/organization/create") => Ok(Some(
                 handlers::org::handle_create_organization(req, ctx, &self.config).await?,
@@ -261,6 +388,97 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
                 handlers::handle_has_permission(req, ctx, &self.config).await?,
             )),
             _ => Ok(None),
-        }
+        };
+        response?
+            .map(|mut response| {
+                shape_invitation_output(req.path(), &mut response, self.config.teams.enabled)?;
+                Ok(response)
+            })
+            .transpose()
     }
+}
+
+fn shape_session_teams(value: &mut serde_json::Value, enabled: bool) {
+    match value {
+        serde_json::Value::Array(sessions) => {
+            for session in sessions {
+                shape_session_teams(session, enabled);
+            }
+        }
+        serde_json::Value::Object(fields) => {
+            if fields.contains_key("id")
+                && fields.contains_key("token")
+                && fields.contains_key("expiresAt")
+                && fields.contains_key("userId")
+            {
+                if enabled {
+                    let _ = fields
+                        .entry("activeTeamId")
+                        .or_insert(serde_json::Value::Null);
+                } else {
+                    let _ = fields.remove("activeTeamId");
+                }
+            } else {
+                for key in ["session", "sessions"] {
+                    if let Some(session) = fields.get_mut(key) {
+                        shape_session_teams(session, enabled);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn shape_invitation_output(
+    path: &str,
+    response: &mut AuthResponse,
+    teams_enabled: bool,
+) -> AuthResult<()> {
+    if !matches!(
+        path,
+        "/organization/invite-member"
+            | "/organization/get-invitation"
+            | "/organization/list-invitations"
+            | "/organization/list-user-invitations"
+            | "/organization/accept-invitation"
+            | "/organization/reject-invitation"
+            | "/organization/cancel-invitation"
+            | "/organization/get-full-organization"
+    ) {
+        return Ok(());
+    }
+    let mut value: serde_json::Value = serde_json::from_slice(&response.body)?;
+    let shape = |invitation: &mut serde_json::Value| {
+        if let Some(object) = invitation.as_object_mut() {
+            if teams_enabled {
+                let _ = object.entry("teamId").or_insert(serde_json::Value::Null);
+            } else {
+                let _ = object.remove("teamId");
+            }
+        }
+    };
+    match path {
+        "/organization/list-invitations" | "/organization/list-user-invitations" => {
+            if let Some(invitations) = value.as_array_mut() {
+                invitations.iter_mut().for_each(shape);
+            }
+        }
+        "/organization/get-full-organization" => {
+            if let Some(invitations) = value
+                .get_mut("invitations")
+                .and_then(serde_json::Value::as_array_mut)
+            {
+                invitations.iter_mut().for_each(shape);
+            }
+        }
+        "/organization/accept-invitation" | "/organization/reject-invitation" => {
+            if let Some(invitation) = value.get_mut("invitation") {
+                shape(invitation);
+            }
+        }
+        _ => shape(&mut value),
+    }
+    response.body = serde_json::to_vec(&value)?;
+    Ok(())
 }

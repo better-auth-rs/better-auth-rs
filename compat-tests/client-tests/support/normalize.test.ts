@@ -15,6 +15,8 @@ test("business identifiers, token types, expiry fields and redirect origins rema
     [{ metadata: { expiresAt: "2026-01-01T00:00:00Z" } }, { metadata: { expiresAt: "2026-01-01T00:00:05Z" } }],
     [{ rp: { id: "example.com" } }, { rp: { id: "attacker.com" } }],
     [{ user: { id: "alice" }, session: { userId: "alice" } }, { user: { id: "bob" }, session: { userId: "mallory" } }],
+    [{ team: { id: "team-a" }, session: { activeTeamId: "team-a" } }, { team: { id: "team-b" }, session: { activeTeamId: "wrong-team" } }],
+    [{ role: { id: "role-a" }, roleId: "role-a" }, { role: { id: "role-b" }, roleId: "wrong-role" }],
     [{ token: "" }, { token: "valid-secret" }],
     [{ location: "https://trusted.example/callback" }, { location: "https://wrong.example/callback" }],
   ]) {

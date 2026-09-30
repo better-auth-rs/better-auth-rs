@@ -20,6 +20,11 @@ use crate::types::InvitationStatus;
 /// The framework reads user fields through these getters. Custom types
 /// must provide all framework fields and may have additional fields.
 pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    /// Already projected application fields, for views reconstructed from session caches.
+    /// Storage models return `None` so the output transform runs exactly once per database read.
+    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        None
+    }
     /// Plugin fields that the entity and store can read and persist.
     ///
     /// `AuthEntity` derives this list. Manual implementations must declare each
@@ -80,6 +85,10 @@ pub trait AuthSession: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
     fn user_id(&self) -> Cow<'_, str>;
     fn impersonated_by(&self) -> Option<&str>;
     fn active_organization_id(&self) -> Option<&str>;
+    /// Active team selected for this session.
+    fn active_team_id(&self) -> Option<&str> {
+        None
+    }
     fn active(&self) -> bool;
 }
 
@@ -155,6 +164,10 @@ pub trait AuthInvitation: Clone + Send + Sync + Serialize + std::fmt::Debug + 's
     /// Check if the invitation has expired.
     fn is_expired(&self) -> bool {
         self.expires_at() < Utc::now()
+    }
+    /// Comma-separated invited team identifiers.
+    fn team_id(&self) -> Option<&str> {
+        None
     }
 }
 

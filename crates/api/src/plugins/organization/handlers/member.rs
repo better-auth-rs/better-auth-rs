@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::OrganizationConfig;
-use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
+use crate::plugins::organization::rbac::check_permission;
 use crate::plugins::organization::types::{
     BasicMemberResponse, GetActiveMemberRoleQuery, GetActiveMemberRoleResponse, ListMembersQuery,
     ListMembersResponse, MemberResponse, RemoveMemberRequest, RemovedMemberResponse,
@@ -188,12 +188,15 @@ pub(crate) async fn remove_member_core(
     let is_self_removal = target_member.user_id() == user.id();
 
     if !is_self_removal
-        && !has_permission_any(
+        && !check_permission(
             requester_member.role(),
-            &Resource::Member,
-            &Action::Delete,
-            &config.roles,
+            &org_id,
+            "member",
+            &["delete"],
+            config,
+            ctx,
         )
+        .await?
     {
         return Err(AuthError::forbidden(
             "You don't have permission to remove members",
@@ -246,12 +249,17 @@ pub(crate) async fn update_member_role_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
-    if !has_permission_any(
-        requester_member.role(),
-        &Resource::Member,
-        &Action::Update,
-        &config.roles,
-    ) {
+    if !has_role(&requester_member, &config.creator_role)
+        && !check_permission(
+            requester_member.role(),
+            &org_id,
+            "member",
+            &["update"],
+            config,
+            ctx,
+        )
+        .await?
+    {
         return Err(AuthError::forbidden(
             "You are not allowed to update this member",
         ));
@@ -295,6 +303,28 @@ pub(crate) async fn update_member_role_core(
                 "You cannot leave the organization without an owner",
             ));
         }
+    }
+
+    let dynamic_roles = if config.dynamic_access_control {
+        ctx.database.list_organization_roles(&org_id).await?
+    } else {
+        Vec::new()
+    };
+    let unknown_roles = body
+        .role
+        .roles()
+        .into_iter()
+        .filter(|role| {
+            !["owner", "admin", "member"].contains(role)
+                && !config.roles.contains_key(*role)
+                && !dynamic_roles.iter().any(|stored| stored.role == *role)
+        })
+        .collect::<Vec<_>>();
+    if !unknown_roles.is_empty() {
+        return Err(AuthError::bad_request(format!(
+            "ROLE_NOT_FOUND: {}",
+            unknown_roles.join(", ")
+        )));
     }
 
     let updated = ctx
@@ -367,7 +397,15 @@ pub async fn handle_update_member_role(
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-    let response = update_member_role_core(&body, &user, &session, config, ctx).await?;
+    let response = match update_member_role_core(&body, &user, &session, config, ctx).await {
+        Err(AuthError::BadRequest(message)) if message.starts_with("ROLE_NOT_FOUND: ") => {
+            return Ok(AuthResponse::json(
+                400,
+                &serde_json::json!({ "code": "ROLE_NOT_FOUND", "message": message }),
+            )?);
+        }
+        result => result?,
+    };
     Ok(AuthResponse::json(200, &response)?)
 }
 

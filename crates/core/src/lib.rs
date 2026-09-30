@@ -33,8 +33,13 @@ pub mod types;
 mod types_jwt;
 pub use runtime_extensions::RuntimeExtensions;
 mod types_org;
+mod types_team;
+pub use types_team::{
+    CreateOrganizationRole, CreateTeam, OrganizationRole, Team, TeamMember, UpdateOrganizationRole,
+};
 mod types_plugin;
 pub use types_jwt::{CreateJwk, Jwk};
+pub mod user_fields;
 #[doc(hidden)]
 pub mod user_query;
 pub mod utils;

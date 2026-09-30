@@ -10,7 +10,7 @@ use better_auth_core::wire::InvitationView;
 use std::collections::HashMap;
 
 use super::{require_session, resolve_organization_id};
-use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
+use crate::plugins::organization::rbac::check_permission;
 use crate::plugins::organization::types::{
     AcceptInvitationRequest, AcceptInvitationResponse, BasicMemberResponse,
     CancelInvitationRequest, GetInvitationQuery, GetInvitationResponse, InviteMemberRequest,
@@ -46,12 +46,16 @@ pub(crate) async fn invite_member_core(
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
-    if !has_permission_any(
+    if !check_permission(
         member.role(),
-        &Resource::Invitation,
-        &Action::Create,
-        &config.roles,
-    ) {
+        &org_id,
+        "invitation",
+        &["create"],
+        config,
+        ctx,
+    )
+    .await?
+    {
         return Err(AuthError::forbidden(
             "You don't have permission to invite members",
         ));
@@ -62,8 +66,14 @@ pub(crate) async fn invite_member_core(
         return Err(AuthError::bad_request("Role is required"));
     }
 
-    let mut valid_roles = vec![config.creator_role.as_str(), "admin", "member"];
+    let dynamic_roles = if config.dynamic_access_control {
+        ctx.database.list_organization_roles(&org_id).await?
+    } else {
+        Vec::new()
+    };
+    let mut valid_roles: Vec<&str> = vec!["owner", "admin", "member"];
     valid_roles.extend(config.roles.keys().map(String::as_str));
+    valid_roles.extend(dynamic_roles.iter().map(|role| role.role.as_str()));
 
     let unknown_roles: Vec<_> = roles
         .iter()
@@ -136,8 +146,35 @@ pub(crate) async fn invite_member_core(
                 return Err(AuthError::forbidden("Invitation limit reached"));
             }
         }
+        let team_ids: Vec<&str> = match &body.team_id {
+            Some(crate::plugins::organization::types::RoleInput::One(id)) => vec![id],
+            Some(crate::plugins::organization::types::RoleInput::Many(ids)) => {
+                ids.iter().map(String::as_str).collect()
+            }
+            None => Vec::new(),
+        };
+        if config.teams.enabled {
+            for team_id in &team_ids {
+                if team_id.contains(',') {
+                    return Err(AuthError::bad_request(
+                        "Team id contains a reserved character",
+                    ));
+                }
+                let _ = super::team::find_team(team_id, &org_id, ctx).await?;
+                if let Some(limit) = config.teams.maximum_members_per_team
+                    && ctx.database.list_team_members(team_id).await?.len() >= limit
+                {
+                    return Err(AuthError::forbidden("Team member limit reached"));
+                }
+            }
+        }
         ctx.database
             .create_invitation(CreateInvitation {
+                team_id: if team_ids.is_empty() {
+                    None
+                } else {
+                    Some(team_ids.join(","))
+                },
                 organization_id: org_id,
                 email: body.email.to_lowercase(),
                 role: normalized_roles(&body.role),
@@ -153,7 +190,7 @@ pub(crate) async fn invite_member_core(
                 invitation: invitation.clone(),
                 organization: better_auth_core::wire::OrganizationView::from(&organization),
                 member,
-                inviter: better_auth_core::wire::UserView::from(user),
+                inviter: ctx.user_view(user)?,
             })
             .await
     {
@@ -273,7 +310,10 @@ pub(crate) async fn accept_invitation_core(
     session: &impl AuthSession,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<AcceptInvitationResponse<InvitationView, BasicMemberResponse>> {
+) -> AuthResult<(
+    AcceptInvitationResponse<InvitationView, BasicMemberResponse>,
+    Option<better_auth_core::wire::SessionView>,
+)> {
     let invitation = ctx
         .database
         .get_invitation_by_id(&body.invitation_id)
@@ -319,6 +359,33 @@ pub(crate) async fn accept_invitation_core(
         ));
     }
 
+    if config.teams.enabled {
+        let (member, snapshot) = ctx
+            .database
+            .accept_invitation_with_teams(
+                &invitation.id(),
+                &user.id(),
+                session.token(),
+                config.teams.maximum_members_per_team,
+            )
+            .await?;
+        let mut accepted = InvitationView::from(&invitation);
+        accepted.status = InvitationStatus::Accepted;
+        let snapshot = snapshot
+            .as_ref()
+            .map(|session| {
+                better_auth_core::wire::SessionView::with_fields(session, &ctx.config.session)
+            })
+            .transpose()?;
+        return Ok((
+            AcceptInvitationResponse {
+                invitation: accepted,
+                member: BasicMemberResponse::from_member(&member),
+            },
+            snapshot,
+        ));
+    }
+
     let member_data = CreateMember {
         organization_id: invitation.organization_id().to_string(),
         user_id: user.id().to_string(),
@@ -339,10 +406,13 @@ pub(crate) async fn accept_invitation_core(
         )
         .await?;
 
-    Ok(AcceptInvitationResponse {
-        invitation: InvitationView::from(&updated_invitation),
-        member: BasicMemberResponse::from_member(&member),
-    })
+    Ok((
+        AcceptInvitationResponse {
+            invitation: InvitationView::from(&updated_invitation),
+            member: BasicMemberResponse::from_member(&member),
+        },
+        None,
+    ))
 }
 
 pub(crate) async fn reject_invitation_core(
@@ -397,12 +467,16 @@ pub(crate) async fn cancel_invitation_core(
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
-    if !has_permission_any(
+    if !check_permission(
         member.role(),
-        &Resource::Invitation,
-        &Action::Cancel,
-        &config.roles,
-    ) {
+        invitation.organization_id().as_ref(),
+        "invitation",
+        &["cancel"],
+        config,
+        ctx,
+    )
+    .await?
+    {
         return Err(AuthError::forbidden(
             "You don't have permission to cancel invitations",
         ));
@@ -476,8 +550,28 @@ pub async fn handle_accept_invitation(
         Ok(value) => value,
         Err(response) => return Ok(response),
     };
-    let response = accept_invitation_core(&body, &user, &session, config, ctx).await?;
-    Ok(AuthResponse::json(200, &response)?)
+    let (response, snapshot) = accept_invitation_core(&body, &user, &session, config, ctx).await?;
+    let mut response = AuthResponse::json(200, &response)?;
+    if let Some(snapshot) = snapshot {
+        response = super::team::with_session_cookie(response, req, session.token(), ctx);
+        let manager = ctx.session_manager();
+        // Upstream writes the team cookie before updating the active organization in the transaction.
+        manager
+            .write_cache(
+                req,
+                &better_auth_core::session::SessionData {
+                    session: snapshot,
+                    user,
+                },
+                manager.dont_remember(req),
+            )
+            .await?;
+        // Preserve the explicit snapshot when response finalization processes the credential cookie.
+        for (name, value) in req.take_response_headers()? {
+            response.headers.append(name, value);
+        }
+    }
+    Ok(response)
 }
 
 pub async fn handle_reject_invitation(

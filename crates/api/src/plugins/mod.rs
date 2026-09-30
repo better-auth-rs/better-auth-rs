@@ -193,7 +193,10 @@ pub use email_password::{EmailPasswordConfig, EmailPasswordPlugin};
 pub use email_verification::{
     EmailVerificationConfig, EmailVerificationHook, EmailVerificationPlugin, SendVerificationEmail,
 };
-pub use jwt::{JwtAlgorithm, JwtPlugin, JwtPluginConfig};
+pub use jwt::{
+    JwtAlgorithm, JwtCallbackFuture, JwtCustomSign, JwtDefinePayload, JwtGetSubject,
+    JwtKeyPairConfig, JwtPlugin, JwtPluginConfig, JwtSigningOptions,
+};
 pub use magic_link::{MagicLinkConfig, MagicLinkMessage, MagicLinkPlugin, SendMagicLink};
 pub use multi_session::{MultiSessionConfig, MultiSessionPlugin};
 pub use oauth::{OAuthProxyConfig, OAuthProxyPlugin};

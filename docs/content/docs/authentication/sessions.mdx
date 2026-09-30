@@ -113,7 +113,7 @@ config.session.cookie_cache = Some(CookieCacheConfig {
 });
 ```
 
-`Compact` uses HMAC-SHA256, `Jwt` uses HS256, and `Jwe` uses A256CBC-HS512 encryption. Each cache is bound to its signed session token and configuration version. Large values use numbered cookie chunks. Authentication writes the cache, and sign-out clears its chunks.
+`Compact` uses HMAC-SHA256, `Jwt` uses HS256, and `Jwe` uses A256CBC-HS512 encryption. Register `JwtPlugin::new().session_cookie_cache(true)` with the `Jwt` strategy to use the plugin's asymmetric signing keys instead of HS256. See [JWT](../plugins/jwt) for the cache token's issuer, audience, and purpose checks. Each cache is bound to its signed session token and configuration version. Large values use numbered cookie chunks. Authentication writes the cache, and sign-out clears its chunks.
 
 Use `disableCookieCache=true` to read the database immediately. Session listing and revocation also require a database read. Changing `version` invalidates previously issued caches. This configuration uses a persistent session store; stateless cache refresh is not exposed.
 

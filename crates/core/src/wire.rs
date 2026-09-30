@@ -16,7 +16,17 @@ use crate::types::InvitationStatus;
 
 /// Public user response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(
+    into = "serde_json::Map<String, serde_json::Value>",
+    try_from = "serde_json::Map<String, serde_json::Value>"
+)]
 pub struct UserView {
+    /// Configured application fields after output transforms.
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    /// Enabled public plugin fields. `None` preserves an unconfigured internal view.
+    #[serde(skip)]
+    pub visible_fields: Option<std::collections::BTreeSet<String>>,
     pub id: String,
     pub name: Option<String>,
     pub email: Option<String>,
@@ -66,7 +76,14 @@ pub struct UserView {
 
 /// Public session response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(
+    into = "serde_json::Map<String, serde_json::Value>",
+    try_from = "serde_json::Map<String, serde_json::Value>"
+)]
 pub struct SessionView {
+    /// Plugin field presence in the database projection or signed cache.
+    #[serde(skip)]
+    pub visible_fields: Option<std::collections::BTreeSet<String>>,
     pub id: String,
     #[serde(rename = "expiresAt")]
     #[serde(serialize_with = "crate::utils::date::serialize")]
@@ -88,6 +105,12 @@ pub struct SessionView {
     pub impersonated_by: Option<String>,
     #[serde(rename = "activeOrganizationId")]
     pub active_organization_id: Option<String>,
+    #[serde(
+        rename = "activeTeamId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub active_team_id: Option<String>,
     #[serde(skip)]
     pub active: bool,
     #[serde(flatten)]
@@ -147,6 +170,8 @@ pub struct VerificationView {
 impl<T: AuthUser> From<&T> for UserView {
     fn from(user: &T) -> Self {
         Self {
+            additional_fields: user.projected_fields().cloned().unwrap_or_default(),
+            visible_fields: None,
             id: user.id().into_owned(),
             name: user.name().map(str::to_owned),
             email: user.email().map(str::to_owned),
@@ -172,6 +197,7 @@ impl<T: AuthUser> From<&T> for UserView {
 impl<T: AuthSession> From<&T> for SessionView {
     fn from(session: &T) -> Self {
         Self {
+            visible_fields: None,
             id: session.id().into_owned(),
             expires_at: session.expires_at(),
             token: session.token().to_owned(),
@@ -182,6 +208,7 @@ impl<T: AuthSession> From<&T> for SessionView {
             user_id: session.user_id().into_owned(),
             impersonated_by: session.impersonated_by().map(str::to_owned),
             active_organization_id: session.active_organization_id().map(str::to_owned),
+            active_team_id: session.active_team_id().map(str::to_owned),
             active: session.active(),
             additional_fields: Default::default(),
         }
@@ -246,6 +273,9 @@ impl<T: AuthVerification> From<&T> for VerificationView {
 }
 
 impl AuthUser for UserView {
+    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        Some(&self.additional_fields)
+    }
     const PLUGIN_FIELDS: &'static [&'static str] = &[
         "is_anonymous",
         "phone_number",
@@ -316,7 +346,11 @@ impl AuthUser for UserView {
 }
 
 impl AuthSession for SessionView {
-    const PLUGIN_FIELDS: &'static [&'static str] = &["impersonated_by", "active_organization_id"];
+    const PLUGIN_FIELDS: &'static [&'static str] = &[
+        "impersonated_by",
+        "active_organization_id",
+        "active_team_id",
+    ];
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
     }
@@ -343,6 +377,9 @@ impl AuthSession for SessionView {
     }
     fn impersonated_by(&self) -> Option<&str> {
         self.impersonated_by.as_deref()
+    }
+    fn active_team_id(&self) -> Option<&str> {
+        self.active_team_id.as_deref()
     }
     fn active_organization_id(&self) -> Option<&str> {
         self.active_organization_id.as_deref()
@@ -470,6 +507,8 @@ impl<T: AuthOrganization> From<&T> for OrganizationView {
 /// Public invitation response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct InvitationView {
+    #[serde(rename = "teamId", default, skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<String>,
     pub id: String,
     #[serde(rename = "organizationId")]
     pub organization_id: String,
@@ -495,6 +534,7 @@ impl<T: AuthInvitation> From<&T> for InvitationView {
             role: inv.role().to_owned(),
             status: inv.status().clone(),
             inviter_id: inv.inviter_id().into_owned(),
+            team_id: inv.team_id().map(str::to_owned),
             expires_at: inv.expires_at(),
             created_at: inv.created_at(),
         }
@@ -642,6 +682,8 @@ mod tests {
     #[test]
     fn user_view_serializes_camel_case() {
         let user = UserView {
+            additional_fields: Default::default(),
+            visible_fields: None,
             id: "user-1".to_string(),
             name: Some("Ada".to_string()),
             email: Some("ada@example.com".to_string()),
@@ -671,6 +713,7 @@ mod tests {
     #[test]
     fn session_view_serializes_camel_case() {
         let session = SessionView {
+            visible_fields: None,
             id: "session-1".to_string(),
             expires_at: Utc::now(),
             token: "token".to_string(),
@@ -681,6 +724,7 @@ mod tests {
             user_id: "user-1".to_string(),
             impersonated_by: Some("admin-1".to_string()),
             active_organization_id: Some("org-1".to_string()),
+            active_team_id: None,
             active: true,
             additional_fields: Default::default(),
         };

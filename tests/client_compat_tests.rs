@@ -1,6 +1,8 @@
 #![expect(
     clippy::panic,
-    reason = "test harness code should panic on orchestration failures"
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    reason = "test harness code must fail on orchestration errors or invalid checked-in fixture fields"
 )]
 
 use std::net::TcpListener;
@@ -91,7 +93,7 @@ fn start_oidc_server(port: u16) -> ManagedChild {
 }
 
 fn start_reference_server(port: u16, profile: &str, oidc_url: &str) -> ManagedChild {
-    let child = Command::new("bun")
+    let child = proxy_environment(&mut Command::new("bun"), profile, port)
         .args(["run", "server.ts"])
         .current_dir(project_root().join("compat-tests/reference-server"))
         .env("PORT", port.to_string())
@@ -159,7 +161,7 @@ fn start_rust_compat_server(
     profile: &str,
     oidc_url: &str,
 ) -> ManagedChild {
-    let child = Command::new(binary)
+    let child = proxy_environment(&mut Command::new(binary), profile, port)
         .current_dir(project_root())
         .env("PORT", port.to_string())
         .env("COMPAT_PROFILE", profile)
@@ -174,7 +176,61 @@ fn start_rust_compat_server(
     ManagedChild::new("rust-compat", child)
 }
 
-fn run_bun_phase_suite(paths: &[&str], ts_port: u16, rust_port: u16, oidc_url: &str) {
+fn proxy_case(profile: &str) -> Option<serde_json::Value> {
+    let index = profile.strip_prefix("oauth-proxy-env:")?;
+    let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+        "../compat-tests/client-tests/tests/config/oauth-proxy-env/cases.json"
+    ))
+    .expect("proxy environment cases");
+    Some(
+        cases
+            .get(index.parse::<usize>().expect("case index"))
+            .expect("environment case")
+            .clone(),
+    )
+}
+
+fn proxy_environment<'a>(command: &'a mut Command, profile: &str, port: u16) -> &'a mut Command {
+    for key in [
+        "VERCEL_URL",
+        "NETLIFY_URL",
+        "RENDER_URL",
+        "AWS_LAMBDA_FUNCTION_NAME",
+        "GOOGLE_CLOUD_FUNCTION_NAME",
+        "AZURE_FUNCTION_NAME",
+        "BETTER_AUTH_URL",
+        "COMPAT_PROXY_OPTIONS",
+    ] {
+        let _ = command.env_remove(key);
+    }
+    if let Some(case) = proxy_case(profile) {
+        let _ = command.env("COMPAT_PROXY_CASE", case.to_string());
+        for (key, value) in case["env"].as_object().expect("case environment") {
+            let _ = command.env(
+                key,
+                value
+                    .as_str()
+                    .expect("environment string")
+                    .replace("{base}", &format!("http://localhost:{port}")),
+            );
+        }
+        let _ = command.env(
+            "COMPAT_PROXY_OPTIONS",
+            case["options"]
+                .to_string()
+                .replace("{base}", &format!("http://localhost:{port}")),
+        );
+    }
+    command
+}
+
+fn run_bun_phase_suite(
+    paths: &[&str],
+    ts_port: u16,
+    rust_port: u16,
+    profile: &str,
+    oidc_url: &str,
+) {
     let output = Command::new("bun")
         .arg("test")
         .args(paths)
@@ -187,6 +243,12 @@ fn run_bun_phase_suite(paths: &[&str], ts_port: u16, rust_port: u16, oidc_url: &
         )
         .env("NO_PROXY", "localhost,127.0.0.1")
         .env("no_proxy", "localhost,127.0.0.1")
+        .env(
+            "COMPAT_PROXY_CASE",
+            proxy_case(profile)
+                .map(|case| case.to_string())
+                .unwrap_or_default(),
+        )
         .output()
         .unwrap_or_else(|error| panic!("failed to run Bun phase suite: {error}"));
 
@@ -215,7 +277,7 @@ async fn run_client_compat_profile(paths: &[&str], profile: &str) {
     let mut rust_server = start_rust_compat_server(binary, rust_port, profile, &oidc_url);
     wait_for_health(rust_port, &mut rust_server, Duration::from_secs(90)).await;
 
-    run_bun_phase_suite(paths, ts_port, rust_port, &oidc_url);
+    run_bun_phase_suite(paths, ts_port, rust_port, profile, &oidc_url);
 }
 
 #[tokio::test]
@@ -331,6 +393,11 @@ async fn full_client_compat() {
 #[ignore = "starts external TS and Rust servers for each configuration"]
 async fn configuration_client_compat() {
     for profile in [
+        "organization-extended",
+        "organization-cache",
+        "organization-jwt",
+        "organization-limits",
+        "organization-no-ac",
         "api-key-zero",
         "device-custom",
         "device-collision",
@@ -357,14 +424,36 @@ async fn configuration_client_compat() {
         "oauth-proxy",
         "oauth-proxy-cookie",
         "oauth-proxy-anonymous",
+        "oauth-proxy-env",
         "jwt",
         "jwt-rs256",
         "jwt-es256",
         "jwt-identity",
+        "user-fields",
+        "jwt-ps256",
+        "jwt-es512",
+        "jwt-advanced",
+        "jwt-remote",
+        "jwt-cache",
     ] {
         if std::env::var("COMPAT_TEST_PROFILE").is_ok_and(|selected| selected != profile) {
             continue;
         }
-        run_client_compat_profile(&[&format!("./tests/config/{profile}/")], profile).await;
+        if profile == "oauth-proxy-env" {
+            let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+                "../compat-tests/client-tests/tests/config/oauth-proxy-env/cases.json"
+            ))
+            .expect("proxy environment cases");
+            for (index, case) in cases.iter().enumerate() {
+                println!("OAuth proxy environment: {}", case["name"]);
+                run_client_compat_profile(
+                    &["./tests/config/oauth-proxy-env/"],
+                    &format!("{profile}:{index}"),
+                )
+                .await;
+            }
+        } else {
+            run_client_compat_profile(&[&format!("./tests/config/{profile}/")], profile).await;
+        }
     }
 }

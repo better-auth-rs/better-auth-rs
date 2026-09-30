@@ -133,6 +133,8 @@ fn test_builder_after_email_verification_hook() {
 /// Helper to create a minimal wire user view for unit tests.
 fn make_test_user(email: &str, verified: bool) -> UserView {
     UserView {
+        additional_fields: Default::default(),
+        visible_fields: None,
         id: "test-id".into(),
         name: Some("Test".into()),
         email: Some(email.into()),
@@ -218,6 +220,8 @@ async fn test_is_user_verified_or_not_required() {
 #[test]
 fn test_to_user_preserves_fields() {
     let user = UserView {
+        additional_fields: Default::default(),
+        visible_fields: None,
         id: "test-id".into(),
         name: Some("Test User".into()),
         email: Some("test@example.com".into()),

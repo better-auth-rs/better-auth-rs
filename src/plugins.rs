@@ -21,7 +21,10 @@ pub use better_auth_api::plugins::{
     MultiSessionConfig, MultiSessionPlugin, OneTimeTokenConfig, OneTimeTokenPlugin, SendEmailOtp,
     SendMagicLink, TokenStorage, email_otp, magic_link, multi_session, one_time_token,
 };
-pub use better_auth_api::plugins::{JwtAlgorithm, JwtPlugin, JwtPluginConfig, jwt};
+pub use better_auth_api::plugins::{
+    JwtAlgorithm, JwtCallbackFuture, JwtCustomSign, JwtDefinePayload, JwtGetSubject,
+    JwtKeyPairConfig, JwtPlugin, JwtPluginConfig, JwtSigningOptions, jwt,
+};
 pub use better_auth_api::plugins::{OAuthProxyConfig, OAuthProxyPlugin};
 pub use better_auth_api::plugins::{OneTapConfig, OneTapPlugin, one_tap};
 

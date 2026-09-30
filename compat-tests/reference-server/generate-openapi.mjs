@@ -66,6 +66,9 @@ const pushIf = (target, plugin) => {
 };
 
 const noopAsync = async () => {};
+const { createAccessControl } = await import("better-auth/plugins/access");
+const { defaultStatements } = await import("better-auth/plugins/organization/access");
+const organizationOptions = { teams: { enabled: true }, dynamicAccessControl: { enabled: true }, ac: createAccessControl(defaultStatements) };
 
 const profiles = {
   core: () => [requiredPlugin("openAPI")],
@@ -75,7 +78,7 @@ const profiles = {
     requiredPlugin("apiKey"),
     requiredPlugin("deviceAuthorization"),
     requiredPlugin("twoFactor"),
-    requiredPlugin("organization"),
+    requiredPlugin("organization", organizationOptions),
     requiredPlugin("username"),
     requiredPlugin("anonymous"),
     requiredPlugin("emailOTP", { sendVerificationOTP: noopAsync }),
@@ -164,7 +167,7 @@ const profiles = {
       }),
     );
     pushIf(selected, optionalPlugin("oneTimeToken"));
-    pushIf(selected, optionalPlugin("organization"));
+    pushIf(selected, optionalPlugin("organization", organizationOptions));
     pushIf(selected, optionalPlugin("phoneNumber"));
     pushIf(
       selected,

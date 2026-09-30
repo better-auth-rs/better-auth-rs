@@ -1,6 +1,6 @@
 use better_auth_core::entity::AuthUser;
 use better_auth_core::store::ConsumeApiKeyResult;
-use better_auth_core::wire::{ApiKeyView, SessionView, UserView};
+use better_auth_core::wire::{ApiKeyView, SessionView};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, BeforeRequestAction,
 };
@@ -244,6 +244,7 @@ impl ApiKeyPlugin {
         };
         let meta = better_auth_core::RequestMeta::from_request(req);
         let session = SessionView {
+            visible_fields: None,
             id: view.id,
             token: key.to_owned(),
             user_id: user.id().into_owned(),
@@ -254,6 +255,7 @@ impl ApiKeyPlugin {
             user_agent: meta.user_agent,
             impersonated_by: None,
             active_organization_id: None,
+            active_team_id: None,
             active: true,
             additional_fields: Default::default(),
         };
@@ -262,7 +264,7 @@ impl ApiKeyPlugin {
             return Ok(Some(BeforeRequestAction::Respond(AuthResponse::json(
                 200,
                 &serde_json::json!({
-                    "user": UserView::from(&user),
+                    "user": ctx.user_view(&user)?,
                     "session": {
                         "id": session.id,
                         "token": session.token,

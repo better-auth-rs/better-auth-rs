@@ -15,14 +15,16 @@ use super::{
 };
 use crate::plugins::{json_body, symmetric};
 
+mod environment;
+
 /// Production-to-preview callback configuration.
 #[derive(Clone, better_auth_core::PluginConfig)]
 #[plugin(name = "OAuthProxyPlugin")]
 pub struct OAuthProxyConfig {
-    /// Production origin registered with the OAuth provider.
+    /// Production callback base URL; also overrides the environment for proxy skip checks.
     #[config(default = None)]
     pub production_url: Option<String>,
-    /// Explicit preview origin; otherwise use a trusted request host or the base URL.
+    /// Explicit preview URL; otherwise use a trusted request host, hosting environment, or base URL.
     #[config(default = None)]
     pub current_url: Option<String>,
     /// Shared encryption secret; defaults to the authentication secret.
@@ -39,6 +41,25 @@ pub struct OAuthProxyPlugin {
 }
 
 pub(super) const REDIRECT_BASE_CONTEXT: &str = "oauthProxyRedirectBase";
+const CALLBACK_CONTEXT: &str = "oauthProxyCallback";
+
+pub(super) fn validate_callback_url<S: AuthSchema>(
+    req: &AuthRequest,
+    callback: &str,
+    ctx: &AuthContext<S>,
+) -> AuthResult<()> {
+    // The proxy validates the original target before generating this configured receiver.
+    // Exact equality keeps later hooks from substituting an untrusted target.
+    if req
+        .server_context(CALLBACK_CONTEXT)?
+        .as_ref()
+        .and_then(Value::as_str)
+        == Some(callback)
+    {
+        return Ok(());
+    }
+    handlers::validate_redirect_target(callback, ctx, "Invalid callbackURL")
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,6 +72,8 @@ struct StatePackage {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ProfileUser {
+    #[serde(default, flatten)]
+    additional_fields: serde_json::Map<String, Value>,
     id: String,
     email: String,
     name: String,
@@ -185,6 +208,7 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthProxyPlugin {
             self.config
                 .production_url
                 .as_deref()
+                .filter(|url| !url.is_empty())
                 .unwrap_or(&ctx.config.base_url),
         )?;
         if location.origin() == production.origin()
@@ -201,57 +225,12 @@ impl OAuthProxyPlugin {
         self.config.secret.as_deref().unwrap_or(&ctx.config.secret)
     }
 
-    fn resolve_current_url<S: AuthSchema>(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<S>,
-    ) -> AuthResult<Url> {
-        if let Some(url) = &self.config.current_url {
-            return parse_url(url);
-        }
-        let base = parse_url(&ctx.config.base_url)?;
-        if let Some(host) = req.headers.get("host")
-            && let Ok(url) = Url::parse(&format!("{}://{host}", base.scheme()))
-            && ctx
-                .config
-                .is_redirect_target_trusted(&url.origin().ascii_serialization())
-        {
-            return Ok(url);
-        }
-        Ok(base)
-    }
-
     fn initiate<S: AuthSchema>(
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<S>,
     ) -> AuthResult<Option<BeforeRequestAction>> {
-        if req
-            .headers
-            .get("x-skip-oauth-proxy")
-            .is_some_and(|value| !value.is_empty())
-        {
-            return Ok(None);
-        }
-        let current = self.resolve_current_url(req, ctx)?;
-        let production = parse_url(
-            self.config
-                .production_url
-                .as_deref()
-                .unwrap_or(&ctx.config.base_url),
-        )?;
-        let request_origin = self
-            .config
-            .current_url
-            .as_deref()
-            .map(parse_url)
-            .transpose()?
-            .or_else(|| {
-                req.headers
-                    .get("host")
-                    .and_then(|host| Url::parse(&format!("{}://{host}", production.scheme())).ok())
-            });
-        if request_origin.is_some_and(|url| url.origin() == production.origin()) {
+        if self.config.skip_proxy(req, ctx) {
             return Ok(None);
         }
         let mut body = match json_body::parse(req) {
@@ -265,6 +244,7 @@ impl OAuthProxyPlugin {
         else {
             return Ok(None);
         };
+        let current = self.config.resolve_current_url(req, ctx)?;
         let original = body
             .get("callbackURL")
             .and_then(Value::as_str)
@@ -284,15 +264,15 @@ impl OAuthProxyPlugin {
             .query_pairs_mut()
             .append_pair("callbackURL", &original);
         let _ = body.insert("callbackURL".into(), callback.to_string().into());
-        req.set_server_context(
-            REDIRECT_BASE_CONTEXT,
-            format!(
-                "{}{}",
-                production.as_str().trim_end_matches('/'),
-                ctx.config.base_path
-            )
-            .into(),
-        )?;
+        req.set_server_context(CALLBACK_CONTEXT, callback.to_string().into())?;
+        let redirect_base = self
+            .config
+            .production_url
+            .as_deref()
+            .filter(|url| !url.is_empty())
+            .map(|url| format!("{}{}", url.trim_end_matches('/'), ctx.config.base_path))
+            .unwrap_or_else(|| handlers::auth_base_url(ctx));
+        req.set_server_context(REDIRECT_BASE_CONTEXT, redirect_base.into())?;
         Ok(Some(BeforeRequestAction::ReplaceBody(serde_json::to_vec(
             &body,
         )?)))
@@ -348,14 +328,21 @@ impl OAuthProxyPlugin {
             state_cookie: symmetric::encrypt(self.encryption_key(ctx), &payload)?,
             is_o_auth_proxy: true,
         };
-        let encrypted =
-            symmetric::encrypt(self.encryption_key(ctx), &serde_json::to_string(&package)?)?;
-        let mut pairs: Vec<_> = url
+        let mut encrypted = Some(symmetric::encrypt(
+            self.encryption_key(ctx),
+            &serde_json::to_string(&package)?,
+        )?);
+        let pairs: Vec<_> = url
             .query_pairs()
-            .filter(|(key, _)| key != "state")
-            .map(|(key, value)| (key.into_owned(), value.into_owned()))
+            .filter_map(|(key, value)| {
+                let value = if key == "state" {
+                    encrypted.take()?
+                } else {
+                    value.into_owned()
+                };
+                Some((key.into_owned(), value))
+            })
             .collect();
-        pairs.push(("state".into(), encrypted));
         let _ = url.query_pairs_mut().clear().extend_pairs(pairs);
         let _ = body.insert("url".into(), url.to_string().into());
         response.body = serde_json::to_vec(&body)?;
@@ -476,6 +463,7 @@ impl OAuthProxyPlugin {
             .unwrap_or_else(|| state.callback_url.clone());
         let payload = Profile {
             user_info: ProfileUser {
+                additional_fields: info.user.additional_fields,
                 id: info.user.id.clone(),
                 email: info.user.email,
                 name: info.user.name.unwrap_or_default(),
@@ -593,6 +581,7 @@ impl OAuthProxyPlugin {
             &ctx.config,
         );
         let user = OAuthUserInfo {
+            additional_fields: profile.user_info.additional_fields,
             id: profile.account.account_id,
             email: profile.user_info.email.to_lowercase(),
             name: Some(profile.user_info.name),

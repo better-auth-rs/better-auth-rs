@@ -593,6 +593,8 @@ pub(crate) async fn sign_up_core(
     let user_agent = meta.user_agent.clone();
     let database = ctx.database.clone();
     let transaction_database = database.clone();
+    let user_config = ctx.config.user.clone();
+    let user_metadata = ctx.metadata.clone();
 
     better_auth_core::store::transaction(database.as_ref(), move |tx| {
         let _database = transaction_database.clone();
@@ -638,7 +640,7 @@ pub(crate) async fn sign_up_core(
                 Ok((
                     SignUpResponse {
                         token: Some(token.clone()),
-                        user: UserView::from(&user),
+                        user: UserView::with_fields(&user, &user_config, &user_metadata)?,
                     },
                     Some(token),
                 ))
@@ -646,7 +648,7 @@ pub(crate) async fn sign_up_core(
                 Ok((
                     SignUpResponse {
                         token: None,
-                        user: UserView::from(&user),
+                        user: UserView::with_fields(&user, &user_config, &user_metadata)?,
                     },
                     None,
                 ))
@@ -746,7 +748,7 @@ async fn finalize_sign_in_with_user_core(
         redirect: false,
         token: token.clone(),
         url: None,
-        user: UserView::from(&issued.user),
+        user: ctx.user_view(&issued.user)?,
     };
     Ok(SignInCoreResult::Success {
         response,

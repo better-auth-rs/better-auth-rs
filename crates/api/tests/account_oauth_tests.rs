@@ -349,6 +349,7 @@ fn make_test_provider(mock_url: &str) -> OAuthProvider {
         authorization_params: Vec::new(),
         map_user_info: Some(|v| {
             Ok(OAuthUserInfo {
+                additional_fields: Default::default(),
                 id: v["sub"].as_str().unwrap_or("mock-user-id-123").to_string(),
                 email: v["email"]
                     .as_str()

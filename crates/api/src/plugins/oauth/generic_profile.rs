@@ -9,6 +9,7 @@ use super::types::AccountInfoUser;
 pub(super) struct ProfileResponse {
     pub user: AccountInfoUser,
     pub data: Value,
+    pub additional_fields: Map<String, Value>,
 }
 
 pub(super) async fn fetch_user_info(
@@ -32,6 +33,7 @@ pub(super) async fn fetch_user_info(
     }
     Ok(OAuthUserInfoResponse {
         user: OAuthUserInfo {
+            additional_fields: response.additional_fields,
             id: subject,
             email: response.user.email,
             name: response.user.name,
@@ -76,6 +78,7 @@ pub(super) async fn fetch_profile(
         None => Default::default(),
     };
     Ok(ProfileResponse {
+        additional_fields: mapped.additional_fields,
         user: AccountInfoUser {
             email: mapped
                 .email

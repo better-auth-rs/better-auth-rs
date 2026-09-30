@@ -1,6 +1,6 @@
 ---
 title: Organization
-description: Multi-tenancy with organizations, members, invitations, and RBAC.
+description: Organizations, teams, invitations, and tenant-scoped access control.
 ---
 
 The `OrganizationPlugin` provides multi-tenancy support with organizations, membership management, invitation workflows, and role-based access control (RBAC).
@@ -48,6 +48,10 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 | `invitation_expires_in` | `u64` | `172800` (48h) | Invitation expiration in seconds |
 | `invitation_limit` | `Option<usize>` | `Some(100)` | Max pending invitations per org |
 | `disable_organization_deletion` | `bool` | `false` | Prevent organization deletion |
+| `teams` | `OrganizationTeamsConfig` | Disabled | Team creation, membership, and limits |
+| `dynamic_access_control` | `bool` | `false` | Enable persisted organization roles |
+| `ac` | `Option<HashMap<String, Vec<String>>>` | `None` | Allowed resource statements for dynamic roles |
+| `maximum_roles_per_organization` | `Option<usize>` | `None` | Maximum persisted roles per organization |
 
 Configure invitation delivery with `OrganizationPlugin::custom_send_invitation_email(Arc<dyn SendInvitationEmail>)`. Implement `SendInvitationEmail::send` using the invitation, organization, member, and inviter in `InvitationEmail`. The plugin logs delivery failures and still returns the stored invitation, matching upstream behavior.
 
@@ -57,20 +61,20 @@ Inviting an email with a pending invitation returns `USER_IS_ALREADY_INVITED_TO_
 
 ### Default Roles
 
-| Role | Organization | Member | Invitation | API key |
-|------|-------------|--------|------------|---------|
-| **owner** | update, delete | create, update, delete | create, cancel | — |
-| **admin** | update | create, update, delete | create, cancel | — |
-| **member** | — | — | — | — |
+| Role | Organization | Member | Invitation | Team | Access control (`ac`) | API key |
+|------|-------------|--------|------------|------|-----------------------|---------|
+| **owner** | update, delete | create, update, delete | create, cancel | create, update, delete | create, read, update, delete | — |
+| **admin** | update | create, update, delete | create, cancel | create, update, delete | create, read, update, delete | — |
+| **member** | — | — | — | — | read | — |
 
-The `apikey` resource governs organization-owned keys from the [API Key plugin](/docs/plugins/api-key#named-configurations-and-organization-owned-keys). Matching upstream, no default role is granted any action on it; the creator role (`creator_role`, `"owner"` by default) is allowed everything implicitly, and other roles need an explicit grant through a custom role.
+The `apikey` resource governs organization-owned keys from the [API Key plugin](/docs/plugins/api-key#named-configurations-and-organization-owned-keys). No default role grants API key actions. The API Key plugin allows the creator role (`creator_role`, `"owner"` by default) implicitly; other roles need an explicit grant. Organization permission checks use the role's statements, including checks made by the creator.
 
 ### Custom Roles
 
-Extend the default roles with custom permissions:
+Configure static roles with custom permissions. A nonempty `roles` map replaces the default permission definitions:
 
 ```rust
-use better_auth::plugins::organization::config::{OrganizationConfig, RolePermissions};
+use better_auth::plugins::organization::{OrganizationConfig, RolePermissions};
 use std::collections::HashMap;
 
 let mut roles = HashMap::new();
@@ -79,6 +83,7 @@ roles.insert("editor".to_string(), RolePermissions {
     member: vec!["read".to_string()],
     invitation: vec![],
     api_key: vec!["read".to_string(), "create".to_string()],
+    ..Default::default()
 });
 
 let config = OrganizationConfig {
@@ -95,9 +100,50 @@ let auth = BetterAuth::<AppAuthSchema>::new(auth_config)
 
 ### Resources and Actions
 
-**Resources**: `organization`, `member`, `invitation`, `apikey`
+**Resources**: `organization`, `member`, `invitation`, `team`, `ac`, `apikey`, and application resource names configured through `RolePermissions.additional`.
 
 **Actions**: `create`, `read`, `update`, `delete`, `cancel`
+
+### Teams
+
+```rust
+use better_auth::plugins::organization::OrganizationTeamsConfig;
+
+let plugin = OrganizationPlugin::new().teams(OrganizationTeamsConfig {
+    enabled: true,
+    maximum_teams: Some(10),
+    maximum_members_per_team: Some(50),
+    ..Default::default()
+});
+```
+
+Teams are disabled by default. When enabled, organization creation creates a default team with the organization's name and adds the creator. Set `default_team: false` to disable that behavior. Set `allow_removing_all_teams: true` to allow deletion of the last team. Both numeric limits default to `None`.
+
+Team members must also belong to the organization. Adding an existing team member returns the existing membership, including when the team is full. The store reserves capacity atomically for concurrent additions. A session's `activeTeamId` identifies its selected team. Team selection checks organization membership and team membership; deleting the selected team is rejected until the caller clears or changes the selection.
+
+### Dynamic roles
+
+Enable persisted roles and provide access-control statements:
+
+```rust
+use std::collections::HashMap;
+
+let plugin = OrganizationPlugin::new()
+    .dynamic_access_control(true)
+    .access_control(HashMap::from([
+        ("organization".into(), vec!["update".into(), "delete".into()]),
+        ("member".into(), vec!["create".into(), "update".into(), "delete".into()]),
+        ("invitation".into(), vec!["create".into(), "cancel".into()]),
+        ("team".into(), vec!["create".into(), "update".into(), "delete".into()]),
+        ("ac".into(), vec!["create".into(), "read".into(), "update".into(), "delete".into()]),
+    ]));
+```
+
+Dynamic roles belong to one organization. Creating or updating permissions requires the corresponding `ac` action and every permission being granted. Resource names must exist in `ac`. Missing `ac` produces `MISSING_AC_INSTANCE` for create and update requests. The default `member` role can list and read roles, but cannot create, update, or delete them.
+
+Created and renamed role names are converted to lowercase. Role lookup uses the supplied name or ID. A role assigned to a member cannot be deleted. Renaming a role does not rewrite existing member role strings, matching upstream. For composite member roles, one assigned role must authorize the complete permission request.
+
+Generate the organization schema with `better-auth-rs generate --plugins organization`. The schema includes the team, team membership, and organization role tables, plus `active_team_id` on sessions and `team_id` on invitations. Apply application-owned migrations to existing databases before enabling these features.
 
 ## API Endpoints
 
@@ -144,6 +190,34 @@ For full request/response details, see the [OpenAPI Reference](/docs/reference/o
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/organization/has-permission` | POST | Check if user has specific permissions |
+
+### Teams and team membership
+
+These routes require `teams.enabled: true`.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/organization/create-team` | POST | Create a team |
+| `/organization/update-team` | POST | Update a team |
+| `/organization/remove-team` | POST | Delete a team and its memberships |
+| `/organization/list-teams` | GET | List organization teams |
+| `/organization/set-active-team` | POST | Select or clear the session's active team |
+| `/organization/list-user-teams` | GET | List the current user's teams |
+| `/organization/list-team-members` | GET | List team memberships |
+| `/organization/add-team-member` | POST | Add an organization member to a team |
+| `/organization/remove-team-member` | POST | Remove a team membership |
+
+### Dynamic access-control roles
+
+These routes require `dynamic_access_control: true`.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/organization/create-role` | POST | Create a tenant-scoped role |
+| `/organization/get-role` | GET | Read a role by name or ID |
+| `/organization/list-roles` | GET | List persisted organization roles |
+| `/organization/update-role` | POST | Update a role's name or permissions |
+| `/organization/delete-role` | POST | Delete an unassigned role |
 
 ## Errors
 

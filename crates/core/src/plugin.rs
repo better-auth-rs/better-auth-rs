@@ -11,7 +11,8 @@ use crate::session::SessionManager;
 use crate::store::AuthStore;
 use crate::types::{AuthRequest, AuthResponse, HttpMethod};
 
-type MetadataMap = HashMap<String, serde_json::Value>;
+/// Runtime metadata published by enabled plugins.
+pub type MetadataMap = HashMap<String, serde_json::Value>;
 
 pub struct AuthInitParts {
     pub extensions: crate::RuntimeExtensions,
@@ -297,6 +298,57 @@ impl<S: AuthSchema> AuthContext<S> {
     /// Create a `SessionManager` from this context's config and database.
     pub fn session_manager(&self) -> crate::session::SessionManager<S> {
         crate::session::SessionManager::new(self.config.clone(), self.database.clone())
+            .with_user_metadata(self.metadata.clone())
+            .with_cookie_signer(
+                self.extensions
+                    .get::<Arc<dyn crate::session::SessionCookieSigner>>()
+                    .cloned(),
+            )
+    }
+
+    /// Project a user through the active user schema before returning public data.
+    pub fn user_view(
+        &self,
+        user: &impl crate::entity::AuthUser,
+    ) -> AuthResult<crate::wire::UserView> {
+        crate::wire::UserView::with_fields(user, &self.config.user, &self.metadata)
+    }
+
+    /// Validate public user fields, including proof and privilege fields owned by active plugins.
+    pub fn parse_user_input(
+        &self,
+        input: &serde_json::Map<String, serde_json::Value>,
+        create: bool,
+    ) -> AuthResult<serde_json::Map<String, serde_json::Value>> {
+        for (plugin, fields, has_default) in [
+            (
+                "admin.enabled",
+                &["role", "banReason", "banExpires"][..],
+                false,
+            ),
+            ("admin.enabled", &["banned"][..], true),
+            ("phone-number.enabled", &["phoneNumberVerified"][..], false),
+            ("anonymous.enabled", &["isAnonymous"][..], true),
+            ("two_factor.enabled", &["twoFactorEnabled"][..], true),
+        ] {
+            if self
+                .get_metadata(plugin)
+                .and_then(serde_json::Value::as_bool)
+                != Some(true)
+                || (create && has_default)
+            {
+                continue;
+            }
+            for name in fields {
+                if input.get(*name).is_some_and(crate::user_fields::is_truthy) {
+                    return Err(AuthError::FieldInput {
+                        code: "FIELD_NOT_ALLOWED",
+                        message: format!("{name} is not allowed to be set"),
+                    });
+                }
+            }
+        }
+        self.config.user.parse_input(input, create)
     }
 
     /// Extract a session token from the request, validate the session, and

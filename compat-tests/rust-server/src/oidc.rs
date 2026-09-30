@@ -27,8 +27,9 @@ impl OAuthAccountSubject for MappedIdentity {
 
 #[async_trait::async_trait]
 impl OAuthProfileMapper for MappedIdentity {
-    async fn map_profile(&self, _profile: &Value) -> AuthResult<OAuthProfile> {
+    async fn map_profile(&self, profile: &Value) -> AuthResult<OAuthProfile> {
         Ok(OAuthProfile {
+            additional_fields: serde_json::from_value(serde_json::json!({"department": "identity", "alias": if profile.get("picture").is_some() { "picture" } else { "plain" }, "internalCode": "untrusted", "secretNote": "provider-private" }))?,
             name: Some(Some("Mapped OIDC User".to_owned())),
             image: Some(None),
             email_verified: Some(false),
@@ -87,6 +88,7 @@ pub fn configure(mut plugin: OAuthPlugin) -> OAuthPlugin {
                 config.account_subject = Some(Arc::new(MappedIdentity));
                 config.map_profile_to_user = Some(Arc::new(MappedIdentity));
                 config.require_email_verification = name == "oidc-email-required";
+                config.override_user_info = std::env::var("COMPAT_PROFILE").is_ok_and(|profile| profile == "organization-jwt");
             }
             "oidc-no-signup" => config.disable_sign_up = true,
             "oidc-parameters" => {

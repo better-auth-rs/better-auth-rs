@@ -34,17 +34,12 @@ async fn identity_defaults_preserve_metadata_that_resembles_a_user() {
         .await
         .unwrap();
     let actual: Value = serde_json::from_slice(&response.body).unwrap();
-    let mut projected_user = user.clone();
-    let fields = projected_user.as_object_mut().unwrap();
-    fields.insert("isAnonymous".into(), json!(false));
-    fields.insert("phoneNumber".into(), Value::Null);
-    fields.insert("phoneNumberVerified".into(), Value::Null);
     assert_eq!(
         actual,
         json!({
-            "user":projected_user,
-            "users":[projected_user],
-            "members":[{"user":projected_user,"metadata":metadata}],
+            "user":user,
+            "users":[user],
+            "members":[{"user":user,"metadata":metadata}],
             "metadata":metadata,
             "arbitrary":[user],
         })

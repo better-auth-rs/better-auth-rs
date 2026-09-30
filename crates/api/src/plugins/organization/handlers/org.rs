@@ -1,6 +1,6 @@
 use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::OrganizationConfig;
-use crate::plugins::organization::rbac::{Action, Resource, has_permission_any};
+use crate::plugins::organization::rbac::check_permission;
 use crate::plugins::organization::types::{
     BasicMemberResponse, CheckSlugRequest, CheckSlugResponse, CreateOrganizationRequest,
     CreateOrganizationResponse, CreatedOrganizationResponse, DeleteOrganizationRequest,
@@ -78,6 +78,20 @@ pub(crate) async fn create_organization_core(
 
     let member = ctx.database.create_member(member_data).await?;
     let member_response = BasicMemberResponse::from_member(&member);
+    if config.teams.enabled && config.teams.default_team {
+        let team = ctx
+            .database
+            .create_team(better_auth_core::types::CreateTeam {
+                name: organization.name().to_string(),
+                organization_id: organization.id().to_string(),
+                updated_at: None,
+            })
+            .await?;
+        let _ = ctx
+            .database
+            .add_team_member(&team.id, &user.id(), None)
+            .await?;
+    }
 
     Ok(CreateOrganizationResponse {
         organization: CreatedOrganizationResponse::from_organization(&organization),
@@ -101,12 +115,16 @@ pub(crate) async fn update_organization_core(
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
-    if !has_permission_any(
+    if !check_permission(
         member.role(),
-        &Resource::Organization,
-        &Action::Update,
-        &config.roles,
-    ) {
+        &org_id,
+        "organization",
+        &["update"],
+        config,
+        ctx,
+    )
+    .await?
+    {
         return Err(AuthError::forbidden(
             "You don't have permission to update this organization",
         ));
@@ -150,12 +168,16 @@ pub(crate) async fn delete_organization_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("User is not a member of the organization"))?;
 
-    if !has_permission_any(
+    if !check_permission(
         member.role(),
-        &Resource::Organization,
-        &Action::Delete,
-        &config.roles,
-    ) {
+        &body.organization_id,
+        "organization",
+        &["delete"],
+        config,
+        ctx,
+    )
+    .await?
+    {
         return Err(AuthError::forbidden(
             "You don't have permission to delete this organization",
         ));
@@ -250,10 +272,24 @@ pub(crate) async fn get_full_organization_core(
 
     let invitations = ctx.database.list_organization_invitations(&org_id).await?;
 
+    let teams = if config.teams.enabled {
+        let mut teams = Vec::new();
+        for team in ctx.database.list_organization_teams(&org_id).await? {
+            let member_count = ctx.database.list_team_members(&team.id).await?.len();
+            teams.push(crate::plugins::organization::types::FullOrganizationTeam {
+                team,
+                member_count,
+            });
+        }
+        Some(teams)
+    } else {
+        None
+    };
     Ok(Some(FullOrganizationResponse {
         organization: OrganizationResponse::from_organization(&organization),
         members,
         invitations: invitations.iter().map(InvitationView::from).collect(),
+        teams,
     }))
 }
 
@@ -392,6 +428,20 @@ pub async fn handle_create_organization(
                 session.token(),
                 Some(response.organization.id.as_str()),
             )
+            .await?;
+    }
+    if config.teams.enabled
+        && config.teams.default_team
+        && !body.keep_current_active_organization.unwrap_or(false)
+        && let Some(team) = ctx
+            .database
+            .list_organization_teams(&response.organization.id)
+            .await?
+            .first()
+    {
+        let _ = ctx
+            .database
+            .update_session_active_team(session.token(), Some(&team.id))
             .await?;
     }
     Ok(AuthResponse::json(200, &response)?)
@@ -574,6 +624,7 @@ mod tests {
             disable_organization_deletion: false,
             roles: HashMap::new(),
             send_invitation_email: None,
+            ..Default::default()
         }
     }
 

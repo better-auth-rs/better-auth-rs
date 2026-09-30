@@ -20,6 +20,12 @@ use crate::types::{
     UpdateOrganization, UpdatePasskeyAuthentication, UpdateUser,
 };
 use crate::wire::{AccountView, SessionView, UserView, VerificationView};
+#[path = "test_store_organization.rs"]
+mod organization;
+#[path = "test_store_sessions.rs"]
+mod sessions;
+#[path = "test_store_teams.rs"]
+mod teams;
 
 pub(crate) struct BundledSchema;
 
@@ -32,6 +38,12 @@ impl AuthSchema for BundledSchema {
 
 #[derive(Default)]
 struct State {
+    organizations: HashMap<String, Organization>,
+    members: HashMap<String, Member>,
+    invitations: HashMap<String, Invitation>,
+    teams: HashMap<String, crate::Team>,
+    team_members: Vec<crate::TeamMember>,
+    organization_roles: HashMap<String, crate::OrganizationRole>,
     jwks: Vec<crate::Jwk>,
     users: HashMap<String, UserView>,
     wallets: Vec<crate::types::WalletAddress>,
@@ -128,6 +140,8 @@ impl UserStore<BundledSchema> for MemoryStore {
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let username = create_user.username.map(|username| username.to_lowercase());
         let user = UserView {
+            additional_fields: Default::default(),
+            visible_fields: None,
             id: id.clone(),
             name: create_user.name,
             email: create_user.email.map(|email| email.to_lowercase()),
@@ -260,109 +274,6 @@ impl UserStore<BundledSchema> for MemoryStore {
     async fn list_users(&self, _params: ListUsersParams) -> AuthResult<(Vec<UserView>, usize)> {
         let users: Vec<_> = self.lock().users.values().cloned().collect();
         Ok(crate::user_query::apply_list_users(users, &_params))
-    }
-}
-
-#[async_trait]
-impl SessionStore<BundledSchema> for MemoryStore {
-    async fn create_session(&self, create_session: CreateSession) -> AuthResult<SessionView> {
-        let now = Utc::now();
-        let token = format!("session_{}", uuid::Uuid::new_v4());
-        let session = SessionView {
-            id: uuid::Uuid::new_v4().to_string(),
-            expires_at: create_session.expires_at,
-            token: token.clone(),
-            created_at: now,
-            updated_at: now,
-            ip_address: create_session.ip_address.or_else(|| Some(String::new())),
-            user_agent: create_session.user_agent.or_else(|| Some(String::new())),
-            user_id: create_session.user_id,
-            impersonated_by: create_session.impersonated_by,
-            active_organization_id: create_session.active_organization_id,
-            active: true,
-            additional_fields: Default::default(),
-        };
-        self.lock().sessions.insert(token, session.clone());
-        Ok(session)
-    }
-
-    async fn get_session(&self, token: &str) -> AuthResult<Option<SessionView>> {
-        Ok(self.lock().sessions.get(token).cloned())
-    }
-
-    async fn update_session_fields(
-        &self,
-        token: &str,
-        fields: serde_json::Map<String, serde_json::Value>,
-    ) -> AuthResult<Option<SessionView>> {
-        let mut data = self.lock();
-        let Some(session) = data.sessions.get_mut(token) else {
-            return Ok(None);
-        };
-        session.additional_fields.extend(fields);
-        session.updated_at = Utc::now();
-        Ok(Some(session.clone()))
-    }
-
-    async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<SessionView>> {
-        Ok(self
-            .lock()
-            .sessions
-            .values()
-            .filter(|session| session.user_id == user_id)
-            .cloned()
-            .collect())
-    }
-
-    async fn update_session_expiry(
-        &self,
-        token: &str,
-        expires_at: DateTime<Utc>,
-    ) -> AuthResult<()> {
-        if let Some(session) = self.lock().sessions.get_mut(token) {
-            session.expires_at = expires_at;
-            session.updated_at = Utc::now();
-            Ok(())
-        } else {
-            Err(AuthError::SessionNotFound)
-        }
-    }
-
-    async fn delete_session(&self, token: &str) -> AuthResult<()> {
-        self.lock().sessions.remove(token);
-        Ok(())
-    }
-
-    async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
-        self.lock()
-            .sessions
-            .retain(|_, session| session.user_id != user_id);
-        Ok(())
-    }
-
-    async fn delete_expired_sessions(&self) -> AuthResult<usize> {
-        let now = Utc::now();
-        let mut state = self.lock();
-        let before = state.sessions.len();
-        state
-            .sessions
-            .retain(|_, session| session.expires_at > now && session.active);
-        Ok(before - state.sessions.len())
-    }
-
-    async fn update_session_active_organization(
-        &self,
-        token: &str,
-        organization_id: Option<&str>,
-    ) -> AuthResult<SessionView> {
-        let mut state = self.lock();
-        let session = state
-            .sessions
-            .get_mut(token)
-            .ok_or(AuthError::SessionNotFound)?;
-        session.active_organization_id = organization_id.map(str::to_owned);
-        session.updated_at = Utc::now();
-        Ok(session.clone())
     }
 }
 
@@ -625,113 +536,6 @@ impl VerificationStore<BundledSchema> for MemoryStore {
             .verifications
             .retain(|_, verification| verification.expires_at > now);
         Ok(before - state.verifications.len())
-    }
-}
-
-#[async_trait]
-impl OrganizationStore for MemoryStore {
-    async fn create_organization(&self, _org: CreateOrganization) -> AuthResult<Organization> {
-        Err(AuthError::internal("unsupported test-store operation"))
-    }
-    async fn get_organization_by_id(&self, _id: &str) -> AuthResult<Option<Organization>> {
-        Ok(None)
-    }
-    async fn get_organization_by_slug(&self, _slug: &str) -> AuthResult<Option<Organization>> {
-        Ok(None)
-    }
-    async fn list_organizations_by_ids(&self, _ids: &[String]) -> AuthResult<Vec<Organization>> {
-        Ok(Vec::new())
-    }
-    async fn update_organization(
-        &self,
-        _id: &str,
-        _update: UpdateOrganization,
-    ) -> AuthResult<Organization> {
-        Err(AuthError::internal("unsupported test-store operation"))
-    }
-    async fn delete_organization(&self, _id: &str) -> AuthResult<()> {
-        Ok(())
-    }
-    async fn list_user_organizations(&self, _user_id: &str) -> AuthResult<Vec<Organization>> {
-        Ok(Vec::new())
-    }
-}
-
-#[async_trait]
-impl MemberStore for MemoryStore {
-    async fn create_member(&self, _member: CreateMember) -> AuthResult<Member> {
-        Err(AuthError::internal("unsupported test-store operation"))
-    }
-    async fn get_member(
-        &self,
-        _organization_id: &str,
-        _user_id: &str,
-    ) -> AuthResult<Option<Member>> {
-        Ok(None)
-    }
-    async fn get_member_by_id(&self, _id: &str) -> AuthResult<Option<Member>> {
-        Ok(None)
-    }
-    async fn update_member_role(&self, _member_id: &str, _role: &str) -> AuthResult<Member> {
-        Err(AuthError::internal("unsupported test-store operation"))
-    }
-    async fn delete_member(&self, _member_id: &str) -> AuthResult<()> {
-        Ok(())
-    }
-    async fn list_organization_members(&self, _org_id: &str) -> AuthResult<Vec<Member>> {
-        Ok(Vec::new())
-    }
-    async fn query_organization_members(
-        &self,
-        _params: &ListOrganizationMembersParams,
-    ) -> AuthResult<(Vec<Member>, usize)> {
-        Ok((Vec::new(), 0))
-    }
-    async fn count_organization_members(&self, _org_id: &str) -> AuthResult<i64> {
-        Ok(0)
-    }
-    async fn count_organization_owners(&self, _org_id: &str) -> AuthResult<i64> {
-        Ok(0)
-    }
-}
-
-#[async_trait]
-impl InvitationStore for MemoryStore {
-    async fn create_invitation(&self, _invitation: CreateInvitation) -> AuthResult<Invitation> {
-        Err(AuthError::internal("unsupported test-store operation"))
-    }
-    async fn get_invitation_by_id(&self, _id: &str) -> AuthResult<Option<Invitation>> {
-        Ok(None)
-    }
-    async fn get_pending_invitation(
-        &self,
-        _org_id: &str,
-        _email: &str,
-    ) -> AuthResult<Option<Invitation>> {
-        Ok(None)
-    }
-    async fn update_invitation_status(
-        &self,
-        _id: &str,
-        _status: InvitationStatus,
-    ) -> AuthResult<Invitation> {
-        Err(AuthError::internal("unsupported test-store operation"))
-    }
-    async fn list_organization_invitations(&self, _org_id: &str) -> AuthResult<Vec<Invitation>> {
-        Ok(Vec::new())
-    }
-    async fn update_invitation_expiry(
-        &self,
-        _id: &str,
-        _expires_at: DateTime<Utc>,
-    ) -> AuthResult<Invitation> {
-        Err(AuthError::internal("unsupported test-store operation"))
-    }
-    async fn count_pending_organization_invitations(&self, _org_id: &str) -> AuthResult<i64> {
-        Ok(0)
-    }
-    async fn list_user_invitations(&self, _email: &str) -> AuthResult<Vec<Invitation>> {
-        Ok(Vec::new())
     }
 }
 

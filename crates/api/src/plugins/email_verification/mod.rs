@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use better_auth_core::AuthUser;
 pub use better_auth_core::email::{EmailVerificationHook, SendVerificationEmail};
-use better_auth_core::wire::UserView;
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse};
 
@@ -214,7 +213,7 @@ impl EmailVerificationPlugin {
             .as_ref()
             .or(ctx.email_verification_policy.override_sender.as_ref())
         {
-            let user = UserView::from(user);
+            let user = ctx.user_view(user)?;
             custom_sender
                 .send(&user, &verification_url, &verification_token)
                 .await?;

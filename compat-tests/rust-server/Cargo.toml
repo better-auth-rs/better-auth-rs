@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-better-auth = { path = "../..", features = ["axum"] }
+better-auth = { path = "../..", features = ["axum", "seaorm2"], version = "1.0.0-alpha.3" }
 better-auth-core = { path = "../../crates/core" }
 better-auth-seaorm = { path = "../../crates/seaorm" }
 tokio = { version = "1", features = ["full"] }

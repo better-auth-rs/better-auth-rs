@@ -11,9 +11,13 @@ mod invitations;
 mod jwks;
 mod members;
 mod migrator;
+mod organization_extensions;
+mod organization_roles;
 mod organizations;
 mod passkeys;
 mod sessions;
+mod team_invitation;
+mod teams;
 mod two_factor;
 mod two_factor_security;
 mod user_verification;
@@ -199,3 +203,6 @@ fn parse_optional_rfc3339(
 ) -> Result<Option<DateTime<Utc>>, AuthError> {
     value.map(|inner| parse_rfc3339(inner, field)).transpose()
 }
+
+#[cfg(test)]
+mod organization_extension_tests;

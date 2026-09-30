@@ -116,11 +116,13 @@ impl EmailOtpPlugin {
             && current.user.id() == user.id()
         {
             current.user.email_verified = true;
-            manager.write_cache(req, &current, manager.dont_remember(req))?;
+            manager
+                .write_cache(req, &current, manager.dont_remember(req))
+                .await?;
         }
         Ok(AuthResponse::json(
             200,
-            &json!({"status": true, "token": null, "user": UserView::from(&user)}),
+            &json!({"status": true, "token": null, "user": ctx.user_view(&user)?}),
         )?)
     }
 
@@ -238,7 +240,7 @@ impl EmailOtpPlugin {
                 .await?;
         }
         if let Some(hook) = &ctx.password_policy.on_password_reset {
-            hook(serde_json::to_value(UserView::from(&user))?).await?;
+            hook(serde_json::to_value(ctx.user_view(&user)?)?).await?;
         }
         if !user.email_verified() {
             let _ = ctx
@@ -348,7 +350,7 @@ impl EmailOtpPlugin {
         email: String,
     ) -> AuthResult<S::User> {
         if let Some(hook) = &ctx.email_verification_policy.before_email_verification {
-            hook(&UserView::from(user)).await?;
+            hook(&ctx.user_view(user)?).await?;
         }
         let user = ctx
             .database
@@ -362,7 +364,7 @@ impl EmailOtpPlugin {
             )
             .await?;
         if let Some(hook) = &ctx.email_verification_policy.after_email_verification {
-            hook(&UserView::from(&user)).await?;
+            hook(&ctx.user_view(&user)?).await?;
         }
         Ok(user)
     }
@@ -378,7 +380,7 @@ impl EmailOtpPlugin {
         let issued = issue_user_session(ctx, user_id, meta.ip_address, meta.user_agent)
             .await
             .map_err(SessionIssueError::into_auth_error)?;
-        let user = UserView::from(&issued.user);
+        let user = ctx.user_view(&issued.user)?;
         let body = if verification {
             json!({"status": true, "token": issued.session.token(), "user": user})
         } else {

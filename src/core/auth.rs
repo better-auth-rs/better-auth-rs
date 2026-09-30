@@ -139,15 +139,13 @@ impl<S: AuthSchema> AuthBuilder<S> {
 
         let init_parts = init_context.into_parts();
 
-        // Create session manager
-        let session_manager = SessionManager::new(config.clone(), store.clone());
-
         // Create context
         let mut context =
             AuthContext::with_metadata(config.clone(), store.clone(), init_parts.metadata);
         context.password_policy = init_parts.password_policy;
         context.extensions = init_parts.extensions;
         context.email_verification_policy = init_parts.email_verification_policy;
+        let session_manager = context.session_manager();
 
         let body_limit = self.body_limit_config.unwrap_or_default();
         let mut rate_limit_config = self.rate_limit_config.unwrap_or_default();
@@ -416,7 +414,7 @@ impl<S: AuthSchema> BetterAuth<S> {
 
     /// Handle user profile update.
     async fn handle_update_user(&self, req: &AuthRequest) -> AuthResult<AuthResponse> {
-        let current_user = self.extract_current_user(req).await?;
+        let (current_user, _) = self.context.require_session(req).await?;
         let body: serde_json::Value = req
             .body_as_json()
             .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
@@ -452,6 +450,7 @@ impl<S: AuthSchema> BetterAuth<S> {
             == Some(&serde_json::Value::Bool(true))
             && body.get("phoneNumber") == Some(&serde_json::Value::Null);
         let mut body = body.clone();
+        let additional_fields = self.context.parse_user_input(&body, false)?;
         if self.context.get_metadata("username.enabled") != Some(&serde_json::Value::Bool(true)) {
             _ = body.remove("username");
             _ = body.remove("displayUsername");
@@ -499,20 +498,20 @@ impl<S: AuthSchema> BetterAuth<S> {
             || update_req.image.is_some()
             || username.is_some()
             || display_username.is_some()
-            || update_req.role.is_some()
-            || update_req.metadata.is_some();
+            || !additional_fields.is_empty();
         if !has_changes {
             return Err(AuthError::bad_request("No fields to update"));
         }
 
         let update_user = UpdateUser {
+            additional_fields,
             email: None,
             name: update_req.name,
             image: update_req.image,
             email_verified: None,
             username,
             display_username,
-            role: update_req.role,
+            role: None,
             banned: None,
             ban_reason: None,
             ban_expires: None,
@@ -520,7 +519,7 @@ impl<S: AuthSchema> BetterAuth<S> {
             is_anonymous: None,
             phone_number: clear_phone_number.then_some(None),
             phone_number_verified: clear_phone_number.then_some(false),
-            metadata: update_req.metadata,
+            metadata: None,
         };
 
         _ = self
@@ -538,16 +537,5 @@ impl<S: AuthSchema> BetterAuth<S> {
         }
 
         Ok(response)
-    }
-
-    /// Resolve the authoritative user for a profile update.
-    async fn extract_current_user(
-        &self,
-        req: &AuthRequest,
-    ) -> AuthResult<better_auth_core::wire::UserView> {
-        self.context
-            .require_authoritative_session(req)
-            .await
-            .map(|(user, _)| user)
     }
 }

@@ -27,6 +27,8 @@ pub struct OAuthTokenSet {
 /// User information extracted from an OAuth provider's user info endpoint.
 #[derive(Debug, Clone)]
 pub struct OAuthUserInfo {
+    /// Mapped application fields validated by the configured user schema.
+    pub additional_fields: serde_json::Map<String, Value>,
     pub id: String,
     pub email: String,
     pub name: Option<String>,
@@ -199,6 +201,7 @@ impl OAuthUserInfoHandler for GitHubUserInfoHandler {
 
         Ok(OAuthUserInfoResponse {
             user: OAuthUserInfo {
+                additional_fields: Default::default(),
                 id,
                 email: resolved_email,
                 name: profile
@@ -258,6 +261,7 @@ impl OAuthProvider {
             authorization_params: vec![("include_granted_scopes".to_string(), "true".to_string())],
             map_user_info: Some(|v| {
                 Ok(OAuthUserInfo {
+                    additional_fields: Default::default(),
                     id: v
                         .get("sub")
                         .and_then(|v| v.as_str())
@@ -344,6 +348,7 @@ impl OAuthProvider {
             authorization_params: Vec::new(),
             map_user_info: Some(|v| {
                 Ok(OAuthUserInfo {
+                    additional_fields: Default::default(),
                     id: v
                         .get("id")
                         .and_then(|v| v.as_str())

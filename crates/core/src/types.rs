@@ -6,6 +6,10 @@ use validator::Validate;
 
 use crate::utils::email::normalize_user_email;
 
+pub use crate::types_team::{
+    CreateOrganizationRole, CreateTeam, OrganizationRole, Team, TeamMember, UpdateOrganizationRole,
+};
+
 // Re-export organization types
 pub use super::types_org::{
     CreateInvitation, CreateMember, CreateOrganization, Invitation, InvitationStatus, Member,
@@ -189,6 +193,9 @@ impl Index<&str> for Headers {
 /// User creation data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateUser {
+    /// Application user fields keyed by their public schema names.
+    #[serde(default)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub id: Option<String>,
     pub email: Option<String>,
     pub name: Option<String>,
@@ -206,6 +213,9 @@ pub struct CreateUser {
 /// User update data
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UpdateUser {
+    /// Application user fields keyed by their public schema names.
+    #[serde(default)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub email: Option<String>,
     pub name: Option<String>,
     pub image: Option<String>,
@@ -272,6 +282,7 @@ pub struct CreateVerification {
 impl CreateUser {
     pub fn new() -> Self {
         Self {
+            additional_fields: Default::default(),
             id: None,
             email: None,
             name: None,
@@ -688,6 +699,7 @@ mod tests {
         assert!(req.virtual_user_id().is_none());
         let now = Utc::now();
         req.set_virtual_session(crate::wire::SessionView {
+            visible_fields: None,
             id: "key-123".into(),
             token: "key-token".into(),
             user_id: "user-123".into(),
@@ -698,6 +710,7 @@ mod tests {
             user_agent: None,
             impersonated_by: None,
             active_organization_id: None,
+            active_team_id: None,
             active: true,
             additional_fields: Default::default(),
         });

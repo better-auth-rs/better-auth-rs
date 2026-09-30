@@ -351,7 +351,7 @@ async fn large_cache_chunks_are_read_and_cleared_after_revocation() {
     let (manager, mut data) = setup(config(CookieCacheStrategy::Jwe)).await;
     data.user.name = Some("name".repeat(3000));
     let req = request(&data.session.token, &manager.config);
-    manager.write_cache(&req, &data, false).unwrap();
+    manager.write_cache(&req, &data, false).await.unwrap();
     let headers = req.take_response_headers().unwrap();
     let chunks: Vec<_> = headers
         .get_all("Set-Cookie")

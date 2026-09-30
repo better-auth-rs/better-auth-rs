@@ -28,6 +28,7 @@ where
             role: Set(invitation.role),
             status: Set(InvitationStatus::Pending.to_string()),
             inviter_id: Set(invitation.inviter_id),
+            team_id: Set(invitation.team_id),
             expires_at: Set(invitation.expires_at),
             created_at: Set(Utc::now()),
         }
@@ -105,7 +106,7 @@ where
     ) -> AuthResult<Vec<Invitation>> {
         Entity::find()
             .filter(Column::OrganizationId.eq(organization_id))
-            .order_by_desc(Column::CreatedAt)
+            .order_by_asc(Column::CreatedAt)
             .all(self.connection())
             .await
             .map(|models| models.iter().map(Invitation::from).collect())

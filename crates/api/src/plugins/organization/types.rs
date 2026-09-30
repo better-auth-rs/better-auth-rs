@@ -36,7 +36,7 @@ pub enum NullableStringField {
     Value(String),
 }
 
-fn deserialize_nullable_string_field<'de, D>(
+pub(crate) fn deserialize_nullable_string_field<'de, D>(
     deserializer: D,
 ) -> Result<NullableStringField, D::Error>
 where
@@ -158,6 +158,8 @@ pub struct InviteMemberRequest {
     pub role: RoleInput,
     #[serde(rename = "organizationId")]
     pub organization_id: Option<String>,
+    #[serde(rename = "teamId")]
+    pub team_id: Option<RoleInput>,
     /// Renew and send an existing pending invitation.
     #[serde(default)]
     pub resend: bool,
@@ -277,6 +279,8 @@ pub struct FullOrganizationResponse<O: Serialize, I: Serialize> {
     pub organization: O,
     pub members: Vec<MemberResponse>,
     pub invitations: Vec<I>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub teams: Option<Vec<FullOrganizationTeam>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -503,4 +507,13 @@ mod tests {
         assert_eq!(string_limit.members_limit, Some(1));
         assert_eq!(number_limit.members_limit, Some(2));
     }
+}
+
+/// Team fields returned by the full organization join.
+#[derive(Debug, Serialize)]
+pub struct FullOrganizationTeam {
+    #[serde(flatten)]
+    pub team: better_auth_core::types::Team,
+    #[serde(rename = "memberCount")]
+    pub member_count: usize,
 }

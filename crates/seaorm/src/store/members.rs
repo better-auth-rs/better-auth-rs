@@ -144,11 +144,53 @@ where
     }
 
     async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
-        Entity::delete_by_id(member_id.to_owned())
-            .exec(self.connection())
+        use super::entities::{team, team_member};
+        use sea_orm::{TransactionTrait, sea_query::Expr};
+        let tx = self.connection().begin().await.map_err(map_db_err)?;
+        if let Some(member) = Entity::find_by_id(member_id)
+            .one(&tx)
             .await
-            .map(|_| ())
-            .map_err(map_db_err)
+            .map_err(map_db_err)?
+        {
+            let teams = team::Entity::find()
+                .filter(team::Column::OrganizationId.eq(member.organization_id))
+                .all(&tx)
+                .await
+                .map_err(map_db_err)?;
+            for team in teams {
+                let _ = team::Entity::update_many()
+                    .col_expr(
+                        team::Column::MemberCount,
+                        Expr::col(team::Column::MemberCount),
+                    )
+                    .filter(team::Column::Id.eq(&team.id))
+                    .exec(&tx)
+                    .await
+                    .map_err(map_db_err)?;
+                let _ = team_member::Entity::delete_many()
+                    .filter(team_member::Column::TeamId.eq(&team.id))
+                    .filter(team_member::Column::UserId.eq(&member.user_id))
+                    .exec(&tx)
+                    .await
+                    .map_err(map_db_err)?;
+                let count = team_member::Entity::find()
+                    .filter(team_member::Column::TeamId.eq(&team.id))
+                    .count(&tx)
+                    .await
+                    .map_err(map_db_err)?;
+                let _ = team::Entity::update_many()
+                    .col_expr(team::Column::MemberCount, Expr::value(count as i64))
+                    .filter(team::Column::Id.eq(team.id))
+                    .exec(&tx)
+                    .await
+                    .map_err(map_db_err)?;
+            }
+            let _ = Entity::delete_by_id(member_id)
+                .exec(&tx)
+                .await
+                .map_err(map_db_err)?;
+        }
+        tx.commit().await.map_err(map_db_err)
     }
 
     async fn list_organization_members(&self, organization_id: &str) -> AuthResult<Vec<Member>> {

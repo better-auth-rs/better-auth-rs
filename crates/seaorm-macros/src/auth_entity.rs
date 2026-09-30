@@ -166,7 +166,14 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
     };
 
     match role {
-        EntityRole::User => gen_user(ident, &has, &extra_not_set, &seaorm_root, &core_root),
+        EntityRole::User => gen_user(
+            ident,
+            &has,
+            &extra_not_set,
+            &extra_updates,
+            &seaorm_root,
+            &core_root,
+        ),
         EntityRole::Session => gen_session(
             ident,
             &has,
@@ -186,6 +193,7 @@ fn gen_user(
     ident: &Ident,
     has: &dyn Fn(&str) -> bool,
     extras: &[TokenStream],
+    extra_updates: &[TokenStream],
     seaorm_root: &TokenStream,
     core_root: &TokenStream,
 ) -> TokenStream {
@@ -294,6 +302,15 @@ fn gen_user(
         }
 
         impl #seaorm_root::SeaOrmUserModel for #ident {
+            fn apply_fields(active: &mut Self::ActiveModel, fields: #core_root::serde_json::Map<::std::string::String, #core_root::serde_json::Value>) -> #core_root::AuthResult<()> {
+                for (name, value) in fields {
+                    match name.as_str() {
+                        #(#extra_updates)*
+                        _ => return Err(#core_root::AuthError::config(format!("Unknown user model field: {name}"))),
+                    }
+                }
+                Ok(())
+            }
             type Id = ::std::string::String;
             type Entity = Entity;
             type ActiveModel = ActiveModel;
@@ -497,6 +514,11 @@ fn gen_session(
     } else {
         quote! { fn active_organization_id(&self) -> Option<&str> { None } }
     };
+    let active_team_impl = if has("active_team_id") {
+        quote! { fn active_team_id(&self) -> Option<&str> { self.active_team_id.as_deref() } }
+    } else {
+        quote! { fn active_team_id(&self) -> Option<&str> { None } }
+    };
 
     let mut plugin_new_active = Vec::new();
     if has("impersonated_by") {
@@ -506,6 +528,10 @@ fn gen_session(
         plugin_new_active.push(quote! { active_organization_id: #seaorm_root::sea_orm::ActiveValue::Set(create_session.active_organization_id) });
     }
 
+    if has("active_team_id") {
+        plugin_new_active
+            .push(quote! { active_team_id: #seaorm_root::sea_orm::ActiveValue::Set(None) });
+    }
     let set_active_org = if has("active_organization_id") {
         quote! {
             fn set_active_organization_id(
@@ -525,6 +551,25 @@ fn gen_session(
             }
         }
     };
+    let set_active_team = if has("active_team_id") {
+        quote! {
+            fn set_active_team_id(
+                active: &mut Self::ActiveModel,
+                team_id: ::std::option::Option<::std::string::String>,
+            ) {
+                active.active_team_id = #seaorm_root::sea_orm::ActiveValue::Set(team_id);
+            }
+        }
+    } else {
+        quote! {
+            fn set_active_team_id(
+                _active: &mut Self::ActiveModel,
+                _team_id: ::std::option::Option<::std::string::String>,
+            ) {
+                // organization plugin not enabled — no-op
+            }
+        }
+    };
 
     quote! {
         impl #core_root::entity::AuthSession for #ident {
@@ -539,6 +584,7 @@ fn gen_session(
             fn user_id(&self) -> ::std::borrow::Cow<'_, str> { ::std::borrow::Cow::Borrowed(&self.user_id) }
             #impersonated_by_impl
             #active_org_impl
+            #active_team_impl
             fn active(&self) -> bool { self.active }
         }
 
@@ -615,6 +661,7 @@ fn gen_session(
             }
 
             #set_active_org
+            #set_active_team
         }
     }
 }

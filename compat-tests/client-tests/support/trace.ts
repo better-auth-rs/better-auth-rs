@@ -20,7 +20,7 @@ function normalizeTracePath(url: URL) {
       key === "state" ||
       key === "user_code" ||
       key === "id" ||
-      ["userId", "accountId", "organizationId", "invitationId", "keyId"].includes(key)
+      ["userId", "accountId", "organizationId", "teamId", "roleId", "invitationId", "keyId"].includes(key)
     ) {
       normalized.searchParams.set(key, `<${key}>`);
     }

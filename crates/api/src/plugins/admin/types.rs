@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -136,67 +135,7 @@ impl HasPermissionRequest {
 // Response types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Serialize)]
-pub(crate) struct AdminUserView {
-    pub id: String,
-    pub name: Option<String>,
-    pub email: Option<String>,
-    #[serde(rename = "emailVerified")]
-    pub email_verified: bool,
-    pub image: Option<String>,
-    #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "better_auth_core::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    #[serde(serialize_with = "better_auth_core::utils::date::serialize")]
-    pub updated_at: DateTime<Utc>,
-    #[serde(rename = "isAnonymous", skip_serializing_if = "Option::is_none")]
-    pub is_anonymous: Option<bool>,
-    #[serde(rename = "phoneNumber", skip_serializing_if = "Option::is_none")]
-    pub phone_number: Option<String>,
-    #[serde(
-        rename = "phoneNumberVerified",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub phone_number_verified: Option<bool>,
-    pub username: Option<String>,
-    #[serde(rename = "displayUsername")]
-    pub display_username: Option<String>,
-    #[serde(rename = "twoFactorEnabled")]
-    pub two_factor_enabled: bool,
-    pub role: Option<String>,
-    pub banned: bool,
-    #[serde(rename = "banReason")]
-    pub ban_reason: Option<String>,
-    #[serde(rename = "banExpires")]
-    pub ban_expires: Option<String>,
-}
-
-impl<T: better_auth_core::entity::AuthUser> From<&T> for AdminUserView {
-    fn from(user: &T) -> Self {
-        Self {
-            id: user.id().into_owned(),
-            name: user.name().map(str::to_owned),
-            email: user.email().map(str::to_owned),
-            email_verified: user.email_verified(),
-            image: user.image().map(str::to_owned),
-            created_at: user.created_at(),
-            updated_at: user.updated_at(),
-            is_anonymous: user.is_anonymous(),
-            phone_number: user.phone_number().map(str::to_owned),
-            phone_number_verified: user.phone_number_verified(),
-            username: user.username().map(str::to_owned),
-            display_username: user.display_username().map(str::to_owned),
-            two_factor_enabled: user.two_factor_enabled(),
-            role: user.role().map(str::to_owned),
-            banned: user.banned(),
-            ban_reason: user.ban_reason().map(str::to_owned),
-            ban_expires: user
-                .ban_expires()
-                .map(|value| value.to_rfc3339_opts(SecondsFormat::Millis, true)),
-        }
-    }
-}
+pub(crate) type AdminUserView = better_auth_core::wire::UserView;
 
 #[derive(Debug, Serialize)]
 pub(crate) struct UserResponse<U: Serialize> {

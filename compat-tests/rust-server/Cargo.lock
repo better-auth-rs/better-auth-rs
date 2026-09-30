@@ -543,6 +543,7 @@ dependencies = [
  "base64 0.22.1",
  "better-auth-api",
  "better-auth-core",
+ "better-auth-seaorm",
  "chrono",
  "clap",
  "http-body-util",

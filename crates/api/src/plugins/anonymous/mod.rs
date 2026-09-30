@@ -139,7 +139,7 @@ impl AnonymousPlugin {
         let issued = issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
             .await
             .map_err(SessionIssueError::into_auth_error)?;
-        Ok(AuthResponse::json(200,&serde_json::json!({"token": issued.session.token(),"user":UserView::from(&issued.user)}))?.with_header("Set-Cookie",create_session_cookie(issued.session.token(),&ctx.config)))
+        Ok(AuthResponse::json(200,&serde_json::json!({"token": issued.session.token(),"user":ctx.user_view(&issued.user)?}))?.with_header("Set-Cookie",create_session_cookie(issued.session.token(),&ctx.config)))
     }
     async fn delete(
         &self,
@@ -258,10 +258,13 @@ impl AnonymousPlugin {
                             .await?
                             .into_iter()
                             .find(|session| session.expires_at() > chrono::Utc::now())
-                            .map(|session| better_auth_core::session::SessionData {
-                                user: UserView::from(&user),
-                                session: SessionView::from(&session),
+                            .map(|session| {
+                                Ok::<_, AuthError>(better_auth_core::session::SessionData {
+                                    user: ctx.user_view(&user)?,
+                                    session: SessionView::from(&session),
+                                })
                             })
+                            .transpose()?
                     } else {
                         None
                     }
@@ -280,7 +283,7 @@ impl AnonymousPlugin {
             callback(AnonymousLink {
                 anonymous_user: previous.user.clone(),
                 anonymous_session: previous.session,
-                new_user: UserView::from(&user),
+                new_user: ctx.user_view(&user)?,
                 new_session: SessionView::from(&session),
                 request: req.clone(),
             })
@@ -327,11 +330,7 @@ better_auth_core::impl_auth_plugin!(AnonymousPlugin, "anonymous";
             response: &mut AuthResponse,
             ctx: &AuthContext<S>,
         ) -> AuthResult<()> {
-            self.link(req, response, ctx).await?;
-            super::helpers::add_user_response_fields(
-                response,
-                &super::helpers::user_plugin_defaults(ctx),
-            )
+            self.link(req, response, ctx).await
         }
     }
 );

@@ -14,3 +14,7 @@ pub use better_auth_core::types::{
     UpdateUserRequest, UpdateUserResponse,
 };
 pub use better_auth_core::wire::{AccountView, SessionView, UserView, VerificationView};
+
+pub use better_auth_core::{
+    CreateOrganizationRole, CreateTeam, OrganizationRole, Team, TeamMember, UpdateOrganizationRole,
+};

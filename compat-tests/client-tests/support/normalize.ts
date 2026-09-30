@@ -3,7 +3,7 @@ import diff from "microdiff";
 // Only server-generated identities and session secrets vary by implementation.
 const GENERATED_FIELDS = new Set([
   "id", "userId", "sessionId", "organizationId", "activeOrganizationId",
-  "memberId", "invitationId", "inviterId", "keyId", "referenceId", "impersonatedBy", "token",
+  "teamId", "activeTeamId", "roleId", "memberId", "invitationId", "inviterId", "keyId", "referenceId", "impersonatedBy", "token",
 ]);
 const CLOCK_FIELDS = new Set([
   "createdAt", "updatedAt", "expiresAt", "accessTokenExpiresAt", "refreshTokenExpiresAt",

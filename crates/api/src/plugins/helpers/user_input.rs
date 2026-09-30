@@ -1,4 +1,3 @@
-use crate::plugins::json_body::is_truthy;
 use better_auth_core::utils::username::{
     UsernameValidationError, normalize_username, validate_username,
 };
@@ -11,33 +10,8 @@ pub(crate) async fn apply_user_create_fields(
     input: &Map<String, Value>,
     user: &mut CreateUser,
 ) -> AuthResult<()> {
+    user.additional_fields = ctx.parse_user_input(input, true)?;
     let enabled = |plugin| ctx.get_metadata(plugin).and_then(Value::as_bool) == Some(true);
-    for (plugin, field, message) in [
-        (
-            "phone-number.enabled",
-            "phoneNumberVerified",
-            "phoneNumberVerified is not allowed to be set",
-        ),
-        ("admin.enabled", "role", "role is not allowed to be set"),
-        (
-            "admin.enabled",
-            "banReason",
-            "banReason is not allowed to be set",
-        ),
-        (
-            "admin.enabled",
-            "banExpires",
-            "banExpires is not allowed to be set",
-        ),
-    ] {
-        if enabled(plugin) && input.get(field).is_some_and(is_truthy) {
-            return Err(AuthError::Upstream {
-                status: 400,
-                code: "FIELD_NOT_ALLOWED",
-                message,
-            });
-        }
-    }
     if enabled("username.enabled") {
         if let Some(username) = optional_string(input, "username")? {
             let username = normalize_username(&username);

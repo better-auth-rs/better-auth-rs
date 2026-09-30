@@ -281,7 +281,8 @@ pub(crate) async fn change_password_core(
             .database
             .get_user_by_id(&user.id())
             .await?
-            .map(|user| UserView::from(&user))
+            .map(|user| ctx.user_view(&user))
+            .transpose()?
             .ok_or(AuthError::UserNotFound)?,
     };
 

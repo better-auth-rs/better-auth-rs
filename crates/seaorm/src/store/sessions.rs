@@ -218,4 +218,34 @@ where
         S::Session::set_updated_at(&mut active, Utc::now());
         active.update(self.connection()).await.map_err(map_db_err)
     }
+    async fn accept_invitation_with_teams(
+        &self,
+        invitation_id: &str,
+        user_id: &str,
+        session_token: &str,
+        maximum: Option<usize>,
+    ) -> AuthResult<(better_auth_core::Member, Option<S::Session>)> {
+        self.accept_team_invitation(invitation_id, user_id, session_token, maximum)
+            .await
+    }
+    async fn update_session_active_team(
+        &self,
+        token: &str,
+        team_id: Option<&str>,
+    ) -> AuthResult<S::Session> {
+        let Some(model) = <S::Session as SeaOrmSessionModel>::Entity::find()
+            .filter(<S::Session as SeaOrmSessionModel>::token_column().eq(token))
+            .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
+            .one(self.connection())
+            .await
+            .map_err(map_db_err)?
+        else {
+            return Err(AuthError::SessionNotFound);
+        };
+
+        let mut active = model.into_active_model();
+        S::Session::set_active_team_id(&mut active, team_id.map(str::to_owned));
+        S::Session::set_updated_at(&mut active, Utc::now());
+        active.update(self.connection()).await.map_err(map_db_err)
+    }
 }

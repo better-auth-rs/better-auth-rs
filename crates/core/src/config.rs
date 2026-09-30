@@ -1,5 +1,8 @@
 use crate::email::EmailProvider;
 use crate::error::AuthError;
+pub use crate::user_fields::{
+    UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType, UserFieldValidator,
+};
 use chrono::Duration;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -476,6 +479,8 @@ pub struct AuthConfig {
     pub disabled_paths: Vec<String>,
     /// Session configuration
     pub session: SessionConfig,
+    /// Application user field configuration.
+    pub user: UserConfig,
 
     /// JWT configuration
     pub jwt: JwtConfig,
@@ -857,6 +862,7 @@ impl Default for AuthConfig {
             trusted_origins: Vec::new(),
             disabled_paths: Vec::new(),
             session: SessionConfig::default(),
+            user: UserConfig::default(),
             jwt: JwtConfig::default(),
             password: PasswordConfig::default(),
             account: AccountConfig::default(),

@@ -115,6 +115,8 @@ impl std::fmt::Display for InvitationStatus {
 /// Organization invitation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Invitation {
+    #[serde(rename = "teamId", default, skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<String>,
     pub id: String,
     #[serde(rename = "organizationId")]
     pub organization_id: String,
@@ -209,6 +211,7 @@ impl CreateMember {
 /// Invitation creation data
 #[derive(Debug, Clone)]
 pub struct CreateInvitation {
+    pub team_id: Option<String>,
     pub organization_id: String,
     pub email: String,
     pub role: String,
@@ -229,6 +232,7 @@ impl CreateInvitation {
             email: email.into(),
             role: role.into(),
             inviter_id: inviter_id.into(),
+            team_id: None,
             expires_at,
         }
     }
@@ -303,6 +307,9 @@ impl<T: AuthMember> From<&T> for Member {
 }
 
 impl AuthInvitation for Invitation {
+    fn team_id(&self) -> Option<&str> {
+        self.team_id.as_deref()
+    }
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
     }
@@ -338,6 +345,7 @@ impl<T: AuthInvitation> From<&T> for Invitation {
             role: invitation.role().to_owned(),
             status: invitation.status().clone(),
             inviter_id: invitation.inviter_id().into_owned(),
+            team_id: invitation.team_id().map(str::to_owned),
             expires_at: invitation.expires_at(),
             created_at: invitation.created_at(),
         }

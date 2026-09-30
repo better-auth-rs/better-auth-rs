@@ -38,6 +38,13 @@ impl AuthPlugin<TestSchema> for LaterPolicy {
         req: &AuthRequest,
         _ctx: &AuthContext<TestSchema>,
     ) -> AuthResult<Option<BeforeRequestAction>> {
+        if req.headers.contains_key("x-replace-oauth-callback") {
+            let mut body: Value = req.body_as_json()?;
+            body["callbackURL"] = "https://attacker.example/stolen".into();
+            return Ok(Some(BeforeRequestAction::ReplaceBody(serde_json::to_vec(
+                &body,
+            )?)));
+        }
         if req.headers.contains_key("x-deny-oauth") {
             let body: Value = req.body_as_json()?;
             assert!(
@@ -53,9 +60,19 @@ impl AuthPlugin<TestSchema> for LaterPolicy {
 }
 
 async fn auth() -> BetterAuth<TestSchema> {
+    auth_with_proxy(
+        OAuthProxyPlugin::new()
+            .current_url("http://preview.example".into())
+            .production_url("http://production.example".into()),
+        false,
+    )
+    .await
+}
+
+async fn auth_with_proxy(proxy: OAuthProxyPlugin, check_origins: bool) -> BetterAuth<TestSchema> {
     let config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
         .base_url("http://preview.example")
-        .disable_origin_check(true);
+        .disable_origin_check(!check_origins);
     let database = Database::connect("sqlite::memory:")
         .await
         .expect("connect SQLite");
@@ -64,11 +81,7 @@ async fn auth() -> BetterAuth<TestSchema> {
         .expect("run migrations");
     AuthBuilder::<TestSchema>::new(config.clone())
         .store(SeaOrmStore::<TestSchema>::new(config, database))
-        .plugin(
-            OAuthProxyPlugin::new()
-                .current_url("http://preview.example".into())
-                .production_url("http://production.example".into()),
-        )
+        .plugin(proxy)
         .plugin(
             ApiKeyPlugin::builder()
                 .enable_session_for_api_keys(true)
@@ -81,6 +94,97 @@ async fn auth() -> BetterAuth<TestSchema> {
         .build()
         .await
         .expect("build authentication")
+}
+
+#[tokio::test]
+async fn proxy_environment_without_request_host() {
+    if let Ok(expected) = std::env::var("PROXY_EXPECT_WRAPPED") {
+        let auth = auth_with_proxy(OAuthProxyPlugin::new(), true).await;
+        let response = auth
+            .handle_request(request(
+                "/sign-in/social",
+                json!({"provider":"google", "callbackURL":"/return", "disableRedirect":true}),
+            ))
+            .await
+            .expect("sign in");
+        assert_eq!(response.status, 200);
+        let body: Value = serde_json::from_slice(&response.body).expect("authorization body");
+        let url =
+            reqwest::Url::parse(body["url"].as_str().expect("authorization URL")).expect("URL");
+        let state = url
+            .query_pairs()
+            .find(|(key, _)| key == "state")
+            .expect("OAuth state")
+            .1
+            .into_owned();
+        assert_eq!(state.len() > 100, expected == "true");
+        return;
+    }
+    for (vendor, production, wrapped) in [
+        ("", "", true),
+        ("http://preview.example", "", false),
+        ("http://other.example", "", true),
+        ("http://other.example/path", "http://other.example", false),
+    ] {
+        let mut command =
+            std::process::Command::new(std::env::current_exe().expect("test executable"));
+        let _ = command.args([
+            "--exact",
+            "proxy_environment_without_request_host",
+            "--nocapture",
+        ]);
+        for key in [
+            "VERCEL_URL",
+            "NETLIFY_URL",
+            "RENDER_URL",
+            "AWS_LAMBDA_FUNCTION_NAME",
+            "GOOGLE_CLOUD_FUNCTION_NAME",
+            "AZURE_FUNCTION_NAME",
+            "BETTER_AUTH_URL",
+        ] {
+            let _ = command.env_remove(key);
+        }
+        let output = command
+            .env("NETLIFY_URL", vendor)
+            .env("BETTER_AUTH_URL", production)
+            .env("PROXY_EXPECT_WRAPPED", wrapped.to_string())
+            .output()
+            .expect("run isolated environment test");
+        assert!(
+            output.status.success(),
+            "vendor={vendor}, production={production}\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[tokio::test]
+async fn configured_proxy_receiver_does_not_trust_user_or_later_hook_redirects() {
+    let auth = auth_with_proxy(
+        OAuthProxyPlugin::new()
+            .current_url("https://configured.example".into())
+            .production_url("https://production.example".into()),
+        true,
+    )
+    .await;
+    for (callback, replace, status) in [
+        ("/return", false, 200),
+        ("https://attacker.example/stolen", false, 403),
+        ("/return", true, 403),
+    ] {
+        let mut req = request(
+            "/sign-in/social",
+            json!({"provider":"google", "callbackURL":callback}),
+        );
+        if replace {
+            let _ = req
+                .headers
+                .insert("x-replace-oauth-callback".into(), "true".into());
+        }
+        let response = auth.handle_request(req).await.expect("sign in");
+        assert_eq!(response.status, status);
+    }
 }
 
 fn request(path: &str, body: Value) -> AuthRequest {

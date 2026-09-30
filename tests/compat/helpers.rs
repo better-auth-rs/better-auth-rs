@@ -228,6 +228,7 @@ fn mock_oauth_plugin() -> OAuthPlugin {
         ) -> Result<OAuthUserInfoResponse, String> {
             Ok(OAuthUserInfoResponse {
                 user: OAuthUserInfo {
+                    additional_fields: Default::default(),
                     id: "mock-account-id".to_string(),
                     email: "mock@example.com".to_string(),
                     name: Some("Mock OAuth User".to_string()),
@@ -263,6 +264,7 @@ fn mock_oauth_plugin() -> OAuthPlugin {
             authorization_params: Vec::new(),
             map_user_info: Some(|_value| {
                 Ok(OAuthUserInfo {
+                    additional_fields: Default::default(),
                     id: "mock-account-id".to_string(),
                     email: "mock@example.com".to_string(),
                     name: Some("Mock OAuth User".to_string()),
@@ -302,7 +304,33 @@ pub async fn create_test_auth() -> TestAuth {
 pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth {
     let config = test_config();
     let store = test_store(&config).await;
-    let organization_plugin = if let Some(creator_role) = options.creator_role.clone() {
+    let organization_plugin = if options.all_plugins {
+        OrganizationPlugin::with_config(better_auth::plugins::organization::OrganizationConfig {
+            teams: better_auth::plugins::organization::OrganizationTeamsConfig {
+                enabled: true,
+                ..Default::default()
+            },
+            dynamic_access_control: true,
+            ac: Some(
+                [
+                    ("organization", vec!["update", "delete"]),
+                    ("member", vec!["create", "update", "delete"]),
+                    ("invitation", vec!["create", "cancel"]),
+                    ("team", vec!["create", "update", "delete"]),
+                    ("ac", vec!["create", "read", "update", "delete"]),
+                ]
+                .into_iter()
+                .map(|(resource, actions)| {
+                    (
+                        resource.to_owned(),
+                        actions.into_iter().map(str::to_owned).collect(),
+                    )
+                })
+                .collect(),
+            ),
+            ..Default::default()
+        })
+    } else if let Some(creator_role) = options.creator_role.clone() {
         OrganizationPlugin::new().creator_role(creator_role)
     } else {
         OrganizationPlugin::new()

@@ -183,6 +183,11 @@ pub(super) async fn process_oauth_sign_in(
                 .update_user(
                     &user.id(),
                     UpdateUser {
+                        additional_fields: ctx
+                            .config
+                            .user
+                            .parse_provider_input(&user_info.additional_fields, false)
+                            .map_err(|error| error.to_string())?,
                         name: user_info.name.clone(),
                         image: user_info.image.clone(),
                         email: Some(user_info.email.to_lowercase()),
@@ -243,7 +248,9 @@ pub(super) async fn process_oauth_sign_in(
         return Ok(ProcessOAuthUserResult {
             session: SessionView::with_fields(&issued.session, &ctx.config.session)
                 .map_err(|error| error.to_string())?,
-            user: UserView::from(&issued.user),
+            user: ctx
+                .user_view(&issued.user)
+                .map_err(|error| error.to_string())?,
             is_register: false,
             account_cookie,
         });
@@ -315,6 +322,11 @@ pub(super) async fn process_oauth_sign_in(
                 .update_user(
                     &linked_user.id(),
                     UpdateUser {
+                        additional_fields: ctx
+                            .config
+                            .user
+                            .parse_provider_input(&user_info.additional_fields, false)
+                            .map_err(|error| error.to_string())?,
                         name: user_info.name.clone(),
                         image: user_info.image.clone(),
                         email: Some(user_info.email.to_lowercase()),
@@ -352,7 +364,9 @@ pub(super) async fn process_oauth_sign_in(
         Ok(ProcessOAuthUserResult {
             session: SessionView::with_fields(&issued.session, &ctx.config.session)
                 .map_err(|error| error.to_string())?,
-            user: UserView::from(&issued.user),
+            user: ctx
+                .user_view(&issued.user)
+                .map_err(|error| error.to_string())?,
             is_register: false,
             account_cookie,
         })
@@ -367,6 +381,11 @@ pub(super) async fn process_oauth_sign_in(
             .with_email_verified(user_info.email_verified);
         apply_default_role(ctx, &mut create_user);
         create_user.image = user_info.image.clone();
+        create_user.additional_fields = ctx
+            .config
+            .user
+            .parse_provider_input(&user_info.additional_fields, true)
+            .map_err(|error| error.to_string())?;
 
         let created_user = ctx
             .database
@@ -411,7 +430,9 @@ pub(super) async fn process_oauth_sign_in(
         Ok(ProcessOAuthUserResult {
             session: SessionView::with_fields(&issued.session, &ctx.config.session)
                 .map_err(|error| error.to_string())?,
-            user: UserView::from(&issued.user),
+            user: ctx
+                .user_view(&issued.user)
+                .map_err(|error| error.to_string())?,
             is_register: true,
             account_cookie,
         })

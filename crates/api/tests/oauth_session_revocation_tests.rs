@@ -114,6 +114,7 @@ impl OAuthUserInfoHandler for ProviderCalls {
         let _ = self.user_info.fetch_add(1, Ordering::SeqCst);
         Ok(OAuthUserInfoResponse {
             user: OAuthUserInfo {
+                additional_fields: Default::default(),
                 id: "provider-subject".to_string(),
                 email: "operator@example.com".to_string(),
                 name: Some("Operator".to_string()),

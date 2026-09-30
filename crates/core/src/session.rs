@@ -19,8 +19,11 @@ use serde::{Deserialize, Serialize};
 mod cache_tests;
 mod cookie_cache;
 mod response;
+mod signer;
+pub use signer::SessionCookieSigner;
 #[cfg(test)]
 mod response_tests;
+mod view;
 
 /// Authenticated session data independent of the application's storage models.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,22 +53,68 @@ pub enum SessionRead {
 
 /// Session manager handles session creation, validation, and cleanup
 pub struct SessionManager<S: AuthSchema> {
+    user_metadata: crate::plugin::MetadataMap,
     config: Arc<AuthConfig>,
     database: Arc<dyn AuthStore<S>>,
+    signer: Option<Arc<dyn SessionCookieSigner>>,
 }
 
 impl<S: AuthSchema> Clone for SessionManager<S> {
     fn clone(&self) -> Self {
         Self {
+            user_metadata: self.user_metadata.clone(),
             config: self.config.clone(),
             database: self.database.clone(),
+            signer: self.signer.clone(),
         }
     }
 }
 
 impl<S: AuthSchema> SessionManager<S> {
     pub fn new(config: Arc<AuthConfig>, database: Arc<dyn AuthStore<S>>) -> Self {
-        Self { config, database }
+        Self {
+            config,
+            database,
+            user_metadata: Default::default(),
+            signer: None,
+        }
+    }
+
+    /// Attach enabled user plugin schemas for database and cache projections.
+    pub fn with_user_metadata(mut self, metadata: crate::plugin::MetadataMap) -> Self {
+        self.user_metadata = metadata;
+        self
+    }
+
+    fn user_view(&self, user: &impl AuthUser) -> AuthResult<UserView> {
+        UserView::with_fields(user, &self.config.user, &self.user_metadata)
+    }
+
+    fn session_view(&self, session: &impl AuthSession) -> AuthResult<SessionView> {
+        let mut view = SessionView::with_fields(session, &self.config.session)?;
+        view.visible_fields = Some(
+            [
+                ("admin.enabled", "impersonatedBy"),
+                ("organization.enabled", "activeOrganizationId"),
+                ("organization.teams_enabled", "activeTeamId"),
+            ]
+            .into_iter()
+            .filter(|(plugin, _)| {
+                self.user_metadata
+                    .get(*plugin)
+                    .and_then(serde_json::Value::as_bool)
+                    == Some(true)
+            })
+            .map(|(_, name)| name.to_owned())
+            .collect(),
+        );
+        Ok(view)
+    }
+
+    /// Install a plugin-provided signer without coupling core to the plugin implementation.
+    pub fn with_cookie_signer(mut self, signer: Option<Arc<dyn SessionCookieSigner>>) -> Self {
+        self.signer = signer;
+        self
     }
 
     /// Create a new session for a user
@@ -152,7 +201,7 @@ impl<S: AuthSchema> SessionManager<S> {
             return Ok(SessionResolution {
                 data: Some(SessionData {
                     session: session.clone(),
-                    user: UserView::from(&user),
+                    user: self.user_view(&user)?,
                 }),
                 needs_refresh: None,
             });
@@ -178,12 +227,21 @@ impl<S: AuthSchema> SessionManager<S> {
         let disable_cache =
             matches!(read, SessionRead::Authoritative) || query_flag(req, "disableCookieCache");
         if !disable_cache && let (Some(cache), Some(value)) = (cache, cache_value.as_deref()) {
-            if let Some((payload, expires)) = cookie_cache::decode(value, &self.config, cache)
+            let decoded = if let Some(signer) = &self.signer {
+                signer
+                    .verify(value)
+                    .await?
+                    .and_then(cookie_cache::parse_jwt)
+            } else {
+                cookie_cache::decode(value, &self.config, cache)
+            };
+            if let Some((mut payload, expires)) = decoded
                 && payload.data.session.token == token
                 && payload.version == cache.version
                 && expires >= Utc::now().timestamp_millis()
                 && payload.data.session.expires_at >= Utc::now()
             {
+                payload.data.user.filter_cached_fields(&self.config.user);
                 return Ok(SessionResolution {
                     data: Some(payload.data),
                     needs_refresh: None,
@@ -209,8 +267,8 @@ impl<S: AuthSchema> SessionManager<S> {
             return Ok(none());
         };
         let mut data = SessionData {
-            session: SessionView::with_fields(&session, &self.config.session)?,
-            user: UserView::from(&user),
+            session: self.session_view(&session)?,
+            user: self.user_view(&user)?,
         };
         let dont_remember = self.dont_remember(req);
         if dont_remember || query_flag(req, "disableRefresh") {
@@ -221,7 +279,7 @@ impl<S: AuthSchema> SessionManager<S> {
         }
         let needs_refresh = self.needs_refresh(&session);
         if self.config.session.defer_session_refresh && !is_post {
-            self.write_cache(req, &data, false)?;
+            self.write_cache(req, &data, false).await?;
             return Ok(SessionResolution {
                 data: Some(data),
                 needs_refresh: Some(needs_refresh),
@@ -243,10 +301,10 @@ impl<S: AuthSchema> SessionManager<S> {
                 self.clear_cookies(req)?;
                 return Err(failed_session_update());
             };
-            data.session = SessionView::with_fields(&updated, &self.config.session)?;
+            data.session = self.session_view(&updated)?;
             req.append_response_header("Set-Cookie", create_session_cookie(&token, &self.config))?;
         }
-        self.write_cache(req, &data, false)?;
+        self.write_cache(req, &data, false).await?;
         Ok(SessionResolution {
             data: Some(data),
             needs_refresh: None,
@@ -254,13 +312,26 @@ impl<S: AuthSchema> SessionManager<S> {
     }
 
     /// Write the configured cache from authenticated session data.
-    pub fn write_cache(
+    pub async fn write_cache(
         &self,
         req: &AuthRequest,
         data: &SessionData,
         dont_remember: bool,
     ) -> AuthResult<()> {
-        cookie_cache::write(req, data, &self.config, dont_remember)
+        let signed = if let (Some(signer), Some(cache)) = (
+            &self.signer,
+            self.config
+                .session
+                .cookie_cache
+                .as_ref()
+                .filter(|cache| cache.enabled),
+        ) {
+            let (payload, max_age) = cookie_cache::payload(data, cache, dont_remember)?;
+            Some(signer.sign(payload, max_age).await?)
+        } else {
+            None
+        };
+        cookie_cache::write(req, data, &self.config, dont_remember, signed)
     }
 
     /// Read the signed marker for a browser-session-only login.
@@ -544,6 +615,7 @@ mod tests {
 
         // A session created "now" is fresh within a 10-minute window.
         let session = SessionView {
+            visible_fields: None,
             id: "s1".into(),
             expires_at: Utc::now() + Duration::hours(1),
             token: "tok".into(),
@@ -554,6 +626,7 @@ mod tests {
             user_id: "u1".into(),
             impersonated_by: None,
             active_organization_id: None,
+            active_team_id: None,
             active: true,
             additional_fields: Default::default(),
         };
@@ -569,6 +642,7 @@ mod tests {
         let mgr = SessionManager::new(Arc::new(config), runtime.block_on(test_database()));
 
         let session = SessionView {
+            visible_fields: None,
             id: "s1".into(),
             expires_at: Utc::now() + Duration::hours(1),
             token: "tok".into(),
@@ -579,6 +653,7 @@ mod tests {
             user_id: "u1".into(),
             impersonated_by: None,
             active_organization_id: None,
+            active_team_id: None,
             active: true,
             additional_fields: Default::default(),
         };
@@ -590,6 +665,7 @@ mod tests {
     fn session_never_fresh_when_no_fresh_age() {
         let mgr = test_manager(); // default: fresh_age = None
         let session = SessionView {
+            visible_fields: None,
             id: "s1".into(),
             expires_at: Utc::now() + Duration::hours(1),
             token: "tok".into(),
@@ -600,6 +676,7 @@ mod tests {
             user_id: "u1".into(),
             impersonated_by: None,
             active_organization_id: None,
+            active_team_id: None,
             active: true,
             additional_fields: Default::default(),
         };

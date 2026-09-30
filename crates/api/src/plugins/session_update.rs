@@ -39,6 +39,7 @@ pub(super) async fn handle(
     // Plugin schemas override application fields in the upstream input schema.
     let protected_fields: Vec<_> = [
         ("organization.enabled", "activeOrganizationId"),
+        ("organization.teams_enabled", "activeTeamId"),
         ("admin.enabled", "impersonatedBy"),
     ]
     .into_iter()
@@ -102,7 +103,7 @@ pub(super) async fn handle(
             &ctx.config,
         ),
     )?;
-    manager.write_cache(req, &data, dont_remember)?;
+    manager.write_cache(req, &data, dont_remember).await?;
     Ok(AuthResponse::json(
         200,
         &serde_json::json!({ "session": data.session }),

@@ -61,12 +61,11 @@ fn key_id(key: &[u8]) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(thumbprint))
 }
 
-pub(super) fn encode(
+pub(super) fn payload(
     data: &SessionData,
-    config: &AuthConfig,
     cache: &CookieCacheConfig,
     dont_remember: bool,
-) -> AuthResult<String> {
+) -> AuthResult<(serde_json::Map<String, Value>, i64)> {
     let now = Utc::now();
     let mut payload = serde_json::Map::new();
     let _ = payload.insert("session".into(), serde_json::to_value(&data.session)?);
@@ -81,6 +80,17 @@ pub(super) fn encode(
     } else {
         cache.max_age.num_seconds()
     };
+    Ok((payload, max_age))
+}
+
+pub(super) fn encode(
+    data: &SessionData,
+    config: &AuthConfig,
+    cache: &CookieCacheConfig,
+    dont_remember: bool,
+) -> AuthResult<String> {
+    let now = Utc::now();
+    let (payload, max_age) = payload(data, cache, dont_remember)?;
     match cache.strategy {
         CookieCacheStrategy::Compact => {
             let expires_at = now.timestamp_millis()
@@ -130,6 +140,13 @@ pub(super) fn encode(
                 .map_err(|error| AuthError::internal(format!("Encrypting session cache: {error}")))
         }
     }
+}
+
+pub(super) fn parse_jwt(payload: serde_json::Map<String, Value>) -> Option<(CachedSession, i64)> {
+    let expires = payload.get("exp")?.as_i64()?.checked_mul(1000)?;
+    let mut parsed: CachedSession = serde_json::from_value(Value::Object(payload)).ok()?;
+    parsed.data.session.active = true;
+    Some((parsed, expires))
 }
 
 pub(super) fn decode(
@@ -238,6 +255,7 @@ pub(super) fn write(
     data: &SessionData,
     config: &AuthConfig,
     dont_remember: bool,
+    signed: Option<String>,
 ) -> AuthResult<()> {
     let Some(cache) = config
         .session
@@ -247,7 +265,10 @@ pub(super) fn write(
     else {
         return Ok(());
     };
-    let value = encode(data, config, cache, dont_remember)?;
+    let value = match signed {
+        Some(value) => value,
+        None => encode(data, config, cache, dont_remember)?,
+    };
     let name = related_cookie_name(config, "session_data");
     let max_age = (!dont_remember).then_some(cache.max_age.num_seconds());
     let overhead = create_session_like_cookie(&format!("{name}.99"), "", max_age, config).len();

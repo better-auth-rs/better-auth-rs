@@ -25,4 +25,4 @@ Configure `phone_number_validator` to validate numbers. The upstream default acc
 
 Phone password operations use the installed password plugins' shared hasher, length limits, password reset callback, and session revocation policy. Do not configure a separate password scheme for phone authentication.
 
-Disabling the plugin does not hide existing stored `phoneNumber` or `phoneNumberVerified` values from Rust's user views. Configuration changes over populated databases differ from upstream output filtering in this case.
+Disabling the plugin hides stored `phoneNumber` and `phoneNumberVerified` values on database reads. Existing signed session caches retain their previous user shape until expiry or a cache version change, matching upstream. New-user verification uses the shared [application user schema](/docs/concepts/users-accounts) before assigning verified phone proof.

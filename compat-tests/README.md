@@ -24,11 +24,15 @@ Each scenario must assert the intended success or failure before returning obser
 
 The comparator assigns stable aliases to explicitly listed generated IDs and session secrets across each complete scenario. Aliases preserve identity relationships between responses. A credential account's `accountId` uses the generated user identity; other account IDs remain literal. RP IDs, provider IDs, configuration IDs, provider tokens, token types, missing fields, and external redirect origins remain observable. Metadata and permissions are compared literally. Date values retain their meaning; listed clock fields allow at most 10 seconds of skew between sequential runs. Expiry scenarios must also assert the expected lifetime or exact seeded timestamp.
 
-Configuration scenarios start fresh server pairs with the same `COMPAT_PROFILE`. The profiles cover API keys, device authorization, OTP storage and delivery, Magic Link, one-time tokens, multiple sessions, anonymous upgrades, phone numbers, SIWE, JWT algorithms, Google One Tap, and OAuth Proxy. Set `COMPAT_TEST_PROFILE` to run one configuration during development. The full gate runs every configuration. Each Bun directory argument has a `./` prefix and trailing slash so similarly named profiles cannot run under the wrong server configuration.
+Configuration scenarios start fresh server pairs with the same `COMPAT_PROFILE`. The profiles cover API keys, device authorization, OTP storage and delivery, Magic Link, one-time tokens, multiple sessions, anonymous upgrades, phone numbers, SIWE, JWT algorithms, Google One Tap, and OAuth Proxy. The `oauth-proxy-env` profile starts a fresh server pair for each hosting-variable and URL-priority case, with environment changes confined to child processes. Set `COMPAT_TEST_PROFILE` to run one configuration during development. The full gate runs every configuration. Each Bun directory argument has a `./` prefix and trailing slash so similarly named profiles cannot run under the wrong server configuration.
+
+The `user-fields` profile uses an application-owned user model. The scenarios cover required fields, constant and dynamic defaults, `onUpdate`, validators, input and output transforms, storage types, protected fields, hidden fields, Email OTP creation, administrator writes, signed JWT claims, and session cache reads. JSON application data is compared literally. A second auth instance shares the database with every user plugin disabled. An existing signed session cache retains disabled plugin fields, matching Better Auth 1.7.6. A read with `disableCookieCache=true` applies the current user schema and removes disabled plugin fields. A third instance marks previously public fields `returned: false`; those fields disappear from both cached and database responses.
 
 Passkey scenarios use an ES256 software authenticator. JWT and One Tap scenarios verify real asymmetric signatures. SIWE scenarios sign Ethereum messages. OAuth Proxy scenarios exchange encrypted profiles between the TS and Rust servers in both directions. The Proxy profiles also verify real OIDC code exchange, API-key account linking, and anonymous upgrades without the original session cookie. These checks preserve identity, expiry, and replay assertions before projecting generated cryptographic material for comparison.
 
 Route checks require zero missing routes in both configured profiles. The all-in profile must match the empty backlog in `deferred-routes.txt`; new gaps and stale backlog entries fail. Route coverage does not establish support for every plugin option or server-only API.
+
+The `organization-jwt` profile verifies teams together with asymmetric session caches, JWT callbacks, transformed user fields, and application-owned session fields. It compares complete session and user objects after cryptographic verification. The same profile verifies OIDC mapped field creation and updates.
 
 The Cargo runner builds the Rust fixture before starting either server. Health deadlines measure server startup, not compilation or Cargo lock waits.
 
@@ -129,3 +133,18 @@ bash compat-tests/client-tests/run-against-both.sh phase11
 bash compat-tests/client-tests/run-against-both.sh phase12
 bash compat-tests/client-tests/run-against-both.sh all
 ```
+
+### Enabled organization profiles
+
+`organization-extended` enables teams and dynamic access control with the upstream default access-control statements. The scenarios verify team and role lifecycles, active team sessions, membership identity, duplicate membership, permission revocation, assigned-role deletion, and tenant isolation. `organization-limits` disables default teams, permits removing the last team, and verifies team, member, and role limits plus concurrent duplicate membership. `organization-no-ac` verifies the explicit missing-access-control configuration error. `organization-cache` verifies upstream cache write timing, fresh database session identities, and active-team selection with the session cookie cache enabled. Phase 6 retains the default organization configuration.
+
+Run each profile with the existing dual-runtime harness:
+
+```bash
+COMPAT_TEST_PROFILE=organization-extended devenv shell -- cargo test --locked --test client_compat_tests configuration_client_compat -- --ignored --nocapture
+COMPAT_TEST_PROFILE=organization-cache devenv shell -- cargo test --locked --test client_compat_tests configuration_client_compat -- --ignored --nocapture
+COMPAT_TEST_PROFILE=organization-limits devenv shell -- cargo test --locked --test client_compat_tests configuration_client_compat -- --ignored --nocapture
+COMPAT_TEST_PROFILE=organization-no-ac devenv shell -- cargo test --locked --test client_compat_tests configuration_client_compat -- --ignored --nocapture
+```
+
+The `aligned-rs` and `all-in` OpenAPI profiles enable teams and dynamic roles. Both profiles require zero route gaps.

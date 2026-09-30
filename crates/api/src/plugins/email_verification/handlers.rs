@@ -45,7 +45,7 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
                 None,
             )?;
             let url = verification_url(&ctx.config.base_url, &token, body.callback_url.as_deref());
-            let user = UserView::from(user);
+            let user = ctx.user_view(user)?;
             if let Some(ref sender) = config.send_verification_email {
                 sender.send(&user, &url, &token).await?;
             }
@@ -75,7 +75,7 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
                 None,
             )?;
             let url = verification_url(&ctx.config.base_url, &token, body.callback_url.as_deref());
-            let user = UserView::from(&user);
+            let user = ctx.user_view(&user)?;
             if let Some(ref sender) = config.send_verification_email {
                 sender.send(&user, &url, &token).await?;
             }
@@ -107,8 +107,10 @@ where
 {
     let current_session = current_session
         .map(|(user, session)| {
-            SessionView::with_fields(&session, &ctx.config.session)
-                .map(|session| (UserView::from(&user), session))
+            Ok::<_, AuthError>((
+                ctx.user_view(&user)?,
+                SessionView::with_fields(&session, &ctx.config.session)?,
+            ))
         })
         .transpose()?;
 
@@ -176,7 +178,7 @@ where
                     query.callback_url.as_deref(),
                 );
                 if let Some(ref sender) = config.send_verification_email {
-                    let mut updated_user = UserView::from(&user);
+                    let mut updated_user = ctx.user_view(&user)?;
                     updated_user.email = Some(update_to.to_string());
                     sender.send(&updated_user, &url, &new_token).await?;
                 }
@@ -202,7 +204,7 @@ where
                             .map_err(SessionIssueError::into_auth_error)?
                             .session;
                         (
-                            UserView::from(&user),
+                            ctx.user_view(&user)?,
                             SessionView::with_fields(&session, &ctx.config.session)?,
                         )
                     }
@@ -221,7 +223,7 @@ where
                     .await?;
 
                 if let Some(ref hook) = config.after_email_verification {
-                    let hook_user = UserView::from(&updated_user);
+                    let hook_user = ctx.user_view(&updated_user)?;
                     hook(&hook_user).await?;
                 }
 
@@ -235,7 +237,7 @@ where
                 return Ok(VerifyEmailResult::Json {
                     body: serde_json::json!({
                         "status": true,
-                        "user": UserView::from(&updated_user),
+                        "user": ctx.user_view(&updated_user)?,
                     }),
                     session_token: Some(session.token().to_string()),
                 });
@@ -265,7 +267,7 @@ where
                     query.callback_url.as_deref(),
                 );
                 if let Some(ref sender) = config.send_verification_email {
-                    let wire_user = UserView::from(&updated_user);
+                    let wire_user = ctx.user_view(&updated_user)?;
                     sender.send(&wire_user, &url, &new_token).await?;
                 }
 
@@ -302,7 +304,7 @@ where
     }
 
     if let Some(ref hook) = config.before_email_verification {
-        let hook_user = UserView::from(&user);
+        let hook_user = ctx.user_view(&user)?;
         hook(&hook_user).await?;
     }
 
@@ -318,7 +320,7 @@ where
         .await?;
 
     if let Some(ref hook) = config.after_email_verification {
-        let hook_user = UserView::from(&updated_user);
+        let hook_user = ctx.user_view(&updated_user)?;
         hook(&hook_user).await?;
     }
 

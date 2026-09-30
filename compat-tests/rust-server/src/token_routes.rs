@@ -1,11 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
 use better_auth::{
-    AuthBuilder, AuthResult,
     plugins::{
         AnonymousPlugin, JwtAlgorithm, JwtPlugin, MagicLinkMessage, MagicLinkPlugin,
         MultiSessionPlugin, OneTimeTokenPlugin, PhoneNumberPlugin, SendMagicLink, TokenStorage,
     },
+    AuthBuilder, AuthResult,
 };
 use tokio::sync::Mutex;
 
@@ -37,7 +37,7 @@ pub(super) fn add_plugins(
         "jwt" => builder.plugin(JwtPlugin::new()),
         "jwt-rs256" => builder.plugin(JwtPlugin::new().algorithm(JwtAlgorithm::Rs256)),
         "jwt-es256" => builder.plugin(JwtPlugin::new().algorithm(JwtAlgorithm::Es256)),
-        "jwt-identity" => builder
+        "jwt-identity" | "user-fields" => builder
             .plugin(JwtPlugin::new())
             .plugin(AnonymousPlugin::new())
             .plugin(PhoneNumberPlugin::new()),

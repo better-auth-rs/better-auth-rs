@@ -1,6 +1,8 @@
 pub mod invitation;
 pub mod member;
 pub mod org;
+pub mod roles;
+pub mod team;
 
 pub use invitation::*;
 pub use member::*;
@@ -12,7 +14,7 @@ use better_auth_core::plugin::AuthContext;
 use better_auth_core::types::{AuthRequest, AuthResponse};
 
 use super::OrganizationConfig;
-use super::rbac::{Action, Resource, has_permission_any};
+use super::rbac::check_permissions;
 use super::types::{HasPermissionRequest, HasPermissionResponse};
 
 /// Helper function to require authenticated session
@@ -40,11 +42,11 @@ pub(crate) async fn resolve_organization_id(
     session: &impl AuthSession,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<String> {
-    if let Some(id) = org_id {
+    if let Some(id) = org_id.filter(|id| !id.is_empty()) {
         return Ok(id.to_string());
     }
 
-    if let Some(slug) = org_slug {
+    if let Some(slug) = org_slug.filter(|slug| !slug.is_empty()) {
         if let Some(org) = ctx.database.get_organization_by_slug(slug).await? {
             use better_auth_core::entity::AuthOrganization;
             return Ok(org.id().to_string());
@@ -78,36 +80,8 @@ pub(crate) async fn has_permission_core(
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
-    let mut has_all_permissions = true;
-
-    for (resource_str, actions) in &body.permissions {
-        let resource = match Resource::parse(resource_str) {
-            Some(r) => r,
-            None => {
-                has_all_permissions = false;
-                break;
-            }
-        };
-
-        for action_str in actions {
-            let action = match Action::parse(action_str) {
-                Some(a) => a,
-                None => {
-                    has_all_permissions = false;
-                    break;
-                }
-            };
-
-            if !has_permission_any(member.role(), &resource, &action, &config.roles) {
-                has_all_permissions = false;
-                break;
-            }
-        }
-
-        if !has_all_permissions {
-            break;
-        }
-    }
+    let has_all_permissions =
+        check_permissions(member.role(), &org_id, &body.permissions, config, ctx).await?;
 
     Ok(HasPermissionResponse {
         success: has_all_permissions,

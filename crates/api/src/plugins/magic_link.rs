@@ -6,9 +6,7 @@ use async_trait::async_trait;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
     AuthUser, AuthVerification, CreateUser, CreateVerification, RequestMeta,
-    middleware::EndpointRateLimit,
-    utils::cookie_utils::create_session_cookie,
-    wire::{SessionView, UserView},
+    middleware::EndpointRateLimit, utils::cookie_utils::create_session_cookie, wire::SessionView,
 };
 use chrono::{Duration, Utc};
 use rand::Rng;
@@ -264,7 +262,7 @@ impl MagicLinkPlugin {
         let response = if req.query.get("callbackURL").is_none_or(String::is_empty) {
             AuthResponse::json(
                 200,
-                &serde_json::json!({ "token": issued.session.token(), "session": SessionView::with_fields(&issued.session, &ctx.config.session)?, "user": UserView::from(&issued.user) }),
+                &serde_json::json!({ "token": issued.session.token(), "session": SessionView::with_fields(&issued.session, &ctx.config.session)?, "user": ctx.user_view(&issued.user)? }),
             )?
         } else {
             redirect(if is_new_user {
