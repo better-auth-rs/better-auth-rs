@@ -37,6 +37,7 @@ export function normalizeUrl(value: string, baseURL?: string): string {
   for (const key of ["token", "state", "code_challenge"]) {
     if (url.searchParams.has(key)) url.searchParams.set(key, `<${key}>`);
   }
+  if (url.searchParams.get("nonce")) url.searchParams.set("nonce", "<nonce>");
   for (const key of ["redirect_uri", "post_logout_redirect_uri", "callbackURL", "errorCallbackURL", "newUserCallbackURL"]) {
     const nested = url.searchParams.get(key);
     if (nested) url.searchParams.set(key, normalizeUrl(nested, baseURL));

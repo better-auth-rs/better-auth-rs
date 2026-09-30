@@ -43,6 +43,9 @@ pub struct EmailVerificationConfig {
     /// user is unverified. Default: false.
     #[config(default = false)]
     pub send_on_sign_in: bool,
+    /// Send for new unverified OAuth users; defaults to the provider verification requirement.
+    #[config(default = None)]
+    pub send_on_sign_up: Option<bool>,
     /// When true, create a session after email verification and return the
     /// session token in the verify-email response. Default: false.
     #[config(default = false)]
@@ -265,6 +268,31 @@ impl EmailVerificationPlugin {
         }
 
         Ok(())
+    }
+
+    pub(crate) async fn send_verification_on_oauth_sign_in(
+        &self,
+        user: &impl AuthUser,
+        is_register: bool,
+        require_verification: bool,
+        callback_url: &str,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) {
+        let should_send = if is_register {
+            self.config.send_on_sign_up.unwrap_or(require_verification)
+        } else {
+            require_verification && self.config.send_on_sign_in
+        };
+        if should_send
+            && !user.email_verified()
+            && let Some(email) = user.email()
+            && let Err(error) = self
+                .send_verification_email_for_user(user, email, Some(callback_url), ctx)
+                .await
+        {
+            // Upstream logs sender failures without changing the OAuth verification decision.
+            tracing::error!(%error, "Failed to send OAuth verification email");
+        }
     }
 
     /// Check if `send_on_sign_in` is enabled.

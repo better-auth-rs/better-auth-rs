@@ -154,6 +154,49 @@ const oauthServer = Bun.serve({
 });
 const oauthBaseURL = `http://127.0.0.1:${oauthServer.port}`;
 const oauthAuthorizationURL = `http://localhost:${PORT}/__test/oauth/authorize`;
+const oidcBaseURL = process.env.COMPAT_OIDC_URL;
+const oidcProviders = oidcBaseURL ? [
+  { providerId: "oidc", discoveryUrl: `${oidcBaseURL}/discovery/valid` },
+  { providerId: "oidc-rotation", discoveryUrl: `${oidcBaseURL}/discovery/valid` },
+  { providerId: "oidc-no-nonce", discoveryUrl: `${oidcBaseURL}/discovery/valid`, disableIdTokenNonceBinding: true },
+  { providerId: "oidc-idp", discoveryUrl: `${oidcBaseURL}/discovery/valid`, allowIdpInitiated: true },
+  { providerId: "oidc-basic", discoveryUrl: `${oidcBaseURL}/discovery/valid`, authentication: "basic" as const },
+  { providerId: "oidc-public", discoveryUrl: `${oidcBaseURL}/discovery/valid`, clientSecret: undefined, tokenEndpointAuth: { method: "none" as const } },
+  { providerId: "oidc-no-signup", discoveryUrl: `${oidcBaseURL}/discovery/valid`, disableSignUp: true },
+  {
+    providerId: "oidc-email-required", discoveryUrl: `${oidcBaseURL}/discovery/valid`,
+    requireEmailVerification: true,
+    accountSubject: ({ profile }: { profile: Record<string, unknown> }) => String(profile.external_subject),
+    mapProfileToUser: () => ({ name: "Mapped OIDC User", emailVerified: false, image: null }),
+  },
+  {
+    providerId: "oidc-mapped", discoveryUrl: `${oidcBaseURL}/discovery/valid`,
+    accountSubject: ({ profile }: { profile: Record<string, unknown> }) => String(profile.external_subject),
+    mapProfileToUser: () => ({ name: "Mapped OIDC User", emailVerified: false, image: null }),
+  },
+  {
+    providerId: "oidc-parameters", discoveryUrl: `${oidcBaseURL}/discovery/headers`,
+    discoveryHeaders: { "x-compat-discovery": "allowed" },
+    pkce: false, prompt: "login", accessType: "offline", responseMode: "query",
+    authorizationUrlParams: { prompt: "consent", tenant: "configured", state: "ignored", nonce: "ignored" },
+    tokenUrlParams: { audience: "fleet-api" },
+  },
+  { providerId: "oidc-unavailable", discoveryUrl: `${oidcBaseURL}/discovery/unavailable` },
+  { providerId: "oidc-missing-jwks", discoveryUrl: `${oidcBaseURL}/discovery/missing-jwks` },
+  { providerId: "oidc-invalid-issuer", discoveryUrl: `${oidcBaseURL}/discovery/invalid-issuer` },
+  {
+    providerId: "oauth-fallback", discoveryUrl: `${oidcBaseURL}/discovery/unavailable`,
+    authorizationUrl: `${oidcBaseURL}/authorize`, tokenUrl: `${oidcBaseURL}/token`,
+    userInfoUrl: `${oidcBaseURL}/userinfo`, requireIdTokenVerification: false,
+  },
+].map((provider) => ({
+  clientId: "oidc-client",
+  clientSecret: "oidc-secret",
+  scopes: ["email", "profile"],
+  requireIdTokenVerification: true,
+  ...(process.env.COMPAT_PROFILE?.startsWith("oauth-proxy") ? { redirectURI: `https://production.example.com/api/auth/callback/${provider.providerId}` } : {}),
+  ...provider,
+})) : [];
 
 const originalFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -379,6 +422,7 @@ const authOptions = {
     username(),
     genericOAuth({
       config: [
+        ...oidcProviders,
         {
           providerId: "mock",
           endSessionEndpoint: "https://idp.example.test/logout",

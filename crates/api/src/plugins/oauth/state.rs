@@ -35,6 +35,8 @@ pub(crate) struct OAuthStatePayload {
         skip_serializing_if = "Map::is_empty"
     )]
     pub server_context: Map<String, Value>,
+    #[serde(rename = "idTokenNonce", skip_serializing_if = "Option::is_none")]
+    pub id_token_nonce: Option<String>,
     #[serde(flatten)]
     pub additional_data: Map<String, Value>,
 }
@@ -58,6 +60,7 @@ impl OAuthStatePayload {
             expires_at: (Utc::now() + Duration::minutes(10)).timestamp_millis(),
             request_sign_up,
             server_context: Map::new(),
+            id_token_nonce: None,
             additional_data,
         }
     }

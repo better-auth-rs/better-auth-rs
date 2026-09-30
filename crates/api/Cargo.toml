@@ -61,6 +61,10 @@ webauthn-rs-core = "0.5.4"
 josekit.workspace = true
 sha3.workspace = true
 chacha20poly1305.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+openssl = "0.10.81"
+indexmap = { version = "2.14.2", features = ["serde"] }
 
 [dev-dependencies]
 tokio = { workspace = true }

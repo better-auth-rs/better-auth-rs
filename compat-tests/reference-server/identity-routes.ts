@@ -11,7 +11,7 @@ export function createIdentityFixture(database: Database, profile: string) {
   function send(message: { phoneNumber: string; code: string }, purpose: string) {
     outbox.set(message.phoneNumber, [...(outbox.get(message.phoneNumber) ?? []), { ...message, purpose }]);
   }
-  const plugins = profile.startsWith("anonymous") ? [anonymous({
+  const plugins = (profile.startsWith("anonymous") || profile === "oauth-proxy-anonymous") ? [anonymous({
     generateRandomEmail: () => `anonymous-${++counter}@example.com`,
     disableDeleteAnonymousUser: profile === "anonymous-disabled",
     onLinkAccount: async ({ anonymousUser, newUser }) => { links.push({ anonymousId: anonymousUser.user.id, newId: newUser.user.id }); },

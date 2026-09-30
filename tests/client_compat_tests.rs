@@ -78,12 +78,25 @@ async fn wait_for_health(port: u16, child: &mut ManagedChild, timeout: Duration)
     );
 }
 
-fn start_reference_server(port: u16, profile: &str) -> ManagedChild {
+fn start_oidc_server(port: u16) -> ManagedChild {
+    let child = Command::new("bun")
+        .args(["run", "oidc-server.ts"])
+        .current_dir(project_root().join("compat-tests/reference-server"))
+        .env("PORT", port.to_string())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .unwrap_or_else(|error| panic!("failed to start OIDC issuer: {error}"));
+    ManagedChild::new("oidc-issuer", child)
+}
+
+fn start_reference_server(port: u16, profile: &str, oidc_url: &str) -> ManagedChild {
     let child = Command::new("bun")
         .args(["run", "server.ts"])
         .current_dir(project_root().join("compat-tests/reference-server"))
         .env("PORT", port.to_string())
         .env("COMPAT_PROFILE", profile)
+        .env("COMPAT_OIDC_URL", oidc_url)
         .env("NO_PROXY", "localhost,127.0.0.1")
         .env("no_proxy", "localhost,127.0.0.1")
         .stdout(Stdio::inherit())
@@ -140,11 +153,17 @@ fn rust_compat_binary() -> &'static Path {
         .as_path()
 }
 
-fn start_rust_compat_server(binary: &Path, port: u16, profile: &str) -> ManagedChild {
+fn start_rust_compat_server(
+    binary: &Path,
+    port: u16,
+    profile: &str,
+    oidc_url: &str,
+) -> ManagedChild {
     let child = Command::new(binary)
         .current_dir(project_root())
         .env("PORT", port.to_string())
         .env("COMPAT_PROFILE", profile)
+        .env("COMPAT_OIDC_URL", oidc_url)
         .env("NO_PROXY", "localhost,127.0.0.1")
         .env("no_proxy", "localhost,127.0.0.1")
         .stdout(Stdio::inherit())
@@ -155,12 +174,13 @@ fn start_rust_compat_server(binary: &Path, port: u16, profile: &str) -> ManagedC
     ManagedChild::new("rust-compat", child)
 }
 
-fn run_bun_phase_suite(paths: &[&str], ts_port: u16, rust_port: u16) {
+fn run_bun_phase_suite(paths: &[&str], ts_port: u16, rust_port: u16, oidc_url: &str) {
     let output = Command::new("bun")
         .arg("test")
         .args(paths)
         .current_dir(project_root().join("compat-tests/client-tests"))
         .env("AUTH_BASE_URL_TS", format!("http://localhost:{ts_port}"))
+        .env("COMPAT_OIDC_URL", oidc_url)
         .env(
             "AUTH_BASE_URL_RUST",
             format!("http://localhost:{rust_port}"),
@@ -183,16 +203,19 @@ async fn run_client_compat(paths: &[&str]) {
 
 async fn run_client_compat_profile(paths: &[&str], profile: &str) {
     let binary = rust_compat_binary();
+    let oidc_port = allocate_port();
+    let oidc_url = format!("http://127.0.0.1:{oidc_port}");
+
+    let mut oidc_server = start_oidc_server(oidc_port);
+    wait_for_health(oidc_port, &mut oidc_server, Duration::from_secs(20)).await;
     let ts_port = allocate_port();
-    let rust_port = allocate_port();
-
-    let mut ts_server = start_reference_server(ts_port, profile);
-    let mut rust_server = start_rust_compat_server(binary, rust_port, profile);
-
+    let mut ts_server = start_reference_server(ts_port, profile, &oidc_url);
     wait_for_health(ts_port, &mut ts_server, Duration::from_secs(20)).await;
+    let rust_port = allocate_port();
+    let mut rust_server = start_rust_compat_server(binary, rust_port, profile, &oidc_url);
     wait_for_health(rust_port, &mut rust_server, Duration::from_secs(90)).await;
 
-    run_bun_phase_suite(paths, ts_port, rust_port);
+    run_bun_phase_suite(paths, ts_port, rust_port, &oidc_url);
 }
 
 #[tokio::test]
@@ -217,6 +240,16 @@ async fn phase2_client_compat() {
 #[ignore = "starts external TS and Rust servers"]
 async fn phase3_client_compat() {
     run_client_compat(&["tests/phase3"]).await;
+}
+
+#[tokio::test]
+#[ignore = "starts external OIDC, TS and Rust servers"]
+async fn oidc_client_compat() {
+    run_client_compat(&[
+        "tests/phase3/oidc.test.ts",
+        "tests/phase3/oidc-boundaries.test.ts",
+    ])
+    .await;
 }
 
 #[tokio::test]
@@ -323,6 +356,7 @@ async fn configuration_client_compat() {
         "one-tap-options",
         "oauth-proxy",
         "oauth-proxy-cookie",
+        "oauth-proxy-anonymous",
         "jwt",
         "jwt-rs256",
         "jwt-es256",

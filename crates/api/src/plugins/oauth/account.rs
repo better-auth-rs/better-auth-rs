@@ -9,7 +9,8 @@ use super::handlers::{
     create_account_cookie_header, decode_account_cookie, fetch_user_info_from_provider,
     refresh_tokens_via_provider,
 };
-use super::providers::{OAuthConfig, OAuthTokenSet, OAuthUserInfoRequest};
+use super::providers::{OAuthTokenSet, OAuthUserInfoRequest};
+use super::resolved::ResolvedOAuthConfig as OAuthConfig;
 use super::state::AccountCookiePayload;
 use super::types::{
     AccessTokenResponse, AccountInfoAccount, AccountInfoResponse, AccountInfoUser,
@@ -157,6 +158,7 @@ async fn persist_tokens(
 async fn valid_access_token(
     account: &mut AccountCookiePayload,
     config: &OAuthConfig,
+    req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(AccessTokenResponse, bool)> {
     let provider = config.providers.get(&account.provider_id).ok_or_else(|| {
@@ -175,7 +177,7 @@ async fn valid_access_token(
         expires_at.timestamp_millis() - Utc::now().timestamp_millis() < 5_000
     });
     let refreshed = if expired && let Some(refresh_token) = refresh_token {
-        let tokens = refresh_tokens_via_provider(provider, &refresh_token)
+        let tokens = refresh_tokens_via_provider(provider, &refresh_token, req)
             .await
             .map_err(|_| AuthError::bad_request("Failed to get a valid access token"))?;
         persist_tokens(account, &tokens, ctx).await?;
@@ -228,9 +230,9 @@ pub(super) async fn handle_get_access_token(
         Ok(selection) => selection,
         Err(message) => return invalid_selection("body", message),
     };
-    let (_, session) = ctx.require_session(req).await?;
+    let (_, session) = ctx.require_authoritative_session(req).await?;
     let mut account = selection.resolve(req, &session.user_id, ctx).await?;
-    let (response, refreshed) = valid_access_token(&mut account, config, ctx).await?;
+    let (response, refreshed) = valid_access_token(&mut account, config, req, ctx).await?;
     token_response(&response, &account, refreshed, ctx)
 }
 
@@ -243,7 +245,7 @@ pub(super) async fn handle_refresh_token(
         Ok(selection) => selection,
         Err(message) => return invalid_selection("body", message),
     };
-    let (_, session) = ctx.require_session(req).await?;
+    let (_, session) = ctx.require_authoritative_session(req).await?;
     let mut account = selection.resolve(req, &session.user_id, ctx).await?;
     let provider = config.providers.get(&account.provider_id).ok_or_else(|| {
         AuthError::bad_request(format!(
@@ -257,7 +259,7 @@ pub(super) async fn handle_refresh_token(
         &ctx.config.secret,
     )?
     .ok_or_else(|| AuthError::bad_request("Refresh token not found"))?;
-    let tokens = refresh_tokens_via_provider(provider, &refresh_token)
+    let tokens = refresh_tokens_via_provider(provider, &refresh_token, req)
         .await
         .map_err(|_| AuthError::bad_request("Failed to refresh access token"))?;
     persist_tokens(&mut account, &tokens, ctx).await?;
@@ -296,7 +298,7 @@ pub(super) async fn handle_account_info(
         Ok(selection) => selection,
         Err(message) => return invalid_selection("query", message),
     };
-    let (_, session) = ctx.require_session(req).await?;
+    let (_, session) = ctx.require_authoritative_session(req).await?;
     let mut account = selection.resolve(req, &session.user_id, ctx).await?;
     let provider = config
         .providers
@@ -306,30 +308,42 @@ pub(super) async fn handle_account_info(
             code: "PROVIDER_NOT_CONFIGURED",
             message: "Account is not associated with a configured social provider.",
         })?;
-    let (tokens, refreshed) = valid_access_token(&mut account, config, ctx).await?;
+    let (tokens, refreshed) = valid_access_token(&mut account, config, req, ctx).await?;
     let access_token = tokens
         .access_token
         .filter(|token| !token.is_empty())
         .ok_or_else(|| AuthError::bad_request("Access token not found"))?;
-    let info = fetch_user_info_from_provider(
-        provider,
-        OAuthUserInfoRequest {
-            access_token: Some(access_token),
-            access_token_expires_at: account.access_token_expires_at,
-            scopes: tokens.scopes,
-            id_token: tokens.id_token,
-            ..Default::default()
-        },
-    )
-    .await?;
+    let request = OAuthUserInfoRequest {
+        access_token: Some(access_token),
+        access_token_expires_at: account.access_token_expires_at,
+        scopes: tokens.scopes,
+        id_token: tokens.id_token,
+        ..Default::default()
+    };
+    let (user, data) = if let Some(generic) = &provider.generic {
+        let info = super::generic_profile::fetch_profile(generic, &request, None)
+            .await
+            .map_err(|_| AuthError::Upstream {
+                status: 401,
+                code: "FAILED_TO_GET_USER_INFO",
+                message: "Failed to get user info",
+            })?;
+        (info.user, info.data)
+    } else {
+        let info = fetch_user_info_from_provider(provider, request, None).await?;
+        (
+            AccountInfoUser {
+                name: info.user.name,
+                email: info.user.email,
+                image: info.user.image,
+                email_verified: info.user.email_verified,
+            },
+            info.data,
+        )
+    };
     let response = AccountInfoResponse {
-        user: AccountInfoUser {
-            name: info.user.name,
-            email: info.user.email,
-            image: info.user.image,
-            email_verified: info.user.email_verified,
-        },
-        data: info.data,
+        user,
+        data,
         account: AccountInfoAccount {
             id: account.id.clone(),
             provider_id: account.provider_id.clone(),

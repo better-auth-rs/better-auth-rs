@@ -48,6 +48,7 @@ Configure a `SendVerificationEmail` callback for `/send-verification-email`. Set
 | `send_email_notifications` | `bool` | `true` | Use the default email provider for sign-in notifications; custom callbacks are independent |
 | `require_verification_for_signin` | `bool` | `false` | Require verification for username sign-in when attached with `with_email_verification` |
 | `send_on_sign_in` | `bool` | `false` | Send to unverified users when attached with `EmailPasswordPlugin::with_email_verification` |
+| `send_on_sign_up` | `Option<bool>` | `None` | Send for new unverified OAuth users; `None` follows the provider's `require_email_verification` |
 | `auto_sign_in_after_verification` | `bool` | `false` | Create a session after verification |
 
 ## Send Verification Email
@@ -102,6 +103,8 @@ GET /verify-email?token=<verification_token>
 ## Sending After Sign-Up
 
 Call `/send-verification-email` after a successful sign-up. Registering `EmailVerificationPlugin` does not automatically send mail when a user is created. Users become verified only after completing the verification flow.
+
+For Generic OAuth, attach the verification plugin with `OAuthPlugin::with_email_verification`. New unverified users follow `send_on_sign_up`; subsequent sign-ins send only when the provider requires email verification and `send_on_sign_in` is enabled. Sender failures are logged and preserve the verification decision, matching upstream. See [Generic OAuth / OIDC](/docs/plugins/oauth#generic-oauth--oidc).
 
 Use [SeaORM hooks](/docs/concepts/hooks) for application database operations associated with user creation.
 

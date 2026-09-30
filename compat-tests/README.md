@@ -26,11 +26,13 @@ The comparator assigns stable aliases to explicitly listed generated IDs and ses
 
 Configuration scenarios start fresh server pairs with the same `COMPAT_PROFILE`. The profiles cover API keys, device authorization, OTP storage and delivery, Magic Link, one-time tokens, multiple sessions, anonymous upgrades, phone numbers, SIWE, JWT algorithms, Google One Tap, and OAuth Proxy. Set `COMPAT_TEST_PROFILE` to run one configuration during development. The full gate runs every configuration. Each Bun directory argument has a `./` prefix and trailing slash so similarly named profiles cannot run under the wrong server configuration.
 
-Passkey scenarios use an ES256 software authenticator. JWT and One Tap scenarios verify real asymmetric signatures. SIWE scenarios sign Ethereum messages. OAuth Proxy scenarios exchange encrypted profiles between the TS and Rust servers in both directions. These checks preserve identity, expiry, and replay assertions before projecting generated cryptographic material for comparison.
+Passkey scenarios use an ES256 software authenticator. JWT and One Tap scenarios verify real asymmetric signatures. SIWE scenarios sign Ethereum messages. OAuth Proxy scenarios exchange encrypted profiles between the TS and Rust servers in both directions. The Proxy profiles also verify real OIDC code exchange, API-key account linking, and anonymous upgrades without the original session cookie. These checks preserve identity, expiry, and replay assertions before projecting generated cryptographic material for comparison.
 
 Route checks require zero missing routes in both configured profiles. The all-in profile must match the empty backlog in `deferred-routes.txt`; new gaps and stale backlog entries fail. Route coverage does not establish support for every plugin option or server-only API.
 
 The Cargo runner builds the Rust fixture before starting either server. Health deadlines measure server startup, not compilation or Cargo lock waits.
+
+Generic OAuth scenarios use a shared local OIDC issuer with real signed ID tokens, discovery, JWKS, and token endpoints. They cover nonce binding, issuer and audience checks, key rotation, profile mapping, authorization parameters, client authentication, refresh, and provider logout. The Cargo runner starts the issuer and both auth servers. Run only these scenarios with `devenv shell -- cargo test --test client_compat_tests oidc_client_compat -- --ignored --nocapture`.
 
 ## Components
 

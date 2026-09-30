@@ -1,13 +1,14 @@
 import { expect } from "bun:test";
 import { symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
 import { compatScenario } from "../../../support/scenario";
+import { control } from "../../../support/oidc";
 import { TS_BASE_URL, RUST_BASE_URL } from "../../../support/config";
 
 const secret = "compat-test-only-key-not-real-minimum-32chars";
 const decode = async (data: string) => JSON.parse(await symmetricDecrypt({ key: secret, data }));
 const encode = (data: unknown) => symmetricEncrypt({ key: secret, data: JSON.stringify(data) });
 
-function cookies(response: Response, previous = "") {
+export function cookies(response: Response, previous = "") {
   const jar = new Map(previous.split("; ").filter(Boolean).map(cookie => cookie.split(/=(.*)/s).slice(0, 2) as [string, string]));
   for (const cookie of response.headers.getSetCookie()) {
     const [pair, ...attributes] = cookie.split(";");
@@ -18,7 +19,7 @@ function cookies(response: Response, previous = "") {
   return [...jar].map(([name, value]) => `${name}=${value}`).join("; ");
 }
 
-async function start(ctx: any, link = false) {
+export async function start(ctx: any, link = false) {
   const peer = ctx.baseURL === TS_BASE_URL ? RUST_BASE_URL : TS_BASE_URL;
   await fetch(`${peer}/__test/reset-state`, { method: "POST" });
   const before = await fetch(`${peer}/__test/oauth-proxy/stats`).then(response => response.json());
@@ -54,6 +55,102 @@ async function start(ctx: any, link = false) {
 }
 
 export function registerProxyScenarios(cookieState = false) {
+  compatScenario("OAuth proxy exchanges real OIDC tokens across runtimes", async ctx => {
+    const peer = ctx.baseURL === TS_BASE_URL ? RUST_BASE_URL : TS_BASE_URL;
+    await fetch(`${peer}/__test/reset-state`, { method: "POST" });
+    const identity = { email: ctx.uniqueEmail("proxy-oidc"), sub: ctx.uniqueToken("proxy-oidc-subject") };
+    await control("configure", { ...identity, mode: "valid" });
+    const initiation = await ctx.actor().fetch(`${ctx.baseURL}/api/auth/sign-in/social`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ provider: "oidc", callbackURL: "/oidc-return", disableRedirect: true }),
+    });
+    expect(initiation.status).toBe(200);
+    const authorization = new URL((await initiation.json()).url);
+    expect(authorization.searchParams.get("nonce")).toBeTruthy();
+    expect(authorization.searchParams.get("code_challenge_method")).toBe("S256");
+    const issued = await fetch(authorization, { redirect: "manual" });
+    expect(issued.status).toBe(302);
+    const callback = new URL(issued.headers.get("location")!);
+    expect(callback.origin).toBe("https://production.example.com");
+    const production = await fetch(`${peer}${callback.pathname}${callback.search}`, { redirect: "manual" });
+    expect(production.status).toBe(302);
+    const completion = new URL(production.headers.get("location")!);
+    expect(completion.origin).toBe(ctx.baseURL);
+    expect(completion.searchParams.has("profile")).toBe(true);
+    const response = await fetch(completion, { headers: { cookie: cookies(initiation) }, redirect: "manual" });
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/oidc-return");
+    const cookie = cookies(response, cookies(initiation));
+    const sessionResponse = await fetch(`${ctx.baseURL}/api/auth/get-session`, { headers: { cookie } });
+    expect(sessionResponse.status).toBe(200);
+    const session = await sessionResponse.json();
+    expect(session.user.email).toBe(identity.email);
+    expect(session.user.emailVerified).toBe(true);
+    expect(session.session.userId).toBe(session.user.id);
+    const accountsResponse = await fetch(`${ctx.baseURL}/api/auth/list-accounts`, { headers: { cookie } });
+    expect(accountsResponse.status).toBe(200);
+    const accounts = await accountsResponse.json();
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0].providerId).toBe("oidc");
+    expect(accounts[0].accountId).toBe(identity.sub);
+    const stats = await fetch(`${peer}/__test/oauth-proxy/stats`).then(response => response.json());
+    expect(stats).toEqual({ users: 0, sessions: 0 });
+    return { session, accounts, stats };
+  });
+
+  compatScenario("OAuth proxy rejects invalid signed OIDC identities before creating a session", async ctx => {
+    const peer = ctx.baseURL === TS_BASE_URL ? RUST_BASE_URL : TS_BASE_URL;
+    await fetch(`${peer}/__test/reset-state`, { method: "POST" });
+    const rejected: string[] = [];
+    for (const mode of ["wrong-signature", "wrong-issuer", "wrong-audience", "expired"]) {
+      await control("configure", { email: ctx.uniqueEmail("proxy-invalid"), sub: ctx.uniqueToken("proxy-invalid-subject"), mode });
+      const initiation = await ctx.actor().fetch(`${ctx.baseURL}/api/auth/sign-in/social`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider: "oidc", callbackURL: "/oidc-return", errorCallbackURL: "/oidc-error", disableRedirect: true }),
+      });
+      expect(initiation.status).toBe(200);
+      const authorization = await fetch((await initiation.json()).url, { redirect: "manual" });
+      expect(authorization.status).toBe(302);
+      const callback = new URL(authorization.headers.get("location")!);
+      const production = await fetch(`${peer}${callback.pathname}${callback.search}`, { redirect: "manual" });
+      expect(production.status).toBe(302);
+      expect(production.headers.get("location")).toBe("/oidc-error?error=unable_to_get_user_info");
+      expect(production.headers.getSetCookie()).toHaveLength(0);
+      rejected.push(production.headers.get("location")!);
+    }
+    const stats = await fetch(`${peer}/__test/oauth-proxy/stats`).then(response => response.json());
+    expect(stats).toEqual({ users: 0, sessions: 0 });
+    const session = await ctx.actor().client.getSession();
+    expect(session.data).toBeNull();
+    return { rejected, stats, session };
+  });
+
+  compatScenario("OAuth proxy accepts API-key authentication for account linking", async ctx => {
+    const signup = await ctx.actor().client.signUp.email({ email: "google@example.com", password: "Password123!", name: "Owner" });
+    expect(signup.error).toBeNull();
+    const created = await ctx.rawRequest({ path: "/api/auth/api-key/create", method: "POST", json: { configId: "session" } });
+    expect(created.status).toBe(200);
+    const key = (created.body as { key: string }).key;
+    const initiation = await fetch(`${ctx.baseURL}/api/auth/link-social`, {
+      method: "POST", headers: { "content-type": "application/json", "x-api-key": key },
+      body: JSON.stringify({ provider: "google", callbackURL: "/api-key-return", disableRedirect: true }),
+    });
+    expect(initiation.status).toBe(200);
+    const authorization = new URL((await initiation.json()).url);
+    const peer = ctx.baseURL === TS_BASE_URL ? RUST_BASE_URL : TS_BASE_URL;
+    const production = await fetch(`${peer}/api/auth/callback/google?${new URLSearchParams({ state: authorization.searchParams.get("state")!, code: "compat-code" })}`, { redirect: "manual" });
+    expect(production.status).toBe(302);
+    const completion = await fetch(production.headers.get("location")!, { headers: { cookie: cookies(initiation) }, redirect: "manual" });
+    expect(completion.status).toBe(302);
+    expect(completion.headers.get("location")).toBe("/api-key-return");
+    const accounts = await ctx.actor().client.listAccounts();
+    expect(accounts.error).toBeNull();
+    expect(accounts.data?.map(account => account.providerId).sort()).toEqual(["credential", "google"]);
+    const session = await ctx.actor().client.getSession();
+    expect(session.data?.user.id).toBe(signup.data?.user.id);
+    return { accounts, session };
+  });
+
   if (cookieState) compatScenario("cookie OAuth binds the returned state even when proxying is skipped", async ctx => {
     const response = await ctx.actor().fetch(`${ctx.baseURL}/api/auth/sign-in/social`, {
       method: "POST", headers: { "content-type": "application/json", "x-skip-oauth-proxy": "true" },

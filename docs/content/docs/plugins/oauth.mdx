@@ -1,9 +1,9 @@
 ---
 title: OAuth / Social Login
-description: Sign in with Google, GitHub, Discord, and other OAuth providers.
+description: Sign in with built-in OAuth providers or configure Generic OAuth and OpenID Connect.
 ---
 
-The `OAuthPlugin` enables social sign-in via OAuth 2.0 providers. It handles the full authorization code flow with PKCE, token exchange, user info fetching, and account linking.
+The `OAuthPlugin` supports OAuth 2.0 and OpenID Connect (OIDC). It handles authorization code exchange, provider profiles, account linking, and provider logout.
 
 ## Setup
 
@@ -40,51 +40,90 @@ Better Auth RS includes pre-configured providers with correct URLs and user info
 | GitHub | `OAuthProvider::github(client_id, client_secret)` | `read:user`, `user:email` |
 | Discord | `OAuthProvider::discord(client_id, client_secret)` | `identify`, `email` |
 
-## Custom Provider
+## Generic OAuth / OIDC
 
-You can register any OAuth 2.0 provider by constructing an `OAuthProvider` manually:
+Use `GenericOAuthConfig` for providers with explicit OAuth endpoints or OIDC discovery. Register the callback URL `{base_url}{base_path}/callback/{provider}` with the identity provider. For example, a provider named `oidc` uses `/auth/callback/oidc` when the auth base path is `/auth`.
 
 ```rust
-use better_auth::plugins::oauth::{OAuthProvider, OAuthUserInfo};
-
-let custom_provider = OAuthProvider {
-    client_id: "your-client-id".to_string(),
-    client_secret: "your-client-secret".to_string(),
-    auth_url: "https://provider.com/oauth/authorize".to_string(),
-    token_url: "https://provider.com/oauth/token".to_string(),
-    user_info_url: Some("https://provider.com/api/userinfo".to_string()),
-    end_session_endpoint: Some("https://provider.com/logout".to_string()),
-    post_logout_redirect_uri: Some("/signed-out".to_string()),
-    scopes: vec!["openid".to_string(), "email".to_string()],
-    authorization_params: Vec::new(),
-    map_user_info: Some(|v| {
-        Ok(OAuthUserInfo {
-            id: v["sub"].as_str().ok_or("missing sub")?.to_string(),
-            email: v["email"].as_str().ok_or("missing email")?.to_string(),
-            name: v["name"].as_str().map(String::from),
-            image: v["avatar"].as_str().map(String::from),
-            email_verified: v["email_verified"].as_bool().unwrap_or(false),
-        })
-    }),
-    get_user_info: None,
-    refresh_access_token: None,
-    verify_id_token: None,
-    disable_implicit_sign_up: false,
-    disable_sign_up: false,
-    override_user_info_on_sign_in: false,
-};
+use better_auth::plugins::oauth::{GenericOAuthConfig, OAuthPlugin};
 
 let auth = BetterAuth::<AppAuthSchema>::new(config)
     .store(store)
-    .plugin(
-        OAuthPlugin::new()
-            .add_provider("custom", custom_provider)
-    )
+    .plugin(OAuthPlugin::new().add_generic_provider("oidc", GenericOAuthConfig {
+        client_id: std::env::var("OIDC_CLIENT_ID")?,
+        client_secret: Some(std::env::var("OIDC_CLIENT_SECRET")?),
+        discovery_url: Some(std::env::var("OIDC_DISCOVERY_URL")?),
+        require_id_token_verification: true,
+        scopes: vec!["email".to_string(), "profile".to_string()],
+        ..Default::default()
+    }))
     .build()
     .await?;
 ```
 
-The `map_user_info` function transforms the provider's raw JSON user info response into a standardized `OAuthUserInfo` struct.
+Use the same client routes as built-in providers:
+
+```typescript
+await authClient.signIn.social({ provider: "oidc", callbackURL: "/dashboard" });
+await authClient.linkSocial({ provider: "oidc", callbackURL: "/settings" });
+```
+
+Discovery runs when the auth instance initializes. Explicit `authorization_url`, `token_url`, `user_info_url`, and `end_session_endpoint` values override discovered endpoints. OIDC providers also request `openid`. For an OAuth provider without discovery, configure the endpoints directly.
+
+Set `require_id_token_verification: true` when using ID tokens for identity. Discovery must supply an issuer and a JWKS URI. Received ID tokens are checked for signature, issuer, audience, expiration, and the authorization request's nonce. Without discovery verification, Generic OAuth retains upstream's unverified ID-token decoding behavior. This option requires verification capability; a provider may still return an access token and use its userinfo endpoint without an ID token.
+
+OIDC signature verification requires OpenSSL 3.0 or newer. OpenSSL 3.5 or newer is required for the complete ML-DSA algorithm set. The development shell supplies the native dependencies.
+
+### Token endpoint authentication
+
+`token_endpoint_auth` applies to both authorization-code exchange and token refresh:
+
+| Value | Configuration |
+| --- | --- |
+| `TokenEndpointAuth::ClientSecretPost` | Send `client_id` and `client_secret` in the form body |
+| `TokenEndpointAuth::ClientSecretBasic` | Send form-encoded credentials in the Basic authorization header |
+| `TokenEndpointAuth::None` | Send `client_id` without a client secret |
+| `TokenEndpointAuth::PrivateKeyJwt(handler)` | Implement `ClientAssertion` to sign a fresh assertion for each request |
+| `TokenEndpointAuth::Custom(handler)` | Implement `TokenRequestHook` to modify authentication headers and form parameters |
+
+When `token_endpoint_auth` is omitted, a configured secret selects `ClientSecretPost`; otherwise the public-client method is used. Set the method required by the provider. `None` and `PrivateKeyJwt` cannot be combined with `client_secret`.
+
+Use `authorization_url_params` for additional authorization parameters, `token_url_params` and `authorization_headers` for code exchange, and `refresh_token_params` for token refresh. Refresh parameters may be static or implement `OAuthRefreshParameters` to use the authenticated request. Reserved grant and authorization parameters cannot be replaced by these extra parameters. Implement `OAuthTokenHandler` through `get_token` when the provider needs a custom code exchange.
+
+### Profiles and account identity
+
+Generic OAuth reads an ID-token profile when it contains `sub` and `email`, then falls back to the userinfo endpoint. `get_user_info` accepts a `GenericOAuthUserInfoHandler` for a custom raw profile. `map_profile_to_user` accepts an `OAuthProfileMapper` to return local user fields independently of account identity.
+
+For `OAuthProfile.name` and `OAuthProfile.image`, `None` preserves the provider value, `Some(None)` clears the value, and `Some(Some(value))` replaces it. Other optional mapper fields preserve the provider value when omitted. Set `override_user_info: true` to update an existing user's profile on sign-in.
+
+The account subject comes from the original profile's `sub` for OIDC or `id` for OAuth. Implement `OAuthAccountSubject` through `account_subject` for providers with another stable identifier. Mapped user fields cannot change that identifier. `/account-info` fetches the profile for an existing linked account and keeps the stored account subject.
+
+### Sign-up and email verification
+
+Set `disable_sign_up: true` to reject new users through this provider. Existing users can continue signing in. `disable_implicit_sign_up: true` instead requires `requestSignUp: true` for new users. These settings apply to the configured provider; configure other sign-up mechanisms separately.
+
+Set `require_email_verification: true` to withhold sessions from users whose email remains unverified. Attach an email verification plugin to send verification messages:
+
+```rust
+use std::sync::Arc;
+use better_auth::plugins::email_verification::{EmailVerificationConfig, EmailVerificationPlugin};
+
+let verification = Arc::new(EmailVerificationPlugin::with_config(EmailVerificationConfig {
+    send_on_sign_up: None,
+    send_on_sign_in: true,
+    send_verification_email: Some(verification_sender),
+    ..Default::default()
+}));
+let oauth = OAuthPlugin::new()
+    .with_email_verification(verification)
+    .add_generic_provider("oidc", provider_config);
+```
+
+`verification_sender` is an `Arc` implementing `SendVerificationEmail`; see the [email verification guide](/docs/authentication/email-verification). Register a separate `EmailVerificationPlugin` with the same sender and token expiry configuration to expose `/verify-email`.
+
+`EmailVerificationConfig.send_on_sign_up` is `Option<bool>`. `None` follows the provider's `require_email_verification`, `Some(true)` sends for new unverified users, and `Some(false)` disables that send. Existing unverified users receive a message only when the provider requires email verification and `send_on_sign_in` is enabled. Sender failures are logged and do not change the verification decision, matching upstream.
+
+## Provider Logout
 
 When `end_session_endpoint` is configured, `POST /sign-out` also returns the provider logout `url` and a `redirect` flag. The endpoint includes the linked account's ID token as `id_token_hint`. A request `callbackURL` overrides `post_logout_redirect_uri`. A post-logout redirect also includes `client_id` and an optional request `state`. Without a redirect or ID token, the URL includes `client_id` only.
 
@@ -99,7 +138,7 @@ The OAuth plugin exposes the following endpoints. For full request/response deta
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/sign-in/social` | POST | Initiate OAuth sign-in flow |
-| `/callback/{provider}` | GET | OAuth callback handler |
+| `/callback/{provider}` | GET, POST | OAuth callback handler, including `form_post` responses |
 | `/link-social` | POST | Link a social account to an existing user |
 | `/get-access-token` | POST | Retrieve stored OAuth access token |
 | `/refresh-token` | POST | Refresh the OAuth access token |
@@ -119,17 +158,17 @@ GET /account-info?accountId=local-account-id
 Authorization: Bearer <token>
 ```
 
-The response includes provider user info and an `account` object with `id`, `providerId`, and the provider's `accountId`.
+The response includes provider user info and an `account` object with `id`, `providerId`, and the provider's `accountId`. The example's Authorization header requires explicit `SessionConfig.bearer` configuration; browser clients may use signed session cookies.
 
 For `POST /get-access-token` and `POST /refresh-token`, send `{ "accountId": "local-account-id" }`. When `account.store_account_cookie` is enabled, these POST endpoints also accept `{ "useAccountCookie": true }` to select the signed account cookie. Select exactly one source. The authenticated session determines the user.
 
-For `POST /unlink-account`, send `{ "accountId": "local-account-id" }`.
+For `POST /unlink-account`, send `{ "accountId": "local-account-id" }`. Access-token, refresh-token, and account-info routes check the current database session even when a session cookie cache is enabled. A revoked session cannot read or refresh provider credentials through a cached session.
 
 ## How It Works
 
 ### PKCE Flow
 
-All OAuth flows use PKCE (Proof Key for Code Exchange) for enhanced security:
+Authorization-code flows use PKCE (Proof Key for Code Exchange). Generic OAuth enables PKCE by default; set `GenericOAuthConfig.pkce: false` for a provider that does not support it. Direct ID-token sign-in does not perform a code exchange.
 
 1. A random `code_verifier` is generated
 2. A `code_challenge` is derived using SHA-256
@@ -142,25 +181,11 @@ All OAuth flows use PKCE (Proof Key for Code Exchange) for enhanced security:
 When the OAuth callback completes:
 
 - **Existing account for provider**: Updates the stored tokens and creates a new session
-- **New provider, existing email**: Links the new provider to the existing user
-- **New provider, new email**: Creates a new user and links the provider account
+- **New provider, existing email**: Links the provider when account-linking policy permits it
+- **New provider, new email**: Creates a user and links the provider when sign-up policy permits it
 
 ### State Management
 
-OAuth state is stored as a verification record with a 10-minute expiration. The state includes:
+OAuth state expires after 10 minutes. `account.store_state_strategy` selects database storage or a signed cookie. State includes the callback URLs, PKCE verifier, link target, sign-up intent, and OIDC nonce when nonce binding is enabled.
 
-- Provider name
-- Callback URL
-- PKCE code verifier
-- Link user ID (if linking to existing user)
-- Scopes
-
-## Errors
-
-| Status | Condition |
-|--------|-----------|
-| 400 | Unknown provider name |
-| 400 | Missing `code` or `state` in callback |
-| 400 | Provider mismatch between state and callback |
-| 409 | Social account already linked to another user |
-| 500 | Token exchange or user info fetch failed |
+With `allow_idp_initiated: true`, a callback without state starts a fresh authorization request. The new request establishes state and nonce binding before a session is issued.

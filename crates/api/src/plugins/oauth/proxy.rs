@@ -10,7 +10,7 @@ use serde_json::Value;
 use url::Url;
 
 use super::{
-    OAuthConfig, OAuthProvider, OAuthTokenSet, OAuthUserInfo, OAuthUserInfoRequest, handlers,
+    OAuthProvider, OAuthTokenSet, OAuthUserInfo, OAuthUserInfoRequest, handlers,
     state::{self, OAuthStatePayload},
 };
 use crate::plugins::{json_body, symmetric};
@@ -417,7 +417,7 @@ impl OAuthProxyPlugin {
         };
         let Some(provider) = ctx
             .extensions
-            .get::<OAuthConfig>()
+            .get::<std::sync::Arc<super::resolved::ResolvedOAuthConfig>>()
             .and_then(|config| config.providers.get(provider_id))
         else {
             return Ok(Some(redirect_error(
@@ -426,7 +426,7 @@ impl OAuthProxyPlugin {
                 None,
             )?));
         };
-        let tokens = match handlers::validate_authorization_code_via_provider(
+        let tokens = match super::provider_tokens::validate_authorization_code_via_provider(
             provider,
             code,
             &format!("{}/callback/{provider_id}", handlers::auth_base_url(ctx)),
@@ -438,7 +438,7 @@ impl OAuthProxyPlugin {
             Ok(tokens) => tokens,
             Err(_) => return Ok(Some(redirect_error(error_url, "invalid_code", None)?)),
         };
-        let info = handlers::fetch_user_info_from_provider(
+        let info = match handlers::fetch_user_info_from_provider(
             provider,
             OAuthUserInfoRequest {
                 access_token: tokens.access_token.clone(),
@@ -451,8 +451,19 @@ impl OAuthProxyPlugin {
                 raw: tokens.raw.clone(),
                 user: handlers::parse_callback_user_payload(params.get("user").map(String::as_str)),
             },
+            state.id_token_nonce.as_deref(),
         )
-        .await?;
+        .await
+        {
+            Ok(info) => info,
+            Err(_) => {
+                return Ok(Some(redirect_error(
+                    error_url,
+                    "unable_to_get_user_info",
+                    None,
+                )?));
+            }
+        };
         if info.user.email.is_empty() {
             return Ok(Some(redirect_error(error_url, "email_not_found", None)?));
         }
@@ -488,8 +499,9 @@ impl OAuthProxyPlugin {
             new_user_url: state.new_user_url,
             error_url: state.error_url,
             disable_sign_up: Some(
-                provider.disable_sign_up
-                    || provider.disable_implicit_sign_up && !state.request_sign_up.unwrap_or(false),
+                provider.config.disable_sign_up
+                    || provider.config.disable_implicit_sign_up
+                        && !state.request_sign_up.unwrap_or(false),
             ),
             timestamp: Utc::now().timestamp_millis() as f64,
         };
@@ -621,18 +633,28 @@ impl OAuthProxyPlugin {
             return Ok(handlers::redirect_response(&profile.callback_url)
                 .with_appended_header("Set-Cookie", clear));
         }
-        let fallback = OAuthProvider::google("", "");
+        let fallback = super::resolved::ResolvedProvider {
+            config: OAuthProvider::google("", ""),
+            generic: None,
+        };
         let provider = ctx
             .extensions
-            .get::<OAuthConfig>()
+            .get::<std::sync::Arc<super::resolved::ResolvedOAuthConfig>>()
             .and_then(|config| config.providers.get(&profile.account.provider_id))
             .unwrap_or(&fallback);
-        let outcome = match handlers::process_oauth_sign_in(
+        let outcome = match super::signin::process_oauth_sign_in(
             &profile.account.provider_id,
             provider,
             &user,
             &tokens,
-            profile.disable_sign_up.unwrap_or(false),
+            super::signin::OAuthSignInOptions {
+                disable_sign_up: profile.disable_sign_up.unwrap_or(false),
+                callback_url: &profile.callback_url,
+                email_verification: ctx
+                    .extensions
+                    .get::<std::sync::Arc<super::resolved::ResolvedOAuthConfig>>()
+                    .and_then(|config| config.email_verification.as_deref()),
+            },
             &better_auth_core::RequestMeta::from_request(req),
             ctx,
         )

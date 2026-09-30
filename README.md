@@ -75,6 +75,8 @@ The [quick-start guide](docs/content/docs/quick-start.mdx) includes sign-up and 
 
 Plugins include email/password, username, sessions, password management, email verification, email OTP, phone numbers, anonymous accounts, SIWE, Magic Link, one-time tokens, multiple sessions, JWT, OAuth, One Tap, OAuth Proxy, organizations, two-factor authentication, passkeys, API keys, and admin. Enable username with `EmailPasswordPlugin::username(true)`. Generate fields and tables for each selected plugin; startup rejects missing entity fields. See [database integration](docs/content/docs/concepts/database.mdx).
 
+Configure Generic OAuth or OIDC with `OAuthPlugin::add_generic_provider` and `GenericOAuthConfig`. OIDC discovery supplies endpoints and JWKS; set `require_id_token_verification: true` to require verification capability. The [OAuth guide](docs/content/docs/plugins/oauth.mdx) covers client authentication, profile mapping, sign-up restrictions, and email verification. Signature verification requires OpenSSL 3.0 or newer; the complete ML-DSA algorithm set requires OpenSSL 3.5 or newer.
+
 | Cargo feature | Purpose |
 | --- | --- |
 | `native-tls` | Default TLS backend |

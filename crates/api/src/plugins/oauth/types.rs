@@ -1,4 +1,5 @@
 use better_auth_core::wire::UserView;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -23,6 +24,8 @@ pub(crate) struct SocialSignInRequest {
     #[serde(rename = "additionalData")]
     pub additional_data: Option<serde_json::Map<String, serde_json::Value>>,
     pub scopes: Option<Vec<String>>,
+    #[serde(rename = "additionalParams")]
+    pub additional_params: Option<IndexMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -39,9 +42,13 @@ pub(crate) struct LinkSocialRequest {
     pub id_token: Option<OAuthIdTokenRequest>,
     #[serde(rename = "requestSignUp")]
     pub request_sign_up: Option<bool>,
+    #[serde(rename = "loginHint")]
+    pub login_hint: Option<String>,
     #[serde(rename = "additionalData")]
     pub additional_data: Option<serde_json::Map<String, serde_json::Value>>,
     pub scopes: Option<Vec<String>>,
+    #[serde(rename = "additionalParams")]
+    pub additional_params: Option<IndexMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize, Validate)]

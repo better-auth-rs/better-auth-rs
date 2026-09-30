@@ -39,3 +39,10 @@ test("only generated fields and bounded clock skew are normalized", () => {
     { providerId: "credential", accountId: "bob", userId: "bob" },
   )).toEqual([]);
 });
+
+test("OIDC nonce entropy is normalized while absent or empty nonce remains observable", () => {
+  const location = "https://issuer.example/authorize?nonce=";
+  expect(clientDiffs({ location: `${location}random-left` }, { location: `${location}random-right` })).toEqual([]);
+  expect(clientDiffs({ location: `${location}random-left` }, { location }).length).toBeGreaterThan(0);
+  expect(clientDiffs({ location: `${location}random-left` }, { location: "https://issuer.example/authorize" }).length).toBeGreaterThan(0);
+});
