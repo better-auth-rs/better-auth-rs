@@ -208,8 +208,12 @@ impl<S: AuthSchema> BetterAuth<S> {
     pub async fn handle_request(&self, req: AuthRequest) -> AuthResult<AuthResponse> {
         // Ignore any caller-supplied virtual session value; only internal
         // before_request hooks may inject this during dispatch.
+        let url = req.url().cloned();
         let mut req =
             AuthRequest::from_parts(req.method, req.path, req.headers, req.body, req.query);
+        if let Some(url) = url {
+            req = req.with_url(url);
+        }
 
         let request_context = RequestHookContext::from_request(&req);
         with_request_hook_context_value(request_context, async {

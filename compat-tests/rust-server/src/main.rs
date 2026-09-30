@@ -578,6 +578,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = AuthConfig::new(secret)
         .base_url(format!("http://localhost:{port}"))
         .password_min_length(8);
+    if let Ok(case) = std::env::var("COMPAT_PROXY_CASE") {
+        let case: serde_json::Value = serde_json::from_str(&case)?;
+        if let Some(base_url) = case["baseURL"].as_str() {
+            config.base_url = base_url.to_owned();
+        }
+        if let Some(origins) = case.get("trustedOrigins") {
+            config.trusted_origins = serde_json::from_value(origins.clone())?;
+        }
+    }
     if device_profile == "organization-cache" {
         config.session.cookie_cache = Some(better_auth::config::CookieCacheConfig {
             enabled: true,

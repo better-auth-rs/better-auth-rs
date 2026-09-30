@@ -183,6 +183,7 @@ async fn convert_axum_request(
     use std::collections::HashMap;
 
     let (parts, body) = req.into_parts();
+    let url = transport_url(&parts)?;
 
     // Convert method
     let method = match parts.method {
@@ -255,9 +256,55 @@ async fn convert_axum_request(
         }
     };
 
-    Ok(AuthRequest::from_parts(
-        method, path, headers, body_bytes, query,
-    ))
+    let request = AuthRequest::from_parts(method, path, headers, body_bytes, query);
+    Ok(match url {
+        Some(url) => request.with_url(url),
+        None => request,
+    })
+}
+
+#[cfg(feature = "axum")]
+fn transport_url(parts: &Parts) -> Result<Option<url::Url>, AuthError> {
+    use axum::{
+        extract::OriginalUri,
+        http::{Uri, uri::Scheme},
+    };
+
+    let uri = parts
+        .extensions
+        .get::<OriginalUri>()
+        .map_or(&parts.uri, |original| &original.0);
+    let authority = match uri.authority() {
+        Some(authority) => Some(authority.as_str()),
+        None => parts
+            .headers
+            .get(axum::http::header::HOST)
+            .map(|host| {
+                host.to_str()
+                    .map_err(|_| AuthError::bad_request("Invalid request host"))
+            })
+            .transpose()?,
+    };
+    let Some(authority) = authority else {
+        return Ok(None);
+    };
+    let scheme = parts
+        .extensions
+        .get::<Scheme>()
+        .or_else(|| uri.scheme())
+        .unwrap_or(&Scheme::HTTP);
+    if *scheme != Scheme::HTTP && *scheme != Scheme::HTTPS {
+        return Err(AuthError::bad_request("Request URL must use HTTP or HTTPS"));
+    }
+    let uri = Uri::builder()
+        .scheme(scheme.clone())
+        .authority(authority)
+        .path_and_query(uri.path_and_query().map_or("/", |path| path.as_str()))
+        .build()
+        .map_err(|_| AuthError::bad_request("Invalid request URL"))?;
+    url::Url::parse(&uri.to_string())
+        .map(Some)
+        .map_err(|_| AuthError::bad_request("Invalid request URL"))
 }
 
 #[cfg(feature = "axum")]

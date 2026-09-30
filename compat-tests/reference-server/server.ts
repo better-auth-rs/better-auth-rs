@@ -271,8 +271,10 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   return originalFetch(request);
 };
 
+const proxyCase = process.env.COMPAT_PROXY_CASE ? JSON.parse(process.env.COMPAT_PROXY_CASE) : {};
 const authOptions = {
-  baseURL: `http://localhost:${PORT}`,
+  baseURL: proxyCase.baseURL ?? `http://localhost:${PORT}`,
+  trustedOrigins: proxyCase.trustedOrigins ?? [],
   basePath: "/api/auth",
   ...(process.env.COMPAT_PROFILE === "oauth-proxy-cookie" ? { account: { storeStateStrategy: "cookie" as const } } : {}),
   secret: ["compat", "test", "only", "key", "not", "real", "minimum", "32chars"].join("-"),

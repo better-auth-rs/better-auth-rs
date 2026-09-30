@@ -41,6 +41,7 @@ pub struct AuthRequest {
     pub headers: HashMap<String, String>,
     pub body: Option<Vec<u8>>,
     pub query: HashMap<String, String>,
+    url: Option<url::Url>,
     /// Session authenticated by a trusted plugin hook for the current request.
     pub(crate) virtual_session: Option<crate::wire::SessionView>,
     /// Cookie updates from session middleware, shared by normalized request clones.
@@ -343,6 +344,7 @@ impl AuthRequest {
             headers: HashMap::new(),
             body: None,
             query: HashMap::new(),
+            url: None,
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),
@@ -365,6 +367,7 @@ impl AuthRequest {
             headers,
             body,
             query,
+            url: None,
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),
@@ -373,6 +376,20 @@ impl AuthRequest {
 
     pub fn method(&self) -> &HttpMethod {
         &self.method
+    }
+
+    /// Attach the original URL supplied by the server transport.
+    ///
+    /// Route normalization preserves this URL. Do not derive the URL from client
+    /// forwarding headers unless the application has authenticated the proxy.
+    pub fn with_url(mut self, url: url::Url) -> Self {
+        self.url = Some(url);
+        self
+    }
+
+    /// Return the original transport URL, if the integration supplied one.
+    pub fn url(&self) -> Option<&url::Url> {
+        self.url.as_ref()
     }
 
     pub fn path(&self) -> &str {
@@ -676,6 +693,7 @@ mod tests {
             headers: HashMap::new(),
             body: Some(br#"{"name":"test"}"#.to_vec()),
             query: HashMap::new(),
+            url: None,
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),

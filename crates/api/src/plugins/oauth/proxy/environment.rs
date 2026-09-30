@@ -30,13 +30,6 @@ fn origin(value: &str) -> Option<Origin> {
         .filter(|origin| matches!(origin, Origin::Tuple(..)))
 }
 
-fn request_url<S: AuthSchema>(req: &AuthRequest, ctx: &AuthContext<S>) -> Option<String> {
-    let scheme = Url::parse(&ctx.config.base_url).ok()?;
-    req.headers
-        .get("host")
-        .map(|host| format!("{}://{host}", scheme.scheme()))
-}
-
 impl OAuthProxyConfig {
     pub(super) fn resolve_current_url<S: AuthSchema>(
         &self,
@@ -46,13 +39,12 @@ impl OAuthProxyConfig {
         if let Some(url) = self.current_url.as_deref().filter(|url| !url.is_empty()) {
             return parse_url(url);
         }
-        if let Some(url) = request_url(req, ctx)
-            && let Some(origin) = origin(&url)
+        if let Some(url) = req.url()
             && ctx
                 .config
-                .is_redirect_target_trusted(&origin.ascii_serialization())
+                .is_redirect_target_trusted(&url.origin().ascii_serialization())
         {
-            return parse_url(&url);
+            return Ok(url.clone());
         }
         // Upstream selects the first nonempty vendor value before validating its origin.
         let vendor = vendor_url().filter(|url| origin(url).is_some());
@@ -82,7 +74,7 @@ impl OAuthProxyConfig {
             .current_url
             .clone()
             .filter(|url| !url.is_empty())
-            .or_else(|| request_url(req, ctx))
+            .or_else(|| req.url().map(ToString::to_string))
             .or_else(vendor_url);
         current.is_some_and(|current| origin(production) == origin(&current))
     }

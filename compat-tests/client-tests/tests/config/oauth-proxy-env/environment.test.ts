@@ -11,7 +11,7 @@ compatScenario(`OAuth hosting environment: ${scenario.name}`, async ctx => {
   const expand = (value: string) => value.replaceAll("{base}", ctx.baseURL).replaceAll("{host}", new URL(ctx.baseURL).host);
   const response = await fetch(`${ctx.baseURL}/api/auth/sign-in/social`, {
     method: "POST",
-    headers: { "content-type": "application/json", host: expand(scenario.host), "x-skip-oauth-proxy": scenario.header },
+    headers: { ...scenario.headers, "content-type": "application/json", host: expand(scenario.host), "x-skip-oauth-proxy": scenario.header },
     body: JSON.stringify({ provider: "google", callbackURL: "/return", disableRedirect: true }),
   });
   expect(response.status).toBe(200);

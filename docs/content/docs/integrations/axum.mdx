@@ -233,3 +233,19 @@ The integration automatically converts between Axum and Better Auth types:
 - **Query**: Query parameters are parsed from the URL
 - **Status codes**: Mapped directly to HTTP status codes
 - **Response headers**: Set-Cookie and other headers are forwarded
+
+### Request URL and TLS
+
+The adapter preserves the original request URL across nested routing. URI authority takes precedence over `Host`. The scheme comes from an explicit `axum::http::uri::Scheme` request extension, then the URI scheme, then `http`. The configured authentication base URL does not determine the request scheme. The adapter does not read `Forwarded` or `X-Forwarded-*` headers to construct the URL.
+
+For a TLS listener whose requests contain relative URIs, attach the scheme on the server:
+
+```rust
+use axum::{Extension, http::uri::Scheme};
+
+let auth_router = auth.clone().axum_router().layer(Extension(Scheme::HTTPS));
+```
+
+For a reverse proxy, attach the external scheme only after the application verifies that the request came through a trusted proxy. Do not copy a client-supplied forwarding header into the extension. OAuth Proxy still checks the resulting origin against the configured trusted origins before using the URL as a profile receiver.
+
+Direct integrations can attach a parsed transport URL with `AuthRequest::with_url(url)`. The URL describes the original HTTP request; internal route normalization changes `path` without changing the transport URL. Populate the URL from the server transport, independently of application configuration and request body fields.
