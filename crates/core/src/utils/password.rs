@@ -165,3 +165,29 @@ pub fn update_user_metadata(metadata: serde_json::Value) -> UpdateUser {
         ..Default::default()
     }
 }
+
+/// Shared password behavior selected by the installed password plugins.
+#[derive(Clone)]
+pub struct PasswordRuntimePolicy {
+    pub hasher: Option<Arc<dyn PasswordHasher>>,
+    pub on_password_reset: Option<Arc<OnPasswordResetCallback>>,
+    pub revoke_sessions_on_password_reset: bool,
+    pub min_length: usize,
+    pub max_length: usize,
+}
+pub type OnPasswordResetCallback = dyn Fn(
+        serde_json::Value,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AuthResult<()>> + Send>>
+    + Send
+    + Sync;
+impl PasswordRuntimePolicy {
+    pub fn new(config: &crate::config::PasswordConfig) -> Self {
+        Self {
+            hasher: None,
+            on_password_reset: None,
+            revoke_sessions_on_password_reset: false,
+            min_length: config.min_length,
+            max_length: config.max_length,
+        }
+    }
+}

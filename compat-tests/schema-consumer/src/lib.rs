@@ -142,7 +142,7 @@ mod tests {
         // The database must enforce invariants when concurrent requests bypass prechecks.
         for (statement, expected) in [
             (
-                "INSERT INTO users SELECT 'duplicate', name, email, email_verified, image, created_at, updated_at, role, banned, ban_reason, ban_expires, metadata, two_factor_enabled, username, display_username FROM users LIMIT 1",
+                "INSERT INTO users (id, name, email, email_verified, image, created_at, updated_at, role, banned, ban_reason, ban_expires, metadata, two_factor_enabled, username, display_username) SELECT 'duplicate', name, email, email_verified, image, created_at, updated_at, role, banned, ban_reason, ban_expires, metadata, two_factor_enabled, username, display_username FROM users LIMIT 1",
                 "UNIQUE constraint failed: users.email",
             ),
             (

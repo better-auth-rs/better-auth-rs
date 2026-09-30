@@ -1,0 +1,30 @@
+---
+title: Sign-In with Ethereum
+description: Verify signed Ethereum messages and persist wallet ownership across chains.
+---
+
+Generate the schema with `--plugins siwe` and migrate the `wallet_address` table before enabling the plugin. Register the server domain, a nonce generator, and a signature verifier.
+
+```rust
+use better_auth::plugins::SiwePlugin;
+
+let plugin = SiwePlugin::new(
+    "wallet.example.com",
+    || async { Ok(generate_nonce()) },
+    |proof| async move {
+        verifier.verify(&proof.message, &proof.signature, &proof.address, proof.chain_id).await
+    },
+);
+```
+
+The required verifier must authenticate the signature. Use a maintained Ethereum library or a wallet verification service. The callback receives the original message and signature, the EIP-55 address, the chain ID, and the upstream CACAO context. The plugin does not assume that all wallets use externally owned accounts; the callback may also verify contract signatures.
+
+`POST /siwe/nonce` and `/siwe/get-nonce` issue a persisted nonce. The generator must return 8–250 alphanumeric characters. `POST /siwe/verify` consumes that nonce before checking the domain, address, positive chain ID, validity window, and signature. A rejected proof cannot reuse the consumed nonce.
+
+Sequential sign-ins reuse a wallet's existing user across chains. Each new chain creates a wallet record and a SIWE account. `ens_lookup` may supply the user's name and avatar. `email_domain_name` changes the generated email domain.
+
+As in Better Auth 1.7.6, wallet registration has no unique wallet constraint or atomic registration transaction. Concurrent first sign-ins for the same wallet can race. The email reservation below protects email claims; it does not lock wallet registration.
+
+`anonymous(false)` requires an email in verification requests. An existing email account is never linked based only on a wallet signature: the new wallet receives a placeholder email instead. A database reservation prevents simultaneous wallets from claiming the same new email.
+
+If an email reservation cannot be stored, the plugin logs the failure and uses the wallet placeholder email. Reservation cleanup failures are logged without invalidating the completed user creation, matching upstream behavior.

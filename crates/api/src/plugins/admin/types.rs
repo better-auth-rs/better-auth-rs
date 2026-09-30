@@ -150,6 +150,15 @@ pub(crate) struct AdminUserView {
     #[serde(rename = "updatedAt")]
     #[serde(serialize_with = "better_auth_core::utils::date::serialize")]
     pub updated_at: DateTime<Utc>,
+    #[serde(rename = "isAnonymous", skip_serializing_if = "Option::is_none")]
+    pub is_anonymous: Option<bool>,
+    #[serde(rename = "phoneNumber", skip_serializing_if = "Option::is_none")]
+    pub phone_number: Option<String>,
+    #[serde(
+        rename = "phoneNumberVerified",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub phone_number_verified: Option<bool>,
     pub username: Option<String>,
     #[serde(rename = "displayUsername")]
     pub display_username: Option<String>,
@@ -173,6 +182,9 @@ impl<T: better_auth_core::entity::AuthUser> From<&T> for AdminUserView {
             image: user.image().map(str::to_owned),
             created_at: user.created_at(),
             updated_at: user.updated_at(),
+            is_anonymous: user.is_anonymous(),
+            phone_number: user.phone_number().map(str::to_owned),
+            phone_number_verified: user.phone_number_verified(),
             username: user.username().map(str::to_owned),
             display_username: user.display_username().map(str::to_owned),
             two_factor_enabled: user.two_factor_enabled(),

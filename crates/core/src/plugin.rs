@@ -14,8 +14,11 @@ use crate::types::{AuthRequest, AuthResponse, HttpMethod};
 type MetadataMap = HashMap<String, serde_json::Value>;
 
 pub struct AuthInitParts {
+    pub extensions: crate::RuntimeExtensions,
+    pub email_verification_policy: crate::email::EmailVerificationRuntimePolicy,
     pub metadata: MetadataMap,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
+    pub password_policy: crate::utils::password::PasswordRuntimePolicy,
 }
 
 /// Action returned by [`AuthPlugin::before_request`].
@@ -23,6 +26,8 @@ pub struct AuthInitParts {
 pub enum BeforeRequestAction {
     /// Short-circuit with this response (e.g. return session JSON).
     Respond(AuthResponse),
+    /// Replace the request body and continue with the remaining hooks.
+    ReplaceBody(Vec<u8>),
     /// Inject a virtual session so downstream handlers see it as authenticated.
     InjectSession {
         session: Box<crate::wire::SessionView>,
@@ -54,8 +59,9 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
     ///
     /// Return `Some(BeforeRequestAction::Respond(..))` to short-circuit with a
     /// response, `Some(BeforeRequestAction::InjectSession { .. })` to attach a
-    /// virtual session (e.g. API-key → session emulation), or `None` to let the
-    /// request continue to normal route matching.
+    /// virtual session, or `Some(BeforeRequestAction::ReplaceBody(..))` to rewrite
+    /// the request body. Session injection and body replacement continue through
+    /// the remaining hooks before normal route matching.
     async fn before_request(
         &self,
         _req: &AuthRequest,
@@ -70,6 +76,16 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
         req: &AuthRequest,
         ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>>;
+
+    /// Inspect or extend the final route response after session cookies are applied.
+    async fn after_request(
+        &self,
+        _req: &AuthRequest,
+        _response: &mut AuthResponse,
+        _ctx: &AuthContext<S>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
 }
 
 /// Generates the [`AuthPlugin`] impl for a plugin with static route dispatch.
@@ -146,17 +162,23 @@ pub struct AuthRoute {
 
 /// Initialization context passed to plugin setup.
 pub struct AuthInitContext<S: AuthSchema> {
+    pub extensions: crate::RuntimeExtensions,
+    pub email_verification_policy: crate::email::EmailVerificationRuntimePolicy,
     pub config: Arc<AuthConfig>,
     pub database: Arc<dyn AuthStore<S>>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
+    pub password_policy: crate::utils::password::PasswordRuntimePolicy,
     pub metadata: MetadataMap,
 }
 
 /// Context passed to plugin methods.
 pub struct AuthContext<S: AuthSchema> {
+    pub extensions: crate::RuntimeExtensions,
+    pub email_verification_policy: crate::email::EmailVerificationRuntimePolicy,
     pub config: Arc<AuthConfig>,
     pub database: Arc<dyn AuthStore<S>>,
     pub email_provider: Option<Arc<dyn EmailProvider>>,
+    pub password_policy: crate::utils::password::PasswordRuntimePolicy,
     pub metadata: MetadataMap,
 }
 
@@ -193,10 +215,14 @@ impl AuthRoute {
 impl<S: AuthSchema> AuthInitContext<S> {
     pub fn new(config: Arc<AuthConfig>, database: Arc<dyn AuthStore<S>>) -> Self {
         let email_provider = config.email_provider.clone();
+        let password_policy = crate::utils::password::PasswordRuntimePolicy::new(&config.password);
         Self {
+            extensions: crate::RuntimeExtensions::default(),
+            email_verification_policy: crate::email::EmailVerificationRuntimePolicy::default(),
             config,
             database,
             email_provider,
+            password_policy,
             metadata: MetadataMap::new(),
         }
     }
@@ -211,8 +237,11 @@ impl<S: AuthSchema> AuthInitContext<S> {
 
     pub fn into_parts(self) -> AuthInitParts {
         AuthInitParts {
+            extensions: self.extensions,
+            email_verification_policy: self.email_verification_policy,
             metadata: self.metadata,
             email_provider: self.email_provider,
+            password_policy: self.password_policy,
         }
     }
 }
@@ -220,10 +249,14 @@ impl<S: AuthSchema> AuthInitContext<S> {
 impl<S: AuthSchema> AuthContext<S> {
     pub fn new(config: Arc<AuthConfig>, database: Arc<dyn AuthStore<S>>) -> Self {
         let email_provider = config.email_provider.clone();
+        let password_policy = crate::utils::password::PasswordRuntimePolicy::new(&config.password);
         Self {
+            extensions: crate::RuntimeExtensions::default(),
+            email_verification_policy: crate::email::EmailVerificationRuntimePolicy::default(),
             config,
             database,
             email_provider,
+            password_policy,
             metadata: MetadataMap::new(),
         }
     }
@@ -234,10 +267,14 @@ impl<S: AuthSchema> AuthContext<S> {
         metadata: MetadataMap,
     ) -> Self {
         let email_provider = config.email_provider.clone();
+        let password_policy = crate::utils::password::PasswordRuntimePolicy::new(&config.password);
         Self {
+            extensions: crate::RuntimeExtensions::default(),
+            email_verification_policy: crate::email::EmailVerificationRuntimePolicy::default(),
             config,
             database,
             email_provider,
+            password_policy,
             metadata,
         }
     }

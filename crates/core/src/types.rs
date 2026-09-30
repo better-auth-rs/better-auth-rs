@@ -14,7 +14,7 @@ pub use super::types_org::{
 pub use super::types_plugin::{
     ApiKey, CreateApiKey, CreateDeviceCode, CreatePasskey, CreateTwoFactor, DeviceCode, Passkey,
     TwoFactor, UpdateApiKey, UpdateDeviceCode, UpdatePasskey, UpdatePasskeyAuthentication,
-    UpdateTwoFactor,
+    UpdateTwoFactor, WalletAddress,
 };
 
 /// HTTP method enumeration
@@ -41,6 +41,7 @@ pub struct AuthRequest {
     pub(crate) virtual_session: Option<crate::wire::SessionView>,
     /// Cookie updates from session middleware, shared by normalized request clones.
     response_headers: std::sync::Arc<std::sync::Mutex<Headers>>,
+    server_context: std::sync::Arc<std::sync::Mutex<serde_json::Map<String, serde_json::Value>>>,
 }
 
 /// Metadata extracted from an incoming request for session creation.
@@ -195,6 +196,9 @@ pub struct CreateUser {
     pub email_verified: Option<bool>,
     pub username: Option<String>,
     pub display_username: Option<String>,
+    pub is_anonymous: Option<bool>,
+    pub phone_number: Option<String>,
+    pub phone_number_verified: Option<bool>,
     pub role: Option<String>,
     pub metadata: Option<serde_json::Value>,
 }
@@ -208,6 +212,9 @@ pub struct UpdateUser {
     pub email_verified: Option<bool>,
     pub username: Option<String>,
     pub display_username: Option<String>,
+    pub is_anonymous: Option<bool>,
+    pub phone_number: Option<Option<String>>,
+    pub phone_number_verified: Option<bool>,
     pub role: Option<String>,
     pub banned: Option<bool>,
     pub ban_reason: Option<String>,
@@ -272,6 +279,9 @@ impl CreateUser {
             email_verified: None,
             username: None,
             display_username: None,
+            is_anonymous: None,
+            phone_number: None,
+            phone_number_verified: None,
             role: None,
             metadata: None,
         }
@@ -324,6 +334,7 @@ impl AuthRequest {
             query: HashMap::new(),
             virtual_session: None,
             response_headers: Default::default(),
+            server_context: Default::default(),
         }
     }
 
@@ -345,6 +356,7 @@ impl AuthRequest {
             query,
             virtual_session: None,
             response_headers: Default::default(),
+            server_context: Default::default(),
         }
     }
 
@@ -378,6 +390,30 @@ impl AuthRequest {
     /// `BeforeRequestAction::InjectSession`. Never populate the session from client input.
     pub fn set_virtual_session(&mut self, session: crate::wire::SessionView) {
         self.virtual_session = Some(session);
+    }
+
+    /// Attach trusted server state for request hooks. Never populate this state from request body fields.
+    pub fn set_server_context(
+        &self,
+        key: impl Into<String>,
+        value: serde_json::Value,
+    ) -> crate::AuthResult<()> {
+        let _ = self
+            .server_context
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Request server context lock poisoned"))?
+            .insert(key.into(), value);
+        Ok(())
+    }
+
+    /// Read server state attached by an authenticated flow.
+    pub fn server_context(&self, key: &str) -> crate::AuthResult<Option<serde_json::Value>> {
+        Ok(self
+            .server_context
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Request server context lock poisoned"))?
+            .get(key)
+            .cloned())
     }
 
     /// Queue a response header from request-scoped authentication middleware.
@@ -631,6 +667,7 @@ mod tests {
             query: HashMap::new(),
             virtual_session: None,
             response_headers: Default::default(),
+            server_context: Default::default(),
         };
         let val: serde_json::Value = req.body_as_json().expect("parse");
         assert_eq!(val["name"], "test");

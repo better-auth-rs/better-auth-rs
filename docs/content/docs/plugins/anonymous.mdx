@@ -1,0 +1,24 @@
+---
+title: Anonymous
+description: Persist anonymous sessions and link anonymous identities when users sign in.
+---
+
+Register `AnonymousPlugin::new()` to expose `POST /sign-in/anonymous` and `POST /delete-anonymous-user`. Generate the user schema with `--plugins anonymous` and apply the migration before enabling the plugin.
+
+```rust
+use better_auth::plugins::AnonymousPlugin;
+
+let plugin = AnonymousPlugin::new()
+    .on_link_account(|link| async move {
+        // Transfer application data before the anonymous identity is removed.
+        transfer_cart(&link.anonymous_user.id, &link.new_user.id).await
+    });
+```
+
+An anonymous session cannot create another anonymous session. A successful sign-in or sign-up invokes `on_link_account` with both persisted identities. The plugin then deletes the anonymous user unless both identities match, the new identity is anonymous, or `disable_delete_anonymous_user(true)` is configured.
+
+`generate_random_email` and `generate_name` accept asynchronous generators. The name generator receives the sign-in request. The default email uses the non-routable `anonymous.placeholder.invalid` domain. `email_domain_name` changes the generated email domain. A custom email generator must return a valid email address.
+
+Post-link cleanup follows Better Auth: a database deletion failure is logged and does not invalidate the successful sign-in. Explicit deletion returns an error when deletion fails.
+
+Disabling the plugin does not hide an existing stored `isAnonymous` value from Rust's user views. Configuration changes over populated databases differ from upstream output filtering in this case.

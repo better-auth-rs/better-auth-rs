@@ -8,6 +8,11 @@ import { apiKey } from "@better-auth/api-key";
 import { admin, bearer, deviceAuthorization, twoFactor, username } from "better-auth/plugins";
 import { organization } from "better-auth/plugins/organization";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
+import { oAuthProxy } from "better-auth/plugins/oauth-proxy";
+import { createEmailOtpFixture } from "./email-otp";
+import { createOneTapFixture } from "./one-tap";
+import { createIdentityFixture } from "./identity-routes";
+import { tokenRoutePlugins } from "./token-routes";
 
 function getPort() {
   const idx = process.argv.indexOf("--port");
@@ -38,8 +43,11 @@ function hasOwn(obj: unknown, key: string) {
 
 const PORT = getPort();
 const database = new Database(":memory:");
+const identityFixture = createIdentityFixture(database, process.env.COMPAT_PROFILE ?? "");
+const emailOtpFixture = createEmailOtpFixture(database, process.env.COMPAT_PROFILE ?? "");
+const oneTapFixture = createOneTapFixture(process.env.COMPAT_PROFILE ?? "");
 const resetPasswordOutbox = new Map<string, { url: string; token: string }>();
-const verificationEmailOutbox = new Map<string, { url: string; token: string }>();
+const verificationEmailOutbox = new Map<string, { url: string; token: string; metadata?: Record<string, unknown> }>();
 const changeEmailOutbox = new Map<string, { newEmail: string; url: string; token: string }>();
 const twoFactorOtpOutbox = new Map<string, { otp: string }>();
 const invitationEmailOutbox: { id: string; email: string; role: string }[] = [];
@@ -151,6 +159,8 @@ const originalFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const request = input instanceof Request ? input : new Request(input, init);
   const url = new URL(request.url);
+  const oneTapResponse = await oneTapFixture.handle(request);
+  if (oneTapResponse) return oneTapResponse;
 
   if (url.origin === "https://oauth2.googleapis.com" && url.pathname === "/token") {
     if (oauthRefreshMode === "error") {
@@ -215,6 +225,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 const authOptions = {
   baseURL: `http://localhost:${PORT}`,
   basePath: "/api/auth",
+  ...(process.env.COMPAT_PROFILE === "oauth-proxy-cookie" ? { account: { storeStateStrategy: "cookie" as const } } : {}),
   secret: ["compat", "test", "only", "key", "not", "real", "minimum", "32chars"].join("-"),
   database,
   emailAndPassword: {
@@ -231,7 +242,8 @@ const authOptions = {
     },
   },
   emailVerification: {
-    async sendVerificationEmail({
+    autoSignInAfterVerification: process.env.COMPAT_PROFILE === "email-otp-options",
+    sendVerificationEmail: process.env.COMPAT_PROFILE === "email-otp-reuse" ? undefined : async ({
       user,
       url,
       token,
@@ -239,7 +251,7 @@ const authOptions = {
       user: { email?: string } | null;
       url: string;
       token: string;
-    }) {
+    }) => {
       if (user?.email) {
         verificationEmailOutbox.set(user.email, { url, token });
       }
@@ -278,6 +290,7 @@ const authOptions = {
       authorizationEndpoint: oauthAuthorizationURL,
     },
     google: {
+      hd: process.env.COMPAT_PROFILE === "one-tap-options" ? "example.com" : undefined,
       clientId: "google-client-id",
       clientSecret: "google-client-secret",
       enabled: true,
@@ -320,6 +333,11 @@ const authOptions = {
     },
   },
   plugins: [
+    ...(process.env.COMPAT_PROFILE?.startsWith("oauth-proxy") ? [oAuthProxy({ productionURL: "https://production.example.com", currentURL: `http://localhost:${PORT}` })] : []),
+    ...identityFixture.plugins,
+    ...tokenRoutePlugins(process.env.COMPAT_PROFILE ?? "", verificationEmailOutbox),
+    ...(process.env.COMPAT_PROFILE?.startsWith("email-otp") ? [emailOtpFixture.plugin] : []),
+    ...(process.env.COMPAT_PROFILE?.startsWith("one-tap") ? [oneTapFixture.plugin] : []),
     ...(process.env.COMPAT_PROFILE === "device-bearer" ? [bearer()] : []),
     admin(),
     apiKey([
@@ -419,8 +437,21 @@ const server = Bun.serve({
     try {
       const url = new URL(request.url);
 
+      const identityResponse = await identityFixture.handle(request);
+      if (identityResponse) return identityResponse;
+      const emailOtpResponse = await emailOtpFixture.handle(request);
+      if (emailOtpResponse) return emailOtpResponse;
+      const oneTapResponse = await oneTapFixture.handle(request);
+      if (oneTapResponse) return oneTapResponse;
+
       if (url.pathname === "/__health") {
         return jsonResponse({ ok: true });
+      }
+      if (url.pathname === "/__test/oauth-proxy/stats") {
+        return jsonResponse({
+          users: (database.query('SELECT COUNT(*) AS count FROM "user"').get() as { count: number }).count,
+          sessions: (database.query('SELECT COUNT(*) AS count FROM "session"').get() as { count: number }).count,
+        });
       }
 
       if (url.pathname === "/__test/oauth/authorize" && request.method === "GET") {
@@ -439,6 +470,9 @@ const server = Bun.serve({
 
       if (url.pathname === "/__test/reset-state" && request.method === "POST") {
         await resetDatabaseState();
+        identityFixture.reset();
+        emailOtpFixture.reset();
+        oneTapFixture.reset();
         resetPasswordOutbox.clear();
         verificationEmailOutbox.clear();
         changeEmailOutbox.clear();

@@ -7,8 +7,11 @@ use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 mod account;
 pub mod encryption;
 mod handlers;
+pub(crate) use handlers::{sign_in_verified_profile, validate_redirect_target};
 mod logout;
 mod providers;
+mod proxy;
+pub use proxy::{OAuthProxyConfig, OAuthProxyPlugin};
 mod state;
 mod types;
 
@@ -49,6 +52,11 @@ impl Default for OAuthPlugin {
 impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
     fn name(&self) -> &'static str {
         "oauth"
+    }
+
+    async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+        ctx.extensions.insert(self.config.clone());
+        Ok(())
     }
 
     fn routes(&self) -> Vec<AuthRoute> {
@@ -111,7 +119,9 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
 /// Check if the path matches `/callback/{provider}` (with optional query string).
 fn path_matches_callback(path: &str) -> bool {
     let path_without_query = path.split('?').next().unwrap_or(path);
-    path_without_query.starts_with("/callback/") && path_without_query.len() > "/callback/".len()
+    path_without_query
+        .strip_prefix("/callback/")
+        .is_some_and(|provider| !provider.is_empty() && !provider.contains('/'))
 }
 
 /// Extract the provider name from `/callback/{provider}?...`.

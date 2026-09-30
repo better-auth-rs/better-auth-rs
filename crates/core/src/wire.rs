@@ -29,6 +29,24 @@ pub struct UserView {
     #[serde(rename = "updatedAt")]
     #[serde(serialize_with = "crate::utils::date::serialize")]
     pub updated_at: DateTime<Utc>,
+    #[serde(
+        rename = "isAnonymous",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub is_anonymous: Option<bool>,
+    #[serde(
+        rename = "phoneNumber",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub phone_number: Option<String>,
+    #[serde(
+        rename = "phoneNumberVerified",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub phone_number_verified: Option<bool>,
     pub username: Option<String>,
     #[serde(rename = "displayUsername")]
     pub display_username: Option<String>,
@@ -136,6 +154,9 @@ impl<T: AuthUser> From<&T> for UserView {
             image: user.image().map(str::to_owned),
             created_at: user.created_at(),
             updated_at: user.updated_at(),
+            is_anonymous: user.is_anonymous(),
+            phone_number: user.phone_number().map(str::to_owned),
+            phone_number_verified: user.phone_number_verified(),
             username: user.username().map(str::to_owned),
             display_username: user.display_username().map(str::to_owned),
             two_factor_enabled: user.two_factor_enabled(),
@@ -226,6 +247,9 @@ impl<T: AuthVerification> From<&T> for VerificationView {
 
 impl AuthUser for UserView {
     const PLUGIN_FIELDS: &'static [&'static str] = &[
+        "is_anonymous",
+        "phone_number",
+        "phone_number_verified",
         "username",
         "display_username",
         "two_factor_enabled",
@@ -255,6 +279,15 @@ impl AuthUser for UserView {
     }
     fn updated_at(&self) -> DateTime<Utc> {
         self.updated_at
+    }
+    fn is_anonymous(&self) -> Option<bool> {
+        self.is_anonymous
+    }
+    fn phone_number(&self) -> Option<&str> {
+        self.phone_number.as_deref()
+    }
+    fn phone_number_verified(&self) -> Option<bool> {
+        self.phone_number_verified
     }
     fn username(&self) -> Option<&str> {
         self.username.as_deref()
@@ -616,6 +649,9 @@ mod tests {
             image: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            is_anonymous: None,
+            phone_number: None,
+            phone_number_verified: None,
             username: Some("ada".to_string()),
             display_username: Some("Ada".to_string()),
             two_factor_enabled: true,

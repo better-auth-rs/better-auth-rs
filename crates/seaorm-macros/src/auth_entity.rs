@@ -1,7 +1,7 @@
 use better_auth_schema_registry::{self as registry, EntityRole};
 use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{
     Attribute, Data, DeriveInput, Expr, Fields, Lit, LitStr, Meta, Token, punctuated::Punctuated,
 };
@@ -195,6 +195,24 @@ fn gen_user(
         .collect();
 
     // AuthUser trait — plugin fields return defaults when absent
+    let identity_getters: Vec<_> = ["is_anonymous", "phone_number_verified"]
+        .iter()
+        .filter(|name| has(name))
+        .map(|name| {
+            let field = format_ident!("{name}");
+            quote! { fn #field(&self) -> Option<bool> { self.#field } }
+        })
+        .collect();
+    let phone_impl = if has("phone_number") {
+        quote! { fn phone_number(&self) -> Option<&str> { self.phone_number.as_deref() } }
+    } else {
+        quote! {}
+    };
+    let phone_column_impl = if has("phone_number") {
+        quote! { fn phone_number_column() -> Option<Self::Column> { Some(Column::PhoneNumber) } }
+    } else {
+        quote! {}
+    };
     let username_impl = if has("username") {
         quote! { fn username(&self) -> Option<&str> { self.username.as_deref() } }
     } else {
@@ -263,6 +281,8 @@ fn gen_user(
             fn image(&self) -> Option<&str> { self.image.as_deref() }
             fn created_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.created_at }
             fn updated_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.updated_at }
+            #(#identity_getters)*
+            #phone_impl
             #username_impl
             #display_username_impl
             #two_factor_impl
@@ -281,6 +301,7 @@ fn gen_user(
 
             fn id_column() -> Self::Column { Column::Id }
             fn email_column() -> Self::Column { Column::Email }
+            #phone_column_impl
             #username_column_impl
             fn name_column() -> Self::Column { Column::Name }
             fn created_at_column() -> Self::Column { Column::CreatedAt }
@@ -338,6 +359,14 @@ fn plugin_set_fields_user(
     seaorm_root: &TokenStream,
 ) -> Vec<TokenStream> {
     let mut out = Vec::new();
+    for name in ["is_anonymous", "phone_number", "phone_number_verified"] {
+        if has(name) {
+            let field = format_ident!("{name}");
+            out.push(
+                quote! { #field: #seaorm_root::sea_orm::ActiveValue::Set(create_user.#field) },
+            );
+        }
+    }
     if has("username") {
         out.push(
             quote! { username: #seaorm_root::sea_orm::ActiveValue::Set(create_user.username) },
@@ -373,6 +402,15 @@ fn plugin_update_fields_user(
     seaorm_root: &TokenStream,
 ) -> Vec<TokenStream> {
     let mut out = Vec::new();
+    for name in ["is_anonymous", "phone_number_verified"] {
+        if has(name) {
+            let field = format_ident!("{name}");
+            out.push(quote! { if let Some(value) = update.#field { active.#field = #seaorm_root::sea_orm::ActiveValue::Set(Some(value)); } });
+        }
+    }
+    if has("phone_number") {
+        out.push(quote! { if let Some(value) = update.phone_number { active.phone_number = #seaorm_root::sea_orm::ActiveValue::Set(value); } });
+    }
     if has("username") {
         out.push(quote! {
             if let ::std::option::Option::Some(username) = update.username {

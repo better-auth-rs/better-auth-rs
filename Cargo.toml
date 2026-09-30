@@ -21,6 +21,9 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/better-auth-rs/better-auth-rs"
 
 [workspace.dependencies]
+sha3 = "0.12.0"
+chacha20poly1305 = "0.11.0"
+josekit = "0.10.3"
 # Sub-crates
 better-auth-core = { version = "1.0.0-alpha.3", path = "crates/core" }
 better-auth-api = { version = "1.0.0-alpha.3", path = "crates/api", default-features = false }

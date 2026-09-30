@@ -23,14 +23,18 @@ pub mod hooks;
 pub mod middleware;
 pub mod openapi;
 pub mod plugin;
+mod runtime_extensions;
 pub mod schema;
 pub mod session;
 pub mod store;
 #[cfg(test)]
 pub(crate) mod test_store;
 pub mod types;
+mod types_jwt;
+pub use runtime_extensions::RuntimeExtensions;
 mod types_org;
 mod types_plugin;
+pub use types_jwt::{CreateJwk, Jwk};
 #[doc(hidden)]
 pub mod user_query;
 pub mod utils;

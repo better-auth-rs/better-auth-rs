@@ -1,0 +1,28 @@
+---
+title: Phone Number
+description: Authenticate phone numbers with single-use OTPs and password credentials.
+---
+
+Generate the user schema with `--plugins phone-number` and migrate `phone_number` and `phone_number_verified` before enabling the plugin. The phone number column must have a unique index.
+
+```rust
+use better_auth::plugins::PhoneNumberPlugin;
+
+let plugin = PhoneNumberPlugin::new()
+    .send_otp(|otp, _request| async move {
+        sms.send(&otp.phone_number, &otp.code).await
+    })
+    .sign_up_on_verification(|phone| format!("{}@phone.example.com", phone.trim_start_matches('+')));
+```
+
+The plugin exposes `/phone-number/send-otp`, `/phone-number/verify`, `/sign-in/phone-number`, `/phone-number/request-password-reset`, and `/phone-number/reset-password`. The `consume_otp` server method verifies a code without creating a session or changing a user.
+
+Codes expire after 300 seconds and permit three incorrect attempts by default. Verification consumes the database record atomically. A failed attempt recreates the code with its original expiry and an incremented attempt count. `allowed_attempts`, `otp_length`, and `expires_in` configure these limits.
+
+Configure `phone_number_validator` to validate numbers. The upstream default accepts any string. Configure `verify_otp` when the SMS provider performs verification. `send_password_reset_otp` sends password reset codes. `callback_on_verification` runs after the user is updated. `require_verification(true)` blocks password sign-in until the phone is verified.
+
+`updatePhoneNumber: true` binds a verified number to the current session owner. `/update-user` rejects non-null phone changes. Setting `phoneNumber` to `null` clears the number and sets `phoneNumberVerified` to false.
+
+Phone password operations use the installed password plugins' shared hasher, length limits, password reset callback, and session revocation policy. Do not configure a separate password scheme for phone authentication.
+
+Disabling the plugin does not hide existing stored `phoneNumber` or `phoneNumberVerified` values from Rust's user views. Configuration changes over populated databases differ from upstream output filtering in this case.

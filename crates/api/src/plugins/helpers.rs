@@ -7,6 +7,9 @@ use better_auth_core::entity::{AuthAccount, AuthUser};
 use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResult, CreateUser, UpdateUser};
 use chrono::Utc;
 
+mod user_input;
+pub(crate) use user_input::apply_user_create_fields;
+
 /// Convert an `expiresIn` value (**seconds** from now) into an RFC 3339
 /// `expires_at` timestamp string.
 ///
@@ -341,3 +344,80 @@ pub fn delete_session_cookie_headers(config: &better_auth_core::AuthConfig) -> V
 
     cookies
 }
+
+/// Select enabled plugin defaults for public users and signed user claims.
+pub(crate) fn user_plugin_defaults(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> Vec<(&'static str, serde_json::Value)> {
+    [
+        ("anonymous.enabled", "isAnonymous", serde_json::json!(false)),
+        (
+            "phone-number.enabled",
+            "phoneNumber",
+            serde_json::Value::Null,
+        ),
+        (
+            "phone-number.enabled",
+            "phoneNumberVerified",
+            serde_json::Value::Null,
+        ),
+    ]
+    .into_iter()
+    .filter(|(plugin, _, _)| {
+        ctx.get_metadata(plugin)
+            .and_then(serde_json::Value::as_bool)
+            == Some(true)
+    })
+    .map(|(_, field, value)| (field, value))
+    .collect()
+}
+
+/// Add plugin defaults to public user objects without changing unrelated payloads.
+pub(crate) fn add_user_response_fields(
+    response: &mut better_auth_core::AuthResponse,
+    defaults: &[(&str, serde_json::Value)],
+) -> AuthResult<()> {
+    fn visit(value: &mut serde_json::Value, defaults: &[(&str, serde_json::Value)]) {
+        match value {
+            serde_json::Value::Object(fields) => {
+                if fields.contains_key("id")
+                    && fields.contains_key("emailVerified")
+                    && fields.contains_key("createdAt")
+                {
+                    for (key, value) in defaults {
+                        let _ = fields
+                            .entry((*key).to_owned())
+                            .or_insert_with(|| value.clone());
+                    }
+                } else {
+                    for key in ["user", "users", "member", "members", "sessions"] {
+                        if let Some(value) = fields.get_mut(key) {
+                            visit(value, defaults);
+                        }
+                    }
+                }
+            }
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    visit(value, defaults);
+                }
+            }
+            _ => {}
+        }
+    }
+    if response
+        .headers
+        .get("content-type")
+        .is_some_and(|value| value.starts_with("application/json"))
+        && !response.body.is_empty()
+    {
+        let mut value = serde_json::from_slice(&response.body)?;
+        visit(&mut value, defaults);
+        response.body = serde_json::to_vec(&value)?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "helpers/response_tests.rs"]
+mod response_tests;

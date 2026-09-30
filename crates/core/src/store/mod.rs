@@ -36,6 +36,12 @@ pub trait AuthTransaction<S: AuthSchema>: Send + Sync {
 
 #[async_trait]
 pub trait UserStore<S: AuthSchema>: Send + Sync {
+    /// Atomically verify an unverified user after deleting every existing account and session.
+    /// Already verified users retain their accounts and sessions.
+    async fn verify_user_and_revoke_unproven_access(
+        &self,
+        user_id: &str,
+    ) -> AuthResult<Option<S::User>>;
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<S::User>;
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<S::User>>;
     /// Fetch multiple users by id.
@@ -45,6 +51,7 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
     async fn list_users_by_ids(&self, ids: &[String]) -> AuthResult<Vec<S::User>>;
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<S::User>>;
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<S::User>>;
+    async fn get_user_by_phone_number(&self, phone_number: &str) -> AuthResult<Option<S::User>>;
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<S::User>;
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
     async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<S::User>, usize)>;
@@ -91,6 +98,27 @@ pub trait AccountStore<S: AuthSchema>: Send + Sync {
 
 #[async_trait]
 pub trait VerificationStore<S: AuthSchema>: Send + Sync {
+    /// Insert a deterministic primary key. Return false when the reservation already exists.
+    async fn reserve_verification(
+        &self,
+        id: &str,
+        verification: CreateVerification,
+    ) -> AuthResult<bool>;
+
+    /// Fetch the newest record, including expired records for protocol-specific expiry errors.
+    async fn get_verification_including_expired(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<S::Verification>>;
+    /// Update every record matching an identifier without consuming the verification.
+    async fn update_verification_by_identifier(
+        &self,
+        identifier: &str,
+        value: Option<String>,
+        expires_at: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> AuthResult<()>;
+    /// Delete every verification record for an identifier.
+    async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()>;
     async fn create_verification(
         &self,
         verification: CreateVerification,
@@ -352,6 +380,19 @@ pub trait TransactionStore<S: AuthSchema>: Send + Sync {
     ) -> AuthResult<BoxedTransactionValue>;
 }
 
+#[async_trait]
+pub trait WalletStore: Send + Sync {
+    async fn get_wallet_address(
+        &self,
+        address: &str,
+        chain_id: Option<i64>,
+    ) -> AuthResult<Option<crate::types::WalletAddress>>;
+    async fn create_wallet_address(
+        &self,
+        wallet: crate::types::WalletAddress,
+    ) -> AuthResult<crate::types::WalletAddress>;
+}
+
 pub trait AuthStore<S: AuthSchema>:
     UserStore<S>
     + SessionStore<S>
@@ -364,6 +405,8 @@ pub trait AuthStore<S: AuthSchema>:
     + ApiKeyStore
     + PasskeyStore
     + DeviceCodeStore
+    + WalletStore
+    + JwksStore
     + TransactionStore<S>
     + Send
     + Sync
@@ -384,10 +427,22 @@ where
         + ApiKeyStore
         + PasskeyStore
         + DeviceCodeStore
+        + WalletStore
+        + WalletStore
+        + JwksStore
         + TransactionStore<S>
         + Send
         + Sync,
 {
+}
+
+/// Persistent signing keys shared by every JWT plugin instance.
+#[async_trait]
+pub trait JwksStore: Send + Sync {
+    /// List public and private key records, including expired keys retained for verification.
+    async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>>;
+    /// Persist a generated signing key.
+    async fn create_jwk(&self, input: crate::CreateJwk) -> AuthResult<crate::Jwk>;
 }
 
 pub async fn transaction<S, T, F>(store: &dyn AuthStore<S>, work: F) -> AuthResult<T>

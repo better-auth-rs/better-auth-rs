@@ -1,0 +1,16 @@
+---
+title: JWT
+description: Sign session tokens with persisted asymmetric keys and expose public JWKS.
+---
+
+Register `JwtPlugin::new()`. `GET /jwks` returns public signing keys. Authenticated `GET /token` returns `{ "token": "..." }`. A successful `GET /get-session` also sets the `set-auth-jwt` response header and exposes that header through CORS.
+
+The default algorithm is Ed25519 (`EdDSA`). Use `.algorithm(JwtAlgorithm::Rs256)` for RSA with SHA-256 or `.algorithm(JwtAlgorithm::Es256)` for ECDSA P-256. The store persists keys through `JwksStore`; private JWKs are encrypted with the authentication secret. Public discovery never returns private key parameters.
+
+Session tokens contain the user fields, the user ID in `sub`, the issue time in `iat`, and a fifteen-minute `exp`. The issuer and audience default to the configured base URL. Override these values with `.issuer(...)`, `.audience(...)`, and `.expiration_time(chrono::Duration::minutes(5))`.
+
+`.rotation_interval(chrono::Duration::days(30))` enables signing key rotation. `.grace_period(...)` controls how long expired public keys remain discoverable; the default is thirty days. Choose a grace period that covers the lifetime of issued tokens. `.jwks_path("/keys")` changes the discovery route. `.disable_setting_jwt_header(true)` suppresses the session response header.
+
+Trusted server code may call `sign` with an application JSON payload. Verify every returned token with its advertised public key, expected issuer, expected audience, and allowed algorithm.
+
+The current implementation supports locally managed EdDSA, RS256, and ES256 keys. Upstream remote JWKS, custom signing callbacks, custom session payload and subject callbacks, pinned signing-key overrides, additional algorithms, and JWT-backed session cookie caches are not implemented. The upstream server-only `verifyJWT` helper is also not exposed; use a JWT verifier with the published JWKS.

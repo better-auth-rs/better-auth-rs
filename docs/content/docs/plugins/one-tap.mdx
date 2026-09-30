@@ -1,0 +1,25 @@
+---
+title: Google One Tap
+description: Authenticate Google One Tap ID tokens with the shared OAuth account flow.
+---
+
+Register `OneTapPlugin` to enable `POST /one-tap/callback`. The body contains the Google `idToken` and an optional `callbackURL`.
+
+```rust
+use better_auth::plugins::OneTapPlugin;
+
+let plugin = OneTapPlugin::new()
+    .client_id(vec!["your-client-id.apps.googleusercontent.com".to_owned()]);
+```
+
+The plugin verifies RS256 signatures against Google's public keys. The token must match Google's issuer, the configured audience, and the one-hour maximum token age. Tokens with invalid signatures, expired claims, future issue times, or unsupported algorithms are rejected.
+
+RSA keys must contain at least 2048 bits. The key's `key_ops`, when present, must permit public-key verification, and `ext` must be a boolean. Google's upstream importer selects RS256 explicitly and ignores the JWK `alg` and `use` fields; the token header must still specify RS256.
+
+When `client_id` is omitted, the plugin uses the Google OAuth provider's client ID. An explicit list overrides the provider's client ID. Configure the provider's `hd` authorization parameter to restrict Google Workspace domains. `*` requires a hosted-domain claim and accepts any nonempty domain.
+
+Successful authentication returns `{ token, user }` and a session cookie. The plugin uses the existing OAuth account-linking policy, including trusted providers and signup restrictions. Set `.disable_signup(true)` to restrict One Tap to existing users.
+
+`callbackURL` is validated against trusted origins. The endpoint returns JSON and does not redirect the browser. Applications must send the intended redirect target for validation before redirecting after sign-in.
+
+The default key endpoint is `https://www.googleapis.com/oauth2/v3/certs`. Use `google_jwks_url` only for an application-controlled, trusted mirror of Google's public keys.

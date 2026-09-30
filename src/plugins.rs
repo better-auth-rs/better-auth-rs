@@ -15,3 +15,17 @@ pub use better_auth_api::plugins::{
     api_key, device_authorization, email_password, email_verification, oauth, organization,
     passkey, password_management, session_management, two_factor, user_management,
 };
+pub use better_auth_api::plugins::{
+    EmailOtpCodec, EmailOtpConfig, EmailOtpGenerator, EmailOtpMessage, EmailOtpPlugin,
+    EmailOtpStorage, EmailOtpType, MagicLinkConfig, MagicLinkMessage, MagicLinkPlugin,
+    MultiSessionConfig, MultiSessionPlugin, OneTimeTokenConfig, OneTimeTokenPlugin, SendEmailOtp,
+    SendMagicLink, TokenStorage, email_otp, magic_link, multi_session, one_time_token,
+};
+pub use better_auth_api::plugins::{JwtAlgorithm, JwtPlugin, JwtPluginConfig, jwt};
+pub use better_auth_api::plugins::{OAuthProxyConfig, OAuthProxyPlugin};
+pub use better_auth_api::plugins::{OneTapConfig, OneTapPlugin, one_tap};
+
+pub use anonymous::AnonymousPlugin;
+pub use better_auth_api::plugins::{anonymous, phone_number, siwe};
+pub use phone_number::PhoneNumberPlugin;
+pub use siwe::SiwePlugin;

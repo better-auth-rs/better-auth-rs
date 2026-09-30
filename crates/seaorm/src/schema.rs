@@ -24,6 +24,9 @@ pub trait SeaOrmUserModel:
     fn id_column() -> Self::Column;
     fn email_column() -> Self::Column;
     /// Returns the username column, or `None` if the username plugin is not enabled.
+    fn phone_number_column() -> Option<Self::Column> {
+        None
+    }
     fn username_column() -> Option<Self::Column> {
         None
     }

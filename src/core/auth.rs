@@ -143,8 +143,11 @@ impl<S: AuthSchema> AuthBuilder<S> {
         let session_manager = SessionManager::new(config.clone(), store.clone());
 
         // Create context
-        let context =
+        let mut context =
             AuthContext::with_metadata(config.clone(), store.clone(), init_parts.metadata);
+        context.password_policy = init_parts.password_policy;
+        context.extensions = init_parts.extensions;
+        context.email_verification_policy = init_parts.email_verification_policy;
 
         let body_limit = self.body_limit_config.unwrap_or_default();
         let mut rate_limit_config = self.rate_limit_config.unwrap_or_default();
@@ -219,6 +222,23 @@ impl<S: AuthSchema> BetterAuth<S> {
             self.session_manager
                 .finish_response(&req, &mut response)
                 .await?;
+            let mut plugin_request = req.clone();
+            if self.config.base_path != "/" {
+                plugin_request.path = req
+                    .path
+                    .strip_prefix(&self.config.base_path)
+                    .unwrap_or(&req.path)
+                    .to_string();
+            }
+            for plugin in &self.plugins {
+                if let Err(error) = plugin
+                    .after_request(&plugin_request, &mut response, &self.context)
+                    .await
+                {
+                    response = error.to_auth_response();
+                    break;
+                }
+            }
             middleware::run_after(&self.middlewares, &req, response).await
         })
         .await
@@ -264,6 +284,10 @@ impl<S: AuthSchema> BetterAuth<S> {
                 match action {
                     BeforeRequestAction::Respond(response) => {
                         return Ok(response);
+                    }
+                    BeforeRequestAction::ReplaceBody(body) => {
+                        internal_req.body = Some(body.clone());
+                        req.body = Some(body);
                     }
                     BeforeRequestAction::InjectSession { session } => {
                         internal_req.set_virtual_session(*session);
@@ -424,6 +448,9 @@ impl<S: AuthSchema> BetterAuth<S> {
             return Err(AuthError::bad_request("Email can not be updated"));
         }
 
+        let clear_phone_number = self.context.get_metadata("phone-number.enabled")
+            == Some(&serde_json::Value::Bool(true))
+            && body.get("phoneNumber") == Some(&serde_json::Value::Null);
         let mut body = body.clone();
         if self.context.get_metadata("username.enabled") != Some(&serde_json::Value::Bool(true)) {
             _ = body.remove("username");
@@ -467,7 +494,8 @@ impl<S: AuthSchema> BetterAuth<S> {
             }
         }
 
-        let has_changes = update_req.name.is_some()
+        let has_changes = clear_phone_number
+            || update_req.name.is_some()
             || update_req.image.is_some()
             || username.is_some()
             || display_username.is_some()
@@ -489,6 +517,9 @@ impl<S: AuthSchema> BetterAuth<S> {
             ban_reason: None,
             ban_expires: None,
             two_factor_enabled: None,
+            is_anonymous: None,
+            phone_number: clear_phone_number.then_some(None),
+            phone_number_verified: clear_phone_number.then_some(false),
             metadata: update_req.metadata,
         };
 

@@ -1,6 +1,4 @@
 use async_trait::async_trait;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use better_auth_core::AuthSession;
@@ -23,8 +21,7 @@ use handlers::*;
 use types::*;
 
 /// Type alias for the async password-reset callback to keep Clippy happy.
-pub type OnPasswordResetCallback =
-    dyn Fn(serde_json::Value) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync;
+pub use better_auth_core::utils::password::OnPasswordResetCallback;
 
 /// Trait for sending password reset emails.
 ///
@@ -99,6 +96,16 @@ impl std::fmt::Debug for PasswordManagementConfig {
 
 #[async_trait]
 impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for PasswordManagementPlugin {
+    async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+        if self.config.password_hasher.is_some() {
+            ctx.password_policy.hasher = self.config.password_hasher.clone();
+        }
+        ctx.password_policy.on_password_reset = self.config.on_password_reset.clone();
+        ctx.password_policy.revoke_sessions_on_password_reset =
+            self.config.revoke_sessions_on_password_reset;
+        Ok(())
+    }
+
     fn name(&self) -> &'static str {
         "password-management"
     }

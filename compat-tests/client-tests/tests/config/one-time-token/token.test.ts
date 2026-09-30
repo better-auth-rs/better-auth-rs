@@ -1,0 +1,32 @@
+import { expect } from "bun:test";
+import { compatScenario } from "../../../support/scenario";
+
+compatScenario("one-time token transfers a real session exactly once", async (ctx) => {
+  const owner = ctx.actor("owner");
+  const signup = await owner.client.signUp.email({ email: ctx.uniqueEmail("ott"), password: "password123", name: "Token Owner" });
+  expect(signup.error).toBeNull();
+  const denied = await ctx.rawRequest({ actor: "stranger", path: "/api/auth/one-time-token/generate" });
+  expect(denied.status).toBe(401);
+  const generated = await ctx.rawRequest({ actor: "owner", path: "/api/auth/one-time-token/generate" });
+  expect(generated.status).toBe(200);
+  const { token } = generated.body as { token: string };
+  expect(token).toMatch(/^[A-Za-z0-9_-]{32}$/);
+  const verified = await ctx.rawRequest({ actor: "recipient", path: "/api/auth/one-time-token/verify", method: "POST", json: { token } });
+  expect(verified.status).toBe(200);
+  const body = verified.body as { user: { id: string }; session: { token: string; userId: string } };
+  expect(body.user.id).toBe(signup.data!.user.id);
+  expect(body.session.token).toBe(signup.data!.token);
+  expect(body.session.userId).toBe(body.user.id);
+  const authenticated = await ctx.actor("recipient").client.getSession();
+  expect(authenticated.data!.user.id).toBe(body.user.id);
+  const replay = await ctx.rawRequest({ actor: "replay", path: "/api/auth/one-time-token/verify", method: "POST", json: { token } });
+  expect(replay.status).toBe(400);
+  expect(replay.body).toEqual({ message: "Invalid token" });
+  const another = await ctx.rawRequest({ actor: "owner", path: "/api/auth/one-time-token/generate" });
+  const revokedToken = (another.body as { token: string }).token;
+  await owner.client.signOut();
+  const revoked = await ctx.rawRequest({ actor: "recipient", path: "/api/auth/one-time-token/verify", method: "POST", json: { token: revokedToken } });
+  expect(revoked.status).toBe(400);
+  expect(revoked.body).toEqual({ message: "Session not found" });
+  return { denied, generated, verified, authenticated: ctx.snapshot(authenticated), replay, revoked };
+});

@@ -1,0 +1,12 @@
+---
+title: One Time Token
+description: Transfer an existing authenticated session with a single-use token.
+---
+
+Register `OneTimeTokenPlugin::new()`. An authenticated `GET /one-time-token/generate` returns `{ "token": "..." }`. `POST /one-time-token/verify` accepts that token, consumes it atomically, and returns the original session and user. The recipient receives a signed session cookie.
+
+Tokens expire after three minutes. `.expires_in(chrono::Duration::minutes(1))` changes the lifetime; the Rust API uses a duration, while Better Auth's numeric option uses minutes. `.store_token(TokenStorage::Hashed)` stores a SHA-256 digest. `TokenStorage::Custom` supports an application hasher. `.generate_token(generator)` receives the session and user for custom token generation.
+
+`.disable_client_request(true)` disables HTTP generation. Trusted server code may call `generate` with a session and user. `.disable_set_session_cookie(true)` returns the verified session without setting its cookie. `.set_ott_header_on_new_session(true)` generates a `set-ott` response header when a response sets a session, and adds that header to `Access-Control-Expose-Headers`.
+
+Verification does not create a new session. Revoking the original session invalidates its outstanding exchange tokens. Failed verification also consumes the token, so retrying the same token cannot authenticate.

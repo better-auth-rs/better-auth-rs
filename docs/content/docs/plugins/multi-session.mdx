@@ -1,0 +1,12 @@
+---
+title: Multi Session
+description: Switch between authenticated accounts on one device.
+---
+
+Register `MultiSessionPlugin::new()`. Session responses add a signed cookie for each account, with at most five remembered accounts. `.maximum_sessions(2)` changes this limit. A new session for an already remembered account replaces and revokes its previous device session.
+
+`GET /multi-session/list-device-sessions` returns active sessions represented by valid signed device cookies, with one entry per user. `POST /multi-session/set-active` accepts `sessionToken` and sets the corresponding active session cookie. Knowing a session token without its signed device cookie does not authorize switching.
+
+`POST /multi-session/revoke` requires an active session and the target's signed device cookie. Revoking the active session selects another valid remembered session or clears authentication. `POST /sign-out` revokes every signed session remembered by the device and clears those cookies.
+
+The storage schema does not change. The plugin uses existing session persistence and the configured session cookie attributes.

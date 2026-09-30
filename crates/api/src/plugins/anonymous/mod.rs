@@ -1,0 +1,337 @@
+use std::{future::Future, pin::Pin, sync::Arc};
+
+use better_auth_core::utils::cookie_utils::create_session_cookie;
+use better_auth_core::wire::{SessionView, UserView};
+use better_auth_core::{
+    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
+    AuthUser, CreateUser, RequestMeta,
+};
+use rand::distributions::{Alphanumeric, DistString};
+use validator::ValidateEmail;
+
+use crate::plugins::helpers::{SessionIssueError, apply_default_role, issue_user_session};
+
+type FutureResult<T> = Pin<Box<dyn Future<Output = AuthResult<T>> + Send>>;
+type Generator = dyn Fn() -> FutureResult<String> + Send + Sync;
+type NameGenerator = dyn Fn(AuthRequest) -> FutureResult<String> + Send + Sync;
+type LinkCallback = dyn Fn(AnonymousLink) -> FutureResult<()> + Send + Sync;
+
+/// The authenticated identities involved when an anonymous session is upgraded.
+#[derive(Debug, Clone)]
+pub struct AnonymousLink {
+    /// Anonymous identity that existed before authentication.
+    pub anonymous_user: UserView,
+    /// Active session for the anonymous identity.
+    pub anonymous_session: SessionView,
+    /// Identity authenticated by the completed endpoint.
+    pub new_user: UserView,
+    /// Session issued by the completed endpoint.
+    pub new_session: SessionView,
+    /// Request that completed authentication.
+    pub request: AuthRequest,
+}
+
+/// Anonymous sign-in with persisted identities and post-sign-in account linking.
+#[derive(Clone, Default)]
+pub struct AnonymousPlugin {
+    email_domain_name: Option<String>,
+    generate_random_email: Option<Arc<Generator>>,
+    generate_name: Option<Arc<NameGenerator>>,
+    on_link_account: Option<Arc<LinkCallback>>,
+    disable_delete_anonymous_user: bool,
+}
+
+impl AnonymousPlugin {
+    /// Use upstream defaults for anonymous sign-in and account cleanup.
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// Use this domain for generated placeholder emails.
+    pub fn email_domain_name(mut self, domain: impl Into<String>) -> Self {
+        self.email_domain_name = Some(domain.into());
+        self
+    }
+    /// Disable explicit deletion and post-link anonymous identity cleanup.
+    pub fn disable_delete_anonymous_user(mut self, disable: bool) -> Self {
+        self.disable_delete_anonymous_user = disable;
+        self
+    }
+    /// Supply an email generator; an empty result uses the default generator.
+    pub fn generate_random_email<F, Fut>(mut self, callback: F) -> Self
+    where
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = AuthResult<String>> + Send + 'static,
+    {
+        self.generate_random_email = Some(Arc::new(move || Box::pin(callback())));
+        self
+    }
+    /// Generate a name from the sign-in request; an empty result uses `Anonymous`.
+    pub fn generate_name<F, Fut>(mut self, callback: F) -> Self
+    where
+        F: Fn(AuthRequest) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = AuthResult<String>> + Send + 'static,
+    {
+        self.generate_name = Some(Arc::new(move |request| Box::pin(callback(request))));
+        self
+    }
+    /// Transfer application data before the anonymous identity is deleted.
+    pub fn on_link_account<F, Fut>(mut self, callback: F) -> Self
+    where
+        F: Fn(AnonymousLink) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = AuthResult<()>> + Send + 'static,
+    {
+        self.on_link_account = Some(Arc::new(move |link| Box::pin(callback(link))));
+        self
+    }
+    async fn sign_in(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<impl AuthSchema>,
+    ) -> AuthResult<AuthResponse> {
+        if ctx
+            .session_manager()
+            .resolve(req, better_auth_core::session::SessionRead::Authoritative)
+            .await?
+            .data
+            .is_some_and(|data| data.user.is_anonymous == Some(true))
+        {
+            return Err(error(
+                400,
+                "ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY",
+                "Anonymous users cannot sign in again anonymously",
+            ));
+        }
+        let custom_email = match &self.generate_random_email {
+            Some(generate) => generate().await?,
+            None => String::new(),
+        };
+        let email = if custom_email.is_empty() {
+            let id = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+            match &self.email_domain_name {
+                Some(domain) => format!("temp-{id}@{domain}"),
+                None => format!("{id}@anonymous.placeholder.invalid"),
+            }
+        } else {
+            if !custom_email.validate_email() {
+                return Err(error(
+                    400,
+                    "INVALID_EMAIL_FORMAT",
+                    "Email was not generated in a valid format",
+                ));
+            }
+            custom_email
+        };
+        let name = match &self.generate_name {
+            Some(generate) => generate(req.clone()).await?,
+            None => String::new(),
+        };
+        let mut create = CreateUser::new()
+            .with_email(email)
+            .with_name(if name.is_empty() {
+                "Anonymous".into()
+            } else {
+                name
+            });
+        create.is_anonymous = Some(true);
+        apply_default_role(ctx, &mut create);
+        let user = ctx.database.create_user(create).await?;
+        let meta = RequestMeta::from_request(req);
+        let issued = issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
+            .await
+            .map_err(SessionIssueError::into_auth_error)?;
+        Ok(AuthResponse::json(200,&serde_json::json!({"token": issued.session.token(),"user":UserView::from(&issued.user)}))?.with_header("Set-Cookie",create_session_cookie(issued.session.token(),&ctx.config)))
+    }
+    async fn delete(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<impl AuthSchema>,
+    ) -> AuthResult<AuthResponse> {
+        let (user, _) = ctx
+            .require_authoritative_session(req)
+            .await
+            .map_err(|cause| {
+                if matches!(cause, AuthError::Unauthenticated) {
+                    error(401, "UNAUTHORIZED", "Unauthorized")
+                } else {
+                    cause
+                }
+            })?;
+        if self.disable_delete_anonymous_user {
+            return Err(error(
+                400,
+                "DELETE_ANONYMOUS_USER_DISABLED",
+                "Deleting anonymous users is disabled",
+            ));
+        }
+        if user.is_anonymous != Some(true) {
+            return Err(error(403, "USER_IS_NOT_ANONYMOUS", "User is not anonymous"));
+        }
+        ctx.database
+            .delete_user_sessions(&user.id)
+            .await
+            .map_err(|cause| {
+                tracing::error!(error=?cause,"Failed to delete anonymous user sessions");
+                error(
+                    500,
+                    "FAILED_TO_DELETE_ANONYMOUS_USER_SESSIONS",
+                    "Failed to delete anonymous user sessions",
+                )
+            })?;
+        ctx.database.delete_user(&user.id).await.map_err(|cause| {
+            tracing::error!(error=?cause,"Failed to delete anonymous user");
+            error(
+                500,
+                "FAILED_TO_DELETE_ANONYMOUS_USER",
+                "Failed to delete anonymous user",
+            )
+        })?;
+        ctx.session_manager().clear_cookies(req)?;
+        Ok(AuthResponse::json(
+            200,
+            &serde_json::json!({"success":true}),
+        )?)
+    }
+    async fn link(
+        &self,
+        req: &AuthRequest,
+        response: &AuthResponse,
+        ctx: &AuthContext<impl AuthSchema>,
+    ) -> AuthResult<()> {
+        if ![
+            "/sign-in",
+            "/sign-up",
+            "/callback",
+            "/magic-link/verify",
+            "/email-otp/verify-email",
+            "/one-tap/callback",
+            "/passkey/verify-authentication",
+            "/phone-number/verify",
+            "/verify-email",
+        ]
+        .iter()
+        .any(|prefix| req.path().starts_with(prefix))
+        {
+            return Ok(());
+        }
+        let Some(cookie) = response
+            .headers
+            .get_all("set-cookie")
+            .filter_map(|value| cookie::Cookie::parse(value.as_str()).ok())
+            .find(|cookie| {
+                cookie.name() == ctx.config.session.cookie_name && !cookie.value().is_empty()
+            })
+        else {
+            return Ok(());
+        };
+        let Some(token) = better_auth_core::utils::cookie_utils::verify_cookie_value(
+            cookie.value(),
+            &ctx.config.secret,
+        ) else {
+            return Ok(());
+        };
+        let Some(session) = ctx.database.get_session(&token).await? else {
+            return Ok(());
+        };
+        let Some(user) = ctx.database.get_user_by_id(&session.user_id()).await? else {
+            return Ok(());
+        };
+        let previous = ctx
+            .session_manager()
+            .resolve(req, better_auth_core::session::SessionRead::Authoritative)
+            .await?
+            .data;
+        let previous = match previous.filter(|session| session.user.is_anonymous == Some(true)) {
+            Some(previous) => Some(previous),
+            None => {
+                if let Some(user_id) = req
+                    .server_context("anonymousUserId")?
+                    .and_then(|value| value.as_str().map(str::to_owned))
+                {
+                    if let Some(user) = ctx
+                        .database
+                        .get_user_by_id(&user_id)
+                        .await?
+                        .filter(|user| user.is_anonymous() == Some(true))
+                    {
+                        ctx.database
+                            .get_user_sessions(&user_id)
+                            .await?
+                            .into_iter()
+                            .find(|session| session.expires_at() > chrono::Utc::now())
+                            .map(|session| better_auth_core::session::SessionData {
+                                user: UserView::from(&user),
+                                session: SessionView::from(&session),
+                            })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+        };
+        let Some(previous) = previous else {
+            return Ok(());
+        };
+        if previous.user.is_anonymous != Some(true) {
+            return Ok(());
+        }
+        if let Some(callback) = &self.on_link_account {
+            callback(AnonymousLink {
+                anonymous_user: previous.user.clone(),
+                anonymous_session: previous.session,
+                new_user: UserView::from(&user),
+                new_session: SessionView::from(&session),
+                request: req.clone(),
+            })
+            .await?;
+        }
+        if !self.disable_delete_anonymous_user
+            && previous.user.id != user.id()
+            && user.is_anonymous() != Some(true)
+        {
+            // Upstream keeps a successful sign-in when post-link cleanup fails.
+            if let Err(cause) = ctx.database.delete_user(&previous.user.id).await {
+                tracing::error!(error=?cause,"Failed to clean up anonymous user during post-link cleanup");
+            }
+        }
+        Ok(())
+    }
+}
+
+fn error(status: u16, code: &'static str, message: &'static str) -> AuthError {
+    AuthError::Upstream {
+        status,
+        code,
+        message,
+    }
+}
+
+better_auth_core::impl_auth_plugin!(AnonymousPlugin, "anonymous";
+    routes {
+        post "/sign-in/anonymous" => sign_in, "signInAnonymous";
+        post "/delete-anonymous-user" => delete, "deleteAnonymousUser";
+    }
+    extra {
+        async fn on_init(
+            &self,
+            ctx: &mut better_auth_core::AuthInitContext<S>,
+        ) -> AuthResult<()> {
+            S::User::require_plugin_fields("anonymous", &["is_anonymous"])?;
+            ctx.set_metadata("anonymous.enabled", serde_json::json!(true));
+            Ok(())
+        }
+        async fn after_request(
+            &self,
+            req: &AuthRequest,
+            response: &mut AuthResponse,
+            ctx: &AuthContext<S>,
+        ) -> AuthResult<()> {
+            self.link(req, response, ctx).await?;
+            super::helpers::add_user_response_fields(
+                response,
+                &super::helpers::user_plugin_defaults(ctx),
+            )
+        }
+    }
+);

@@ -1,0 +1,55 @@
+---
+title: Email OTP
+description: Sign in, verify email, reset passwords, and change email with one-time codes.
+---
+
+The Email OTP plugin implements Better Auth 1.7.6's nine public email OTP routes. Register an application sender to deliver each code. The plugin logs delivery errors and retains the endpoint's success response, matching upstream background-task behavior. Database and OTP protection errors propagate to the caller.
+
+```rust
+use std::sync::Arc;
+use async_trait::async_trait;
+use better_auth::{AuthResult, plugins::email_otp::{EmailOtpMessage, EmailOtpPlugin, SendEmailOtp}};
+
+struct Mailer;
+
+#[async_trait]
+impl SendEmailOtp for Mailer {
+    async fn send(&self, message: &EmailOtpMessage) -> AuthResult<()> {
+        send_mail(&message.email, &message.otp).await
+    }
+}
+
+let plugin = EmailOtpPlugin::new().sender(Arc::new(Mailer));
+```
+
+Replace `send_mail` with your mail provider. Add `plugin` to the auth builder. Never return codes from a public endpoint or log codes.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/email-otp/send-verification-otp` | Send an OTP for `sign-in`, `email-verification`, or `forget-password`. |
+| POST | `/email-otp/check-verification-otp` | Check a code without consuming a successful code. |
+| POST | `/email-otp/verify-email` | Consume the verification code and mark the email verified. |
+| POST | `/sign-in/email-otp` | Consume a sign-in code and create a session. |
+| POST | `/email-otp/request-password-reset` | Send a password-reset code. |
+| POST | `/forget-password/email-otp` | Deprecated alias for the reset request. |
+| POST | `/email-otp/reset-password` | Consume the reset code and update the credential password. |
+| POST | `/email-otp/request-email-change` | Authenticate the user and send a code to the new email. |
+| POST | `/email-otp/change-email` | Consume the address-bound code and update the user's email. |
+
+The upstream `createVerificationOTP` and `getVerificationOTP` helpers are server-only APIs. The plugin does not expose corresponding HTTP routes.
+
+Codes contain six digits and expire after five minutes by default. Three wrong attempts are allowed; the next check returns `TOO_MANY_ATTEMPTS` and removes the code. Verification, sign-in, password reset, and email changes consume valid codes atomically. A code cannot authenticate two concurrent requests.
+
+Use `.storage(EmailOtpStorage::Hashed)` to persist SHA-256 digests or `.storage(EmailOtpStorage::Encrypted)` to persist encrypted codes. `.reuse_otp(true)` resends an unexpired recoverable code and extends its expiry without resetting attempts. Hashed codes cannot be recovered, so resends generate a new code.
+
+Use `EmailOtpStorage::Custom` with an `EmailOtpCodec` to supply application hashing or encryption. A hash codec returns `None` from `decode`; an encryption codec returns the original code. `generate_otp` accepts an application generator, with `None` selecting the default generator.
+
+Enable `.send_verification_on_sign_up(true)` to send a verification code after email registration. Enable `.override_default_email_verification(true)` to supply OTP delivery when no explicit verification-email sender is configured. An explicit sender takes precedence, matching upstream plugin-option merging. Email verification hooks and automatic sign-in use the existing `EmailVerificationPlugin` configuration. Password reset uses the existing password hasher, reset callback, length limits, and session-revocation policy.
+
+Use `.disable_sign_up(true)` to restrict sign-in to existing users. Unknown-user verification and password-reset requests return success without sending a code. When OTP sign-in proves an existing unverified email, the store removes the user's previous password, OAuth accounts, and sessions before issuing the owner's session. Already verified users retain their existing access.
+
+New-user sign-in accepts the enabled username plugin's `username` and `displayUsername` fields, and the enabled phone plugin's `phoneNumber` field. Username creation applies normalization, validation, uniqueness checks, and the display-name default. A display name alone does not create a username. Protected fields such as `role` and `phoneNumberVerified` cannot grant privileges or establish proof. Application-defined user `additionalFields` schemas and transforms are not supported.
+
+Email changes are disabled by default. Enable `.change_email(true)` and, if required, `.verify_current_email(true)`. Current-email verification uses an `email-verification` code. The new-email code is bound to both addresses and requires an authoritative session.
+
+Each public route supplies a default rate limit of three requests per sixty seconds. Application rate-limit overrides take precedence. Global rate limiting must be enabled for these limits to apply.

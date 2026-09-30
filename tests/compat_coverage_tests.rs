@@ -56,7 +56,11 @@ fn canonical_path(path: &str) -> String {
 
 async fn missing_routes(profile: OpenApiProfile) -> BTreeSet<String> {
     let spec = load_openapi_spec_with_profile(profile);
-    let auth = create_test_auth().await;
+    let auth = create_test_auth_with_options(TestAuthOptions {
+        all_plugins: true,
+        ..Default::default()
+    })
+    .await;
 
     // Collect reference endpoints from the typed spec
     let paths = spec.paths.as_ref().expect("spec must have paths");

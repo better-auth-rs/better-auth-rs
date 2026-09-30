@@ -50,7 +50,7 @@ unicode-normalization = "0.1.25"
 hmac.workspace = true
 hkdf.workspace = true
 sha2.workspace = true
-josekit = "0.10.3"
+josekit.workspace = true
 percent-encoding = "2.3.2"
 
 [features]

@@ -4,6 +4,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+mod oauth_proxy;
 use better_auth::__private_core::AuthContext as InternalAuthContext;
 use better_auth::integrations::axum::AxumIntegration;
 use better_auth::middleware::RateLimitConfig;
@@ -40,6 +41,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
+
+mod email_otp;
+mod identity_routes;
+mod one_tap;
+mod token_routes;
 
 type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
@@ -106,6 +112,8 @@ impl SendInvitationEmail for CompatInvitationSender {
 struct EmailOutboxRecord {
     url: String,
     token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    metadata: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -226,6 +234,7 @@ impl SendVerificationEmail for CompatVerificationSender {
                 EmailOutboxRecord {
                     url: url.to_string(),
                     token: token.to_string(),
+                    metadata: None,
                 },
             );
         }
@@ -283,6 +292,7 @@ impl SendChangeEmailConfirmation for CompatChangeEmailSender {
                 EmailOutboxRecord {
                     url: url.to_string(),
                     token: token.to_string(),
+                    metadata: None,
                 },
             );
         }
@@ -511,10 +521,14 @@ fn mock_oauth_plugin(
                     "profile".to_string(),
                     "openid".to_string(),
                 ],
-                authorization_params: vec![(
-                    "include_granted_scopes".to_string(),
-                    "true".to_string(),
-                )],
+                authorization_params: {
+                    let mut params =
+                        vec![("include_granted_scopes".to_string(), "true".to_string())];
+                    if std::env::var("COMPAT_PROFILE").as_deref() == Ok("one-tap-options") {
+                        params.push(("hd".to_string(), "example.com".to_string()));
+                    }
+                    params
+                },
                 map_user_info: None,
                 get_user_info: Some(Arc::new(CompatGoogleUserInfoHandler {
                     profile: social_profile,
@@ -549,6 +563,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if device_profile == "device-bearer" {
         config.session.bearer = Some(Default::default());
     }
+    if device_profile == "oauth-proxy-cookie" {
+        config.account.store_state_strategy = better_auth::config::OAuthStateStrategy::Cookie;
+    }
 
     let database = Database::connect("sqlite::memory:").await?;
     better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database).await?;
@@ -567,6 +584,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let social_id_token_valid = Arc::new(Mutex::new(true));
 
     let store = SeaOrmStore::<TestSchema>::new(config.clone(), database);
+    let identity_fixture = identity_routes::IdentityFixture::default();
+    let identity_router = identity_fixture.router(Arc::new(SeaOrmStore::<TestSchema>::new(
+        config.clone(),
+        reset_database.clone(),
+    )));
+    let email_otp_fixture = email_otp::EmailOtpFixture::default();
+    let one_tap_fixture = one_tap::OneTapFixture::default();
+    let one_tap_router = one_tap_fixture.router();
+    let email_otp_router = email_otp_fixture.router(Arc::new(SeaOrmStore::<TestSchema>::new(
+        config.clone(),
+        reset_database.clone(),
+    )));
     let two_factor_plugin =
         TwoFactorPlugin::new().custom_send_otp(Arc::new(CompatTwoFactorOtpSender {
             outbox: two_factor_otp_outbox.clone(),
@@ -628,65 +657,83 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => DeviceAuthorizationPlugin::new(),
     };
-    let auth = Arc::new(
-        AuthBuilder::<TestSchema>::new(config)
-            .store(store)
-            .rate_limit(RateLimitConfig::new().enabled(matches!(
-                device_profile.as_str(),
-                "device-rate-limit" | "device-rate-window"
-            )))
-            .plugin(
-                EmailPasswordPlugin::new()
-                    .enable_signup(true)
-                    .username(true),
-            )
-            .plugin(SessionManagementPlugin::new())
-            .plugin(AccountManagementPlugin::new())
-            .plugin(device_plugin)
-            .plugin(api_key_plugin.clone())
-            .plugin(
-                OrganizationPlugin::new().custom_send_invitation_email(Arc::new(
-                    CompatInvitationSender {
-                        outbox: invitation_email_outbox.clone(),
-                        fails: invitation_sender_fails.clone(),
-                    },
-                )),
-            )
-            .plugin(AdminPlugin::new())
-            .plugin(PasskeyPlugin::new())
-            .plugin(
-                PasswordManagementPlugin::new().send_reset_password(Arc::new(CompatResetSender {
-                    outbox: reset_outbox.clone(),
-                    mode: reset_password_mode.clone(),
-                })),
-            )
-            .plugin(
-                EmailVerificationPlugin::new().custom_send_verification_email(Arc::new(
-                    CompatVerificationSender {
-                        outbox: verification_outbox.clone(),
-                    },
-                )),
-            )
-            .plugin(
-                UserManagementPlugin::new()
-                    .change_email_enabled(true)
-                    .send_change_email_confirmation(Arc::new(CompatChangeEmailSender {
-                        verification_outbox: verification_outbox.clone(),
-                        outbox: change_email_outbox.clone(),
-                    }))
-                    .delete_user_enabled(true)
-                    .require_delete_verification(false),
-            )
-            .plugin(two_factor_plugin.clone())
-            .plugin(mock_oauth_plugin(
-                port,
-                social_profile.clone(),
-                social_id_token_valid.clone(),
-                oauth_refresh_mode.clone(),
-            ))
-            .build()
-            .await?,
-    );
+    let builder = AuthBuilder::<TestSchema>::new(config)
+        .store(store)
+        .rate_limit(RateLimitConfig::new().enabled(matches!(
+            device_profile.as_str(),
+            "device-rate-limit" | "device-rate-window"
+        )))
+        .plugin(
+            EmailPasswordPlugin::new()
+                .enable_signup(true)
+                .username(true),
+        )
+        .plugin(SessionManagementPlugin::new())
+        .plugin(AccountManagementPlugin::new())
+        .plugin(device_plugin)
+        .plugin(api_key_plugin.clone())
+        .plugin(
+            OrganizationPlugin::new().custom_send_invitation_email(Arc::new(
+                CompatInvitationSender {
+                    outbox: invitation_email_outbox.clone(),
+                    fails: invitation_sender_fails.clone(),
+                },
+            )),
+        )
+        .plugin(AdminPlugin::new())
+        .plugin(PasskeyPlugin::new())
+        .plugin(
+            PasswordManagementPlugin::new().send_reset_password(Arc::new(CompatResetSender {
+                outbox: reset_outbox.clone(),
+                mode: reset_password_mode.clone(),
+            })),
+        )
+        .plugin({
+            let plugin = EmailVerificationPlugin::new()
+                .auto_sign_in_after_verification(device_profile == "email-otp-options");
+            if device_profile == "email-otp-reuse" {
+                plugin
+            } else {
+                plugin.custom_send_verification_email(Arc::new(CompatVerificationSender {
+                    outbox: verification_outbox.clone(),
+                }))
+            }
+        })
+        .plugin(
+            UserManagementPlugin::new()
+                .change_email_enabled(true)
+                .send_change_email_confirmation(Arc::new(CompatChangeEmailSender {
+                    verification_outbox: verification_outbox.clone(),
+                    outbox: change_email_outbox.clone(),
+                }))
+                .delete_user_enabled(true)
+                .require_delete_verification(false),
+        )
+        .plugin(two_factor_plugin.clone())
+        .plugin(mock_oauth_plugin(
+            port,
+            social_profile.clone(),
+            social_id_token_valid.clone(),
+            oauth_refresh_mode.clone(),
+        ));
+    let builder = if device_profile.starts_with("email-otp") {
+        builder.plugin(email_otp_fixture.plugin(&device_profile))
+    } else {
+        builder
+    };
+    let builder = token_routes::add_plugins(builder, &device_profile, verification_outbox.clone());
+    let builder = if device_profile.starts_with("one-tap") {
+        builder.plugin(one_tap_fixture.plugin(port, &device_profile))
+    } else {
+        builder
+    };
+    let builder = identity_fixture.add_plugins(builder, &device_profile);
+    let builder = if device_profile.starts_with("oauth-proxy") {
+        builder.plugin(oauth_proxy::plugin(port))
+    } else {
+        builder
+    };
+    let auth = Arc::new(builder.build().await?);
 
     let auth_router = auth.clone().axum_router();
 
@@ -973,6 +1020,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/__test/reset-state",
             post(move || {
+                let identity_fixture = identity_fixture.clone();
+                let email_otp_fixture = email_otp_fixture.clone();
+                let one_tap_fixture = one_tap_fixture.clone();
                 let reset_outbox = reset_outbox_for_reset.clone();
                 let verification_outbox = verification_outbox_for_reset.clone();
                 let change_email_outbox = change_email_outbox_for_reset.clone();
@@ -993,6 +1043,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         );
                     }
                     reset_outbox.lock().await.clear();
+                    identity_fixture.reset().await;
+                    email_otp_fixture.reset().await;
+                    one_tap_fixture.reset().await;
                     verification_outbox.lock().await.clear();
                     change_email_outbox.lock().await.clear();
                     two_factor_otp_outbox.lock().await.clear();
@@ -1542,7 +1595,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
         )
         .nest("/api/auth", auth_router)
-        .with_state(auth);
+        .with_state(auth)
+        .merge(oauth_proxy::router(reset_database.clone()))
+        .merge(email_otp_router)
+        .merge(one_tap_router)
+        .merge(identity_router);
 
     let addr = format!("0.0.0.0:{port}");
     println!("[rust-server] Listening on http://localhost:{port}");

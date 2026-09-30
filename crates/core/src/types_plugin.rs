@@ -459,3 +459,14 @@ impl<T: AuthPasskey> From<&T> for Passkey {
         }
     }
 }
+
+/// Persisted SIWE wallet identity. Multiple chains can belong to one user.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletAddress {
+    pub id: String,
+    pub user_id: String,
+    pub address: String,
+    pub chain_id: i64,
+    pub is_primary: bool,
+    pub created_at: DateTime<Utc>,
+}

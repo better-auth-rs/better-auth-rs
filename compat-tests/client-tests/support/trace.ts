@@ -1,5 +1,5 @@
 import { parseSetCookie } from "set-cookie-parser";
-import { jsonShape, normalizeUrl } from "./normalize";
+import { jsonShape, normalizeDeviceCookieName, normalizeUrl } from "./normalize";
 
 export type TraceEntry = {
   actor: string;
@@ -93,7 +93,7 @@ function pickHeaders(headers: Headers, baseURL: string) {
   );
 }
 
-function normalizeCookies(response: Response) {
+function normalizeCookies(response: Response, aliases: Map<string, string>) {
   const cookies = parseSetCookie(response, { map: true, silent: true }) as Record<
     string,
     Record<string, unknown>
@@ -101,7 +101,7 @@ function normalizeCookies(response: Response) {
 
   return Object.fromEntries(
     Object.entries(cookies).map(([name, cookie]) => [
-      name,
+      normalizeDeviceCookieName(name, aliases),
       {
         domain: cookie.domain ?? null,
         path: cookie.path ?? null,
@@ -128,7 +128,11 @@ function applyCookiesToJar(jar: CookieJar, response: Response) {
     silent: true,
   }) as Array<Record<string, unknown>>) {
     if (typeof cookie.name === "string" && typeof cookie.value === "string") {
-      jar.set(cookie.name, `${cookie.name}=${cookie.value}`);
+      if (typeof cookie.maxAge === "number" && cookie.maxAge <= 0) {
+        jar.delete(cookie.name);
+      } else {
+        jar.set(cookie.name, `${cookie.name}=${cookie.value}`);
+      }
     }
   }
 }
@@ -141,6 +145,7 @@ export function createTracingFetch(
   baseURL: string,
   actor: string,
   traces: TraceEntry[],
+  cookieAliases = new Map<string, string>(),
 ) {
   const jar: CookieJar = new Map();
 
@@ -171,7 +176,7 @@ export function createTracingFetch(
       requestBodyShape: normalizeRequestBody(init?.body),
       responseStatus: response.status,
       responseHeaders: pickHeaders(response.headers, baseURL),
-      responseCookies: normalizeCookies(response),
+      responseCookies: normalizeCookies(response, cookieAliases),
       responseBodyShape: await normalizeResponseBody(response),
     });
 

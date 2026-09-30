@@ -1,6 +1,16 @@
 {
   "pages": [
     "oauth",
+    "oauth-proxy",
+    "one-tap",
+    "anonymous",
+    "email-otp",
+    "phone-number",
+    "siwe",
+    "jwt",
+    "magic-link",
+    "one-time-token",
+    "multi-session",
     "two-factor",
     "organization",
     "admin",

@@ -1,17 +1,27 @@
 pub mod account_management;
 pub mod admin;
+pub mod anonymous;
 pub mod api_key;
 pub mod device_authorization;
+pub mod email_otp;
 pub mod email_password;
 pub mod email_verification;
 pub mod helpers;
 mod json_body;
+pub mod jwt;
+pub mod magic_link;
+pub mod multi_session;
 pub mod oauth;
+pub mod one_tap;
+pub mod one_time_token;
 pub mod organization;
 pub mod passkey;
 pub mod password_management;
+pub mod phone_number;
 pub mod session_management;
 mod session_update;
+pub mod siwe;
+mod symmetric;
 pub mod two_factor;
 pub mod user_management;
 
@@ -175,10 +185,20 @@ pub use admin::{AdminConfig, AdminPlugin, RolePermissions};
 pub use api_key::{ApiKeyConfig, ApiKeyPlugin};
 pub use better_auth_core::PasswordHasher;
 pub use device_authorization::DeviceAuthorizationPlugin;
+pub use email_otp::{
+    EmailOtpCodec, EmailOtpConfig, EmailOtpGenerator, EmailOtpMessage, EmailOtpPlugin,
+    EmailOtpStorage, EmailOtpType, SendEmailOtp,
+};
 pub use email_password::{EmailPasswordConfig, EmailPasswordPlugin};
 pub use email_verification::{
     EmailVerificationConfig, EmailVerificationHook, EmailVerificationPlugin, SendVerificationEmail,
 };
+pub use jwt::{JwtAlgorithm, JwtPlugin, JwtPluginConfig};
+pub use magic_link::{MagicLinkConfig, MagicLinkMessage, MagicLinkPlugin, SendMagicLink};
+pub use multi_session::{MultiSessionConfig, MultiSessionPlugin};
+pub use oauth::{OAuthProxyConfig, OAuthProxyPlugin};
+pub use one_tap::{OneTapConfig, OneTapPlugin};
+pub use one_time_token::{OneTimeTokenConfig, OneTimeTokenPlugin, TokenStorage};
 pub use organization::{OrganizationConfig, OrganizationPlugin};
 pub use passkey::{PasskeyConfig, PasskeyPlugin};
 pub use password_management::{

@@ -32,12 +32,35 @@ impl AuthSchema for BundledSchema {
 
 #[derive(Default)]
 struct State {
+    jwks: Vec<crate::Jwk>,
     users: HashMap<String, UserView>,
+    wallets: Vec<crate::types::WalletAddress>,
     sessions: HashMap<String, SessionView>,
     accounts: HashMap<String, AccountView>,
     verifications: HashMap<String, VerificationView>,
     two_factors: HashMap<String, TwoFactor>,
     device_codes: HashMap<String, DeviceCode>,
+}
+
+#[async_trait]
+impl crate::store::JwksStore for MemoryStore {
+    async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>> {
+        Ok(self.lock().jwks.clone())
+    }
+
+    async fn create_jwk(&self, input: crate::CreateJwk) -> AuthResult<crate::Jwk> {
+        let key = crate::Jwk {
+            id: uuid::Uuid::new_v4().to_string(),
+            public_key: input.public_key,
+            private_key: input.private_key,
+            created_at: Utc::now(),
+            expires_at: input.expires_at,
+            alg: Some(input.alg),
+            crv: input.crv,
+        };
+        self.lock().jwks.push(key.clone());
+        Ok(key)
+    }
 }
 
 #[derive(Default)]
@@ -76,6 +99,28 @@ impl AuthTransaction<BundledSchema> for MemoryTransaction<'_> {
 
 #[async_trait]
 impl UserStore<BundledSchema> for MemoryStore {
+    async fn verify_user_and_revoke_unproven_access(
+        &self,
+        user_id: &str,
+    ) -> AuthResult<Option<UserView>> {
+        let mut state = self.lock();
+        let Some(user) = state.users.get(user_id) else {
+            return Ok(None);
+        };
+        if !user.email_verified {
+            state
+                .accounts
+                .retain(|_, account| account.user_id != user_id);
+            state
+                .sessions
+                .retain(|_, session| session.user_id != user_id);
+            if let Some(user) = state.users.get_mut(user_id) {
+                user.email_verified = true;
+                user.updated_at = Utc::now();
+            }
+        }
+        Ok(state.users.get(user_id).cloned())
+    }
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<UserView> {
         let now = Utc::now();
         let id = create_user
@@ -90,6 +135,9 @@ impl UserStore<BundledSchema> for MemoryStore {
             image: create_user.image,
             created_at: now,
             updated_at: now,
+            is_anonymous: create_user.is_anonymous,
+            phone_number: create_user.phone_number,
+            phone_number_verified: create_user.phone_number_verified,
             username,
             display_username: create_user.display_username,
             two_factor_enabled: false,
@@ -136,9 +184,21 @@ impl UserStore<BundledSchema> for MemoryStore {
             .cloned())
     }
 
-    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<UserView> {
+    async fn get_user_by_phone_number(&self, phone_number: &str) -> AuthResult<Option<UserView>> {
+        Ok(self
+            .lock()
+            .users
+            .values()
+            .find(|user| user.phone_number.as_deref() == Some(phone_number))
+            .cloned())
+    }
+
+    async fn update_user(&self, id: &str, mut update: UpdateUser) -> AuthResult<UserView> {
         let mut state = self.lock();
         let user = state.users.get_mut(id).ok_or(AuthError::UserNotFound)?;
+        if update.phone_number == Some(None) {
+            update.phone_number_verified = Some(false);
+        }
         if let Some(email) = update.email {
             user.email = Some(email.to_lowercase());
         }
@@ -150,6 +210,15 @@ impl UserStore<BundledSchema> for MemoryStore {
         }
         if let Some(email_verified) = update.email_verified {
             user.email_verified = email_verified;
+        }
+        if let Some(value) = update.is_anonymous {
+            user.is_anonymous = Some(value);
+        }
+        if let Some(value) = update.phone_number {
+            user.phone_number = value;
+        }
+        if let Some(value) = update.phone_number_verified {
+            user.phone_number_verified = Some(value);
         }
         if let Some(username) = update.username {
             user.username = Some(username.to_lowercase());
@@ -386,6 +455,70 @@ impl AccountStore<BundledSchema> for MemoryStore {
 
 #[async_trait]
 impl VerificationStore<BundledSchema> for MemoryStore {
+    async fn reserve_verification(
+        &self,
+        id: &str,
+        verification: CreateVerification,
+    ) -> AuthResult<bool> {
+        let mut state = self.lock();
+        if state.verifications.contains_key(id) {
+            return Ok(false);
+        }
+        let now = Utc::now();
+        let _ = state.verifications.insert(
+            id.to_owned(),
+            VerificationView {
+                id: id.to_owned(),
+                identifier: verification.identifier,
+                value: verification.value,
+                expires_at: verification.expires_at,
+                created_at: now,
+                updated_at: now,
+            },
+        );
+        Ok(true)
+    }
+
+    async fn get_verification_including_expired(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<VerificationView>> {
+        Ok(self
+            .lock()
+            .verifications
+            .values()
+            .filter(|row| row.identifier == identifier)
+            .max_by_key(|row| row.created_at)
+            .cloned())
+    }
+    async fn update_verification_by_identifier(
+        &self,
+        identifier: &str,
+        value: Option<String>,
+        expires_at: Option<DateTime<Utc>>,
+    ) -> AuthResult<()> {
+        for row in self
+            .lock()
+            .verifications
+            .values_mut()
+            .filter(|row| row.identifier == identifier)
+        {
+            if let Some(value) = &value {
+                row.value.clone_from(value);
+            }
+            if let Some(expires_at) = expires_at {
+                row.expires_at = expires_at;
+            }
+            row.updated_at = Utc::now();
+        }
+        Ok(())
+    }
+    async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()> {
+        self.lock()
+            .verifications
+            .retain(|_, row| row.identifier != identifier);
+        Ok(())
+    }
     async fn create_verification(
         &self,
         verification: CreateVerification,
@@ -935,4 +1068,29 @@ pub(crate) fn test_config() -> Arc<AuthConfig> {
 
 pub(crate) async fn test_database() -> Arc<dyn AuthStore<BundledSchema>> {
     Arc::new(MemoryStore::new(test_config()))
+}
+
+#[async_trait]
+impl crate::store::WalletStore for MemoryStore {
+    async fn get_wallet_address(
+        &self,
+        address: &str,
+        chain_id: Option<i64>,
+    ) -> AuthResult<Option<crate::types::WalletAddress>> {
+        Ok(self
+            .lock()
+            .wallets
+            .iter()
+            .find(|wallet| {
+                wallet.address == address && chain_id.is_none_or(|chain| chain == wallet.chain_id)
+            })
+            .cloned())
+    }
+    async fn create_wallet_address(
+        &self,
+        value: crate::types::WalletAddress,
+    ) -> AuthResult<crate::types::WalletAddress> {
+        self.lock().wallets.push(value.clone());
+        Ok(value)
+    }
 }

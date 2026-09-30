@@ -23,7 +23,8 @@ use better_auth_core::utils::username::{
 use better_auth_core::wire::UserView;
 
 use crate::plugins::helpers::{
-    SessionIssueError, apply_default_role, issue_user_session_with_lifetime,
+    SessionIssueError, apply_default_role, apply_user_create_fields,
+    issue_user_session_with_lifetime,
 };
 
 const MESSAGE_INVALID_USERNAME_OR_PASSWORD: &str = "Invalid username or password";
@@ -113,6 +114,8 @@ pub(crate) struct SignUpRequest {
     display_username: Option<String>,
     #[serde(rename = "callbackURL")]
     callback_url: Option<String>,
+    #[serde(flatten)]
+    additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -572,6 +575,7 @@ pub(crate) async fn sign_up_core(
     let mut create_user = CreateUser::new()
         .with_email(&body.email)
         .with_name(&body.name);
+    apply_user_create_fields(ctx, &body.additional_fields, &mut create_user).await?;
     apply_default_role(ctx, &mut create_user);
     if config.username {
         if let Some(ref username) = body.username {
@@ -865,6 +869,11 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
     }
 
     async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+        if self.config.password_hasher.is_some() {
+            ctx.password_policy.hasher = self.config.password_hasher.clone();
+        }
+        ctx.password_policy.min_length = self.config.password_min_length;
+        ctx.password_policy.max_length = self.config.password_max_length;
         if self.config.username {
             S::User::require_plugin_fields("username", &["username", "display_username"])?;
             ctx.set_metadata("username.enabled", serde_json::Value::Bool(true));

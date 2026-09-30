@@ -24,9 +24,13 @@ Each scenario must assert the intended success or failure before returning obser
 
 The comparator assigns stable aliases to explicitly listed generated IDs and session secrets across each complete scenario. Aliases preserve identity relationships between responses. A credential account's `accountId` uses the generated user identity; other account IDs remain literal. RP IDs, provider IDs, configuration IDs, provider tokens, token types, missing fields, and external redirect origins remain observable. Metadata and permissions are compared literally. Date values retain their meaning; listed clock fields allow at most 10 seconds of skew between sequential runs. Expiry scenarios must also assert the expected lifetime or exact seeded timestamp.
 
-Configuration scenarios start fresh server pairs with the same `COMPAT_PROFILE`. The profiles cover zero-length API keys, custom device codes, code collisions, device rate limits, and explicit Bearer authentication. Passkey scenarios use an ES256 software authenticator to exercise real signature verification, persistence, counters, and challenge consumption.
+Configuration scenarios start fresh server pairs with the same `COMPAT_PROFILE`. The profiles cover API keys, device authorization, OTP storage and delivery, Magic Link, one-time tokens, multiple sessions, anonymous upgrades, phone numbers, SIWE, JWT algorithms, Google One Tap, and OAuth Proxy. Set `COMPAT_TEST_PROFILE` to run one configuration during development. The full gate runs every configuration. Each Bun directory argument has a `./` prefix and trailing slash so similarly named profiles cannot run under the wrong server configuration.
 
-Route checks require zero missing routes in the supported profile. The broader upstream profile must match the exact backlog in `deferred-routes.txt`; new gaps and stale backlog entries fail. This backlog records unimplemented plugins, not permission to omit supported behavior.
+Passkey scenarios use an ES256 software authenticator. JWT and One Tap scenarios verify real asymmetric signatures. SIWE scenarios sign Ethereum messages. OAuth Proxy scenarios exchange encrypted profiles between the TS and Rust servers in both directions. These checks preserve identity, expiry, and replay assertions before projecting generated cryptographic material for comparison.
+
+Route checks require zero missing routes in both configured profiles. The all-in profile must match the empty backlog in `deferred-routes.txt`; new gaps and stale backlog entries fail. Route coverage does not establish support for every plugin option or server-only API.
+
+The Cargo runner builds the Rust fixture before starting either server. Health deadlines measure server startup, not compilation or Cargo lock waits.
 
 ## Components
 

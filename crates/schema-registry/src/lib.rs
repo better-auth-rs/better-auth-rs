@@ -134,6 +134,58 @@ pub fn core_fields(role: EntityRole) -> &'static [FieldDef] {
 
 static PLUGINS: &[PluginSchema] = &[
     PluginSchema {
+        name: "jwt",
+        user_fields: &[],
+        session_fields: &[],
+        extra_entities: &[ExtraEntitySchema {
+            mod_name: "jwk",
+            table_name: "jwks",
+            role: None,
+            fields: &[
+                pk!("id", "String"),
+                f!("public_key", "String"),
+                f!("private_key", "String"),
+                f!("created_at", "DateTimeUtc"),
+                f!("expires_at", "Option<DateTimeUtc>"),
+                f!("alg", "Option<String>"),
+                f!("crv", "Option<String>"),
+            ],
+        }],
+    },
+    PluginSchema {
+        name: "anonymous",
+        user_fields: &[f!("is_anonymous", "Option<bool>")],
+        session_fields: &[],
+        extra_entities: &[],
+    },
+    PluginSchema {
+        name: "phone-number",
+        user_fields: &[
+            f!("phone_number", "Option<String>"),
+            f!("phone_number_verified", "Option<bool>"),
+        ],
+        session_fields: &[],
+        extra_entities: &[],
+    },
+    PluginSchema {
+        name: "siwe",
+        user_fields: &[],
+        session_fields: &[],
+        extra_entities: &[ExtraEntitySchema {
+            mod_name: "wallet_address",
+            table_name: "wallet_address",
+            role: None,
+            fields: &[
+                pk!("id", "String"),
+                f!("user_id", "String"),
+                f!("address", "String"),
+                f!("chain_id", "i64"),
+                f!("is_primary", "bool"),
+                f!("created_at", "DateTimeUtc"),
+            ],
+        }],
+    },
+    PluginSchema {
         name: "username",
         user_fields: &[
             f!("username", "Option<String>"),
@@ -348,7 +400,11 @@ macro_rules! unique {
 /// Index definitions use database column names. Omit absent plugin columns.
 pub fn entity_indexes(table: &str) -> &'static [IndexDef] {
     match table {
-        "users" => &[unique!("email"), unique!("username")],
+        "users" => &[
+            unique!("email"),
+            unique!("username"),
+            unique!("phone_number"),
+        ],
         "sessions" => &[unique!("token"), index!("user_id"), index!("expires_at")],
         "accounts" => &[unique!("provider_id", "account_id"), index!("user_id")],
         "verifications" => &[index!("identifier")],
@@ -364,6 +420,7 @@ pub fn entity_indexes(table: &str) -> &'static [IndexDef] {
         "invitation" => &[index!("organization_id"), index!("email"), index!("status")],
         "api_keys" => &[unique!("key"), index!("reference_id"), index!("config_id")],
         "passkeys" => &[unique!("credential_id"), index!("user_id")],
+        "wallet_address" => &[index!("user_id")],
         _ => &[],
     }
 }
@@ -371,7 +428,7 @@ pub fn entity_indexes(table: &str) -> &'static [IndexDef] {
 /// Cascading foreign keys from a column to another entity's primary key.
 pub fn entity_foreign_keys(table: &str) -> &'static [(&'static str, &'static str)] {
     match table {
-        "sessions" | "accounts" | "two_factor" | "device_code" | "passkeys" => {
+        "sessions" | "accounts" | "two_factor" | "device_code" | "passkeys" | "wallet_address" => {
             &[("user_id", "users")]
         }
         "member" => &[("organization_id", "organization"), ("user_id", "users")],

@@ -1,0 +1,14 @@
+---
+title: OAuth Proxy
+description: Complete preview sign-in through a production OAuth callback.
+---
+
+Register `OAuthPlugin` and `OAuthProxyPlugin` on the production and preview servers. Use the same authentication secret, or set the same `.secret(...)` on both proxy plugins. Configure `.production_url("https://auth.example.com")` with the origin registered at the OAuth provider. Set `.current_url(...)` when the preview origin differs from the configured base URL.
+
+The production callback exchanges the authorization code and encrypts the verified profile. The preview callback consumes the original OAuth state and creates the account and session in the preview database. Production creates neither a user nor a session. Linked-account flows retain the existing preview session.
+
+`GET /callback/{provider}/oauth-proxy` completes the transfer. `GET /oauth-proxy-callback` retains the upstream deprecated entry point. Both require `callbackURL`; the profile is carried in the encrypted `profile` parameter. The implementation validates the callback origin, provider identity, profile age, and OAuth state before creating a session. The default maximum profile age is sixty seconds; use `.max_age(...)` to change it.
+
+Set `x-skip-oauth-proxy` to bypass proxying for a request. Requests on the configured production origin also use the normal OAuth callback. Without an explicit current URL, only a trusted request host can become the profile receiver; other hosts fall back to the configured base URL.
+
+Use application configuration to supply preview and production URLs. Vendor-specific hosting environment discovery is not provided. The compatibility suite verifies both TS-to-Rust and Rust-to-TS profile transfer, database and cookie state, linked accounts, expiry, nonce binding, and replay rejection.

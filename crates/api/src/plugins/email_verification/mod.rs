@@ -1,10 +1,8 @@
-use async_trait::async_trait;
 use chrono::Duration;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use better_auth_core::AuthUser;
+pub use better_auth_core::email::{EmailVerificationHook, SendVerificationEmail};
 use better_auth_core::wire::UserView;
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse};
@@ -23,27 +21,12 @@ mod tests;
 use handlers::*;
 use types::*;
 
-/// Trait for custom email sending logic.
-///
-/// When set on [`EmailVerificationConfig::send_verification_email`], this
-/// callback overrides the default `EmailProvider`-based sending.
-#[async_trait]
-pub trait SendVerificationEmail: Send + Sync {
-    async fn send(&self, user: &UserView, url: &str, token: &str) -> AuthResult<()>;
-}
-
-/// Shorthand for the async hook closure type used by
-/// [`EmailVerificationConfig::before_email_verification`] and
-/// [`EmailVerificationConfig::after_email_verification`].
-pub type EmailVerificationHook =
-    Arc<dyn Fn(&UserView) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>> + Send + Sync>;
-
 /// Email verification plugin for handling email verification flows
 pub struct EmailVerificationPlugin {
     config: EmailVerificationConfig,
 }
 
-#[derive(better_auth_core::PluginConfig)]
+#[derive(Clone, better_auth_core::PluginConfig)]
 #[plugin(name = "EmailVerificationPlugin")]
 pub struct EmailVerificationConfig {
     /// How long a verification token stays valid. Default: 24 hours.
@@ -92,6 +75,14 @@ better_auth_core::impl_auth_plugin! {
         post "/send-verification-email" => handle_send_verification_email, "send_verification_email";
         get "/verify-email" => handle_verify_email, "verify_email";
     }
+    extra {
+        async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+            ctx.email_verification_policy.auto_sign_in_after_verification = self.config.auto_sign_in_after_verification;
+            ctx.email_verification_policy.before_email_verification = self.config.before_email_verification.clone();
+            ctx.email_verification_policy.after_email_verification = self.config.after_email_verification.clone();
+            Ok(())
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -110,8 +101,12 @@ impl EmailVerificationPlugin {
             Err(resp) => return Ok(resp),
         };
         let current_user = ctx.require_session(req).await.ok().map(|(user, _)| user);
+        let mut config = self.config.clone();
+        if config.send_verification_email.is_none() {
+            config.send_verification_email = ctx.email_verification_policy.override_sender.clone();
+        }
         let response =
-            send_verification_email_core(&body, current_user.as_ref(), &self.config, ctx).await?;
+            send_verification_email_core(&body, current_user.as_ref(), &config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -210,7 +205,12 @@ impl EmailVerificationPlugin {
         );
 
         // Use custom sender if configured, otherwise fall back to EmailProvider
-        if let Some(ref custom_sender) = self.config.send_verification_email {
+        if let Some(custom_sender) = self
+            .config
+            .send_verification_email
+            .as_ref()
+            .or(ctx.email_verification_policy.override_sender.as_ref())
+        {
             let user = UserView::from(user);
             custom_sender
                 .send(&user, &verification_url, &verification_token)

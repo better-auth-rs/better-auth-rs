@@ -86,6 +86,9 @@ async fn test_virtual_session_creates_no_db_session() {
         BeforeRequestAction::Respond(_) => {
             panic!("Expected InjectSession, got Respond");
         }
+        BeforeRequestAction::ReplaceBody(_) => {
+            panic!("Expected InjectSession, got ReplaceBody");
+        }
     }
 
     // Count sessions after -- should be unchanged (no DB writes)
@@ -144,6 +147,9 @@ async fn test_virtual_session_on_get_session() {
         }
         BeforeRequestAction::InjectSession { .. } => {
             panic!("Expected Respond for /get-session, got InjectSession");
+        }
+        BeforeRequestAction::ReplaceBody(_) => {
+            panic!("Expected Respond for /get-session, got ReplaceBody");
         }
     }
 }

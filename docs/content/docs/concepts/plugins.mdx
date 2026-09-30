@@ -64,10 +64,17 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
     async fn on_request(
         &self, req: &AuthRequest, ctx: &AuthContext<S>
     ) -> AuthResult<Option<AuthResponse>>;
+
+    /// Called after the response and session cookies are available.
+    async fn after_request(
+        &self, req: &AuthRequest, response: &mut AuthResponse, ctx: &AuthContext<S>
+    ) -> AuthResult<()>;
 }
 ```
 
-`on_init` and `before_request` have default no-op implementations. Plugins must implement `name`, `routes`, and `on_request`.
+`on_init`, `before_request`, and `after_request` have default no-op implementations. Plugins must implement `name`, `routes`, and `on_request`.
+
+`before_request` hooks run in plugin registration order. `ReplaceBody` replaces the request body and continues the hook chain. `InjectSession` supplies a session for the remaining hooks and route handler. `Respond` ends request handling. `after_request` hooks receive successful and error responses before application response middleware. Check the response status before changing response data.
 
 For user and session creation or deletion, register `SeaOrmHooks` on `SeaOrmStore`. These hooks receive the active database transaction.
 

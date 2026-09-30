@@ -38,6 +38,15 @@ pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static 
     fn image(&self) -> Option<&str>;
     fn created_at(&self) -> DateTime<Utc>;
     fn updated_at(&self) -> DateTime<Utc>;
+    fn is_anonymous(&self) -> Option<bool> {
+        None
+    }
+    fn phone_number(&self) -> Option<&str> {
+        None
+    }
+    fn phone_number_verified(&self) -> Option<bool> {
+        None
+    }
     fn username(&self) -> Option<&str>;
     fn display_username(&self) -> Option<&str>;
     fn two_factor_enabled(&self) -> bool;

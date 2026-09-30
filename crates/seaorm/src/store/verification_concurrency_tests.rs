@@ -8,6 +8,54 @@ use tokio::{sync::Barrier, task::JoinSet};
 
 struct RejectVerificationHook(crate::hooks::HookControl);
 
+// Upstream internal-adapter.reserveVerificationValue uses a deterministic primary key.
+#[tokio::test]
+async fn email_claim_reservations_have_one_winner_and_can_be_released()
+-> Result<(), Box<dyn std::error::Error>> {
+    let database = Database::connect("sqlite::memory:").await?;
+    run_migrations(&database).await?;
+    let store = Arc::new(SeaOrmStore::<BundledSchema>::new(
+        AuthConfig::new("a-secret-that-is-at-least-32-characters"),
+        database.clone(),
+    ));
+    let claim = CreateVerification {
+        identifier: "siwe-email-claim-owner@example.com".into(),
+        value: "wallet-address".into(),
+        expires_at: Utc::now() + chrono::Duration::minutes(1),
+    };
+    let barrier = Arc::new(Barrier::new(8));
+    let mut tasks = JoinSet::new();
+    for _ in 0..8 {
+        let store = store.clone();
+        let barrier = barrier.clone();
+        let claim = claim.clone();
+        let _ = tasks.spawn(async move {
+            let _ = barrier.wait().await;
+            store
+                .reserve_verification("deterministic-claim", claim)
+                .await
+        });
+    }
+    let mut winners = 0;
+    while let Some(result) = tasks.join_next().await {
+        winners += usize::from(result??);
+    }
+    assert_eq!(winners, 1);
+    let reservation = store
+        .consume_verification_by_identifier(&claim.identifier)
+        .await?
+        .ok_or_else(|| std::io::Error::other("winning reservation must persist"))?;
+    assert_eq!(reservation.id(), "deterministic-claim");
+    assert_eq!(reservation.value(), claim.value);
+    assert!(
+        store
+            .reserve_verification("deterministic-claim", claim)
+            .await?
+    );
+    database.close().await?;
+    Ok(())
+}
+
 #[async_trait]
 impl crate::hooks::SeaOrmHooks<BundledSchema> for RejectVerificationHook {
     async fn before_delete_verification(

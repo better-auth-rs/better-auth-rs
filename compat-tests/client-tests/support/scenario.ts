@@ -119,6 +119,7 @@ async function runScenario(
   await resetServerState(baseURL);
 
   const traces: TraceEntry[] = [];
+  const cookieAliases = new Map<string, string>();
   const actors = new Map<
     string,
     {
@@ -136,7 +137,7 @@ async function runScenario(
         return existing;
       }
 
-      const fetchImpl = createTracingFetch(baseURL, name, traces);
+      const fetchImpl = createTracingFetch(baseURL, name, traces, cookieAliases);
       const actor = {
         client: createAuthClient({
           baseURL,

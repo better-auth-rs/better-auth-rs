@@ -34,21 +34,6 @@ use crate::plugins::helpers::{SessionIssueError, apply_default_role, issue_user_
 // Shared helpers (DRY)
 // ---------------------------------------------------------------------------
 
-/// Authenticate the current request and return the validated session.
-async fn require_session<S: better_auth_core::AuthSchema>(
-    req: &AuthRequest,
-    ctx: &AuthContext<S>,
-) -> Result<S::Session, AuthError> {
-    let session_manager = ctx.session_manager();
-    let token = session_manager
-        .extract_session_token(req)
-        .ok_or(AuthError::Unauthenticated)?;
-    session_manager
-        .get_session(&token)
-        .await?
-        .ok_or(AuthError::Unauthenticated)
-}
-
 fn generate_pkce() -> (String, String) {
     let verifier: String = thread_rng()
         .sample_iter(&Alphanumeric)
@@ -187,7 +172,7 @@ fn parse_token_response(token_data: serde_json::Value) -> AuthResult<OAuthTokenS
     })
 }
 
-async fn validate_authorization_code_via_provider(
+pub(super) async fn validate_authorization_code_via_provider(
     provider: &OAuthProvider,
     code: &str,
     redirect_uri: &str,
@@ -292,7 +277,9 @@ pub(super) async fn fetch_user_info_from_provider(
     })
 }
 
-fn parse_callback_user_payload(user_data: Option<&str>) -> Option<OAuthCallbackUserPayload> {
+pub(super) fn parse_callback_user_payload(
+    user_data: Option<&str>,
+) -> Option<OAuthCallbackUserPayload> {
     let value: serde_json::Value = serde_json::from_str(user_data?).ok()?;
     Some(OAuthCallbackUserPayload {
         name: value
@@ -315,7 +302,7 @@ fn parse_callback_user_payload(user_data: Option<&str>) -> Option<OAuthCallbackU
     })
 }
 
-fn redirect_response(location: &str) -> AuthResponse {
+pub(super) fn redirect_response(location: &str) -> AuthResponse {
     AuthResponse::new(302)
         .with_header("content-type", "application/json")
         .with_header("Location", location)
@@ -386,13 +373,13 @@ fn attach_cookie_state_payload(
         better_auth_core::utils::cookie_utils::create_cookie(
             &state_cookie_name(config),
             &value,
-            Duration::minutes(5).num_seconds(),
+            Duration::minutes(10).num_seconds(),
             config,
         ),
     ))
 }
 
-fn validate_redirect_target(
+pub(crate) fn validate_redirect_target(
     target: &str,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     error_message: &str,
@@ -452,14 +439,14 @@ pub(super) fn auth_base_url(ctx: &AuthContext<impl better_auth_core::AuthSchema>
     )
 }
 
-struct ProcessOAuthUserResult {
-    session: SessionView,
-    user: UserView,
-    is_register: bool,
-    account_cookie: Option<AccountCookiePayload>,
+pub(super) struct ProcessOAuthUserResult {
+    pub session: SessionView,
+    pub user: UserView,
+    pub is_register: bool,
+    pub account_cookie: Option<AccountCookiePayload>,
 }
 
-enum OAuthSignInError {
+pub(super) enum OAuthSignInError {
     Generic(String),
     Banned(String),
 }
@@ -472,7 +459,7 @@ impl OAuthSignInError {
         }
     }
 
-    fn redirect_parts(&self) -> (String, Option<&str>) {
+    pub(super) fn redirect_parts(&self) -> (String, Option<&str>) {
         match self {
             // Upstream turns a plain internal error string into the `error`
             // param verbatim, with no description.
@@ -506,6 +493,8 @@ struct InitiatedOAuthFlow {
 }
 
 struct FlowStartRequest<'a> {
+    redirect_base: Option<String>,
+    anonymous_user_id: Option<String>,
     provider_name: &'a str,
     provider: &'a OAuthProvider,
     callback_url: &'a str,
@@ -519,7 +508,7 @@ struct FlowStartRequest<'a> {
     disable_redirect: bool,
 }
 
-async fn process_oauth_sign_in(
+pub(super) async fn process_oauth_sign_in(
     provider_name: &str,
     provider: &OAuthProvider,
     user_info: &OAuthUserInfo,
@@ -820,7 +809,7 @@ async fn process_oauth_sign_in(
     }
 }
 
-async fn complete_link_social(
+pub(super) async fn complete_link_social(
     provider_name: &str,
     user_info: &OAuthUserInfo,
     tokens: &OAuthTokenSet,
@@ -905,6 +894,49 @@ async fn complete_link_social(
         .map_err(|_| "unable_to_link_account".to_string())?;
 
     Ok(())
+}
+
+pub(crate) async fn sign_in_verified_profile(
+    provider_name: &str,
+    provider: &OAuthProvider,
+    user: OAuthUserInfo,
+    tokens: OAuthTokenSet,
+    disable_sign_up: bool,
+    req: &AuthRequest,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<AuthResponse> {
+    let outcome = process_oauth_sign_in(
+        provider_name,
+        provider,
+        &user,
+        &tokens,
+        disable_sign_up,
+        &better_auth_core::RequestMeta::from_request(req),
+        ctx,
+    )
+    .await
+    .map_err(|error| match error {
+        OAuthSignInError::Generic(message) if message == "email_not_verified" => {
+            AuthError::Upstream {
+                status: 403,
+                code: "EMAIL_NOT_VERIFIED",
+                message: "Email not verified",
+            }
+        }
+        OAuthSignInError::Generic(message) => AuthError::authentication_failed(message),
+        OAuthSignInError::Banned(message) => AuthError::banned_user(message),
+    })?;
+    Ok(AuthResponse::json(
+        200,
+        &serde_json::json!({"token": outcome.session.token(), "user": outcome.user}),
+    )?
+    .with_appended_header(
+        "Set-Cookie",
+        better_auth_core::utils::cookie_utils::create_session_cookie(
+            outcome.session.token(),
+            &ctx.config,
+        ),
+    ))
 }
 
 async fn sign_in_with_id_token_core(
@@ -1100,6 +1132,7 @@ async fn link_with_id_token_core(
 // ---------------------------------------------------------------------------
 
 async fn social_sign_in_core(
+    req: &AuthRequest,
     body: &SocialSignInRequest,
     config: &OAuthConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
@@ -1121,9 +1154,24 @@ async fn social_sign_in_core(
         validate_redirect_target(new_user_callback_url, ctx, "Invalid newUserCallbackURL")?;
     }
 
+    let anonymous_user_id =
+        if ctx.get_metadata("anonymous.enabled") == Some(&serde_json::Value::Bool(true)) {
+            ctx.session_manager()
+                .resolve(req, better_auth_core::session::SessionRead::Authoritative)
+                .await?
+                .data
+                .filter(|session| session.user.is_anonymous == Some(true))
+                .map(|session| session.user.id)
+        } else {
+            None
+        };
     initiate_oauth_flow_core(
         ctx,
         FlowStartRequest {
+            redirect_base: req
+                .server_context(super::proxy::REDIRECT_BASE_CONTEXT)?
+                .and_then(|value| value.as_str().map(str::to_owned)),
+            anonymous_user_id,
             provider_name: &body.provider,
             provider,
             callback_url: &callback_url,
@@ -1141,6 +1189,7 @@ async fn social_sign_in_core(
 }
 
 async fn link_social_core(
+    req: &AuthRequest,
     body: &LinkSocialRequest,
     session: &impl AuthSession,
     config: &OAuthConfig,
@@ -1172,6 +1221,10 @@ async fn link_social_core(
     initiate_oauth_flow_core(
         ctx,
         FlowStartRequest {
+            redirect_base: req
+                .server_context(super::proxy::REDIRECT_BASE_CONTEXT)?
+                .and_then(|value| value.as_str().map(str::to_owned)),
+            anonymous_user_id: None,
             provider_name: &body.provider,
             provider,
             callback_url: &callback_url,
@@ -1203,7 +1256,7 @@ async fn initiate_oauth_flow_core(
     let (code_verifier, code_challenge) = generate_pkce();
     let state = uuid::Uuid::new_v4().to_string();
 
-    let payload = OAuthStatePayload::new(
+    let mut payload = OAuthStatePayload::new(
         request.callback_url.to_string(),
         code_verifier,
         request.error_callback_url,
@@ -1212,6 +1265,14 @@ async fn initiate_oauth_flow_core(
         request.request_sign_up,
         request.additional_data,
     );
+    let _ = payload
+        .additional_data
+        .insert("oauthState".into(), state.clone().into());
+    if let Some(user_id) = request.anonymous_user_id {
+        let _ = payload
+            .server_context
+            .insert("anonymousUserId".into(), serde_json::json!(user_id));
+    }
 
     match ctx.config.account.store_state_strategy {
         better_auth_core::OAuthStateStrategy::Database => {
@@ -1229,7 +1290,11 @@ async fn initiate_oauth_flow_core(
 
     let url = build_authorization_url(
         request.provider,
-        &format!("{}/callback/{}", auth_base_url(ctx), request.provider_name),
+        &format!(
+            "{}/callback/{}",
+            request.redirect_base.unwrap_or_else(|| auth_base_url(ctx)),
+            request.provider_name
+        ),
         request.scopes,
         &state,
         &code_challenge,
@@ -1279,7 +1344,7 @@ pub(crate) async fn handle_social_sign_in(
         return Ok(auth_response);
     }
 
-    let flow = social_sign_in_core(&body, config, ctx).await?;
+    let flow = social_sign_in_core(req, &body, config, ctx).await?;
     let response = flow.response;
     let mut auth_response = AuthResponse::json(200, &response).map_err(AuthError::from)?;
 
@@ -1443,7 +1508,20 @@ pub(crate) async fn handle_callback(
                 )));
             };
             match decode_cookie_state_value(&ctx.config.secret, &cookie_value) {
-                Ok(payload) => payload,
+                Ok(payload) => {
+                    if !payload
+                        .additional_data
+                        .get("oauthState")
+                        .is_some_and(|value| value.as_str() == Some(state_param.as_str()))
+                    {
+                        return Ok(redirect_response(&build_redirect_url(
+                            &auth_base_url(ctx),
+                            payload.error_url.as_deref().or(Some(&default_error_url)),
+                            &[("error", "state_mismatch")],
+                        )?));
+                    }
+                    payload
+                }
                 Err(_) => {
                     return Ok(redirect_response(&format!(
                         "{default_error_url}?error=please_restart_the_process"
@@ -1495,6 +1573,9 @@ pub(crate) async fn handle_callback(
 
     if payload.is_expired() {
         return Ok(redirect_on_error("please_restart_the_process", None));
+    }
+    if let Some(user_id) = payload.server_context.get("anonymousUserId") {
+        req.set_server_context("anonymousUserId", user_id.clone())?;
     }
 
     let Some(code) = merged.get("code").cloned() else {
@@ -1598,7 +1679,7 @@ pub(crate) async fn handle_link_social(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let session = require_session(req, ctx).await?;
+    let (_, session) = ctx.require_session(req).await?;
     let body: LinkSocialRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
         Err(resp) => return Ok(resp),
@@ -1612,7 +1693,7 @@ pub(crate) async fn handle_link_social(
         return AuthResponse::json(200, &response).map_err(AuthError::from);
     }
 
-    let flow = link_social_core(&body, &session, config, ctx).await?;
+    let flow = link_social_core(req, &body, &session, config, ctx).await?;
     let response = flow.response;
     let mut auth_response = AuthResponse::json(200, &response).map_err(AuthError::from)?;
 

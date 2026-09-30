@@ -29,6 +29,12 @@ pub(crate) struct OAuthStatePayload {
     pub expires_at: i64,
     #[serde(rename = "requestSignUp", skip_serializing_if = "Option::is_none")]
     pub request_sign_up: Option<bool>,
+    #[serde(
+        rename = "serverContext",
+        default,
+        skip_serializing_if = "Map::is_empty"
+    )]
+    pub server_context: Map<String, Value>,
     #[serde(flatten)]
     pub additional_data: Map<String, Value>,
 }
@@ -51,6 +57,7 @@ impl OAuthStatePayload {
             link,
             expires_at: (Utc::now() + Duration::minutes(10)).timestamp_millis(),
             request_sign_up,
+            server_context: Map::new(),
             additional_data,
         }
     }
@@ -266,7 +273,10 @@ pub(crate) fn filter_additional_state_data(
 fn reserved_state_key(key: &str) -> bool {
     matches!(
         key,
-        "callbackURL"
+        "oauthState"
+            | "idTokenNonce"
+            | "serverContext"
+            | "callbackURL"
             | "codeVerifier"
             | "errorURL"
             | "newUserURL"

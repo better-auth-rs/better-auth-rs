@@ -1,6 +1,34 @@
 use async_trait::async_trait;
 
 use crate::error::AuthResult;
+use std::{future::Future, pin::Pin, sync::Arc};
+
+/// Application callback invoked around a successful email verification.
+pub type EmailVerificationHook = Arc<
+    dyn Fn(&crate::wire::UserView) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>>
+        + Send
+        + Sync,
+>;
+
+/// Application delivery of the default email verification message.
+#[async_trait]
+pub trait SendVerificationEmail: Send + Sync {
+    /// Deliver a verification message for the supplied user.
+    async fn send(&self, user: &crate::wire::UserView, url: &str, token: &str) -> AuthResult<()>;
+}
+
+/// Shared email-verification behavior used by proof-based authentication plugins.
+#[derive(Clone, Default)]
+pub struct EmailVerificationRuntimePolicy {
+    /// Create a session after an email verification succeeds.
+    pub auto_sign_in_after_verification: bool,
+    /// Callback invoked before the user update.
+    pub before_email_verification: Option<EmailVerificationHook>,
+    /// Callback invoked after the user update.
+    pub after_email_verification: Option<EmailVerificationHook>,
+    /// Plugin replacement for default email verification delivery.
+    pub override_sender: Option<Arc<dyn SendVerificationEmail>>,
+}
 
 /// Trait for sending emails. Implement this to integrate with your
 /// email service (SMTP, SendGrid, SES, etc.).

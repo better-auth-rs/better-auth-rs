@@ -1,4 +1,5 @@
 use super::json_body;
+use super::json_body::is_truthy;
 use better_auth_core::session::SessionData;
 use better_auth_core::utils::cookie_utils::create_session_cookie_with_max_age;
 use better_auth_core::{
@@ -115,15 +116,4 @@ fn field_not_allowed(name: &str) -> AuthResult<AuthResponse> {
             "code": "FIELD_NOT_ALLOWED", "message": format!("{name} is not allowed to be set"),
         }),
     )?)
-}
-
-// Upstream ignores falsy values for fields with input:false and rejects truthy values.
-fn is_truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(value) => *value,
-        Value::Number(value) => value.as_f64() != Some(0.0),
-        Value::String(value) => !value.is_empty(),
-        Value::Array(_) | Value::Object(_) => true,
-    }
 }

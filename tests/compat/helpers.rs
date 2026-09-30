@@ -144,6 +144,7 @@ pub enum ResetSenderMode {
 pub struct TestAuthOptions {
     pub reset_sender_mode: ResetSenderMode,
     pub creator_role: Option<String>,
+    pub all_plugins: bool,
 }
 
 struct TestResetSender {
@@ -307,7 +308,7 @@ pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth
         OrganizationPlugin::new()
     };
 
-    AuthBuilder::<TestSchema>::new(config)
+    let builder = AuthBuilder::<TestSchema>::new(config)
         .store(store)
         .plugin(
             EmailPasswordPlugin::new()
@@ -341,7 +342,28 @@ pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth
                 .rp_name("Better Auth Test")
                 .origin("http://localhost:3000"),
         )
-        .plugin(AdminPlugin::new())
+        .plugin(AdminPlugin::new());
+    let builder = if options.all_plugins {
+        use better_auth::plugins::*;
+        builder
+            .plugin(AnonymousPlugin::new())
+            .plugin(EmailOtpPlugin::new())
+            .plugin(JwtPlugin::new())
+            .plugin(MagicLinkPlugin::new())
+            .plugin(MultiSessionPlugin::new())
+            .plugin(OAuthProxyPlugin::new())
+            .plugin(OneTapPlugin::new())
+            .plugin(OneTimeTokenPlugin::new())
+            .plugin(PhoneNumberPlugin::new())
+            .plugin(SiwePlugin::new(
+                "localhost",
+                || async { Ok("route-coverage-nonce".to_owned()) },
+                |_| async { Ok(false) },
+            ))
+    } else {
+        builder
+    };
+    builder
         .build()
         .await
         .unwrap_or_else(|e| panic!("Failed to create test auth instance: {e}"))

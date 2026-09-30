@@ -72,7 +72,15 @@ impl<S> UserStore<S> for SeaOrmStore<S>
 where
     S: AuthSchema + Send + Sync,
     S::User: SeaOrmUserModel,
+    S::Account: crate::schema::SeaOrmAccountModel,
+    S::Session: crate::schema::SeaOrmSessionModel,
 {
+    async fn verify_user_and_revoke_unproven_access(
+        &self,
+        user_id: &str,
+    ) -> AuthResult<Option<S::User>> {
+        self.verify_unproven_user(user_id).await
+    }
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<S::User> {
         self.create_user_with_connection(self.connection(), None, create_user)
             .await
@@ -124,8 +132,21 @@ where
             .map_err(map_db_err)
     }
 
+    async fn get_user_by_phone_number(&self, phone_number: &str) -> AuthResult<Option<S::User>> {
+        let column = S::User::phone_number_column()
+            .ok_or_else(|| AuthError::config("The user entity requires phone_number"))?;
+        <S::User as SeaOrmUserModel>::Entity::find()
+            .filter(column.eq(phone_number))
+            .one(self.connection())
+            .await
+            .map_err(map_db_err)
+    }
+
     async fn update_user(&self, id: &str, mut update: UpdateUser) -> AuthResult<S::User> {
         update.email = normalize_optional_user_email(update.email);
+        if update.phone_number == Some(None) {
+            update.phone_number_verified = Some(false);
+        }
         let user_id = S::User::parse_id(id)?;
         let hook_context = self.hook_context(None);
         for hook in self.hooks() {

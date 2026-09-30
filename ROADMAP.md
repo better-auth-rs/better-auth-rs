@@ -9,9 +9,7 @@ This roadmap tracks the pinned upstream TypeScript surface plus exposed
 Rust plugin routes we intend to keep. Public routes not present in
 upstream TS should be removed.
 
-For the v1 release, phases 0-12 are the supported completion target.
-Later phases remain tracked here, but they are follow-up/community work
-unless explicitly pulled back into core scope.
+The supported completion target includes phases 0–13 and the additional plugin routes listed below. Organization teams and dynamic roles remain follow-up work. Route coverage describes the configured HTTP surface; it does not establish support for every upstream plugin option or server-only API.
 
 Phases are ordered so that each one only depends on capabilities from
 earlier phases. A phase is complete when every endpoint in it has
@@ -108,6 +106,29 @@ route in the pinned compat surface)
 **Phase 13 — JWT surface:**
 When `jwt()` is enabled:
 `/token`, `/jwks` (or configured `jwksPath`)
+
+**Additional plugin routes:**
+
+| Plugin | HTTP routes |
+| --- | --- |
+| Anonymous | `/sign-in/anonymous`, `/delete-anonymous-user` |
+| Email OTP | `/email-otp/send-verification-otp`, `/email-otp/check-verification-otp`, `/email-otp/verify-email`, `/sign-in/email-otp`, `/email-otp/request-password-reset`, `/forget-password/email-otp`, `/email-otp/reset-password`, `/email-otp/request-email-change`, `/email-otp/change-email` |
+| Magic Link | `/sign-in/magic-link`, `/magic-link/verify` |
+| Multi Session | `/multi-session/list-device-sessions`, `/multi-session/set-active`, `/multi-session/revoke` |
+| OAuth Proxy | `/callback/{provider}/oauth-proxy`, `/oauth-proxy-callback` |
+| One Tap | `/one-tap/callback` |
+| One Time Token | `/one-time-token/generate`, `/one-time-token/verify` |
+| Phone Number | `/phone-number/send-otp`, `/phone-number/verify`, `/sign-in/phone-number`, `/phone-number/request-password-reset`, `/phone-number/reset-password` |
+| SIWE | `/siwe/nonce`, `/siwe/get-nonce`, `/siwe/verify` |
+
+These plugins use separate configuration profiles in the dual-runtime suite. Each profile verifies successful authentication and relevant failure paths. Mail and SMS delivery and SIWE verification require application callbacks, as in upstream. See the plugin documentation for Rust configuration and supported options.
+
+HTTP route coverage does not close these behavior gaps:
+
+- [JWT](docs/content/docs/plugins/jwt.mdx) does not implement remote JWKS, custom signing and payload callbacks, additional algorithms, or JWT session cookie caches.
+- [Email OTP](docs/content/docs/plugins/email-otp.mdx) does not support application-defined user `additionalFields` schemas and transforms.
+- Disabling [Anonymous](docs/content/docs/plugins/anonymous.mdx) or [Phone Number](docs/content/docs/plugins/phone-number.mdx) does not remove their previously stored fields from user output.
+- [OAuth Proxy](docs/content/docs/plugins/oauth-proxy.mdx) requires application configuration for hosting URLs instead of vendor environment discovery.
 
 **Phase 14 — Organization teams:**
 When `organization({ teams: { enabled: true } })` is enabled:

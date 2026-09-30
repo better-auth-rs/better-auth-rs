@@ -102,6 +102,11 @@ export function normalizeClientValue(value: unknown, key = "", baseURL?: string,
   return String(value);
 }
 
+export function normalizeDeviceCookieName(name: string, generated: Map<string, string>): string {
+  const match = /^((?:__Secure-)?better-auth\.session_token_multi-)([a-z0-9_-]+)$/.exec(name);
+  return match ? `${match[1]}${normalizeScalar(match[2]!, "token", undefined, generated)}` : name;
+}
+
 export function jsonShape(value: unknown): unknown {
   if (value === null || value === undefined) {
     return null;

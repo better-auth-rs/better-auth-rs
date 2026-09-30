@@ -7,7 +7,10 @@
 #![allow(unreachable_pub, reason = "SeaORM derive requires public entity types")]
 
 use better_auth::plugin::AuthPlugin;
-use better_auth::plugins::{AdminPlugin, EmailPasswordPlugin, OrganizationPlugin, TwoFactorPlugin};
+use better_auth::plugins::{
+    AdminPlugin, AnonymousPlugin, EmailPasswordPlugin, OrganizationPlugin, PhoneNumberPlugin,
+    TwoFactorPlugin,
+};
 use better_auth::seaorm::sea_orm::entity::prelude::*;
 use better_auth::seaorm::{AuthEntity, Database, SeaOrmStore, sea_orm};
 use better_auth::{AuthConfig, AuthError, AuthSchema, BetterAuth};
@@ -90,6 +93,16 @@ async fn plugins_reject_missing_user_fields_before_serving_requests()
             "two_factor_enabled",
         ),
         (Box::new(AdminPlugin::new()), "admin", "role"),
+        (
+            Box::new(AnonymousPlugin::new()),
+            "anonymous",
+            "is_anonymous",
+        ),
+        (
+            Box::new(PhoneNumberPlugin::new()),
+            "phone-number",
+            "phone_number",
+        ),
         (
             Box::new(EmailPasswordPlugin::new().username(true)),
             "username",

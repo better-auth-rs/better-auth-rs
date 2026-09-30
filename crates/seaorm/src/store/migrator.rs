@@ -19,6 +19,8 @@ impl MigratorTrait for AuthMigrator {
             Box::new(ApiKeyReferenceOwnership),
             Box::new(super::api_key_numbers::ApiKeyNumbers),
             Box::new(super::two_factor_security::TwoFactorSecurity),
+            Box::new(super::identity_schema::IdentitySchema),
+            Box::new(super::jwks::JwtKeys),
         ]
     }
 

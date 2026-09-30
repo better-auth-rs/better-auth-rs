@@ -73,7 +73,7 @@ The [quick-start guide](docs/content/docs/quick-start.mdx) includes sign-up and 
 
 ## Plugins and features
 
-Plugins include email/password, username, sessions, password management, email verification, account management, OAuth, organizations, two-factor authentication, passkeys, API keys, and admin. Enable username with `EmailPasswordPlugin::username(true)`. Generate fields and tables for each selected plugin; startup rejects missing entity fields. See [database integration](docs/content/docs/concepts/database.mdx).
+Plugins include email/password, username, sessions, password management, email verification, email OTP, phone numbers, anonymous accounts, SIWE, Magic Link, one-time tokens, multiple sessions, JWT, OAuth, One Tap, OAuth Proxy, organizations, two-factor authentication, passkeys, API keys, and admin. Enable username with `EmailPasswordPlugin::username(true)`. Generate fields and tables for each selected plugin; startup rejects missing entity fields. See [database integration](docs/content/docs/concepts/database.mdx).
 
 | Cargo feature | Purpose |
 | --- | --- |

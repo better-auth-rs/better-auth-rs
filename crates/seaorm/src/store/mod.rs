@@ -6,7 +6,9 @@ mod api_keys;
 mod bundled_schema;
 mod device_codes;
 pub mod entities;
+mod identity_schema;
 mod invitations;
+mod jwks;
 mod members;
 mod migrator;
 mod organizations;
@@ -14,8 +16,10 @@ mod passkeys;
 mod sessions;
 mod two_factor;
 mod two_factor_security;
+mod user_verification;
 mod users;
 mod verifications;
+mod wallets;
 
 #[doc(hidden)]
 pub mod __private_test_support {

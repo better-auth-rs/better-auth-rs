@@ -24,6 +24,80 @@ where
     S: AuthSchema + Send + Sync,
     S::Verification: SeaOrmVerificationModel,
 {
+    async fn reserve_verification(
+        &self,
+        id: &str,
+        verification: CreateVerification,
+    ) -> AuthResult<bool> {
+        let reservation_id = S::Verification::parse_id(id)?;
+        match S::Verification::new_active(Some(reservation_id.clone()), verification, Utc::now())
+            .insert(self.connection())
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(cause) => {
+                if <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                    .filter(S::Verification::id_column().eq(reservation_id))
+                    .one(self.connection())
+                    .await
+                    .map_err(map_db_err)?
+                    .is_some()
+                {
+                    Ok(false)
+                } else {
+                    Err(map_db_err(cause))
+                }
+            }
+        }
+    }
+
+    async fn get_verification_including_expired(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<S::Verification>> {
+        <S::Verification as SeaOrmVerificationModel>::Entity::find()
+            .filter(S::Verification::identifier_column().eq(identifier))
+            .order_by_desc(S::Verification::created_at_column())
+            .one(self.connection())
+            .await
+            .map_err(map_db_err)
+    }
+
+    async fn update_verification_by_identifier(
+        &self,
+        identifier: &str,
+        value: Option<String>,
+        expires_at: Option<chrono::DateTime<Utc>>,
+    ) -> AuthResult<()> {
+        let mut query = <S::Verification as SeaOrmVerificationModel>::Entity::update_many()
+            .filter(S::Verification::identifier_column().eq(identifier));
+        if let Some(value) = value {
+            query = query.col_expr(
+                S::Verification::value_column(),
+                sea_orm::sea_query::Expr::value(value),
+            );
+        }
+        if let Some(expires_at) = expires_at {
+            query = query.col_expr(
+                S::Verification::expires_at_column(),
+                sea_orm::sea_query::Expr::value(expires_at),
+            );
+        }
+        let _ = query.exec(self.connection()).await.map_err(map_db_err)?;
+        Ok(())
+    }
+
+    async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()> {
+        let records = <S::Verification as SeaOrmVerificationModel>::Entity::find()
+            .filter(S::Verification::identifier_column().eq(identifier))
+            .all(self.connection())
+            .await
+            .map_err(map_db_err)?;
+        for record in records {
+            self.delete_verification(record.id().as_ref()).await?;
+        }
+        Ok(())
+    }
     async fn create_verification(
         &self,
         mut verification: CreateVerification,
