@@ -1,4 +1,10 @@
+mod fields;
 pub mod handlers;
+pub mod hooks;
+mod policy;
+mod server_api;
+pub use better_auth_core::organization_fields::OrganizationFields;
+pub use server_api::AddMemberInput;
 pub mod rbac;
 pub mod types;
 
@@ -16,11 +22,13 @@ pub struct InvitationEmail {
     /// The persisted invitation, including its current expiration.
     pub invitation: better_auth_core::wire::InvitationView,
     /// The organization receiving the invited member.
-    pub organization: better_auth_core::wire::OrganizationView,
+    pub organization: types::OrganizationResponse,
     /// The member sending the invitation.
     pub member: better_auth_core::types::Member,
     /// The user sending the invitation.
     pub inviter: better_auth_core::wire::UserView,
+    /// HTTP request that initiated delivery, absent for requestless server calls.
+    pub request: Option<AuthRequest>,
 }
 
 /// Application callback for invitation email delivery.
@@ -48,13 +56,34 @@ pub struct RolePermissions {
 }
 
 /// Team creation and membership limits.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct OrganizationTeamsConfig {
     pub enabled: bool,
     pub default_team: bool,
     pub allow_removing_all_teams: bool,
     pub maximum_teams: Option<usize>,
     pub maximum_members_per_team: Option<usize>,
+    /// Dynamic capacity. Trusted server calls require a session when this callback is configured.
+    pub maximum_members_per_team_callback: Option<Arc<dyn hooks::TeamMemberLimitPolicy>>,
+}
+
+impl std::fmt::Debug for OrganizationTeamsConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OrganizationTeamsConfig")
+            .field("enabled", &self.enabled)
+            .field("default_team", &self.default_team)
+            .field("allow_removing_all_teams", &self.allow_removing_all_teams)
+            .field("maximum_teams", &self.maximum_teams)
+            .field("maximum_members_per_team", &self.maximum_members_per_team)
+            .field(
+                "maximum_members_per_team_callback",
+                &self
+                    .maximum_members_per_team_callback
+                    .as_ref()
+                    .map(|_| "custom"),
+            )
+            .finish()
+    }
 }
 
 impl Default for OrganizationTeamsConfig {
@@ -65,6 +94,7 @@ impl Default for OrganizationTeamsConfig {
             allow_removing_all_teams: false,
             maximum_teams: None,
             maximum_members_per_team: None,
+            maximum_members_per_team_callback: None,
         }
     }
 }
@@ -73,6 +103,16 @@ impl Default for OrganizationTeamsConfig {
 #[derive(Clone, better_auth_core::PluginConfig)]
 #[plugin(name = "OrganizationPlugin")]
 pub struct OrganizationConfig {
+    /// Application fields for organization entities.
+    #[config(default = better_auth_core::organization_fields::OrganizationFields::default(), skip)]
+    pub schema: OrganizationFields,
+
+    /// Application lifecycle hooks.
+    #[config(default = None, skip)]
+    pub hooks: Option<Arc<dyn hooks::OrganizationHooks>>,
+    /// Asynchronous organization configuration.
+    #[config(default = None, skip)]
+    pub policy: Option<Arc<dyn hooks::OrganizationPolicy>>,
     /// Enable teams and configure team limits.
     #[config(default = OrganizationTeamsConfig::default(), skip)]
     pub teams: OrganizationTeamsConfig,
@@ -91,18 +131,27 @@ pub struct OrganizationConfig {
     /// Maximum organizations per user (None = unlimited)
     #[config(default = None)]
     pub organization_limit: Option<usize>,
-    /// Maximum members per organization (None = unlimited)
+    /// Maximum members per organization (None or zero uses upstream default 100)
     #[config(default = Some(100))]
     pub membership_limit: Option<usize>,
+    /// Dynamic membership capacity, replacing the static admission limit.
+    #[config(default = None, skip)]
+    pub membership_limit_callback: Option<Arc<dyn hooks::MembershipLimitPolicy>>,
     /// Role assigned to organization creator (default: "owner")
     #[config(default = "owner".to_string())]
     pub creator_role: String,
     /// Invitation expiration in seconds (default: 48 hours)
     #[config(default = 60 * 60 * 48)]
     pub invitation_expires_in: u64,
-    /// Maximum pending invitations per organization (None = unlimited)
+    /// Maximum pending invitations per organization (None uses upstream default 100)
     #[config(default = Some(100))]
     pub invitation_limit: Option<usize>,
+    /// Cancel the previous pending invitation before creating a replacement.
+    #[config(default = false)]
+    pub cancel_pending_invitations_on_re_invite: bool,
+    /// Require a verified recipient email for invitation lookup, acceptance, and rejection.
+    #[config(default = false)]
+    pub require_email_verification_on_invitation: bool,
     /// Disable organization deletion (default: false)
     #[config(default = false)]
     pub disable_organization_deletion: bool,
@@ -127,6 +176,14 @@ impl std::fmt::Debug for OrganizationConfig {
             .field("invitation_expires_in", &self.invitation_expires_in)
             .field("invitation_limit", &self.invitation_limit)
             .field(
+                "cancel_pending_invitations_on_re_invite",
+                &self.cancel_pending_invitations_on_re_invite,
+            )
+            .field(
+                "require_email_verification_on_invitation",
+                &self.require_email_verification_on_invitation,
+            )
+            .field(
                 "disable_organization_deletion",
                 &self.disable_organization_deletion,
             )
@@ -147,11 +204,30 @@ impl std::fmt::Debug for OrganizationConfig {
 }
 
 /// Organization plugin for multi-tenancy support
+#[derive(Clone)]
 pub struct OrganizationPlugin {
     config: OrganizationConfig,
 }
 
 impl OrganizationPlugin {
+    /// Configure dynamic organization capacity. Listing retains the upstream default page size.
+    pub fn membership_limit_callback(
+        mut self,
+        callback: Arc<dyn hooks::MembershipLimitPolicy>,
+    ) -> Self {
+        self.config.membership_limit_callback = Some(callback);
+        self
+    }
+    /// Configure application lifecycle hooks.
+    pub fn hooks(mut self, hooks: Arc<dyn hooks::OrganizationHooks>) -> Self {
+        self.config.hooks = Some(hooks);
+        self
+    }
+    /// Configure asynchronous organization options.
+    pub fn policy(mut self, policy: Arc<dyn hooks::OrganizationPolicy>) -> Self {
+        self.config.policy = Some(policy);
+        self
+    }
     /// Configure organization teams.
     pub fn teams(mut self, teams: OrganizationTeamsConfig) -> Self {
         self.config.teams = teams;
@@ -189,6 +265,14 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         &self,
         ctx: &mut better_auth_core::AuthInitContext<S>,
     ) -> better_auth_core::AuthResult<()> {
+        self.config.schema.validate()?;
+        let mut fields = self.config.schema.clone();
+        for field in fields.organization_role.additional_fields.values_mut() {
+            field.required = Some(false);
+        }
+        ctx.database.configure_organization_fields(fields)?;
+        ctx.extensions.insert(self.config.schema.clone());
+
         S::Session::require_plugin_fields("organization", &["active_organization_id"])?;
         if self.config.teams.enabled {
             S::Session::require_plugin_fields("organization", &["active_team_id"])?;
@@ -274,7 +358,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
 
     async fn after_request(
         &self,
-        _req: &AuthRequest,
+        req: &AuthRequest,
         response: &mut AuthResponse,
         _ctx: &AuthContext<S>,
     ) -> AuthResult<()> {
@@ -288,6 +372,9 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         }
         let mut value = serde_json::from_slice(&response.body)?;
         shape_session_teams(&mut value, self.config.teams.enabled);
+        if response.status < 400 {
+            fields::filter_response(req.path(), &mut value, &self.config.schema);
+        }
         response.body = serde_json::to_vec(&value)?;
         Ok(())
     }
@@ -366,7 +453,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
                 handlers::invitation::handle_invite_member(req, ctx, &self.config).await?,
             )),
             (HttpMethod::Get, "/organization/get-invitation") => Ok(Some(
-                handlers::invitation::handle_get_invitation(req, ctx).await?,
+                handlers::invitation::handle_get_invitation(req, ctx, &self.config).await?,
             )),
             (HttpMethod::Get, "/organization/list-invitations") => Ok(Some(
                 handlers::invitation::handle_list_invitations(req, ctx).await?,
@@ -378,7 +465,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
                 handlers::invitation::handle_accept_invitation(req, ctx, &self.config).await?,
             )),
             (HttpMethod::Post, "/organization/reject-invitation") => Ok(Some(
-                handlers::invitation::handle_reject_invitation(req, ctx).await?,
+                handlers::invitation::handle_reject_invitation(req, ctx, &self.config).await?,
             )),
             (HttpMethod::Post, "/organization/cancel-invitation") => Ok(Some(
                 handlers::invitation::handle_cancel_invitation(req, ctx, &self.config).await?,
@@ -435,17 +522,19 @@ fn shape_invitation_output(
     response: &mut AuthResponse,
     teams_enabled: bool,
 ) -> AuthResult<()> {
-    if !matches!(
-        path,
-        "/organization/invite-member"
-            | "/organization/get-invitation"
-            | "/organization/list-invitations"
-            | "/organization/list-user-invitations"
-            | "/organization/accept-invitation"
-            | "/organization/reject-invitation"
-            | "/organization/cancel-invitation"
-            | "/organization/get-full-organization"
-    ) {
+    if response.status >= 400
+        || !matches!(
+            path,
+            "/organization/invite-member"
+                | "/organization/get-invitation"
+                | "/organization/list-invitations"
+                | "/organization/list-user-invitations"
+                | "/organization/accept-invitation"
+                | "/organization/reject-invitation"
+                | "/organization/cancel-invitation"
+                | "/organization/get-full-organization"
+        )
+    {
         return Ok(());
     }
     let mut value: serde_json::Value = serde_json::from_slice(&response.body)?;

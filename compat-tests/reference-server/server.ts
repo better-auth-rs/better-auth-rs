@@ -1,4 +1,6 @@
 #!/usr/bin/env bun
+import { createOrganizationCallbacks } from "./organization-callbacks";
+import { organizationFieldOptions } from "./organization-fields";
 
 import { Database } from "bun:sqlite";
 import { passkey } from "@better-auth/passkey";
@@ -51,6 +53,7 @@ const database = new Database(":memory:");
 const identityFixture = createIdentityFixture(database, process.env.COMPAT_PROFILE ?? "");
 const emailOtpFixture = createEmailOtpFixture(database, process.env.COMPAT_PROFILE ?? "");
 const oneTapFixture = createOneTapFixture(process.env.COMPAT_PROFILE ?? "");
+const organizationCallbacks = createOrganizationCallbacks(process.env.COMPAT_PROFILE ?? "");
 const resetPasswordOutbox = new Map<string, { url: string; token: string }>();
 const verificationEmailOutbox = new Map<string, { url: string; token: string; metadata?: Record<string, unknown> }>();
 const changeEmailOutbox = new Map<string, { newEmail: string; url: string; token: string }>();
@@ -316,7 +319,7 @@ const authOptions = {
     } } : {}),
   } : undefined,
   user: {
-    additionalFields: ["user-fields", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? userFields : undefined,
+    additionalFields: ["user-fields", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? userFields : ["organization-callbacks", "organization-custom-team"].includes(process.env.COMPAT_PROFILE ?? "") ? { secretNote: { type: "string", required: false, returned: false, defaultValue: "hidden" } } : undefined,
     changeEmail: {
       enabled: true,
       async sendChangeEmailConfirmation({
@@ -420,11 +423,18 @@ const authOptions = {
           : undefined,
     }),
     organization({
+      ...(["organization-invitation-options", "organization-invitation-unverified"].includes(process.env.COMPAT_PROFILE ?? "") ? {
+        cancelPendingInvitationsOnReInvite: true,
+        requireEmailVerificationOnInvitation: process.env.COMPAT_PROFILE === "organization-invitation-options",
+        invitationLimit: 1,
+      } : {}),
       ...(process.env.COMPAT_PROFILE?.startsWith("organization-") ? {
         teams: { enabled: true, ...(process.env.COMPAT_PROFILE === "organization-limits" ? { defaultTeam: { enabled: false }, maximumTeams: 2, maximumMembersPerTeam: 1, allowRemovingAllTeams: true } : {}) },
         dynamicAccessControl: { enabled: true, ...(process.env.COMPAT_PROFILE === "organization-limits" ? { maximumRolesPerOrganization: 1 } : {}) },
         ...(process.env.COMPAT_PROFILE === "organization-no-ac" ? {} : { ac: createAccessControl(defaultStatements) }),
       } : {}),
+      ...organizationCallbacks.options,
+      ...organizationFieldOptions(process.env.COMPAT_PROFILE ?? ""),
       async sendInvitationEmail({ id, email, role }) {
         await Promise.resolve();
         if (invitationSenderFails) throw new Error("compat invitation sender failure");
@@ -519,6 +529,11 @@ const server = Bun.serve({
         return hiddenUserFields.handler(new Request(url, request));
       }
 
+      const organizationResponse = await organizationCallbacks.route(request);
+      if (organizationResponse) return organizationResponse;
+      if (url.pathname === "/__test/organization-add-member" && request.method === "POST") {
+        return auth.api.addMember({ body: await readJson(request), headers: request.headers, asResponse: true });
+      }
       const identityResponse = await identityFixture.handle(request);
       const jwtResponse = await jwtFixture.handle(request, auth);
       if (jwtResponse) return jwtResponse;
@@ -555,6 +570,7 @@ const server = Bun.serve({
       if (url.pathname === "/__test/reset-state" && request.method === "POST") {
         await resetDatabaseState();
         identityFixture.reset();
+        organizationCallbacks.reset();
         emailOtpFixture.reset();
         oneTapFixture.reset();
         resetPasswordOutbox.clear();

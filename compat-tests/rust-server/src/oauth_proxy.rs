@@ -1,4 +1,4 @@
-use axum::{routing::get, Json, Router};
+use axum::{Json, Router, routing::get};
 use better_auth::plugins::OAuthProxyPlugin;
 use better_auth_seaorm::sea_orm::{DatabaseConnection, EntityTrait};
 use better_auth_seaorm::store::entities::{session, user};

@@ -13,7 +13,7 @@ use crate::types::CreateSession;
 
 use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
 
-impl<S> SeaOrmStore<S>
+impl<S, O: crate::SeaOrmOrganizationSchema> SeaOrmStore<S, O>
 where
     S: AuthSchema,
     S::Session: SeaOrmSessionModel,
@@ -73,7 +73,7 @@ where
 }
 
 #[async_trait]
-impl<S> SessionStore<S> for SeaOrmStore<S>
+impl<S, O: crate::SeaOrmOrganizationSchema> SessionStore<S> for SeaOrmStore<S, O>
 where
     S: AuthSchema + Send + Sync,
     S::Session: SeaOrmSessionModel,
@@ -223,10 +223,21 @@ where
         invitation_id: &str,
         user_id: &str,
         session_token: &str,
-        maximum: Option<usize>,
-    ) -> AuthResult<(better_auth_core::Member, Option<S::Session>)> {
-        self.accept_team_invitation(invitation_id, user_id, session_token, maximum)
-            .await
+        teams_enabled: bool,
+        maximum: better_auth_core::store::TeamMemberLimits<'_>,
+    ) -> AuthResult<(
+        better_auth_core::Member,
+        better_auth_core::Invitation,
+        Option<S::Session>,
+    )> {
+        self.accept_team_invitation(
+            invitation_id,
+            user_id,
+            session_token,
+            teams_enabled,
+            maximum,
+        )
+        .await
     }
     async fn update_session_active_team(
         &self,

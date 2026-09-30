@@ -19,7 +19,7 @@ impl From<wallet_address::Model> for WalletAddress {
     }
 }
 #[async_trait]
-impl<S: AuthSchema> WalletStore for SeaOrmStore<S> {
+impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema> WalletStore for SeaOrmStore<S, O> {
     async fn get_wallet_address(
         &self,
         address: &str,

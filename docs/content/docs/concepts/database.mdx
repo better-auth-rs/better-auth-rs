@@ -60,7 +60,7 @@ The CLI generates core entities, plugin fields and tables, unique indexes, and f
 
 Call the generated `create_auth_tables(&database).await?` from the application's initial migration. The function creates tables in an empty database and fails when a table already exists. The function does not compare schemas, alter existing tables, or track migration versions. Use your application's versioned SeaORM migrations for later changes, including plugin additions.
 
-The application owns the generated source. The four core entities can be customized through the public schema traits. Plugin tables currently use fixed library entity names and columns; preserve their generated database schema.
+The application owns the generated source. The four core entities can be customized through the public schema traits. Organization also supports application-owned models. Other plugin tables use fixed library entity names and columns; preserve their generated database schema.
 
 For application-owned entities, bind the four model types with `AuthSchema`:
 
@@ -78,6 +78,70 @@ pub struct AppAuthSchema;
 Each model must implement its corresponding auth entity trait. You may place each binding in a separate `#[auth(...)]` attribute. Each binding must appear exactly once.
 
 Auth responses serialize timestamps as UTC ISO 8601 strings with three fractional digits, matching the upstream JavaScript client. Stored database timestamps retain their original precision.
+
+## Organization models
+
+Use `--schema-config` to generate Organization tables with application column names and additional fields:
+
+```sh
+better-auth-rs generate --plugins organization --schema-config organization-schema.json --output src/auth_schema.rs
+```
+
+```json
+{
+  "session": {
+    "fields": { "activeOrganizationId": "selected_organization" }
+  },
+  "organization": {
+    "modelName": "workspaces",
+    "fields": { "slug": "workspace_slug" },
+    "additionalFields": {
+      "label": { "type": "string", "fieldName": "stored_label", "required": false },
+      "tags": { "type": "string[]", "required": false }
+    }
+  }
+}
+```
+
+The configuration accepts `organization`, `member`, `invitation`, `team`, `teamMember`, and `organizationRole`. Each model supports `modelName` and `fields` mappings. Core field keys use upstream camelCase names. Rust core fields retain their snake_case names. The `session` entry supports only `activeOrganizationId` and `activeTeamId` column mappings. Primary key names remain `id`.
+
+All Organization models except `teamMember` support `additionalFields`. Supported types are `string`, `number`, `boolean`, `date`, `json`, `string[]`, `number[]`, and string arrays that define enum values. Array fields use transparent typed JSON wrappers. Enum fields use `String` storage; the CLI does not generate enum validation. Only `required: true` generates a nonnullable column. Omitted or false `required` generates an `Option` field. Organization role additional fields always remain nullable because upstream makes these fields optional when constructing the role update endpoint. `unique: true` generates a unique index.
+
+The JSON configuration describes storage. The CLI does not generate SQL defaults, validators, transforms, or callback configuration. Additional field runtime metadata may appear in this JSON but does not configure the plugin. Configure the matching public names, types, and `field_name` in `OrganizationConfig.schema` with `UserFieldConfig`. `field_name` accepts the Rust field name or its Serde serialization name; SeaORM's `column_name` attribute controls the SQL column name. For example:
+
+```rust
+use better_auth::config::{UserFieldConfig, UserFieldType};
+use better_auth::plugins::organization::OrganizationConfig;
+
+let mut organization = OrganizationConfig::default();
+organization.schema.organization.additional_fields.insert(
+    "label".into(),
+    UserFieldConfig {
+        field_name: Some("stored_label".into()),
+        required: Some(false),
+        ..Default::default()
+    },
+);
+organization.schema.organization.additional_fields.insert(
+    "tags".into(),
+    UserFieldConfig {
+        field_type: UserFieldType::StringArray,
+        required: Some(false),
+        ..Default::default()
+    },
+);
+```
+
+The generated source exports `AppOrganizationSchema`. Select these models when constructing the store:
+
+```rust
+let store = SeaOrmStore::<AppAuthSchema>::new(config.clone(), database)
+    .with_organization_schema::<auth_schema::AppOrganizationSchema>();
+```
+
+For existing entities, derive `AuthEntity` with role `organization`, `member`, `invitation`, `team`, `team_member`, or `organization_role`. Bind the models with `better_auth::seaorm::OrganizationModels<Organization, Member, Invitation, Team, TeamMember, OrganizationRole>`, or implement `SeaOrmOrganizationSchema`. The organization schema is independent of the four core `AuthSchema` model bindings.
+
+Organization `metadata` uses nullable native JSON storage. Preserve SQL NULL for absent metadata and JSON null for an explicit stored JSON null. Existing application migrations must permit NULL in this column. Team membership storage also requires nullable `membership_key` with a unique index. The plugin computes this value as unpadded base64url of SHA-256 over the JSON `[teamId, userId]` tuple. Keep the unique `(team_id, user_id)` index to protect existing rows with a NULL membership key. Use the corresponding mapped column names when your schema renames these fields.
 
 ## Plugin Fields
 
@@ -113,7 +177,7 @@ The canonical worked example is [`examples/postgres_usage.rs`](../../../../examp
 
 ## Testing
 
-Run `devenv shell -- ./scripts/consumer-check.sh` to generate a fresh schema and test an independent consumer against the public package. The check compiles combined and separate `AuthSchema` attributes, creates SQLite tables, registers and signs in a user, protects an Axum route, creates an API key, and enables TOTP. Database constraint checks cover uniqueness and foreign keys.
+Run `devenv shell -- ./scripts/consumer-check.sh` to generate fresh schemas and test an independent consumer against the public package. The check creates SQLite tables, registers and signs in a user, protects an Axum route, creates an API key, and enables TOTP. A second schema verifies all six Organization model mappings, additional field storage types, partial updates, and organization deletion. Database constraint checks cover uniqueness and foreign keys.
 
 Internal behavior tests also use a bundled schema. Dual-server and client SDK compatibility checks compare behavior with the TypeScript reference server.
 

@@ -248,7 +248,7 @@ async fn test_organization_invitation_endpoints() {
         &auth,
         get_with_auth_and_query(
             "/organization/get-invitation",
-            &owner_token,
+            &invitee_token,
             vec![("id", &invitation_id)],
         ),
     )

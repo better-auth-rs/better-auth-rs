@@ -34,6 +34,25 @@ impl UserView {
         config: &super::UserConfig,
         metadata: &MetadataMap,
     ) -> AuthResult<Self> {
+        Self::project(user, config, metadata, true)
+    }
+
+    /// Apply adapter transforms and active schemas without removing application-only fields.
+    /// Use this view only for trusted callbacks, never for public responses.
+    pub fn with_internal_fields<T: AuthUser>(
+        user: &T,
+        config: &super::UserConfig,
+        metadata: &MetadataMap,
+    ) -> AuthResult<Self> {
+        Self::project(user, config, metadata, false)
+    }
+
+    fn project<T: AuthUser>(
+        user: &T,
+        config: &super::UserConfig,
+        metadata: &MetadataMap,
+        public: bool,
+    ) -> AuthResult<Self> {
         let mut view = Self::from(user);
         view.visible_fields = Some(
             PLUGIN_FIELDS
@@ -65,7 +84,7 @@ impl UserView {
                 };
                 if let Some(mut value) = value {
                     field.normalize_date(&mut value)?;
-                    if field.returned {
+                    if !public || field.returned {
                         let _ = view.additional_fields.insert(name.clone(), value);
                     }
                 }

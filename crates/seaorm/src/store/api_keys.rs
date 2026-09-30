@@ -70,7 +70,7 @@ fn apply_update_fields(mut active: ActiveModel, update: UpdateApiKey) -> AuthRes
 }
 
 #[async_trait]
-impl<S> ApiKeyStore for SeaOrmStore<S>
+impl<S, O: crate::SeaOrmOrganizationSchema> ApiKeyStore for SeaOrmStore<S, O>
 where
     S: AuthSchema + Send + Sync,
 {

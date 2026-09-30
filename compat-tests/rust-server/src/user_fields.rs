@@ -74,7 +74,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
         (
             "changedMarker".into(),
             UserFieldConfig {
-                required: false,
+                required: Some(false),
                 default_value: Some(json!("created")),
                 on_update: Some(Arc::new(|| json!("updated"))),
                 ..Default::default()
@@ -83,7 +83,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
         (
             "department".into(),
             UserFieldConfig {
-                required: true,
+                required: Some(true),
                 ..Default::default()
             },
         ),
@@ -99,7 +99,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
         (
             "optionalAlias".into(),
             UserFieldConfig {
-                required: false,
+                required: Some(false),
                 input_transform: Some(Arc::new(|value| suffix(value, "in"))),
                 output_transform: Some(Arc::new(|value| suffix(value, "out"))),
                 ..Default::default()
@@ -160,7 +160,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
             name.into(),
             UserFieldConfig {
                 field_type,
-                required: false,
+                required: Some(false),
                 default_value: Some(default_value),
                 ..Default::default()
             },
@@ -169,7 +169,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
     config.user.additional_fields.insert(
         "cohort".into(),
         UserFieldConfig {
-            required: false,
+            required: Some(false),
             default_value_fn: Some(Arc::new(|| json!("factory"))),
             ..Default::default()
         },
@@ -178,7 +178,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
         "joinedAt".into(),
         UserFieldConfig {
             field_type: UserFieldType::Date,
-            required: false,
+            required: Some(false),
             default_value_fn: Some(Arc::new(|| json!("2020-01-02T03:04:05.000Z"))),
             ..Default::default()
         },
@@ -186,7 +186,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
     config.user.additional_fields.insert(
         "label".into(),
         UserFieldConfig {
-            required: false,
+            required: Some(false),
             field_name: Some("storedLabel".into()),
             default_value: Some(json!("public-label")),
             ..Default::default()
@@ -219,8 +219,12 @@ pub async fn add_columns(
             .execute_unprepared(&format!("ALTER TABLE users ADD COLUMN {column}"))
             .await?;
     }
-    database.execute_unprepared("ALTER TABLE sessions ADD COLUMN device_label TEXT").await?;
-    database.execute_unprepared("ALTER TABLE sessions ADD COLUMN internal_note TEXT").await?;
+    database
+        .execute_unprepared("ALTER TABLE sessions ADD COLUMN device_label TEXT")
+        .await?;
+    database
+        .execute_unprepared("ALTER TABLE sessions ADD COLUMN internal_note TEXT")
+        .await?;
     Ok(())
 }
 

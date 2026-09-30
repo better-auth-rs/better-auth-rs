@@ -17,7 +17,7 @@ use super::entities::two_factor::{ActiveModel, Column, Entity};
 use super::{SeaOrmStore, map_db_err};
 
 #[async_trait]
-impl<S> TwoFactorStore for SeaOrmStore<S>
+impl<S, O: crate::SeaOrmOrganizationSchema> TwoFactorStore for SeaOrmStore<S, O>
 where
     S: AuthSchema + Send + Sync,
 {

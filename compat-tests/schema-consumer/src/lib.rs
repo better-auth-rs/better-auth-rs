@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod tests {
+    mod organization;
+
     use std::sync::Arc;
 
     use axum::{
@@ -66,7 +68,10 @@ mod tests {
         config.session.bearer = Some(Default::default());
         let auth = Arc::new(
             BetterAuth::<generated::AppAuthSchema>::new(config.clone())
-                .store(SeaOrmStore::new(config, database.clone()))
+                .store(
+                    SeaOrmStore::<generated::AppAuthSchema>::new(config, database.clone())
+                        .with_organization_schema::<generated::AppOrganizationSchema>(),
+                )
                 .plugin(EmailPasswordPlugin::new().enable_signup(true))
                 .plugin(SessionManagementPlugin::new())
                 .plugin(TwoFactorPlugin::new())

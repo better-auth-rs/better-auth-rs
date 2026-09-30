@@ -52,6 +52,7 @@ hkdf.workspace = true
 sha2.workspace = true
 josekit.workspace = true
 percent-encoding = "2.3.2"
+better-auth-schema-registry.workspace = true
 
 [features]
 default = []

@@ -35,7 +35,7 @@ use serde_json::json;
 
 config.user.additional_fields.insert("department".into(), UserFieldConfig {
     field_type: UserFieldType::String,
-    required: true,
+    required: Some(true),
     ..Default::default()
 });
 config.user.additional_fields.insert("internalCode".into(), UserFieldConfig {
@@ -46,7 +46,7 @@ config.user.additional_fields.insert("internalCode".into(), UserFieldConfig {
 });
 ```
 
-`required` rejects missing public creation input without a default. Updates leave missing fields unchanged. `input: false` rejects truthy client values; during creation, a configured default replaces supplied values. `returned: false` hides the field from public user responses, session caches, and JWT user claims. Administrator routes can set configured fields without public input restrictions. Application metadata and permissions are not rewritten by user projection.
+`required: Some(true)` rejects missing public creation input without a default. `None` and `Some(false)` keep user fields optional; Organization routes use a different creation requirement, described in the [Organization guide](/docs/plugins/organization). Updates leave missing fields unchanged. `input: false` rejects truthy client values; during creation, a configured default replaces supplied values. `returned: false` hides the field from public user responses, session caches, and JWT user claims. Administrator routes can set configured fields without public input restrictions. Application metadata and permissions are not rewritten by user projection.
 
 Use `validator` for synchronous input validation or normalization. The validator returns `AuthResult<Value>`; a failure becomes `VALIDATION_ERROR`. Use `default_value_fn` for dynamic creation defaults. Use `on_update` to produce a value when a database update omits the field. Use `input_transform` and `output_transform` for transformations. Transform callbacks take and return `Option<Value>`: `None` means undefined, while `Some(Value::Null)` means explicit null.
 

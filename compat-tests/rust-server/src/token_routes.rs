@@ -1,11 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
 use better_auth::{
+    AuthBuilder, AuthResult,
     plugins::{
         AnonymousPlugin, JwtAlgorithm, JwtPlugin, MagicLinkMessage, MagicLinkPlugin,
         MultiSessionPlugin, OneTimeTokenPlugin, PhoneNumberPlugin, SendMagicLink, TokenStorage,
     },
-    AuthBuilder, AuthResult,
 };
 use tokio::sync::Mutex;
 

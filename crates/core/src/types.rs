@@ -8,6 +8,7 @@ use crate::utils::email::normalize_user_email;
 
 pub use crate::types_team::{
     CreateOrganizationRole, CreateTeam, OrganizationRole, Team, TeamMember, UpdateOrganizationRole,
+    UpdateTeam,
 };
 
 // Re-export organization types

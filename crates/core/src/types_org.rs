@@ -47,6 +47,9 @@ where
 /// Organization entity - matches OpenAPI schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Organization {
+    /// Application fields projected by the configured organization schema.
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub id: String,
     pub name: String,
     pub slug: String,
@@ -68,6 +71,9 @@ pub struct Organization {
 /// Organization member
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Member {
+    /// Application fields projected by the configured member schema.
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub id: String,
     #[serde(rename = "organizationId")]
     pub organization_id: String,
@@ -115,6 +121,9 @@ impl std::fmt::Display for InvitationStatus {
 /// Organization invitation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Invitation {
+    /// Application fields projected by the configured invitation schema.
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     #[serde(rename = "teamId", default, skip_serializing_if = "Option::is_none")]
     pub team_id: Option<String>,
     pub id: String,
@@ -148,6 +157,8 @@ impl Invitation {
 /// Organization creation data
 #[derive(Debug, Clone)]
 pub struct CreateOrganization {
+    /// Validated application input before adapter transforms.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub id: Option<String>,
     pub name: String,
     pub slug: String,
@@ -159,6 +170,7 @@ impl CreateOrganization {
     pub fn new(name: impl Into<String>, slug: impl Into<String>) -> Self {
         Self {
             id: Some(Uuid::new_v4().to_string()),
+            additional_fields: Default::default(),
             name: name.into(),
             slug: slug.into(),
             logo: None,
@@ -180,15 +192,21 @@ impl CreateOrganization {
 /// Organization update data
 #[derive(Debug, Clone, Default)]
 pub struct UpdateOrganization {
+    pub id: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
+    /// Application fields to update; omitted fields retain their stored values.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub name: Option<String>,
     pub slug: Option<String>,
-    pub logo: Option<String>,
+    pub logo: Option<Option<String>>,
     pub metadata: Option<serde_json::Value>,
 }
 
 /// Member creation data
 #[derive(Debug, Clone)]
 pub struct CreateMember {
+    /// Validated application input before adapter transforms.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub organization_id: String,
     pub user_id: String,
     pub role: String,
@@ -202,6 +220,7 @@ impl CreateMember {
     ) -> Self {
         Self {
             organization_id: organization_id.into(),
+            additional_fields: Default::default(),
             user_id: user_id.into(),
             role: role.into(),
         }
@@ -211,6 +230,11 @@ impl CreateMember {
 /// Invitation creation data
 #[derive(Debug, Clone)]
 pub struct CreateInvitation {
+    pub id: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub status: Option<InvitationStatus>,
+    /// Validated application input before adapter transforms.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub team_id: Option<String>,
     pub organization_id: String,
     pub email: String,
@@ -229,10 +253,14 @@ impl CreateInvitation {
     ) -> Self {
         Self {
             organization_id: organization_id.into(),
+            additional_fields: Default::default(),
             email: email.into(),
             role: role.into(),
             inviter_id: inviter_id.into(),
             team_id: None,
+            id: None,
+            created_at: None,
+            status: None,
             expires_at,
         }
     }
@@ -241,6 +269,7 @@ impl CreateInvitation {
 impl<T: AuthOrganization> From<&T> for Organization {
     fn from(organization: &T) -> Self {
         Self {
+            additional_fields: organization.projected_fields().cloned().unwrap_or_default(),
             id: organization.id().into_owned(),
             name: organization.name().to_owned(),
             slug: organization.slug().to_owned(),
@@ -253,6 +282,10 @@ impl<T: AuthOrganization> From<&T> for Organization {
 }
 
 impl AuthOrganization for Organization {
+    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        Some(&self.additional_fields)
+    }
+
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
     }
@@ -277,6 +310,10 @@ impl AuthOrganization for Organization {
 }
 
 impl AuthMember for Member {
+    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        Some(&self.additional_fields)
+    }
+
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
     }
@@ -297,6 +334,7 @@ impl AuthMember for Member {
 impl<T: AuthMember> From<&T> for Member {
     fn from(member: &T) -> Self {
         Self {
+            additional_fields: member.projected_fields().cloned().unwrap_or_default(),
             id: member.id().into_owned(),
             organization_id: member.organization_id().into_owned(),
             user_id: member.user_id().into_owned(),
@@ -307,6 +345,10 @@ impl<T: AuthMember> From<&T> for Member {
 }
 
 impl AuthInvitation for Invitation {
+    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        Some(&self.additional_fields)
+    }
+
     fn team_id(&self) -> Option<&str> {
         self.team_id.as_deref()
     }
@@ -339,6 +381,7 @@ impl AuthInvitation for Invitation {
 impl<T: AuthInvitation> From<&T> for Invitation {
     fn from(invitation: &T) -> Self {
         Self {
+            additional_fields: invitation.projected_fields().cloned().unwrap_or_default(),
             id: invitation.id().into_owned(),
             organization_id: invitation.organization_id().into_owned(),
             email: invitation.email().to_owned(),

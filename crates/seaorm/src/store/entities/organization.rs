@@ -1,6 +1,7 @@
 use sea_orm::entity::prelude::*;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, DeriveEntityModel, crate::AuthEntity)]
+#[auth(role = "organization")]
 #[sea_orm(table_name = "organization")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -8,7 +9,7 @@ pub struct Model {
     pub name: String,
     pub slug: String,
     pub logo: Option<String>,
-    pub metadata: Json,
+    pub metadata: Option<Json>,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
 }

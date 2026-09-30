@@ -1,4 +1,6 @@
-use better_auth_schema_registry::{self as registry, EntityRole, ExtraEntitySchema, FieldDef};
+use crate::schema_config::{Entity, SchemaConfig};
+use better_auth_schema_registry::{self as registry, EntityRole, ExtraEntitySchema};
+use heck::ToLowerCamelCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
@@ -6,7 +8,8 @@ pub(crate) fn list_plugins() -> Vec<&'static str> {
     registry::plugin_schemas().iter().map(|p| p.name).collect()
 }
 
-pub(crate) fn generate_schema(plugins: &[String]) -> String {
+pub(crate) fn generate_schema(plugins: &[String], config: &SchemaConfig) -> Result<String, String> {
+    config.validate()?;
     let mut user = registry::core_fields(EntityRole::User).to_vec();
     let mut session = registry::core_fields(EntityRole::Session).to_vec();
     let mut extra_entities: Vec<&ExtraEntitySchema> = Vec::new();
@@ -46,9 +49,7 @@ pub(crate) fn generate_schema(plugins: &[String]) -> String {
             fields: &[],
         },
     ];
-    let mut entities = Vec::new();
-    let mut tables = Vec::new();
-    let mut indexes = Vec::new();
+    let mut definitions = Vec::new();
     for entity in core_entities.iter().chain(extra_entities) {
         let fields = match entity.role {
             Some(EntityRole::User) => user.as_slice(),
@@ -56,10 +57,56 @@ pub(crate) fn generate_schema(plugins: &[String]) -> String {
             Some(role) => registry::core_fields(role),
             None => entity.fields,
         };
-        entities.push(gen_entity(entity, fields));
-        tables.push(gen_table(entity));
-        indexes.extend(gen_indexes(entity, fields));
+        let configured = config.0.get(&entity.mod_name.to_lower_camel_case());
+        definitions.push(Entity::resolve(entity, fields, configured)?);
     }
+    for name in config.0.keys() {
+        if !definitions
+            .iter()
+            .any(|entity| entity.name.to_lower_camel_case() == *name)
+        {
+            return Err(format!(
+                "schema model `{name}` requires the organization plugin"
+            ));
+        }
+    }
+    let mut table_names = std::collections::BTreeSet::new();
+    for entity in &definitions {
+        if !table_names.insert(&entity.table) {
+            return Err(format!("duplicate database table `{}`", entity.table));
+        }
+    }
+    let entities = definitions.iter().map(gen_entity);
+    let tables = definitions
+        .iter()
+        .map(|entity| gen_table(entity, &definitions))
+        .collect::<Result<Vec<_>, _>>()?;
+    let indexes = definitions.iter().flat_map(gen_indexes);
+    let organization_schema = definitions
+        .iter()
+        .any(|entity| entity.role == Some(EntityRole::Organization))
+        .then(|| {
+            quote! {
+                pub type AppOrganizationSchema = better_auth::seaorm::OrganizationModels<
+                    organization::Model, member::Model, invitation::Model,
+                    team::Model, team_member::Model, organization_role::Model
+                >;
+            }
+        });
+    let arrays = [("StringArray", quote!(String)), ("NumberArray", quote!(f64))].into_iter().filter_map(|(name, element)| {
+        let used = definitions.iter().flat_map(|entity| &entity.fields).any(|field| {
+            let ty = &field.ty;
+            quote!(#ty).to_string().contains(name)
+        });
+        used.then(|| {
+            let name = format_ident!("{name}");
+            quote! {
+                #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, FromJsonQueryResult)]
+                #[serde(transparent)]
+                pub struct #name(pub Vec<#element>);
+            }
+        })
+    });
     let tokens = quote! {
         use better_auth::AuthSchema;
         use better_auth::seaorm::sea_orm;
@@ -68,7 +115,9 @@ pub(crate) fn generate_schema(plugins: &[String]) -> String {
         use better_auth::seaorm::sea_orm::sea_query::{Alias, ForeignKey, ForeignKeyAction, Index};
         use better_auth::seaorm::AuthEntity;
 
+        #(#arrays)*
         #(#entities)*
+        #organization_schema
 
         pub struct AppAuthSchema;
 
@@ -94,43 +143,35 @@ pub(crate) fn generate_schema(plugins: &[String]) -> String {
             Ok(())
         }
     };
-    #[expect(
-        clippy::expect_used,
-        reason = "generated from hardcoded registry; parse failure is a bug"
-    )]
-    let file = syn::parse2(tokens).expect("generated code should be valid syntax");
-    prettyplease::unparse(&file)
+    let file = syn::parse2(tokens).map_err(|error| format!("cannot generate schema: {error}"))?;
+    Ok(prettyplease::unparse(&file))
 }
 
-fn gen_entity(entity: &ExtraEntitySchema, fields: &[FieldDef]) -> TokenStream {
-    let mod_ident = format_ident!("{}", entity.mod_name);
-    let table_name = entity.table_name;
-    let field_tokens = fields.iter().map(|field| {
-        let name = format_ident!("{}", field.name);
-        #[expect(
-            clippy::panic,
-            reason = "type strings come from hardcoded registry; parse failure is a bug"
-        )]
-        let ty: syn::Type = syn::parse_str(field.ty).unwrap_or_else(|e| {
-            panic!(
-                "invalid type `{}` for field `{}`: {e}",
-                field.ty, field.name
-            )
-        });
-        let column_attr = field
-            .column_name
-            .map(|column| quote! { #[sea_orm(column_name = #column)] });
+fn gen_entity(entity: &Entity) -> TokenStream {
+    let mod_ident = &entity.module;
+    let table_name = &entity.table;
+    let field_tokens = entity.fields.iter().map(|field| {
+        let name = &field.ident;
+        let ty = &field.ty;
+        let column = &field.column;
+        let column_attr =
+            (name != column.as_str()).then(|| quote! { #[sea_orm(column_name = #column)] });
+        let serialized = field
+            .serialized
+            .as_ref()
+            .map(|name| quote! { #[serde(rename = #name)] });
         let primary_key = field
-            .is_primary_key
+            .primary_key
             .then(|| quote! { #[sea_orm(primary_key, auto_increment = false)] });
         quote! {
             #column_attr
+            #serialized
             #primary_key
             pub #name: #ty,
         }
     });
     let derives = if entity.role.is_some() {
-        let role = entity.mod_name;
+        let role = entity.name;
         quote! {
             #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, AuthEntity)]
             #[auth(role = #role)]
@@ -139,7 +180,7 @@ fn gen_entity(entity: &ExtraEntitySchema, fields: &[FieldDef]) -> TokenStream {
         quote! { #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel)] }
     };
     quote! {
-        mod #mod_ident {
+        pub mod #mod_ident {
             use super::*;
             #derives
             #[sea_orm(table_name = #table_name)]
@@ -151,33 +192,57 @@ fn gen_entity(entity: &ExtraEntitySchema, fields: &[FieldDef]) -> TokenStream {
     }
 }
 
-fn gen_table(entity: &ExtraEntitySchema) -> TokenStream {
-    let module = format_ident!("{}", entity.mod_name);
-    let table = entity.table_name;
-    let foreign_keys = registry::entity_foreign_keys(table)
+fn gen_table(entity: &Entity, entities: &[Entity]) -> Result<TokenStream, String> {
+    let module = &entity.module;
+    let table = &entity.table;
+    let foreign_keys = registry::entity_foreign_keys(entity.registry_table)
         .iter()
         .map(|(column, target)| {
+            let column = entity
+                .column(column)
+                .ok_or_else(|| format!("foreign key column `{table}.{column}` is missing"))?;
+            let target = entities
+                .iter()
+                .find(|entity| entity.registry_table == *target)
+                .map(|entity| entity.table.as_str())
+                .ok_or_else(|| format!("foreign key target `{target}` is missing"))?;
             let name = format!("fk_{table}_{column}");
-            quote! {
+            Ok(quote! {
                 .foreign_key(ForeignKey::create()
                     .name(#name)
                     .from(Alias::new(#table), Alias::new(#column))
                     .to(Alias::new(#target), Alias::new("id"))
                     .on_delete(ForeignKeyAction::Cascade))
-            }
-        });
-    quote! { schema.create_table_from_entity(#module::Entity) #(#foreign_keys)* .to_owned() }
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(quote! { schema.create_table_from_entity(#module::Entity) #(#foreign_keys)* .to_owned() })
 }
 
-fn gen_indexes(entity: &ExtraEntitySchema, fields: &[FieldDef]) -> Vec<TokenStream> {
-    let table = entity.table_name;
-    registry::entity_indexes(table).iter()
-        .filter(|index| index.columns.iter().all(|column| fields.iter().any(|field| field.column_name.unwrap_or(field.name) == *column)))
-        .map(|index| {
-            let name = format!("idx_{table}_{}", index.columns.join("_"));
-            let columns = index.columns.iter().map(|column| quote! { .col(Alias::new(#column)) });
-            let unique = index.unique.then(|| quote! { .unique() });
-            quote! { Index::create().name(#name).table(Alias::new(#table)) #(#columns)* #unique .to_owned() }
+fn gen_indexes(entity: &Entity) -> Vec<TokenStream> {
+    let table = &entity.table;
+    let mut indexes: Vec<_> = registry::entity_indexes(entity.registry_table)
+        .iter()
+        .filter_map(|index| {
+            let columns = index
+                .columns
+                .iter()
+                .map(|column| entity.column(column))
+                .collect::<Option<Vec<_>>>()?;
+            Some((columns, index.unique))
         })
-        .collect()
+        .collect();
+    indexes.extend(
+        entity
+            .fields
+            .iter()
+            .filter(|field| field.unique)
+            .map(|field| (vec![field.column.as_str()], true)),
+    );
+    indexes.into_iter().map(|(columns, unique)| {
+        let name = format!("idx_{table}_{}", columns.join("_"));
+        let columns = columns.iter().map(|column| quote! { .col(Alias::new(#column)) });
+        let unique = unique.then(|| quote! { .unique() });
+        quote! { Index::create().name(#name).table(Alias::new(#table)) #(#columns)* #unique .to_owned() }
+    }).collect()
 }

@@ -50,6 +50,8 @@ impl serde::Serialize for RequestedPermissions {
 #[derive(Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 struct CreateRole {
+    #[serde(default)]
+    additional_fields: OptionalField<serde_json::Map<String, serde_json::Value>>,
     organization_id: Option<String>,
     role: String,
     permission: RequestedPermissions,
@@ -73,6 +75,8 @@ struct UpdateRole {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RoleUpdate {
+    #[serde(flatten)]
+    additional_fields: serde_json::Map<String, serde_json::Value>,
     #[serde(default)]
     role_name: OptionalField<String>,
     #[serde(default)]
@@ -334,6 +338,18 @@ pub async fn handle_role_request(
                 Ok(body) => body,
                 Err(response) => return Ok(Some(response)),
             };
+            let additional_fields = match body.additional_fields {
+                OptionalField::Missing => Default::default(),
+                OptionalField::Null => {
+                    return validation(
+                        "[body.additionalFields] Invalid input: expected object, received null",
+                    );
+                }
+                OptionalField::Value(fields) => config
+                    .schema
+                    .organization_role
+                    .parse_organization_input(&fields, "body.additionalFields", false)?,
+            };
             let _ = require_ac(config)?;
             if body
                 .organization_id
@@ -359,15 +375,13 @@ pub async fn handle_role_request(
             let (organization_id, member_role) =
                 authorize_member(req, body.organization_id.as_deref(), "create", config, ctx)
                     .await?;
+            let maximum = config.role_limit(&organization_id).await?;
             let count = ctx
                 .database
                 .list_organization_roles(&organization_id)
                 .await?
                 .len();
-            if config
-                .maximum_roles_per_organization
-                .is_some_and(|limit| count >= limit)
-            {
+            if maximum.is_some_and(|limit| count >= limit) {
                 return Err(AuthError::Upstream {
                     status: 400,
                     code: "TOO_MANY_ROLES",
@@ -391,6 +405,7 @@ pub async fn handle_role_request(
             let role = ctx
                 .database
                 .create_organization_role(CreateOrganizationRole {
+                    additional_fields,
                     organization_id,
                     role: name,
                     permission: permission.clone(),
@@ -526,23 +541,38 @@ pub async fn handle_role_request(
             if let Some(name) = &name {
                 unused_name(name, &organization_id, config, ctx).await?;
             }
-            let mut updated = ctx
+            let mut schema = config.schema.organization_role.clone();
+            for field in schema.additional_fields.values_mut() {
+                field.required = Some(false);
+            }
+            let fields =
+                schema.parse_organization_input(&body.data.additional_fields, "body.data", true)?;
+            let permission = body
+                .data
+                .permission
+                .into_option()
+                .map(serde_json::to_value)
+                .transpose()?;
+            let _ = ctx
                 .database
                 .update_organization_role(
                     &role.id,
                     UpdateOrganizationRole {
-                        role: name,
-                        permission: body
-                            .data
-                            .permission
-                            .into_option()
-                            .map(serde_json::to_value)
-                            .transpose()?,
+                        additional_fields: fields.clone(),
+                        role: name.clone(),
+                        permission: permission.clone(),
                     },
                 )
                 .await?;
-            // Upstream returns the pre-update record merged with requested fields, while the adapter updates its timestamp.
-            updated.updated_at = role.updated_at;
+            // The endpoint merges raw input into the old snapshot; adapter transforms remain in storage.
+            let mut updated = role;
+            updated.additional_fields.extend(fields);
+            if let Some(name) = name {
+                updated.role = name;
+            }
+            if let Some(permission) = permission {
+                updated.permission = permission;
+            }
             AuthResponse::json(200, &json!({"success":true,"roleData":updated}))?
         }
         _ => return Ok(None),
@@ -574,6 +604,7 @@ mod tests {
         let org = ctx
             .database
             .create_organization(CreateOrganization {
+                additional_fields: Default::default(),
                 id: None,
                 name: "Roles".into(),
                 slug: "roles".into(),
@@ -584,6 +615,7 @@ mod tests {
             .unwrap();
         ctx.database
             .create_member(CreateMember {
+                additional_fields: Default::default(),
                 organization_id: org.id.clone(),
                 user_id: user.id.clone(),
                 role: "admin".into(),

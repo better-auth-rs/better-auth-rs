@@ -1,6 +1,7 @@
 use sea_orm::entity::prelude::*;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, DeriveEntityModel, crate::AuthEntity)]
+#[auth(role = "member")]
 #[sea_orm(table_name = "member")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]

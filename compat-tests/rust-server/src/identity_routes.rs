@@ -1,22 +1,22 @@
-use axum::{routing::post, Json, Router};
+use axum::{Json, Router, routing::post};
 use better_auth::__private_core::{
-    store::{UserStore, VerificationStore},
     AuthUser, UpdateUser,
+    store::{UserStore, VerificationStore},
 };
 use better_auth::{
+    AuthBuilder, AuthResult,
     plugins::{
         anonymous::AnonymousPlugin,
         phone_number::{PhoneNumberPlugin, PhoneOtp},
         siwe::{SiwePlugin, SiweVerification},
     },
-    AuthBuilder, AuthResult,
 };
 use better_auth_seaorm::{
-    sea_orm::{EntityTrait, QueryOrder},
     SeaOrmStore,
+    sea_orm::{EntityTrait, QueryOrder},
 };
 use chrono::{Duration, Utc};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha3::{Digest, Keccak256};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;

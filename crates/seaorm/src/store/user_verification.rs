@@ -8,7 +8,7 @@ use sea_orm::{
 use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
 use crate::schema::{AuthSchema, SeaOrmAccountModel, SeaOrmSessionModel, SeaOrmUserModel};
 
-impl<S> SeaOrmStore<S>
+impl<S, O: crate::SeaOrmOrganizationSchema> SeaOrmStore<S, O>
 where
     S: AuthSchema,
     S::User: SeaOrmUserModel,

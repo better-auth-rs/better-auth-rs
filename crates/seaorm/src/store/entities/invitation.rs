@@ -1,6 +1,7 @@
 use sea_orm::entity::prelude::*;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, DeriveEntityModel, crate::AuthEntity)]
+#[auth(role = "invitation")]
 #[sea_orm(table_name = "invitation")]
 pub struct Model {
     pub team_id: Option<String>,

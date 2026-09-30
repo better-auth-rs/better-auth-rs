@@ -38,7 +38,9 @@ impl sea_orm_migration::MigrationTrait for JwtKeys {
 }
 
 #[async_trait]
-impl<S: better_auth_core::AuthSchema> JwksStore for SeaOrmStore<S> {
+impl<S: better_auth_core::AuthSchema, O: crate::SeaOrmOrganizationSchema> JwksStore
+    for SeaOrmStore<S, O>
+{
     async fn list_jwks(&self) -> AuthResult<Vec<Jwk>> {
         jwk::Entity::find()
             .all(self.connection())

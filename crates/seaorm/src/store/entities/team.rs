@@ -1,6 +1,7 @@
 use sea_orm::entity::prelude::*;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, DeriveEntityModel, crate::AuthEntity)]
+#[auth(role = "team")]
 #[sea_orm(table_name = "team")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
@@ -18,6 +19,7 @@ impl ActiveModelBehavior for ActiveModel {}
 impl From<Model> for better_auth_core::Team {
     fn from(model: Model) -> Self {
         Self {
+            additional_fields: Default::default(),
             id: model.id,
             name: model.name,
             organization_id: model.organization_id,

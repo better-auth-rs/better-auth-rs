@@ -1,142 +1,143 @@
-use async_trait::async_trait;
-use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter,
-    QueryOrder, Set,
+use super::{
+    SeaOrmStore, map_db_err,
+    organization_models::{self as models, Entity, values},
 };
-use uuid::Uuid;
-
-use better_auth_core::store::InvitationStore;
-
-use crate::error::AuthResult;
 use crate::schema::AuthSchema;
 use crate::types_org::{CreateInvitation, Invitation, InvitationStatus};
-
-use super::entities::invitation::{ActiveModel, Column, Entity};
-use super::{SeaOrmStore, map_db_err};
+use crate::{SeaOrmOrganizationModel, SeaOrmOrganizationSchema};
+use async_trait::async_trait;
+use better_auth_core::{AuthResult, store::InvitationStore};
+use chrono::Utc;
+use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder};
+use serde_json::json;
 
 #[async_trait]
-impl<S> InvitationStore for SeaOrmStore<S>
-where
-    S: AuthSchema + Send + Sync,
-{
-    async fn create_invitation(&self, invitation: CreateInvitation) -> AuthResult<Invitation> {
-        ActiveModel {
-            id: Set(Uuid::new_v4().to_string()),
-            organization_id: Set(invitation.organization_id),
-            email: Set(invitation.email),
-            role: Set(invitation.role),
-            status: Set(InvitationStatus::Pending.to_string()),
-            inviter_id: Set(invitation.inviter_id),
-            team_id: Set(invitation.team_id),
-            expires_at: Set(invitation.expires_at),
-            created_at: Set(Utc::now()),
-        }
-        .insert(self.connection())
+impl<S: AuthSchema, O: SeaOrmOrganizationSchema> InvitationStore for SeaOrmStore<S, O> {
+    async fn create_invitation(&self, input: CreateInvitation) -> AuthResult<Invitation> {
+        let config = self.organization_fields()?.invitation;
+        models::insert::<O::Invitation, _>(
+            self.connection(),
+            values([
+                (
+                    "id",
+                    json!(input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())),
+                ),
+                ("organization_id", json!(input.organization_id)),
+                ("email", json!(input.email)),
+                ("role", json!(input.role)),
+                (
+                    "status",
+                    json!(
+                        input
+                            .status
+                            .unwrap_or(InvitationStatus::Pending)
+                            .to_string()
+                    ),
+                ),
+                ("inviter_id", json!(input.inviter_id)),
+                ("team_id", json!(input.team_id)),
+                ("expires_at", json!(input.expires_at)),
+                (
+                    "created_at",
+                    json!(input.created_at.unwrap_or_else(Utc::now)),
+                ),
+            ]),
+            input.additional_fields,
+            &config,
+        )
         .await
-        .map(|model| Invitation::from(&model))
-        .map_err(map_db_err)
     }
-
     async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
-        Entity::find_by_id(id.to_owned())
-            .one(self.connection())
-            .await
-            .map(|model| model.map(|model| Invitation::from(&model)))
-            .map_err(map_db_err)
+        let config = self.organization_fields()?.invitation;
+        models::find::<O::Invitation, _>(self.connection(), id)
+            .await?
+            .map(|row| row.record(&config))
+            .transpose()
     }
-
     async fn get_pending_invitation(
         &self,
         organization_id: &str,
         email: &str,
     ) -> AuthResult<Option<Invitation>> {
-        Entity::find()
-            .filter(Column::OrganizationId.eq(organization_id))
-            .filter(Column::Email.eq(email.to_lowercase()))
-            .filter(Column::Status.eq(InvitationStatus::Pending.to_string()))
-            .filter(Column::ExpiresAt.gt(Utc::now()))
+        let config = self.organization_fields()?.invitation;
+        Entity::<O::Invitation>::find()
+            .filter(O::Invitation::column("organization_id")?.eq(organization_id))
+            .filter(O::Invitation::column("email")?.eq(email.to_lowercase()))
+            .filter(O::Invitation::column("status")?.eq("pending"))
+            .filter(O::Invitation::column("expires_at")?.gt(Utc::now()))
             .one(self.connection())
             .await
-            .map(|model| model.map(|model| Invitation::from(&model)))
-            .map_err(map_db_err)
+            .map_err(map_db_err)?
+            .map(|row| row.record(&config))
+            .transpose()
     }
-
     async fn update_invitation_status(
         &self,
         id: &str,
         status: InvitationStatus,
     ) -> AuthResult<Invitation> {
-        let Some(model) = Entity::find_by_id(id.to_owned())
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-        else {
-            return Err(crate::error::AuthError::not_found("Invitation not found"));
-        };
-
-        let mut active = model.into_active_model();
-        active.status = Set(status.to_string());
-        active
-            .update(self.connection())
-            .await
-            .map(|model| Invitation::from(&model))
-            .map_err(map_db_err)
+        models::update::<O::Invitation, _>(
+            self.connection(),
+            id,
+            values([("status", json!(status.to_string()))]),
+            Default::default(),
+            &self.organization_fields()?.invitation,
+        )
+        .await
     }
-
     async fn update_invitation_expiry(
         &self,
         id: &str,
         expires_at: chrono::DateTime<Utc>,
     ) -> AuthResult<Invitation> {
-        ActiveModel {
-            id: Set(id.to_owned()),
-            expires_at: Set(expires_at),
-            ..Default::default()
-        }
-        .update(self.connection())
+        models::update::<O::Invitation, _>(
+            self.connection(),
+            id,
+            values([("expires_at", json!(expires_at))]),
+            Default::default(),
+            &self.organization_fields()?.invitation,
+        )
         .await
-        .map(|model| Invitation::from(&model))
-        .map_err(map_db_err)
     }
-
     async fn list_organization_invitations(
         &self,
         organization_id: &str,
     ) -> AuthResult<Vec<Invitation>> {
-        Entity::find()
-            .filter(Column::OrganizationId.eq(organization_id))
-            .order_by_asc(Column::CreatedAt)
-            .all(self.connection())
-            .await
-            .map(|models| models.iter().map(Invitation::from).collect())
-            .map_err(map_db_err)
+        models::project::<O::Invitation>(
+            Entity::<O::Invitation>::find()
+                .filter(O::Invitation::column("organization_id")?.eq(organization_id))
+                .order_by_asc(O::Invitation::column("created_at")?)
+                .all(self.connection())
+                .await
+                .map_err(map_db_err)?,
+            &self.organization_fields()?.invitation,
+        )
     }
-
     async fn count_pending_organization_invitations(
         &self,
         organization_id: &str,
     ) -> AuthResult<i64> {
-        Entity::find()
-            .filter(Column::OrganizationId.eq(organization_id))
-            .filter(Column::Status.eq(InvitationStatus::Pending.to_string()))
-            .filter(Column::ExpiresAt.gt(Utc::now()))
+        Entity::<O::Invitation>::find()
+            .filter(O::Invitation::column("organization_id")?.eq(organization_id))
+            .filter(O::Invitation::column("status")?.eq("pending"))
+            .filter(O::Invitation::column("expires_at")?.gt(Utc::now()))
             .count(self.connection())
             .await
             .map(|count| count as i64)
             .map_err(map_db_err)
     }
-
     async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>> {
-        Entity::find()
-            .filter(Column::Email.eq(email.to_lowercase()))
-            .filter(Column::Status.eq(InvitationStatus::Pending.to_string()))
-            .filter(Column::ExpiresAt.gt(Utc::now()))
-            .order_by_desc(Column::CreatedAt)
-            .all(self.connection())
-            .await
-            .map(|models| models.iter().map(Invitation::from).collect())
-            .map_err(map_db_err)
+        models::project::<O::Invitation>(
+            Entity::<O::Invitation>::find()
+                .filter(O::Invitation::column("email")?.eq(email.to_lowercase()))
+                .filter(O::Invitation::column("status")?.eq("pending"))
+                .filter(O::Invitation::column("expires_at")?.gt(Utc::now()))
+                .order_by_desc(O::Invitation::column("created_at")?)
+                .all(self.connection())
+                .await
+                .map_err(map_db_err)?,
+            &self.organization_fields()?.invitation,
+        )
     }
 }
 
@@ -175,6 +176,7 @@ mod tests {
         let org_id = "org-1";
         let _organization = store
             .create_organization(CreateOrganization {
+                additional_fields: Default::default(),
                 id: Some(org_id.to_string()),
                 name: "Org".to_string(),
                 slug: "org".to_string(),
@@ -241,6 +243,7 @@ mod tests {
         let org_id = "org-1";
         let _organization = store
             .create_organization(CreateOrganization {
+                additional_fields: Default::default(),
                 id: Some(org_id.to_string()),
                 name: "Org".to_string(),
                 slug: "org-second".to_string(),

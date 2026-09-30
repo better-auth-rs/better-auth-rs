@@ -393,11 +393,16 @@ async fn full_client_compat() {
 #[ignore = "starts external TS and Rust servers for each configuration"]
 async fn configuration_client_compat() {
     for profile in [
+        "organization-callbacks",
+        "organization-custom-team",
         "organization-extended",
         "organization-cache",
         "organization-jwt",
         "organization-limits",
         "organization-no-ac",
+        "organization-fields",
+        "organization-invitation-options",
+        "organization-invitation-unverified",
         "api-key-zero",
         "device-custom",
         "device-collision",

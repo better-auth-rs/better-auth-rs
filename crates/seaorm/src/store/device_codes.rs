@@ -13,7 +13,7 @@ use super::entities::device_code::{ActiveModel, Column, Entity};
 use super::{SeaOrmStore, map_db_err};
 
 #[async_trait]
-impl<S> DeviceCodeStore for SeaOrmStore<S>
+impl<S, O: crate::SeaOrmOrganizationSchema> DeviceCodeStore for SeaOrmStore<S, O>
 where
     S: AuthSchema + Send + Sync,
 {

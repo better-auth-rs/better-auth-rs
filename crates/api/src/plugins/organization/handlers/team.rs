@@ -1,11 +1,12 @@
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::{AuthContext, AuthRoute};
-use better_auth_core::types::{AuthRequest, AuthResponse, CreateTeam, HttpMethod, Team};
+use better_auth_core::types::{AuthRequest, AuthResponse, HttpMethod, Team};
 use serde::Deserialize;
 use validator::Validate;
 
 use super::{require_session, resolve_organization_id};
+use crate::plugins::organization::hooks::*;
 use crate::plugins::organization::{OrganizationConfig, rbac::check_permission};
 
 pub(crate) fn routes() -> Vec<AuthRoute> {
@@ -25,6 +26,8 @@ pub(crate) fn routes() -> Vec<AuthRoute> {
 #[derive(Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 struct CreateBody {
+    #[serde(flatten)]
+    additional_fields: serde_json::Map<String, serde_json::Value>,
     name: String,
     organization_id: Option<String>,
 }
@@ -50,6 +53,8 @@ struct UpdateBody {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UpdateData {
+    #[serde(flatten)]
+    additional_fields: serde_json::Map<String, serde_json::Value>,
     name: Option<String>,
     organization_id: Option<String>,
 }
@@ -72,6 +77,7 @@ pub(crate) async fn find_team(
         .get_team(team_id)
         .await?
         .filter(|team| team.organization_id == organization_id)
+        .map(|team| crate::plugins::organization::fields::team(team, ctx))
         .ok_or_else(|| AuthError::bad_request("Team not found"))
 }
 
@@ -109,6 +115,13 @@ pub(crate) async fn handle_team_request(
     config: &OrganizationConfig,
 ) -> AuthResult<Option<AuthResponse>> {
     let (user, session) = require_session(req, ctx).await?;
+    let user_view = ctx.user_view(&user)?;
+    let session_view =
+        better_auth_core::wire::SessionView::with_fields(&session, &ctx.config.session)?;
+    let actor = OrganizationSession {
+        user: &user_view,
+        session: &session_view,
+    };
     macro_rules! body {
         ($ty:ty) => {
             match better_auth_core::validate_request_body::<$ty>(req) {
@@ -136,26 +149,63 @@ pub(crate) async fn handle_team_request(
                 ctx,
             )
             .await?;
-            if let Some(maximum) = config.teams.maximum_teams.filter(|limit| *limit > 0)
-                && ctx.database.list_organization_teams(&org).await?.len() >= maximum
+            let count = ctx.database.list_organization_teams(&org).await?.len();
+            if let Some(maximum) = config
+                .team_limit(
+                    OrganizationTeamLimit {
+                        organization_id: &org,
+                        session: Some(actor),
+                    },
+                    OrganizationEndpoint::new(ctx, Some(req)),
+                )
+                .await?
+                .filter(|limit| *limit > 0)
+                && count >= maximum
             {
                 return Err(AuthError::bad_request(
                     "You have reached the maximum number of teams",
                 ));
             }
-            if ctx.database.get_organization_by_id(&org).await?.is_none() {
-                return Err(AuthError::bad_request("Organization not found"));
+            let organization = ctx
+                .database
+                .get_organization_by_id(&org)
+                .await?
+                .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+            let organization_view =
+                crate::plugins::organization::fields::organization(&organization, ctx);
+            let created_at = chrono::Utc::now();
+            let mut data = OrganizationTeamDraft {
+                additional_fields: config.schema.team.parse_organization_input(
+                    &body.additional_fields,
+                    "body",
+                    false,
+                )?,
+                id: None,
+                name: body.name,
+                organization_id: org,
+                created_at: None,
+                updated_at: None,
+            };
+            if let Some(hooks) = &config.hooks {
+                hooks
+                    .before_create_team(&mut data, &organization_view, Some(&user_view))
+                    .await?;
             }
-            AuthResponse::json(
-                200,
-                &ctx.database
-                    .create_team(CreateTeam {
-                        name: body.name,
-                        organization_id: org,
-                        updated_at: Some(chrono::Utc::now()),
+            let team = ctx
+                .database
+                .create_team(data.into_create(created_at, Some(created_at)))
+                .await?;
+            let team = crate::plugins::organization::fields::team(team, ctx);
+            if let Some(hooks) = &config.hooks {
+                hooks
+                    .after_create_team(OrganizationTeamEvent {
+                        team: &team,
+                        user: Some(&user_view),
+                        organization: &organization_view,
                     })
-                    .await?,
-            )?
+                    .await?;
+            }
+            AuthResponse::json(200, &team)?
         }
         (HttpMethod::Post, "/organization/update-team") => {
             let body = body!(UpdateBody);
@@ -172,12 +222,41 @@ pub(crate) async fn handle_team_request(
             )
             .await?;
             let team = find_team(&body.team_id, &org, ctx).await?;
-            AuthResponse::json(
-                200,
-                &ctx.database
-                    .update_team(&team.id, body.data.name.as_deref().unwrap_or(&team.name))
-                    .await?,
-            )?
+            let organization = ctx
+                .database
+                .get_organization_by_id(&org)
+                .await?
+                .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+            let organization_view =
+                crate::plugins::organization::fields::organization(&organization, ctx);
+            let event = OrganizationTeamEvent {
+                team: &team,
+                user: Some(&user_view),
+                organization: &organization_view,
+            };
+            let mut updates = better_auth_core::UpdateTeam {
+                additional_fields: config.schema.team.parse_organization_input(
+                    &body.data.additional_fields,
+                    "body.data",
+                    true,
+                )?,
+                name: body.data.name,
+                ..Default::default()
+            };
+            if let Some(hooks) = &config.hooks {
+                hooks.before_update_team(&mut updates, event).await?;
+            }
+            let updated = ctx.database.update_team(&team.id, updates).await?;
+            let updated = crate::plugins::organization::fields::team(updated, ctx);
+            if let Some(hooks) = &config.hooks {
+                hooks
+                    .after_update_team(OrganizationTeamEvent {
+                        team: &updated,
+                        ..event
+                    })
+                    .await?;
+            }
+            AuthResponse::json(200, &updated)?
         }
         (HttpMethod::Post, "/organization/remove-team") => {
             let body = body!(TeamBody);
@@ -205,7 +284,25 @@ pub(crate) async fn handle_team_request(
             {
                 return Err(AuthError::bad_request("Unable to remove last team"));
             }
+            let organization = ctx
+                .database
+                .get_organization_by_id(&org)
+                .await?
+                .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+            let organization_view =
+                crate::plugins::organization::fields::organization(&organization, ctx);
+            let event = OrganizationTeamEvent {
+                team: &team,
+                user: Some(&user_view),
+                organization: &organization_view,
+            };
+            if let Some(hooks) = &config.hooks {
+                hooks.before_delete_team(event).await?;
+            }
             ctx.database.delete_team(&team.id).await?;
+            if let Some(hooks) = &config.hooks {
+                hooks.after_delete_team(event).await?;
+            }
             AuthResponse::json(
                 200,
                 &serde_json::json!({"message":"Team removed successfully."}),
@@ -388,30 +485,64 @@ pub(crate) async fn handle_team_request(
                     "User is not a member of the organization",
                 ));
             }
-            let _ = find_team(&body.team_id, &org, ctx).await?;
+            let team = find_team(&body.team_id, &org, ctx).await?;
+            let organization = ctx
+                .database
+                .get_organization_by_id(&org)
+                .await?
+                .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+            let organization_view =
+                crate::plugins::organization::fields::organization(&organization, ctx);
+            let target_user = ctx
+                .database
+                .get_user_by_id(&body.user_id)
+                .await?
+                .ok_or_else(|| AuthError::bad_request("User not found"))?;
+            let target_view = better_auth_core::wire::UserView::with_internal_fields(
+                &target_user,
+                &ctx.config.user,
+                &ctx.metadata,
+            )?;
+            let target = OrganizationTeamMemberTarget {
+                team: &team,
+                organization: &organization_view,
+                user: &target_view,
+            };
             if adding {
+                if let Some(hooks) = &config.hooks {
+                    hooks.before_add_team_member(target).await?;
+                }
+                let maximum = config
+                    .team_member_limit(OrganizationTeamMemberLimit {
+                        team_id: &team.id,
+                        organization_id: &org,
+                        session: actor,
+                    })
+                    .await?;
                 let member = ctx
                     .database
-                    .add_team_member(
-                        &body.team_id,
-                        &body.user_id,
-                        config.teams.maximum_members_per_team,
-                    )
+                    .add_team_member(&body.team_id, &body.user_id, maximum)
                     .await?
                     .ok_or_else(|| AuthError::forbidden("Team member limit reached"))?;
+                if let Some(hooks) = &config.hooks {
+                    hooks.after_add_team_member(&member, target).await?;
+                }
                 AuthResponse::json(200, &member)?
             } else {
-                if ctx
+                let member = ctx
                     .database
                     .get_team_member(&body.team_id, &body.user_id)
                     .await?
-                    .is_none()
-                {
-                    return Err(AuthError::bad_request("User is not a member of the team"));
+                    .ok_or_else(|| AuthError::bad_request("User is not a member of the team"))?;
+                if let Some(hooks) = &config.hooks {
+                    hooks.before_remove_team_member(&member, target).await?;
                 }
                 ctx.database
                     .remove_team_member(&body.team_id, &body.user_id)
                     .await?;
+                if let Some(hooks) = &config.hooks {
+                    hooks.after_remove_team_member(&member, target).await?;
+                }
                 AuthResponse::json(
                     200,
                     &serde_json::json!({"message":"Team member removed successfully."}),
@@ -447,6 +578,7 @@ mod tests {
     use crate::plugins::test_helpers::{
         create_auth_json_request_no_query, create_test_context, create_user_and_session,
     };
+    use better_auth_core::CreateTeam;
     use better_auth_core::{CreateMember, CreateOrganization, CreateUser};
     use chrono::Duration;
 
@@ -465,6 +597,7 @@ mod tests {
         let org = ctx
             .database
             .create_organization(CreateOrganization {
+                additional_fields: Default::default(),
                 id: None,
                 name: "Teams".into(),
                 slug: "teams".into(),
@@ -475,6 +608,7 @@ mod tests {
             .unwrap();
         ctx.database
             .create_member(CreateMember {
+                additional_fields: Default::default(),
                 organization_id: org.id.clone(),
                 user_id: user.id.clone(),
                 role: "owner".into(),
@@ -499,6 +633,7 @@ mod tests {
                 name: "One".into(),
                 organization_id: org.id.clone(),
                 updated_at: None,
+                ..Default::default()
             })
             .await
             .unwrap();
@@ -542,6 +677,7 @@ mod tests {
         let foreign_org = ctx
             .database
             .create_organization(CreateOrganization {
+                additional_fields: Default::default(),
                 id: None,
                 name: "Foreign".into(),
                 slug: "foreign-teams".into(),
@@ -556,6 +692,7 @@ mod tests {
                 name: "Foreign".into(),
                 organization_id: foreign_org.id,
                 updated_at: None,
+                ..Default::default()
             })
             .await
             .unwrap();

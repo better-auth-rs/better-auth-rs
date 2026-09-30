@@ -10,6 +10,12 @@ pub enum EntityRole {
     Session,
     Account,
     Verification,
+    Organization,
+    Member,
+    Invitation,
+    Team,
+    TeamMember,
+    OrganizationRole,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -127,6 +133,11 @@ pub fn core_fields(role: EntityRole) -> &'static [FieldDef] {
         EntityRole::Session => SESSION_CORE,
         EntityRole::Account => ACCOUNT_CORE,
         EntityRole::Verification => VERIFICATION_CORE,
+        role => PLUGINS
+            .iter()
+            .flat_map(|plugin| plugin.extra_entities)
+            .find(|entity| entity.role == Some(role))
+            .map_or(&[], |entity| entity.fields),
     }
 }
 
@@ -260,13 +271,13 @@ static PLUGINS: &[PluginSchema] = &[
             ExtraEntitySchema {
                 mod_name: "organization",
                 table_name: "organization",
-                role: None,
+                role: Some(EntityRole::Organization),
                 fields: &[
                     pk!("id", "String"),
                     f!("name", "String"),
                     f!("slug", "String"),
                     f!("logo", "Option<String>"),
-                    f!("metadata", "Json"),
+                    f!("metadata", "Option<Json>"),
                     f!("created_at", "DateTimeUtc"),
                     f!("updated_at", "DateTimeUtc"),
                 ],
@@ -274,7 +285,7 @@ static PLUGINS: &[PluginSchema] = &[
             ExtraEntitySchema {
                 mod_name: "member",
                 table_name: "member",
-                role: None,
+                role: Some(EntityRole::Member),
                 fields: &[
                     pk!("id", "String"),
                     f!("organization_id", "String"),
@@ -286,7 +297,7 @@ static PLUGINS: &[PluginSchema] = &[
             ExtraEntitySchema {
                 mod_name: "invitation",
                 table_name: "invitation",
-                role: None,
+                role: Some(EntityRole::Invitation),
                 fields: &[
                     pk!("id", "String"),
                     f!("organization_id", "String"),
@@ -302,7 +313,7 @@ static PLUGINS: &[PluginSchema] = &[
             ExtraEntitySchema {
                 mod_name: "team",
                 table_name: "team",
-                role: None,
+                role: Some(EntityRole::Team),
                 fields: &[
                     pk!("id", "String"),
                     f!("name", "String"),
@@ -315,18 +326,19 @@ static PLUGINS: &[PluginSchema] = &[
             ExtraEntitySchema {
                 mod_name: "team_member",
                 table_name: "team_member",
-                role: None,
+                role: Some(EntityRole::TeamMember),
                 fields: &[
                     pk!("id", "String"),
                     f!("team_id", "String"),
                     f!("user_id", "String"),
+                    f!("membership_key", "Option<String>"),
                     f!("created_at", "DateTimeUtc"),
                 ],
             },
             ExtraEntitySchema {
                 mod_name: "organization_role",
                 table_name: "organization_role",
-                role: None,
+                role: Some(EntityRole::OrganizationRole),
                 fields: &[
                     pk!("id", "String"),
                     f!("organization_id", "String"),
@@ -411,7 +423,7 @@ pub fn plugin_field_names(role: EntityRole) -> Vec<&'static str> {
         .flat_map(|p| match role {
             EntityRole::User => p.user_fields.iter(),
             EntityRole::Session => p.session_fields.iter(),
-            EntityRole::Account | EntityRole::Verification => [].iter(),
+            _ => [].iter(),
         })
         .map(|f| f.name)
         .collect()
@@ -458,7 +470,11 @@ pub fn entity_indexes(table: &str) -> &'static [IndexDef] {
         ],
         "organization" => &[unique!("slug")],
         "team" => &[index!("organization_id")],
-        "team_member" => &[unique!("team_id", "user_id"), index!("user_id")],
+        "team_member" => &[
+            unique!("team_id", "user_id"),
+            unique!("membership_key"),
+            index!("user_id"),
+        ],
         "organization_role" => &[index!("organization_id"), index!("role")],
         "member" => &[unique!("organization_id", "user_id"), index!("user_id")],
         "invitation" => &[index!("organization_id"), index!("email"), index!("status")],

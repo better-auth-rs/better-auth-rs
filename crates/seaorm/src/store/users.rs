@@ -14,7 +14,7 @@ use crate::utils::email::{normalize_optional_user_email, normalize_user_email};
 
 use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
 
-impl<S> SeaOrmStore<S>
+impl<S, O: crate::SeaOrmOrganizationSchema> SeaOrmStore<S, O>
 where
     S: AuthSchema,
     S::User: SeaOrmUserModel,
@@ -73,7 +73,7 @@ where
 }
 
 #[async_trait]
-impl<S> UserStore<S> for SeaOrmStore<S>
+impl<S, O: crate::SeaOrmOrganizationSchema> UserStore<S> for SeaOrmStore<S, O>
 where
     S: AuthSchema + Send + Sync,
     S::User: SeaOrmUserModel,

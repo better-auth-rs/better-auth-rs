@@ -1,47 +1,105 @@
 use super::*;
 use crate::{
     CreateOrganizationRole, CreateTeam, OrganizationRole, Team, TeamMember, UpdateOrganizationRole,
+    UpdateTeam,
     store::{OrganizationRoleStore, TeamStore},
 };
 #[async_trait]
 impl TeamStore for MemoryStore {
     async fn create_team(&self, input: CreateTeam) -> AuthResult<Team> {
         let team = Team {
-            id: uuid::Uuid::new_v4().to_string(),
+            additional_fields: Self::create_fields(
+                &self.organization_fields().team,
+                input.additional_fields,
+            )?,
+            id: input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             name: input.name,
             organization_id: input.organization_id,
-            created_at: Utc::now(),
+            created_at: input.created_at.unwrap_or_else(Utc::now),
             updated_at: input.updated_at,
         };
         self.lock().teams.insert(team.id.clone(), team.clone());
-        Ok(team)
+        self.output_team(team)
     }
     async fn get_team(&self, id: &str) -> AuthResult<Option<Team>> {
-        Ok(self.lock().teams.get(id).cloned())
+        self.lock()
+            .teams
+            .get(id)
+            .cloned()
+            .map(|value| self.output_team(value))
+            .transpose()
     }
-    async fn update_team(&self, id: &str, name: &str) -> AuthResult<Team> {
+    async fn update_team(&self, id: &str, update: UpdateTeam) -> AuthResult<Team> {
+        let fields = self
+            .organization_fields()
+            .team
+            .storage_fields(update.additional_fields, false)?;
         let mut state = self.lock();
         let team = state
             .teams
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Team not found"))?;
-        team.name = name.to_owned();
-        Ok(team.clone())
+        team.additional_fields.extend(fields);
+        if let Some(name) = update.name {
+            team.name = name;
+        }
+        if let Some(organization_id) = update.organization_id {
+            team.organization_id = organization_id;
+        }
+        if let Some(created_at) = update.created_at {
+            team.created_at = created_at;
+        }
+        team.updated_at = update.updated_at.unwrap_or_else(|| Some(Utc::now()));
+        self.output_team(team.clone())
     }
     async fn delete_team(&self, id: &str) -> AuthResult<()> {
         let mut state = self.lock();
-        state.teams.remove(id);
-        for invitation in state
+        let organization_id = &state
+            .teams
+            .get(id)
+            .ok_or_else(|| AuthError::not_found("Team not found"))?
+            .organization_id;
+        let pending = state
             .invitations
-            .values_mut()
-            .filter(|invitation| invitation.is_pending())
+            .values()
+            .filter(|invitation| {
+                invitation.organization_id == *organization_id && invitation.is_pending()
+            })
+            .cloned()
+            .map(|invitation| self.output_invitation(invitation))
+            .collect::<AuthResult<Vec<_>>>()?;
+        let mut updates = Vec::new();
+        for invitation in pending
+            .into_iter()
+            .filter(|row| row.expires_at > Utc::now())
         {
-            if let Some(ids) = invitation.team_id.as_ref() {
-                let retained: Vec<_> = ids.split(',').filter(|team_id| *team_id != id).collect();
-                invitation.team_id = (!retained.is_empty()).then(|| retained.join(","));
+            let Some(ids) = invitation.team_id.as_ref() else {
+                continue;
+            };
+            let retained: Vec<_> = ids.split(',').filter(|team_id| *team_id != id).collect();
+            if retained.len() == ids.split(',').count() {
+                continue;
             }
+            let mut updated = state
+                .invitations
+                .get(&invitation.id)
+                .cloned()
+                .ok_or_else(|| AuthError::not_found("Invitation not found"))?;
+            updated.team_id = (!retained.is_empty()).then(|| retained.join(","));
+            updated.additional_fields.extend(
+                self.organization_fields()
+                    .invitation
+                    .storage_fields(Default::default(), false)?,
+            );
+            let _ = self.output_invitation(updated.clone())?;
+            updates.push(updated);
         }
+        // Keep changes staged until every transform succeeds, matching transaction rollback.
+        state.teams.remove(id);
         state.team_members.retain(|member| member.team_id != id);
+        for invitation in updates {
+            state.invitations.insert(invitation.id.clone(), invitation);
+        }
         Ok(())
     }
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<Team>> {
@@ -53,16 +111,20 @@ impl TeamStore for MemoryStore {
             .cloned()
             .collect();
         teams.sort_by_key(|team| team.created_at);
-        Ok(teams)
+        teams
+            .into_iter()
+            .map(|value| self.output_team(value))
+            .collect()
     }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<Team>> {
         let state = self.lock();
-        Ok(state
+        state
             .team_members
             .iter()
             .filter(|member| member.user_id == user_id)
             .filter_map(|member| state.teams.get(&member.team_id).cloned())
-            .collect())
+            .map(|value| self.output_team(value))
+            .collect()
     }
     async fn get_team_member(
         &self,
@@ -143,6 +205,10 @@ impl OrganizationRoleStore for MemoryStore {
             return Err(AuthError::bad_request("Role already exists"));
         }
         let role = OrganizationRole {
+            additional_fields: Self::create_fields(
+                &self.organization_fields().organization_role,
+                input.additional_fields,
+            )?,
             id: uuid::Uuid::new_v4().to_string(),
             organization_id: input.organization_id,
             role: input.role,
@@ -153,10 +219,15 @@ impl OrganizationRoleStore for MemoryStore {
         state
             .organization_roles
             .insert(role.id.clone(), role.clone());
-        Ok(role)
+        self.output_organization_role(role)
     }
     async fn get_organization_role(&self, id: &str) -> AuthResult<Option<OrganizationRole>> {
-        Ok(self.lock().organization_roles.get(id).cloned())
+        self.lock()
+            .organization_roles
+            .get(id)
+            .cloned()
+            .map(|value| self.output_organization_role(value))
+            .transpose()
     }
     async fn list_organization_roles(
         &self,
@@ -170,18 +241,26 @@ impl OrganizationRoleStore for MemoryStore {
             .cloned()
             .collect();
         roles.sort_by_key(|role| role.created_at);
-        Ok(roles)
+        roles
+            .into_iter()
+            .map(|value| self.output_organization_role(value))
+            .collect()
     }
     async fn update_organization_role(
         &self,
         id: &str,
         update: UpdateOrganizationRole,
     ) -> AuthResult<OrganizationRole> {
+        let fields = self
+            .organization_fields()
+            .organization_role
+            .storage_fields(update.additional_fields, false)?;
         let mut state = self.lock();
         let role = state
             .organization_roles
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Role not found"))?;
+        role.additional_fields.extend(fields);
         if let Some(name) = update.role {
             role.role = name;
         }
@@ -189,7 +268,7 @@ impl OrganizationRoleStore for MemoryStore {
             role.permission = permission;
         }
         role.updated_at = Some(Utc::now());
-        Ok(role.clone())
+        self.output_organization_role(role.clone())
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {
         self.lock().organization_roles.remove(id);
@@ -209,6 +288,7 @@ async fn memory_organization_deletion_cleans_teams_and_roles() {
             name: "one".into(),
             organization_id: org.id.clone(),
             updated_at: None,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -235,6 +315,7 @@ async fn memory_organization_deletion_cleans_teams_and_roles() {
     );
     let role = store
         .create_organization_role(CreateOrganizationRole {
+            additional_fields: Default::default(),
             organization_id: org.id.clone(),
             role: "editor".into(),
             permission: serde_json::json!({"team":["create"]}),
@@ -251,4 +332,105 @@ async fn memory_organization_deletion_cleans_teams_and_roles() {
             .unwrap()
             .is_none()
     );
+}
+
+#[tokio::test]
+async fn memory_team_deletion_rolls_back_invitation_output_errors() {
+    use crate::{
+        organization_fields::OrganizationFields,
+        user_fields::{UserConfig, UserFieldConfig},
+    };
+    use serde_json::json;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    for failure_stage in ["expired", "unassigned", "updated"] {
+        let store = MemoryStore::new(test_config());
+        let config = OrganizationFields {
+            invitation: UserConfig {
+                additional_fields: [(
+                    "marker".into(),
+                    UserFieldConfig {
+                        required: Some(false),
+                        default_value: Some(json!("created")),
+                        ..Default::default()
+                    },
+                )]
+                .into(),
+            },
+            ..Default::default()
+        };
+        store.configure_organization_fields(config.clone()).unwrap();
+        let org = store
+            .create_organization(CreateOrganization::new("organization", "organization"))
+            .await
+            .unwrap();
+        let team = store
+            .create_team(CreateTeam {
+                name: "team".into(),
+                organization_id: org.id.clone(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        let _ = store
+            .add_team_member(&team.id, "owner", None)
+            .await
+            .unwrap();
+        let expires = Utc::now() + chrono::Duration::days(1);
+        let mut live = Vec::new();
+        for _ in 0..2 {
+            let mut input =
+                CreateInvitation::new(&org.id, "recipient@example.com", "member", "owner", expires);
+            input.team_id = Some(team.id.clone());
+            live.push(store.create_invitation(input).await.unwrap().id);
+        }
+        if failure_stage != "updated" {
+            let mut input =
+                CreateInvitation::new(&org.id, "other@example.com", "member", "owner", expires);
+            if failure_stage == "expired" {
+                input.team_id = Some(team.id.clone());
+                input.expires_at = Utc::now() - chrono::Duration::days(1);
+            }
+            let _ = input
+                .additional_fields
+                .insert("marker".into(), json!("read-fail"));
+            let _ = store.create_invitation(input).await.unwrap();
+        }
+        let updates = Arc::new(AtomicUsize::new(0));
+        let count = updates.clone();
+        let mut failing = config.clone();
+        let marker = failing
+            .invitation
+            .additional_fields
+            .get_mut("marker")
+            .unwrap();
+        marker.on_update = Some(Arc::new(move || {
+            json!(format!(
+                "updated-{}",
+                count.fetch_add(1, Ordering::SeqCst) + 1
+            ))
+        }));
+        marker.output_transform = Some(Arc::new(|value| {
+            if value == Some(json!("read-fail")) || value == Some(json!("updated-2")) {
+                Err(AuthError::bad_request("invitation output failed"))
+            } else {
+                Ok(value)
+            }
+        }));
+        store.configure_organization_fields(failing).unwrap();
+        let error = store.delete_team(&team.id).await.unwrap_err();
+        assert!(error.to_string().contains("invitation output failed"));
+        assert_eq!(
+            updates.load(Ordering::SeqCst),
+            if failure_stage == "updated" { 2 } else { 0 }
+        );
+        store.configure_organization_fields(config).unwrap();
+        assert!(store.get_team(&team.id).await.unwrap().is_some());
+        assert_eq!(store.list_team_members(&team.id).await.unwrap().len(), 1);
+        for id in live {
+            let row = store.get_invitation_by_id(&id).await.unwrap().unwrap();
+            assert_eq!(row.team_id.as_deref(), Some(team.id.as_str()));
+            assert_eq!(row.additional_fields.get("marker"), Some(&json!("created")));
+        }
+    }
 }

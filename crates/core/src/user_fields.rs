@@ -3,6 +3,7 @@
 use crate::{AuthError, AuthResult};
 use serde_json::{Map, Value};
 use std::{collections::BTreeMap, sync::Arc};
+mod organization;
 mod output;
 
 /// Synchronous field transform. `None` represents undefined; `Some(Value::Null)` represents null.
@@ -38,8 +39,8 @@ pub enum UserFieldType {
 pub struct UserFieldConfig {
     /// Storage type; route validation is supplied separately by `validator`.
     pub field_type: UserFieldType,
-    /// Require the field during public user creation when no default exists. Defaults to false.
-    pub required: bool,
+    /// User input requires `Some(true)`; organization input requires any value except `Some(false)`.
+    pub required: Option<bool>,
     /// Permit public client input.
     pub input: bool,
     /// Include the field in public user views.
@@ -64,7 +65,7 @@ impl Default for UserFieldConfig {
     fn default() -> Self {
         Self {
             field_type: UserFieldType::String,
-            required: false,
+            required: None,
             input: true,
             returned: true,
             field_name: None,
@@ -151,7 +152,7 @@ impl UserConfig {
             } else if create {
                 if let Some(default) = field.default_value() {
                     Some(default)
-                } else if field.required {
+                } else if field.required == Some(true) {
                     return Err(AuthError::FieldInput {
                         code: "MISSING_FIELD",
                         message: format!("{name} is required"),
@@ -206,7 +207,7 @@ impl UserConfig {
                 continue;
             }
             if create
-                && field.required
+                && field.required == Some(true)
                 && value == Some(Value::Null)
                 && let Some(default) = field.default_value()
             {

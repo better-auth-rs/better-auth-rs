@@ -19,7 +19,7 @@ use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
 mod concurrency_tests;
 
 #[async_trait]
-impl<S> VerificationStore<S> for SeaOrmStore<S>
+impl<S, O: crate::SeaOrmOrganizationSchema> VerificationStore<S> for SeaOrmStore<S, O>
 where
     S: AuthSchema + Send + Sync,
     S::Verification: SeaOrmVerificationModel,
@@ -233,7 +233,7 @@ where
     }
 }
 
-impl<S> SeaOrmStore<S>
+impl<S, O: crate::SeaOrmOrganizationSchema> SeaOrmStore<S, O>
 where
     S: AuthSchema + Send + Sync,
     S::Verification: SeaOrmVerificationModel,

@@ -7,7 +7,11 @@ mod conversions;
 mod entity;
 mod error;
 pub mod hooks;
+pub mod organization_schema;
 pub mod schema;
+pub use organization_schema::{
+    OrganizationModels, SeaOrmOrganizationModel, SeaOrmOrganizationSchema,
+};
 pub mod store;
 mod types;
 mod types_org;

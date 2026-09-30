@@ -47,15 +47,99 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 | `creator_role` | `String` | `"owner"` | Role assigned to organization creator |
 | `invitation_expires_in` | `u64` | `172800` (48h) | Invitation expiration in seconds |
 | `invitation_limit` | `Option<usize>` | `Some(100)` | Max pending invitations per org |
+| `cancel_pending_invitations_on_re_invite` | `bool` | `false` | Cancel the old pending invitation before creating a replacement |
+| `require_email_verification_on_invitation` | `bool` | `false` | Require a verified recipient email for lookup, acceptance, and rejection |
 | `disable_organization_deletion` | `bool` | `false` | Prevent organization deletion |
 | `teams` | `OrganizationTeamsConfig` | Disabled | Team creation, membership, and limits |
 | `dynamic_access_control` | `bool` | `false` | Enable persisted organization roles |
 | `ac` | `Option<HashMap<String, Vec<String>>>` | `None` | Allowed resource statements for dynamic roles |
 | `maximum_roles_per_organization` | `Option<usize>` | `None` | Maximum persisted roles per organization |
 
-Configure invitation delivery with `OrganizationPlugin::custom_send_invitation_email(Arc<dyn SendInvitationEmail>)`. Implement `SendInvitationEmail::send` using the invitation, organization, member, and inviter in `InvitationEmail`. The plugin logs delivery failures and still returns the stored invitation, matching upstream behavior.
+Configure invitation delivery with `OrganizationPlugin::custom_send_invitation_email(Arc<dyn SendInvitationEmail>)`. Implement `SendInvitationEmail::send` using the invitation, organization, member, inviter, and optional HTTP request in `InvitationEmail`. The plugin logs delivery failures and still returns the stored invitation, matching upstream behavior.
 
 Inviting an email with a pending invitation returns `USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION`. Send `resend: true` to renew that invitation and send the email again. Resending preserves the invitation ID, role, and original inviter.
+
+Organization metadata uses nullable native JSON in Rust storage: SQL `NULL` represents an omitted value; JSON `null` remains a stored JSON value. Existing application migrations must allow SQL `NULL` in the organization metadata column. Creation and update responses decode metadata; read/list/delete responses use the upstream JSON text representation. HTTP metadata input must be an object. A trusted before-update hook can store JSON `null`; a before-create hook's null value is omitted, matching the upstream creation adapter.
+
+## Additional fields
+
+Set `OrganizationConfig::schema` to an `OrganizationFields` value. The `organization`, `member`, `invitation`, `team`, and `organization_role` members each use `UserConfig::additional_fields`. Define the corresponding typed SeaORM columns and select the application's organization models as described in the [database guide](/docs/concepts/database). The plugin configures the store during initialization.
+
+```rust
+use better_auth::plugins::organization::{OrganizationConfig, OrganizationFields};
+use better_auth::config::{UserConfig, UserFieldConfig};
+
+let config = OrganizationConfig {
+    schema: OrganizationFields {
+        organization: UserConfig {
+            additional_fields: [("department".to_owned(), UserFieldConfig {
+                required: Some(false),
+                default_value: Some(serde_json::json!("general")),
+                ..Default::default()
+            })].into(),
+        },
+        ..Default::default()
+    },
+    ..Default::default()
+};
+let plugin = OrganizationPlugin::with_config(config);
+```
+
+Organization field validation follows the pinned upstream schema. `required: None` and `Some(true)` require a field during creation; `Some(false)` permits omission and null. A default does not make a required HTTP field optional. Updates permit omission. `input: false` strips client input before hooks. Organization routes validate declared types but do not invoke `validator`; the adapter applies `input_transform` once. HTTP date strings do not satisfy a date field, while typed storage defaults can supply dates. Enum fields retain upstream's unrestricted Organization input behavior.
+
+Adapter writes apply creation defaults and `on_update`, including implicit owner/default-team creation, invitation acceptance, and pending-invitation changes during team deletion. Adapter reads apply `output_transform` and `field_name` mapping once. Organization and team responses hide `returned: false` fields. Member, invitation, and dynamic-role responses retain those fields; full-organization responses hide them in their nested lists. Hooks receive the same entity visibility as the corresponding upstream adapter operation.
+
+Dynamic-role creation accepts an optional outer `additionalFields` object. When supplied, that object uses the configured creation requirements. Upstream initializes the role update schema eagerly, which makes adapter role fields optional from initialization; the creation endpoint retains its original validation schema. Role updates return the old record merged with raw request fields, while subsequent reads expose the persisted transforms and `on_update` values. Invitation resend similarly returns the old record with the new expiration time, while storing `on_update` values.
+
+The current Rust schema supports new fields. Redefining built-in fields through `additional_fields` is unsupported and fails during initialization. SeaORM also rejects a `field_name` that resolves to a built-in column or does not resolve to a typed model column. Use entity table and column mappings to rename storage; those mappings preserve the built-in field type and behavior. Upstream permits built-in field redefinition, so that capability remains a compatibility limitation.
+
+## Application hooks and dynamic options
+
+`OrganizationPlugin::hooks(Arc<dyn OrganizationHooks>)` configures the 30 upstream lifecycle hooks. Implement only the methods your application uses. Before hooks receive mutable typed inputs. Changes replace the corresponding values before persistence. Creation drafts omit generated timestamps until the hook returns. Return an `AuthError` to stop the operation. After hooks receive stored records; an after-hook error does not undo writes that upstream already committed.
+
+```rust
+use async_trait::async_trait;
+use better_auth::{AuthResult, plugins::organization::hooks::OrganizationHooks};
+use better_auth::types::CreateOrganization;
+use better_auth::wire::UserView;
+
+struct OrganizationRules;
+
+#[async_trait]
+impl OrganizationHooks for OrganizationRules {
+    async fn before_create_organization(
+        &self,
+        organization: &mut CreateOrganization,
+        user: &UserView,
+    ) -> AuthResult<()> {
+        organization.name = format!("{}'s organization", user.name.as_deref().unwrap_or("User"));
+        Ok(())
+    }
+}
+
+let plugin = OrganizationPlugin::new().hooks(std::sync::Arc::new(OrganizationRules));
+```
+
+Hooks cover organization creation/update/deletion, member addition/removal/role changes, invitation creation/acceptance/rejection/cancellation, team creation/update/deletion, and team member addition/removal. Owner and default-team creation invoke their corresponding hooks. Invitation acceptance does not invoke member-add hooks, and leaving an organization does not invoke member-remove hooks. Resending an invitation invokes delivery without rerunning invitation creation hooks. Upstream ignores the return data from `beforeAddTeamMember`, so the Rust hook exposes a read-only target.
+
+An organization ID override follows the database constraints. A database with foreign keys can reject changing an ID referenced by members or teams; the plugin propagates that error. The plugin does not disable constraints to imitate an adapter that has foreign keys disabled.
+
+Configure asynchronous options with these interfaces:
+
+| Interface | Options |
+| --- | --- |
+| `OrganizationPolicy` through `.policy(...)` | Creation permission, organization limit, invitation limit, team limit, dynamic role limit, custom default-team creation |
+| `MembershipLimitPolicy` through `.membership_limit_callback(...)` | Organization capacity for the user being added or accepting an invitation |
+| `TeamMemberLimitPolicy` through `teams.maximum_members_per_team_callback` | Team capacity for the authenticated actor and destination team |
+
+Optional `OrganizationPolicy` methods return `None` to retain the static setting. The organization-limit callback returns `true` when the limit has been reached. Membership and team member callbacks return numeric limits. Static `membership_limit: Some(0)` uses the default of 100; a callback returning zero rejects admission. A dynamic membership limit does not change the default list size of 100. A zero invitation limit rejects new invitations, while `invitation_expires_in: 0` uses 48 hours. A zero maximum-team limit disables that limit.
+
+Endpoint-aware hooks and policies receive `OrganizationEndpoint`, which exposes the request, global configuration, and organization persistence. A custom default-team callback must persist its team and return that record. Returning `None` uses normal team creation, including the before-hook changes. The returned team's identity controls owner membership and the active team.
+
+`OrganizationPlugin::add_member(input, request, context)` is a trusted server-only API, matching upstream `auth.api.addMember`. There is no public HTTP route. When a dynamic team capacity callback is configured, adding a team member requires an authenticated request. A failure during the team addition removes the newly created organization membership. Dynamic team limits during invitation acceptance execute per team in the same transaction as member creation; a callback error rolls back every reserved seat. The invitation is claimed before that transaction. If the transaction fails, a conditional update restores the invitation to pending and runs its `on_update` callbacks again. Claim-output failures stop before the member transaction, and compensation failures propagate.
+Set `cancel_pending_invitations_on_re_invite: true` to cancel the old invitation and create a new invitation. Explicit `resend: true` still renews the existing invitation. Cancellation occurs before the new invitation's capacity and team checks, matching upstream.
+
+Invitation lookup requires a session owned by the recipient, a pending unexpired invitation, and an inviter who still belongs to the organization. Set `require_email_verification_on_invitation: true` to require email verification for lookup, acceptance, and rejection. The default matches upstream's built-in opaque IDs; the bundled stores generate UUIDs. Applications with predictable invitation IDs must enable this option. Listing a user's invitations always requires a verified session email.
 
 ## RBAC (Role-Based Access Control)
 
@@ -68,6 +152,8 @@ Inviting an email with a pending invitation returns `USER_IS_ALREADY_INVITED_TO_
 | **member** | — | — | — | — | read | — |
 
 The `apikey` resource governs organization-owned keys from the [API Key plugin](/docs/plugins/api-key#named-configurations-and-organization-owned-keys). No default role grants API key actions. The API Key plugin allows the creator role (`creator_role`, `"owner"` by default) implicitly; other roles need an explicit grant. Organization permission checks use the role's statements, including checks made by the creator.
+
+Deleting an organization does not revoke its API keys, matching Better Auth 1.7.6. Applications that require revocation must delete those keys explicitly.
 
 ### Custom Roles
 

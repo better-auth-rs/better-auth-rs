@@ -1,10 +1,12 @@
 use axum::{
+    Json, Router,
     extract::Query,
     response::IntoResponse,
     routing::{get, post},
-    Json, Router,
 };
 mod oauth_proxy;
+mod organization_callbacks;
+mod organization_fields;
 use better_auth::__private_core::AuthContext as InternalAuthContext;
 use better_auth::integrations::axum::AxumIntegration;
 use better_auth::middleware::RateLimitConfig;
@@ -13,6 +15,10 @@ use better_auth::plugins::api_key::{
     VerifyApiKey,
 };
 use better_auth::plugins::{
+    AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, DeviceAuthorizationPlugin,
+    EmailPasswordPlugin, EmailVerificationPlugin, OAuthPlugin, OrganizationPlugin, PasskeyPlugin,
+    PasswordManagementPlugin, SendTwoFactorOtp, SessionManagementPlugin, TwoFactorPlugin,
+    UserManagementPlugin,
     email_verification::SendVerificationEmail,
     oauth::{
         OAuthIdTokenVerifier, OAuthProvider, OAuthRefreshTokenHandler, OAuthTokenSet,
@@ -23,10 +29,6 @@ use better_auth::plugins::{
     },
     password_management::SendResetPassword,
     user_management::SendChangeEmailConfirmation,
-    AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, DeviceAuthorizationPlugin,
-    EmailPasswordPlugin, EmailVerificationPlugin, OAuthPlugin, OrganizationPlugin, PasskeyPlugin,
-    PasswordManagementPlugin, SendTwoFactorOtp, SessionManagementPlugin, TwoFactorPlugin,
-    UserManagementPlugin,
 };
 use better_auth::prelude::{AuthAccount, AuthUser, CreateAccount, CreateVerification};
 use better_auth::wire::UserView;
@@ -47,9 +49,9 @@ use tokio::sync::Mutex;
 mod email_otp;
 mod identity_routes;
 mod jwt_fixture;
+mod oidc;
 mod one_tap;
 mod token_routes;
-mod oidc;
 mod user_fields;
 
 type TestSchema = user_fields::Schema;
@@ -186,6 +188,7 @@ fn default_github_profile() -> GitHubProfile {
 }
 
 async fn reset_database_state(database: &DatabaseConnection) -> Result<(), DbErr> {
+    organization_fields::reset(database).await?;
     device_code::Entity::delete_many().exec(database).await?;
     passkey::Entity::delete_many().exec(database).await?;
     api_key::Entity::delete_many().exec(database).await?;
@@ -611,14 +614,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if matches!(device_profile.as_str(), "user-fields" | "organization-jwt") {
         user_fields::configure(&mut config);
     }
+    if matches!(
+        device_profile.as_str(),
+        "organization-callbacks" | "organization-custom-team"
+    ) {
+        config.user.additional_fields.insert(
+            "secretNote".into(),
+            better_auth::config::UserFieldConfig {
+                returned: false,
+                default_value: Some(serde_json::json!("hidden")),
+                ..Default::default()
+            },
+        );
+    }
     if device_profile == "organization-jwt" {
-        config.session.cookie_cache.as_mut().unwrap().strategy = better_auth::config::CookieCacheStrategy::Jwt;
-        config.session.additional_fields.insert("deviceLabel".into(), Default::default());
-        config.session.additional_fields.insert("internalNote".into(), better_auth::config::SessionFieldConfig { input: false, returned: false, ..Default::default() });
+        config.session.cookie_cache.as_mut().unwrap().strategy =
+            better_auth::config::CookieCacheStrategy::Jwt;
+        config
+            .session
+            .additional_fields
+            .insert("deviceLabel".into(), Default::default());
+        config.session.additional_fields.insert(
+            "internalNote".into(),
+            better_auth::config::SessionFieldConfig {
+                input: false,
+                returned: false,
+                ..Default::default()
+            },
+        );
     }
     let database = Database::connect("sqlite::memory:").await?;
     better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database).await?;
     user_fields::add_columns(&database).await?;
+    organization_fields::create_tables(&database).await?;
     let disabled_user_router = if device_profile == "user-fields" {
         user_fields::disabled_router(config.clone(), database.clone()).await?
     } else {
@@ -639,6 +667,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let social_id_token_valid = Arc::new(Mutex::new(true));
 
     let store = SeaOrmStore::<TestSchema>::new(config.clone(), database);
+    let store: Arc<dyn better_auth::store::AuthStore<TestSchema>> =
+        if device_profile == "organization-fields" {
+            Arc::new(store.with_organization_schema::<organization_fields::models::Models>())
+        } else {
+            Arc::new(store)
+        };
+    let organization_callbacks =
+        organization_callbacks::OrganizationCallbacks::new(&device_profile);
+    let organization_callbacks_router = organization_callbacks.router();
     let identity_fixture = identity_routes::IdentityFixture::default();
     let identity_router = identity_fixture.router(Arc::new(SeaOrmStore::<TestSchema>::new(
         config.clone(),
@@ -712,8 +749,79 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => DeviceAuthorizationPlugin::new(),
     };
+    let mut organization_config = OrganizationConfig {
+        cancel_pending_invitations_on_re_invite: device_profile
+            .starts_with("organization-invitation-"),
+        require_email_verification_on_invitation: device_profile
+            == "organization-invitation-options",
+        invitation_limit: if device_profile.starts_with("organization-invitation-") {
+            Some(1)
+        } else {
+            Some(100)
+        },
+        teams: OrganizationTeamsConfig {
+            enabled: device_profile.starts_with("organization-"),
+            default_team: device_profile != "organization-limits",
+            allow_removing_all_teams: device_profile == "organization-limits",
+            maximum_teams: (device_profile == "organization-limits").then_some(2),
+            maximum_members_per_team: (device_profile == "organization-limits").then_some(1),
+            ..Default::default()
+        },
+        dynamic_access_control: device_profile.starts_with("organization-"),
+        maximum_roles_per_organization: (device_profile == "organization-limits").then_some(1),
+        ac: (device_profile.starts_with("organization-") && device_profile != "organization-no-ac")
+            .then(|| {
+                HashMap::from([
+                    (
+                        "organization".to_string(),
+                        vec!["update".to_string(), "delete".to_string()],
+                    ),
+                    (
+                        "member".to_string(),
+                        vec![
+                            "create".to_string(),
+                            "update".to_string(),
+                            "delete".to_string(),
+                        ],
+                    ),
+                    (
+                        "invitation".to_string(),
+                        vec!["create".to_string(), "cancel".to_string()],
+                    ),
+                    (
+                        "team".to_string(),
+                        vec![
+                            "create".to_string(),
+                            "update".to_string(),
+                            "delete".to_string(),
+                        ],
+                    ),
+                    (
+                        "ac".to_string(),
+                        vec![
+                            "create".to_string(),
+                            "read".to_string(),
+                            "update".to_string(),
+                            "delete".to_string(),
+                        ],
+                    ),
+                ])
+            }),
+        ..Default::default()
+    };
+    if device_profile == "organization-fields" {
+        organization_fields::configure(&mut organization_config);
+    }
+    let organization_plugin = organization_callbacks.apply(
+        OrganizationPlugin::with_config(organization_config).custom_send_invitation_email(
+            Arc::new(CompatInvitationSender {
+                outbox: invitation_email_outbox.clone(),
+                fails: invitation_sender_fails.clone(),
+            }),
+        ),
+    );
     let builder = AuthBuilder::<TestSchema>::new(config)
-        .store(store)
+        .store_arc(store)
         .rate_limit(RateLimitConfig::new().enabled(matches!(
             device_profile.as_str(),
             "device-rate-limit" | "device-rate-window"
@@ -727,65 +835,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .plugin(AccountManagementPlugin::new())
         .plugin(device_plugin)
         .plugin(api_key_plugin.clone())
-        .plugin(
-            OrganizationPlugin::with_config(OrganizationConfig {
-                teams: OrganizationTeamsConfig {
-                    enabled: device_profile.starts_with("organization-"),
-                    default_team: device_profile != "organization-limits",
-                    allow_removing_all_teams: device_profile == "organization-limits",
-                    maximum_teams: (device_profile == "organization-limits").then_some(2),
-                    maximum_members_per_team: (device_profile == "organization-limits")
-                        .then_some(1),
-                },
-                dynamic_access_control: device_profile.starts_with("organization-"),
-                maximum_roles_per_organization: (device_profile == "organization-limits")
-                    .then_some(1),
-                ac: (device_profile.starts_with("organization-")
-                    && device_profile != "organization-no-ac")
-                    .then(|| {
-                        HashMap::from([
-                            (
-                                "organization".to_string(),
-                                vec!["update".to_string(), "delete".to_string()],
-                            ),
-                            (
-                                "member".to_string(),
-                                vec![
-                                    "create".to_string(),
-                                    "update".to_string(),
-                                    "delete".to_string(),
-                                ],
-                            ),
-                            (
-                                "invitation".to_string(),
-                                vec!["create".to_string(), "cancel".to_string()],
-                            ),
-                            (
-                                "team".to_string(),
-                                vec![
-                                    "create".to_string(),
-                                    "update".to_string(),
-                                    "delete".to_string(),
-                                ],
-                            ),
-                            (
-                                "ac".to_string(),
-                                vec![
-                                    "create".to_string(),
-                                    "read".to_string(),
-                                    "update".to_string(),
-                                    "delete".to_string(),
-                                ],
-                            ),
-                        ])
-                    }),
-                ..Default::default()
-            })
-            .custom_send_invitation_email(Arc::new(CompatInvitationSender {
-                outbox: invitation_email_outbox.clone(),
-                fails: invitation_sender_fails.clone(),
-            })),
-        )
+        .plugin(organization_plugin.clone())
         .plugin(AdminPlugin::new())
         .plugin(PasskeyPlugin::new())
         .plugin(
@@ -894,6 +944,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auth_for_invitation_expiry = auth.clone();
     let two_factor_plugin_for_view_backup_codes = two_factor_plugin.clone();
 
+    let auth_for_organization_member = auth.clone();
     let auth_for_api_key_create = auth.clone();
     let auth_for_api_key_update = auth.clone();
     let auth_for_api_key_verify = auth.clone();
@@ -901,6 +952,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let api_key_for_update = api_key_plugin.clone();
 
     let app = Router::new()
+        .route("/__test/organization-add-member", post(move |headers: axum::http::HeaderMap, Json(body): Json<better_auth::plugins::organization::AddMemberInput>| {
+            let auth = auth_for_organization_member.clone();
+            let plugin = organization_plugin.clone();
+            async move {
+                let mut request = better_auth_core::AuthRequest::new(better_auth_core::HttpMethod::Post, "/__test/organization-add-member");
+                for (name, value) in headers { if let Some(name) = name { request.headers.insert(name.as_str().to_owned(), value.to_str().unwrap_or_default().to_owned()); } }
+                match plugin.add_member(body, Some(&request), auth.context()).await {
+                    Ok(member) => Json(serde_json::to_value(member).unwrap()).into_response(),
+                    Err(better_auth::AuthError::Unauthenticated) => (axum::http::StatusCode::UNAUTHORIZED, [(axum::http::header::CONTENT_TYPE, "application/json")]).into_response(),
+                    Err(error) => { let response = error.to_auth_response(); (axum::http::StatusCode::from_u16(response.status).unwrap(), [(axum::http::header::CONTENT_TYPE, "application/json")], response.body).into_response() }
+                }
+            }
+        }))
         .route("/__health", get(health_check))
         .route(
             "/__test/api-key/create",
@@ -1144,6 +1208,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let identity_fixture = identity_fixture.clone();
                 let email_otp_fixture = email_otp_fixture.clone();
                 let one_tap_fixture = one_tap_fixture.clone();
+                let organization_callbacks = organization_callbacks.clone();
                 let reset_outbox = reset_outbox_for_reset.clone();
                 let verification_outbox = verification_outbox_for_reset.clone();
                 let change_email_outbox = change_email_outbox_for_reset.clone();
@@ -1167,6 +1232,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     identity_fixture.reset().await;
                     email_otp_fixture.reset().await;
                     one_tap_fixture.reset().await;
+                    organization_callbacks.reset().await;
                     verification_outbox.lock().await.clear();
                     change_email_outbox.lock().await.clear();
                     two_factor_otp_outbox.lock().await.clear();
@@ -1721,6 +1787,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(email_otp_router)
         .merge(jwt_router)
         .merge(one_tap_router)
+        .merge(organization_callbacks_router)
         .merge(identity_router)
         .merge(disabled_user_router);
 

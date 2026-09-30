@@ -1,16 +1,16 @@
 use super::TestSchema;
 use axum::{
+    Json, Router,
     response::IntoResponse,
     routing::{get, post},
-    Json, Router,
 };
 use better_auth::{
-    plugins::{JwtAlgorithm, JwtKeyPairConfig, JwtPlugin, JwtSigningOptions},
     AuthConfig, BetterAuth,
+    plugins::{JwtAlgorithm, JwtKeyPairConfig, JwtPlugin, JwtSigningOptions},
 };
 use better_auth_core::{AuthContext, AuthPlugin, AuthRequest, HttpMethod};
 use better_auth_seaorm::{Database, SeaOrmStore};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 
 #[derive(Clone)]

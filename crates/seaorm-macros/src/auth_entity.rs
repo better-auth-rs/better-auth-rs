@@ -5,6 +5,9 @@ use quote::{format_ident, quote};
 use syn::{
     Attribute, Data, DeriveInput, Expr, Fields, Lit, LitStr, Meta, Token, punctuated::Punctuated,
 };
+#[path = "organization_model.rs"]
+mod organization_model;
+use organization_model::generate as gen_organization_model;
 
 fn serde_serialized_name(attrs: &[Attribute], key: &str) -> syn::Result<Option<String>> {
     for attr in attrs.iter().filter(|attr| attr.path().is_ident("serde")) {
@@ -186,6 +189,8 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
         EntityRole::Verification => {
             gen_verification(ident, &extra_not_set, &seaorm_root, &core_root)
         }
+        role => gen_organization_model(input, fields, role, &seaorm_root, &core_root)
+            .unwrap_or_else(|error| error.to_compile_error()),
     }
 }
 
@@ -834,6 +839,12 @@ fn parse_role(input: &DeriveInput) -> Result<EntityRole, syn::Error> {
                     "session" => EntityRole::Session,
                     "account" => EntityRole::Account,
                     "verification" => EntityRole::Verification,
+                    "organization" => EntityRole::Organization,
+                    "member" => EntityRole::Member,
+                    "invitation" => EntityRole::Invitation,
+                    "team" => EntityRole::Team,
+                    "team_member" => EntityRole::TeamMember,
+                    "organization_role" => EntityRole::OrganizationRole,
                     _ => {
                         return Err(syn::Error::new_spanned(
                             role,

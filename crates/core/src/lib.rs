@@ -36,9 +36,11 @@ mod types_org;
 mod types_team;
 pub use types_team::{
     CreateOrganizationRole, CreateTeam, OrganizationRole, Team, TeamMember, UpdateOrganizationRole,
+    UpdateTeam,
 };
 mod types_plugin;
 pub use types_jwt::{CreateJwk, Jwk};
+pub mod organization_fields;
 pub mod user_fields;
 #[doc(hidden)]
 pub mod user_query;

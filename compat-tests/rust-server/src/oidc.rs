@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use better_auth::plugins::OAuthPlugin;
 use better_auth::plugins::oauth::{
     GenericOAuthConfig, OAuthAccountSubject, OAuthProfile, OAuthProfileMapper,
     OAuthUserInfoRequest, TokenEndpointAuth, TokenEndpointSecretAuthentication,
 };
-use better_auth::plugins::OAuthPlugin;
 use better_auth::{AuthError, AuthResult};
 use serde_json::Value;
 
@@ -29,7 +29,9 @@ impl OAuthAccountSubject for MappedIdentity {
 impl OAuthProfileMapper for MappedIdentity {
     async fn map_profile(&self, profile: &Value) -> AuthResult<OAuthProfile> {
         Ok(OAuthProfile {
-            additional_fields: serde_json::from_value(serde_json::json!({"department": "identity", "alias": if profile.get("picture").is_some() { "picture" } else { "plain" }, "internalCode": "untrusted", "secretNote": "provider-private" }))?,
+            additional_fields: serde_json::from_value(
+                serde_json::json!({"department": "identity", "alias": if profile.get("picture").is_some() { "picture" } else { "plain" }, "internalCode": "untrusted", "secretNote": "provider-private" }),
+            )?,
             name: Some(Some("Mapped OIDC User".to_owned())),
             image: Some(None),
             email_verified: Some(false),
@@ -74,7 +76,9 @@ pub fn configure(mut plugin: OAuthPlugin) -> OAuthPlugin {
             ..Default::default()
         };
         if std::env::var("COMPAT_PROFILE").is_ok_and(|profile| profile.starts_with("oauth-proxy")) {
-            config.redirect_uri = Some(format!("https://production.example.com/api/auth/callback/{name}"));
+            config.redirect_uri = Some(format!(
+                "https://production.example.com/api/auth/callback/{name}"
+            ));
         }
         match name {
             "oidc-no-nonce" => config.disable_id_token_nonce_binding = true,
@@ -88,7 +92,8 @@ pub fn configure(mut plugin: OAuthPlugin) -> OAuthPlugin {
                 config.account_subject = Some(Arc::new(MappedIdentity));
                 config.map_profile_to_user = Some(Arc::new(MappedIdentity));
                 config.require_email_verification = name == "oidc-email-required";
-                config.override_user_info = std::env::var("COMPAT_PROFILE").is_ok_and(|profile| profile == "organization-jwt");
+                config.override_user_info = std::env::var("COMPAT_PROFILE")
+                    .is_ok_and(|profile| profile == "organization-jwt");
             }
             "oidc-no-signup" => config.disable_sign_up = true,
             "oidc-parameters" => {
@@ -105,7 +110,9 @@ pub fn configure(mut plugin: OAuthPlugin) -> OAuthPlugin {
                     ("tenant".to_owned(), "configured".to_owned()),
                     ("state".to_owned(), "ignored".to_owned()),
                     ("nonce".to_owned(), "ignored".to_owned()),
-                ].into_iter().collect();
+                ]
+                .into_iter()
+                .collect();
                 config.token_url_params =
                     HashMap::from([("audience".to_owned(), "fleet-api".to_owned())]);
             }

@@ -127,6 +127,11 @@ pub trait AuthAccount: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
 
 /// Trait representing an organization entity.
 pub trait AuthOrganization: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    /// Application fields already projected by the adapter.
+    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        None
+    }
+
     fn id(&self) -> Cow<'_, str>;
     fn name(&self) -> &str;
     fn slug(&self) -> &str;
@@ -138,6 +143,11 @@ pub trait AuthOrganization: Clone + Send + Sync + Serialize + std::fmt::Debug + 
 
 /// Trait representing an organization member entity.
 pub trait AuthMember: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    /// Application fields already projected by the adapter.
+    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        None
+    }
+
     fn id(&self) -> Cow<'_, str>;
     fn organization_id(&self) -> Cow<'_, str>;
     fn user_id(&self) -> Cow<'_, str>;
@@ -147,6 +157,11 @@ pub trait AuthMember: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stati
 
 /// Trait representing an invitation entity.
 pub trait AuthInvitation: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    /// Application fields already projected by the adapter.
+    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        None
+    }
+
     fn id(&self) -> Cow<'_, str>;
     fn organization_id(&self) -> Cow<'_, str>;
     fn email(&self) -> &str;

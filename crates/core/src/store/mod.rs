@@ -57,19 +57,46 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
     async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<S::User>, usize)>;
 }
 
+/// Resolve a team's capacity inside the invitation acceptance transaction.
+#[async_trait]
+pub trait TeamMemberLimitResolver: Send + Sync {
+    async fn maximum(&self, team_id: &str) -> AuthResult<Option<usize>>;
+}
+
+/// Fixed and dynamic limits share the same atomic team reservation path.
+#[derive(Clone, Copy)]
+pub enum TeamMemberLimits<'a> {
+    Fixed(Option<usize>),
+    Resolver(&'a dyn TeamMemberLimitResolver),
+}
+impl TeamMemberLimits<'_> {
+    pub async fn maximum(&self, team_id: &str) -> AuthResult<Option<usize>> {
+        match self {
+            Self::Fixed(maximum) => Ok(*maximum),
+            Self::Resolver(resolver) => resolver.maximum(team_id).await,
+        }
+    }
+}
+impl From<Option<usize>> for TeamMemberLimits<'_> {
+    fn from(value: Option<usize>) -> Self {
+        Self::Fixed(value)
+    }
+}
+
 #[async_trait]
 pub trait SessionStore<S: AuthSchema>: Send + Sync {
-    /// Accept an invitation and reserve all invited team seats in one transaction.
-    /// Return the member and, for one invited team, the session snapshot before changing its active organization.
-    /// The organization plugin uses that snapshot for the upstream cookie-cache write order.
-    /// Return the single-team cookie snapshot captured before updating the active organization.
+    /// Claim an invitation, then create its member and enabled team memberships in one transaction.
+    /// If that transaction fails, restore a still-accepted invitation to pending through the adapter.
+    /// Return the created member, claimed invitation, and optional single-team cookie snapshot.
+    /// Capture the cookie snapshot before updating the active organization to preserve upstream write order.
     async fn accept_invitation_with_teams(
         &self,
         invitation_id: &str,
         user_id: &str,
         session_token: &str,
-        maximum: Option<usize>,
-    ) -> AuthResult<(Member, Option<S::Session>)>;
+        teams_enabled: bool,
+        maximum: TeamMemberLimits<'_>,
+    ) -> AuthResult<(Member, Invitation, Option<S::Session>)>;
     async fn create_session(&self, create_session: CreateSession) -> AuthResult<S::Session>;
     async fn get_session(&self, token: &str) -> AuthResult<Option<S::Session>>;
     /// Persist application session fields and update the modification timestamp.
@@ -187,6 +214,19 @@ pub struct ListOrganizationMembersParams {
 
 #[async_trait]
 pub trait OrganizationStore: Send + Sync {
+    /// Register the Organization plugin's field policies before serving requests.
+    fn configure_organization_fields(
+        &self,
+        fields: crate::organization_fields::OrganizationFields,
+    ) -> AuthResult<()> {
+        if fields.is_empty() {
+            Ok(())
+        } else {
+            Err(crate::AuthError::config(
+                "The store does not support organization additional fields",
+            ))
+        }
+    }
     async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Organization>;
     async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>>;
     async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>>;
@@ -414,7 +454,7 @@ pub trait WalletStore: Send + Sync {
 pub trait TeamStore: Send + Sync {
     async fn create_team(&self, input: crate::CreateTeam) -> AuthResult<crate::Team>;
     async fn get_team(&self, id: &str) -> AuthResult<Option<crate::Team>>;
-    async fn update_team(&self, id: &str, name: &str) -> AuthResult<crate::Team>;
+    async fn update_team(&self, id: &str, update: crate::UpdateTeam) -> AuthResult<crate::Team>;
     async fn delete_team(&self, id: &str) -> AuthResult<()>;
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<crate::Team>>;
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<crate::Team>>;

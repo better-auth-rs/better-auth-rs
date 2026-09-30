@@ -12,6 +12,7 @@ mod jwks;
 mod members;
 mod migrator;
 mod organization_extensions;
+mod organization_models;
 mod organization_roles;
 mod organizations;
 mod passkeys;
@@ -51,22 +52,62 @@ use crate::error::{AuthError, AuthResult, DatabaseError};
 use crate::hooks::{SeaOrmHookContext, SeaOrmHooks, current_request_hook_context};
 use crate::schema::{AuthSchema, SeaOrmAccountModel, SeaOrmSessionModel, SeaOrmUserModel};
 
-#[derive(Clone)]
-pub struct SeaOrmStore<S: AuthSchema> {
+pub struct SeaOrmStore<
+    S: AuthSchema,
+    O: crate::SeaOrmOrganizationSchema = crate::OrganizationModels,
+> {
     config: Arc<AuthConfig>,
     db: DatabaseConnection,
     hooks: Vec<Arc<dyn SeaOrmHooks<S>>>,
-    _schema: PhantomData<S>,
+    organization_fields:
+        Arc<std::sync::RwLock<better_auth_core::organization_fields::OrganizationFields>>,
+    _schema: PhantomData<(S, O)>,
+}
+
+impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema> Clone for SeaOrmStore<S, O> {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            db: self.db.clone(),
+            hooks: self.hooks.clone(),
+            organization_fields: self.organization_fields.clone(),
+            _schema: PhantomData,
+        }
+    }
 }
 
 impl<S: AuthSchema> SeaOrmStore<S> {
+    /// Construct a store with bundled organization models.
     pub fn new(config: impl Into<Arc<AuthConfig>>, db: DatabaseConnection) -> Self {
         Self {
             config: config.into(),
             db,
             hooks: Vec::new(),
+            organization_fields: Default::default(),
             _schema: PhantomData,
         }
+    }
+}
+
+impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema> SeaOrmStore<S, O> {
+    /// Bind application-owned organization models while retaining core auth models and hooks.
+    pub fn with_organization_schema<T: crate::SeaOrmOrganizationSchema>(self) -> SeaOrmStore<S, T> {
+        SeaOrmStore {
+            config: self.config,
+            db: self.db,
+            hooks: self.hooks,
+            organization_fields: self.organization_fields,
+            _schema: PhantomData,
+        }
+    }
+
+    pub(crate) fn organization_fields(
+        &self,
+    ) -> AuthResult<better_auth_core::organization_fields::OrganizationFields> {
+        self.organization_fields
+            .read()
+            .map(|fields| fields.clone())
+            .map_err(|error| AuthError::internal(error.to_string()))
     }
 
     pub fn with_hooks(mut self, hooks: Vec<Arc<dyn SeaOrmHooks<S>>>) -> Self {
@@ -108,13 +149,13 @@ impl<S: AuthSchema> SeaOrmStore<S> {
     }
 }
 
-struct SeaOrmTransaction<'a, S: AuthSchema> {
-    store: &'a SeaOrmStore<S>,
+struct SeaOrmTransaction<'a, S: AuthSchema, O: crate::SeaOrmOrganizationSchema> {
+    store: &'a SeaOrmStore<S, O>,
     tx: &'a DatabaseTransaction,
 }
 
 #[async_trait]
-impl<S> AuthTransaction<S> for SeaOrmTransaction<'_, S>
+impl<S, O: crate::SeaOrmOrganizationSchema> AuthTransaction<S> for SeaOrmTransaction<'_, S, O>
 where
     S: AuthSchema,
     S::User: SeaOrmUserModel,
@@ -145,7 +186,7 @@ where
 }
 
 #[async_trait]
-impl<S> TransactionStore<S> for SeaOrmStore<S>
+impl<S, O: crate::SeaOrmOrganizationSchema> TransactionStore<S> for SeaOrmStore<S, O>
 where
     S: AuthSchema,
     S::User: SeaOrmUserModel,

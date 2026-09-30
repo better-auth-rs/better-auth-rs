@@ -12,11 +12,12 @@ fn to_rfc3339(value: DateTime<Utc>) -> String {
 impl From<&entities::organization::Model> for Organization {
     fn from(model: &entities::organization::Model) -> Self {
         Self {
+            additional_fields: Default::default(),
             id: model.id.clone(),
             name: model.name.clone(),
             slug: model.slug.clone(),
             logo: model.logo.clone(),
-            metadata: Some(model.metadata.clone()),
+            metadata: model.metadata.clone(),
             created_at: model.created_at,
             updated_at: model.updated_at,
         }
@@ -26,6 +27,7 @@ impl From<&entities::organization::Model> for Organization {
 impl From<&entities::member::Model> for Member {
     fn from(model: &entities::member::Model) -> Self {
         Self {
+            additional_fields: Default::default(),
             id: model.id.clone(),
             organization_id: model.organization_id.clone(),
             user_id: model.user_id.clone(),
@@ -38,6 +40,7 @@ impl From<&entities::member::Model> for Member {
 impl From<&entities::invitation::Model> for Invitation {
     fn from(model: &entities::invitation::Model) -> Self {
         Self {
+            additional_fields: Default::default(),
             id: model.id.clone(),
             organization_id: model.organization_id.clone(),
             email: model.email.clone(),

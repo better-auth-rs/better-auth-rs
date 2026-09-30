@@ -188,6 +188,8 @@ compatScenario("email OTP delivery failures retain the generic response and a la
   expect(failed.body).toEqual({ success: true });
   expect(await control(ctx, { email })).toEqual([]);
   await control(ctx, { action: "fail", fail: false });
+  // Upstream orders verification records by millisecond timestamps; the retry must be later.
+  await Bun.sleep(2);
   const otp = await send(ctx, email, "sign-in");
   const signedIn = await post(ctx, "/sign-in/email-otp", { email, otp });
   expect(signedIn.status).toBe(200);

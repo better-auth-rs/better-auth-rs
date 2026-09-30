@@ -1,8 +1,8 @@
-use axum::{routing::post, Json, Router};
+use axum::{Json, Router, routing::post};
 use better_auth::__private_core::store::VerificationStore;
 use better_auth::{
-    plugins::email_otp::{EmailOtpMessage, EmailOtpPlugin, EmailOtpStorage, SendEmailOtp},
     AuthError, AuthResult,
+    plugins::email_otp::{EmailOtpMessage, EmailOtpPlugin, EmailOtpStorage, SendEmailOtp},
 };
 use better_auth_seaorm::SeaOrmStore;
 use chrono::{Duration, Utc};

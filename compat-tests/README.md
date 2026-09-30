@@ -138,6 +138,12 @@ bash compat-tests/client-tests/run-against-both.sh all
 
 `organization-extended` enables teams and dynamic access control with the upstream default access-control statements. The scenarios verify team and role lifecycles, active team sessions, membership identity, duplicate membership, permission revocation, assigned-role deletion, and tenant isolation. `organization-limits` disables default teams, permits removing the last team, and verifies team, member, and role limits plus concurrent duplicate membership. `organization-no-ac` verifies the explicit missing-access-control configuration error. `organization-cache` verifies upstream cache write timing, fresh database session identities, and active-team selection with the session cookie cache enabled. Phase 6 retains the default organization configuration.
 
+`organization-invitation-options` and `organization-invitation-unverified` verify invitation replacement with a pending-invitation limit of one. Both profiles check resend identity, cancellation before validation, recipient authorization, pending-state errors, departed inviters, and the distinction between invitation lookup and acceptance. They enable and explicitly disable recipient email verification respectively. Listing invitations for a session email requires verification in both profiles.
+
+`organization-fields` uses application-owned tables for all six organization models. The scenarios compare additional fields on organizations, members, invitations, teams, and roles. They cover required and nullable input, protected and hidden fields, defaults, transforms, update callbacks, and custom table and column names. Role updates return the upstream request projection; later reads verify transformed storage separately.
+
+`organization-callbacks` compares lifecycle hook arguments, data overrides, dynamic limits, metadata, and server-only member creation. `organization-custom-team` verifies custom default-team creation. Failed invitation acceptance must preserve the upstream compensation updates without creating organization or team memberships.
+
 Run each profile with the existing dual-runtime harness:
 
 ```bash

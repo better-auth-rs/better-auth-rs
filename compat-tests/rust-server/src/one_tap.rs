@@ -1,6 +1,6 @@
-use axum::{routing::get, Json, Router};
+use axum::{Json, Router, routing::get};
 use better_auth::plugins::OneTapPlugin;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

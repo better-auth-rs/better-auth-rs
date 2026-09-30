@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, Select, Set,
+    ColumnTrait, DatabaseBackend, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, Select,
 };
 use uuid::Uuid;
 
@@ -12,180 +12,205 @@ use crate::error::AuthResult;
 use crate::schema::AuthSchema;
 use crate::types_org::{CreateMember, Member};
 
-use super::entities::member::{ActiveModel, Column, Entity};
+use super::organization_models::{self as models, Entity, values};
 use super::{SeaOrmStore, map_db_err};
+use crate::SeaOrmOrganizationModel;
+use serde_json::json;
 
-fn member_column(field: &str) -> Option<Column> {
-    match field {
-        "id" => Some(Column::Id),
-        "organizationId" => Some(Column::OrganizationId),
-        "userId" => Some(Column::UserId),
-        "role" => Some(Column::Role),
-        "createdAt" => Some(Column::CreatedAt),
-        _ => None,
-    }
+fn member_column<M: SeaOrmOrganizationModel>(
+    field: &str,
+    config: &better_auth_core::user_fields::UserConfig,
+) -> Option<M::Column> {
+    let name = match field {
+        "organizationId" => "organization_id",
+        "userId" => "user_id",
+        "createdAt" => "created_at",
+        other => other,
+    };
+    M::column(
+        config
+            .additional_fields
+            .get(field)
+            .and_then(|field| field.field_name.as_deref())
+            .unwrap_or(name),
+    )
+    .ok()
 }
 
-fn apply_member_filter(
-    mut query: Select<Entity>,
+fn apply_member_filter<M: SeaOrmOrganizationModel>(
+    mut query: Select<Entity<M>>,
     params: &ListOrganizationMembersParams,
-) -> AuthResult<Select<Entity>> {
-    let Some(field) = params.filter_field.as_deref() else {
+    config: &better_auth_core::user_fields::UserConfig,
+    backend: DatabaseBackend,
+) -> AuthResult<Select<Entity<M>>> {
+    let (Some(field), Some(value)) = (
+        params.filter_field.as_deref(),
+        params.filter_value.as_deref(),
+    ) else {
         return Ok(query);
     };
-    let Some(value) = params.filter_value.as_deref() else {
+    let Some(column) = member_column::<M>(field, config) else {
         return Ok(query);
     };
-    let operator = params.filter_operator.as_deref().unwrap_or("eq");
-
-    match member_column(field) {
-        Some(Column::CreatedAt) => {
-            let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(value) else {
-                return Ok(query.filter(Column::Id.eq("__better_auth_never_matches__")));
-            };
-            let parsed = parsed.with_timezone(&Utc);
-            query = match operator {
-                "eq" => query.filter(Column::CreatedAt.eq(parsed)),
-                "ne" => query.filter(Column::CreatedAt.ne(parsed)),
-                "gt" => query.filter(Column::CreatedAt.gt(parsed)),
-                "gte" => query.filter(Column::CreatedAt.gte(parsed)),
-                "lt" => query.filter(Column::CreatedAt.lt(parsed)),
-                "lte" => query.filter(Column::CreatedAt.lte(parsed)),
-                _ => query,
-            };
+    let raw_value = value;
+    let value = if field == "createdAt" {
+        let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(value) else {
+            return Ok(query.filter(M::column("id")?.eq("__better_auth_never_matches__")));
+        };
+        sea_orm::Value::ChronoDateTimeUtc(Some(parsed.with_timezone(&Utc)))
+    } else {
+        match config
+            .additional_fields
+            .get(field)
+            .map(|field| &field.field_type)
+        {
+            Some(better_auth_core::user_fields::UserFieldType::Boolean) => (value == "true").into(),
+            Some(better_auth_core::user_fields::UserFieldType::Number) => {
+                better_auth_core::organization_fields::numeric_filter(value)
+                    .map_or_else(|| value.into(), Into::into)
+            }
+            _ => value.into(),
         }
-        Some(column) => {
-            query = match operator {
-                "eq" => query.filter(column.eq(value)),
-                "ne" => query.filter(column.ne(value)),
-                "contains" => query.filter(column.contains(value)),
-                "gt" => query.filter(column.gt(value)),
-                "gte" => query.filter(column.gte(value)),
-                "lt" => query.filter(column.lt(value)),
-                "lte" => query.filter(column.lte(value)),
-                _ => query,
+    };
+    query = match params.filter_operator.as_deref().unwrap_or("eq") {
+        "eq" => query.filter(column.eq(value)),
+        "ne" => query.filter(column.ne(value)),
+        "gt" => query.filter(column.gt(value)),
+        "gte" => query.filter(column.gte(value)),
+        "lt" => query.filter(column.lt(value)),
+        "lte" => query.filter(column.lte(value)),
+        "contains" => {
+            let pattern = match value {
+                sea_orm::Value::Double(Some(value)) => value.to_string(),
+                sea_orm::Value::Bool(Some(value)) if backend != DatabaseBackend::Postgres => {
+                    u8::from(value).to_string()
+                }
+                sea_orm::Value::Bool(Some(value)) => value.to_string(),
+                _ => raw_value.to_owned(),
             };
+            query.filter(column.contains(pattern))
         }
-        None => {}
-    }
-
+        _ => query,
+    };
     Ok(query)
 }
 
-fn apply_member_sort(
-    query: Select<Entity>,
+fn apply_member_sort<M: SeaOrmOrganizationModel>(
+    query: Select<Entity<M>>,
     params: &ListOrganizationMembersParams,
-) -> Select<Entity> {
-    let Some(sort_by) = params.sort_by.as_deref() else {
-        return query.order_by_asc(Column::CreatedAt);
-    };
-    let descending = matches!(params.sort_direction.as_deref(), Some("desc"));
-
-    match member_column(sort_by) {
-        Some(column) if descending => query.order_by_desc(column),
-        Some(column) => query.order_by_asc(column),
-        None => query.order_by_asc(Column::CreatedAt),
-    }
+    config: &better_auth_core::user_fields::UserConfig,
+) -> AuthResult<Select<Entity<M>>> {
+    let column = params
+        .sort_by
+        .as_deref()
+        .and_then(|field| member_column::<M>(field, config))
+        .unwrap_or(M::column("created_at")?);
+    Ok(if params.sort_direction.as_deref() == Some("desc") {
+        query.order_by_desc(column)
+    } else {
+        query.order_by_asc(column)
+    })
 }
 
 #[async_trait]
-impl<S> MemberStore for SeaOrmStore<S>
+impl<S, O: crate::SeaOrmOrganizationSchema> MemberStore for SeaOrmStore<S, O>
 where
     S: AuthSchema + Send + Sync,
 {
     async fn create_member(&self, member: CreateMember) -> AuthResult<Member> {
-        ActiveModel {
-            id: Set(Uuid::new_v4().to_string()),
-            organization_id: Set(member.organization_id),
-            user_id: Set(member.user_id),
-            role: Set(member.role),
-            created_at: Set(Utc::now()),
-        }
-        .insert(self.connection())
+        models::insert::<O::Member, _>(
+            self.connection(),
+            values([
+                ("id", json!(Uuid::new_v4().to_string())),
+                ("organization_id", json!(member.organization_id)),
+                ("user_id", json!(member.user_id)),
+                ("role", json!(member.role)),
+                ("created_at", json!(Utc::now())),
+            ]),
+            member.additional_fields,
+            &self.organization_fields()?.member,
+        )
         .await
-        .map(|model| Member::from(&model))
-        .map_err(map_db_err)
     }
 
     async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>> {
-        Entity::find()
-            .filter(Column::OrganizationId.eq(organization_id))
-            .filter(Column::UserId.eq(user_id))
-            .one(self.connection())
-            .await
-            .map(|model| model.map(|model| Member::from(&model)))
-            .map_err(map_db_err)
-    }
-
-    async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
-        Entity::find_by_id(id.to_owned())
-            .one(self.connection())
-            .await
-            .map(|model| model.map(|model| Member::from(&model)))
-            .map_err(map_db_err)
-    }
-
-    async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member> {
-        let Some(model) = Entity::find_by_id(member_id.to_owned())
+        Entity::<O::Member>::find()
+            .filter(O::Member::column("organization_id")?.eq(organization_id))
+            .filter(O::Member::column("user_id")?.eq(user_id))
             .one(self.connection())
             .await
             .map_err(map_db_err)?
-        else {
-            return Err(crate::error::AuthError::not_found("Member not found"));
-        };
+            .map(|row| row.record(&self.organization_fields()?.member))
+            .transpose()
+    }
 
-        let mut active = model.into_active_model();
-        active.role = Set(role.to_owned());
-        active
-            .update(self.connection())
+    async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
+        Entity::<O::Member>::find()
+            .filter(O::Member::column("id")?.eq(id))
+            .one(self.connection())
             .await
-            .map(|model| Member::from(&model))
-            .map_err(map_db_err)
+            .map_err(map_db_err)?
+            .map(|row| row.record(&self.organization_fields()?.member))
+            .transpose()
+    }
+
+    async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member> {
+        models::update::<O::Member, _>(
+            self.connection(),
+            member_id,
+            values([("role", json!(role))]),
+            Default::default(),
+            &self.organization_fields()?.member,
+        )
+        .await
     }
 
     async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
-        use super::entities::{team, team_member};
         use sea_orm::{TransactionTrait, sea_query::Expr};
         let tx = self.connection().begin().await.map_err(map_db_err)?;
-        if let Some(member) = Entity::find_by_id(member_id)
+        if let Some(member) = Entity::<O::Member>::find()
+            .filter(O::Member::column("id")?.eq(member_id))
             .one(&tx)
             .await
             .map_err(map_db_err)?
         {
-            let teams = team::Entity::find()
-                .filter(team::Column::OrganizationId.eq(member.organization_id))
+            let member = member.record(&self.organization_fields()?.member)?;
+            let teams = Entity::<O::Team>::find()
+                .filter(O::Team::column("organization_id")?.eq(member.organization_id))
                 .all(&tx)
                 .await
                 .map_err(map_db_err)?;
             for team in teams {
-                let _ = team::Entity::update_many()
+                let team = team.record(&self.organization_fields()?.team)?;
+                let _ = Entity::<O::Team>::update_many()
                     .col_expr(
-                        team::Column::MemberCount,
-                        Expr::col(team::Column::MemberCount),
+                        O::Team::column("member_count")?,
+                        Expr::col(O::Team::column("member_count")?),
                     )
-                    .filter(team::Column::Id.eq(&team.id))
+                    .filter(O::Team::column("id")?.eq(&team.id))
                     .exec(&tx)
                     .await
                     .map_err(map_db_err)?;
-                let _ = team_member::Entity::delete_many()
-                    .filter(team_member::Column::TeamId.eq(&team.id))
-                    .filter(team_member::Column::UserId.eq(&member.user_id))
+                let _ = Entity::<O::TeamMember>::delete_many()
+                    .filter(O::TeamMember::column("team_id")?.eq(&team.id))
+                    .filter(O::TeamMember::column("user_id")?.eq(&member.user_id))
                     .exec(&tx)
                     .await
                     .map_err(map_db_err)?;
-                let count = team_member::Entity::find()
-                    .filter(team_member::Column::TeamId.eq(&team.id))
+                let count = Entity::<O::TeamMember>::find()
+                    .filter(O::TeamMember::column("team_id")?.eq(&team.id))
                     .count(&tx)
                     .await
                     .map_err(map_db_err)?;
-                let _ = team::Entity::update_many()
-                    .col_expr(team::Column::MemberCount, Expr::value(count as i64))
-                    .filter(team::Column::Id.eq(team.id))
+                let _ = Entity::<O::Team>::update_many()
+                    .col_expr(O::Team::column("member_count")?, Expr::value(count as i64))
+                    .filter(O::Team::column("id")?.eq(team.id))
                     .exec(&tx)
                     .await
                     .map_err(map_db_err)?;
             }
-            let _ = Entity::delete_by_id(member_id)
+            let _ = Entity::<O::Member>::delete_many()
+                .filter(O::Member::column("id")?.eq(member_id))
                 .exec(&tx)
                 .await
                 .map_err(map_db_err)?;
@@ -194,28 +219,40 @@ where
     }
 
     async fn list_organization_members(&self, organization_id: &str) -> AuthResult<Vec<Member>> {
-        Entity::find()
-            .filter(Column::OrganizationId.eq(organization_id))
-            .order_by_asc(Column::CreatedAt)
+        Entity::<O::Member>::find()
+            .filter(O::Member::column("organization_id")?.eq(organization_id))
+            .order_by_asc(O::Member::column("created_at")?)
             .all(self.connection())
             .await
-            .map(|models| models.iter().map(Member::from).collect())
             .map_err(map_db_err)
+            .and_then(|rows| {
+                models::project::<O::Member>(rows, &self.organization_fields()?.member)
+            })
     }
 
     async fn query_organization_members(
         &self,
         params: &ListOrganizationMembersParams,
     ) -> AuthResult<(Vec<Member>, usize)> {
-        let base_query = Entity::find().filter(Column::OrganizationId.eq(&params.organization_id));
-        let filtered_query = apply_member_filter(base_query, params)?;
+        let base_query = Entity::<O::Member>::find()
+            .filter(O::Member::column("organization_id")?.eq(&params.organization_id));
+        let filtered_query = apply_member_filter::<O::Member>(
+            base_query,
+            params,
+            &self.organization_fields()?.member,
+            self.connection().get_database_backend(),
+        )?;
         let total = filtered_query
             .clone()
             .count(self.connection())
             .await
             .map_err(map_db_err)? as usize;
 
-        let mut query = apply_member_sort(filtered_query, params);
+        let mut query = apply_member_sort::<O::Member>(
+            filtered_query,
+            params,
+            &self.organization_fields()?.member,
+        )?;
         if let Some(offset) = params.offset {
             query = query.offset(offset as u64);
         }
@@ -226,13 +263,18 @@ where
         query
             .all(self.connection())
             .await
-            .map(|models| (models.iter().map(Member::from).collect(), total))
             .map_err(map_db_err)
+            .and_then(|rows| {
+                Ok((
+                    models::project::<O::Member>(rows, &self.organization_fields()?.member)?,
+                    total,
+                ))
+            })
     }
 
     async fn count_organization_members(&self, organization_id: &str) -> AuthResult<i64> {
-        Entity::find()
-            .filter(Column::OrganizationId.eq(organization_id))
+        Entity::<O::Member>::find()
+            .filter(O::Member::column("organization_id")?.eq(organization_id))
             .count(self.connection())
             .await
             .map(|count| count as i64)
@@ -240,9 +282,9 @@ where
     }
 
     async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<i64> {
-        Entity::find()
-            .filter(Column::OrganizationId.eq(organization_id))
-            .filter(Column::Role.eq("owner"))
+        Entity::<O::Member>::find()
+            .filter(O::Member::column("organization_id")?.eq(organization_id))
+            .filter(O::Member::column("role")?.eq("owner"))
             .count(self.connection())
             .await
             .map(|count| count as i64)
@@ -285,6 +327,7 @@ mod tests {
         let org_id = "org-1".to_string();
         let _organization = store
             .create_organization(CreateOrganization {
+                additional_fields: Default::default(),
                 id: Some(org_id.clone()),
                 name: "Org".to_string(),
                 slug: "org".to_string(),

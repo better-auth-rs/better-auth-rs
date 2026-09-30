@@ -6,13 +6,13 @@ use better_auth_core::types::{AuthRequest, AuthResponse};
 use std::collections::HashMap;
 
 use super::{require_session, resolve_organization_id};
-use crate::plugins::organization::OrganizationConfig;
 use crate::plugins::organization::rbac::check_permission;
 use crate::plugins::organization::types::{
     BasicMemberResponse, GetActiveMemberRoleQuery, GetActiveMemberRoleResponse, ListMembersQuery,
-    ListMembersResponse, MemberResponse, RemoveMemberRequest, RemovedMemberResponse,
+    ListMembersResponse, MemberResponse, RemoveMemberRequest, RemovedMember, RemovedMemberResponse,
     UpdateMemberRoleRequest,
 };
+use crate::plugins::organization::{OrganizationConfig, hooks::*};
 
 fn has_role(member: &impl AuthMember, role: &str) -> bool {
     member
@@ -168,42 +168,19 @@ pub(crate) async fn remove_member_core(
             .await?
             .ok_or_else(|| AuthError::bad_request("Member not found"))?
     } else {
-        let target_member = ctx
-            .database
+        ctx.database
             .get_member_by_id(&body.member_id_or_email)
             .await?
-            .ok_or_else(|| AuthError::bad_request("Member not found"))?;
-        if target_member.organization_id() != org_id {
-            return Err(AuthError::bad_request("Member not found"));
-        }
-        target_member
+            .ok_or_else(|| AuthError::bad_request("Member not found"))?
     };
-
-    let target_user = ctx
-        .database
-        .get_user_by_id(&target_member.user_id())
-        .await?
-        .ok_or_else(|| AuthError::bad_request("User not found"))?;
-
     let is_self_removal = target_member.user_id() == user.id();
 
-    if !is_self_removal
-        && !check_permission(
-            requester_member.role(),
-            &org_id,
-            "member",
-            &["delete"],
-            config,
-            ctx,
-        )
-        .await?
-    {
-        return Err(AuthError::forbidden(
-            "You don't have permission to remove members",
-        ));
-    }
-
     if has_role(&target_member, &config.creator_role) {
+        if !has_role(&requester_member, &config.creator_role) {
+            return Err(AuthError::bad_request(
+                "You cannot leave the organization as the only owner",
+            ));
+        }
         let all_members = ctx.database.list_organization_members(&org_id).await?;
         let owner_count = all_members
             .iter()
@@ -217,8 +194,57 @@ pub(crate) async fn remove_member_core(
         }
     }
 
+    if !check_permission(
+        requester_member.role(),
+        &org_id,
+        "member",
+        &["delete"],
+        config,
+        ctx,
+    )
+    .await?
+    {
+        return Err(AuthError::Upstream {
+            status: 401,
+            code: "YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER",
+            message: "You are not allowed to delete this member",
+        });
+    }
+    if target_member.organization_id != org_id {
+        return Err(AuthError::bad_request("Member not found"));
+    }
+    let organization = ctx
+        .database
+        .get_organization_by_id(&org_id)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
+    let target_user = ctx
+        .database
+        .get_user_by_id(&target_member.user_id)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("User not found"))?;
+    let user_view = better_auth_core::wire::UserView::with_internal_fields(
+        &target_user,
+        &ctx.config.user,
+        &ctx.metadata,
+    )?;
+    let event = OrganizationMemberEvent {
+        member: &target_member,
+        user: &user_view,
+        organization: &organization_view,
+    };
+    if let Some(hooks) = &config.hooks {
+        hooks.before_remove_member(event).await?;
+    }
     let response = RemovedMemberResponse {
-        member: MemberResponse::from_member_and_user(&target_member, &target_user),
+        member: RemovedMember {
+            member: BasicMemberResponse::from_member(&target_member),
+            user: body
+                .member_id_or_email
+                .contains('@')
+                .then(|| better_auth_core::entity::MemberUserView::from_user(&target_user)),
+        },
     };
 
     ctx.database.delete_member(&target_member.id()).await?;
@@ -230,6 +256,9 @@ pub(crate) async fn remove_member_core(
             .await?;
     }
 
+    if let Some(hooks) = &config.hooks {
+        hooks.after_remove_member(event).await?;
+    }
     Ok(response)
 }
 
@@ -327,11 +356,54 @@ pub(crate) async fn update_member_role_core(
         )));
     }
 
+    let organization = ctx
+        .database
+        .get_organization_by_id(&org_id)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
+    let target_user = ctx
+        .database
+        .get_user_by_id(&target_member.user_id)
+        .await?
+        .ok_or_else(|| AuthError::bad_request("User not found"))?;
+    let user_view = better_auth_core::wire::UserView::with_internal_fields(
+        &target_user,
+        &ctx.config.user,
+        &ctx.metadata,
+    )?;
+    let event = OrganizationMemberEvent {
+        member: &target_member,
+        user: &user_view,
+        organization: &organization_view,
+    };
+    let mut overridden_role = new_role.clone();
+    if let Some(hooks) = &config.hooks {
+        hooks
+            .before_update_member_role(&mut overridden_role, event)
+            .await?;
+    }
+    let new_role = if overridden_role.is_empty() {
+        new_role
+    } else {
+        overridden_role
+    };
     let updated = ctx
         .database
         .update_member_role(&body.member_id, &new_role)
         .await?;
 
+    if let Some(hooks) = &config.hooks {
+        hooks
+            .after_update_member_role(
+                &target_member.role,
+                OrganizationMemberEvent {
+                    member: &updated,
+                    ..event
+                },
+            )
+            .await?;
+    }
     Ok(BasicMemberResponse::from_member(&updated))
 }
 

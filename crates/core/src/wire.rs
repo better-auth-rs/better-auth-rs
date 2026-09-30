@@ -473,6 +473,9 @@ where
 /// Public organization response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct OrganizationView {
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+
     pub id: String,
     pub name: String,
     pub slug: String,
@@ -493,6 +496,7 @@ pub struct OrganizationView {
 impl<T: AuthOrganization> From<&T> for OrganizationView {
     fn from(org: &T) -> Self {
         Self {
+            additional_fields: org.projected_fields().cloned().unwrap_or_default(),
             id: org.id().into_owned(),
             name: org.name().to_owned(),
             slug: org.slug().to_owned(),
@@ -507,6 +511,9 @@ impl<T: AuthOrganization> From<&T> for OrganizationView {
 /// Public invitation response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct InvitationView {
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+
     #[serde(rename = "teamId", default, skip_serializing_if = "Option::is_none")]
     pub team_id: Option<String>,
     pub id: String,
@@ -528,6 +535,7 @@ pub struct InvitationView {
 impl<T: AuthInvitation> From<&T> for InvitationView {
     fn from(inv: &T) -> Self {
         Self {
+            additional_fields: inv.projected_fields().cloned().unwrap_or_default(),
             id: inv.id().into_owned(),
             organization_id: inv.organization_id().into_owned(),
             email: inv.email().to_owned(),

@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Team {
+    /// Application fields projected by the configured team schema.
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub id: String,
     pub name: String,
     pub organization_id: String,
@@ -16,11 +19,26 @@ pub struct Team {
 }
 
 /// Data required to create a team.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CreateTeam {
+    pub id: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
+    /// Validated application input before adapter transforms.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub updated_at: Option<DateTime<Utc>>,
     pub name: String,
     pub organization_id: String,
+}
+
+/// Mutable team fields. Team IDs cannot be changed.
+#[derive(Debug, Clone, Default)]
+pub struct UpdateTeam {
+    pub name: Option<String>,
+    pub organization_id: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<Option<DateTime<Utc>>>,
+    /// Application fields to update.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
 /// A user's membership in a team.
@@ -38,6 +56,9 @@ pub struct TeamMember {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OrganizationRole {
+    /// Application fields projected by the configured role schema.
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub id: String,
     pub organization_id: String,
     pub role: String,
@@ -51,6 +72,8 @@ pub struct OrganizationRole {
 /// Data required to create a dynamic role.
 #[derive(Debug, Clone)]
 pub struct CreateOrganizationRole {
+    /// Validated application input before adapter transforms.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub organization_id: String,
     pub role: String,
     pub permission: serde_json::Value,
@@ -59,6 +82,8 @@ pub struct CreateOrganizationRole {
 /// Mutable dynamic-role fields.
 #[derive(Debug, Clone, Default)]
 pub struct UpdateOrganizationRole {
+    /// Application fields to update.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub role: Option<String>,
     pub permission: Option<serde_json::Value>,
 }

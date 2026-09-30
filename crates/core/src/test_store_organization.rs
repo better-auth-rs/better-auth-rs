@@ -1,6 +1,37 @@
 use super::*;
+
+fn compare_member_values(
+    left: &serde_json::Value,
+    right: &serde_json::Value,
+) -> std::cmp::Ordering {
+    use serde_json::Value;
+    match (left, right) {
+        (Value::Null, Value::Null) => std::cmp::Ordering::Equal,
+        (Value::Null, _) => std::cmp::Ordering::Less,
+        (_, Value::Null) => std::cmp::Ordering::Greater,
+        (Value::Number(left), Value::Number(right)) => left
+            .as_f64()
+            .partial_cmp(&right.as_f64())
+            .unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Bool(left), Value::Bool(right)) => left.cmp(right),
+        (Value::String(left), Value::String(right)) => left.cmp(right),
+        _ => left.to_string().cmp(&right.to_string()),
+    }
+}
+
 #[async_trait]
 impl OrganizationStore for MemoryStore {
+    fn configure_organization_fields(
+        &self,
+        fields: crate::organization_fields::OrganizationFields,
+    ) -> AuthResult<()> {
+        fields.validate()?;
+        *self
+            .organization_fields
+            .write()
+            .unwrap_or_else(|error| error.into_inner()) = fields;
+        Ok(())
+    }
     async fn create_organization(&self, input: CreateOrganization) -> AuthResult<Organization> {
         let mut state = self.lock();
         if state
@@ -11,6 +42,10 @@ impl OrganizationStore for MemoryStore {
             return Err(AuthError::bad_request("Organization already exists"));
         }
         let org = Organization {
+            additional_fields: Self::create_fields(
+                &self.organization_fields().organization,
+                input.additional_fields,
+            )?,
             id: input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             name: input.name,
             slug: input.slug,
@@ -20,38 +55,49 @@ impl OrganizationStore for MemoryStore {
             updated_at: Utc::now(),
         };
         state.organizations.insert(org.id.clone(), org.clone());
-        Ok(org)
+        self.output_organization(org)
     }
     async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>> {
-        Ok(self.lock().organizations.get(id).cloned())
+        self.lock()
+            .organizations
+            .get(id)
+            .cloned()
+            .map(|value| self.output_organization(value))
+            .transpose()
     }
     async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>> {
-        Ok(self
-            .lock()
+        self.lock()
             .organizations
             .values()
             .find(|org| org.slug == slug)
-            .cloned())
+            .cloned()
+            .map(|value| self.output_organization(value))
+            .transpose()
     }
     async fn list_organizations_by_ids(&self, ids: &[String]) -> AuthResult<Vec<Organization>> {
-        Ok(self
-            .lock()
+        self.lock()
             .organizations
             .values()
             .filter(|org| ids.contains(&org.id))
             .cloned()
-            .collect())
+            .map(|value| self.output_organization(value))
+            .collect()
     }
     async fn update_organization(
         &self,
         id: &str,
         update: UpdateOrganization,
     ) -> AuthResult<Organization> {
+        let fields = self
+            .organization_fields()
+            .organization
+            .storage_fields(update.additional_fields, false)?;
         let mut state = self.lock();
         let org = state
             .organizations
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Organization not found"))?;
+        org.additional_fields.extend(fields);
         if let Some(name) = update.name {
             org.name = name;
         }
@@ -59,13 +105,24 @@ impl OrganizationStore for MemoryStore {
             org.slug = slug;
         }
         if let Some(logo) = update.logo {
-            org.logo = Some(logo);
+            org.logo = logo;
         }
         if let Some(metadata) = update.metadata {
             org.metadata = Some(metadata);
         }
+        if let Some(created_at) = update.created_at {
+            org.created_at = created_at;
+        }
+        if let Some(new_id) = update.id {
+            org.id = new_id;
+        }
         org.updated_at = Utc::now();
-        Ok(org.clone())
+        let result = org.clone();
+        state.organizations.remove(id);
+        state
+            .organizations
+            .insert(result.id.clone(), result.clone());
+        self.output_organization(result)
     }
     async fn delete_organization(&self, id: &str) -> AuthResult<()> {
         let mut state = self.lock();
@@ -93,12 +150,13 @@ impl OrganizationStore for MemoryStore {
     }
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
         let state = self.lock();
-        Ok(state
+        state
             .members
             .values()
             .filter(|member| member.user_id == user_id)
             .filter_map(|member| state.organizations.get(&member.organization_id).cloned())
-            .collect())
+            .map(|value| self.output_organization(value))
+            .collect()
     }
 }
 #[async_trait]
@@ -111,6 +169,10 @@ impl MemberStore for MemoryStore {
             return Err(AuthError::bad_request("User is already a member"));
         }
         let member = Member {
+            additional_fields: Self::create_fields(
+                &self.organization_fields().member,
+                input.additional_fields,
+            )?,
             id: uuid::Uuid::new_v4().to_string(),
             organization_id: input.organization_id,
             user_id: input.user_id,
@@ -118,27 +180,38 @@ impl MemberStore for MemoryStore {
             created_at: Utc::now(),
         };
         state.members.insert(member.id.clone(), member.clone());
-        Ok(member)
+        self.output_member(member)
     }
     async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>> {
-        Ok(self
-            .lock()
+        self.lock()
             .members
             .values()
             .find(|member| member.organization_id == organization_id && member.user_id == user_id)
-            .cloned())
+            .cloned()
+            .map(|value| self.output_member(value))
+            .transpose()
     }
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
-        Ok(self.lock().members.get(id).cloned())
+        self.lock()
+            .members
+            .get(id)
+            .cloned()
+            .map(|value| self.output_member(value))
+            .transpose()
     }
     async fn update_member_role(&self, id: &str, role: &str) -> AuthResult<Member> {
+        let fields = self
+            .organization_fields()
+            .member
+            .storage_fields(Default::default(), false)?;
         let mut state = self.lock();
         let member = state
             .members
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Member not found"))?;
+        member.additional_fields.extend(fields);
         member.role = role.to_owned();
-        Ok(member.clone())
+        self.output_member(member.clone())
     }
     async fn delete_member(&self, id: &str) -> AuthResult<()> {
         let mut state = self.lock();
@@ -156,29 +229,42 @@ impl MemberStore for MemoryStore {
         Ok(())
     }
     async fn list_organization_members(&self, org: &str) -> AuthResult<Vec<Member>> {
-        Ok(self
-            .lock()
+        self.lock()
             .members
             .values()
             .filter(|member| member.organization_id == org)
             .cloned()
-            .collect())
+            .map(|value| self.output_member(value))
+            .collect()
     }
     async fn query_organization_members(
         &self,
         params: &ListOrganizationMembersParams,
     ) -> AuthResult<(Vec<Member>, usize)> {
-        let mut members = self
-            .list_organization_members(&params.organization_id)
-            .await?;
-        let value = |member: &Member, field: &str| -> Option<String> {
+        use crate::user_fields::UserFieldType;
+        use serde_json::Value;
+        let schema = self.organization_fields().member;
+        let mut members: Vec<_> = self
+            .lock()
+            .members
+            .values()
+            .filter(|member| member.organization_id == params.organization_id)
+            .cloned()
+            .collect();
+        let value = |member: &Member, field: &str| -> Option<Value> {
             match field {
-                "id" => Some(member.id.clone()),
-                "organizationId" => Some(member.organization_id.clone()),
-                "userId" => Some(member.user_id.clone()),
-                "role" => Some(member.role.clone()),
-                "createdAt" => Some(member.created_at.to_rfc3339()),
-                _ => None,
+                "id" => Some(Value::String(member.id.clone())),
+                "organizationId" => Some(Value::String(member.organization_id.clone())),
+                "userId" => Some(Value::String(member.user_id.clone())),
+                "role" => Some(Value::String(member.role.clone())),
+                "createdAt" => Some(Value::String(member.created_at.to_rfc3339())),
+                _ => schema.additional_fields.get(field).map(|config| {
+                    member
+                        .additional_fields
+                        .get(config.field_name.as_deref().unwrap_or(field))
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                }),
             }
         };
         if let (Some(field), Some(expected)) = (&params.filter_field, &params.filter_value) {
@@ -186,6 +272,9 @@ impl MemberStore for MemoryStore {
                 let Some(actual) = value(member, field) else {
                     return true;
                 };
+                if actual.is_null() {
+                    return false;
+                }
                 let expected = if field == "createdAt" {
                     match chrono::DateTime::parse_from_rfc3339(expected) {
                         Ok(date) => date.with_timezone(&Utc).to_rfc3339(),
@@ -194,20 +283,56 @@ impl MemberStore for MemoryStore {
                 } else {
                     expected.clone()
                 };
+                let field_type = schema
+                    .additional_fields
+                    .get(field)
+                    .map(|field| &field.field_type);
+                let number = matches!(field_type, Some(UserFieldType::Number))
+                    .then(|| crate::organization_fields::numeric_filter(&expected))
+                    .flatten();
+                let ordering = if let Some(number) = number
+                    && let Some(actual) = actual.as_f64()
+                {
+                    actual
+                        .partial_cmp(&number)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                } else {
+                    let expected = if matches!(field_type, Some(UserFieldType::Boolean)) {
+                        Value::Bool(expected == "true")
+                    } else {
+                        Value::String(expected.clone())
+                    };
+                    compare_member_values(&actual, &expected)
+                };
                 match params.filter_operator.as_deref().unwrap_or("eq") {
-                    "eq" => actual == expected,
-                    "ne" => actual != expected,
-                    "contains" => actual.contains(&expected),
-                    "gt" => actual > expected,
-                    "gte" => actual >= expected,
-                    "lt" => actual < expected,
-                    "lte" => actual <= expected,
+                    "eq" => ordering.is_eq(),
+                    "ne" => !ordering.is_eq(),
+                    "contains" => {
+                        let expected = if matches!(field_type, Some(UserFieldType::Boolean)) {
+                            (expected == "true").to_string()
+                        } else {
+                            number.map_or(expected, |number| number.to_string())
+                        };
+                        actual
+                            .as_str()
+                            .map_or_else(|| actual.to_string(), str::to_owned)
+                            .contains(&expected)
+                    }
+                    "gt" => ordering.is_gt(),
+                    "gte" => !ordering.is_lt(),
+                    "lt" => ordering.is_lt(),
+                    "lte" => !ordering.is_gt(),
                     _ => true,
                 }
             });
         }
         let field = params.sort_by.as_deref().unwrap_or("createdAt");
-        members.sort_by_key(|member| value(member, field));
+        members.sort_by(|left, right| {
+            compare_member_values(
+                &value(left, field).unwrap_or(Value::Null),
+                &value(right, field).unwrap_or(Value::Null),
+            )
+        });
         if params.sort_direction.as_deref() == Some("desc") {
             members.reverse();
         }
@@ -217,7 +342,8 @@ impl MemberStore for MemoryStore {
                 .into_iter()
                 .skip(params.offset.unwrap_or(0))
                 .take(params.limit.unwrap_or(usize::MAX))
-                .collect(),
+                .map(|member| self.output_member(member))
+                .collect::<AuthResult<Vec<_>>>()?,
             total,
         ))
     }
@@ -244,31 +370,39 @@ impl MemberStore for MemoryStore {
 impl InvitationStore for MemoryStore {
     async fn create_invitation(&self, input: CreateInvitation) -> AuthResult<Invitation> {
         let invitation = Invitation {
-            id: uuid::Uuid::new_v4().to_string(),
+            additional_fields: Self::create_fields(
+                &self.organization_fields().invitation,
+                input.additional_fields,
+            )?,
+            id: input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             organization_id: input.organization_id,
             email: input.email,
             role: input.role,
-            status: InvitationStatus::Pending,
+            status: input.status.unwrap_or_default(),
             inviter_id: input.inviter_id,
             team_id: input.team_id,
             expires_at: input.expires_at,
-            created_at: Utc::now(),
+            created_at: input.created_at.unwrap_or_else(Utc::now),
         };
         self.lock()
             .invitations
             .insert(invitation.id.clone(), invitation.clone());
-        Ok(invitation)
+        self.output_invitation(invitation)
     }
     async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
-        Ok(self.lock().invitations.get(id).cloned())
+        self.lock()
+            .invitations
+            .get(id)
+            .cloned()
+            .map(|value| self.output_invitation(value))
+            .transpose()
     }
     async fn get_pending_invitation(
         &self,
         org: &str,
         email: &str,
     ) -> AuthResult<Option<Invitation>> {
-        Ok(self
-            .lock()
+        self.lock()
             .invitations
             .values()
             .find(|invitation| {
@@ -277,42 +411,54 @@ impl InvitationStore for MemoryStore {
                     && invitation.is_pending()
                     && !invitation.is_expired()
             })
-            .cloned())
+            .cloned()
+            .map(|value| self.output_invitation(value))
+            .transpose()
     }
     async fn update_invitation_status(
         &self,
         id: &str,
         status: InvitationStatus,
     ) -> AuthResult<Invitation> {
+        let fields = self
+            .organization_fields()
+            .invitation
+            .storage_fields(Default::default(), false)?;
         let mut state = self.lock();
         let invitation = state
             .invitations
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Invitation not found"))?;
+        invitation.additional_fields.extend(fields);
         invitation.status = status;
-        Ok(invitation.clone())
+        self.output_invitation(invitation.clone())
     }
     async fn update_invitation_expiry(
         &self,
         id: &str,
         expires_at: DateTime<Utc>,
     ) -> AuthResult<Invitation> {
+        let fields = self
+            .organization_fields()
+            .invitation
+            .storage_fields(Default::default(), false)?;
         let mut state = self.lock();
         let invitation = state
             .invitations
             .get_mut(id)
             .ok_or_else(|| AuthError::not_found("Invitation not found"))?;
+        invitation.additional_fields.extend(fields);
         invitation.expires_at = expires_at;
-        Ok(invitation.clone())
+        self.output_invitation(invitation.clone())
     }
     async fn list_organization_invitations(&self, org: &str) -> AuthResult<Vec<Invitation>> {
-        Ok(self
-            .lock()
+        self.lock()
             .invitations
             .values()
             .filter(|invitation| invitation.organization_id == org)
             .cloned()
-            .collect())
+            .map(|value| self.output_invitation(value))
+            .collect()
     }
     async fn count_pending_organization_invitations(&self, org: &str) -> AuthResult<i64> {
         Ok(self
@@ -327,8 +473,7 @@ impl InvitationStore for MemoryStore {
             .count() as i64)
     }
     async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>> {
-        Ok(self
-            .lock()
+        self.lock()
             .invitations
             .values()
             .filter(|invitation| {
@@ -337,6 +482,116 @@ impl InvitationStore for MemoryStore {
                     && !invitation.is_expired()
             })
             .cloned()
-            .collect())
+            .map(|value| self.output_invitation(value))
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod query_tests {
+    use super::*;
+    use crate::organization_fields::OrganizationFields;
+    use crate::user_fields::{UserFieldConfig, UserFieldType};
+    use serde_json::{Value, json};
+
+    #[tokio::test]
+    async fn member_queries_use_typed_storage_before_output_transforms() -> AuthResult<()> {
+        let store = MemoryStore::default();
+        let mut fields = OrganizationFields::default();
+        fields.member.additional_fields = [
+            (
+                "label".into(),
+                UserFieldConfig {
+                    field_name: Some("stored_label".into()),
+                    input_transform: Some(Arc::new(|value| {
+                        Ok(value.map(|value| {
+                            json!(format!("{}:in", value.as_str().unwrap_or_default()))
+                        }))
+                    })),
+                    output_transform: Some(Arc::new(|value| {
+                        Ok(value.map(|value| {
+                            json!(format!("{}:out", value.as_str().unwrap_or_default()))
+                        }))
+                    })),
+                    ..Default::default()
+                },
+            ),
+            (
+                "score".into(),
+                UserFieldConfig {
+                    field_type: UserFieldType::Number,
+                    ..Default::default()
+                },
+            ),
+            (
+                "enabled".into(),
+                UserFieldConfig {
+                    field_type: UserFieldType::Boolean,
+                    ..Default::default()
+                },
+            ),
+        ]
+        .into_iter()
+        .collect();
+        store.configure_organization_fields(fields)?;
+        for (user, score, enabled) in [("first", 2, false), ("second", 10, true)] {
+            let mut member = CreateMember::new("organization", user, "member");
+            member.additional_fields = [
+                ("label".into(), json!(user)),
+                ("score".into(), json!(score)),
+                ("enabled".into(), json!(enabled)),
+            ]
+            .into_iter()
+            .collect();
+            let _ = store.create_member(member).await?;
+        }
+        let mut params = ListOrganizationMembersParams {
+            organization_id: "organization".into(),
+            filter_field: Some("label".into()),
+            filter_value: Some("first:in".into()),
+            ..Default::default()
+        };
+        let (members, total) = store.query_organization_members(&params).await?;
+        assert_eq!(total, 1);
+        assert_eq!(members[0].user_id, "first");
+        assert_eq!(
+            members[0].additional_fields["label"],
+            Value::String("first:in:out".into())
+        );
+        params.filter_value = Some("first".into());
+        assert_eq!(store.query_organization_members(&params).await?.1, 0);
+        params.filter_field = Some("score".into());
+        params.filter_value = Some(" 0x2 ".into());
+        params.filter_operator = Some("gt".into());
+        let (members, total) = store.query_organization_members(&params).await?;
+        assert_eq!(total, 1);
+        assert_eq!(members[0].user_id, "second");
+        params.filter_operator = Some("contains".into());
+        for filter in ["0xa", "1e1"] {
+            params.filter_value = Some(filter.into());
+            let (members, total) = store.query_organization_members(&params).await?;
+            assert_eq!(total, 1);
+            assert_eq!(members[0].user_id, "second");
+        }
+        params.filter_field = Some("enabled".into());
+        params.filter_value = Some("false".into());
+        params.filter_operator = Some("eq".into());
+        let (members, total) = store.query_organization_members(&params).await?;
+        assert_eq!(total, 1);
+        assert_eq!(members[0].user_id, "first");
+        params.filter_operator = Some("contains".into());
+        params.filter_value = Some("not-true".into());
+        let (members, total) = store.query_organization_members(&params).await?;
+        assert_eq!(total, 1);
+        assert_eq!(members[0].user_id, "first");
+        params.filter_field = None;
+        params.filter_value = None;
+        params.sort_by = Some("score".into());
+        params.sort_direction = Some("desc".into());
+        params.limit = Some(1);
+        let (members, total) = store.query_organization_members(&params).await?;
+        assert_eq!(total, 2);
+        assert_eq!(members[0].user_id, "second");
+        Ok(())
     }
 }

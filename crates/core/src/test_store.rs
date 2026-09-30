@@ -78,6 +78,7 @@ impl crate::store::JwksStore for MemoryStore {
 #[derive(Default)]
 pub(crate) struct MemoryStore {
     state: Mutex<State>,
+    organization_fields: std::sync::RwLock<crate::organization_fields::OrganizationFields>,
 }
 
 impl MemoryStore {
@@ -87,6 +88,65 @@ impl MemoryStore {
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
         self.state.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
+
+impl MemoryStore {
+    fn organization_fields(&self) -> crate::organization_fields::OrganizationFields {
+        self.organization_fields
+            .read()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone()
+    }
+    fn create_fields(
+        schema: &crate::user_fields::UserConfig,
+        input: serde_json::Map<String, serde_json::Value>,
+    ) -> AuthResult<serde_json::Map<String, serde_json::Value>> {
+        let mut stored = schema.storage_fields(input, true)?;
+        for (name, field) in &schema.additional_fields {
+            stored
+                .entry(field.field_name.as_ref().unwrap_or(name).clone())
+                .or_insert(serde_json::Value::Null);
+        }
+        Ok(stored)
+    }
+    fn output_organization(&self, mut value: Organization) -> AuthResult<Organization> {
+        value.additional_fields = self
+            .organization_fields()
+            .organization
+            .output_fields(&value.additional_fields)?;
+        Ok(value)
+    }
+    fn output_member(&self, mut value: Member) -> AuthResult<Member> {
+        value.additional_fields = self
+            .organization_fields()
+            .member
+            .output_fields(&value.additional_fields)?;
+        Ok(value)
+    }
+    fn output_invitation(&self, mut value: Invitation) -> AuthResult<Invitation> {
+        value.additional_fields = self
+            .organization_fields()
+            .invitation
+            .output_fields(&value.additional_fields)?;
+        Ok(value)
+    }
+    fn output_team(&self, mut value: crate::Team) -> AuthResult<crate::Team> {
+        value.additional_fields = self
+            .organization_fields()
+            .team
+            .output_fields(&value.additional_fields)?;
+        Ok(value)
+    }
+    fn output_organization_role(
+        &self,
+        mut value: crate::OrganizationRole,
+    ) -> AuthResult<crate::OrganizationRole> {
+        value.additional_fields = self
+            .organization_fields()
+            .organization_role
+            .output_fields(&value.additional_fields)?;
+        Ok(value)
     }
 }
 

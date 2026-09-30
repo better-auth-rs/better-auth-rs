@@ -1,0 +1,41 @@
+{
+  "session": { "fields": { "activeOrganizationId": "selected_workspace", "activeTeamId": "selected_group" } },
+  "organization": {
+    "modelName": "app_organizations",
+    "fields": { "name": "organization_name", "slug": "organization_slug", "metadata": "organization_metadata" },
+    "additionalFields": {
+      "label": { "type": "string", "fieldName": "stored_label", "required": false },
+      "category": { "type": ["small", "large"], "required": false },
+      "joinedAt": { "type": "date", "required": false },
+      "tags": { "type": "string[]", "required": false },
+      "scores": { "type": "number[]", "required": false },
+      "payload": { "type": "json", "required": false },
+      "enabled": { "type": "boolean", "required": false },
+      "score": { "type": "number", "required": false }
+    }
+  },
+  "member": {
+    "modelName": "app_members",
+    "fields": { "organizationId": "workspace_id", "userId": "subject_id", "role": "access_role" },
+    "additionalFields": { "badge": { "type": "string", "required": false } }
+  },
+  "invitation": {
+    "modelName": "app_invitations",
+    "fields": { "organizationId": "workspace_id", "inviterId": "sender_id", "expiresAt": "valid_until" },
+    "additionalFields": { "note": { "type": "string", "required": false } }
+  },
+  "team": {
+    "modelName": "app_teams",
+    "fields": { "organizationId": "workspace_id", "name": "team_name", "memberCount": "seat_count" },
+    "additionalFields": { "region": { "type": "string", "required": false } }
+  },
+  "teamMember": {
+    "modelName": "app_team_members",
+    "fields": { "teamId": "group_id", "userId": "subject_id", "membershipKey": "link_key" }
+  },
+  "organizationRole": {
+    "modelName": "app_organization_roles",
+    "fields": { "organizationId": "workspace_id", "permission": "granted_permissions" },
+    "additionalFields": { "description": { "type": "string", "required": true } }
+  }
+}

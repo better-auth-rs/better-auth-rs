@@ -81,13 +81,23 @@ impl RoleInput {
     }
 }
 
+fn deserialize_present_metadata<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<serde_json::Value>, D::Error> {
+    serde_json::Value::deserialize(deserializer).map(Some)
+}
+
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateOrganizationRequest {
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+
     #[validate(length(min = 1, message = "Name is required"))]
     pub name: String,
     #[validate(length(min = 1, max = 100, message = "Slug must be 1-100 characters"))]
     pub slug: String,
     pub logo: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_present_metadata")]
     pub metadata: Option<serde_json::Value>,
     #[serde(rename = "keepCurrentActiveOrganization")]
     pub keep_current_active_organization: Option<bool>,
@@ -95,9 +105,14 @@ pub struct CreateOrganizationRequest {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct UpdateOrganizationData {
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+
     pub name: Option<String>,
     pub slug: Option<String>,
-    pub logo: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_nullable_string_field")]
+    pub logo: NullableStringField,
+    #[serde(default, deserialize_with = "deserialize_present_metadata")]
     pub metadata: Option<serde_json::Value>,
 }
 
@@ -153,6 +168,9 @@ pub struct GetFullOrganizationQuery {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct InviteMemberRequest {
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+
     #[validate(email(message = "Invalid email address"))]
     pub email: String,
     pub role: RoleInput,
@@ -290,11 +308,23 @@ pub struct InvitationResponse<I: Serialize> {
 
 #[derive(Debug, Serialize)]
 pub struct RemovedMemberResponse {
-    pub member: MemberResponse,
+    pub member: RemovedMember,
+}
+
+/// A removed membership; email lookup also includes the public user summary.
+#[derive(Debug, Serialize)]
+pub struct RemovedMember {
+    #[serde(flatten)]
+    pub member: BasicMemberResponse,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<MemberUserView>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct BasicMemberResponse {
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+
     pub id: String,
     #[serde(rename = "userId")]
     pub user_id: String,
@@ -345,6 +375,9 @@ pub struct UserInvitationResponse<I: Serialize> {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CreatedOrganizationResponse {
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+
     pub id: String,
     pub name: String,
     pub slug: String,
@@ -358,6 +391,9 @@ pub struct CreatedOrganizationResponse {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OrganizationResponse {
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+
     pub id: String,
     pub name: String,
     pub slug: String,
@@ -365,40 +401,45 @@ pub struct OrganizationResponse {
     #[serde(rename = "createdAt")]
     #[serde(serialize_with = "better_auth_core::utils::date::serialize")]
     pub created_at: chrono::DateTime<chrono::Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
-}
-
-fn normalize_metadata(metadata: Option<&serde_json::Value>) -> Option<serde_json::Value> {
-    match metadata {
-        None => None,
-        Some(serde_json::Value::Null) => None,
-        Some(serde_json::Value::Object(map)) if map.is_empty() => None,
-        Some(value) => Some(value.clone()),
-    }
 }
 
 impl CreatedOrganizationResponse {
     pub fn from_organization(organization: &impl AuthOrganization) -> Self {
         Self {
+            additional_fields: organization.projected_fields().cloned().unwrap_or_default(),
             id: organization.id().to_string(),
             name: organization.name().to_string(),
             slug: organization.slug().to_string(),
             logo: organization.logo().map(str::to_owned),
             created_at: organization.created_at(),
-            metadata: normalize_metadata(organization.metadata()),
+            metadata: organization.metadata().cloned(),
         }
     }
 }
 
 impl OrganizationResponse {
+    /// Creation and update adapter outputs decode the stored JSON text.
+    pub fn from_created_organization(organization: &impl AuthOrganization) -> Self {
+        let mut output = Self::from_organization(organization);
+        output.metadata = organization.metadata().cloned();
+        output
+    }
     pub fn from_organization(organization: &impl AuthOrganization) -> Self {
         Self {
+            additional_fields: organization.projected_fields().cloned().unwrap_or_default(),
             id: organization.id().to_string(),
             name: organization.name().to_string(),
             slug: organization.slug().to_string(),
             logo: organization.logo().map(str::to_owned),
             created_at: organization.created_at(),
-            metadata: normalize_metadata(organization.metadata()),
+            metadata: Some(
+                organization
+                    .metadata()
+                    .map(|value| serde_json::Value::String(value.to_string()))
+                    .unwrap_or(serde_json::Value::Null),
+            ),
         }
     }
 }
@@ -409,6 +450,9 @@ impl OrganizationResponse {
 /// keeping it compatible with the built-in auth store.
 #[derive(Debug, Clone, Serialize)]
 pub struct MemberResponse {
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+
     pub id: String,
     #[serde(rename = "organizationId")]
     pub organization_id: String,
@@ -428,6 +472,7 @@ impl MemberResponse {
         user: &impl better_auth_core::entity::AuthUser,
     ) -> Self {
         Self {
+            additional_fields: member.projected_fields().cloned().unwrap_or_default(),
             id: member.id().to_string(),
             organization_id: member.organization_id().to_string(),
             user_id: member.user_id().to_string(),
@@ -441,6 +486,7 @@ impl MemberResponse {
 impl BasicMemberResponse {
     pub fn from_member(member: &impl AuthMember) -> Self {
         Self {
+            additional_fields: member.projected_fields().cloned().unwrap_or_default(),
             id: member.id().to_string(),
             organization_id: member.organization_id().to_string(),
             user_id: member.user_id().to_string(),
