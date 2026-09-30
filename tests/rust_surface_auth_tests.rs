@@ -78,6 +78,37 @@ async fn test_builder_rejects_invalid_config() {
     assert!(result.is_err());
 }
 
+// Rust-specific surface: existing callers can validate a shared AuthConfig
+// reference without granting mutable access or changing the configuration.
+#[test]
+fn test_config_validation_accepts_shared_references() -> AuthResult<()> {
+    let config = test_config().cross_sub_domain_cookies("");
+    let shared: &AuthConfig = &config;
+    shared.validate()?;
+    assert_eq!(
+        shared
+            .advanced
+            .cross_sub_domain_cookies
+            .as_ref()
+            .map(|cookies| cookies.domain.as_str()),
+        Some("")
+    );
+    Ok(())
+}
+
+// Upstream: cookies/index.ts :: createCookieGetter rejects a missing domain
+// during initialization, before any request can emit host-only cookies.
+#[tokio::test]
+async fn test_builder_rejects_cross_subdomain_cookies_without_a_hostname() {
+    let config = test_config()
+        .base_url("localhost:3000")
+        .cross_sub_domain_cookies("");
+    let result = BetterAuth::<TestSchema>::new(config).build().await;
+    assert!(
+        matches!(result, Err(better_auth::AuthError::Config(message)) if message.contains("base_url must have a hostname"))
+    );
+}
+
 // Rust-specific surface: `BetterAuth::plugin_names` and `BetterAuth::get_plugin`
 // are public Rust introspection APIs with no TS analogue.
 #[tokio::test]

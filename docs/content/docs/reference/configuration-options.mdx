@@ -138,7 +138,9 @@ Refresh semantics:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `domain` | `String` | Parent cookie domain such as `".example.com"` |
+| `domain` | `String` | Parent cookie domain such as `".example.com"`; an empty string uses the hostname from `base_url` |
+
+The domain applies when setting and clearing auth cookies. See [Domain and Subdomain Sharing](/docs/concepts/cookies#domain-and-subdomain-sharing) for a configuration example.
 
 ### CookieAttributes
 
