@@ -21,7 +21,9 @@ impl EphemeralStore {
         } else {
             Vec::new()
         };
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for account in &accounts {
             for hook in &self.hooks {
@@ -68,13 +70,13 @@ impl EphemeralStore {
             state.accounts.retain(|row| {
                 row.get(schema.record_storage_key("userId"))
                     != Some(&Value::String(user_id.to_owned()))
-            });
+            })?;
             Ok(())
         })
         .await?;
         if database_sessions {
             self.raw("session", "deleteMany", |state| {
-                state.sessions.retain(|_, row| row.user_id != user_id);
+                state.sessions.retain(|row| row.user_id != user_id)?;
                 Ok(())
             })
             .await?;
@@ -107,11 +109,11 @@ impl EphemeralStore {
                 .verify_unproven_user_inner(user_id, database_sessions, session_cleanup)
                 .await;
         }
-        let (base, isolated) = self.begin_transaction()?;
+        let (base, isolated, queue) = self.begin_transaction()?;
         let user = isolated
             .verify_unproven_user_inner(user_id, database_sessions, session_cleanup)
             .await?;
-        self.commit_transaction(base, isolated).await?;
+        self.commit_transaction(base, isolated, queue).await?;
         Ok(user)
     }
 }

@@ -39,6 +39,45 @@ impl ValidatedBody {
     }
 }
 
+/// Validate a record body while retaining values and removing the prototype setter key.
+pub fn record_body(request: &AuthRequest) -> AuthResult<ValidatedBody> {
+    let body = parse_record_body(request)?;
+    Ok(ValidatedBody::new(Some(Value::Object(body.clone())), body))
+}
+
+/// Read a validated record, including calls that invoke a plugin directly.
+pub fn record_input(request: &AuthRequest) -> AuthResult<serde_json::Map<String, Value>> {
+    request
+        .validated_body::<serde_json::Map<String, Value>>()
+        .cloned()
+        .map_or_else(|| parse_record_body(request), Ok)
+}
+
+fn parse_record_body(request: &AuthRequest) -> AuthResult<serde_json::Map<String, Value>> {
+    let body = request.input_body()?;
+    if let Some(Value::Object(mut body)) = body {
+        let _ = body.remove("__proto__");
+        return Ok(body);
+    }
+    let actual = match body {
+        None => "undefined",
+        Some(Value::Null) => "null",
+        Some(Value::Bool(_)) => "boolean",
+        Some(Value::Number(_)) => "number",
+        Some(Value::String(_)) => "string",
+        Some(Value::Array(_)) => "array",
+        Some(Value::Object(_)) => "object",
+    };
+    Err(crate::AuthResponse::json(
+        400,
+        &serde_json::json!({
+            "code": "VALIDATION_ERROR",
+            "message": format!("[body] Invalid input: expected record, received {actual}"),
+        }),
+    )?
+    .into())
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct EndpointBody {
     source: Option<Vec<u8>>,

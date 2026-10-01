@@ -121,6 +121,7 @@ where
     async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()> {
         self.delete_single_verification(
             self.connection(),
+            None,
             S::Verification::identifier_column().eq(identifier),
         )
         .await
@@ -145,8 +146,11 @@ where
         if let Some(writer) = writer {
             writer(verification.clone()).await?;
         }
-        self.after_create_runtime_verification(&verification)
-            .await?;
+        self.after_create_runtime_verification(
+            &verification,
+            crate::hooks::current_request_hook_context(),
+        )
+        .await?;
         Ok(verification)
     }
 
@@ -161,8 +165,10 @@ where
     async fn after_create_runtime_verification(
         &self,
         verification: &VerificationView,
+        request: Option<better_auth_core::hooks::RequestHookContext>,
     ) -> AuthResult<()> {
-        let hook_context = self.hook_context(None);
+        let mut hook_context = self.hook_context(None);
+        hook_context.request = request;
         for hook in self.hooks() {
             better_auth_core::observability::database::with_database_hook(
                 hook_context.config,
@@ -290,6 +296,7 @@ where
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
         self.delete_single_verification(
             self.connection(),
+            None,
             S::Verification::id_column().eq(S::Verification::parse_id(id)?),
         )
         .await
@@ -488,11 +495,13 @@ where
         .map(|row| self.output_verification(row, db))
         .transpose()?;
         let updated = row.clone();
+        let request = context.request.clone();
         let store = self.clone();
         super::transaction_hooks::after_write(
             tx,
             Box::pin(async move {
-                let context = store.hook_context(None);
+                let mut context = store.hook_context(None);
+                context.request = request;
                 for hook in store.hooks() {
                     better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterUpdateVerification, hook.after_update_verification(updated.as_ref(), &context)).await?;
                 }
@@ -503,9 +512,10 @@ where
         Ok(row)
     }
 
-    async fn delete_single_verification(
+    pub(super) async fn delete_single_verification(
         &self,
         db: &impl ConnectionTrait,
+        tx: Option<super::HookTransaction<'_, S>>,
         condition: sea_orm::sea_query::SimpleExpr,
     ) -> AuthResult<()> {
         // A failed findMany projection is caught before single-delete hooks or writes run.
@@ -530,7 +540,7 @@ where
         let Ok(Some(row)) = snapshot else {
             return Ok(());
         };
-        let context = self.hook_context(None);
+        let context = self.hook_context(tx);
         for hook in self.hooks() {
             if better_auth_core::observability::database::with_database_hook(
                 context.config,
@@ -556,16 +566,21 @@ where
             },
         )
         .await?;
-        for hook in self.hooks() {
-            better_auth_core::observability::database::with_database_hook(
-                context.config,
-                hook.hook_metadata(),
-                better_auth_core::observability::database::DatabaseHook::AfterDeleteVerification,
-                hook.after_delete_verification(&row, &context),
-            )
-            .await?;
-        }
-        Ok(())
+        let store = self.clone();
+        let request = context.request.clone();
+        super::transaction_hooks::after_write(tx, Box::pin(async move {
+            let mut context = store.hook_context(None);
+            context.request = request;
+            for hook in store.hooks() {
+                better_auth_core::observability::database::with_database_hook(
+                    context.config,
+                    hook.hook_metadata(),
+                    better_auth_core::observability::database::DatabaseHook::AfterDeleteVerification,
+                    hook.after_delete_verification(&row, &context),
+                ).await?;
+            }
+            Ok(())
+        })).await
     }
 
     pub(super) async fn before_runtime_verification_in_tx(
@@ -656,10 +671,12 @@ where
             })
             .await
             .map_err(map_db_err)?;
+        let transaction = crate::TransactionConnection::new(transaction);
+        let effects = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let hook_transaction = super::SeaOrmTransaction {
-            store: self,
-            tx: &transaction,
-            effects: std::sync::Mutex::new(Vec::new()),
+            store: self.clone(),
+            tx: transaction.clone(),
+            effects: std::sync::Arc::downgrade(&effects),
         };
         let result: AuthResult<Option<VerificationView>> = async {
             let Some(model) = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(self.config(), "findMany", async { <S::Verification as SeaOrmVerificationModel>::Entity::find()
@@ -712,12 +729,9 @@ where
             Ok(Some(consumed))
         }
         .await;
-        let effects = hook_transaction.effects.into_inner().map_err(|_| {
-            better_auth_core::AuthError::internal("Transaction hook queue lock poisoned")
-        })?;
         if result.is_ok() {
             transaction.commit().await.map_err(map_db_err)?;
-            self.finish_transaction_effects(effects).await?;
+            self.finish_queued_transaction_effects(&effects).await?;
         } else {
             transaction.rollback().await.map_err(map_db_err)?;
         }

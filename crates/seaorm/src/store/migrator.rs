@@ -476,7 +476,7 @@ async fn create_organizations(manager: &SchemaManager<'_>) -> Result<(), DbErr> 
                         .unique_key(),
                 )
                 .col(ColumnDef::new(organization::Column::Logo).string())
-                .col(ColumnDef::new(organization::Column::Metadata).json_binary())
+                .col(ColumnDef::new(organization::Column::Metadata).text())
                 .col(
                     ColumnDef::new(organization::Column::CreatedAt)
                         .timestamp_with_time_zone()

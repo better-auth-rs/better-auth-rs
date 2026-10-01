@@ -326,3 +326,48 @@ fn test_routes_do_not_expose_view_backup_codes() {
         "view-backup-codes must stay server-only",
     );
 }
+
+#[test]
+fn body_schemas_keep_each_instances_global_and_nested_password_policy() {
+    let strict = TwoFactorPlugin::new().totp_allow_passwordless(true);
+    let optional = TwoFactorPlugin::new()
+        .allow_passwordless(true)
+        .totp_allow_passwordless(false);
+    let strict_routes = <TwoFactorPlugin as AuthPlugin<TestSchema>>::routes(&strict);
+    let optional_routes = <TwoFactorPlugin as AuthPlugin<TestSchema>>::routes(&optional);
+    for (routes, enable_required, totp_required) in
+        [(strict_routes, true, false), (optional_routes, false, true)]
+    {
+        for (path, required) in [
+            ("/two-factor/enable", enable_required),
+            ("/two-factor/get-totp-uri", totp_required),
+        ] {
+            let route = routes.iter().find(|route| route.path == path).unwrap();
+            let mut request = AuthRequest::new(better_auth_core::HttpMethod::Post, path);
+            request.body = Some(br#"{"unknown":"raw"}"#.to_vec());
+            let result = route.body_validator.as_ref().unwrap()(&request);
+            if required {
+                let response = result.unwrap_err().to_auth_response();
+                let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+                assert_eq!(
+                    body["message"],
+                    "[body.password] Invalid input: expected string, received undefined"
+                );
+            } else {
+                request.set_endpoint_body(result.unwrap());
+                assert_eq!(
+                    request.input_body().unwrap(),
+                    Some(if path.ends_with("enable") {
+                        serde_json::json!({"method":"totp"})
+                    } else {
+                        serde_json::json!({})
+                    })
+                );
+                assert_eq!(
+                    request.body.as_deref(),
+                    Some(br#"{"unknown":"raw"}"#.as_slice())
+                );
+            }
+        }
+    }
+}

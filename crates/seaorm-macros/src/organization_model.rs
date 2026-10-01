@@ -112,7 +112,16 @@ pub(super) fn generate(
                 let unconfigured = if role == EntityRole::Organization
                     && matches!(&field.ty, syn::Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "Option"))
                 {
-                    quote!(#core_root::SchemaValue::Typed(self.#ident.as_ref().map(#core_root::serde_json::to_value).transpose()?))
+                    quote! {
+                        if matches!(
+                            #seaorm_root::sea_orm::ColumnTrait::def(&Column::#column).get_column_type(),
+                            #seaorm_root::sea_orm::ColumnType::Json | #seaorm_root::sea_orm::ColumnType::JsonBinary
+                        ) {
+                            #core_root::SchemaValue::Typed(self.#ident.as_ref().map(#core_root::serde_json::to_value).transpose()?)
+                        } else {
+                            value.map(#core_root::SchemaValue::Dynamic).unwrap_or_default()
+                        }
+                    }
                 } else {
                     quote!(#core_root::SchemaValue::from_json(value))
                 };

@@ -8,11 +8,45 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 impl<S: AuthSchema> SecondaryStore<S> {
+    pub(super) async fn delete_verification_in_transaction(
+        &self,
+        identifier: &str,
+        transaction: Option<&dyn crate::store::AuthTransaction<S>>,
+    ) -> AuthResult<()> {
+        let identifier = self
+            .config
+            .verification
+            .store_identifier
+            .process(identifier)
+            .await?
+            .0;
+        if let Some(storage) = &self.storage {
+            storage
+                .delete(&format!("verification:{identifier}"))
+                .await?;
+        }
+        if self.database_verifications() {
+            match transaction {
+                Some(transaction) => {
+                    transaction
+                        .delete_verification_by_identifier(&identifier)
+                        .await?
+                }
+                None => {
+                    self.inner
+                        .delete_verification_by_identifier(&identifier)
+                        .await?
+                }
+            }
+        }
+        Ok(())
+    }
     pub(super) async fn create_verification_in_transaction(
         &self,
         mut input: CreateVerification,
         transaction: Option<&dyn crate::store::AuthTransaction<S>>,
     ) -> AuthResult<VerificationView> {
+        let request = crate::hooks::current_request_hook_context();
         input = input.with_timestamps(Utc::now());
         input.identifier = self
             .config
@@ -55,7 +89,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         self.cache_verification(&identifier, &verification).await?;
         if transaction.is_none() {
             self.inner
-                .after_create_runtime_verification(&verification)
+                .after_create_runtime_verification(&verification, request)
                 .await?;
         }
 
@@ -344,24 +378,8 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
     }
 
     async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()> {
-        let identifier = self
-            .config
-            .verification
-            .store_identifier
-            .process(identifier)
-            .await?
-            .0;
-        if let Some(storage) = &self.storage {
-            storage
-                .delete(&format!("verification:{identifier}"))
-                .await?;
-        }
-        if self.database_verifications() {
-            self.inner
-                .delete_verification_by_identifier(&identifier)
-                .await?;
-        }
-        Ok(())
+        self.delete_verification_in_transaction(identifier, None)
+            .await
     }
 
     async fn consume_verification_including_expired(

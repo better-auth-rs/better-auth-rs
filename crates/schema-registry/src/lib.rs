@@ -304,7 +304,7 @@ static PLUGINS: &[PluginSchema] = &[
                     f!("name", "String"),
                     f!("slug", "String"),
                     f!("logo", "Option<String>"),
-                    f!("metadata", "Option<Json>"),
+                    f!("metadata", "Option<String>"),
                     f!("created_at", "DateTimeUtc"),
                     FieldDef {
                         name: "auth_updated_at",

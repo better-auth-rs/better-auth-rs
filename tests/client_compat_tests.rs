@@ -448,6 +448,14 @@ async fn configuration_client_compat() {
         "api-error-production",
         "request-security-memory",
         "request-security-sqlite",
+        "request-two-factor-memory",
+        "request-two-factor-sqlite",
+        "request-two-factor-passwordless-memory",
+        "request-two-factor-nested-sqlite",
+        "request-admin-memory",
+        "request-api-key-memory",
+        "request-api-key-sqlite",
+        "request-admin-sqlite",
         "request-organization-memory",
         "request-organization-sqlite",
         "request-query-memory",
@@ -518,6 +526,7 @@ async fn configuration_client_compat() {
         "dispatch-errors",
         "dynamic-context",
         "dynamic-native",
+        "organization-metadata",
         "id-policy",
         "dynamic-oauth",
         "dynamic-environment",
@@ -674,6 +683,12 @@ async fn configuration_client_compat() {
             run_client_compat_profile(&["./tests/config/api-error/"], profile).await;
         } else if profile.starts_with("request-security-") {
             run_client_compat_profile(&["./tests/config/request-security/"], profile).await;
+        } else if profile.starts_with("request-api-key-") {
+            run_client_compat_profile(&["./tests/config/request-api-key/"], profile).await;
+        } else if profile.starts_with("request-two-factor-") {
+            run_client_compat_profile(&["./tests/config/request-two-factor/"], profile).await;
+        } else if profile.starts_with("request-admin-") {
+            run_client_compat_profile(&["./tests/config/request-admin/"], profile).await;
         } else if profile.starts_with("request-organization-") {
             run_client_compat_profile(&["./tests/config/request-organization/"], profile).await;
         } else if profile.starts_with("request-plugin-") {

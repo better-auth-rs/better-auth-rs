@@ -229,9 +229,13 @@ pub(crate) async fn validate_create<S: AuthSchema>(
     if let Some(value) = &input.metadata {
         let _ = user.insert("metadata".into(), value.clone());
     }
-    let now = serde_json::json!(chrono::Utc::now());
-    let _ = user.entry("createdAt").or_insert_with(|| now.clone());
-    let _ = user.entry("updatedAt").or_insert(now);
+    let now = chrono::Utc::now();
+    let _ = user
+        .entry("createdAt")
+        .or_insert(serde_json::json!(input.created_at.unwrap_or(now)));
+    let _ = user
+        .entry("updatedAt")
+        .or_insert(serde_json::json!(input.updated_at.unwrap_or(now)));
     validate(UserValidationData { user, source }, endpoint).await
 }
 

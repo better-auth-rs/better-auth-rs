@@ -42,7 +42,7 @@ async fn refreshed_request() -> (SessionManager<BundledSchema>, AuthRequest, Ses
 }
 
 #[tokio::test]
-async fn rotation_supersedes_earlier_refresh_token_and_cache() {
+async fn rotation_preserves_order_and_the_browser_uses_the_last_token_and_cache() {
     let (manager, req, old) = refreshed_request().await;
     let user = manager
         .database
@@ -68,7 +68,10 @@ async fn rotation_supersedes_earlier_refresh_token_and_cache() {
     let cookies = response
         .headers
         .get_all("set-cookie")
-        .map(|header| header.split(';').next().unwrap())
+        .map(|header| header.split(';').next().unwrap().split_once('=').unwrap())
+        .collect::<std::collections::BTreeMap<_, _>>()
+        .into_iter()
+        .map(|(name, value)| format!("{name}={value}"))
         .collect::<Vec<_>>()
         .join("; ");
     browser.headers.insert("cookie".into(), cookies);
@@ -99,13 +102,16 @@ async fn rotation_supersedes_earlier_refresh_token_and_cache() {
             .get_all("set-cookie")
             .filter(|header| header.starts_with("better-auth.session_token="))
             .count(),
-        1
+        2
     );
 }
 
 #[tokio::test]
 async fn challenge_expiration_supersedes_earlier_refresh_credentials() {
     let (manager, req, _) = refreshed_request().await;
+    for name in ["better-auth.session_token", "better-auth.session_data"] {
+        crate::utils::cookie_utils::remove_set_cookie_entries(&req, None, name).unwrap();
+    }
     let mut response = AuthResponse::json(200, &serde_json::json!({"twoFactorRedirect": true}))
         .unwrap()
         .with_appended_header(
@@ -188,5 +194,51 @@ async fn explicit_browser_session_keeps_the_signed_remember_preference() {
     assert_eq!(
         verify_cookie_value(value, manager.config.signing_secret()).as_deref(),
         Some("true")
+    );
+}
+
+#[tokio::test]
+async fn explicit_expiration_scrubs_both_scopes_without_deduplicating_ordinary_cookies() {
+    let manager = SessionManager::new(
+        Arc::new(AuthConfig::new("response-secret-at-least-32-characters")),
+        test_database().await,
+    );
+    let req = AuthRequest::new(HttpMethod::Get, "/cookie-contract");
+    for value in [
+        "ordinary=first; Path=/",
+        "ordinary=second; Path=/",
+        "ordinary=; Max-Age=0; Path=/",
+        "credential=secret; Path=/",
+        "credential.0=chunk; Path=/",
+        "credential-other=retained; Path=/",
+    ] {
+        req.append_response_header("Set-Cookie", value.into())
+            .unwrap();
+    }
+    let mut response = AuthResponse::new(200)
+        .with_appended_header("Set-Cookie", "credential.1=outer-secret; Path=/");
+    crate::utils::cookie_utils::remove_set_cookie_entries(
+        &req,
+        Some(&mut response.headers),
+        "credential",
+    )
+    .unwrap();
+    response
+        .headers
+        .append("Set-Cookie", "credential=; Max-Age=0; Path=/");
+    manager.finish_response(&req, &mut response).unwrap();
+    assert_eq!(
+        response
+            .headers
+            .get_all("set-cookie")
+            .map(|line| line.split(';').next().unwrap())
+            .collect::<Vec<_>>(),
+        [
+            "ordinary=first",
+            "ordinary=second",
+            "ordinary=",
+            "credential-other=retained",
+            "credential="
+        ]
     );
 }

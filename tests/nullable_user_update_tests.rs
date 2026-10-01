@@ -144,6 +144,7 @@ async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache:
     let session = auth
         .store()
         .create_session(CreateSession {
+            additional_fields: Default::default(),
             user_id: id.clone().into(),
             expires_at: Utc::now() + Duration::hours(1),
             ip_address: None,

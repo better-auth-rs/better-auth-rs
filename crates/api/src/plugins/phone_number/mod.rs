@@ -311,15 +311,25 @@ impl PhoneNumberPlugin {
         let endpoint = EndpointContext::new(Some(req), parsed_body(&body, &["phoneNumber"]), ctx);
         self.validate(phone).await?;
         let code = self.save_otp(ctx, phone.to_owned(), true).await?;
-        self.deliver(
+        let task = self.delivery(
             PhoneOtp {
                 phone_number: phone.to_owned(),
                 code,
             },
             &endpoint,
             Delivery::Verification,
-        )
-        .await?;
+        )?;
+        if ctx.config.advanced.background_tasks.is_some() {
+            better_auth_core::background::run_or_await(
+                task,
+                ctx.config.advanced.background_tasks.as_ref(),
+                &ctx.config.logger,
+            )
+            .await;
+        } else if let Some(task) = task {
+            // The direct send endpoint propagates asynchronous failures without a handler.
+            task.await?;
+        }
         Ok(AuthResponse::json(200, &json!({"message":"code sent"}))?)
     }
     async fn verify(
@@ -459,28 +469,20 @@ impl PhoneNumberPlugin {
                     parsed_body(&body, &["phoneNumber", "password", "rememberMe"]),
                     ctx,
                 );
-                // Upstream treats sign-in delivery as a background notification.
-                if let Err(error) = self
-                    .deliver(
-                        PhoneOtp {
-                            phone_number: phone.to_owned(),
-                            code,
-                        },
-                        &endpoint,
-                        Delivery::Verification,
-                    )
-                    .await
-                {
-                    better_auth_core::observability::logger::current().error(
-                        "Failed to run background task",
-                        &[
-                            better_auth_core::observability::LogArgument::Value(
-                                &serde_json::json!("phone-number"),
-                            ),
-                            better_auth_core::observability::LogArgument::Error(&error),
-                        ],
-                    );
-                }
+                let task = self.delivery(
+                    PhoneOtp {
+                        phone_number: phone.to_owned(),
+                        code,
+                    },
+                    &endpoint,
+                    Delivery::Verification,
+                )?;
+                better_auth_core::background::run_or_await(
+                    task,
+                    ctx.config.advanced.background_tasks.as_ref(),
+                    &ctx.config.logger,
+                )
+                .await;
             }
             return Err(error(
                 401,
@@ -569,28 +571,20 @@ impl PhoneNumberPlugin {
         if user.is_some() && self.has_sender(ctx, Delivery::PasswordReset) {
             let endpoint =
                 EndpointContext::new(Some(req), parsed_body(&body, &["phoneNumber"]), ctx);
-            // Upstream logs reset notification failures and still reports success.
-            if let Err(error) = self
-                .deliver(
-                    PhoneOtp {
-                        phone_number: phone.to_owned(),
-                        code,
-                    },
-                    &endpoint,
-                    Delivery::PasswordReset,
-                )
-                .await
-            {
-                better_auth_core::observability::logger::current().error(
-                    "Failed to run background task",
-                    &[
-                        better_auth_core::observability::LogArgument::Value(&serde_json::json!(
-                            "phone-number"
-                        )),
-                        better_auth_core::observability::LogArgument::Error(&error),
-                    ],
-                );
-            }
+            let task = self.delivery(
+                PhoneOtp {
+                    phone_number: phone.to_owned(),
+                    code,
+                },
+                &endpoint,
+                Delivery::PasswordReset,
+            )?;
+            better_auth_core::background::run_or_await(
+                task,
+                ctx.config.advanced.background_tasks.as_ref(),
+                &ctx.config.logger,
+            )
+            .await;
         }
         Ok(AuthResponse::json(200, &json!({"status":true}))?)
     }

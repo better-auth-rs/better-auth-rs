@@ -59,8 +59,39 @@ pub type VerificationCreateWriter =
 
 #[async_trait]
 pub trait AuthTransaction<S: AuthSchema>: JwksStore + Send + Sync {
+    /// Retain this transaction adapter after the enclosing operation finishes.
+    /// Preserve the adapter's own commit, rollback, and pending-hook behavior.
+    fn clone_handle(&self) -> std::sync::Arc<dyn AuthTransaction<S>>;
+
+    /// Create a user while preserving cancellation and the active transaction.
+    async fn create_user_optional(
+        &self,
+        _input: CreateUser,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
+        Err(AuthError::config(
+            "The store must support nullable transactional user creation",
+        ))
+    }
+    /// Create a session while preserving cancellation and the active transaction.
+    async fn create_session_optional(
+        &self,
+        _input: CreateSession,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        Err(AuthError::config(
+            "The store must support nullable transactional session creation",
+        ))
+    }
+    /// Run session before hooks without converting cancellation into an API error.
+    async fn before_create_runtime_session_optional(
+        &self,
+        input: &mut CreateSession,
+    ) -> AuthResult<bool> {
+        self.before_create_runtime_session(input).await?;
+        Ok(true)
+    }
     /// Queue an effect in write order. Run it after commit, discard it on rollback,
-    /// and stop later effects if it fails. Preserve the current request hook context.
+    /// and stop later effects if it fails. Execute in the committing caller's request scope.
+    /// Capture any explicit hook request argument separately when queuing the effect.
     fn queue_after_commit(&self, effect: TypedTransactionFuture<'static, ()>) -> AuthResult<()>;
 
     /// Run verification creation hooks for secondary-only values in this transaction.
@@ -101,6 +132,8 @@ pub trait AuthTransaction<S: AuthSchema>: JwksStore + Send + Sync {
         &self,
         identifier: &str,
     ) -> AuthResult<Option<crate::wire::VerificationView>>;
+    /// Delete a verification through the active transaction and its storage policy.
+    async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()>;
     /// Delete expired verification records inside the active transaction.
     async fn delete_expired_verifications(&self) -> AuthResult<usize>;
     /// Run session creation hooks before creating a session outside the database.
@@ -212,6 +245,15 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
         user_id: &str,
     ) -> AuthResult<Option<crate::wire::UserView>>;
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<crate::wire::UserView>;
+    /// Return None when a before-create hook cancels the write.
+    async fn create_user_optional(
+        &self,
+        _input: CreateUser,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
+        Err(AuthError::config(
+            "The store must support nullable user creation",
+        ))
+    }
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<crate::wire::UserView>>;
     /// Query the adapter ID field without the internal adapter's falsy-ID guard.
     /// Pure secondary session creation uses this lookup before publishing its user snapshot.
@@ -307,6 +349,24 @@ impl From<Option<usize>> for TeamMemberLimits<'_> {
 
 #[async_trait]
 pub trait SessionStore<S: AuthSchema>: Send + Sync {
+    /// Create a session, preserving cancellation by a database before hook.
+    async fn create_session_optional(
+        &self,
+        _input: CreateSession,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        Err(AuthError::config(
+            "The store must support nullable session creation",
+        ))
+    }
+    /// Run session before hooks and retain their cancellation result for cache-only creation.
+    async fn before_create_runtime_session_optional(
+        &self,
+        input: &mut CreateSession,
+    ) -> AuthResult<bool> {
+        self.before_create_runtime_session(input).await?;
+        Ok(true)
+    }
+
     /// Run one update lifecycle, with a secondary writer before the database write.
     async fn update_session_with_writer(
         &self,
@@ -334,10 +394,12 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
     async fn before_create_runtime_session(&self, _session: &mut CreateSession) -> AuthResult<()> {
         Ok(())
     }
-    /// Run creation hooks after secondary storage contains the committed session.
+    /// Run creation hooks with the captured explicit request after the session write.
+    /// Keep the caller's ambient request scope when invoking each hook.
     async fn after_create_runtime_session(
         &self,
         _session: &crate::wire::SessionView,
+        _request: Option<crate::hooks::RequestHookContext>,
     ) -> AuthResult<()> {
         Ok(())
     }
@@ -384,6 +446,17 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         create_session: CreateSession,
     ) -> AuthResult<crate::wire::SessionView>;
     async fn get_session(&self, token: &str) -> AuthResult<Option<crate::wire::SessionView>>;
+    /// Read a token batch in adapter order, with the adapter limit and optional cached projections.
+    async fn get_session_snapshots(
+        &self,
+        tokens: &[String],
+        only_active: bool,
+    ) -> AuthResult<
+        Vec<(
+            crate::wire::SessionView,
+            Option<crate::session::SessionData>,
+        )>,
+    >;
     /// Persist application session fields and update the modification timestamp.
     async fn update_session_fields(
         &self,
@@ -517,10 +590,12 @@ pub trait VerificationStore<S: AuthSchema>: Send + Sync {
     ) -> AuthResult<()> {
         Ok(())
     }
-    /// Run creation hooks after secondary storage contains the verification.
+    /// Run creation hooks with the captured explicit request after the verification write.
+    /// Keep the caller's ambient request scope when invoking each hook.
     async fn after_create_runtime_verification(
         &self,
         _verification: &crate::wire::VerificationView,
+        _request: Option<crate::hooks::RequestHookContext>,
     ) -> AuthResult<()> {
         Ok(())
     }
@@ -610,6 +685,20 @@ pub struct ListOrganizationMembersParams {
 
 #[async_trait]
 pub trait OrganizationStore: Send + Sync {
+    /// Insert a complete organization record without route policies or application hooks.
+    async fn insert_organization(&self, _record: Organization) -> AuthResult<Organization> {
+        Err(AuthError::config(
+            "The store must support inserting organization records",
+        ))
+    }
+    /// Delete members, invitations, then the organization without an enclosing transaction.
+    /// A later failure preserves preceding deletes, matching direct adapter cleanup.
+    async fn delete_organization_records(&self, _id: &str) -> AuthResult<()> {
+        Err(AuthError::config(
+            "The store must support raw organization cleanup",
+        ))
+    }
+
     /// Register the Organization plugin's field policies before serving requests.
     /// Stores must call `OrganizationFields::into_storage` before saving the configuration.
     fn configure_organization_fields(
@@ -668,6 +757,13 @@ pub trait OrganizationStore: Send + Sync {
 
 #[async_trait]
 pub trait MemberStore: Send + Sync {
+    /// Insert a complete member record without route policies or application hooks.
+    async fn insert_member(&self, _record: Member) -> AuthResult<Member> {
+        Err(AuthError::config(
+            "The store must support inserting member records",
+        ))
+    }
+
     async fn create_member(&self, member: CreateMember) -> AuthResult<Member>;
     async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>>;
     /// Query member references supplied through a replacement organization schema.

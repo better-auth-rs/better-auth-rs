@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ColumnTrait, DatabaseBackend, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, Select,
+    ActiveModelTrait, ColumnTrait, DatabaseBackend, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, Select,
 };
 
 use better_auth_core::store::{ListOrganizationMembersParams, MemberStore};
@@ -202,6 +202,38 @@ impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> Member
 where
     S: AuthSchema + Send + Sync,
 {
+    async fn insert_member(&self, record: Member) -> AuthResult<Member> {
+        let config = self.organization_fields()?.member;
+        let core = self.create_fields(
+            "member",
+            if record.id.is_undefined() {
+                None
+            } else {
+                Some(record.id.typed()?.clone())
+            },
+            models::values([
+                (
+                    "organization_id",
+                    serde_json::to_value(record.organization_id)?,
+                ),
+                ("user_id", serde_json::to_value(record.user_id)?),
+                ("role", serde_json::to_value(record.role)?),
+                ("created_at", serde_json::to_value(record.created_at)?),
+            ]),
+        )?;
+        models::active::<O::Member>(
+            core,
+            record.additional_fields,
+            &config,
+            true,
+            self.connection().get_database_backend(),
+        )?
+        .insert(self.connection())
+        .await
+        .map_err(map_db_err)?
+        .record(&config)
+    }
+
     async fn create_member(&self, member: CreateMember) -> AuthResult<Member> {
         let mut core = self.create_fields(
             "member",

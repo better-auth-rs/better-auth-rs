@@ -79,6 +79,7 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
         .unwrap();
     let session = store
         .create_session(CreateSession {
+            additional_fields: Default::default(),
             user_id: "recipient".into(),
             expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
             ip_address: None,

@@ -58,7 +58,9 @@ impl EphemeralStore {
         secondary: Option<crate::store::SessionUpdateWriter>,
     ) -> AuthResult<Option<SessionView>> {
         let original = update.clone();
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             match crate::observability::database::with_database_hook(
@@ -102,16 +104,11 @@ impl EphemeralStore {
             .storage_fields(update.additional_fields, false)?;
         let session = self
             .raw("session", "update", |state| {
-                let Some((position, _, mut session)) = state.sessions.shift_remove_full(token)
-                else {
+                let Some(mut session) = state.sessions.find_mut(|row| row.token == token)? else {
                     return Ok(None);
                 };
                 update.apply(&mut session);
-                let _ =
-                    state
-                        .sessions
-                        .shift_insert(position, session.token.clone(), session.clone());
-                Ok(Some(session))
+                Ok(Some(session.clone()))
             })
             .await?;
         let session = session.map(|row| self.output_session(row)).transpose()?;
@@ -130,7 +127,8 @@ impl EphemeralStore {
                 Ok(crate::query::paginate_memory(
                     state
                         .sessions
-                        .values()
+                        .snapshot()?
+                        .iter()
                         .filter(|row| matches(row))
                         .cloned()
                         .collect(),
@@ -145,7 +143,9 @@ impl EphemeralStore {
             .map(|row| self.output_session(row))
             .collect::<AuthResult<_>>()
             .unwrap_or_default();
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for session in &sessions {
             for hook in &self.hooks {
@@ -170,19 +170,22 @@ impl EphemeralStore {
                 .storage_fields(Default::default(), false)?;
             self.raw("session", "updateMany", |state| {
                 let mut count = 0;
-                for session in state.sessions.values_mut().filter(|row| matches(row)) {
-                    session.expires_at = expires_at;
-                    session.updated_at = expires_at;
-                    session.additional_fields.extend(fields.clone());
-                    count += 1;
-                }
+                state.sessions.update_each(|session| {
+                    if matches(session) {
+                        session.expires_at = expires_at;
+                        session.updated_at = expires_at;
+                        session.additional_fields.extend(fields.clone());
+                        count += 1;
+                    }
+                    Ok(())
+                })?;
                 Ok(count)
             })
             .await?
         } else {
             self.raw("session", "deleteMany", |state| {
                 let before = state.sessions.len();
-                state.sessions.retain(|_, row| !matches(row));
+                state.sessions.retain(|row| !matches(row))?;
                 Ok(before - state.sessions.len())
             })
             .await?

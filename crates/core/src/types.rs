@@ -164,6 +164,15 @@ impl Headers {
             .any(|value| value.starts_with(&exact) || value.starts_with(&chunk))
     }
 
+    pub(crate) fn remove_set_cookie(&mut self, name: &str) {
+        let exact = format!("{name}=");
+        let chunk = format!("{name}.");
+        self.0.retain(|(header, value)| {
+            !header.eq_ignore_ascii_case("set-cookie")
+                || !(value.starts_with(&exact) || value.starts_with(&chunk))
+        });
+    }
+
     /// Check whether a header name exists.
     pub fn contains_key(&self, name: &str) -> bool {
         self.get(name).is_some()
@@ -225,6 +234,12 @@ impl Index<&str> for Headers {
 /// User creation data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateUser {
+    /// Seeded creation time; omission uses the adapter creation time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<DateTime<Utc>>,
+    /// Seeded update time; omission uses the adapter creation time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<DateTime<Utc>>,
     /// Application user fields keyed by their public schema names.
     #[serde(default)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
@@ -326,6 +341,8 @@ where
 /// Session creation data
 #[derive(Debug, Clone)]
 pub struct CreateSession {
+    /// Trusted application fields written with the initial session record.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub user_id: crate::SchemaValue<String>,
     pub expires_at: DateTime<Utc>,
     pub ip_address: Option<String>,
@@ -337,6 +354,8 @@ pub struct CreateSession {
 impl CreateUser {
     pub fn new() -> Self {
         Self {
+            created_at: None,
+            updated_at: None,
             additional_fields: Default::default(),
             id: None,
             email: None,
@@ -629,6 +648,14 @@ impl AuthRequest {
             .lock()
             .map_err(|_| crate::AuthError::internal("Session response headers lock poisoned"))?
             .has_set_cookie(name))
+    }
+
+    pub(crate) fn remove_response_cookie(&self, name: &str) -> crate::AuthResult<()> {
+        self.response_headers
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Session response headers lock poisoned"))?
+            .remove_set_cookie(name);
+        Ok(())
     }
 
     /// Drain response headers queued by authentication middleware.

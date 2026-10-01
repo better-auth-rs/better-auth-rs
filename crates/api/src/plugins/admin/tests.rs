@@ -85,6 +85,7 @@ async fn test_custom_admin_role_can_use_permission_engine() {
 
     let admin_session = database
         .create_session(CreateSession {
+            additional_fields: Default::default(),
             user_id: admin.id.clone(),
             expires_at: Utc::now() + Duration::hours(24),
             ip_address: None,
@@ -471,7 +472,7 @@ async fn test_set_user_password_updates_credential_account() {
 }
 
 #[tokio::test]
-async fn test_set_user_password_does_not_create_credential_account() {
+async fn test_set_user_password_creates_missing_credential_account() {
     let (ctx, _admin, admin_session, _user, _user_session) = create_admin_context().await;
     let plugin = AdminPlugin::new();
 
@@ -487,6 +488,14 @@ async fn test_set_user_password_does_not_create_credential_account() {
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
     let user_id = json_body(&resp)["user"]["id"].as_str().unwrap().to_string();
 
+    assert!(
+        ctx.database
+            .get_user_accounts(&user_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
     let req = make_request(
         HttpMethod::Post,
         "/admin/set-user-password",
@@ -499,11 +508,27 @@ async fn test_set_user_password_does_not_create_credential_account() {
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
     assert_eq!(resp.status, 200);
 
+    let accounts = ctx.database.get_user_accounts(&user_id).await.unwrap();
+    assert_eq!(accounts.len(), 1);
+    let account = accounts.first().unwrap();
+    assert_eq!(account.provider_id, "credential");
+    assert_eq!(account.user_id.typed().unwrap(), &user_id);
+    assert_eq!(account.account_id.typed().unwrap(), &user_id);
+    let password = account.password.typed().unwrap().as_deref().unwrap();
+    better_auth_core::utils::password::verify_password(
+        ctx.password_policy.hasher.as_ref(),
+        "newpassword456",
+        password,
+    )
+    .await
+    .unwrap();
     assert!(
-        ctx.database
-            .get_user_accounts(&user_id)
-            .await
-            .unwrap()
-            .is_empty()
+        better_auth_core::utils::password::verify_password(
+            ctx.password_policy.hasher.as_ref(),
+            "wrong-password",
+            password
+        )
+        .await
+        .is_err()
     );
 }

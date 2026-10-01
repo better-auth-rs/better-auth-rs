@@ -1,0 +1,47 @@
+---
+title: Test Utilities
+description: Seed records and create authenticated sessions in integration tests.
+---
+
+`TestUtilsPlugin` exposes privileged native helpers. Enable the plugin only on test instances. The plugin has no HTTP routes.
+
+```rust,no_run
+use better_auth::{AuthConfig, BetterAuth};
+use better_auth::plugins::TestUtilsPlugin;
+use better_auth::plugins::test_utils::TestAuthOptions;
+use better_auth_core::CreateUser;
+
+# async fn example() -> better_auth::AuthResult<()> {
+let auth = BetterAuth::stateless(
+    AuthConfig::new("test-secret-with-at-least-thirty-two-characters")
+        .base_url("http://localhost:3000"),
+)
+.plugin(TestUtilsPlugin { capture_otp: true })
+.build()
+.await?;
+
+let test = auth.test()?;
+let draft = test.create_user(CreateUser::new().with_email("test@example.com"))?;
+let Some(user) = test.save_user(draft).await? else {
+    return Ok(()); // A database before hook cancelled creation.
+};
+let login = test.login(TestAuthOptions::new(user.id.typed()?.clone())).await?;
+assert_eq!(login.session.token, login.token);
+test.delete_user(user.id.typed()?).await?;
+# Ok(())
+# }
+```
+
+`create_user` generates a draft without writing to storage. The configured ID generator runs even when the draft has an explicit ID. Supplied creation and update dates are retained. `save_user` applies admission and database hooks, lowercases the email address, and returns `None` when a before hook cancels creation. An after-hook error propagates after the record is committed.
+
+`login` checks that the user exists and creates one session. The result contains the session, user, raw signed Cookie request header, browser-cookie data, and token. `get_auth_headers` and `get_cookies` each create a separate session without first checking the user. Session options can set plugin and application fields; standard session fields such as ID, token, dates, and IP address are ignored.
+
+Browser-cookie data uses the configured session cookie name and attributes. Its domain comes from the supplied override or the initialized base URL hostname; the cookie attribute `domain` is not used. Cookie values are raw HMAC signatures suitable for request headers or browser cookie APIs, without HTTP response percent encoding.
+
+If an endpoint already owns a transaction, use `endpoint.test()` to keep user and session operations in that transaction. `auth.test()` does not infer an active transaction. Admission callbacks require an endpoint context when user validation is configured.
+
+`test.organization()` is available when `OrganizationPlugin` is enabled. Organization factories do not write to storage. `save_organization` and `add_member` use raw adapter insertion, without Organization application hooks or route permission checks. These helpers retain the captured outer adapter even when obtained from an endpoint transaction. `delete_organization` deletes members, invitations, then the organization; a later failure retains earlier deletes. Users are retained.
+
+When `capture_otp` is enabled, `test.otps()` provides `get` and `clear`. Capture runs after verification creation and removes the Email OTP and Phone Number identifier prefixes. A new value replaces the previous value for the same identifier. Clearing capture does not delete verification records. Each authentication instance owns a separate capture sink, including instances configured from the same cloned plugin.
+
+Custom stores must implement the nullable `create_user_optional` and `create_session_optional` capabilities to support helpers. Transaction implementations must provide the same capabilities for `endpoint.test()`. Organization helpers additionally require `insert_organization`, `insert_member`, and `delete_organization_records`. Default capability methods return a configuration error instead of bypassing hooks or changing cancellation semantics.

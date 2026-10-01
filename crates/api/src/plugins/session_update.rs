@@ -1,4 +1,3 @@
-use super::json_body;
 use super::json_body::is_truthy;
 use better_auth_core::session::SessionData;
 use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema};
@@ -8,20 +7,7 @@ pub(super) async fn handle(
     req: &AuthRequest,
     ctx: &AuthContext<impl AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let body = match json_body::parse(req) {
-        Ok(body) => body,
-        Err(response) => return Ok(response),
-    };
-    let body = match body {
-        Some(Value::Object(body)) => body,
-        body => {
-            return Ok(json_body::validation_error(&json_body::invalid_type(
-                "body",
-                "record",
-                body.as_ref(),
-            )));
-        }
-    };
+    let body = better_auth_core::endpoint_input::record_input(req)?;
     let (user, session) = ctx
         .require_session(req)
         .await

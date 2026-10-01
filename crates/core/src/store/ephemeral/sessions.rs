@@ -47,10 +47,10 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         maximum: crate::store::TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
         let invitation_snapshot = {
-            let mut state = self.lock()?;
-            let invitation = state
+            let state = self.lock()?;
+            let mut invitation = state
                 .invitations
-                .get_mut(invitation_id)
+                .get_mut(invitation_id)?
                 .filter(|invitation| invitation.is_pending())
                 .ok_or_else(|| AuthError::bad_request("Invitation not found"))?;
             *invitation = self.store_record(
@@ -79,7 +79,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             {
                 {
                     let state = self.lock()?;
-                    if !state.teams.get(team_id).is_some_and(|team| {
+                    if !state.teams.get(team_id)?.is_some_and(|team| {
                         team.organization_id == invitation_snapshot.organization_id
                     }) {
                         return Err(AuthError::bad_request("Team not found"));
@@ -88,13 +88,12 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 let limit = maximum.maximum(team_id).await?;
                 {
                     let state = self.lock()?;
-                    if !state
-                        .team_members
+                    let members = state.team_members.snapshot()?;
+                    if !members
                         .iter()
                         .any(|member| member.team_id == team_id && member.user_id == user_id)
                         && limit.is_some_and(|limit| {
-                            state
-                                .team_members
+                            members
                                 .iter()
                                 .filter(|member| member.team_id == team_id)
                                 .count()
@@ -109,9 +108,8 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             let mut state = self.lock()?;
             let invitation = state
                 .invitations
-                .get(invitation_id)
+                .get(invitation_id)?
                 .filter(|invitation| invitation.status == InvitationStatus::Accepted)
-                .cloned()
                 .ok_or_else(|| AuthError::bad_request("Invitation not found"))?;
             let team_ids: Vec<_> = invitation
                 .team_id
@@ -126,12 +124,11 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 .map(|token| {
                     state
                         .sessions
-                        .get(token)
-                        .cloned()
+                        .find(|row| row.token == token)?
                         .ok_or(AuthError::SessionNotFound)
                 })
                 .transpose()?;
-            if state.members.iter().any(|member| {
+            if state.members.snapshot()?.iter().any(|member| {
                 member.organization_id == invitation.organization_id && member.user_id == user_id
             }) {
                 return Err(AuthError::bad_request("User is already a member"));
@@ -140,17 +137,19 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             for team_id in &team_ids {
                 let team = state
                     .teams
-                    .get(*team_id)
+                    .get(*team_id)?
                     .filter(|team| team.organization_id == invitation.organization_id)
                     .ok_or_else(|| AuthError::bad_request("Team not found"))?;
                 if !state
                     .team_members
+                    .snapshot()?
                     .iter()
                     .any(|member| member.team_id == *team_id && member.user_id == user_id)
                     && !reserved_teams.contains_key(*team_id)
                 {
                     let actual = state
                         .team_members
+                        .snapshot()?
                         .iter()
                         .filter(|member| member.team_id == *team_id)
                         .count();
@@ -184,6 +183,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             for team_id in &team_ids {
                 if !state
                     .team_members
+                    .snapshot()?
                     .iter()
                     .any(|member| member.team_id == *team_id && member.user_id == user_id)
                 {
@@ -200,9 +200,9 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 }
             }
             for (id, team) in reserved_teams {
-                let _ = state.teams.replace(&id, team);
+                let _ = state.teams.replace(&id, team)?;
             }
-            let _ = state.members.push(member.clone());
+            state.members.push(member.clone());
             let Some(mut session) = session else {
                 return Ok((member_output, None));
             };
@@ -221,7 +221,11 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 let _ = fields.insert("activeOrganizationId".into());
             }
             session.updated_at = Utc::now();
-            let _ = state.sessions.insert(session.token.clone(), session);
+            let mut stored = state
+                .sessions
+                .find_mut(|row| row.token == session.token)?
+                .ok_or(AuthError::SessionNotFound)?;
+            *stored = session;
             Ok((member_output, cookie_session))
         }
         .await;
@@ -229,10 +233,10 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             Ok((member, session)) => Ok((member, accepted, session)),
             Err(error) => {
                 let restored = {
-                    let mut state = self.lock()?;
-                    if let Some(invitation) = state
+                    let state = self.lock()?;
+                    if let Some(mut invitation) = state
                         .invitations
-                        .get_mut(invitation_id)
+                        .get_mut(invitation_id)?
                         .filter(|invitation| invitation.status == InvitationStatus::Accepted)
                     {
                         *invitation = self.store_record(
@@ -259,7 +263,21 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn before_create_runtime_session(&self, input: &mut CreateSession) -> AuthResult<()> {
-        let transaction = EphemeralTransaction { store: self };
+        if self.before_create_runtime_session_optional(input).await? {
+            Ok(())
+        } else {
+            Err(AuthError::forbidden(
+                "session creation cancelled by database hook",
+            ))
+        }
+    }
+    async fn before_create_runtime_session_optional(
+        &self,
+        input: &mut CreateSession,
+    ) -> AuthResult<bool> {
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             if crate::observability::database::with_database_hook(
@@ -271,25 +289,47 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             .await?
                 == DatabaseHookControl::Cancel
             {
-                return Err(AuthError::forbidden(
-                    "session creation cancelled by database hook",
-                ));
+                return Ok(false);
             }
         }
-        Ok(())
+        Ok(true)
     }
 
-    async fn after_create_runtime_session(&self, session: &SessionView) -> AuthResult<()> {
-        self.after(CommittedWrite::SessionCreated(session.clone()))
+    async fn after_create_runtime_session(
+        &self,
+        session: &SessionView,
+        request: Option<crate::hooks::RequestHookContext>,
+    ) -> AuthResult<()> {
+        self.after_with_request(CommittedWrite::SessionCreated(session.clone()), request)
             .await
     }
 
-    async fn create_session(&self, mut create_session: CreateSession) -> AuthResult<SessionView> {
-        self.before_create_runtime_session(&mut create_session)
-            .await?;
+    async fn create_session(&self, input: CreateSession) -> AuthResult<SessionView> {
+        self.create_session_optional(input)
+            .await?
+            .ok_or_else(|| AuthError::forbidden("session creation cancelled by database hook"))
+    }
+    async fn create_session_optional(
+        &self,
+        mut create_session: CreateSession,
+    ) -> AuthResult<Option<SessionView>> {
+        if !self
+            .before_create_runtime_session_optional(&mut create_session)
+            .await?
+        {
+            return Ok(None);
+        }
         let now = Utc::now();
         let token = crate::id::random_id(None);
-        let session = SessionView {
+        let mut fields = self.session_config.default_fields();
+        fields.extend(create_session.additional_fields);
+        let mut plugin_fields = serde_json::Map::new();
+        for name in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
+            if let Some(value) = fields.remove(name) {
+                let _ = plugin_fields.insert(name.into(), value);
+            }
+        }
+        let mut session = SessionView {
             visible_fields: Some(
                 [
                     ("impersonatedBy", create_session.impersonated_by.is_some()),
@@ -321,25 +361,67 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             additional_fields: self
                 .session_config
                 .field_schema()
-                .storage_fields(self.session_config.default_fields(), true)?,
+                .storage_fields(fields, true)?,
         };
+        for (field, target) in [
+            ("impersonatedBy", &mut session.impersonated_by),
+            ("activeOrganizationId", &mut session.active_organization_id),
+            ("activeTeamId", &mut session.active_team_id),
+        ] {
+            if let Some(value) = plugin_fields.remove(field) {
+                *target = serde_json::from_value(value)?;
+                if let Some(visible) = &mut session.visible_fields {
+                    let _ = visible.insert(field.into());
+                }
+            }
+        }
         self.raw("session", "create", |state| {
-            let _ = state.sessions.insert(token, session.clone());
+            state.sessions.push(session.clone());
             Ok(())
         })
         .await?;
         let session = self.output_session(session)?;
-        self.after_create_runtime_session(&session).await?;
-        Ok(session)
+        self.after_create_runtime_session(&session, crate::hooks::current_request_hook_context())
+            .await?;
+        Ok(Some(session))
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<SessionView>> {
         self.raw("session", "findOne", |state| {
-            Ok(state.sessions.get(token).cloned())
+            state.sessions.find(|row| row.token == token)
         })
         .await?
         .map(|session| self.output_session(session))
         .transpose()
+    }
+
+    async fn get_session_snapshots(
+        &self,
+        tokens: &[String],
+        only_active: bool,
+    ) -> AuthResult<Vec<(SessionView, Option<crate::session::SessionData>)>> {
+        let now = Utc::now();
+        let sessions = self
+            .raw("session", "findMany", |state| {
+                Ok(crate::query::paginate_memory(
+                    state
+                        .sessions
+                        .snapshot()?
+                        .into_iter()
+                        .filter(|session| {
+                            tokens.contains(&session.token)
+                                && (!only_active || session.expires_at > now)
+                        })
+                        .collect(),
+                    Some(self.config.advanced.database.find_many_limit()),
+                    None,
+                ))
+            })
+            .await?;
+        sessions
+            .into_iter()
+            .map(|session| self.output_session(session).map(|session| (session, None)))
+            .collect()
     }
 
     async fn update_session_fields(
@@ -363,7 +445,8 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 Ok(crate::query::paginate_memory(
                     state
                         .sessions
-                        .values()
+                        .snapshot()?
+                        .iter()
                         .filter(|session| session.user_id == user_id)
                         .cloned()
                         .collect(),
@@ -397,14 +480,16 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
         let session = self
             .raw("session", "findOne", |state| {
-                Ok(state.sessions.get(token).cloned())
+                state.sessions.find(|row| row.token == token)
             })
             .await?;
         // A failed single-row snapshot prevents deletion, unlike a failed batch snapshot.
         let Some(session) = session.and_then(|row| self.output_session(row).ok()) else {
             return Ok(());
         };
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             if crate::observability::database::with_database_hook(
@@ -420,7 +505,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             }
         }
         self.raw("session", "delete", |state| {
-            let _ = state.sessions.shift_remove(token);
+            let _ = state.sessions.remove_first(|row| row.token == token)?;
             Ok(())
         })
         .await?;
@@ -557,6 +642,7 @@ async fn invitation_fields_update_atomically_with_team_membership() {
     let invitation = store.create_invitation(input).await.unwrap();
     let session = store
         .create_session(CreateSession {
+            additional_fields: Default::default(),
             user_id: "member".into(),
             expires_at: Utc::now() + chrono::Duration::days(1),
             ip_address: None,

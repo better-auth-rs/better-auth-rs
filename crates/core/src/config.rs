@@ -439,6 +439,8 @@ impl std::fmt::Display for SameSite {
 /// Advanced configuration options (mirrors TS `advanced` block).
 #[derive(Debug, Clone, Default)]
 pub struct AdvancedConfig {
+    /// Retain running notification tasks instead of awaiting delivery in the endpoint.
+    pub background_tasks: Option<crate::background::BackgroundTasks>,
     /// Legacy context-only override. Database inserts use `database.generate_id`.
     pub generate_id: Option<crate::id::IdGenerator>,
     /// Match HTTP routes with or without one trailing slash. Default: false.

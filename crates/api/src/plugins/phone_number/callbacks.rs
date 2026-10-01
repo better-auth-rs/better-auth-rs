@@ -1,11 +1,14 @@
 use super::{PhoneNumberPlugin, PhoneOtp, PhoneVerification};
 use crate::plugins::endpoint_context::{EndpointContext, WithCallbacks};
-use better_auth_core::{AuthPlugin, AuthResult, AuthSchema};
+use better_auth_core::{AuthPlugin, AuthResult, AuthSchema, background::BackgroundFuture};
 use std::{future::Future, pin::Pin, sync::Arc};
 
 /// Borrowing future for phone callbacks with access to the active typed store.
 pub type PhoneCallbackFuture<'a, T> = Pin<Box<dyn Future<Output = AuthResult<T>> + Send + 'a>>;
 type OtpCallback<S, T> = dyn for<'a> Fn(&'a PhoneOtp, &'a EndpointContext<'_, S>) -> PhoneCallbackFuture<'a, T>
+    + Send
+    + Sync;
+type Sender<S> = dyn Fn(&PhoneOtp, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
     + Send
     + Sync;
 type VerifiedCallback<S> = dyn for<'a> Fn(&'a PhoneVerification, &'a EndpointContext<'_, S>) -> PhoneCallbackFuture<'a, ()>
@@ -14,8 +17,8 @@ type VerifiedCallback<S> = dyn for<'a> Fn(&'a PhoneVerification, &'a EndpointCon
 
 /// Phone callbacks with parsed endpoint input and the complete authentication runtime.
 pub struct PhoneNumberCallbacks<S: AuthSchema> {
-    pub(super) send: Option<Arc<OtpCallback<S, ()>>>,
-    pub(super) reset: Option<Arc<OtpCallback<S, ()>>>,
+    pub(super) send: Option<Arc<Sender<S>>>,
+    pub(super) reset: Option<Arc<Sender<S>>>,
     pub(super) verify: Option<Arc<OtpCallback<S, bool>>>,
     pub(super) verified: Option<Arc<VerifiedCallback<S>>>,
 }
@@ -30,10 +33,11 @@ impl<S: AuthSchema> Default for PhoneNumberCallbacks<S> {
     }
 }
 impl<S: AuthSchema> PhoneNumberCallbacks<S> {
-    /// Deliver a verification code.
+    /// Start verification delivery. Return `None` for synchronous completion.
+    /// Retain the endpoint with `to_owned` when asynchronous delivery needs its context.
     pub fn send_otp<F>(mut self, callback: F) -> Self
     where
-        F: for<'a> Fn(&'a PhoneOtp, &'a EndpointContext<'_, S>) -> PhoneCallbackFuture<'a, ()>
+        F: Fn(&PhoneOtp, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
             + Send
             + Sync
             + 'static,
@@ -41,10 +45,10 @@ impl<S: AuthSchema> PhoneNumberCallbacks<S> {
         self.send = Some(Arc::new(callback));
         self
     }
-    /// Deliver a password reset code.
+    /// Start password reset delivery. Return `None` for synchronous completion.
     pub fn send_password_reset_otp<F>(mut self, callback: F) -> Self
     where
-        F: for<'a> Fn(&'a PhoneOtp, &'a EndpointContext<'_, S>) -> PhoneCallbackFuture<'a, ()>
+        F: Fn(&PhoneOtp, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
             + Send
             + Sync
             + 'static,
@@ -111,12 +115,12 @@ impl PhoneNumberPlugin {
             }
         }
     }
-    pub(super) async fn deliver<S: AuthSchema>(
+    pub(super) fn delivery<S: AuthSchema>(
         &self,
         otp: PhoneOtp,
         endpoint: &EndpointContext<'_, S>,
         kind: Delivery,
-    ) -> AuthResult<()> {
+    ) -> AuthResult<Option<BackgroundFuture>> {
         let callbacks = endpoint
             .auth
             .extensions
@@ -132,12 +136,12 @@ impl PhoneNumberPlugin {
             ),
         };
         if let Some(callback) = typed {
-            callback(&otp, endpoint).await
+            callback(&otp, endpoint)
         } else if let Some(callback) = legacy {
             let request = endpoint.request.ok_or_else(|| {
                 better_auth_core::AuthError::config("Legacy phone callbacks require a request")
             })?;
-            callback(otp, request.clone()).await
+            Ok(Some(callback(otp, request.clone())))
         } else {
             Err(super::error(
                 501,

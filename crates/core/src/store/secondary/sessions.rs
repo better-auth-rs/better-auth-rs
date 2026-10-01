@@ -104,6 +104,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
             let _ = fields.remove("userId");
         }
         fields.extend(self.config.session.default_fields());
+        fields.extend(input.additional_fields);
         self.hydrate_session(fields)
     }
 
@@ -324,21 +325,38 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
             .await
     }
 
-    async fn create_session(
+    async fn create_session(&self, input: CreateSession) -> AuthResult<crate::wire::SessionView> {
+        self.create_session_optional(input)
+            .await?
+            .ok_or_else(|| AuthError::forbidden("session creation cancelled by database hook"))
+    }
+    async fn create_session_optional(
         &self,
         mut input: CreateSession,
-    ) -> AuthResult<crate::wire::SessionView> {
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        let request = crate::hooks::current_request_hook_context();
         let session = if self.database_sessions() {
-            self.inner.create_session(input).await?
+            let Some(session) = self.inner.create_session_optional(input).await? else {
+                return Ok(None);
+            };
+            session
         } else {
-            self.inner.before_create_runtime_session(&mut input).await?;
+            if !self
+                .inner
+                .before_create_runtime_session_optional(&mut input)
+                .await?
+            {
+                return Ok(None);
+            }
             self.new_session(input)?
         };
         self.mirror_session(&session).await?;
         if !self.database_sessions() {
-            self.inner.after_create_runtime_session(&session).await?;
+            self.inner
+                .after_create_runtime_session(&session, request)
+                .await?;
         }
-        Ok(session)
+        Ok(Some(session))
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<crate::wire::SessionView>> {
@@ -387,6 +405,32 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
             .get_session(token)
             .await?
             .map(|session| (session, None)))
+    }
+
+    async fn get_session_snapshots(
+        &self,
+        tokens: &[String],
+        only_active: bool,
+    ) -> AuthResult<Vec<(SessionView, Option<crate::session::SessionData>)>> {
+        if self.storage.is_none() {
+            return self.inner.get_session_snapshots(tokens, only_active).await;
+        }
+        let mut sessions = Vec::new();
+        for token in tokens {
+            let Some(cached) = decode(self.secondary()?.get(token).await?) else {
+                continue;
+            };
+            // Upstream batch reads skip malformed cache entries and never fall back to the database.
+            let Ok(mut data) = serde_json::from_value::<crate::session::SessionData>(cached) else {
+                continue;
+            };
+            if only_active && data.session.expires_at <= Utc::now() {
+                continue;
+            }
+            data.session.active = true;
+            sessions.push((data.session.clone(), Some(data)));
+        }
+        Ok(sessions)
     }
 
     async fn update_session_fields(

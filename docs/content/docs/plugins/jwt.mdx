@@ -5,6 +5,8 @@ description: Sign session tokens with persisted asymmetric keys and expose publi
 
 Register `JwtPlugin::new()`. `GET /jwks` returns public signing keys. Authenticated `GET /token` returns `{ "token": "..." }`.
 
+Database key lists apply `advanced.database.default_find_many_limit` before expiration filtering and newest-key selection. A zero limit or a page containing only expired keys causes signing to create a new key. Custom `get_jwks` callbacks supply their complete keyset without this database limit.
+
 `GET /get-session` signs the endpoint session snapshot and exposes `set-auth-jwt` through CORS. The snapshot is independent of the response body. Better Auth 1.7.6 retains an expired session in endpoint context, so a null expired-session response can still carry a newly signed JWT. A revoked session has no snapshot and emits no JWT. Do not use this header as proof that the session response authenticated the request. `.disable_setting_jwt_header(true)` disables the header.
 
 The default algorithm is Ed25519 (`EdDSA`). Select `Rs256`, `Ps256`, `Es256`, or `Es512` with `.algorithm(...)`. These algorithms use RSA PKCS#1, RSA PSS, P-256, and P-521 respectively. RSA keys default to 2048 bits; `.modulus_length(3072)` changes the primary RSA key size. The store persists keys through `JwksStore`; private JWKs are encrypted with the authentication secret. Public discovery never returns private key parameters.

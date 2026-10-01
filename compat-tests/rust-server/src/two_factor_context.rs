@@ -26,7 +26,11 @@ impl TwoFactorContextFixture {
             callbacks = callbacks.send(move |user, otp, endpoint| {
                 let fixture = fixture.clone();
                 let outbox = outbox.clone();
-                Box::pin(async move {
+                let user = user.clone();
+                let otp = otp.to_owned();
+                let endpoint = endpoint.to_owned();
+                Ok(Some(Box::pin(async move {
+                    let endpoint = endpoint.as_endpoint();
                     let stored = endpoint.auth.database.get_user_by_id(user.id.typed().unwrap()).await?.expect("callback user exists");
                     fixture.events.lock().unwrap().push(json!({
                         "user": { "id":user.id, "email":user.email, "secretNote":user.additional_fields.get("secretNote") },
@@ -44,7 +48,7 @@ impl TwoFactorContextFixture {
                         return Err(AuthError::Upstream { status: 503, code: "DELIVERY_UNAVAILABLE", message: "Fixture delivery unavailable" });
                     }
                     Ok(())
-                })
+                })))
             });
         }
         plugin.callbacks(callbacks)

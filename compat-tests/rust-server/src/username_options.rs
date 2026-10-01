@@ -296,7 +296,7 @@ async fn finish<S: AuthSchema>(
                 EmailOtpPlugin::new().callbacks(
                     EmailOtpCallbacks::<S>::default()
                         .generate(|_, _, _| Ok(Some("123456".into())))
-                        .send(|_, _| Box::pin(async { Ok(()) })),
+                        .send(|_, _| Ok(None)),
                 ),
             )
             .plugin(

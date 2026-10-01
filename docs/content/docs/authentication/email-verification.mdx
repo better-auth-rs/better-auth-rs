@@ -102,7 +102,15 @@ GET /verify-email?token=<verification_token>
 
 ## Sending After Sign-Up
 
-Call `/send-verification-email` after a successful sign-up. Registering `EmailVerificationPlugin` does not automatically send mail when a user is created. Users become verified only after completing the verification flow.
+Set `.send_on_sign_up(true)` to send verification mail during email signup. With this option omitted, signup follows `EmailPasswordConfig::require_email_verification`. Delivery starts after account creation and before session creation, inside the signup transaction. Users become verified only after completing the verification flow.
+
+Register `.callbacks(EmailVerificationCallbacks::<AppAuthSchema>::send(callback))` for automatic verification notifications that need the full endpoint context. The callback receives `VerificationEmail` and `EndpointContext`. Return `Err` for a synchronous callback failure, `Ok(None)` for synchronous completion, or `Ok(Some(BackgroundFuture))` for asynchronous delivery. A synchronous failure propagates to signup. An asynchronous delivery failure is logged and does not abort signup, matching the upstream notification boundary.
+
+Use `EndpointContext::to_owned()` when delivery must retain the endpoint. Call `as_endpoint()` inside the future to access the same resolved runtime and transaction. Do not substitute the normal store for the retained transaction: SQL transactions reject operations after finalization, while the memory adapter preserves its isolated transaction rows.
+
+Set `config.advanced.background_tasks = Some(BackgroundTasks::new(handler))` to let automatic verification delivery continue after the response. The handler receives an already-running `BackgroundTask`; dropping this handle does not cancel delivery. Without a handler, signup awaits delivery. The task retains request and logger scope. Transaction after hooks still run after commit, in their existing order, and rollback discards them.
+
+The typed callback and background scheduler cover automatic signup, signin and OAuth verification notifications, [password reset](/docs/authentication/password-management#reset-callbacks), and [Phone OTP notifications](/docs/plugins/phone-number#typed-callback-context). Explicit verification-route delivery and the remaining notification plugins retain their existing callback interfaces until their background-task integration is complete.
 
 For Generic OAuth, attach the verification plugin with `OAuthPlugin::with_email_verification`. New unverified users follow `send_on_sign_up`; subsequent sign-ins send only when the provider requires email verification and `send_on_sign_in` is enabled. Sender failures are logged and preserve the verification decision, matching upstream. See [Generic OAuth / OIDC](/docs/plugins/oauth#generic-oauth--oidc).
 

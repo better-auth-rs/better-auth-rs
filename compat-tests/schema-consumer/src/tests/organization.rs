@@ -212,7 +212,7 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
         .unwrap();
     assert_eq!(row.label.as_deref(), Some("updated"));
     assert_eq!(row.tags.unwrap().0, ["one", "two"]);
-    assert_eq!(row.metadata, Some(json!({})));
+    assert_eq!(row.metadata.as_deref(), Some("{}"));
     let team = post(
         &router,
         "/auth/organization/create-team",

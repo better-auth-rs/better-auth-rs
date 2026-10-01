@@ -1,0 +1,2664 @@
+[
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "body": ""
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject-immediate",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "log:sender-async",
+      "response",
+      "gate:release"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "body": ""
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject-immediate",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:sender-async",
+      "response",
+      "gate:release"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "body": ""
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject-immediate",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "log:sender-async",
+      "response",
+      "gate:release"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/email-otp/send-verification-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync",
+      "body": null
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject-immediate",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "log:sender-async",
+      "response",
+      "gate:release"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync",
+      "body": null
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject-immediate",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:sender-async",
+      "response",
+      "gate:release"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync",
+      "body": null
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "email-otp",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject-immediate",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"success\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "log:sender-async",
+      "response",
+      "gate:release"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "background@example.com",
+          "type": "sign-in"
+        },
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to send two-factor OTP",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "body": ""
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject-immediate",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "log:sender-async",
+      "response",
+      "gate:release"
+    ],
+    "logs": [
+      {
+        "message": "Failed to send two-factor OTP",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to send two-factor OTP",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "body": ""
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject-immediate",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:sender-async",
+      "response",
+      "gate:release"
+    ],
+    "logs": [
+      {
+        "message": "Failed to send two-factor OTP",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to send two-factor OTP",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "body": ""
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject-immediate",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "log:sender-async",
+      "response",
+      "gate:release"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to send two-factor OTP",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": true,
+        "requestURL": "http://localhost:3000/api/auth/two-factor/send-otp",
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to send two-factor OTP",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync",
+      "body": null
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject-immediate",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "log:sender-async",
+      "response",
+      "gate:release"
+    ],
+    "logs": [
+      {
+        "message": "Failed to send two-factor OTP",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to send two-factor OTP",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync",
+      "body": null
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject-immediate",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:sender-async",
+      "response",
+      "gate:release"
+    ],
+    "logs": [
+      {
+        "message": "Failed to send two-factor OTP",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to send two-factor OTP",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      },
+      {
+        "phase": "released",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync",
+      "body": null
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "two-factor",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject-immediate",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": 1,
+    "storedAfterResponse": 1,
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "body": "{\"status\":true}"
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "log:sender-async",
+      "response",
+      "gate:release"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to send two-factor OTP",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "sameContext": true,
+        "path": "/two-factor/send-otp",
+        "body": {},
+        "request": false,
+        "requestURL": null,
+        "sameRequest": true,
+        "baseURL": "http://localhost:3000/api/auth"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  }
+]

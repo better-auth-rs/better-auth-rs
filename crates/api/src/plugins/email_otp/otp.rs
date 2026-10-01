@@ -132,35 +132,31 @@ impl EmailOtpPlugin {
             otp,
             kind,
         };
-        let result = if let Some(sender) = endpoint
-            .auth
-            .extensions
-            .get::<Arc<EmailOtpCallbacks<S>>>()
-            .and_then(|callbacks| callbacks.sender.as_ref())
+        let task: Option<better_auth_core::background::BackgroundFuture> = if let Some(sender) =
+            endpoint
+                .auth
+                .extensions
+                .get::<Arc<EmailOtpCallbacks<S>>>()
+                .and_then(|callbacks| callbacks.sender.as_ref())
         {
-            sender(&message, endpoint).await
+            sender(&message, endpoint)?
         } else {
-            self.config
+            let sender = self
+                .config
                 .sender
                 .as_ref()
                 .ok_or_else(|| {
                     AuthError::bad_request("send email verification is not implemented")
                 })?
-                .send(&message)
-                .await
+                .clone();
+            Some(Box::pin(async move { sender.send(&message).await }))
         };
-        // Upstream logs notification failures without changing the endpoint result.
-        if let Err(error) = result {
-            better_auth_core::observability::logger::current().error(
-                "Failed to run background task",
-                &[
-                    better_auth_core::observability::LogArgument::Value(&serde_json::json!(
-                        "email-otp"
-                    )),
-                    better_auth_core::observability::LogArgument::Error(&error),
-                ],
-            );
-        }
+        better_auth_core::background::run_or_await(
+            task,
+            endpoint.auth.config.advanced.background_tasks.as_ref(),
+            &endpoint.auth.config.logger,
+        )
+        .await;
         Ok(())
     }
     pub(super) async fn create_otp(
@@ -196,10 +192,18 @@ impl EmailOtpPlugin {
         let ctx = endpoint.auth;
         let identifier = kind.identifier(email);
         if self.config.reuse_otp
-            && let Some(existing) = ctx
-                .database
-                .get_verification_including_expired(&identifier)
-                .await?
+            && let Some(existing) = match endpoint.transaction {
+                Some(transaction) => {
+                    transaction
+                        .get_verification_including_expired(&identifier)
+                        .await?
+                }
+                None => {
+                    ctx.database
+                        .get_verification_including_expired(&identifier)
+                        .await?
+                }
+            }
         {
             let (stored, attempts) = split(existing.value.typed()?);
             if existing.expires_at.is_after_or_equal(Utc::now())
@@ -209,13 +213,20 @@ impl EmailOtpPlugin {
                     .await?
                     .filter(|otp| !otp.is_empty())
             {
-                ctx.database
-                    .update_verification_by_identifier(
-                        &identifier,
-                        None,
-                        Some(Utc::now() + self.config.expires_in),
-                    )
-                    .await?;
+                let update = better_auth_core::store::database_hooks::VerificationUpdate {
+                    expires_at: (Utc::now() + self.config.expires_in).into(),
+                    ..Default::default()
+                };
+                let _ = match endpoint.transaction {
+                    Some(transaction) => {
+                        transaction.update_verification(&identifier, update).await?
+                    }
+                    None => {
+                        ctx.database
+                            .update_verification(&identifier, update)
+                            .await?
+                    }
+                };
                 return Ok(otp);
             }
         }

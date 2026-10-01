@@ -4,7 +4,7 @@ use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder,
+    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, QuerySelect,
 };
 use serde_json::{Map, json};
 
@@ -60,7 +60,10 @@ where
         database_operation::<Entity<P::Passkey>, _>(self.config(), "findMany", async {
             Entity::<P::Passkey>::find()
                 .filter(P::Passkey::column("user_id")?.eq(user_id))
-                .order_by_desc(P::Passkey::column("created_at")?)
+                .limit(super::pagination::default_limit(
+                    self.config(),
+                    self.connection().get_database_backend(),
+                )?)
                 .all(self.connection())
                 .await
                 .map_err(map_db_err)

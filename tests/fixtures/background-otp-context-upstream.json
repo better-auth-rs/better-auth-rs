@@ -1,0 +1,759 @@
+[
+  {
+    "reuse": false,
+    "outcome": "commit",
+    "result": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "verification:create.before",
+      "sender",
+      "session:create.before",
+      "user:create.after",
+      "verification:create.after",
+      "session:create.after"
+    ],
+    "observations": [
+      {
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "override@example.com",
+          "type": "email-verification"
+        },
+        "hasRequest": false,
+        "userFound": true,
+        "value": "654321:0",
+        "otp": "654321"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "verification:create.before",
+        "ambient": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "sender",
+        "ambient": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "session:create.before",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "user:create.after",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "verification:create.after",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "session:create.after",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        }
+      }
+    ],
+    "stored": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "verification": [
+        {
+          "value": "654321:0",
+          "originalExpiry": false
+        }
+      ]
+    }
+  },
+  {
+    "reuse": false,
+    "outcome": "rollback",
+    "result": {
+      "status": null,
+      "thrown": "session-rejected"
+    },
+    "events": [
+      "verification:create.before",
+      "sender",
+      "session:create.before"
+    ],
+    "observations": [
+      {
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "override@example.com",
+          "type": "email-verification"
+        },
+        "hasRequest": false,
+        "userFound": true,
+        "value": "654321:0",
+        "otp": "654321"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "verification:create.before",
+        "ambient": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "sender",
+        "ambient": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "session:create.before",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        }
+      }
+    ],
+    "stored": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "verification": []
+    }
+  },
+  {
+    "reuse": false,
+    "outcome": "after-error",
+    "result": {
+      "status": null,
+      "thrown": "after-error"
+    },
+    "events": [
+      "verification:create.before",
+      "sender",
+      "session:create.before",
+      "user:create.after"
+    ],
+    "observations": [
+      {
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "override@example.com",
+          "type": "email-verification"
+        },
+        "hasRequest": false,
+        "userFound": true,
+        "value": "654321:0",
+        "otp": "654321"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "verification:create.before",
+        "ambient": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "sender",
+        "ambient": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "session:create.before",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "user:create.after",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        }
+      }
+    ],
+    "stored": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "verification": [
+        {
+          "value": "654321:0",
+          "originalExpiry": false
+        }
+      ]
+    }
+  },
+  {
+    "reuse": true,
+    "outcome": "commit",
+    "result": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "verification:update.before",
+      "sender",
+      "session:create.before",
+      "user:create.after",
+      "verification:update.after",
+      "session:create.after"
+    ],
+    "observations": [
+      {
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "override@example.com",
+          "type": "email-verification"
+        },
+        "hasRequest": false,
+        "userFound": true,
+        "value": "123456:0",
+        "otp": "123456"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "verification:update.before",
+        "ambient": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "sender",
+        "ambient": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "session:create.before",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "user:create.after",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "verification:update.after",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "session:create.after",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        }
+      }
+    ],
+    "stored": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "verification": [
+        {
+          "value": "123456:0",
+          "originalExpiry": false
+        }
+      ]
+    }
+  },
+  {
+    "reuse": true,
+    "outcome": "rollback",
+    "result": {
+      "status": null,
+      "thrown": "session-rejected"
+    },
+    "events": [
+      "verification:update.before",
+      "sender",
+      "session:create.before"
+    ],
+    "observations": [
+      {
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "override@example.com",
+          "type": "email-verification"
+        },
+        "hasRequest": false,
+        "userFound": true,
+        "value": "123456:0",
+        "otp": "123456"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "verification:update.before",
+        "ambient": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "sender",
+        "ambient": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "session:create.before",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        }
+      }
+    ],
+    "stored": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "verification": [
+        {
+          "value": "123456:0",
+          "originalExpiry": true
+        }
+      ]
+    }
+  },
+  {
+    "reuse": true,
+    "outcome": "after-error",
+    "result": {
+      "status": null,
+      "thrown": "after-error"
+    },
+    "events": [
+      "verification:update.before",
+      "sender",
+      "session:create.before",
+      "user:create.after"
+    ],
+    "observations": [
+      {
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "override@example.com",
+          "type": "email-verification"
+        },
+        "hasRequest": false,
+        "userFound": true,
+        "value": "123456:0",
+        "otp": "123456"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "verification:update.before",
+        "ambient": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "sender",
+        "ambient": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/email-otp/send-verification-otp",
+          "body": {
+            "email": "override@example.com",
+            "type": "email-verification"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "session:create.before",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        }
+      },
+      {
+        "phase": "user:create.after",
+        "ambient": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        },
+        "supplied": {
+          "path": "/sign-up/email",
+          "body": {
+            "name": "Override",
+            "email": "override@example.com",
+            "password": "fixture-password"
+          },
+          "request": false
+        }
+      }
+    ],
+    "stored": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "verification": [
+        {
+          "value": "123456:0",
+          "originalExpiry": false
+        }
+      ]
+    }
+  }
+]

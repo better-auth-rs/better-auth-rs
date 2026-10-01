@@ -84,6 +84,7 @@ mod oauth_popup;
 mod oidc;
 mod one_tap;
 mod openapi;
+mod organization_metadata;
 mod otp_callbacks;
 mod passkey_options;
 mod password_policy;
@@ -680,7 +681,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         axum::serve(listener, app).await?;
         return Ok(());
     }
-    if device_profile.starts_with("request-security-")
+    if device_profile.starts_with("request-two-factor-")
+        || device_profile.starts_with("request-security-")
+        || device_profile.starts_with("request-admin-")
+        || device_profile.starts_with("request-api-key-")
         || device_profile.starts_with("request-organization-")
         || device_profile.starts_with("request-query-")
         || device_profile.starts_with("request-plugin-")
@@ -733,7 +737,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if matches!(
         device_profile.as_str(),
-        "dynamic-context" | "dynamic-native" | "dynamic-oauth" | "id-policy"
+        "dynamic-context"
+            | "dynamic-native"
+            | "dynamic-oauth"
+            | "id-policy"
+            | "organization-metadata"
     ) || device_profile.starts_with("dynamic-environment:")
     {
         axum::serve(listener, dynamic_context::router()).await?;

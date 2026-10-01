@@ -15,6 +15,12 @@ Set `advanced.cross_sub_domain_cookies = Some(CrossSubDomainConfig { domain: Non
 
 Use `config.auth_cookie("session_token", CookieAttributes::default())` to inspect the resolved name and attributes. Application cookies can use `context.create_auth_cookie` with their logical name and caller attributes.
 
+## Response Cookies
+
+`Headers::get_all("set-cookie")` returns every cookie in response order. Ordinary writes retain repeated names. A client must apply each entry in order, so the final value for a cookie determines the browser state.
+
+Explicit expiration removes earlier entries for the cookie name and its chunks before adding the expiration header. Session revocation and Two Factor challenges use this operation to keep discarded credentials out of response headers. A raw `Max-Age=0` header remains an ordinary write. Custom plugin expiration can call `remove_set_cookie_entries(request, Some(&mut response.headers), name)` from `better_auth_core::utils::cookie_utils` before appending its expiration header.
+
 ## Default Cookie Settings
 
 By default, Better Auth sets session cookies with the following attributes:

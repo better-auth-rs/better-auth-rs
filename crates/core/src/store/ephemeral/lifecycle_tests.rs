@@ -197,8 +197,8 @@ async fn concurrent_consume_runs_hooks_once_and_invalidates_older_rows() {
         .lock()
         .unwrap()
         .verifications
-        .iter_mut()
-        .find(|row| row.get("id") == old.id.json().unwrap().as_ref())
+        .find_mut(|row| row.get("id") == old.id.json().unwrap().as_ref())
+        .unwrap()
         .unwrap()
         .insert(
             "createdAt".into(),
@@ -379,6 +379,7 @@ async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
 
     let session = store
         .create_session(CreateSession {
+            additional_fields: Default::default(),
             user_id: user.id,
             expires_at: Utc::now() + chrono::Duration::days(1),
             ip_address: None,

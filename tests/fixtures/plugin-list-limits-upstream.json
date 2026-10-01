@@ -1,0 +1,94 @@
+[
+  {
+    "backend": "memory",
+    "limit": 0,
+    "passkeys": [],
+    "keys": [],
+    "selected": "generated"
+  },
+  {
+    "backend": "memory",
+    "limit": 1,
+    "passkeys": [
+      "first"
+    ],
+    "keys": [
+      "first"
+    ],
+    "selected": "generated"
+  },
+  {
+    "backend": "memory",
+    "limit": 2,
+    "passkeys": [
+      "first",
+      "second"
+    ],
+    "keys": [
+      "first",
+      "second"
+    ],
+    "selected": "second"
+  },
+  {
+    "backend": "memory",
+    "limit": 100,
+    "passkeys": [
+      "first",
+      "second",
+      "third"
+    ],
+    "keys": [
+      "first",
+      "second",
+      "third"
+    ],
+    "selected": "third"
+  },
+  {
+    "backend": "sqlite",
+    "limit": 0,
+    "passkeys": [],
+    "keys": [],
+    "selected": "generated"
+  },
+  {
+    "backend": "sqlite",
+    "limit": 1,
+    "passkeys": [
+      "first"
+    ],
+    "keys": [
+      "first"
+    ],
+    "selected": "generated"
+  },
+  {
+    "backend": "sqlite",
+    "limit": 2,
+    "passkeys": [
+      "first",
+      "second"
+    ],
+    "keys": [
+      "first",
+      "second"
+    ],
+    "selected": "second"
+  },
+  {
+    "backend": "sqlite",
+    "limit": 100,
+    "passkeys": [
+      "first",
+      "second",
+      "third"
+    ],
+    "keys": [
+      "first",
+      "second",
+      "third"
+    ],
+    "selected": "third"
+  }
+]

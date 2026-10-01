@@ -57,11 +57,17 @@ impl OtpCallbacksFixture {
                 })
                 .send(move |message, endpoint| {
                     let fixture = send.clone();
-                    Box::pin(async move {
-                        let exists = endpoint.auth.database.get_user_by_email(&message.email).await?.is_some();
-                        fixture.event("email.send", json!({"email":message.email,"type":message.kind,"userExists":exists}), endpoint);
-                        Self::fail(endpoint, "email-send")
-                    })
+                    let message = message.clone();
+                    let endpoint = endpoint.to_owned();
+                    Ok(Some(Box::pin(async move {
+                        let endpoint = endpoint.as_endpoint();
+                        let exists = match endpoint.transaction {
+                            Some(transaction) => transaction.get_user_by_email(&message.email).await?,
+                            None => endpoint.auth.database.get_user_by_email(&message.email).await?,
+                        }.is_some();
+                        fixture.event("email.send", json!({"email":message.email,"type":message.kind,"userExists":exists}), &endpoint);
+                        Self::fail(&endpoint, "email-send")
+                    })))
                 }))
     }
     pub(super) fn phone(&self) -> impl AuthPlugin<TestSchema> {
@@ -72,16 +78,18 @@ impl OtpCallbacksFixture {
         PhoneNumberPlugin::new().sign_up_on_verification(|phone| format!("{phone}@phone.example.com"))
             .require_verification(true)
             .callbacks(PhoneNumberCallbacks::<TestSchema>::default()
-                .send_otp(move |message, endpoint| { let fixture=send.clone(); Box::pin(async move {
+                .send_otp(move |message, endpoint| { let fixture=send.clone(); let message=message.clone(); let endpoint=endpoint.to_owned(); Ok(Some(Box::pin(async move {
+                    let endpoint=endpoint.as_endpoint();
                     let exists=endpoint.auth.database.get_user_by_phone_number(&message.phone_number).await?.is_some();
-                    fixture.event("phone.send", json!({"phoneNumber":message.phone_number,"userExists":exists}), endpoint);
-                    Self::fail(endpoint,"phone-send")
-                }) })
-                .send_password_reset_otp(move |message, endpoint| { let fixture=reset.clone(); Box::pin(async move {
+                    fixture.event("phone.send", json!({"phoneNumber":message.phone_number,"userExists":exists}), &endpoint);
+                    Self::fail(&endpoint,"phone-send")
+                }))) })
+                .send_password_reset_otp(move |message, endpoint| { let fixture=reset.clone(); let message=message.clone(); let endpoint=endpoint.to_owned(); Ok(Some(Box::pin(async move {
+                    let endpoint=endpoint.as_endpoint();
                     let exists=endpoint.auth.database.get_user_by_phone_number(&message.phone_number).await?.is_some();
-                    fixture.event("phone.reset", json!({"phoneNumber":message.phone_number,"userExists":exists}), endpoint);
-                    Self::fail(endpoint,"phone-reset")
-                }) })
+                    fixture.event("phone.reset", json!({"phoneNumber":message.phone_number,"userExists":exists}), &endpoint);
+                    Self::fail(&endpoint,"phone-reset")
+                }))) })
                 .verify_otp(move |message, endpoint| { let fixture=verify.clone(); Box::pin(async move {
                     fixture.event("phone.verify", json!({"phoneNumber":message.phone_number}), endpoint);
                     Self::fail(endpoint,"phone-verify")?;

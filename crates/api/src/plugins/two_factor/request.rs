@@ -1,59 +1,131 @@
-use better_auth_core::{AuthRequest, AuthResponse};
+use super::*;
+use crate::plugins::json_body::{invalid_type, validation_error};
+use better_auth_core::endpoint_input::ValidatedBody;
 use serde::de::DeserializeOwned;
+use serde_json::{Map, Value};
 
-use crate::plugins::json_body::{invalid_type, parse, validation_error};
-
-pub(super) fn send_otp(req: &AuthRequest) -> Result<serde_json::Value, AuthResponse> {
-    let Some(value) = parse(req)? else {
-        return Ok(serde_json::Value::Null);
-    };
-    let body = value
-        .as_object()
-        .ok_or_else(|| validation_error(&invalid_type("body", "object", Some(&value))))?;
-    let mut filtered = serde_json::Map::new();
-    if let Some(trust_device) = body.get("trustDevice") {
-        if !trust_device.is_boolean() {
-            return Err(validation_error(&invalid_type(
-                "body.trustDevice",
-                "boolean",
-                Some(trust_device),
-            )));
-        }
-        _ = filtered.insert("trustDevice".to_owned(), trust_device.clone());
+pub(super) fn read<T: Clone + Send + Sync + 'static>(
+    req: &AuthRequest,
+    password_optional: bool,
+) -> AuthResult<T> {
+    if let Some(value) = req.validated_body::<T>() {
+        return Ok(value.clone());
     }
-    Ok(serde_json::Value::Object(filtered))
+    validate(req, password_optional)?
+        .get::<T>()
+        .cloned()
+        .ok_or_else(|| {
+            AuthError::internal("Two Factor body validator returned a different input type")
+        })
 }
 
-pub(super) fn password<T: DeserializeOwned>(
-    req: &AuthRequest,
-    optional: bool,
-    enable: bool,
-) -> Result<T, AuthResponse> {
-    let value =
-        parse(req)?.ok_or_else(|| validation_error(&invalid_type("body", "object", None)))?;
-    let body = value
-        .as_object()
-        .ok_or_else(|| validation_error(&invalid_type("body", "object", Some(&value))))?;
-    let mut errors = Vec::new();
-    let password = body.get("password");
-    if (password.is_some() || !optional) && !password.is_some_and(serde_json::Value::is_string) {
-        errors.push(invalid_type("body.password", "string", password));
+fn typed<T: DeserializeOwned + Send + Sync + 'static>(
+    output: Map<String, Value>,
+) -> AuthResult<ValidatedBody> {
+    let output = Value::Object(output);
+    Ok(ValidatedBody::new(
+        Some(output.clone()),
+        serde_json::from_value::<T>(output)?,
+    ))
+}
+
+pub(super) fn validate(req: &AuthRequest, password_optional: bool) -> AuthResult<ValidatedBody> {
+    let input = req.input_body()?;
+    if req.path() == "/two-factor/send-otp" && input.is_none() {
+        return Ok(ValidatedBody::new(None, Value::Null));
     }
-    if enable {
-        if let Some(method) = body.get("method")
-            && !matches!(method.as_str(), Some("totp" | "otp"))
-        {
-            errors
-                .push("[body.method] Invalid option: expected one of \"otp\"|\"totp\"".to_owned());
+    let body = input.as_ref().and_then(Value::as_object).ok_or_else(|| {
+        AuthError::from(validation_error(&invalid_type(
+            "body",
+            "object",
+            input.as_ref(),
+        )))
+    })?;
+    let fields: &[(&str, &str, bool)] = match req.path() {
+        "/two-factor/enable" => &[
+            ("password", "string", !password_optional),
+            ("method", "method", false),
+            ("issuer", "string", false),
+        ],
+        "/two-factor/disable"
+        | "/two-factor/get-totp-uri"
+        | "/two-factor/generate-backup-codes" => &[("password", "string", !password_optional)],
+        "/two-factor/verify-totp" | "/two-factor/verify-otp" => {
+            &[("code", "string", true), ("trustDevice", "boolean", false)]
         }
-        if let Some(issuer) = body.get("issuer")
-            && !issuer.is_string()
-        {
-            errors.push(invalid_type("body.issuer", "string", Some(issuer)));
+        "/two-factor/verify-backup-code" => &[
+            ("code", "string", true),
+            ("disableSession", "boolean", false),
+            ("trustDevice", "boolean", false),
+        ],
+        "/two-factor/send-otp" => &[("trustDevice", "boolean", false)],
+        "generateTOTP" => &[("secret", "string", true)],
+        "viewBackupCodes" => &[("userId", "id", true)],
+        _ => return Err(AuthError::internal("Unknown Two Factor body schema")),
+    };
+    let mut output = Map::new();
+    let mut errors = Vec::new();
+    for &(name, kind, required) in fields {
+        let value = body.get(name);
+        if value.is_none() && !required {
+            if kind == "method" {
+                let _ = output.insert(name.into(), Value::String("totp".into()));
+            }
+            continue;
+        }
+        let valid = match kind {
+            "id" => value.is_some(),
+            "string" => value.is_some_and(Value::is_string),
+            "boolean" => value.is_some_and(Value::is_boolean),
+            "method" => matches!(value.and_then(Value::as_str), Some("otp" | "totp")),
+            _ => false,
+        };
+        if valid {
+            if let Some(value) = value {
+                let value = if kind == "id" {
+                    better_auth_core::SchemaValue::<Value>::from_json(Some(value.clone()))
+                        .display_string()?
+                        .into()
+                } else {
+                    value.clone()
+                };
+                let _ = output.insert(name.into(), value);
+            }
+        } else {
+            errors.push(if kind == "method" {
+                "[body.method] Invalid option: expected one of \"otp\"|\"totp\"".into()
+            } else {
+                invalid_type(
+                    &format!("body.{name}"),
+                    if kind == "id" { "nonoptional" } else { kind },
+                    value,
+                )
+            });
         }
     }
     if !errors.is_empty() {
-        return Err(validation_error(&errors.join("; ")));
+        return Err(validation_error(&errors.join("; ")).into());
     }
-    serde_json::from_value(value).map_err(|error| validation_error(&error.to_string()))
+    match req.path() {
+        "/two-factor/enable" => typed::<EnableRequest>(output),
+        "/two-factor/disable" => typed::<DisableRequest>(output),
+        "/two-factor/get-totp-uri" => typed::<GetTotpUriRequest>(output),
+        "/two-factor/verify-totp" => typed::<VerifyTotpRequest>(output),
+        "/two-factor/verify-otp" => typed::<VerifyOtpRequest>(output),
+        "/two-factor/generate-backup-codes" => typed::<GenerateBackupCodesRequest>(output),
+        "/two-factor/verify-backup-code" => typed::<VerifyBackupCodeRequest>(output),
+        "generateTOTP" => typed::<GenerateTotpRequest>(output),
+        "viewBackupCodes" => typed::<ViewBackupCodesRequest>(output),
+        _ => typed::<Value>(output),
+    }
+}
+
+#[derive(Clone, Deserialize)]
+pub(super) struct GenerateTotpRequest {
+    pub secret: String,
+}
+#[derive(Clone, Deserialize)]
+pub(super) struct ViewBackupCodesRequest {
+    #[serde(rename = "userId")]
+    pub user_id: String,
 }

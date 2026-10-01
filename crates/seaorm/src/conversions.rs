@@ -17,7 +17,13 @@ impl From<&entities::organization::Model> for Organization {
             name: model.name.clone().into(),
             slug: model.slug.clone().into(),
             logo: model.logo.clone().into(),
-            metadata: model.metadata.clone().into(),
+            metadata: better_auth_core::SchemaValue::Dynamic(
+                model
+                    .metadata
+                    .clone()
+                    .map(serde_json::Value::String)
+                    .unwrap_or(serde_json::Value::Null),
+            ),
             created_at: model.created_at.into(),
         }
     }

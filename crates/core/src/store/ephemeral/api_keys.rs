@@ -54,26 +54,23 @@ impl ApiKeyStore for EphemeralStore {
     }
 
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
-        self.raw("apikey", "findOne", |state| {
-            Ok(state.api_keys.get(id).cloned())
-        })
-        .await
+        self.raw("apikey", "findOne", |state| state.api_keys.get(id))
+            .await
     }
 
     async fn get_api_key_by_id_value(
         &self,
         id: &crate::SchemaValue<String>,
     ) -> AuthResult<Option<ApiKey>> {
-        self.raw("apikey", "findOne", |state| {
-            Ok(state.api_keys.get(id).cloned())
-        })
-        .await
+        self.raw("apikey", "findOne", |state| state.api_keys.get(id))
+            .await
     }
 
     async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>> {
         self.raw("apikey", "findOne", |state| {
             Ok(state
                 .api_keys
+                .snapshot()?
                 .iter()
                 .find(|key| key.key_hash == hash)
                 .cloned())
@@ -89,6 +86,7 @@ impl ApiKeyStore for EphemeralStore {
         self.raw("apikey", "findMany", |state| {
             let mut keys: Vec<_> = state
                 .api_keys
+                .snapshot()?
                 .iter()
                 .filter(|key| key.reference_id == reference_id)
                 .cloned()
@@ -117,6 +115,7 @@ impl ApiKeyStore for EphemeralStore {
         self.raw("apikey", "count", |state| {
             Ok(state
                 .api_keys
+                .snapshot()?
                 .iter()
                 .filter(|key| key.reference_id == reference_id)
                 .count() as u64)
@@ -130,7 +129,7 @@ impl ApiKeyStore for EphemeralStore {
         update: UpdateApiKey,
     ) -> AuthResult<ApiKey> {
         self.raw("apikey", "update", |state| {
-            let Some(key) = state.api_keys.get_mut(id) else {
+            let Some(mut key) = state.api_keys.get_mut(id)? else {
                 return Ok(None);
             };
             macro_rules! optional {
@@ -177,7 +176,7 @@ impl ApiKeyStore for EphemeralStore {
         write: ApiKeyUsageWrite,
     ) -> AuthResult<Option<ApiKey>> {
         self.raw("apikey", write.operation(), |state| {
-            let Some(key) = state.api_keys.get_mut(id) else {
+            let Some(mut key) = state.api_keys.get_mut(id)? else {
                 return Ok(None);
             };
             match write {
@@ -244,7 +243,7 @@ impl ApiKeyStore for EphemeralStore {
 
     async fn delete_api_key(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
         self.raw("apikey", "delete", |state| {
-            let _ = state.api_keys.remove(id);
+            let _ = state.api_keys.remove(id)?;
             Ok(())
         })
         .await
@@ -254,7 +253,7 @@ impl ApiKeyStore for EphemeralStore {
         self.raw("apikey", "deleteMany", |state| {
             let current = Utc::now().timestamp_millis();
             let mut expired = Vec::new();
-            for key in state.api_keys.iter() {
+            for key in state.api_keys.snapshot()?.iter() {
                 if let Some(expires) = key.expires_at.as_deref()
                     && timestamp(expires)? < current
                 {
@@ -262,7 +261,7 @@ impl ApiKeyStore for EphemeralStore {
                 }
             }
             for id in &expired {
-                let _ = state.api_keys.remove(id);
+                let _ = state.api_keys.remove(id)?;
             }
             Ok(expired.len())
         })
@@ -324,6 +323,7 @@ mod tests {
             .unwrap()
             .api_keys
             .get_mut(&key.id)
+            .unwrap()
             .unwrap()
             .updated_at = unchanged.into();
         for remaining in [1.0, 0.0] {

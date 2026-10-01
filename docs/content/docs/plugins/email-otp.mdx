@@ -3,7 +3,7 @@ title: Email OTP
 description: Sign in, verify email, reset passwords, and change email with one-time codes.
 ---
 
-The Email OTP plugin implements Better Auth 1.7.6's nine public email OTP routes. Register an application sender to deliver each code. The plugin logs delivery errors and retains the endpoint's success response, matching upstream background-task behavior. Database and OTP protection errors propagate to the caller.
+The Email OTP plugin implements Better Auth 1.7.6's nine public email OTP routes. Register an application sender to deliver each code. The plugin logs asynchronous delivery errors and retains the endpoint's success response, matching upstream background-task behavior. Sender factory errors, database errors, and OTP protection errors propagate on direct OTP endpoints.
 
 ```rust
 use std::sync::Arc;
@@ -62,17 +62,24 @@ Call `.callbacks::<AppSchema>(EmailOtpCallbacks::default().generate(...).send(..
 use better_auth::plugins::email_otp::{EmailOtpCallbacks, EmailOtpPlugin};
 
 let plugin = EmailOtpPlugin::new().callbacks::<AppSchema>(
-    EmailOtpCallbacks::default().send(|message, endpoint| Box::pin(async move {
-        let user = endpoint.auth.database.get_user_by_email(&message.email).await?;
-        send_mail(&message.email, &message.otp, user).await
-    })),
+    EmailOtpCallbacks::default().send(|message, endpoint| {
+        let message = message.clone();
+        let endpoint = endpoint.to_owned();
+        Ok(Some(Box::pin(async move {
+            let endpoint = endpoint.as_endpoint();
+            let user = match endpoint.transaction {
+                Some(transaction) => transaction.get_user_by_email(&message.email).await?,
+                None => endpoint.auth.database.get_user_by_email(&message.email).await?,
+            };
+            send_mail(&message.email, &message.otp, user).await
+        })))
+    }),
 );
 ```
 
-The generator returns `AuthResult<Option<String>>`; generator errors propagate on direct OTP endpoints. The sender returns a boxed borrowing future, so database calls use the active typed store. Context callbacks override their corresponding legacy callbacks. The legacy sender and generator remain available when context is unnecessary.
+The generator returns `AuthResult<Option<String>>`; generator errors propagate on direct OTP endpoints. The sender factory returns `AuthResult<Option<BackgroundFuture>>`. `Err` propagates immediately, `Ok(None)` schedules no work, and `Ok(Some(task))` uses the configured background handler or awaits delivery. Retain the endpoint with `to_owned()` before returning a task that uses its runtime. Context callbacks override their corresponding legacy callbacks. The legacy sender and generator remain available when context is unnecessary.
 
-The default-email override keeps the original request but supplies the OTP endpoint's synthetic `{ email, type }` input. Upstream invokes the entire overridden endpoint as a background notification, so errors from that dispatch are logged. This policy does not suppress database errors on direct OTP endpoints.
-
+The default-email override keeps the original request and active transaction but supplies the OTP endpoint's synthetic `{ email, type }` input. Creation, lookup, reuse updates, and unknown-user deletion use that transaction. Upstream invokes the entire overridden endpoint as a background notification, so errors from that dispatch are logged. This policy does not suppress database errors on direct OTP endpoints. A scheduled SQL operation that resumes after commit or rollback receives the database's closed-transaction error; the runtime does not replace the retained transaction with a new connection.
 
 ## Trusted server operations
 

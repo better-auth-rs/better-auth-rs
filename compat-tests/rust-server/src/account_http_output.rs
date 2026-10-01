@@ -87,6 +87,7 @@ async fn run(input: Input) -> AuthResult<Value> {
     let session = auth
         .store()
         .create_session(CreateSession {
+            additional_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: chrono::Utc::now() + chrono::Duration::days(1),
             ip_address: None,

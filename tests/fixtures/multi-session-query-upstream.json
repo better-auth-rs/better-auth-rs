@@ -1,0 +1,412 @@
+[
+  {
+    "backend": "memory",
+    "limit": 0,
+    "expired": false,
+    "missing": false,
+    "listed": [],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "memory",
+    "limit": 0,
+    "expired": false,
+    "missing": true,
+    "listed": [],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "memory",
+    "limit": 0,
+    "expired": true,
+    "missing": false,
+    "listed": [],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "memory",
+    "limit": 0,
+    "expired": true,
+    "missing": true,
+    "listed": [],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "memory",
+    "limit": 1,
+    "expired": false,
+    "missing": false,
+    "listed": [
+      "c"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "c"
+  },
+  {
+    "backend": "memory",
+    "limit": 1,
+    "expired": false,
+    "missing": true,
+    "listed": [],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "memory",
+    "limit": 1,
+    "expired": true,
+    "missing": false,
+    "listed": [
+      "c"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "c"
+  },
+  {
+    "backend": "memory",
+    "limit": 1,
+    "expired": true,
+    "missing": true,
+    "listed": [],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "memory",
+    "limit": 2,
+    "expired": false,
+    "missing": false,
+    "listed": [
+      "c",
+      "a"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "c"
+  },
+  {
+    "backend": "memory",
+    "limit": 2,
+    "expired": false,
+    "missing": true,
+    "listed": [],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "memory",
+    "limit": 2,
+    "expired": true,
+    "missing": false,
+    "listed": [
+      "c",
+      "b"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "c"
+  },
+  {
+    "backend": "memory",
+    "limit": 2,
+    "expired": true,
+    "missing": true,
+    "listed": [],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "memory",
+    "limit": 100,
+    "expired": false,
+    "missing": false,
+    "listed": [
+      "c",
+      "a",
+      "b",
+      "d"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "c"
+  },
+  {
+    "backend": "memory",
+    "limit": 100,
+    "expired": false,
+    "missing": true,
+    "listed": [],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "memory",
+    "limit": 100,
+    "expired": true,
+    "missing": false,
+    "listed": [
+      "c",
+      "b",
+      "d"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "c"
+  },
+  {
+    "backend": "memory",
+    "limit": 100,
+    "expired": true,
+    "missing": true,
+    "listed": [],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "sqlite",
+    "limit": 0,
+    "expired": false,
+    "missing": false,
+    "listed": [],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "sqlite",
+    "limit": 0,
+    "expired": true,
+    "missing": false,
+    "listed": [],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "sqlite",
+    "limit": 1,
+    "expired": false,
+    "missing": false,
+    "listed": [
+      "a"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "a"
+  },
+  {
+    "backend": "sqlite",
+    "limit": 1,
+    "expired": true,
+    "missing": false,
+    "listed": [
+      "b"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "sqlite",
+    "limit": 2,
+    "expired": false,
+    "missing": false,
+    "listed": [
+      "a",
+      "b"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "a"
+  },
+  {
+    "backend": "sqlite",
+    "limit": 2,
+    "expired": true,
+    "missing": false,
+    "listed": [
+      "b",
+      "c"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "b"
+  },
+  {
+    "backend": "sqlite",
+    "limit": 100,
+    "expired": false,
+    "missing": false,
+    "listed": [
+      "a",
+      "b",
+      "c",
+      "d"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "a"
+  },
+  {
+    "backend": "sqlite",
+    "limit": 100,
+    "expired": true,
+    "missing": false,
+    "listed": [
+      "b",
+      "c",
+      "d"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "b"
+  },
+  {
+    "backend": "secondary",
+    "limit": 0,
+    "expired": false,
+    "missing": false,
+    "listed": [
+      "a",
+      "d"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "a"
+  },
+  {
+    "backend": "secondary",
+    "limit": 0,
+    "expired": true,
+    "missing": false,
+    "listed": [
+      "d"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "secondary",
+    "limit": 1,
+    "expired": false,
+    "missing": false,
+    "listed": [
+      "a",
+      "d"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "a"
+  },
+  {
+    "backend": "secondary",
+    "limit": 1,
+    "expired": true,
+    "missing": false,
+    "listed": [
+      "d"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "secondary",
+    "limit": 2,
+    "expired": false,
+    "missing": false,
+    "listed": [
+      "a",
+      "d"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "a"
+  },
+  {
+    "backend": "secondary",
+    "limit": 2,
+    "expired": true,
+    "missing": false,
+    "listed": [
+      "d"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  },
+  {
+    "backend": "secondary",
+    "limit": 100,
+    "expired": false,
+    "missing": false,
+    "listed": [
+      "a",
+      "d"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": "a"
+  },
+  {
+    "backend": "secondary",
+    "limit": 100,
+    "expired": true,
+    "missing": false,
+    "listed": [
+      "d"
+    ],
+    "revoked": {
+      "status": true
+    },
+    "active": ""
+  }
+]

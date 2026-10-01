@@ -7,7 +7,7 @@ Authentication for Rust with Axum integration and application-owned SeaORM entit
 
 Configure model IDs and application-owned defaults through [database ID generation](docs/content/docs/concepts/database.mdx#model-ids).
 
-Sessions use signed cookies. Enable `SessionConfig.bearer` explicitly for Authorization header authentication; see the [session guide](docs/content/docs/authentication/sessions.mdx) for cache and application field configuration. Use [Custom Session](docs/content/docs/plugins/custom-session.mdx) to transform public session responses with typed application context.
+Sessions use signed cookies. Response headers preserve repeated cookie writes in order; explicit expiration removes earlier values and chunks. Enable `SessionConfig.bearer` explicitly for Authorization header authentication; see the [session guide](docs/content/docs/authentication/sessions.mdx) for cache and application field configuration. Use [Custom Session](docs/content/docs/plugins/custom-session.mdx) to transform public session responses with typed application context. Use [Multi Session](docs/content/docs/plugins/multi-session.mdx) to remember and switch between accounts, with adapter-specific session selection.
 
 Use `BetterAuth::stateless(config)` without an application schema or database. Encrypted session and OAuth cookies survive adapter restart; process-local users and plugin records do not. See [stateless sessions](docs/content/docs/authentication/sessions.mdx#stateless-sessions) for storage defaults, hooks, and revocation behavior.
 
@@ -15,13 +15,15 @@ Configure application user fields with `AuthConfig.user.additional_fields` and m
 
 Use [OAuth Popup](docs/content/docs/plugins/oauth-popup.mdx) to return OAuth sign-in results to a trusted popup opener. Enable [OpenAPI](docs/content/docs/reference/openapi.mdx) for the configured runtime schema and Scalar reference page.
 
-The [JWT plugin](docs/content/docs/plugins/jwt.mdx) supports local and custom signing, server-only verification, and asymmetric session cookie caches.
+The [JWT plugin](docs/content/docs/plugins/jwt.mdx) supports local and custom signing, server-only verification, and asymmetric session cookie caches. Database key selection follows the configured query limit.
 
 Use [CAPTCHA](docs/content/docs/plugins/captcha.mdx) for request verification and [Have I Been Pwned](docs/content/docs/plugins/have-i-been-pwned.mdx) for compromised-password checks. [Versioned secrets](docs/content/docs/reference/security.mdx#secret-rotation) support encryption-key rotation with retained legacy data.
 
 [![Crates.io](https://img.shields.io/crates/v/better-auth.svg)](https://crates.io/crates/better-auth)
 [![Documentation](https://docs.rs/better-auth/badge.svg)](https://docs.rs/better-auth)
 [![CI](https://github.com/better-auth-rs/better-auth-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/better-auth-rs/better-auth-rs/actions/workflows/ci.yml)
+
+For integration tests, enable `TestUtilsPlugin` and use `auth.test()` for seeded users, authenticated cookies, and OTP capture. See the [test utilities guide](docs/content/docs/plugins/test-utils.mdx).
 
 ## Quick start
 

@@ -12,6 +12,9 @@ pub(super) mod handlers;
 pub(crate) mod token;
 pub(super) mod types;
 
+mod callbacks;
+pub use callbacks::{EmailVerificationCallbacks, VerificationEmail};
+
 #[cfg(test)]
 mod tests;
 
@@ -99,18 +102,17 @@ impl EmailVerificationPlugin {
             .map(|config| Self::with_config(config.clone()))
     }
 
-    pub(crate) async fn send_verification_on_sign_up(
+    pub(crate) async fn send_verification_on_sign_up<S: better_auth_core::AuthSchema>(
         &self,
         user: &impl AuthUser,
         required: bool,
-        request: Option<&AuthRequest>,
         callback_url: Option<&str>,
-        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+        endpoint: &crate::plugins::endpoint_context::EndpointContext<'_, S>,
     ) -> AuthResult<()> {
         if self.config.send_on_sign_up.unwrap_or(required)
             && let Some(email) = user.email()
         {
-            self.send_verification_email_for_user(user, email, callback_url, request, ctx)
+            self.send_verification_email_at(user, email, callback_url, endpoint)
                 .await?;
         }
         Ok(())
@@ -212,6 +214,24 @@ impl EmailVerificationPlugin {
         request: Option<&AuthRequest>,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<()> {
+        let body = request
+            .filter(|request| request.body.is_some())
+            .map(|request| request.body_as_json())
+            .transpose()?
+            .unwrap_or(serde_json::Value::Null);
+        let endpoint = crate::plugins::endpoint_context::EndpointContext::new(request, body, ctx);
+        self.send_verification_email_at(user, email, callback_url, &endpoint)
+            .await
+    }
+
+    async fn send_verification_email_at<S: better_auth_core::AuthSchema>(
+        &self,
+        user: &impl AuthUser,
+        email: &str,
+        callback_url: Option<&str>,
+        endpoint: &crate::plugins::endpoint_context::EndpointContext<'_, S>,
+    ) -> AuthResult<()> {
+        let ctx = endpoint.auth;
         let verification_token = token::create_email_verification_token(
             ctx.config.signing_secret(),
             email,
@@ -230,45 +250,72 @@ impl EmailVerificationPlugin {
         if self.config.send_verification_email.is_none()
             && crate::plugins::email_otp::callbacks::overrides_verification(ctx)
         {
-            return crate::plugins::email_otp::callbacks::send_verification_override(
-                email, request, ctx,
+            let retained = endpoint.to_owned();
+            let email = email.to_owned();
+            better_auth_core::background::run_or_await(
+                Some(Box::pin(async move {
+                    let endpoint = retained.as_endpoint();
+                    crate::plugins::email_otp::callbacks::send_verification_override(
+                        &email, &endpoint,
+                    )
+                    .await
+                })),
+                ctx.config.advanced.background_tasks.as_ref(),
+                &ctx.config.logger,
             )
             .await;
+            return Ok(());
         }
-        // Use custom sender if configured, otherwise fall back to EmailProvider
-        if let Some(custom_sender) = self
+        let message = VerificationEmail {
+            user: ctx.internal_user_view(user)?,
+            url: verification_url,
+            token: verification_token,
+        };
+        let task: Option<better_auth_core::background::BackgroundFuture> = if let Some(callbacks) =
+            ctx.extensions.get::<Arc<EmailVerificationCallbacks<S>>>()
+        {
+            (callbacks.sender)(&message, endpoint)?
+        } else if let Some(sender) = self
             .config
             .send_verification_email
             .as_ref()
             .or(ctx.email_verification_policy.override_sender.as_ref())
         {
-            let user = ctx.user_view(user)?;
-            custom_sender
-                .send(&user, &verification_url, &verification_token)
-                .await?;
+            let sender = sender.clone();
+            Some(Box::pin(async move {
+                sender
+                    .send(&message.user, &message.url, &message.token)
+                    .await
+            }))
         } else if self.config.send_email_notifications {
-            // Gracefully skip if no email provider is configured
-            if ctx.email_provider.is_some() {
-                let subject = "Verify your email address";
-                let html = format!(
-                    "<p>Click the link below to verify your email address:</p>\
-                     <p><a href=\"{url}\">Verify Email</a></p>",
-                    url = verification_url
-                );
-                let text = format!("Verify your email address: {}", verification_url);
-
-                ctx.email_provider()?
-                    .send(email, subject, &html, &text)
-                    .await?;
+            if let Some(provider) = ctx.email_provider.clone() {
+                let email = email.to_owned();
+                Some(Box::pin(async move {
+                    let html = format!(
+                        "<p>Click the link below to verify your email address:</p><p><a href=\"{url}\">Verify Email</a></p>",
+                        url = message.url
+                    );
+                    let text = format!("Verify your email address: {}", message.url);
+                    provider
+                        .send(&email, "Verify your email address", &html, &text)
+                        .await
+                }))
             } else {
                 better_auth_core::observability::logger::current().warn(
                     "No email provider configured, skipping verification email",
-                    &[better_auth_core::observability::LogArgument::Value(
-                        &serde_json::json!(email),
-                    )],
+                    &[],
                 );
+                None
             }
-        }
+        } else {
+            None
+        };
+        better_auth_core::background::run_or_await(
+            task,
+            ctx.config.advanced.background_tasks.as_ref(),
+            &ctx.config.logger,
+        )
+        .await;
 
         Ok(())
     }

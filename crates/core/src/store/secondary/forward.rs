@@ -63,6 +63,13 @@ impl<S: AuthSchema> AccountStore<S> for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> OrganizationStore for SecondaryStore<S> {
+    async fn insert_organization(&self, record: Organization) -> AuthResult<Organization> {
+        self.inner.insert_organization(record).await
+    }
+    async fn delete_organization_records(&self, id: &str) -> AuthResult<()> {
+        self.inner.delete_organization_records(id).await
+    }
+
     async fn get_organization_by_id_value(
         &self,
         id: &serde_json::Value,
@@ -111,6 +118,10 @@ impl<S: AuthSchema> OrganizationStore for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> MemberStore for SecondaryStore<S> {
+    async fn insert_member(&self, record: Member) -> AuthResult<Member> {
+        self.inner.insert_member(record).await
+    }
+
     async fn get_member_value(
         &self,
         organization_id: &serde_json::Value,

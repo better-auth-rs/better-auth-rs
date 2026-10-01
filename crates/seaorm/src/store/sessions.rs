@@ -68,6 +68,20 @@ where
         session: &mut CreateSession,
         tx: Option<super::HookTransaction<'_, S>>,
     ) -> AuthResult<()> {
+        if self
+            .before_runtime_session_optional_in_tx(session, tx)
+            .await?
+        {
+            Ok(())
+        } else {
+            Err(cancelled_by_hook("session creation"))
+        }
+    }
+    pub(crate) async fn before_runtime_session_optional_in_tx(
+        &self,
+        session: &mut CreateSession,
+        tx: Option<super::HookTransaction<'_, S>>,
+    ) -> AuthResult<bool> {
         let context = self.hook_context(tx);
         for hook in self.hooks() {
             if better_auth_core::observability::database::with_database_hook(
@@ -79,18 +93,19 @@ where
             .await?
             .is_cancelled()
             {
-                return Err(cancelled_by_hook("session creation"));
+                return Ok(false);
             }
         }
-        Ok(())
+        Ok(true)
     }
 
-    async fn after_runtime_session_in_tx(
+    async fn after_runtime_session(
         &self,
         session: &better_auth_core::wire::SessionView,
-        tx: Option<super::HookTransaction<'_, S>>,
+        request: Option<better_auth_core::hooks::RequestHookContext>,
     ) -> AuthResult<()> {
-        let context = self.hook_context(tx);
+        let mut context = self.hook_context(None);
+        context.request = request;
         for hook in self.hooks() {
             better_auth_core::observability::database::with_database_hook(
                 context.config,
@@ -103,22 +118,34 @@ where
         Ok(())
     }
 
-    async fn create_session_with_connection<C>(
+    pub(crate) async fn create_session_with_connection<C>(
         &self,
         db: &C,
         tx: Option<super::HookTransaction<'_, S>>,
         mut create_session: CreateSession,
-    ) -> AuthResult<better_auth_core::wire::SessionView>
+    ) -> AuthResult<Option<better_auth_core::wire::SessionView>>
     where
         C: ConnectionTrait,
     {
-        self.before_runtime_session_in_tx(&mut create_session, tx)
-            .await?;
+        if !self
+            .before_runtime_session_optional_in_tx(&mut create_session, tx)
+            .await?
+        {
+            return Ok(None);
+        }
         let now = Utc::now();
         create_session.ip_address = Self::normalize_session_client_field(create_session.ip_address);
         create_session.user_agent = Self::normalize_session_client_field(create_session.user_agent);
         let id = self.generated_id("session", None)?;
         let parsed = id.as_deref().map(S::Session::parse_id).transpose()?;
+        let mut fields = self.config().session.default_fields();
+        fields.extend(std::mem::take(&mut create_session.additional_fields));
+        let mut plugin_fields = serde_json::Map::new();
+        for name in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
+            if let Some(value) = fields.remove(name) {
+                let _ = plugin_fields.insert(name.into(), value);
+            }
+        }
         let mut active = S::Session::new_active(
             parsed,
             better_auth_core::id::random_id(None),
@@ -134,12 +161,13 @@ where
                 .session
                 .field_schema()
                 .storage_fields_for_adapter(
-                    self.config().session.default_fields(),
+                    fields,
                     true,
                     db.get_database_backend() == sea_orm::DbBackend::Postgres,
                     S::Session::native_json_field,
                 )?,
         )?;
+        S::Session::apply_fields(&mut active, plugin_fields)?;
         crate::reference_id::apply_bindings(
             &mut active,
             &self.config().session.field_schema(),
@@ -154,9 +182,10 @@ where
         .await?;
         let session = self.output_session(&session, db)?;
         if tx.is_none() {
-            self.after_runtime_session_in_tx(&session, None).await?;
+            self.after_runtime_session(&session, crate::hooks::current_request_hook_context())
+                .await?;
         }
-        Ok(session)
+        Ok(Some(session))
     }
 
     pub(crate) async fn create_session_in_tx(
@@ -165,7 +194,8 @@ where
         create_session: CreateSession,
     ) -> AuthResult<better_auth_core::wire::SessionView> {
         self.create_session_with_connection(tx.0, Some(tx), create_session)
-            .await
+            .await?
+            .ok_or_else(|| cancelled_by_hook("session creation"))
     }
 
     pub(super) async fn update_session_with_connection(
@@ -217,8 +247,10 @@ where
         };
         let store = self.clone();
         let updated = session.clone();
+        let request = context.request.clone();
         let after = Box::pin(async move {
-            let context = store.hook_context(None);
+            let mut context = store.hook_context(None);
+            context.request = request;
             for hook in store.hooks() {
                 better_auth_core::observability::database::with_database_hook(
                     context.config,
@@ -308,6 +340,20 @@ where
         .await
     }
 
+    async fn create_session_optional(
+        &self,
+        input: CreateSession,
+    ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
+        self.create_session_with_connection(self.connection(), None, input)
+            .await
+    }
+    async fn before_create_runtime_session_optional(
+        &self,
+        input: &mut CreateSession,
+    ) -> AuthResult<bool> {
+        self.before_runtime_session_optional_in_tx(input, None)
+            .await
+    }
     async fn before_create_runtime_session(&self, session: &mut CreateSession) -> AuthResult<()> {
         self.before_runtime_session_in_tx(session, None).await
     }
@@ -315,8 +361,9 @@ where
     async fn after_create_runtime_session(
         &self,
         session: &better_auth_core::wire::SessionView,
+        request: Option<better_auth_core::hooks::RequestHookContext>,
     ) -> AuthResult<()> {
-        self.after_runtime_session_in_tx(session, None).await
+        self.after_runtime_session(session, request).await
     }
 
     async fn end_session(&self, token: &str) -> AuthResult<()> {
@@ -330,8 +377,9 @@ where
         &self,
         create_session: CreateSession,
     ) -> AuthResult<better_auth_core::wire::SessionView> {
-        self.create_session_with_connection(self.connection(), None, create_session)
-            .await
+        self.create_session_optional(create_session)
+            .await?
+            .ok_or_else(|| cancelled_by_hook("session creation"))
     }
 
     async fn get_session(
@@ -354,6 +402,46 @@ where
         .as_ref()
         .map(|row| self.output_session(row, self.connection()))
         .transpose()
+    }
+
+    async fn get_session_snapshots(
+        &self,
+        tokens: &[String],
+        only_active: bool,
+    ) -> AuthResult<
+        Vec<(
+            better_auth_core::wire::SessionView,
+            Option<better_auth_core::session::SessionData>,
+        )>,
+    > {
+        let mut condition = Condition::all()
+            .add(S::Session::token_column().is_in(tokens.iter().cloned()))
+            .add(S::Session::active_column().eq(true));
+        if only_active {
+            condition = condition.add(S::Session::expires_at_column().gt(Utc::now()));
+        }
+        database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+            self.config(),
+            "findMany",
+            async {
+                <S::Session as SeaOrmSessionModel>::Entity::find()
+                    .filter(condition)
+                    .limit(super::pagination::default_limit(
+                        self.config(),
+                        self.connection().get_database_backend(),
+                    )?)
+                    .all(self.connection())
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?
+        .iter()
+        .map(|row| {
+            self.output_session(row, self.connection())
+                .map(|session| (session, None))
+        })
+        .collect()
     }
 
     async fn get_user_sessions(

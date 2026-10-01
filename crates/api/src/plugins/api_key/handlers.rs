@@ -103,7 +103,6 @@ impl ApiKeyPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
         body: &CreateKeyRequest,
     ) -> AuthResult<CreateKeyResponse> {
-        use validator::Validate as _;
         let callback_body = serde_json::to_value(body)?;
         let session = self
             .authenticate_api_key(
@@ -111,8 +110,22 @@ impl ApiKeyPlugin {
                 ctx,
             )
             .await?;
-        body.validate().map_err(|error| {
-            better_auth_core::AuthError::from(better_auth_core::validation_error_response(&error))
+        let validated = super::request::validate_numbers(
+            "/api-key/create",
+            Some(&callback_body),
+            &[
+                ("expiresIn", body.expires_in),
+                ("remaining", body.remaining),
+                ("refillAmount", body.refill_amount),
+                ("refillInterval", body.refill_interval),
+                ("rateLimitTimeWindow", body.rate_limit_time_window),
+                ("rateLimitMax", body.rate_limit_max),
+            ],
+        )?;
+        let body = validated.get::<CreateKeyRequest>().ok_or_else(|| {
+            better_auth_core::AuthError::internal(
+                "API key body validator returned a different input type",
+            )
         })?;
         let config = self.resolve_configuration(body.config_id.as_deref())?;
         if config.references == super::ApiKeyReferences::User
@@ -141,7 +154,6 @@ impl ApiKeyPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
         body: &UpdateKeyRequest,
     ) -> AuthResult<ApiKeyView> {
-        use validator::Validate as _;
         let callback_body = serde_json::to_value(body)?;
         let session = self
             .authenticate_api_key(
@@ -149,8 +161,22 @@ impl ApiKeyPlugin {
                 ctx,
             )
             .await?;
-        body.validate().map_err(|error| {
-            better_auth_core::AuthError::from(better_auth_core::validation_error_response(&error))
+        let validated = super::request::validate_numbers(
+            "/api-key/update",
+            Some(&callback_body),
+            &[
+                ("expiresIn", body.expires_in.flatten()),
+                ("remaining", body.remaining),
+                ("refillAmount", body.refill_amount),
+                ("refillInterval", body.refill_interval),
+                ("rateLimitTimeWindow", body.rate_limit_time_window),
+                ("rateLimitMax", body.rate_limit_max),
+            ],
+        )?;
+        let body = validated.get::<UpdateKeyRequest>().ok_or_else(|| {
+            better_auth_core::AuthError::internal(
+                "API key body validator returned a different input type",
+            )
         })?;
         if let Some((session, _)) = &session
             && body
@@ -171,14 +197,7 @@ impl ApiKeyPlugin {
     }
 }
 
-pub(crate) async fn create_key_core(
-    body: &CreateKeyRequest,
-    user_id: impl AsRef<str>,
-    plugin: &ApiKeyPlugin,
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-    request: Option<&better_auth_core::AuthRequest>,
-) -> AuthResult<CreateKeyResponse> {
-    let _ = plugin.resolve_configuration(body.config_id.as_deref())?;
+pub(super) fn validate_client_create(body: &CreateKeyRequest) -> AuthResult<()> {
     if body.refill_amount.is_some()
         || body.refill_interval.is_some()
         || body.rate_limit_max.is_some()
@@ -191,15 +210,10 @@ pub(crate) async fn create_key_core(
             super::ApiKeyErrorCode::ServerOnlyProperty,
         ));
     }
-    if body.user_id.is_some() {
-        return Err(super::api_key_error(
-            super::ApiKeyErrorCode::UnauthorizedSession,
-        ));
-    }
-    create_key_for_user(body, user_id.as_ref(), plugin, ctx, request).await
+    Ok(())
 }
 
-async fn create_key_for_user(
+pub(super) async fn create_key_for_user(
     body: &CreateKeyRequest,
     user_id: &str,
     plugin: &ApiKeyPlugin,
@@ -469,7 +483,7 @@ pub(crate) async fn update_key_core(
     update_key_for_user(body, user_id.as_ref(), plugin, ctx).await
 }
 
-async fn update_key_for_user(
+pub(super) async fn update_key_for_user(
     body: &UpdateKeyRequest,
     user_id: &str,
     plugin: &ApiKeyPlugin,

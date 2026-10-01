@@ -1,11 +1,10 @@
 use super::{EmailOtpMessage, EmailOtpPlugin, EmailOtpType};
 use crate::plugins::endpoint_context::{EndpointContext, WithCallbacks};
+use better_auth_core::background::{BackgroundFuture, run_or_await};
 use better_auth_core::{AuthPlugin, AuthResult, AuthSchema};
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::sync::Arc;
 
-/// Borrowing callback future; callbacks can use the active typed store directly.
-pub type EmailOtpCallbackFuture<'a> = Pin<Box<dyn Future<Output = AuthResult<()>> + Send + 'a>>;
-type Sender<S> = dyn for<'a> Fn(&'a EmailOtpMessage, &'a EndpointContext<'_, S>) -> EmailOtpCallbackFuture<'a>
+type Sender<S> = dyn Fn(&EmailOtpMessage, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
     + Send
     + Sync;
 type Generator<S> =
@@ -25,13 +24,11 @@ impl<S: AuthSchema> Default for EmailOtpCallbacks<S> {
     }
 }
 impl<S: AuthSchema> EmailOtpCallbacks<S> {
-    /// Deliver OTPs with parsed input and access to the active typed runtime.
+    /// Construct delivery work after persisting the OTP. Factory errors propagate immediately.
+    /// Retain the endpoint with `to_owned` when delivery uses its runtime or transaction.
     pub fn send<F>(mut self, callback: F) -> Self
     where
-        F: for<'a> Fn(
-                &'a EmailOtpMessage,
-                &'a EndpointContext<'_, S>,
-            ) -> EmailOtpCallbackFuture<'a>
+        F: Fn(&EmailOtpMessage, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
             + Send
             + Sync
             + 'static,
@@ -70,9 +67,9 @@ pub(crate) fn overrides_verification(ctx: &better_auth_core::AuthContext<impl Au
 
 pub(crate) async fn send_verification_override(
     email: &str,
-    request: Option<&better_auth_core::AuthRequest>,
-    ctx: &better_auth_core::AuthContext<impl AuthSchema>,
+    endpoint: &EndpointContext<'_, impl AuthSchema>,
 ) -> AuthResult<()> {
+    let ctx = endpoint.auth;
     let config = ctx
         .extensions
         .get::<super::EmailOtpConfig>()
@@ -82,34 +79,57 @@ pub(crate) async fn send_verification_override(
     let plugin = EmailOtpPlugin::with_config(config.clone());
     let email = email.to_lowercase();
     let kind = EmailOtpType::EmailVerification;
-    let mut endpoint = EndpointContext::new(
-        request,
-        serde_json::json!({"email":email,"type":"email-verification"}),
-        ctx,
-    );
-    endpoint.path = Some("/email-otp/send-verification-otp");
-    let result = async {
-        let otp = plugin.resolve_otp(&endpoint, &email, kind).await?;
-        if ctx.database.get_user_by_email(&email).await?.is_none() {
-            ctx.database
-                .delete_verification_by_identifier(&kind.identifier(&email))
-                .await?;
-            return Ok(());
+    let owned = endpoint.to_owned();
+    let request_context =
+        better_auth_core::hooks::current_request_hook_context().map(|mut context| {
+            context.path = "/email-otp/send-verification-otp".into();
+            context.body = Some(serde_json::json!({"email":email,"type":"email-verification"}));
+            context.params.clear();
+            context
+        });
+    let task = Box::pin(async move {
+        let operation = async {
+            let mut endpoint = owned.as_endpoint();
+            endpoint.body = serde_json::json!({"email":email,"type":"email-verification"});
+            endpoint.path = Some("/email-otp/send-verification-otp");
+            let otp = plugin.resolve_otp(&endpoint, &email, kind).await?;
+            let user = match endpoint.transaction {
+                Some(transaction) => transaction.get_user_by_email(&email).await?,
+                None => endpoint.auth.database.get_user_by_email(&email).await?,
+            };
+            if user.is_none() {
+                let identifier = kind.identifier(&email);
+                match endpoint.transaction {
+                    Some(transaction) => {
+                        transaction
+                            .delete_verification_by_identifier(&identifier)
+                            .await?
+                    }
+                    None => {
+                        endpoint
+                            .auth
+                            .database
+                            .delete_verification_by_identifier(&identifier)
+                            .await?
+                    }
+                }
+                return Ok(());
+            }
+            plugin.deliver(&endpoint, &email, otp, kind).await
+        };
+        match request_context {
+            Some(context) => {
+                better_auth_core::hooks::with_request_hook_context_value(context, operation).await
+            }
+            None => operation.await,
         }
-        plugin.deliver(&endpoint, &email, otp, kind).await
-    }
-    .await;
+    });
     // The upstream override invokes the complete OTP endpoint through runInBackgroundOrAwait.
-    if let Err(error) = result {
-        better_auth_core::observability::logger::current().error(
-            "Failed to run background task",
-            &[
-                better_auth_core::observability::LogArgument::Value(&serde_json::json!(
-                    "email-otp"
-                )),
-                better_auth_core::observability::LogArgument::Error(&error),
-            ],
-        );
-    }
+    run_or_await(
+        Some(task),
+        ctx.config.advanced.background_tasks.as_ref(),
+        &ctx.config.logger,
+    )
+    .await;
     Ok(())
 }

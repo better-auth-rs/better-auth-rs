@@ -437,6 +437,12 @@ pub fn router() -> Router {
                 crate::dynamic_native::run(input).await.map(Json)
             }),
         )
+        .route(
+            "/__test/organization-metadata",
+            post(|Json(input): Json<Value>| async move {
+                crate::organization_metadata::run(input).await.map(Json)
+            }),
+        )
         .route("/__test/id-policy", post(|Json(input): Json<Value>| async move {
             crate::id_policy::run(input).await.map(Json)
         }))

@@ -20,6 +20,7 @@ async fn context() -> (AuthContext<TestSchema>, String, String) {
     let user_id = user.id().into_owned();
     let session = database
         .create_session(CreateSession {
+            additional_fields: Default::default(),
             user_id: user_id.clone(),
             expires_at: Utc::now() + Duration::hours(1),
             ip_address: None,
@@ -40,13 +41,14 @@ async fn context() -> (AuthContext<TestSchema>, String, String) {
 }
 
 fn request(token: &str, path: &str, body: serde_json::Value) -> AuthRequest {
-    AuthRequest::from_parts(
+    let request = AuthRequest::from_parts(
         HttpMethod::Post,
         path.to_string(),
         HashMap::from([("authorization".to_string(), format!("Bearer {token}"))]),
         Some(serde_json::to_vec(&body).unwrap()),
         None,
-    )
+    );
+    request.clone().with_original_request(request)
 }
 
 async fn server_key(

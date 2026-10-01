@@ -1,14 +1,13 @@
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::sync::Arc;
 
-use better_auth_core::{AuthPlugin, AuthResult, AuthSchema, wire::UserView};
+use better_auth_core::{
+    AuthPlugin, AuthResult, AuthSchema, background::BackgroundFuture, wire::UserView,
+};
 
 use super::TwoFactorPlugin;
 use crate::plugins::endpoint_context::{EndpointContext, WithCallbacks};
 
-/// Borrowing future returned by a context-aware two-factor delivery callback.
-pub type TwoFactorCallbackFuture<'a> = Pin<Box<dyn Future<Output = AuthResult<()>> + Send + 'a>>;
-
-type Sender<S> = dyn for<'a> Fn(&'a UserView, &'a str, &'a EndpointContext<'_, S>) -> TwoFactorCallbackFuture<'a>
+type Sender<S> = dyn Fn(&UserView, &str, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
     + Send
     + Sync;
 
@@ -24,14 +23,11 @@ impl<S: AuthSchema> Default for TwoFactorCallbacks<S> {
 }
 
 impl<S: AuthSchema> TwoFactorCallbacks<S> {
-    /// Deliver an OTP after its verification record has been persisted.
+    /// Construct delivery work after persisting the OTP. Factory errors propagate immediately.
+    /// Retain the endpoint with `to_owned` when delivery needs its active runtime.
     pub fn send<F>(mut self, callback: F) -> Self
     where
-        F: for<'a> Fn(
-                &'a UserView,
-                &'a str,
-                &'a EndpointContext<'_, S>,
-            ) -> TwoFactorCallbackFuture<'a>
+        F: Fn(&UserView, &str, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
             + Send
             + Sync
             + 'static,

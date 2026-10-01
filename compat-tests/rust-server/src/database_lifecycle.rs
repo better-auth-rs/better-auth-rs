@@ -458,6 +458,7 @@ impl Fixture {
                 Some(id.into()),
                 format!("{id}-token"),
                 CreateSession {
+                    additional_fields: Default::default(),
                     user_id: "u1".into(),
                     expires_at: date(EXPIRES_AT),
                     ip_address: None,

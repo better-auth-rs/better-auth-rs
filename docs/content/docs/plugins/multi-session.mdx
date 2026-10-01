@@ -9,4 +9,8 @@ Register `MultiSessionPlugin::new()`. Session responses add a signed cookie for 
 
 `POST /multi-session/revoke` requires an active session and the target's signed device cookie. Revoking the active session selects another valid remembered session or clears authentication. `POST /sign-out` revokes every signed session remembered by the device and clears those cookies.
 
+Database-backed lists use one token-list query with `advanced.database.default_find_many_limit` and the database query order. The list endpoint filters expired sessions before applying the limit. Revoking the active session applies the limit before rejecting expired replacement sessions. If a selected database session has no user, the whole candidate list is empty.
+
+With secondary storage, candidate sessions follow the device-cookie order. The database limit does not apply. Missing or malformed cache records are skipped without reading the database.
+
 The storage schema does not change. The plugin uses existing session persistence and the configured session cookie attributes.

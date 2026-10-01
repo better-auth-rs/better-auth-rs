@@ -93,8 +93,14 @@ pub(super) fn trust_device_max_age(ctx: &AuthContext<impl better_auth_core::Auth
         .unwrap_or(DEFAULT_TRUST_DEVICE_MAX_AGE_SECS)
 }
 
-pub(super) fn clear_cookie_header(config: &better_auth_core::AuthConfig, suffix: &str) -> String {
-    create_clear_cookie(&related_cookie_name(config, suffix), config)
+pub(super) fn clear_cookie_header(
+    req: &AuthRequest,
+    config: &better_auth_core::AuthConfig,
+    suffix: &str,
+) -> AuthResult<String> {
+    let name = related_cookie_name(config, suffix);
+    better_auth_core::utils::cookie_utils::remove_set_cookie_entries(req, None, &name)?;
+    Ok(create_clear_cookie(&name, config))
 }
 
 pub(super) async fn create_trust_device_cookie_header(

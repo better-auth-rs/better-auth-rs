@@ -1,4 +1,6 @@
 use super::*;
+
+pub(super) type PendingHookQueue = Mutex<Vec<PendingHook>>;
 use crate::hooks::{RequestHookContext, current_request_hook_context};
 use crate::store::database_hooks::DatabaseHookContext;
 
@@ -20,18 +22,17 @@ pub(super) enum CommittedWrite {
 pub(super) enum PendingHook {
     Database {
         write: Box<CommittedWrite>,
-        request: Option<RequestHookContext>,
+        request: Option<Box<RequestHookContext>>,
     },
     External {
         effect: crate::store::TypedTransactionFuture<'static, ()>,
-        request: Option<RequestHookContext>,
     },
 }
 
 impl EphemeralStore {
     pub(super) fn hook_context<'a>(
         &'a self,
-        transaction: &'a EphemeralTransaction<'a>,
+        transaction: &'a EphemeralTransaction,
     ) -> DatabaseHookContext<'a, StatelessSchema> {
         DatabaseHookContext {
             config: &self.config,
@@ -44,15 +45,30 @@ impl EphemeralStore {
     }
 
     pub(super) async fn after(&self, write: CommittedWrite) -> AuthResult<()> {
+        self.after_with_request(write, current_request_hook_context())
+            .await
+    }
+
+    pub(super) async fn after_with_request(
+        &self,
+        write: CommittedWrite,
+        request: Option<RequestHookContext>,
+    ) -> AuthResult<()> {
         let pending = PendingHook::Database {
             write: Box::new(write),
-            request: current_request_hook_context(),
+            request: request.map(Box::new),
         };
         if let Some(queue) = &self.pending_hooks {
-            queue
-                .lock()
-                .map_err(|_| AuthError::internal("Ephemeral transaction hook queue lock poisoned"))?
-                .push(pending);
+            // Only the transaction owner keeps the queue alive. Late writes retain
+            // their adapter, but their after hooks cannot restart a completed drain.
+            if let Some(queue) = queue.upgrade() {
+                queue
+                    .lock()
+                    .map_err(|_| {
+                        AuthError::internal("Ephemeral transaction hook queue lock poisoned")
+                    })?
+                    .push(pending);
+            }
             Ok(())
         } else {
             self.run_after(pending).await
@@ -61,15 +77,8 @@ impl EphemeralStore {
 
     pub(super) async fn run_after(&self, pending: PendingHook) -> AuthResult<()> {
         let (write, request) = match pending {
-            PendingHook::External { effect, request } => {
-                return match request {
-                    Some(request) => {
-                        crate::hooks::with_request_hook_context_value(request, effect).await
-                    }
-                    None => effect.await,
-                };
-            }
-            PendingHook::Database { write, request } => (write, request),
+            PendingHook::External { effect } => return effect.await,
+            PendingHook::Database { write, request } => (write, request.map(|request| *request)),
         };
         let context = DatabaseHookContext {
             config: &self.config,

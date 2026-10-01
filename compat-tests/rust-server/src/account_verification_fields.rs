@@ -526,6 +526,7 @@ impl Fixture {
             .auth
             .store()
             .create_session(better_auth_core::CreateSession {
+                additional_fields: Default::default(),
                 user_id: self.user_id.clone().into(),
                 expires_at: chrono::Utc::now() + chrono::Duration::days(1),
                 ip_address: None,

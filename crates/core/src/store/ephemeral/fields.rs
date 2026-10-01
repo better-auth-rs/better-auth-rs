@@ -343,6 +343,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
             .organizations
             .get(&organization.id)
             .unwrap()
+            .unwrap()
             .name,
         "original:in"
     );
@@ -491,11 +492,21 @@ async fn invalid_builtin_transform_cannot_partially_update_a_memory_record() {
     );
     let state = store.lock().unwrap();
     assert_eq!(
-        state.organizations.get(&organization.id).unwrap().name,
+        state
+            .organizations
+            .get(&organization.id)
+            .unwrap()
+            .unwrap()
+            .name,
         "original"
     );
     assert_eq!(
-        state.organizations.get(&organization.id).unwrap().slug,
+        state
+            .organizations
+            .get(&organization.id)
+            .unwrap()
+            .unwrap()
+            .slug,
         "original"
     );
 }
@@ -556,6 +567,7 @@ async fn memory_core_fields_keep_dynamic_values_and_output_omission() {
             .unwrap()
             .organizations
             .get(&organization.id)
+            .unwrap()
             .unwrap()
             .name
             .json()

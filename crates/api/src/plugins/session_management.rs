@@ -70,7 +70,8 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for SessionManagementPlugin 
             AuthRoute::post("/get-session", "getSession")
                 .query_validator(better_auth_core::query::session_query),
             AuthRoute::post("/sign-out", "signOut").body_validator(super::json_body::sign_out_body),
-            AuthRoute::post("/update-session", "updateSession"),
+            AuthRoute::post("/update-session", "updateSession")
+                .body_validator(better_auth_core::endpoint_input::record_body),
             AuthRoute::get("/list-sessions", "listUserSessions"),
             AuthRoute::post("/revoke-session", "revokeSession").body_validator(revoke_session_body),
             AuthRoute::post("/revoke-sessions", "revokeSessions"),
@@ -546,6 +547,7 @@ mod tests {
         .await;
 
         let create_session2 = CreateSession {
+            additional_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: Utc::now() + Duration::hours(24),
             ip_address: Some("192.168.1.1".to_string()),
@@ -583,6 +585,7 @@ mod tests {
         ctx.set_metadata("admin.enabled", serde_json::Value::Bool(true));
 
         let direct_session = CreateSession {
+            additional_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: Utc::now() + Duration::hours(24),
             ip_address: Some("192.168.1.1".to_string()),
@@ -593,6 +596,7 @@ mod tests {
         ctx.database.create_session(direct_session).await.unwrap();
 
         let impersonated_session = CreateSession {
+            additional_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: Utc::now() + Duration::hours(24),
             ip_address: Some("10.0.0.5".to_string()),
@@ -640,6 +644,7 @@ mod tests {
         .await;
 
         let create_session2 = CreateSession {
+            additional_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: Utc::now() + Duration::hours(24),
             ip_address: Some("192.168.1.1".to_string()),
@@ -685,6 +690,7 @@ mod tests {
         let user2 = ctx.database.create_user(create_user2).await.unwrap();
 
         let create_session2 = CreateSession {
+            additional_fields: Default::default(),
             user_id: user2.id,
             expires_at: Utc::now() + Duration::hours(24),
             ip_address: Some("192.168.1.1".to_string()),
@@ -728,6 +734,7 @@ mod tests {
         .await;
 
         let create_session2 = CreateSession {
+            additional_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: Utc::now() + Duration::hours(24),
             ip_address: Some("192.168.1.1".to_string()),

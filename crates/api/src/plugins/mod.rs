@@ -29,6 +29,7 @@ pub mod session_management;
 mod session_update;
 pub mod siwe;
 mod symmetric;
+pub mod test_utils;
 pub mod two_factor;
 pub mod user_management;
 pub mod username;
@@ -123,6 +124,7 @@ pub(crate) mod test_helpers {
         expires_in: Duration,
     ) -> SessionView {
         let create_session = CreateSession {
+            additional_fields: Default::default(),
             user_id: user_id.into(),
             expires_at: Utc::now() + expires_in,
             ip_address: Some("127.0.0.1".to_string()),

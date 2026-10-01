@@ -96,6 +96,7 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
     assert_eq!(store.list_users(Default::default()).await.unwrap().1, 2);
 
     let session = CreateSession {
+        additional_fields: Default::default(),
         user_id: one.id().into_owned(),
         expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
         ip_address: None,

@@ -8,42 +8,9 @@ impl<S: AuthSchema> SessionManager<S> {
         req: &AuthRequest,
         response: &mut AuthResponse,
     ) -> AuthResult<()> {
-        use crate::utils::cookie_utils::related_cookie_name;
-        let cache_name = related_cookie_name(&self.config, "session_data");
-        let endpoint_sets_session = response.headers.get_all("set-cookie").any(|value| {
-            value.split_once('=').is_some_and(|(name, _)| {
-                name == self
-                    .config
-                    .auth_cookie("session_token", Default::default())
-                    .name
-            })
-        });
         let endpoint_headers = std::mem::take(&mut response.headers);
-        // Endpoint rotation or revocation supersedes credentials queued while
-        // authenticating the request, including the previous session's cache.
-        let pending_headers = req
-            .take_response_headers()?
-            .into_iter()
-            .filter(|(name, value)| {
-                !(endpoint_sets_session
-                    && name.eq_ignore_ascii_case("set-cookie")
-                    && value.split_once('=').is_some_and(|(cookie, _)| {
-                        cookie
-                            == self
-                                .config
-                                .auth_cookie("session_token", Default::default())
-                                .name
-                            || cookie == cache_name
-                            || cookie.starts_with(&format!("{cache_name}."))
-                    }))
-            });
-        for (name, value) in pending_headers.chain(endpoint_headers) {
-            if name.eq_ignore_ascii_case("set-cookie") {
-                response.headers.append(name, value);
-            } else {
-                let _ = response.headers.insert(name, value);
-            }
-        }
+        response.headers = req.take_response_headers()?;
+        response.headers.merge(endpoint_headers);
         let session_cookie = response
             .headers
             .get_all("set-cookie")
@@ -93,20 +60,6 @@ impl<S: AuthSchema> SessionManager<S> {
             let _ = response
                 .headers
                 .insert("access-control-expose-headers", exposed.join(", "));
-        }
-        // Send only the final value for each cookie. A 2FA redirect must never expose
-        // an earlier credential cookie that the same response subsequently expires.
-        let mut cookies = Vec::<(String, String)>::new();
-        for value in response.headers.get_all("set-cookie") {
-            let Some((name, _)) = value.split_once('=') else {
-                continue;
-            };
-            cookies.retain(|(existing, _)| existing != name);
-            cookies.push((name.to_string(), value.clone()));
-        }
-        response.headers.remove("set-cookie");
-        for (_, value) in cookies {
-            response.headers.append("Set-Cookie", value);
         }
         if req.path().ends_with("/get-session") {
             let _ = response.headers.insert("Cache-Control", "no-store");

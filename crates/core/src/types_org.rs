@@ -47,7 +47,7 @@ where
 }
 
 /// Organization entity - matches OpenAPI schema
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Organization {
     /// Application fields projected by the configured organization schema.
     #[serde(flatten)]

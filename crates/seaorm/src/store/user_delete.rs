@@ -76,10 +76,12 @@ where
         .await?;
         for account in accounts {
             let store = self.clone();
+            let request = context.request.clone();
             after_write(
                 tx,
                 Box::pin(async move {
-                    let context = store.hook_context(None);
+                    let mut context = store.hook_context(None);
+                    context.request = request;
                     for hook in store.hooks() {
                         better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterDeleteAccount, hook.after_delete_account(&account, &context)).await?;
                     }

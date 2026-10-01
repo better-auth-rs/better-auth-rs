@@ -373,6 +373,20 @@ async fn test_admin_set_user_password_user_not_found() {
     let auth = create_test_auth().await;
     let admin_token = setup_admin(&auth).await;
 
+    assert!(
+        auth.store()
+            .get_user_by_id("nonexistent-id")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        auth.store()
+            .get_user_accounts("nonexistent-id")
+            .await
+            .unwrap()
+            .is_empty()
+    );
     let req = post_json_with_auth(
         "/admin/set-user-password",
         json!({
@@ -381,9 +395,27 @@ async fn test_admin_set_user_password_user_not_found() {
         }),
         &admin_token,
     );
-    let (status, _json) = send_request(&auth, req).await;
+    let (status, body) = send_request(&auth, req).await;
 
-    assert_eq!(status, 200, "missing user should no-op with success");
+    assert_eq!(status, 404);
+    assert_eq!(
+        body,
+        json!({"code":"USER_NOT_FOUND", "message":"User not found"})
+    );
+    assert!(
+        auth.store()
+            .get_user_by_id("nonexistent-id")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        auth.store()
+            .get_user_accounts("nonexistent-id")
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[tokio::test]

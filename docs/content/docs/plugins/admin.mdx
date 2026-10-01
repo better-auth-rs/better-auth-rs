@@ -145,3 +145,11 @@ An update with `banned: true` revokes the user's sessions after the user update 
 | 400 | Validation or admin-plugin bad request error |
 
 User listing transforms only the selected page. A successful list read then performs a separate count with the same filters and without pagination or output transforms. Instrumentation emits separate `findMany` and `count` spans for these logical adapter operations. If a page output transform fails, the Admin endpoint returns its existing empty-result error shape and does not run the count.
+
+## Endpoint input
+
+Admin body schemas run before authentication and permissions. Before and after endpoint hooks retain the original body; handlers and database hooks receive the validated projection. Unknown top-level keys are removed. The `data` object keeps its entries.
+
+Admin user IDs accept JavaScript string coercion, including numbers and arrays. A missing required ID remains a validation error. Only `set-user-password` rejects an empty ID; that route also rejects an empty password. The route creates a credential account when the target has none. Ban durations accept fractional seconds. A zero duration selects the configured default, and an empty reason selects the configured reason.
+
+`has-permission` requires exactly one of `permission` and `permissions` at the schema boundary. The handler accepts only `permissions`, matching Better Auth 1.7.6. A requestless native call can check an explicit role or user ID. Supplied headers or a Request require an authenticated session, whose identity takes precedence over the body.

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 pub(crate) mod callbacks;
-pub use callbacks::{EmailOtpCallbackFuture, EmailOtpCallbacks};
+pub use callbacks::EmailOtpCallbacks;
 mod handlers;
 mod native;
 mod otp;

@@ -416,8 +416,10 @@ async fn concurrent_otp_requests_create_only_one_session_and_invalidate_older_co
     .await
     .unwrap();
     let req = challenge_request(&challenge);
-    let _ = send_otp_core(&req, &config, &ctx).await.unwrap();
-    let _ = send_otp_core(&req, &config, &ctx).await.unwrap();
+    let mut send_request = req.clone();
+    send_request.path = "/two-factor/send-otp".into();
+    let _ = send_otp_core(&send_request, &config, &ctx).await.unwrap();
+    let _ = send_otp_core(&send_request, &config, &ctx).await.unwrap();
     let code = outbox.0.lock().unwrap()[1].clone();
     let body = VerifyOtpRequest {
         code,
@@ -459,4 +461,47 @@ async fn concurrent_otp_requests_create_only_one_session_and_invalidate_older_co
             .unwrap()
             .is_none()
     );
+}
+
+#[tokio::test]
+async fn challenge_expiration_removes_pending_credentials_and_preserves_remember_marker() {
+    let (ctx, user, session) =
+        create_test_context_with_credential_user("cookie-challenge@example.com", true).await;
+    let req = AuthRequest::new(HttpMethod::Post, "/sign-in/email");
+    for cookie in better_auth_core::utils::cookie_utils::create_session_cookies(
+        &session.token,
+        true,
+        &ctx.config,
+    ) {
+        req.append_response_header("Set-Cookie", cookie).unwrap();
+    }
+    req.append_response_header(
+        "Set-Cookie",
+        "better-auth.session_data.0=pre-challenge; Path=/".into(),
+    )
+    .unwrap();
+    let challenge = begin_sign_in_challenge(&user, None, &req, &ctx)
+        .await
+        .unwrap();
+    let mut response = AuthResponse::json(200, &challenge.response).unwrap();
+    for cookie in challenge.set_cookie_headers {
+        response.headers.append("Set-Cookie", cookie);
+    }
+    ctx.session_manager()
+        .finish_response(&req, &mut response)
+        .unwrap();
+    let credentials = response
+        .headers
+        .get_all("set-cookie")
+        .filter(|value| value.starts_with("better-auth.session_"))
+        .collect::<Vec<_>>();
+    assert_eq!(credentials.len(), 2);
+    assert!(credentials.iter().all(|value| value.contains("Max-Age=0")));
+    let markers = response
+        .headers
+        .get_all("set-cookie")
+        .filter(|value| value.starts_with("better-auth.dont_remember="))
+        .collect::<Vec<_>>();
+    assert_eq!(markers.len(), 1);
+    assert!(!markers[0].contains("Max-Age=0"));
 }

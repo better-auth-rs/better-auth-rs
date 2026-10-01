@@ -38,6 +38,7 @@ impl DeviceCodeStore for EphemeralStore {
         self.raw("deviceCode", "findOne", |state| {
             Ok(state
                 .device_codes
+                .snapshot()?
                 .iter()
                 .find(|value| value.device_code == device_code)
                 .cloned())
@@ -52,6 +53,7 @@ impl DeviceCodeStore for EphemeralStore {
         self.raw("deviceCode", "findOne", |state| {
             Ok(state
                 .device_codes
+                .snapshot()?
                 .iter()
                 .find(|value| value.user_code == user_code)
                 .cloned())
@@ -65,7 +67,7 @@ impl DeviceCodeStore for EphemeralStore {
         update: UpdateDeviceCode,
     ) -> AuthResult<DeviceCode> {
         self.raw("deviceCode", "update", |state| {
-            let Some(device_code) = state.device_codes.get_mut(id) else {
+            let Some(mut device_code) = state.device_codes.get_mut(id)? else {
                 return Ok(None);
             };
 
@@ -92,7 +94,7 @@ impl DeviceCodeStore for EphemeralStore {
         update: UpdateDeviceCode,
     ) -> AuthResult<bool> {
         self.raw("deviceCode", "update", |state| {
-            let Some(device_code) = state.device_codes.get_mut(id) else {
+            let Some(mut device_code) = state.device_codes.get_mut(id)? else {
                 return Ok(false);
             };
 
@@ -121,7 +123,7 @@ impl DeviceCodeStore for EphemeralStore {
         user_id: &str,
     ) -> AuthResult<bool> {
         self.raw("deviceCode", "incrementOne", |state| {
-            let Some(device_code) = state.device_codes.get_mut(id) else {
+            let Some(mut device_code) = state.device_codes.get_mut(id)? else {
                 return Ok(false);
             };
 
@@ -137,7 +139,7 @@ impl DeviceCodeStore for EphemeralStore {
 
     async fn delete_device_code(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
         self.raw("deviceCode", "delete", |state| {
-            let _ = state.device_codes.remove(id);
+            let _ = state.device_codes.remove(id)?;
             Ok(())
         })
         .await
@@ -151,11 +153,11 @@ impl DeviceCodeStore for EphemeralStore {
         self.raw("deviceCode", "delete", |state| {
             let should_delete = state
                 .device_codes
-                .get(id)
+                .get(id)?
                 .is_some_and(|device_code| device_code.status == status);
 
             if should_delete {
-                let _ = state.device_codes.remove(id);
+                let _ = state.device_codes.remove(id)?;
             }
 
             Ok(should_delete)

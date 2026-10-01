@@ -87,6 +87,11 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthPopupPlugin {
                 else {
                     return Ok(());
                 };
+                better_auth_core::utils::cookie_utils::remove_set_cookie_entries(
+                    req,
+                    Some(&mut response.headers),
+                    &name,
+                )?;
                 response
                     .headers
                     .append("Set-Cookie", create_clear_cookie(&name, &ctx.config));

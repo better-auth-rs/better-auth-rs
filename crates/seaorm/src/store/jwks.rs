@@ -4,7 +4,9 @@ use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use better_auth_core::{AuthResult, CreateJwk, Jwk, store::JwksStore};
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect,
+};
 use serde_json::{Map, json};
 
 use super::{SeaOrmStore, entities::jwk, map_db_err};
@@ -65,16 +67,16 @@ impl<
     S: better_auth_core::AuthSchema,
     O: crate::SeaOrmOrganizationSchema,
     P: crate::SeaOrmPluginSchema,
-> JwksStore for super::SeaOrmTransaction<'_, S, O, P>
+> JwksStore for super::SeaOrmTransaction<S, O, P>
 {
     async fn get_jwk(&self, id: &str) -> AuthResult<Option<Jwk>> {
-        get::<P>(self.store.config(), self.tx, id).await
+        get::<P>(self.store.config(), &self.tx, id).await
     }
     async fn list_jwks(&self) -> AuthResult<Vec<Jwk>> {
-        list::<P>(self.store.config(), self.tx).await
+        list::<P>(self.store.config(), &self.tx).await
     }
     async fn create_jwk(&self, input: CreateJwk) -> AuthResult<Jwk> {
-        self.store.create_jwk_with_connection(self.tx, input).await
+        self.store.create_jwk_with_connection(&self.tx, input).await
     }
 }
 
@@ -102,6 +104,10 @@ async fn list<P: crate::SeaOrmPluginSchema>(
 ) -> AuthResult<Vec<Jwk>> {
     database_operation::<Entity<P::Jwk>, _>(config, "findMany", async {
         Entity::<P::Jwk>::find()
+            .limit(super::pagination::default_limit(
+                config,
+                connection.get_database_backend(),
+            )?)
             .all(connection)
             .await
             .map_err(map_db_err)

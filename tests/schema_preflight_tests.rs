@@ -16,7 +16,7 @@ use better_auth_core::{
 };
 use better_auth_seaorm::{
     SeaOrmStore,
-    sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement},
+    sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement},
     store::__private_test_support::{bundled_schema::BundledSchema, migrator},
 };
 use std::sync::{
@@ -59,7 +59,7 @@ fn config() -> AuthConfig {
 
 async fn execute(db: &DatabaseConnection, sql: &str) {
     let _ = db
-        .execute_raw(Statement::from_string(DbBackend::Sqlite, sql))
+        .execute_raw(Statement::from_string(db.get_database_backend(), sql))
         .await
         .unwrap();
 }
@@ -92,6 +92,93 @@ fn findings(error: &SchemaCheckError) -> &[SchemaFinding] {
     assert_eq!(error.code, "SCHEMA_MISMATCH");
     assert_eq!(error.source, "database");
     &error.findings
+}
+
+#[tokio::test]
+#[ignore = "Requires BETTER_AUTH_TEST_POSTGRES_URL and permission to create isolated test schemas"]
+async fn live_postgres_preflight_tracks_migrations_defaults_and_search_path() {
+    let mut options = better_auth_seaorm::sea_orm::ConnectOptions::new(
+        std::env::var("BETTER_AUTH_TEST_POSTGRES_URL").unwrap(),
+    );
+    let _ = options.max_connections(1);
+    let database = Database::connect(options).await.unwrap();
+    let schema = format!("ba_preflight_{}", uuid::Uuid::new_v4().simple());
+    let shadow = format!("{schema}_shadow");
+    execute(&database, &format!("CREATE SCHEMA {schema}")).await;
+    execute(&database, &format!("SET search_path TO {schema}")).await;
+    let store = SeaOrmStore::new(config(), database.clone());
+    let auth = build(store.clone(), config(), Observe(Default::default())).await;
+    let missing = mismatch(http(&auth).await.unwrap_err());
+    assert_eq!(findings(&missing).len(), 4);
+
+    migrator::run_migrations(&database).await.unwrap();
+    assert!(Arc::ptr_eq(
+        &missing,
+        &mismatch(http(&auth).await.unwrap_err())
+    ));
+    store.invalidate_schema_check();
+    assert_eq!(http(&auth).await.unwrap().status, 200);
+    assert_eq!(
+        auth.call_endpoint(HttpMethod::Get, "/ok", EndpointInput::default())
+            .await
+            .unwrap()
+            .status,
+        200
+    );
+
+    execute(
+        &database,
+        "ALTER TABLE accounts ADD COLUMN legacy TEXT NOT NULL",
+    )
+    .await;
+    assert_eq!(http(&auth).await.unwrap().status, 200);
+    store.invalidate_schema_check();
+    assert_eq!(
+        findings(&mismatch(http(&auth).await.unwrap_err())),
+        &[SchemaFinding::UnexpectedRequiredColumn {
+            table: "accounts".into(),
+            column: "legacy".into(),
+        }]
+    );
+    execute(
+        &database,
+        "ALTER TABLE accounts ALTER COLUMN legacy SET DEFAULT ''",
+    )
+    .await;
+    execute(
+        &database,
+        "ALTER TABLE accounts ADD COLUMN sequence_value BIGSERIAL",
+    )
+    .await;
+    store.invalidate_schema_check();
+    assert_eq!(http(&auth).await.unwrap().status, 200);
+
+    execute(&database, &format!("CREATE SCHEMA {shadow}")).await;
+    execute(
+        &database,
+        &format!("CREATE TABLE {shadow}.users (LIKE {schema}.users INCLUDING ALL)"),
+    )
+    .await;
+    execute(
+        &database,
+        &format!("ALTER TABLE {shadow}.users DROP COLUMN email"),
+    )
+    .await;
+    execute(&database, &format!("SET search_path TO {shadow}, {schema}")).await;
+    store.invalidate_schema_check();
+    assert_eq!(
+        findings(&mismatch(http(&auth).await.unwrap_err())),
+        &[SchemaFinding::MissingColumn {
+            table: "users".into(),
+            column: "email".into(),
+        }]
+    );
+    execute(&database, &format!("SET search_path TO {schema}, {shadow}")).await;
+    store.invalidate_schema_check();
+    assert_eq!(http(&auth).await.unwrap().status, 200);
+    execute(&database, &format!("DROP SCHEMA {shadow} CASCADE")).await;
+    execute(&database, &format!("DROP SCHEMA {schema} CASCADE")).await;
+    database.close().await.unwrap();
 }
 
 async fn http(auth: &BetterAuth<BundledSchema>) -> AuthResult<AuthResponse> {

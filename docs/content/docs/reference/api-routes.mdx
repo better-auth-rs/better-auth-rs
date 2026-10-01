@@ -35,6 +35,7 @@ This page is the authoritative v1 route inventory for phases 0-12. The pinned Ty
 |--------|------|-------------|
 | `GET` | `/get-session` | Return the current session and user |
 | `POST` | `/get-session` | Same without a refresh; requires `session.defer_session_refresh` |
+| `POST` | `/update-session` | Update configured writable session fields |
 | `POST` | `/sign-out` | Revoke the current session |
 | `GET` | `/list-sessions` | List active sessions for the current user |
 | `POST` | `/revoke-session` | Revoke one session by token |

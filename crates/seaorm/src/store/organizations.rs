@@ -17,6 +17,58 @@ use serde_json::json;
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> OrganizationStore
     for SeaOrmStore<S, O, P>
 {
+    async fn insert_organization(&self, record: Organization) -> AuthResult<Organization> {
+        let config = self.organization_fields()?.organization;
+        let core = self.create_fields(
+            "organization",
+            if record.id.is_undefined() {
+                None
+            } else {
+                Some(record.id.typed()?.clone())
+            },
+            values([
+                ("name", serde_json::to_value(record.name)?),
+                ("slug", serde_json::to_value(record.slug)?),
+                ("logo", serde_json::to_value(record.logo)?),
+                (
+                    "metadata",
+                    record.metadata.json()?.unwrap_or(serde_json::Value::Null),
+                ),
+                ("created_at", serde_json::to_value(record.created_at)?),
+                ("auth_updated_at", json!(Utc::now())),
+            ]),
+        )?;
+        models::active::<O::Organization>(
+            core,
+            record.additional_fields,
+            &config,
+            true,
+            self.connection().get_database_backend(),
+        )?
+        .insert(self.connection())
+        .await
+        .map_err(map_db_err)?
+        .record(&config)
+    }
+    async fn delete_organization_records(&self, id: &str) -> AuthResult<()> {
+        let _ = Entity::<O::Member>::delete_many()
+            .filter(O::Member::column("organization_id")?.eq(id))
+            .exec(self.connection())
+            .await
+            .map_err(map_db_err)?;
+        let _ = Entity::<O::Invitation>::delete_many()
+            .filter(O::Invitation::column("organization_id")?.eq(id))
+            .exec(self.connection())
+            .await
+            .map_err(map_db_err)?;
+        let _ = Entity::<O::Organization>::delete_many()
+            .filter(O::Organization::column("id")?.eq(id))
+            .exec(self.connection())
+            .await
+            .map_err(map_db_err)?;
+        Ok(())
+    }
+
     fn configure_organization_fields(&self, fields: OrganizationFields) -> AuthResult<()> {
         let mut fields = fields.into_storage();
         models::validate_fields::<O::Organization>("organization", &fields.organization)?;
@@ -60,8 +112,12 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
                 let _ = core.insert(name.into(), value);
             }
         }
-        let overridden_metadata = config.additional_fields.contains_key("metadata");
-        if overridden_metadata
+        let native_metadata = !config.additional_fields.contains_key("metadata")
+            && matches!(
+                O::Organization::column("metadata")?.def().get_column_type(),
+                sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
+            );
+        if !native_metadata
             && let Some(value) =
                 better_auth_core::organization_fields::metadata_input(org.metadata.json()?, true)
         {
@@ -81,7 +137,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             better_auth_core::SchemaValue::Undefined => None,
             better_auth_core::SchemaValue::InvalidDate => Some(serde_json::Value::Null),
         };
-        if !overridden_metadata {
+        if native_metadata {
             active.set(
                 O::Organization::column("metadata")?,
                 sea_orm::Value::Json(metadata.map(Box::new)),
@@ -168,8 +224,12 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
                 let _ = core.insert(name.into(), value);
             }
         }
-        let overridden_metadata = config.additional_fields.contains_key("metadata");
-        if overridden_metadata
+        let native_metadata = !config.additional_fields.contains_key("metadata")
+            && matches!(
+                O::Organization::column("metadata")?.def().get_column_type(),
+                sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
+            );
+        if !native_metadata
             && let Some(value) = better_auth_core::organization_fields::metadata_input(
                 update.metadata.clone(),
                 false,
@@ -184,7 +244,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             false,
             self.connection().get_database_backend(),
         )?;
-        if !overridden_metadata && let Some(metadata) = update.metadata {
+        if native_metadata && let Some(metadata) = update.metadata {
             active.set(
                 O::Organization::column("metadata")?,
                 sea_orm::Value::Json(Some(Box::new(metadata))),

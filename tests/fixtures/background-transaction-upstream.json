@@ -1,0 +1,2774 @@
+[
+  {
+    "backend": "sqlite",
+    "transport": "http",
+    "scheduled": false,
+    "outcome": "commit",
+    "result": {
+      "status": 200,
+      "thrown": null
+    },
+    "responseBeforeRelease": false,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Sender mutation"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Sender mutation",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      },
+      {
+        "hook": "user:update",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      },
+      {
+        "hook": "session:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "sender:start",
+      "gate:release",
+      "sender:done",
+      "session:create.before",
+      "user:create.after",
+      "user:update.after",
+      "session:create.after",
+      "response"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "transport": "http",
+    "scheduled": false,
+    "outcome": "rollback",
+    "result": {
+      "status": 500,
+      "thrown": null
+    },
+    "responseBeforeRelease": false,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "freshRead": {
+      "found": false,
+      "name": null,
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [],
+    "events": [
+      "sender:called",
+      "sender:start",
+      "gate:release",
+      "sender:done",
+      "session:create.before",
+      "response"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "transport": "http",
+    "scheduled": false,
+    "outcome": "after-hook-error",
+    "result": {
+      "status": 500,
+      "thrown": null
+    },
+    "responseBeforeRelease": false,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Sender mutation"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Sender mutation",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "sender:start",
+      "gate:release",
+      "sender:done",
+      "session:create.before",
+      "user:create.after",
+      "response"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "transport": "http",
+    "scheduled": true,
+    "outcome": "commit",
+    "result": {
+      "status": 200,
+      "thrown": null
+    },
+    "responseBeforeRelease": true,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Original"
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Original"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Original",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": true,
+        "pendingBefore": 2,
+        "currentRead": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already committed"
+        },
+        "internalRead": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already committed"
+        },
+        "write": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already committed"
+        },
+        "pendingAfter": 2
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        }
+      },
+      {
+        "hook": "session:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "handler:received",
+      "sender:start",
+      "session:create.before",
+      "user:create.after",
+      "session:create.after",
+      "response",
+      "gate:release",
+      "sender:done"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "transport": "http",
+    "scheduled": true,
+    "outcome": "rollback",
+    "result": {
+      "status": 500,
+      "thrown": null
+    },
+    "responseBeforeRelease": true,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "freshRead": {
+      "found": false,
+      "name": null,
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": true,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already rolled back"
+        },
+        "internalRead": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already rolled back"
+        },
+        "write": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already rolled back"
+        },
+        "pendingAfter": 1
+      }
+    ],
+    "hookContexts": [],
+    "events": [
+      "sender:called",
+      "handler:received",
+      "sender:start",
+      "session:create.before",
+      "response",
+      "gate:release",
+      "sender:done"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "transport": "http",
+    "scheduled": true,
+    "outcome": "after-hook-error",
+    "result": {
+      "status": 500,
+      "thrown": null
+    },
+    "responseBeforeRelease": true,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Original"
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Original"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Original",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": true,
+        "pendingBefore": 2,
+        "currentRead": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already committed"
+        },
+        "internalRead": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already committed"
+        },
+        "write": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already committed"
+        },
+        "pendingAfter": 2
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "handler:received",
+      "sender:start",
+      "session:create.before",
+      "user:create.after",
+      "response",
+      "gate:release",
+      "sender:done"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "transport": "native",
+    "scheduled": false,
+    "outcome": "commit",
+    "result": {
+      "status": 200,
+      "thrown": null
+    },
+    "responseBeforeRelease": false,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Sender mutation"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Sender mutation",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      },
+      {
+        "hook": "user:update",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      },
+      {
+        "hook": "session:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "sender:start",
+      "gate:release",
+      "sender:done",
+      "session:create.before",
+      "user:create.after",
+      "user:update.after",
+      "session:create.after",
+      "response"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "transport": "native",
+    "scheduled": false,
+    "outcome": "rollback",
+    "result": {
+      "status": null,
+      "thrown": "rollback-before-session"
+    },
+    "responseBeforeRelease": false,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "freshRead": {
+      "found": false,
+      "name": null,
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [],
+    "events": [
+      "sender:called",
+      "sender:start",
+      "gate:release",
+      "sender:done",
+      "session:create.before",
+      "response"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "transport": "native",
+    "scheduled": false,
+    "outcome": "after-hook-error",
+    "result": {
+      "status": null,
+      "thrown": "after-hook-error"
+    },
+    "responseBeforeRelease": false,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Sender mutation"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Sender mutation",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "sender:start",
+      "gate:release",
+      "sender:done",
+      "session:create.before",
+      "user:create.after",
+      "response"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "transport": "native",
+    "scheduled": true,
+    "outcome": "commit",
+    "result": {
+      "status": 200,
+      "thrown": null
+    },
+    "responseBeforeRelease": true,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Original"
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Original"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Original",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": true,
+        "pendingBefore": 2,
+        "currentRead": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already committed"
+        },
+        "internalRead": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already committed"
+        },
+        "write": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already committed"
+        },
+        "pendingAfter": 2
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        }
+      },
+      {
+        "hook": "session:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "handler:received",
+      "sender:start",
+      "session:create.before",
+      "user:create.after",
+      "session:create.after",
+      "response",
+      "gate:release",
+      "sender:done"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "transport": "native",
+    "scheduled": true,
+    "outcome": "rollback",
+    "result": {
+      "status": null,
+      "thrown": "rollback-before-session"
+    },
+    "responseBeforeRelease": true,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "freshRead": {
+      "found": false,
+      "name": null,
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": true,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already rolled back"
+        },
+        "internalRead": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already rolled back"
+        },
+        "write": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already rolled back"
+        },
+        "pendingAfter": 1
+      }
+    ],
+    "hookContexts": [],
+    "events": [
+      "sender:called",
+      "handler:received",
+      "sender:start",
+      "session:create.before",
+      "response",
+      "gate:release",
+      "sender:done"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "transport": "native",
+    "scheduled": true,
+    "outcome": "after-hook-error",
+    "result": {
+      "status": null,
+      "thrown": "after-hook-error"
+    },
+    "responseBeforeRelease": true,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Original"
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Original"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Original",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": true,
+        "pendingBefore": 2,
+        "currentRead": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already committed"
+        },
+        "internalRead": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already committed"
+        },
+        "write": {
+          "found": false,
+          "name": null,
+          "error": "Transaction is already committed"
+        },
+        "pendingAfter": 2
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "handler:received",
+      "sender:start",
+      "session:create.before",
+      "user:create.after",
+      "response",
+      "gate:release",
+      "sender:done"
+    ]
+  },
+  {
+    "backend": "memory",
+    "transport": "http",
+    "scheduled": false,
+    "outcome": "commit",
+    "result": {
+      "status": 200,
+      "thrown": null
+    },
+    "responseBeforeRelease": false,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Sender mutation"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Sender mutation",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      },
+      {
+        "hook": "user:update",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      },
+      {
+        "hook": "session:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "sender:start",
+      "gate:release",
+      "sender:done",
+      "session:create.before",
+      "user:create.after",
+      "user:update.after",
+      "session:create.after",
+      "response"
+    ]
+  },
+  {
+    "backend": "memory",
+    "transport": "http",
+    "scheduled": false,
+    "outcome": "rollback",
+    "result": {
+      "status": 500,
+      "thrown": null
+    },
+    "responseBeforeRelease": false,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "freshRead": {
+      "found": false,
+      "name": null,
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [],
+    "events": [
+      "sender:called",
+      "sender:start",
+      "gate:release",
+      "sender:done",
+      "session:create.before",
+      "response"
+    ]
+  },
+  {
+    "backend": "memory",
+    "transport": "http",
+    "scheduled": false,
+    "outcome": "after-hook-error",
+    "result": {
+      "status": 500,
+      "thrown": null
+    },
+    "responseBeforeRelease": false,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Sender mutation"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Sender mutation",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "sender:start",
+      "gate:release",
+      "sender:done",
+      "session:create.before",
+      "user:create.after",
+      "response"
+    ]
+  },
+  {
+    "backend": "memory",
+    "transport": "http",
+    "scheduled": true,
+    "outcome": "commit",
+    "result": {
+      "status": 200,
+      "thrown": null
+    },
+    "responseBeforeRelease": true,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Original"
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Sender mutation"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Sender mutation",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": true,
+        "pendingBefore": 2,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 4
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        }
+      },
+      {
+        "hook": "session:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "handler:received",
+      "sender:start",
+      "session:create.before",
+      "user:create.after",
+      "session:create.after",
+      "response",
+      "gate:release",
+      "sender:done"
+    ]
+  },
+  {
+    "backend": "memory",
+    "transport": "http",
+    "scheduled": true,
+    "outcome": "rollback",
+    "result": {
+      "status": 500,
+      "thrown": null
+    },
+    "responseBeforeRelease": true,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "freshRead": {
+      "found": false,
+      "name": null,
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": true,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [],
+    "events": [
+      "sender:called",
+      "handler:received",
+      "sender:start",
+      "session:create.before",
+      "response",
+      "gate:release",
+      "sender:done"
+    ]
+  },
+  {
+    "backend": "memory",
+    "transport": "http",
+    "scheduled": true,
+    "outcome": "after-hook-error",
+    "result": {
+      "status": 500,
+      "thrown": null
+    },
+    "responseBeforeRelease": true,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Original"
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Sender mutation"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Sender mutation",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": true,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": true,
+        "pendingBefore": 2,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 4
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": true,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "handler:received",
+      "sender:start",
+      "session:create.before",
+      "user:create.after",
+      "response",
+      "gate:release",
+      "sender:done"
+    ]
+  },
+  {
+    "backend": "memory",
+    "transport": "native",
+    "scheduled": false,
+    "outcome": "commit",
+    "result": {
+      "status": 200,
+      "thrown": null
+    },
+    "responseBeforeRelease": false,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Sender mutation"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Sender mutation",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      },
+      {
+        "hook": "user:update",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      },
+      {
+        "hook": "session:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "sender:start",
+      "gate:release",
+      "sender:done",
+      "session:create.before",
+      "user:create.after",
+      "user:update.after",
+      "session:create.after",
+      "response"
+    ]
+  },
+  {
+    "backend": "memory",
+    "transport": "native",
+    "scheduled": false,
+    "outcome": "rollback",
+    "result": {
+      "status": null,
+      "thrown": "rollback-before-session"
+    },
+    "responseBeforeRelease": false,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "freshRead": {
+      "found": false,
+      "name": null,
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [],
+    "events": [
+      "sender:called",
+      "sender:start",
+      "gate:release",
+      "sender:done",
+      "session:create.before",
+      "response"
+    ]
+  },
+  {
+    "backend": "memory",
+    "transport": "native",
+    "scheduled": false,
+    "outcome": "after-hook-error",
+    "result": {
+      "status": null,
+      "thrown": "after-hook-error"
+    },
+    "responseBeforeRelease": false,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Sender mutation"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Sender mutation",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "sender:start",
+      "gate:release",
+      "sender:done",
+      "session:create.before",
+      "user:create.after",
+      "response"
+    ]
+  },
+  {
+    "backend": "memory",
+    "transport": "native",
+    "scheduled": true,
+    "outcome": "commit",
+    "result": {
+      "status": 200,
+      "thrown": null
+    },
+    "responseBeforeRelease": true,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Original"
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Sender mutation"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Sender mutation",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": true,
+        "pendingBefore": 2,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 4
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        }
+      },
+      {
+        "hook": "session:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "handler:received",
+      "sender:start",
+      "session:create.before",
+      "user:create.after",
+      "session:create.after",
+      "response",
+      "gate:release",
+      "sender:done"
+    ]
+  },
+  {
+    "backend": "memory",
+    "transport": "native",
+    "scheduled": true,
+    "outcome": "rollback",
+    "result": {
+      "status": null,
+      "thrown": "rollback-before-session"
+    },
+    "responseBeforeRelease": true,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "final": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "freshRead": {
+      "found": false,
+      "name": null,
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": true,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 3
+      }
+    ],
+    "hookContexts": [],
+    "events": [
+      "sender:called",
+      "handler:received",
+      "sender:start",
+      "session:create.before",
+      "response",
+      "gate:release",
+      "sender:done"
+    ]
+  },
+  {
+    "backend": "memory",
+    "transport": "native",
+    "scheduled": true,
+    "outcome": "after-hook-error",
+    "result": {
+      "status": null,
+      "thrown": "after-hook-error"
+    },
+    "responseBeforeRelease": true,
+    "before": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "name": null
+    },
+    "atRelease": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Original"
+    },
+    "final": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "name": "Sender mutation"
+    },
+    "freshRead": {
+      "found": true,
+      "name": "Sender mutation",
+      "error": null
+    },
+    "phases": [
+      {
+        "phase": "start",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": false,
+        "pendingBefore": 1,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "pendingAfter": 1
+      },
+      {
+        "phase": "released",
+        "sameEndpoint": true,
+        "sameAdapter": true,
+        "baseAdapter": false,
+        "transactionActive": true,
+        "path": "/sign-up/email",
+        "request": false,
+        "sameRequestURL": true,
+        "bodyName": "Original",
+        "responseDone": true,
+        "pendingBefore": 2,
+        "currentRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "internalRead": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        },
+        "write": {
+          "found": true,
+          "name": "Sender mutation",
+          "error": null
+        },
+        "pendingAfter": 4
+      }
+    ],
+    "hookContexts": [
+      {
+        "hook": "user:create",
+        "baseAdapter": true,
+        "transactionActive": false,
+        "path": "/sign-up/email",
+        "request": false,
+        "bodyName": "Original",
+        "read": {
+          "found": true,
+          "name": "Original",
+          "error": null
+        }
+      }
+    ],
+    "events": [
+      "sender:called",
+      "handler:received",
+      "sender:start",
+      "session:create.before",
+      "user:create.after",
+      "response",
+      "gate:release",
+      "sender:done"
+    ]
+  }
+]

@@ -36,7 +36,7 @@ impl better_auth_core::email::SendVerificationEmail for RejectedDelivery {
 }
 
 #[tokio::test]
-async fn username_login_only_sends_verification_when_required_and_propagates_delivery_errors() {
+async fn username_login_only_sends_verification_when_required_and_logs_async_delivery_errors() {
     use better_auth::plugins::{EmailPasswordPlugin, EmailVerificationPlugin};
     for required in [false, true] {
         let delivery = Arc::new(RejectedDelivery(AtomicUsize::new(0)));
@@ -97,10 +97,10 @@ async fn username_login_only_sends_verification_when_required_and_propagates_del
             .await;
         if required {
             let response = result.unwrap_err().to_auth_response();
-            assert_eq!(response.status, 409);
+            assert_eq!(response.status, 403);
             assert_eq!(
                 serde_json::from_slice::<serde_json::Value>(&response.body).unwrap(),
-                serde_json::json!({"code":"DELIVERY_REJECTED","message":"Delivery rejected"})
+                serde_json::json!({"code":"EMAIL_NOT_VERIFIED","message":"Email not verified"})
             );
             assert_eq!(delivery.0.load(Ordering::SeqCst), 1);
             assert!(

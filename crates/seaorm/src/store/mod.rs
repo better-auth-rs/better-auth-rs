@@ -58,7 +58,7 @@ use better_auth_core::store::{
     AuthTransaction, BoxedTransactionValue, TransactionStore, TransactionWork,
 };
 use chrono::{DateTime, Utc};
-use sea_orm::{DatabaseConnection, DatabaseTransaction, DbErr, SqlErr, TransactionTrait};
+use sea_orm::{DatabaseConnection, DbErr, SqlErr, TransactionTrait};
 
 use crate::config::AuthConfig;
 use crate::error::{AuthError, AuthResult, DatabaseError};
@@ -215,22 +215,21 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     }
 }
 
-type HookTransaction<'a, S> = (&'a DatabaseTransaction, &'a dyn AuthTransaction<S>);
+type HookTransaction<'a, S> = (&'a crate::TransactionConnection, &'a dyn AuthTransaction<S>);
 
 struct SeaOrmTransaction<
-    'a,
     S: AuthSchema,
     O: crate::SeaOrmOrganizationSchema,
     P: crate::SeaOrmPluginSchema,
 > {
-    store: &'a SeaOrmStore<S, O, P>,
-    tx: &'a DatabaseTransaction,
-    effects: Mutex<Vec<transaction_hooks::PendingEffect>>,
+    store: SeaOrmStore<S, O, P>,
+    tx: crate::TransactionConnection,
+    effects: std::sync::Weak<Mutex<Vec<transaction_hooks::PendingEffect>>>,
 }
 
 #[async_trait]
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> AuthTransaction<S>
-    for SeaOrmTransaction<'_, S, O, P>
+    for SeaOrmTransaction<S, O, P>
 where
     S: AuthSchema,
     S::User: SeaOrmUserModel,
@@ -238,17 +237,58 @@ where
     S::Session: SeaOrmSessionModel,
     S::Verification: crate::schema::SeaOrmVerificationModel,
 {
+    fn clone_handle(&self) -> Arc<dyn AuthTransaction<S>> {
+        Arc::new(Self {
+            store: self.store.clone(),
+            tx: self.tx.clone(),
+            effects: self.effects.clone(),
+        })
+    }
+
+    async fn create_user_optional(
+        &self,
+        input: better_auth_core::CreateUser,
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
+        let record = self
+            .store
+            .create_user_with_connection(&self.tx, Some((&self.tx, self)), input)
+            .await?;
+        if let Some(record) = &record {
+            self.queue(transaction_hooks::Effect::UserCreated(record.clone()))?;
+        }
+        Ok(record)
+    }
+    async fn create_session_optional(
+        &self,
+        input: better_auth_core::CreateSession,
+    ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
+        let record = self
+            .store
+            .create_session_with_connection(&self.tx, Some((&self.tx, self)), input)
+            .await?;
+        if let Some(record) = &record {
+            self.queue(transaction_hooks::Effect::SessionCreated(record.clone()))?;
+        }
+        Ok(record)
+    }
+    async fn before_create_runtime_session_optional(
+        &self,
+        input: &mut better_auth_core::CreateSession,
+    ) -> AuthResult<bool> {
+        self.store
+            .before_runtime_session_optional_in_tx(input, Some((&self.tx, self)))
+            .await
+    }
     fn queue_after_commit(
         &self,
         effect: better_auth_core::store::TypedTransactionFuture<'static, ()>,
     ) -> AuthResult<()> {
-        self.effects
-            .lock()
-            .map_err(|_| AuthError::internal("Transaction hook queue lock poisoned"))?
-            .push(transaction_hooks::PendingEffect::External {
-                effect,
-                request: crate::hooks::current_request_hook_context(),
-            });
+        if let Some(queue) = self.effects.upgrade() {
+            queue
+                .lock()
+                .map_err(|_| AuthError::internal("Transaction hook queue lock poisoned"))?
+                .push(transaction_hooks::PendingEffect::External { effect });
+        }
         Ok(())
     }
 
@@ -257,7 +297,7 @@ where
         input: &mut better_auth_core::CreateVerification,
     ) -> AuthResult<()> {
         self.store
-            .before_runtime_verification_in_tx(input, Some((self.tx, self)))
+            .before_runtime_verification_in_tx(input, Some((&self.tx, self)))
             .await
     }
     async fn create_verification(
@@ -280,7 +320,12 @@ where
         update: better_auth_core::store::database_hooks::VerificationUpdate,
     ) -> AuthResult<Option<better_auth_core::wire::VerificationView>> {
         self.store
-            .update_verification_with_connection(self.tx, Some((self.tx, self)), identifier, update)
+            .update_verification_with_connection(
+                &self.tx,
+                Some((&self.tx, self)),
+                identifier,
+                update,
+            )
             .await
     }
 
@@ -289,11 +334,22 @@ where
         identifier: &str,
     ) -> AuthResult<Option<better_auth_core::wire::VerificationView>> {
         self.store
-            .find_verification_with_connection(self.tx, identifier)
+            .find_verification_with_connection(&self.tx, identifier)
             .await
     }
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
         self.delete_expired_transaction_verifications().await
+    }
+    async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()> {
+        use crate::schema::SeaOrmVerificationModel;
+        use sea_orm::ColumnTrait;
+        self.store
+            .delete_single_verification(
+                &self.tx,
+                Some((&self.tx, self)),
+                S::Verification::identifier_column().eq(identifier),
+            )
+            .await
     }
     async fn get_user_by_id(
         &self,
@@ -303,11 +359,11 @@ where
         let id = S::User::parse_id(id)?;
         <S::User as SeaOrmUserModel>::Entity::find()
             .filter(<S::User as SeaOrmUserModel>::id_column().eq(id))
-            .one(self.tx)
+            .one(&self.tx)
             .await
             .map_err(map_db_err)?
             .as_ref()
-            .map(|row| self.store.output_user(row, self.tx))
+            .map(|row| self.store.output_user(row, &self.tx))
             .transpose()
     }
     async fn get_user_by_email(
@@ -320,18 +376,18 @@ where
                 <S::User as SeaOrmUserModel>::email_column()
                     .eq(crate::utils::email::normalize_user_email(email)),
             )
-            .one(self.tx)
+            .one(&self.tx)
             .await
             .map_err(map_db_err)?
             .as_ref()
-            .map(|row| self.store.output_user(row, self.tx))
+            .map(|row| self.store.output_user(row, &self.tx))
             .transpose()
     }
     async fn get_user_by_username(
         &self,
         username: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        self.store.find_user_by_username(self.tx, username).await
+        self.store.find_user_by_username(&self.tx, username).await
     }
     async fn update_user(
         &self,
@@ -340,7 +396,7 @@ where
     ) -> AuthResult<better_auth_core::wire::UserView> {
         let record = self
             .store
-            .update_user_with_connection(self.tx, Some((self.tx, self)), id, update)
+            .update_user_with_connection(&self.tx, Some((&self.tx, self)), id, update)
             .await?;
         self.queue(transaction_hooks::Effect::UserUpdated(Some(record.clone())))?;
         Ok(record)
@@ -352,7 +408,7 @@ where
     ) -> AuthResult<Option<better_auth_core::UserView>> {
         let record = self
             .store
-            .update_user_outcome_with_connection(self.tx, Some((self.tx, self)), id, update)
+            .update_user_outcome_with_connection(&self.tx, Some((&self.tx, self)), id, update)
             .await?
             .continue_value()
             .flatten();
@@ -373,8 +429,8 @@ where
         let record = self
             .store
             .delete_user_with_connection(
-                self.tx,
-                Some((self.tx, self)),
+                &self.tx,
+                Some((&self.tx, self)),
                 id,
                 delete_database_sessions,
             )
@@ -389,7 +445,7 @@ where
         input: better_auth_core::CreatePasskey,
     ) -> AuthResult<better_auth_core::Passkey> {
         self.store
-            .create_passkey_with_connection(self.tx, input)
+            .create_passkey_with_connection(&self.tx, input)
             .await
     }
     async fn before_create_runtime_session(
@@ -397,7 +453,7 @@ where
         session: &mut better_auth_core::CreateSession,
     ) -> AuthResult<()> {
         self.store
-            .before_runtime_session_in_tx(session, Some((self.tx, self)))
+            .before_runtime_session_in_tx(session, Some((&self.tx, self)))
             .await
     }
     async fn create_user(
@@ -406,7 +462,7 @@ where
     ) -> AuthResult<better_auth_core::wire::UserView> {
         let record = self
             .store
-            .create_user_in_tx((self.tx, self), create_user)
+            .create_user_in_tx((&self.tx, self), create_user)
             .await?;
         self.queue(transaction_hooks::Effect::UserCreated(record.clone()))?;
         Ok(record)
@@ -418,7 +474,7 @@ where
     ) -> AuthResult<better_auth_core::wire::AccountView> {
         let record = self
             .store
-            .create_account_in_tx((self.tx, self), create_account)
+            .create_account_in_tx((&self.tx, self), create_account)
             .await?;
         self.queue(transaction_hooks::Effect::AccountCreated(Box::new(
             record.clone(),
@@ -432,7 +488,7 @@ where
     ) -> AuthResult<better_auth_core::wire::SessionView> {
         let record = self
             .store
-            .create_session_in_tx((self.tx, self), create_session)
+            .create_session_in_tx((&self.tx, self), create_session)
             .await?;
         self.queue(transaction_hooks::Effect::SessionCreated(record.clone()))?;
         Ok(record)
@@ -453,21 +509,18 @@ where
         &self,
         work: Box<TransactionWork<S>>,
     ) -> AuthResult<BoxedTransactionValue> {
-        let tx = self.db.begin().await.map_err(map_db_err)?;
+        let tx = crate::TransactionConnection::new(self.db.begin().await.map_err(map_db_err)?);
+        let effects = Arc::new(Mutex::new(Vec::new()));
         let tx_store = SeaOrmTransaction {
-            store: self,
-            tx: &tx,
-            effects: Mutex::new(Vec::new()),
+            store: self.clone(),
+            tx: tx.clone(),
+            effects: Arc::downgrade(&effects),
         };
 
         match work(&tx_store).await {
             Ok(value) => {
-                let effects = tx_store
-                    .effects
-                    .into_inner()
-                    .map_err(|_| AuthError::internal("Transaction hook queue lock poisoned"))?;
                 tx.commit().await.map_err(map_db_err)?;
-                self.finish_transaction_effects(effects).await?;
+                self.finish_queued_transaction_effects(&effects).await?;
                 Ok(value)
             }
             Err(err) => {
@@ -479,6 +532,9 @@ where
 }
 
 fn map_db_err(err: DbErr) -> AuthError {
+    if let DbErr::Custom(message) = err {
+        return AuthError::Database(DatabaseError::Query(message));
+    }
     match err.sql_err() {
         Some(SqlErr::UniqueConstraintViolation(message)) => {
             AuthError::Database(DatabaseError::UniqueConstraint(message))

@@ -27,6 +27,11 @@ pub struct EndpointInput {
 }
 
 impl<S: AuthSchema> BetterAuth<S> {
+    /// Access the registered native test helpers. Do not enable this plugin in production.
+    pub fn test(&self) -> AuthResult<crate::plugins::test_utils::TestUtilsApi<'_, S>> {
+        crate::plugins::test_utils::TestUtilsApi::from_context(self.context())
+    }
+
     /// Call a registered endpoint with its plugin hooks, without the HTTP transport phase.
     /// API errors retain response headers; ordinary errors retain their original Rust variant.
     pub async fn call_endpoint(
@@ -64,10 +69,9 @@ impl<S: AuthSchema> BetterAuth<S> {
                         &request,
                         &auth.config.advanced.ip_address,
                     );
-                    let route = self
-                        .plugins()
-                        .iter()
-                        .flat_map(|plugin| plugin.routes())
+                    let route = crate::core::auth::core_routes()
+                        .into_iter()
+                        .chain(self.plugins().iter().flat_map(|plugin| plugin.routes()))
                         .find(|route| route.matches(request.method(), path));
                     better_auth_core::with_request_hook_context_value(context, async {
                         better_auth_core::hooks::set_request_hook_route(path, route.as_ref());
@@ -162,22 +166,13 @@ pub struct UpdateKeyOptions {
     pub expires_in: FieldUpdate<f64>,
 }
 
-/// Actions required on one resource during API key verification.
-#[derive(Debug)]
-pub enum RequiredActions {
-    /// Require every action, matching the upstream AND connector.
-    All(Vec<String>),
-    /// Require at least one action, matching the upstream OR connector.
-    Any(Vec<String>),
-}
-
 /// Constraints checked before verification consumes quota or rate limit capacity.
 #[derive(Debug, Default)]
 pub struct VerifyKeyOptions {
     /// Restrict verification to this configuration.
     pub config_id: Option<String>,
-    /// Each resource must satisfy its requested actions.
-    pub permissions: Option<HashMap<String, RequiredActions>>,
+    /// Require every listed action for every requested resource.
+    pub permissions: Option<HashMap<String, Vec<String>>>,
 }
 
 /// Server API bound to the registered API key plugin and initialized auth context.
@@ -288,22 +283,9 @@ impl<S: AuthSchema> ApiKeyApi<'_, S> {
         key: &str,
         options: VerifyKeyOptions,
     ) -> Result<ApiKeyView, ApiKeyVerificationError> {
-        let permissions = options.permissions.map(|resources| {
-            Value::Object(
-                resources
-                    .into_iter()
-                    .map(|(resource, actions)| {
-                        let actions = match actions {
-                            RequiredActions::All(actions) => serde_json::json!(actions),
-                            RequiredActions::Any(actions) => {
-                                serde_json::json!({ "actions": actions, "connector": "OR" })
-                            }
-                        };
-                        (resource, actions)
-                    })
-                    .collect(),
-            )
-        });
+        let permissions = options
+            .permissions
+            .map(|resources| serde_json::json!(resources));
         self.context
             .with_native_context(Default::default(), |context| async move {
                 Ok(self
@@ -339,5 +321,14 @@ impl<S: AuthSchema> BetterAuth<S> {
     /// Use the registered JWT key adapter from trusted server code.
     pub fn jwt(&self) -> AuthResult<better_auth_api::plugins::jwt::JwtApi<'_, S>> {
         better_auth_api::plugins::jwt::JwtApi::from_context(self.context())
+    }
+}
+
+impl<S: AuthSchema> BetterAuth<S> {
+    /// Use the registered server-only TOTP and backup-code endpoints.
+    pub fn two_factor(
+        &self,
+    ) -> AuthResult<better_auth_api::plugins::two_factor::TwoFactorApi<'_, S>> {
+        better_auth_api::plugins::two_factor::TwoFactorApi::from_context(self.context())
     }
 }

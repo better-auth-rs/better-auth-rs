@@ -11,6 +11,8 @@ use better_auth_core::utils::password::PasswordHasher;
 
 use super::StatusResponse;
 
+mod callbacks;
+pub use callbacks::{PasswordManagementCallbacks, PasswordResetEmail};
 pub(super) mod handlers;
 mod request;
 pub(super) mod types;

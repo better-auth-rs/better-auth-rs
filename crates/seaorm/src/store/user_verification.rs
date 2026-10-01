@@ -32,10 +32,12 @@ where
             })
             .await
             .map_err(map_db_err)?;
+        let tx = crate::TransactionConnection::new(tx);
+        let effects = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let hook_transaction = super::SeaOrmTransaction {
-            store: self,
-            tx: &tx,
-            effects: std::sync::Mutex::new(Vec::new()),
+            store: self.clone(),
+            tx: tx.clone(),
+            effects: std::sync::Arc::downgrade(&effects),
         };
         let mut revoked = None;
         let result = async {
@@ -148,12 +150,9 @@ where
             Ok(Some(user))
         }
         .await;
-        let effects = hook_transaction.effects.into_inner().map_err(|_| {
-            better_auth_core::AuthError::internal("Transaction hook queue lock poisoned")
-        })?;
         if result.is_ok() {
             tx.commit().await.map_err(map_db_err)?;
-            self.finish_transaction_effects(effects).await?;
+            self.finish_queued_transaction_effects(&effects).await?;
         } else {
             tx.rollback().await.map_err(map_db_err)?;
         }

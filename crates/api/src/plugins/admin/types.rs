@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use validator::Validate;
 
 /// Role input accepted by TypeScript admin routes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,22 +30,20 @@ impl RoleInput {
 // Request types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct SetRoleRequest {
     #[serde(rename = "userId")]
-    #[validate(length(min = 1, message = "userId is required"))]
     pub user_id: String,
     pub role: RoleInput,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct GetUserQuery {
-    #[validate(length(min = 1, message = "id is required"))]
     pub id: String,
 }
 
 /// User provisioned by an administrator or trusted requestless server code.
-#[derive(Debug, Serialize, Deserialize, Validate)]
+#[derive(Debug, Clone, Serialize, Deserialize, validator::Validate)]
 pub struct CreateUserRequest {
     pub email: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -58,65 +55,54 @@ pub struct CreateUserRequest {
     pub data: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct AdminUpdateUserRequest {
     #[serde(rename = "userId")]
-    #[validate(length(min = 1, message = "userId is required"))]
     pub user_id: String,
     pub data: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct UserIdRequest {
     #[serde(rename = "userId")]
-    #[validate(length(min = 1, message = "userId is required"))]
     pub user_id: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct BanUserRequest {
     #[serde(rename = "userId")]
-    #[validate(length(min = 1, message = "userId is required"))]
     pub user_id: String,
     #[serde(rename = "banReason")]
     pub ban_reason: Option<String>,
     #[serde(rename = "banExpiresIn")]
-    pub ban_expires_in: Option<i64>,
+    pub ban_expires_in: Option<f64>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct RevokeSessionRequest {
     #[serde(rename = "sessionToken")]
-    #[validate(length(min = 1, message = "sessionToken is required"))]
     pub session_token: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct SetUserPasswordRequest {
     #[serde(rename = "userId")]
-    #[validate(length(min = 1, message = "userId is required"))]
     pub user_id: String,
     #[serde(rename = "newPassword")]
-    #[validate(length(min = 1, message = "newPassword is required"))]
     pub new_password: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
-#[expect(
-    dead_code,
-    reason = "server-side HTTP route currently checks session user only"
-)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct HasPermissionRequest {
     #[serde(rename = "userId")]
     pub user_id: Option<String>,
     pub role: Option<String>,
-    pub permission: Option<HashMap<String, Vec<String>>>,
     pub permissions: Option<HashMap<String, Vec<String>>>,
 }
 
 impl HasPermissionRequest {
     pub(crate) fn requested_permissions(&self) -> Option<&HashMap<String, Vec<String>>> {
-        self.permissions.as_ref().or(self.permission.as_ref())
+        self.permissions.as_ref()
     }
 }
 

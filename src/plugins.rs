@@ -57,3 +57,5 @@ pub use better_auth_api::plugins::username::{
     self, UsernameConfig, UsernameNormalization, UsernameNormalizer, UsernamePlugin,
     UsernameValidationOrder, UsernameValidator,
 };
+
+pub use better_auth_api::plugins::test_utils::{self, TestUtilsApi, TestUtilsPlugin};

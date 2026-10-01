@@ -6,34 +6,48 @@ use crate::store::{
 use crate::types::{CreateAccount, CreateSession, CreateUser};
 use crate::{AuthResult, AuthSchema};
 use async_trait::async_trait;
+use std::sync::Arc;
 
-struct Transaction<'a, S: AuthSchema> {
-    inner: &'a dyn AuthTransaction<S>,
+struct Transaction<S: AuthSchema> {
+    inner: Arc<dyn AuthTransaction<S>>,
     runtime: SecondaryStore<S>,
 }
 
-impl<S: AuthSchema> Transaction<'_, S> {
+impl<S: AuthSchema> Transaction<S> {
     async fn create_session_with_storage(
         &self,
         mut input: CreateSession,
         deferred: bool,
-    ) -> AuthResult<crate::wire::SessionView> {
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        let request = crate::hooks::current_request_hook_context();
         let session = if self.runtime.database_sessions() {
-            self.inner.create_session(input).await?
+            let Some(session) = self.inner.create_session_optional(input).await? else {
+                return Ok(None);
+            };
+            session
         } else {
-            self.inner.before_create_runtime_session(&mut input).await?;
+            if !self
+                .inner
+                .before_create_runtime_session_optional(&mut input)
+                .await?
+            {
+                return Ok(None);
+            }
             self.runtime.new_session(input)?
         };
         if !deferred {
             self.runtime
-                .mirror_session_in_transaction(&session, Some(self.inner))
+                .mirror_session_in_transaction(&session, Some(self.inner.as_ref()))
                 .await?;
         }
         if !self.runtime.database_sessions() {
             let runtime = self.runtime.clone();
             let created = session.clone();
             self.inner.queue_after_commit(Box::pin(async move {
-                runtime.inner.after_create_runtime_session(&created).await
+                runtime
+                    .inner
+                    .after_create_runtime_session(&created, request)
+                    .await
             }))?;
         }
         if deferred {
@@ -56,12 +70,39 @@ impl<S: AuthSchema> Transaction<'_, S> {
                 Ok(())
             }))?;
         }
-        Ok(session)
+        Ok(Some(session))
     }
 }
 
 #[async_trait]
-impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
+impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
+    fn clone_handle(&self) -> Arc<dyn AuthTransaction<S>> {
+        Arc::new(Self {
+            inner: self.inner.clone(),
+            runtime: self.runtime.clone(),
+        })
+    }
+    async fn create_user_optional(
+        &self,
+        input: crate::CreateUser,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
+        self.inner.create_user_optional(input).await
+    }
+    async fn before_create_runtime_session_optional(
+        &self,
+        input: &mut crate::CreateSession,
+    ) -> AuthResult<bool> {
+        self.inner
+            .before_create_runtime_session_optional(input)
+            .await
+    }
+    async fn create_session_optional(
+        &self,
+        input: crate::CreateSession,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        self.create_session_with_storage(input, false).await
+    }
+
     fn queue_after_commit(&self, effect: TypedTransactionFuture<'static, ()>) -> AuthResult<()> {
         self.inner.queue_after_commit(effect)
     }
@@ -70,9 +111,10 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
         &self,
         input: crate::CreateVerification,
     ) -> AuthResult<crate::wire::VerificationView> {
+        let request = crate::hooks::current_request_hook_context();
         let verification = self
             .runtime
-            .create_verification_in_transaction(input, Some(self.inner))
+            .create_verification_in_transaction(input, Some(self.inner.as_ref()))
             .await?;
         if !self.runtime.database_verifications() {
             let runtime = self.runtime.clone();
@@ -80,7 +122,7 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
             self.inner.queue_after_commit(Box::pin(async move {
                 runtime
                     .inner
-                    .after_create_runtime_verification(&created)
+                    .after_create_runtime_verification(&created, request)
                     .await
             }))?;
         }
@@ -101,7 +143,7 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
         update: crate::store::database_hooks::VerificationUpdate,
     ) -> AuthResult<Option<crate::wire::VerificationView>> {
         self.runtime
-            .update_verification_in_transaction(identifier, update, Some(self.inner))
+            .update_verification_in_transaction(identifier, update, Some(self.inner.as_ref()))
             .await
     }
     async fn get_verification_including_expired(
@@ -109,11 +151,16 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
         identifier: &str,
     ) -> AuthResult<Option<crate::wire::VerificationView>> {
         self.runtime
-            .find_verification_in_transaction(identifier, Some(self.inner))
+            .find_verification_in_transaction(identifier, Some(self.inner.as_ref()))
             .await
     }
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
         self.inner.delete_expired_verifications().await
+    }
+    async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()> {
+        self.runtime
+            .delete_verification_in_transaction(identifier, Some(self.inner.as_ref()))
+            .await
     }
     async fn get_user_by_id_field(
         &self,
@@ -183,7 +230,11 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
             .is_some()
         {
             self.runtime
-                .queue_cached_user_session_deletion(id.to_owned(), sessions, Some(self.inner))
+                .queue_cached_user_session_deletion(
+                    id.to_owned(),
+                    sessions,
+                    Some(self.inner.as_ref()),
+                )
                 .await?;
         }
         Ok(())
@@ -208,13 +259,21 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
         self.inner.create_account(input).await
     }
     async fn create_session(&self, input: CreateSession) -> AuthResult<crate::wire::SessionView> {
-        self.create_session_with_storage(input, false).await
+        self.create_session_with_storage(input, false)
+            .await?
+            .ok_or_else(|| {
+                crate::AuthError::forbidden("session creation cancelled by database hook")
+            })
     }
     async fn create_session_with_deferred_secondary(
         &self,
         input: CreateSession,
     ) -> AuthResult<crate::wire::SessionView> {
-        self.create_session_with_storage(input, true).await
+        self.create_session_with_storage(input, true)
+            .await?
+            .ok_or_else(|| {
+                crate::AuthError::forbidden("session creation cancelled by database hook")
+            })
     }
 }
 
@@ -232,7 +291,13 @@ impl<S: AuthSchema> TransactionStore<S> for SecondaryStore<S> {
             .transaction_boxed(Box::new(move |inner| {
                 Box::pin(async move {
                     let validation = runtime.schema_validation.clone();
-                    let operation = async move { work(&Transaction { inner, runtime }).await };
+                    let operation = async move {
+                        work(&Transaction {
+                            inner: inner.clone_handle(),
+                            runtime,
+                        })
+                        .await
+                    };
                     if let Some(validation) = validation {
                         validation.in_transaction(operation).await
                     } else {
@@ -245,14 +310,14 @@ impl<S: AuthSchema> TransactionStore<S> for SecondaryStore<S> {
 }
 
 #[async_trait]
-impl<S: AuthSchema> crate::store::JwksStore for Transaction<'_, S> {
+impl<S: AuthSchema> crate::store::JwksStore for Transaction<S> {
     async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>> {
-        crate::store::JwksStore::get_jwk(self.inner, id).await
+        crate::store::JwksStore::get_jwk(self.inner.as_ref(), id).await
     }
     async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>> {
-        crate::store::JwksStore::list_jwks(self.inner).await
+        crate::store::JwksStore::list_jwks(self.inner.as_ref()).await
     }
     async fn create_jwk(&self, input: crate::CreateJwk) -> AuthResult<crate::Jwk> {
-        crate::store::JwksStore::create_jwk(self.inner, input).await
+        crate::store::JwksStore::create_jwk(self.inner.as_ref(), input).await
     }
 }

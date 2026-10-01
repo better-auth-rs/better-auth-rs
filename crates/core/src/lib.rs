@@ -18,6 +18,7 @@ mod api_key_start;
 pub use api_key_start::ApiKeyStart;
 
 pub mod api_error;
+pub mod background;
 pub mod config;
 pub mod email;
 pub mod entity;

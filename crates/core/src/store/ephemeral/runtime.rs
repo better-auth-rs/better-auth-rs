@@ -13,7 +13,7 @@ impl RuntimeStore<StatelessSchema> for EphemeralStore {
             config,
             state: self.state.clone(),
             verification_locks: self.verification_locks.clone(),
-            organization_fields: RwLock::new(self.organization_fields()?),
+            organization_fields: Arc::new(RwLock::new(self.organization_fields()?)),
             hooks,
             pending_hooks: None,
         }))

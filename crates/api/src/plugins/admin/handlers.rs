@@ -10,8 +10,6 @@ use better_auth_core::{
 
 use crate::plugins::StatusResponse;
 
-use validator::ValidateEmail;
-
 use super::access::has_permission;
 use super::types::*;
 use super::{AdminConfig, target_is_admin};
@@ -198,7 +196,7 @@ pub(crate) async fn create_user_core(
         require_user_permission(user, config, "ban", "You are not allowed to ban users")?;
     }
     let email = body.email.to_lowercase();
-    if !email.validate_email() {
+    if !crate::plugins::json_body::valid_email(&email)? {
         return Err(AuthError::bad_request("Invalid email"));
     }
     if let Some(password) = body
@@ -348,7 +346,7 @@ pub(crate) async fn update_user_core(
             let email = better_auth_core::SchemaValue::<String>::Dynamic(value.clone())
                 .display_string()?
                 .to_lowercase();
-            if !email.validate_email() {
+            if !crate::plugins::json_body::valid_email(&email)? {
                 return Err(AuthError::bad_request("Invalid email"));
             }
             if let Some(existing) = ctx.database.get_user_by_email(&email).await?
@@ -480,28 +478,45 @@ pub(crate) async fn ban_user_core(
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<UserResponse<AdminUserView>> {
-    if body.user_id == admin_user_id.as_ref() {
-        return Err(AuthError::bad_request("You cannot ban yourself"));
-    }
-
     let _target = ctx
         .database
         .get_user_by_id(&body.user_id)
         .await?
         .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
 
-    let ban_expires = body
+    if body.user_id == admin_user_id.as_ref() {
+        return Err(AuthError::bad_request("You cannot ban yourself"));
+    }
+
+    let seconds = body
         .ban_expires_in
-        .or(config.default_ban_expires_in)
-        .and_then(Duration::try_seconds)
-        .map(|duration| Utc::now() + duration);
+        .filter(|value| *value != 0.0)
+        .or_else(|| {
+            config
+                .default_ban_expires_in
+                .filter(|value| *value != 0)
+                .map(|value| value as f64)
+        });
+    let ban_expires = seconds
+        .map(|seconds| {
+            let millis = (Utc::now().timestamp_millis() as f64 + seconds * 1000.0).trunc();
+            chrono::DateTime::from_timestamp_millis(millis as i64)
+                .ok_or_else(|| AuthError::internal("Invalid ban expiration date"))
+        })
+        .transpose()?;
 
     let update = UpdateUser {
         banned: Some(true),
         ban_reason: Some(Some(
             body.ban_reason
                 .clone()
-                .or_else(|| config.default_ban_reason.clone())
+                .filter(|value| !value.is_empty())
+                .or_else(|| {
+                    config
+                        .default_ban_reason
+                        .clone()
+                        .filter(|value| !value.is_empty())
+                })
                 .unwrap_or_else(|| "No reason".to_string()),
         )),
         ban_expires: Some(ban_expires),
@@ -605,6 +620,7 @@ pub(crate) async fn impersonate_user_core(
         + Duration::try_seconds(config.impersonation_session_duration.unwrap_or(60 * 60))
             .unwrap_or(Duration::hours(1));
     let create_session = CreateSession {
+        additional_fields: Default::default(),
         user_id: target.id().into_owned(),
         expires_at,
         ip_address: ip_address.map(|value| value.to_string()),
@@ -733,6 +749,12 @@ pub(crate) async fn set_user_password_core(
         ctx,
     )?;
 
+    let user = ctx
+        .database
+        .get_user_by_id(&body.user_id)
+        .await?
+        .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
+
     let password_hash =
         better_auth_core::hash_password(ctx.password_policy.hasher.as_ref(), &body.new_password)
             .await?;
@@ -751,6 +773,17 @@ pub(crate) async fn set_user_password_core(
         let _ = ctx
             .database
             .update_account(account.id.typed()?, account_update)
+            .await?;
+    } else {
+        let _ = ctx
+            .database
+            .create_account(CreateAccount {
+                user_id: body.user_id.clone().into(),
+                account_id: user.id.clone(),
+                provider_id: "credential".into(),
+                password: better_auth_core::SchemaValue::Typed(Some(password_hash)),
+                ..Default::default()
+            })
             .await?;
     }
 

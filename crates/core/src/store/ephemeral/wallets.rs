@@ -10,6 +10,7 @@ impl crate::store::WalletStore for EphemeralStore {
         self.raw("walletAddress", "findOne", |state| {
             Ok(state
                 .wallets
+                .snapshot()?
                 .iter()
                 .find(|wallet| {
                     wallet.address == address

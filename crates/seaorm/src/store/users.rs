@@ -62,12 +62,12 @@ where
         .transpose()
     }
 
-    async fn create_user_with_connection<C>(
+    pub(crate) async fn create_user_with_connection<C>(
         &self,
         db: &C,
         tx: Option<super::HookTransaction<'_, S>>,
         mut create_user: CreateUser,
-    ) -> AuthResult<better_auth_core::wire::UserView>
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>>
     where
         C: ConnectionTrait,
     {
@@ -84,7 +84,7 @@ where
             .await?
             .is_cancelled()
             {
-                return Err(cancelled_by_hook("user creation"));
+                return Ok(None);
             }
             create_user.prepare_user_fields(&self.config().user)?;
         }
@@ -97,7 +97,15 @@ where
             db.get_database_backend() == sea_orm::DbBackend::Postgres,
             S::User::native_json_field,
         )?;
+        let created_at = create_user.created_at;
+        let updated_at = create_user.updated_at;
         let mut model = S::User::new_active(user_id, create_user, now);
+        if let Some(value) = created_at {
+            model.set(S::User::created_at_column(), value.into());
+        }
+        if let Some(value) = updated_at {
+            model.set(S::User::field_column("updatedAt")?, value.into());
+        }
         if generated_id.is_none() {
             model.not_set(S::User::id_column());
         }
@@ -127,7 +135,7 @@ where
                 .await?;
             }
         }
-        Ok(user)
+        Ok(Some(user))
     }
 
     pub(super) async fn update_user_with_connection(
@@ -212,10 +220,12 @@ where
         .await?;
         let Some(user) = user else {
             let store = self.clone();
+            let request = hook_context.request.clone();
             super::transaction_hooks::after_write(
                 tx,
                 Box::pin(async move {
-                    let context = store.hook_context(None);
+                    let mut context = store.hook_context(None);
+                    context.request = request;
                     for hook in store.hooks() {
                         better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterUpdateUser, hook.after_update_user(None, &context)).await?;
                     }
@@ -247,7 +257,8 @@ where
         create_user: CreateUser,
     ) -> AuthResult<better_auth_core::wire::UserView> {
         self.create_user_with_connection(tx.0, Some(tx), create_user)
-            .await
+            .await?
+            .ok_or_else(|| cancelled_by_hook("user creation"))
     }
 }
 
@@ -292,6 +303,15 @@ where
         &self,
         create_user: CreateUser,
     ) -> AuthResult<better_auth_core::wire::UserView> {
+        self.create_user_optional(create_user)
+            .await?
+            .ok_or_else(|| cancelled_by_hook("user creation"))
+    }
+
+    async fn create_user_optional(
+        &self,
+        create_user: CreateUser,
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         self.create_user_with_connection(self.connection(), None, create_user)
             .await
     }

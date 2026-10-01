@@ -9,7 +9,7 @@ pub struct Model {
     pub name: String,
     pub slug: String,
     pub logo: Option<String>,
-    pub metadata: Option<Json>,
+    pub metadata: Option<String>,
     pub created_at: DateTimeUtc,
     #[sea_orm(column_name = "updated_at")]
     pub auth_updated_at: DateTimeUtc,

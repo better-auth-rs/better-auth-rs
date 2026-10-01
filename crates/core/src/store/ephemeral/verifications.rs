@@ -37,7 +37,9 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         &self,
         input: &mut CreateVerification,
     ) -> AuthResult<()> {
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             if crate::observability::database::with_database_hook(
@@ -56,8 +58,12 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         }
         Ok(())
     }
-    async fn after_create_runtime_verification(&self, record: &VerificationView) -> AuthResult<()> {
-        self.after(CommittedWrite::VerificationCreated(record.clone()))
+    async fn after_create_runtime_verification(
+        &self,
+        record: &VerificationView,
+        request: Option<crate::hooks::RequestHookContext>,
+    ) -> AuthResult<()> {
+        self.after_with_request(CommittedWrite::VerificationCreated(record.clone()), request)
             .await
     }
 
@@ -77,12 +83,13 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .raw("verification", "create", |state| {
                 if state
                     .verifications
+                    .snapshot()?
                     .iter()
                     .any(|row| row.get("id").and_then(Value::as_str) == Some(id))
                 {
                     return Ok(false);
                 }
-                let _ = state.verifications.push(record.clone());
+                state.verifications.push(record.clone());
                 Ok(true)
             })
             .await?;
@@ -128,7 +135,11 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         if let Some(writer) = writer {
             writer(projected.clone()).await?;
         }
-        self.after_create_runtime_verification(&projected).await?;
+        self.after_create_runtime_verification(
+            &projected,
+            crate::hooks::current_request_hook_context(),
+        )
+        .await?;
         Ok(projected)
     }
 
@@ -140,6 +151,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .raw("verification", "findMany", |state| {
                 Ok(state
                     .verifications
+                    .snapshot()?
                     .iter()
                     .filter(|row| {
                         self.verification_field(row, "identifier")
@@ -166,6 +178,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .raw("verification", "findOne", |state| {
                 Ok(state
                     .verifications
+                    .snapshot()?
                     .iter()
                     .find(|row| {
                         self.verification_field(row, "identifier")
@@ -186,6 +199,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .raw("verification", "findOne", |state| {
                 Ok(state
                     .verifications
+                    .snapshot()?
                     .iter()
                     .find(|row| {
                         self.verification_field(row, "value")
@@ -207,6 +221,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .raw("verification", "findOne", |state| {
                 Ok(state
                     .verifications
+                    .snapshot()?
                     .iter()
                     .find(|row| {
                         self.verification_field(row, "identifier")

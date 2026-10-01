@@ -32,6 +32,18 @@ trace.setGlobalTracerProvider({
 });
 afterAll(() => trace.disable());
 
+// Upstream mergeSchema mutates module-level plugin schemas. Restore test overrides before other contract files run.
+const { twoFactor, deviceAuthorization, siwe } = await import(require.resolve("better-auth/plugins"));
+const { passkey } = await import(require.resolve("@better-auth/passkey"));
+const schemaNames = [twoFactor().schema, deviceAuthorization().schema, siwe({verifyMessage: async () => true}).schema, passkey().schema]
+  .flatMap(schema => Object.values(schema).map(model => ({model, descriptor: Object.getOwnPropertyDescriptor(model, "modelName")})));
+afterAll(() => {
+  for (const {model, descriptor} of schemaNames) {
+    if (descriptor) Object.defineProperty(model, "modelName", descriptor);
+    else delete (model as any).modelName;
+  }
+});
+
 // The upstream API loads OpenTelemetry lazily; wait for that actual import to finish.
 for (let attempt = 0; attempt < 50 && !spans.length; attempt++) {
   await withSpan("warmup", {}, async () => {});

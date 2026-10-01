@@ -204,7 +204,7 @@ Use `auth.api_keys()?` to access the registered plugin and initialized context f
 use std::collections::HashMap;
 use better_auth::plugins::ApiKeyPlugin;
 use better_auth::server_api::{
-    CreateKeyOptions, RequiredActions, UpdateKeyOptions, VerifyKeyOptions,
+    CreateKeyOptions, UpdateKeyOptions, VerifyKeyOptions,
 };
 
 let auth = BetterAuth::<AppAuthSchema>::new(config)
@@ -225,7 +225,7 @@ let issued = api_keys.create(user_id, CreateKeyOptions {
 let key = api_keys.verify(&issued.key, VerifyKeyOptions {
     config_id: Some("default".to_owned()),
     permissions: Some(HashMap::from([
-        ("nodes".to_owned(), RequiredActions::All(vec!["heartbeat".to_owned()])),
+        ("nodes".to_owned(), vec!["heartbeat".to_owned()]),
     ])),
 }).await?;
 
@@ -237,7 +237,7 @@ api_keys.update(user_id, &key.id, UpdateKeyOptions {
 
 Creation and update require the acting user's ID as a method argument. Organization configurations also require `organization_id` during creation and check the acting user's organization permissions. Verification requires the key, without a user session. No public HTTP verification endpoint is exposed.
 
-Use `RequiredActions::All` for upstream AND semantics or `RequiredActions::Any` for OR semantics within a resource. Every requested resource must pass. Numeric options use `f64` to preserve upstream fractional values.
+Verification requires every listed action for every requested resource. Pass a `HashMap<String, Vec<String>>`; the upstream endpoint rejects connector objects before quota consumption. Numeric options use `f64` to preserve upstream fractional values.
 
 Use `FieldUpdate::Unchanged`, `FieldUpdate::Clear`, or `FieldUpdate::Set(value)` for nullable updates to `permissions`, `metadata`, and `expires_in`. Other omitted update fields remain unchanged. For example:
 
@@ -276,3 +276,9 @@ Better Auth accepts fractional quota, refill, and rate-limit values. Rust uses `
 | 500 | `ORGANIZATION_PLUGIN_REQUIRED` |
 | 401 | Not authenticated |
 | 404 | API key not found, not owned by the caller, or not in the addressed configuration |
+
+### Endpoint input validation
+
+Create, update, and delete use the shared body schema before endpoint authentication. Plugin before hooks receive the raw body. The handler receives the validated body with unknown top-level fields removed. Create defaults `expiresIn` and `remaining` to null before the permissions callback runs. Error messages aggregate invalid fields in the upstream schema order.
+
+Native creation and update preserve the distinction between omitted headers, explicit empty headers, and an original Request. A requestless call may supply its acting `userId`; a call with headers requires a valid session. An original Request forbids supplying `userId` on creation. The typed native API validates numeric constraints and preserves rejection of NaN and infinities before JSON serialization can turn them into null. Server-only verification validates the permissions record before consuming quota.

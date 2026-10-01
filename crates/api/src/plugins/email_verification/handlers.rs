@@ -24,6 +24,13 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
     config: &EmailVerificationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
+    let mut endpoint_body =
+        serde_json::Map::from_iter([("email".into(), serde_json::json!(body.email))]);
+    if let Some(callback_url) = &body.callback_url {
+        let _ = endpoint_body.insert("callbackURL".into(), serde_json::json!(callback_url));
+    }
+    let endpoint =
+        crate::plugins::endpoint_context::EndpointContext::new(request, endpoint_body.into(), ctx);
     if config.send_verification_email.is_none()
         && !crate::plugins::email_otp::callbacks::overrides_verification(ctx)
     {
@@ -54,8 +61,7 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
             {
                 crate::plugins::email_otp::callbacks::send_verification_override(
                     &body.email,
-                    request,
-                    ctx,
+                    &endpoint,
                 )
                 .await?;
             } else if let Some(ref sender) = config.send_verification_email {
@@ -93,8 +99,7 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
             {
                 crate::plugins::email_otp::callbacks::send_verification_override(
                     &body.email,
-                    request,
-                    ctx,
+                    &endpoint,
                 )
                 .await?;
             } else if let Some(ref sender) = config.send_verification_email {

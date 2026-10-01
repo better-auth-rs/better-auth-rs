@@ -1,0 +1,227 @@
+[
+  {
+    "reuse": false,
+    "outcome": "commit",
+    "result": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "verification:create.before",
+      "sender",
+      "session:create.before",
+      "user:create.after",
+      "verification:create.after",
+      "session:create.after"
+    ],
+    "observations": [
+      {
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "override@example.com",
+          "type": "email-verification"
+        },
+        "hasRequest": false,
+        "userFound": true,
+        "value": "654321:0",
+        "otp": "654321"
+      }
+    ],
+    "stored": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "verification": [
+        {
+          "value": "654321:0",
+          "originalExpiry": false
+        }
+      ]
+    }
+  },
+  {
+    "reuse": false,
+    "outcome": "rollback",
+    "result": {
+      "status": null,
+      "thrown": "session-rejected"
+    },
+    "events": [
+      "verification:create.before",
+      "sender",
+      "session:create.before"
+    ],
+    "observations": [
+      {
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "override@example.com",
+          "type": "email-verification"
+        },
+        "hasRequest": false,
+        "userFound": true,
+        "value": "654321:0",
+        "otp": "654321"
+      }
+    ],
+    "stored": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "verification": []
+    }
+  },
+  {
+    "reuse": false,
+    "outcome": "after-error",
+    "result": {
+      "status": null,
+      "thrown": "after-error"
+    },
+    "events": [
+      "verification:create.before",
+      "sender",
+      "session:create.before",
+      "user:create.after"
+    ],
+    "observations": [
+      {
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "override@example.com",
+          "type": "email-verification"
+        },
+        "hasRequest": false,
+        "userFound": true,
+        "value": "654321:0",
+        "otp": "654321"
+      }
+    ],
+    "stored": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "verification": [
+        {
+          "value": "654321:0",
+          "originalExpiry": false
+        }
+      ]
+    }
+  },
+  {
+    "reuse": true,
+    "outcome": "commit",
+    "result": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "verification:update.before",
+      "sender",
+      "session:create.before",
+      "user:create.after",
+      "verification:update.after",
+      "session:create.after"
+    ],
+    "observations": [
+      {
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "override@example.com",
+          "type": "email-verification"
+        },
+        "hasRequest": false,
+        "userFound": true,
+        "value": "123456:0",
+        "otp": "123456"
+      }
+    ],
+    "stored": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "verification": [
+        {
+          "value": "123456:0",
+          "originalExpiry": false
+        }
+      ]
+    }
+  },
+  {
+    "reuse": true,
+    "outcome": "rollback",
+    "result": {
+      "status": null,
+      "thrown": "session-rejected"
+    },
+    "events": [
+      "verification:update.before",
+      "sender",
+      "session:create.before"
+    ],
+    "observations": [
+      {
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "override@example.com",
+          "type": "email-verification"
+        },
+        "hasRequest": false,
+        "userFound": true,
+        "value": "123456:0",
+        "otp": "123456"
+      }
+    ],
+    "stored": {
+      "users": 0,
+      "accounts": 0,
+      "sessions": 0,
+      "verification": [
+        {
+          "value": "123456:0",
+          "originalExpiry": true
+        }
+      ]
+    }
+  },
+  {
+    "reuse": true,
+    "outcome": "after-error",
+    "result": {
+      "status": null,
+      "thrown": "after-error"
+    },
+    "events": [
+      "verification:update.before",
+      "sender",
+      "session:create.before",
+      "user:create.after"
+    ],
+    "observations": [
+      {
+        "path": "/email-otp/send-verification-otp",
+        "body": {
+          "email": "override@example.com",
+          "type": "email-verification"
+        },
+        "hasRequest": false,
+        "userFound": true,
+        "value": "123456:0",
+        "otp": "123456"
+      }
+    ],
+    "stored": {
+      "users": 1,
+      "accounts": 1,
+      "sessions": 1,
+      "verification": [
+        {
+          "value": "123456:0",
+          "originalExpiry": false
+        }
+      ]
+    }
+  }
+]

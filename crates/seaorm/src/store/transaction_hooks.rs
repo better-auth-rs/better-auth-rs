@@ -17,16 +17,14 @@ pub(super) enum Effect {
 pub(super) enum PendingEffect {
     Database {
         effect: Box<Effect>,
-        request: Option<better_auth_core::hooks::RequestHookContext>,
+        request: Option<Box<better_auth_core::hooks::RequestHookContext>>,
     },
     External {
         effect: better_auth_core::store::TypedTransactionFuture<'static, ()>,
-        request: Option<better_auth_core::hooks::RequestHookContext>,
     },
 }
 
-impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
-    SeaOrmTransaction<'_, S, O, P>
+impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmTransaction<S, O, P>
 where
     S: AuthSchema,
     S::Verification: SeaOrmVerificationModel,
@@ -35,13 +33,15 @@ where
     S::Session: crate::schema::SeaOrmSessionModel,
 {
     pub(super) fn queue(&self, effect: Effect) -> AuthResult<()> {
-        self.effects
-            .lock()
-            .map_err(|_| AuthError::internal("Transaction hook queue lock poisoned"))?
-            .push(PendingEffect::Database {
-                effect: Box::new(effect),
-                request: crate::hooks::current_request_hook_context(),
-            });
+        if let Some(queue) = self.effects.upgrade() {
+            queue
+                .lock()
+                .map_err(|_| AuthError::internal("Transaction hook queue lock poisoned"))?
+                .push(PendingEffect::Database {
+                    effect: Box::new(effect),
+                    request: crate::hooks::current_request_hook_context().map(Box::new),
+                });
+        }
         Ok(())
     }
     pub(super) async fn create_transaction_verification(
@@ -51,7 +51,7 @@ where
     ) -> AuthResult<better_auth_core::wire::VerificationView> {
         let record = self
             .store
-            .create_verification_with_connection(self.tx, Some((self.tx, self)), input)
+            .create_verification_with_connection(&self.tx, Some((&self.tx, self)), input)
             .await?;
         if let Some(writer) = writer {
             writer(record.clone()).await?;
@@ -63,7 +63,7 @@ where
     pub(super) async fn delete_expired_transaction_verifications(&self) -> AuthResult<usize> {
         let (count, records) = self
             .store
-            .delete_expired_verifications_with_connection(self.tx, Some((self.tx, self)))
+            .delete_expired_verifications_with_connection(&self.tx, Some((&self.tx, self)))
             .await?;
         for record in records {
             self.queue(Effect::Deleted(Box::new(record)))?;
@@ -80,25 +80,36 @@ where
     S::Account: crate::schema::SeaOrmAccountModel,
     S::Session: crate::schema::SeaOrmSessionModel,
 {
+    pub(super) async fn finish_queued_transaction_effects(
+        &self,
+        queue: &std::sync::Mutex<Vec<PendingEffect>>,
+    ) -> AuthResult<()> {
+        loop {
+            let pending = std::mem::take(
+                &mut *queue
+                    .lock()
+                    .map_err(|_| AuthError::internal("Transaction hook queue lock poisoned"))?,
+            );
+            if pending.is_empty() {
+                return Ok(());
+            }
+            self.finish_transaction_effects(pending).await?;
+        }
+    }
+
     pub(super) async fn finish_transaction_effects(
         &self,
         effects: Vec<PendingEffect>,
     ) -> AuthResult<()> {
         for pending in effects {
             let (effect, request) = match pending {
-                PendingEffect::External { effect, request } => {
-                    match request {
-                        Some(request) => {
-                            better_auth_core::hooks::with_request_hook_context_value(
-                                request, effect,
-                            )
-                            .await?;
-                        }
-                        None => effect.await?,
-                    }
+                PendingEffect::External { effect } => {
+                    effect.await?;
                     continue;
                 }
-                PendingEffect::Database { effect, request } => (effect, request),
+                PendingEffect::Database { effect, request } => {
+                    (effect, request.map(|request| *request))
+                }
             };
             let mut context = self.hook_context(None);
             context.request = request;

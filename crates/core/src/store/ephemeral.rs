@@ -50,7 +50,7 @@ mod verifications;
 mod wallets;
 
 use crate::store::database_hooks::DatabaseHooks;
-use hooks::PendingHook;
+use hooks::{PendingHook, PendingHookQueue};
 use state::State;
 use transactions::EphemeralTransaction;
 
@@ -65,14 +65,15 @@ impl AuthSchema for StatelessSchema {
 }
 
 /// Non-durable adapter with isolated transactions and insertion-ordered records.
+#[derive(Clone)]
 pub struct EphemeralStore {
     config: Arc<AuthConfig>,
     state: Arc<Mutex<State>>,
     verification_locks: Arc<Mutex<HashMap<String, Weak<tokio::sync::Mutex<()>>>>>,
     session_config: crate::config::SessionConfig,
-    organization_fields: RwLock<crate::organization_fields::OrganizationFields>,
+    organization_fields: Arc<RwLock<crate::organization_fields::OrganizationFields>>,
     hooks: Vec<Arc<dyn DatabaseHooks<StatelessSchema>>>,
-    pending_hooks: Option<Arc<Mutex<Vec<PendingHook>>>>,
+    pending_hooks: Option<Weak<PendingHookQueue>>,
 }
 
 impl Default for EphemeralStore {
@@ -108,7 +109,7 @@ impl EphemeralStore {
             config,
             state: Arc::default(),
             verification_locks: Arc::default(),
-            organization_fields: RwLock::default(),
+            organization_fields: Arc::default(),
             hooks: Vec::new(),
             pending_hooks: None,
         }

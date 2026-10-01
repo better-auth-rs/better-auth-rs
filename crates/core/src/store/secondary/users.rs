@@ -126,6 +126,12 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
         }
         Ok(user)
     }
+    async fn create_user_optional(
+        &self,
+        input: CreateUser,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
+        self.inner.create_user_optional(input).await
+    }
     async fn create_user(&self, input: CreateUser) -> AuthResult<crate::wire::UserView> {
         self.inner.create_user(input).await
     }

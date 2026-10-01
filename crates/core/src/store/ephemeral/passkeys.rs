@@ -1,5 +1,3 @@
-use std::cmp::Reverse;
-
 use async_trait::async_trait;
 use chrono::Utc;
 
@@ -30,17 +28,15 @@ impl PasskeyStore for EphemeralStore {
             updated_at: now,
         };
         self.raw("passkey", "create", |state| {
-            let _ = state.passkeys.push(passkey.clone());
+            state.passkeys.push(passkey.clone());
             Ok(passkey)
         })
         .await
     }
 
     async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>> {
-        self.raw("passkey", "findOne", |state| {
-            Ok(state.passkeys.get(id).cloned())
-        })
-        .await
+        self.raw("passkey", "findOne", |state| state.passkeys.get(id))
+            .await
     }
 
     async fn get_passkey_by_credential_id(
@@ -50,6 +46,7 @@ impl PasskeyStore for EphemeralStore {
         self.raw("passkey", "findOne", |state| {
             Ok(state
                 .passkeys
+                .snapshot()?
                 .iter()
                 .find(|passkey| passkey.credential_id == credential_id)
                 .cloned())
@@ -59,14 +56,18 @@ impl PasskeyStore for EphemeralStore {
 
     async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>> {
         self.raw("passkey", "findMany", |state| {
-            let mut passkeys: Vec<_> = state
+            let passkeys: Vec<_> = state
                 .passkeys
+                .snapshot()?
                 .iter()
                 .filter(|passkey| passkey.user_id == user_id)
                 .cloned()
                 .collect();
-            passkeys.sort_by_key(|passkey| Reverse(passkey.created_at.timestamp_millis()));
-            Ok(passkeys)
+            Ok(crate::query::paginate_memory(
+                passkeys,
+                Some(self.config.advanced.database.find_many_limit()),
+                None,
+            ))
         })
         .await
     }
@@ -77,7 +78,7 @@ impl PasskeyStore for EphemeralStore {
         update: UpdatePasskeyAuthentication,
     ) -> AuthResult<Passkey> {
         self.raw("passkey", "update", |state| {
-            let Some(passkey) = state.passkeys.get_mut(id) else {
+            let Some(mut passkey) = state.passkeys.get_mut(id)? else {
                 return Ok(None);
             };
             passkey.credential = update.credential;
@@ -93,7 +94,7 @@ impl PasskeyStore for EphemeralStore {
 
     async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey> {
         self.raw("passkey", "update", |state| {
-            let Some(passkey) = state.passkeys.get_mut(id) else {
+            let Some(mut passkey) = state.passkeys.get_mut(id)? else {
                 return Ok(None);
             };
             passkey.name = Some(name.to_owned());
@@ -106,7 +107,7 @@ impl PasskeyStore for EphemeralStore {
 
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
         self.raw("passkey", "delete", |state| {
-            let _ = state.passkeys.remove(id);
+            let _ = state.passkeys.remove(id)?;
             Ok(())
         })
         .await

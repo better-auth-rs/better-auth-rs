@@ -98,7 +98,7 @@ pub(super) async fn begin_attempt<S: better_auth_core::AuthSchema>(
             .await;
         req.append_response_header(
             "Set-Cookie",
-            clear_cookie_header(&ctx.config, TWO_FACTOR_COOKIE_SUFFIX),
+            clear_cookie_header(req, &ctx.config, TWO_FACTOR_COOKIE_SUFFIX)?,
         )?;
         if let Err(error) = invalidation {
             better_auth_core::observability::logger::current().error(

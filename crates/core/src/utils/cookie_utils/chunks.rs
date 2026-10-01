@@ -48,6 +48,7 @@ pub fn get_chunked_cookie(req: &AuthRequest, name: &str) -> Option<String> {
 
 /// Expire a cookie and every numbered chunk present on the request.
 pub fn clear_chunked_cookie(req: &AuthRequest, cookie: &ResolvedCookie) -> AuthResult<()> {
+    super::remove_set_cookie_entries(req, None, &cookie.name)?;
     for cookie in create_clear_chunked_cookies(req, cookie) {
         req.append_response_header("Set-Cookie", cookie)?;
     }

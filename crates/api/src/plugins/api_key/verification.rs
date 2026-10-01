@@ -193,6 +193,8 @@ impl ApiKeyPlugin {
             .authenticate_api_key(endpoint, ctx)
             .await
             .map_err(ApiKeyVerificationError::Endpoint)?;
+        let _ = super::request::validate_value("verifyApiKey", Some(&body))
+            .map_err(ApiKeyVerificationError::Endpoint)?;
         let endpoint = ApiKeyEndpoint {
             path: Some(if session.is_some() { "/" } else { "virtual:" }),
             ..endpoint

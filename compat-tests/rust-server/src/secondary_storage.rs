@@ -370,6 +370,7 @@ impl SecondaryFixture {
                     Box::pin(async move {
                         let _ = tx
                             .create_session_with_deferred_secondary(CreateSession {
+                                additional_fields: Default::default(),
                                 user_id: user_id.into(),
                                 expires_at: Utc::now() + chrono::Duration::days(7),
                                 ip_address: None,

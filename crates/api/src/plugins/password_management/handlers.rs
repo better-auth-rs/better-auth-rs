@@ -32,10 +32,7 @@ pub(crate) async fn request_password_reset_core(
         validate_redirect_target(redirect_to, ctx, "Invalid redirectURL")?;
     }
 
-    let sender = config
-        .send_reset_password
-        .as_ref()
-        .ok_or_else(|| AuthError::bad_request("Reset password isn't enabled"))?;
+    super::callbacks::require_sender(config, ctx)?;
 
     let success = RequestPasswordResetResponse {
         status: true,
@@ -95,19 +92,27 @@ pub(crate) async fn request_password_reset_core(
         callback_url
     );
 
-    let user_value = serde_json::to_value(ctx.internal_user_view(&user)?)?;
-    if let Err(error) = sender
-        .send_with_request(&user_value, &reset_url, &reset_token, Some(req))
-        .await
-    {
-        better_auth_core::observability::logger::current().warn(
-            "Custom send_reset_password callback failed",
-            &[
-                better_auth_core::observability::LogArgument::Value(&serde_json::json!(body.email)),
-                better_auth_core::observability::LogArgument::Error(&error),
-            ],
-        );
+    let mut parsed = serde_json::Map::from_iter([("email".into(), serde_json::json!(body.email))]);
+    if let Some(redirect) = &body.redirect_to {
+        let _ = parsed.insert("redirectTo".into(), serde_json::json!(redirect));
     }
+    let endpoint =
+        crate::plugins::endpoint_context::EndpointContext::new(Some(req), parsed.into(), ctx);
+    let task = super::callbacks::delivery(
+        config,
+        super::PasswordResetEmail {
+            user: ctx.internal_user_view(&user)?,
+            url: reset_url,
+            token: reset_token,
+        },
+        &endpoint,
+    )?;
+    better_auth_core::background::run_or_await(
+        task,
+        ctx.config.advanced.background_tasks.as_ref(),
+        &ctx.config.logger,
+    )
+    .await;
 
     Ok(success)
 }

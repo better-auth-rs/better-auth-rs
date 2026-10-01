@@ -19,8 +19,8 @@ use better_auth::{
         AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, DeviceAuthorizationPlugin,
         EmailPasswordPlugin, EmailVerificationPlugin, MagicLinkPlugin, MultiSessionPlugin,
         OAuthPlugin, OneTapPlugin, OneTimeTokenPlugin, OrganizationPlugin, PasskeyPlugin,
-        PasswordManagementPlugin, SessionManagementPlugin, SiwePlugin, UserManagementPlugin,
-        UsernamePlugin,
+        PasswordManagementPlugin, SessionManagementPlugin, SiwePlugin, TwoFactorPlugin,
+        UserManagementPlugin, UsernamePlugin,
     },
 };
 use better_auth_core::{
@@ -179,6 +179,31 @@ fn configure<S: AuthSchema>(
     } else {
         builder
     };
+    let builder = if profile.starts_with("request-two-factor-") {
+        let nested = profile
+            .contains("nested")
+            .then_some(true)
+            .or_else(|| profile.contains("passwordless").then_some(false));
+        let plugin = TwoFactorPlugin::new().allow_passwordless(profile.contains("passwordless"));
+        let plugin = if let Some(allow) = nested {
+            plugin.totp_allow_passwordless(allow)
+        } else {
+            plugin
+        };
+        builder.plugin(
+            plugin
+                .backup_code_options(better_auth::plugins::two_factor::BackupCodeOptions {
+                    generate: Some(Arc::new(|| {
+                        vec!["first-recovery".into(), "second-recovery".into()]
+                    })),
+                    allow_passwordless: nested,
+                    ..Default::default()
+                })
+                .custom_send_otp(Arc::new(body.clone())),
+        )
+    } else {
+        builder
+    };
     let builder = if profile.starts_with("request-plugin-") {
         builder
             .plugin(UsernamePlugin::new(Default::default()))
@@ -214,7 +239,17 @@ fn configure<S: AuthSchema>(
                 ..Default::default()
             },
         ))
-        .plugin(ApiKeyPlugin::with_config(Default::default()))
+        .plugin(ApiKeyPlugin::with_config(
+            if profile.starts_with("request-api-key-") {
+                better_auth::plugins::api_key::ApiKeyConfig {
+                    enable_metadata: true,
+                    default_permissions_callback: Some(Arc::new(body.clone())),
+                    ..Default::default()
+                }
+            } else {
+                Default::default()
+            },
+        ))
         .plugin(PasskeyPlugin::new())
         .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(body.clone())))
         .plugin(management)
@@ -240,6 +275,52 @@ fn wire(response: AuthResult<AuthResponse>) -> Response {
 fn routes<S: AuthSchema>(auth: Arc<BetterAuth<S>>, events: Events, body: BodyTrace) -> Router {
     let email_events = body.1.clone();
     let controls = Router::new()
+        .route(
+            "/__test/api-key-verify",
+            post({
+                let auth = auth.clone();
+                move |Json(input): Json<Value>| {
+                    let auth = auth.clone();
+                    async move {
+                        let plugin = auth
+                            .plugins()
+                            .iter()
+                            .find_map(|plugin| {
+                                (plugin.as_ref() as &dyn Any).downcast_ref::<ApiKeyPlugin>()
+                            })
+                            .unwrap();
+                        let result = plugin
+                            .verify_api_key(
+                                &better_auth::plugins::api_key::VerifyApiKey {
+                                    key: input["key"].as_str().unwrap(),
+                                    config_id: input.get("configId").and_then(Value::as_str),
+                                    permissions: input.get("permissions"),
+                                },
+                                auth.context(),
+                            )
+                            .await;
+                        #[derive(serde::Serialize)]
+                        struct Verified<T: serde::Serialize> {
+                            valid: bool,
+                            error: Option<Value>,
+                            key: T,
+                        }
+                        wire(match result {
+                            Ok(key) => AuthResponse::json(
+                                200,
+                                &Verified {
+                                    valid: true,
+                                    error: None,
+                                    key,
+                                },
+                            )
+                            .map_err(Into::into),
+                            Err(error) => error.into_response(),
+                        })
+                    }
+                }
+            }),
+        )
         .route(
             "/__test/device-record",
             post({
@@ -376,6 +457,17 @@ fn routes<S: AuthSchema>(auth: Arc<BetterAuth<S>>, events: Events, body: BodyTra
                             .map(serde_json::from_value::<HashMap<String, String>>)
                             .transpose()
                             .unwrap();
+                        if matches!(input["path"].as_str(), Some("generateTOTP" | "viewBackupCodes")) {
+                            let result = async {
+                                let api = auth.two_factor()?.with_request(better_auth_core::NativeRequest { request: original.as_ref(), headers: headers.as_ref() });
+                                if input["path"] == "generateTOTP" {
+                                    AuthResponse::json(200, &json!({"code":api.generate_totp(input.get("body").cloned()).await?})).map_err(Into::into)
+                                } else {
+                                    AuthResponse::json(200, &json!({"status":true,"backupCodes":api.view_backup_codes(input.get("body").cloned()).await?})).map_err(Into::into)
+                                }
+                            }.await;
+                            return wire(result);
+                        }
                         wire(
                             auth.call_endpoint(
                                 if input.get("method").and_then(Value::as_str) == Some("POST") {

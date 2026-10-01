@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::sync::Arc;
 use totp_rs::{Algorithm, TOTP};
-use validator::Validate;
 
 use better_auth_core::entity::{AuthSession, AuthTwoFactor, AuthUser};
 use better_auth_core::utils::cookie_utils::{
@@ -28,10 +27,12 @@ use crate::plugins::helpers::{
 use super::StatusResponse;
 mod actions;
 mod callbacks;
-pub use callbacks::{TwoFactorCallbackFuture, TwoFactorCallbacks};
+pub use callbacks::TwoFactorCallbacks;
 mod helpers;
+mod native;
 mod options;
 mod request;
+pub use native::TwoFactorApi;
 pub use options::{
     BackupCodeOptions, BackupCodeStorage, TwoFactorCipher, TwoFactorHasher, TwoFactorOtpStorage,
 };
@@ -169,7 +170,7 @@ impl Default for AccountLockout {
     }
 }
 
-#[derive(Debug, Default, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 enum EnrollmentMethod {
     Otp,
@@ -177,7 +178,7 @@ enum EnrollmentMethod {
     Totp,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct EnableRequest {
     password: Option<String>,
     issuer: Option<String>,
@@ -185,36 +186,36 @@ pub(crate) struct EnableRequest {
     method: EnrollmentMethod,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct DisableRequest {
     password: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct GetTotpUriRequest {
     password: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct VerifyTotpRequest {
     code: String,
     #[serde(rename = "trustDevice")]
     trust_device: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct VerifyOtpRequest {
     code: String,
     #[serde(rename = "trustDevice")]
     trust_device: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct GenerateBackupCodesRequest {
     password: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct VerifyBackupCodeRequest {
     code: String,
     #[serde(rename = "disableSession")]
@@ -306,19 +307,26 @@ pub(crate) async fn inspect_trusted_device(
         });
     };
 
-    let clear_header = create_clear_cookie(&cookie_name, &ctx.config);
     let Some(signed_value) = verify_signed_cookie_value(ctx.config.signing_secret(), &raw_cookie)?
     else {
         return Ok(TrustedDeviceCheck {
             trusted: false,
-            set_cookie_headers: vec![clear_header],
+            set_cookie_headers: vec![clear_cookie_header(
+                req,
+                &ctx.config,
+                TRUST_DEVICE_COOKIE_SUFFIX,
+            )?],
         });
     };
 
     let Some((token, trust_identifier)) = signed_value.split_once('!') else {
         return Ok(TrustedDeviceCheck {
             trusted: false,
-            set_cookie_headers: vec![clear_header],
+            set_cookie_headers: vec![clear_cookie_header(
+                req,
+                &ctx.config,
+                TRUST_DEVICE_COOKIE_SUFFIX,
+            )?],
         });
     };
 
@@ -329,7 +337,11 @@ pub(crate) async fn inspect_trusted_device(
     if token != expected_token {
         return Ok(TrustedDeviceCheck {
             trusted: false,
-            set_cookie_headers: vec![clear_header],
+            set_cookie_headers: vec![clear_cookie_header(
+                req,
+                &ctx.config,
+                TRUST_DEVICE_COOKIE_SUFFIX,
+            )?],
         });
     }
 
@@ -340,7 +352,11 @@ pub(crate) async fn inspect_trusted_device(
     else {
         return Ok(TrustedDeviceCheck {
             trusted: false,
-            set_cookie_headers: vec![clear_header],
+            set_cookie_headers: vec![clear_cookie_header(
+                req,
+                &ctx.config,
+                TRUST_DEVICE_COOKIE_SUFFIX,
+            )?],
         });
     };
 
@@ -349,7 +365,11 @@ pub(crate) async fn inspect_trusted_device(
     {
         return Ok(TrustedDeviceCheck {
             trusted: false,
-            set_cookie_headers: vec![clear_header],
+            set_cookie_headers: vec![clear_cookie_header(
+                req,
+                &ctx.config,
+                TRUST_DEVICE_COOKIE_SUFFIX,
+            )?],
         });
     }
 
@@ -391,13 +411,7 @@ pub(crate) async fn begin_sign_in_challenge(
         })
         .await?;
 
-    let mut headers = delete_session_cookie_headers(req, &ctx.config);
-    headers.retain(|cookie| {
-        !cookie.starts_with(&format!(
-            "{}=",
-            related_cookie_name(&ctx.config, DONT_REMEMBER_COOKIE_SUFFIX)
-        ))
-    });
+    let mut headers = delete_session_cookie_headers(req, &ctx.config, true)?;
     headers.push(create_signed_cookie_header(
         ctx.config.signing_secret(),
         &ctx.config,
@@ -493,40 +507,97 @@ impl TwoFactorPlugin {
     }
 }
 
-better_auth_core::impl_auth_plugin! {
-    TwoFactorPlugin, "two-factor";
-    routes {
-        post "/two-factor/enable" => handle_enable, "enableTwoFactor";
-        post "/two-factor/disable" => handle_disable, "disableTwoFactor";
-        post "/two-factor/get-totp-uri" => handle_get_totp_uri, "getTOTPURI";
-        post "/two-factor/verify-totp" => handle_verify_totp, "verifyTOTP";
-        post "/two-factor/send-otp" => handle_send_otp, "sendTwoFactorOTP";
-        post "/two-factor/verify-otp" => handle_verify_otp, "verifyTwoFactorOTP";
-        post "/two-factor/generate-backup-codes" => handle_generate_backup_codes, "generateBackupCodes";
-        post "/two-factor/verify-backup-code" => handle_verify_backup_code, "verifyBackupCode";
+#[async_trait]
+impl<S: better_auth_core::AuthSchema> better_auth_core::AuthPlugin<S> for TwoFactorPlugin {
+    fn name(&self) -> &'static str {
+        "two-factor"
     }
-    extra {
-        async fn on_init(
-            &self,
-            ctx: &mut better_auth_core::AuthInitContext<S>,
-        ) -> better_auth_core::AuthResult<()> {
-            S::User::require_plugin_fields("two-factor", &["two_factor_enabled"])?;
-            ctx.set_metadata(METADATA_ENABLED, serde_json::Value::Bool(true));
-            ctx.set_metadata(METADATA_TOTP_DISABLED, serde_json::Value::Bool(self.config.totp_disabled));
-            ctx.set_metadata(
-                METADATA_OTP_ENABLED,
-                serde_json::Value::Bool(self.config.send_otp.is_some() || ctx.extensions.get::<Arc<TwoFactorCallbacks<S>>>().is_some_and(|callbacks| callbacks.sender.is_some())),
-            );
-            ctx.set_metadata(
-                METADATA_TWO_FACTOR_COOKIE_MAX_AGE,
-                serde_json::Value::Number(self.config.two_factor_cookie_max_age.into()),
-            );
-            ctx.set_metadata(
-                METADATA_TRUST_DEVICE_MAX_AGE,
-                serde_json::Value::Number(self.config.trust_device_max_age.into()),
-            );
-            Ok(())
+    fn routes(&self) -> Vec<better_auth_core::AuthRoute> {
+        let passwordless = self.config.allow_passwordless;
+        let totp_passwordless = self.config.totp_allow_passwordless.unwrap_or(passwordless);
+        let backup_passwordless = self
+            .config
+            .backup_code_options
+            .allow_passwordless
+            .unwrap_or(passwordless);
+        [
+            ("/two-factor/enable", "enableTwoFactor", passwordless),
+            ("/two-factor/disable", "disableTwoFactor", passwordless),
+            ("/two-factor/get-totp-uri", "getTOTPURI", totp_passwordless),
+            ("/two-factor/verify-totp", "verifyTOTP", passwordless),
+            ("/two-factor/send-otp", "sendTwoFactorOTP", passwordless),
+            ("/two-factor/verify-otp", "verifyTwoFactorOTP", passwordless),
+            (
+                "/two-factor/generate-backup-codes",
+                "generateBackupCodes",
+                backup_passwordless,
+            ),
+            (
+                "/two-factor/verify-backup-code",
+                "verifyBackupCode",
+                passwordless,
+            ),
+        ]
+        .into_iter()
+        .map(|(path, operation, optional)| {
+            better_auth_core::AuthRoute::post(path, operation)
+                .body_validator(move |req| request::validate(req, optional))
+        })
+        .collect()
+    }
+    async fn on_request(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        if *req.method() != better_auth_core::HttpMethod::Post {
+            return Ok(None);
         }
+        let response = match req.path() {
+            "/two-factor/enable" => self.handle_enable(req, ctx).await?,
+            "/two-factor/disable" => self.handle_disable(req, ctx).await?,
+            "/two-factor/get-totp-uri" => self.handle_get_totp_uri(req, ctx).await?,
+            "/two-factor/verify-totp" => self.handle_verify_totp(req, ctx).await?,
+            "/two-factor/send-otp" => self.handle_send_otp(req, ctx).await?,
+            "/two-factor/verify-otp" => self.handle_verify_otp(req, ctx).await?,
+            "/two-factor/generate-backup-codes" => {
+                self.handle_generate_backup_codes(req, ctx).await?
+            }
+            "/two-factor/verify-backup-code" => self.handle_verify_backup_code(req, ctx).await?,
+            _ => return Ok(None),
+        };
+        Ok(Some(response))
+    }
+    async fn on_init(
+        &self,
+        ctx: &mut better_auth_core::AuthInitContext<S>,
+    ) -> better_auth_core::AuthResult<()> {
+        ctx.extensions.insert(self.config.clone());
+        S::User::require_plugin_fields("two-factor", &["two_factor_enabled"])?;
+        ctx.set_metadata(METADATA_ENABLED, serde_json::Value::Bool(true));
+        ctx.set_metadata(
+            METADATA_TOTP_DISABLED,
+            serde_json::Value::Bool(self.config.totp_disabled),
+        );
+        ctx.set_metadata(
+            METADATA_OTP_ENABLED,
+            serde_json::Value::Bool(
+                self.config.send_otp.is_some()
+                    || ctx
+                        .extensions
+                        .get::<Arc<TwoFactorCallbacks<S>>>()
+                        .is_some_and(|callbacks| callbacks.sender.is_some()),
+            ),
+        );
+        ctx.set_metadata(
+            METADATA_TWO_FACTOR_COOKIE_MAX_AGE,
+            serde_json::Value::Number(self.config.two_factor_cookie_max_age.into()),
+        );
+        ctx.set_metadata(
+            METADATA_TRUST_DEVICE_MAX_AGE,
+            serde_json::Value::Number(self.config.trust_device_max_age.into()),
+        );
+        Ok(())
     }
 }
 
@@ -536,12 +607,8 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
+        let body: EnableRequest = request::read(req, self.config.allow_passwordless)?;
         let (user, session) = ctx.require_session(req).await?;
-        let body: EnableRequest = match request::password(req, self.config.allow_passwordless, true)
-        {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
 
         let (response, set_cookie_headers) =
             enable_core(req, &body, &user, &session, &self.config, ctx).await?;
@@ -557,12 +624,8 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
+        let body: DisableRequest = request::read(req, self.config.allow_passwordless)?;
         let (user, session) = ctx.require_session(req).await?;
-        let body: DisableRequest =
-            match request::password(req, self.config.allow_passwordless, false) {
-                Ok(v) => v,
-                Err(resp) => return Ok(resp),
-            };
 
         let (response, set_cookie_headers) =
             disable_core(&body, &user, &session, req, &self.config, ctx).await?;
@@ -578,17 +641,13 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
-        let body: GetTotpUriRequest = match request::password(
+        let body: GetTotpUriRequest = request::read(
             req,
             self.config
                 .totp_allow_passwordless
                 .unwrap_or(self.config.allow_passwordless),
-            false,
-        ) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        )?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let response = get_totp_uri_core(&body, &user, &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
@@ -599,10 +658,7 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body: VerifyTotpRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body: VerifyTotpRequest = request::read(req, false)?;
 
         let (response, set_cookie_headers) =
             verify_totp_core(req, &body, &self.config, ctx).await?;
@@ -627,10 +683,7 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body: VerifyOtpRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body: VerifyOtpRequest = request::read(req, false)?;
 
         let (response, set_cookie_headers) = verify_otp_core(req, &body, &self.config, ctx).await?;
         let mut auth_response = AuthResponse::json(200, &response)?;
@@ -645,18 +698,14 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
-        let body: GenerateBackupCodesRequest = match request::password(
+        let body: GenerateBackupCodesRequest = request::read(
             req,
             self.config
                 .backup_code_options
                 .allow_passwordless
                 .unwrap_or(self.config.allow_passwordless),
-            false,
-        ) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        )?;
+        let (user, _session) = ctx.require_session(req).await?;
 
         let response = generate_backup_codes_core(&body, &user, &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
@@ -667,10 +716,7 @@ impl TwoFactorPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body: VerifyBackupCodeRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body: VerifyBackupCodeRequest = request::read(req, false)?;
 
         let (response, set_cookie_headers) =
             verify_backup_code_core(req, &body, &self.config, ctx).await?;
@@ -812,7 +858,7 @@ async fn finalize_pending_two_factor<S: better_auth_core::AuthSchema>(
     else {
         req.append_response_header(
             "Set-Cookie",
-            clear_cookie_header(&ctx.config, TWO_FACTOR_COOKIE_SUFFIX),
+            clear_cookie_header(req, &ctx.config, TWO_FACTOR_COOKIE_SUFFIX)?,
         )?;
         return Err(AuthError::authentication_failed(
             "Invalid two factor cookie",
@@ -844,13 +890,18 @@ async fn finalize_pending_two_factor<S: better_auth_core::AuthSchema>(
             None,
         )
         .await?;
-    let mut set_cookie_headers = vec![clear_cookie_header(&ctx.config, TWO_FACTOR_COOKIE_SUFFIX)];
+    let mut set_cookie_headers = vec![clear_cookie_header(
+        req,
+        &ctx.config,
+        TWO_FACTOR_COOKIE_SUFFIX,
+    )?];
     if trust_device {
         set_cookie_headers.push(create_trust_device_cookie_header(&issued.user, ctx).await?);
         set_cookie_headers.push(clear_cookie_header(
+            req,
             &ctx.config,
             DONT_REMEMBER_COOKIE_SUFFIX,
-        ));
+        )?);
     }
 
     Ok((

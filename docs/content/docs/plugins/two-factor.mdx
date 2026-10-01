@@ -69,7 +69,9 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 
 The server-only `TwoFactorPlugin::generate_totp(secret)` returns a code using the configured digits and period. No public `/totp/generate` route is registered. The enrollment `issuer` applies to enrollment URIs; the later URI lookup uses `app_name`, matching upstream's separate TOTP option scope.
 
-Use `TwoFactorPlugin::callbacks(TwoFactorCallbacks::<AppAuthSchema>::default().send(...))` for delivery callbacks that need the endpoint context. The callback receives the user, OTP, and `EndpointContext`, including validated input, original request, typed store, and any session already resolved by the endpoint. A pending sign-in challenge has no completed session. This callback takes precedence over `custom_send_otp` and can be configured without a legacy sender. Delivery errors are logged after OTP persistence and do not change the successful send response, matching upstream.
+Use `TwoFactorPlugin::callbacks(TwoFactorCallbacks::<AppAuthSchema>::default().send(...))` for delivery callbacks that need the endpoint context. The callback receives the user, OTP, and `EndpointContext`, including validated input, original request, typed store, and any session already resolved by the endpoint. A pending sign-in challenge has no completed session. This callback takes precedence over `custom_send_otp` and can be configured without a legacy sender.
+
+The sender factory returns `AuthResult<Option<BackgroundFuture>>` after OTP persistence. Factory errors propagate immediately. `Ok(None)` schedules no work. `Ok(Some(task))` uses the configured background handler or awaits delivery. Retain callback data and `endpoint.to_owned()` when the task needs them. Asynchronous delivery failures produce one `Failed to send two-factor OTP` error log and retain the successful response. A background handler failure is logged separately as `Failed to run background task:` and does not cancel delivery.
 
 ## How It Works
 
@@ -150,3 +152,12 @@ For TS compatibility, Rust keeps backup-code retrieval as a server-only capabili
 | 401 | Unauthenticated (missing or invalid session) |
 | 409 | A concurrent request already replaced the backup-code set |
 | 429 | Account temporarily locked after repeated verification failures |
+
+
+## Request validation and native helpers
+
+Two Factor validates each body before session middleware. Endpoint before/after hooks retain raw input. Handler callbacks receive only schema fields, including `method: "totp"` when enrollment omits `method`. `send-otp` permits an omitted body; explicit `null` is invalid. Global `allow_passwordless`, `totp_allow_passwordless`, and `backup_code_options.allow_passwordless` determine their own password schemas when routes are built.
+
+`auth.two_factor()` binds server-only operations to the registered plugin configuration. `generate_totp(Some(json!({"secret": secret})))` validates the supplied secret and returns a code. `view_backup_codes(Some(json!({"userId": user_id})))` applies upstream ID coercion and reads the stored codes. Pass `None` to preserve an omitted native body. `with_request(NativeRequest { request, headers })` supplies the original native request and headers for dynamic runtime resolution. Neither helper creates an HTTP route. Existing typed `TwoFactorPlugin::generate_totp` and `view_backup_codes` methods remain available.
+
+The server-only facade currently validates input and calls the registered operation directly. Shared endpoint before/after hooks and endpoint spans remain tracked in the alignment backlog.

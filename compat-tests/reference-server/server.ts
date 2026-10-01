@@ -94,7 +94,7 @@ function hasOwn(obj: unknown, key: string) {
 
 const PORT = getPort();
 const identityContextFixture = process.env.COMPAT_PROFILE === "identity-context" ? createIdentityContextFixture(`http://localhost:${PORT}`) : undefined;
-const dynamicContextFixture = (["dynamic-context", "dynamic-native", "dynamic-oauth", "id-policy"].includes(process.env.COMPAT_PROFILE ?? "") || process.env.COMPAT_PROFILE?.startsWith("dynamic-environment:")) ? createDynamicContextFixture() : undefined;
+const dynamicContextFixture = (["dynamic-context", "dynamic-native", "dynamic-oauth", "id-policy", "organization-metadata"].includes(process.env.COMPAT_PROFILE ?? "") || process.env.COMPAT_PROFILE?.startsWith("dynamic-environment:")) ? createDynamicContextFixture() : undefined;
 const dispatchErrorsFixture = process.env.COMPAT_PROFILE === "dispatch-errors" ? createDispatchErrorsFixture(`http://localhost:${PORT}`) : undefined;
 const rateLimitFixture = process.env.COMPAT_PROFILE === "rate-limit-options" ? await createRateLimitFixture(`http://localhost:${PORT}`) : undefined;
 const oauthPopupFixture = createOAuthPopupFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`);
@@ -131,7 +131,7 @@ const lastLoginFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("last-log
   : undefined;
 const apiErrorFixture = ["api-error", "api-error-production"].includes(process.env.COMPAT_PROFILE ?? "")
   ? createApiErrorFixture(`http://localhost:${PORT}`) : null;
-const requestQueryFixture = ((process.env.COMPAT_PROFILE ?? "").startsWith("request-security-") || (process.env.COMPAT_PROFILE ?? "").startsWith("request-organization-") || (process.env.COMPAT_PROFILE ?? "").startsWith("request-query-") || (process.env.COMPAT_PROFILE ?? "").startsWith("request-plugin-") || (process.env.COMPAT_PROFILE ?? "").startsWith("request-change-email"))
+const requestQueryFixture = ["request-api-key-", "request-two-factor-", "request-admin-", "request-security-", "request-organization-", "request-query-", "request-plugin-", "request-change-email"].some(prefix => (process.env.COMPAT_PROFILE ?? "").startsWith(prefix))
   ? await createRequestQueryFixture(process.env.COMPAT_PROFILE!, `http://localhost:${PORT}`)
   : undefined;
 const trailingSlashesFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("trailing-slashes-")

@@ -270,6 +270,7 @@ impl<S: AuthSchema> SessionManager<S> {
         let expires_at = Utc::now() + expires_in;
 
         let create_session = CreateSession {
+            additional_fields: Default::default(),
             user_id: user.id().into_owned(),
             expires_at,
             ip_address,
@@ -579,6 +580,14 @@ impl<S: AuthSchema> SessionManager<S> {
 
     /// Expire session credentials and every cache chunk received on the request.
     pub fn clear_cookies(&self, req: &AuthRequest) -> AuthResult<()> {
+        crate::utils::cookie_utils::remove_set_cookie_entries(
+            req,
+            None,
+            &self
+                .config
+                .auth_cookie("session_token", Default::default())
+                .name,
+        )?;
         req.append_response_header(
             "Set-Cookie",
             create_clear_cookie(
@@ -607,6 +616,7 @@ impl<S: AuthSchema> SessionManager<S> {
                     &self.config.auth_cookie(suffix, Default::default()),
                 )?;
             } else {
+                crate::utils::cookie_utils::remove_set_cookie_entries(req, None, &name)?;
                 req.append_response_header("Set-Cookie", create_clear_cookie(&name, &self.config))?;
             }
         }

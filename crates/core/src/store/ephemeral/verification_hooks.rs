@@ -9,7 +9,9 @@ impl EphemeralStore {
         mut update: VerificationUpdate,
     ) -> AuthResult<Option<VerificationView>> {
         let original = update.clone();
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             match crate::observability::database::with_database_hook(
@@ -33,11 +35,11 @@ impl EphemeralStore {
         let record = self
             .raw("verification", "update", |state| {
                 Ok({
-                    let row = state.verifications.iter_mut().find(|row| {
+                    let row = state.verifications.find_mut(|row| {
                         self.verification_field(row, "identifier")
                             == Some(&Value::String(identifier.to_owned()))
-                    });
-                    if let Some(record) = row {
+                    })?;
+                    if let Some(mut record) = row {
                         record.extend(patch);
                         Some(record.clone())
                     } else {
@@ -68,6 +70,7 @@ impl EphemeralStore {
                     Ok(crate::query::paginate_memory(
                         state
                             .verifications
+                            .snapshot()?
                             .iter()
                             .filter(|row| predicate(row))
                             .cloned()
@@ -91,7 +94,9 @@ impl EphemeralStore {
         if !many && rows.is_empty() {
             return Ok(0);
         }
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for row in &rows {
             for hook in &self.hooks {
@@ -115,7 +120,7 @@ impl EphemeralStore {
                 |state| {
                     Ok({
                         let count = state.verifications.len();
-                        state.verifications.retain(|row| !predicate(row));
+                        state.verifications.retain(|row| !predicate(row))?;
                         count - state.verifications.len()
                     })
                 },
@@ -138,7 +143,9 @@ impl EphemeralStore {
         if value.is_some_and(|value| snapshot.value != value) {
             return Ok(None);
         }
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             if crate::observability::database::with_database_hook(
@@ -156,11 +163,9 @@ impl EphemeralStore {
         let id = snapshot.id.json()?;
         let Some(consumed) = self
             .raw("verification", "consumeOne", |state| {
-                Ok(state
+                state
                     .verifications
-                    .iter()
-                    .position(|row| row.get("id") == id.as_ref())
-                    .map(|position| state.verifications.remove(position)))
+                    .remove_first(|row| row.get("id") == id.as_ref())
             })
             .await?
         else {
@@ -171,7 +176,7 @@ impl EphemeralStore {
             state.verifications.retain(|row| {
                 self.verification_field(row, "identifier")
                     != Some(&Value::String(identifier.to_owned()))
-            });
+            })?;
             Ok(())
         })
         .await?;
@@ -190,11 +195,11 @@ impl EphemeralStore {
         if self.pending_hooks.is_some() {
             return self.consume_verification_inner(identifier, value).await;
         }
-        let (base, isolated) = self.begin_transaction()?;
+        let (base, isolated, queue) = self.begin_transaction()?;
         let result = isolated
             .consume_verification_inner(identifier, value)
             .await?;
-        self.commit_transaction(base, isolated).await?;
+        self.commit_transaction(base, isolated, queue).await?;
         Ok(result)
     }
 }

@@ -9,6 +9,8 @@ if(!profile.endsWith("disabled"))for(const mode of ["http","native"]){
   await post(ctx,"/__test/body-events",{});await post(ctx,"/__test/email-events",{});
   const body={newEmail,callbackURL:"/cancelled",unknown:"raw"};const response=mode==="http"?await post(ctx,"/api/auth/change-email",body,headers):await post(ctx,"/__test/query-native",{path:"/change-email",method:"POST",body,headers});
   expect(response.status).toBe(200);expect(await response.json()).toEqual({status:true});expect(response.headers.getSetCookie().some(line=>line.startsWith("better-auth.session_token="))).toBe(true);
+  const cacheEmails=response.headers.getSetCookie().filter(line=>line.startsWith("better-auth.session_data=")).map(line=>{const value=decodeURIComponent(line.split(";",1)[0].slice("better-auth.session_data=".length));return JSON.parse(Buffer.from(value,"base64url").toString()).session.user.email;});
+  expect(cacheEmails).toEqual([email,newEmail]);
   const events=(await(await fetch(`${ctx.baseURL}/__test/body-events`)).json()).events;
   expect(events.map((event:any)=>event.phase)).toEqual(["before","plugin.before","user.update.before",...(profile.endsWith("no-sender")?[]:["email.sender"]),"after"]);
   for(const event of events){expect(event.body).toEqual(["before","plugin.before","after"].includes(event.phase)?body:{newEmail,callbackURL:"/cancelled"});expect(event.requestBody).toBe(mode==="http"?JSON.stringify(body):null);}

@@ -24,6 +24,7 @@ impl crate::hooks::SeaOrmHooks<BundledSchema> for FailAfterVerification {
 
 fn session(user_id: &str) -> CreateSession {
     CreateSession {
+        additional_fields: Default::default(),
         user_id: user_id.to_owned().into(),
         expires_at: Utc::now() + chrono::Duration::hours(1),
         ip_address: None,

@@ -4,6 +4,9 @@ use better_auth_core::{
     AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
     AuthSchema, BeforeRequestAction,
 };
+mod owned;
+pub use owned::OwnedEndpointContext;
+
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -31,6 +34,11 @@ pub struct EndpointContext<'a, S: AuthSchema> {
     pub response: Option<&'a AuthResponse>,
 }
 impl<'a, S: AuthSchema> EndpointContext<'a, S> {
+    /// Access installed test helpers using this endpoint's active transaction.
+    pub fn test(&'a self) -> AuthResult<super::test_utils::TestUtilsApi<'a, S>> {
+        super::test_utils::TestUtilsApi::from_endpoint(self)
+    }
+
     /// Supplied endpoint headers, preserving omission for native calls.
     pub fn headers(&self) -> Option<&std::collections::HashMap<String, String>> {
         self.input_request.and_then(AuthRequest::endpoint_headers)

@@ -29,7 +29,9 @@ impl EphemeralStore {
     ) -> AuthResult<Option<UpdateUser>> {
         update.prepare_user_fields(&self.config.user)?;
         let original = update.clone();
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             match crate::observability::database::with_database_hook(
@@ -81,7 +83,7 @@ impl EphemeralStore {
         let user = self
             .raw("user", "update", |state| {
                 Ok({
-                    let Some(user) = state.users.get_mut(id) else {
+                    let Some(mut user) = state.users.get_mut(id)? else {
                         return Ok(None);
                     };
                     if update.phone_number == Some(None) {
@@ -182,12 +184,22 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     ) -> AuthResult<Option<UserView>> {
         self.verify_unproven_user(user_id, true, None).await
     }
-    async fn create_user(&self, mut create_user: CreateUser) -> AuthResult<UserView> {
+    async fn create_user(&self, input: CreateUser) -> AuthResult<UserView> {
+        self.create_user_optional(input)
+            .await?
+            .ok_or_else(|| AuthError::forbidden("user creation cancelled by database hook"))
+    }
+    async fn create_user_optional(
+        &self,
+        mut create_user: CreateUser,
+    ) -> AuthResult<Option<UserView>> {
         create_user.prepare_user_fields(&self.config.user)?;
         create_user.email = create_user
             .email
             .map(|value| crate::utils::email::normalize_user_email(&value));
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             if crate::observability::database::with_database_hook(
@@ -199,9 +211,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .await?
                 == DatabaseHookControl::Cancel
             {
-                return Err(AuthError::forbidden(
-                    "user creation cancelled by database hook",
-                ));
+                return Ok(None);
             }
             create_user.prepare_user_fields(&self.config.user)?;
         }
@@ -258,8 +268,8 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             email: create_user.email,
             email_verified: create_user.email_verified.unwrap_or(false),
             image: create_user.image.flatten(),
-            created_at: now,
-            updated_at: now,
+            created_at: create_user.created_at.unwrap_or(now),
+            updated_at: create_user.updated_at.unwrap_or(now),
             is_anonymous: create_user.is_anonymous,
             phone_number: create_user.phone_number,
             phone_number_verified: create_user.phone_number_verified,
@@ -279,7 +289,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             "user",
             "create",
             async {
-                let _ = self.lock()?.users.push(user.clone());
+                self.lock()?.users.push(user.clone());
                 Ok(())
             },
         )
@@ -287,7 +297,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         let user = self.output_user(user)?;
         self.after(CommittedWrite::UserCreated(user.clone()))
             .await?;
-        Ok(user)
+        Ok(Some(user))
     }
 
     async fn get_user_by_id_field(
@@ -295,13 +305,13 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         id: &crate::SchemaValue<String>,
     ) -> AuthResult<Option<UserView>> {
         let user = self
-            .raw("user", "findOne", |state| Ok(state.users.get(id).cloned()))
+            .raw("user", "findOne", |state| state.users.get(id))
             .await?;
         user.map(|user| self.output_user(user)).transpose()
     }
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<UserView>> {
         let user = self
-            .raw("user", "findOne", |state| Ok(state.users.get(id).cloned()))
+            .raw("user", "findOne", |state| state.users.get(id))
             .await?;
         user.map(|user| self.output_user(user)).transpose()
     }
@@ -310,6 +320,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .raw("user", "findOne", |state| {
                 Ok(state
                     .users
+                    .snapshot()?
                     .iter()
                     .find(|user| serde_json::json!(user.id) == *id)
                     .cloned())
@@ -324,6 +335,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                 Ok(crate::query::paginate_memory(
                     state
                         .users
+                        .snapshot()?
                         .iter()
                         .filter(|user| ids.iter().any(|id| user.id.as_str() == Some(id.as_str())))
                         .cloned()
@@ -344,6 +356,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .raw("user", "findOne", |state| {
                 Ok(state
                     .users
+                    .snapshot()?
                     .iter()
                     .find(|user| user.email.as_deref() == Some(&email.to_lowercase()))
                     .cloned())
@@ -357,6 +370,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .raw("user", "findOne", |state| {
                 Ok(state
                     .users
+                    .snapshot()?
                     .iter()
                     .find(|user| user.username.as_deref() == Some(username))
                     .cloned())
@@ -370,6 +384,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .raw("user", "findOne", |state| {
                 Ok(state
                     .users
+                    .snapshot()?
                     .iter()
                     .find(|user| user.phone_number.as_deref() == Some(phone_number))
                     .cloned())
@@ -409,13 +424,15 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         }
         self.delete_user_accounts_with_hooks(id).await?;
         let user = self
-            .raw("user", "findOne", |state| Ok(state.users.get(id).cloned()))
+            .raw("user", "findOne", |state| state.users.get(id))
             .await?;
         // Upstream deleteWithHooks treats snapshot projection failures as a missing row.
         let Some(user) = user.and_then(|user| self.output_user(user).ok()) else {
             return Ok(None);
         };
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             if crate::observability::database::with_database_hook(
@@ -431,7 +448,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             }
         }
         self.raw("user", "delete", |state| {
-            let _ = state.users.remove(id);
+            let _ = state.users.remove(id)?;
             Ok(())
         })
         .await?;
@@ -445,9 +462,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .limit
             .get_or_insert(self.config.advanced.database.find_many_limit());
         let users: Vec<_> = self
-            .raw("user", "findMany", |state| {
-                Ok(state.users.iter().cloned().collect())
-            })
+            .raw("user", "findMany", |state| state.users.snapshot())
             .await?;
         let (users, _) = crate::user_query::apply_list_users(users, &params);
         let users = users
@@ -456,7 +471,10 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .collect::<AuthResult<Vec<_>>>()?;
         let total = self
             .raw("user", "count", |state| {
-                Ok(crate::user_query::count_users(state.users.iter(), &params))
+                Ok(crate::user_query::count_users(
+                    state.users.snapshot()?.iter(),
+                    &params,
+                ))
             })
             .await?;
         Ok((users, total))

@@ -122,10 +122,12 @@ where
         };
         for session in sessions {
             let store = self.clone();
+            let request = context.request.clone();
             after_write(
                 transaction,
                 Box::pin(async move {
-                    let context = store.hook_context(None);
+                    let mut context = store.hook_context(None);
+                    context.request = request;
                     for hook in store.hooks() {
                         better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterDeleteSession, hook.after_delete_session(&session, &context)).await?;
                     }

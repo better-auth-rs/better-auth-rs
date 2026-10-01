@@ -4,13 +4,24 @@ use super::*;
 impl crate::store::JwksStore for EphemeralStore {
     async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>> {
         self.raw("jwks", "findOne", |state| {
-            Ok(state.jwks.iter().find(|key| key.id == id).cloned())
+            Ok(state
+                .jwks
+                .snapshot()?
+                .iter()
+                .find(|key| key.id == id)
+                .cloned())
         })
         .await
     }
     async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>> {
-        self.raw("jwks", "findMany", |state| Ok(state.jwks.clone()))
-            .await
+        self.raw("jwks", "findMany", |state| {
+            Ok(crate::query::paginate_memory(
+                state.jwks.snapshot()?,
+                Some(self.config.advanced.database.find_many_limit()),
+                None,
+            ))
+        })
+        .await
     }
 
     async fn create_jwk(&self, input: crate::CreateJwk) -> AuthResult<crate::Jwk> {

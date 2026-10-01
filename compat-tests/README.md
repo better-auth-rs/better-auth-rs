@@ -162,6 +162,8 @@ bash compat-tests/client-tests/run-against-both.sh all
 
 `organization-callbacks` compares lifecycle hook arguments, data overrides, dynamic limits, metadata, and server-only member creation. `organization-custom-team` verifies custom default-team creation. Failed invitation acceptance must preserve the upstream compensation updates without creating organization or team memberships.
 
+`organization-metadata` compares raw test-helper storage on Memory and SQLite. Raw strings and SQL NULL retain their values; Memory accepts raw objects, while SQLite rejects them. Normal create and update responses decode metadata, and later reads retain the stored JSON text. Rust persistence tests separately retain the explicit JSON-model contract.
+
 Run each profile with the existing dual-runtime harness:
 
 ```bash
@@ -219,7 +221,7 @@ The `request-query-memory` and `request-query-sqlite` profiles cover raw HTTP du
 The same request-query profiles verify unknown-key removal, optional account-selection unions, API-key numeric coercion, passkey registration queries, and actual member/user pagination. SQLite rejects fractional SQL pagination; the implicit memory adapter follows JavaScript slice semantics. Body cases inspect real password hashing, verification senders, database hooks, and session deletion. They compare JSON, form, native, and native-with-Request calls, including delayed before-hook changes and body-before-query error order.
 
 
-The request-query profiles each run 30 scenarios. Account and user body cases also verify validation before authentication, strict account selection, empty session-token acceptance, and actual email updates and session revocation. HTTP origin checks retain their earlier rejection boundary. Endpoint hooks see raw input; database hooks see the validated projection. The reference fixture captures original request bytes before dispatch because endpoints can consume the Request stream.
+The request-query profiles each run 33 scenarios. Account and user body cases also verify validation before authentication, strict account selection, empty session-token acceptance, and actual email updates and session revocation. The user/session record cases verify required bodies, prototype-key projection, raw hooks, persisted profile updates and truthy email rejection. HTTP origin checks retain their earlier rejection boundary. Endpoint hooks see raw input; database hooks see the validated projection. The reference fixture captures original request bytes before dispatch because endpoints can consume the Request stream.
 
 
 The `request-plugin-memory` and `request-plugin-sqlite` profiles each run five scenarios. Username, one-time token, multi-session, and email-verification bodies validate at the shared endpoint boundary before authentication and side effects. Tests preserve raw hooks, validated sender/storage input, real credentials and token replay rejection. A null signup body also proves that Username before hooks run before the core schema and retain the upstream ordinary error.
@@ -229,3 +231,9 @@ The four `request-change-email*` profiles run 22 scenarios across HTTP and nativ
 The `request-organization-memory` and `request-organization-sqlite` profiles validate all 22 Organization HTTP body schemas through both HTTP and native dispatch. They cover ordered multi-field errors, nested unknown-field projection, role-selector unions, deprecated permission input, real role/team/invitation writes, raw endpoint hooks and validated lifecycle hooks. Native organization creation distinguishes omitted headers from explicit empty headers and preserves user ownership. A shared-store Rust regression proves that two auth instances keep independent captured field schemas.
 
 `request-security-memory` and `request-security-sqlite` verify shared body validation for Magic Link, One Tap, Passkey, Device Authorization, and SIWE. The scenarios compare HTTP and native error aggregation, raw endpoint hooks, projected sender input, SIWE Request presence, device form multiplicity, and real Magic Link, claimed-device, and WebAuthn success flows.
+
+The `request-admin-memory` and `request-admin-sqlite` profiles compare all twelve Admin body schemas, ID coercion, raw endpoint hooks, and validated lifecycle input. They exercise requestless provisioning, credential creation and login, fractional bans, authoritative revocation, impersonation, role changes, and deletion through HTTP and native endpoints.
+
+`request-api-key-memory` and `request-api-key-sqlite` compare API Key body validation through HTTP and native calls. The scenarios cover schema-order aggregation, raw hook input, callback defaults, unknown-key removal, client-only restrictions, requestless acting-user coercion, ownership rejection, update and deletion persistence, and verification errors that do not consume quota.
+
+The four `request-two-factor-*` profiles exercise eight HTTP body schemas and two server-only body schemas. The Memory and SQLite flows verify real TOTP enrollment, the stale response versus persisted user state, OTP delivery and consumption, backup-code replay rejection, password checks, and disablement. The two option profiles invert global and nested password requirements. Raw endpoint hooks and projected password/sender inputs remain separate; native-only helpers remain unavailable through HTTP.

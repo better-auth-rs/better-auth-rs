@@ -1,0 +1,53 @@
+[
+  {
+    "rollback": false,
+    "result": {
+      "status": 200,
+      "thrown": null
+    },
+    "observations": [
+      {
+        "userFound": true,
+        "path": "/email-otp/send-verification-otp"
+      }
+    ],
+    "events": [
+      "handler",
+      "handler",
+      "handler",
+      "sender:start",
+      "session:before",
+      "verification:after",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "count": 1,
+    "tasks": 3
+  },
+  {
+    "rollback": true,
+    "result": {
+      "status": null,
+      "thrown": "rollback"
+    },
+    "observations": [
+      {
+        "userFound": true,
+        "path": "/email-otp/send-verification-otp"
+      }
+    ],
+    "events": [
+      "handler",
+      "handler",
+      "handler",
+      "sender:start",
+      "session:before",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "count": 0,
+    "tasks": 3
+  }
+]

@@ -30,20 +30,20 @@ impl TeamStore for EphemeralStore {
         };
         let team: Team =
             self.store_record(EntityRole::Team, team, None, input.additional_fields)?;
-        let _ = self.lock()?.teams.push(team.clone());
+        self.lock()?.teams.push(team.clone());
         self.output_team(team)
     }
     async fn get_team(&self, id: &str) -> AuthResult<Option<Team>> {
         self.lock()?
             .teams
-            .get(id)
-            .cloned()
+            .get(id)?
             .map(|value| self.output_team(value))
             .transpose()
     }
     async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<Team>> {
         self.lock()?
             .teams
+            .snapshot()?
             .iter()
             .find(|team| json!(team.id) == *id)
             .cloned()
@@ -71,10 +71,10 @@ impl TeamStore for EphemeralStore {
         {
             let _ = patch.insert("updatedAt".into(), json!(Utc::now()));
         }
-        let mut state = self.lock()?;
-        let team = state
+        let state = self.lock()?;
+        let mut team = state
             .teams
-            .get_mut(id)
+            .get_mut(id)?
             .ok_or_else(|| AuthError::not_found("Team not found"))?;
         *team = self.store_record(
             EntityRole::Team,
@@ -88,11 +88,12 @@ impl TeamStore for EphemeralStore {
         let mut state = self.lock()?;
         let organization_id = &state
             .teams
-            .get(id)
+            .get(id)?
             .ok_or_else(|| AuthError::not_found("Team not found"))?
             .organization_id;
         let pending = state
             .invitations
+            .snapshot()?
             .iter()
             .filter(|invitation| {
                 invitation.organization_id == *organization_id && invitation.is_pending()
@@ -114,8 +115,7 @@ impl TeamStore for EphemeralStore {
             }
             let mut updated = state
                 .invitations
-                .get(&invitation.id)
-                .cloned()
+                .get(&invitation.id)?
                 .ok_or_else(|| AuthError::not_found("Invitation not found"))?;
             updated = self.store_record(
                 EntityRole::Invitation,
@@ -134,12 +134,12 @@ impl TeamStore for EphemeralStore {
             updates.push(updated);
         }
         // Keep changes staged until every transform succeeds, matching transaction rollback.
-        let _ = state.teams.remove(id);
-        state.team_members.retain(|member| member.team_id != id);
+        let _ = state.teams.remove(id)?;
+        state.team_members.retain(|member| member.team_id != id)?;
         for invitation in updates {
             let _ = state
                 .invitations
-                .replace(&invitation.id.clone(), invitation);
+                .replace(&invitation.id.clone(), invitation)?;
         }
         Ok(())
     }
@@ -147,6 +147,7 @@ impl TeamStore for EphemeralStore {
         let teams: Vec<_> = self
             .lock()?
             .teams
+            .snapshot()?
             .iter()
             .filter(|team| team.organization_id == organization_id)
             .cloned()
@@ -172,9 +173,13 @@ impl TeamStore for EphemeralStore {
         let state = self.lock()?;
         state
             .team_members
+            .snapshot()?
             .iter()
             .filter(|member| member.user_id == user_id)
-            .filter_map(|member| state.teams.get(&member.team_id).cloned())
+            .map(|member| state.teams.get(&member.team_id))
+            .collect::<AuthResult<Vec<_>>>()?
+            .into_iter()
+            .flatten()
             .map(|value| self.output_team(value))
             .collect()
     }
@@ -186,6 +191,7 @@ impl TeamStore for EphemeralStore {
         Ok(self
             .lock()?
             .team_members
+            .snapshot()?
             .iter()
             .find(|member| member.team_id == team_id && member.user_id == user_id)
             .cloned())
@@ -194,6 +200,7 @@ impl TeamStore for EphemeralStore {
         Ok(self
             .lock()?
             .team_members
+            .snapshot()?
             .iter()
             .filter(|member| member.team_id == team_id)
             .cloned()
@@ -208,11 +215,11 @@ impl TeamStore for EphemeralStore {
         let mut state = self.lock()?;
         let team = state
             .teams
-            .get(team_id)
-            .cloned()
+            .get(team_id)?
             .ok_or_else(|| AuthError::not_found("Team not found"))?;
         if let Some(member) = state
             .team_members
+            .snapshot()?
             .iter()
             .find(|member| member.team_id == *team_id && member.user_id == user_id)
         {
@@ -220,11 +227,12 @@ impl TeamStore for EphemeralStore {
         }
         let actual = state
             .team_members
+            .snapshot()?
             .iter()
             .filter(|member| member.team_id == *team_id)
             .count();
         let (team, reserved) = self.reserve_team_seat(team, actual, maximum)?;
-        let _ = state.teams.replace(team_id, team);
+        let _ = state.teams.replace(team_id, team)?;
         if !reserved {
             return Ok(None);
         }
@@ -244,16 +252,17 @@ impl TeamStore for EphemeralStore {
         let mut state = self.lock()?;
         let deleted = state
             .team_members
+            .snapshot()?
             .iter()
             .filter(|member| member.team_id == team_id && member.user_id == user_id)
             .count();
-        if let Some(team) = state.teams.get(team_id).cloned() {
+        if let Some(team) = state.teams.get(team_id)? {
             let team = self.release_team_seats(team, deleted)?;
-            let _ = state.teams.replace(team_id, team);
+            let _ = state.teams.replace(team_id, team)?;
         }
         state
             .team_members
-            .retain(|member| member.team_id != team_id || member.user_id != user_id);
+            .retain(|member| member.team_id != team_id || member.user_id != user_id)?;
         Ok(())
     }
 }
@@ -325,6 +334,7 @@ impl OrganizationRoleStore for EphemeralStore {
         let mut state = self.lock()?;
         if state
             .organization_roles
+            .snapshot()?
             .iter()
             .any(|role| role.organization_id == input.organization_id && role.role == input.role)
         {
@@ -373,14 +383,13 @@ impl OrganizationRoleStore for EphemeralStore {
             None,
             input.additional_fields,
         )?;
-        let _ = state.organization_roles.push(role.clone());
+        state.organization_roles.push(role.clone());
         self.output_organization_role(role)
     }
     async fn get_organization_role(&self, id: &str) -> AuthResult<Option<OrganizationRole>> {
         self.lock()?
             .organization_roles
-            .get(id)
-            .cloned()
+            .get(id)?
             .map(|value| self.output_organization_role(value))
             .transpose()
     }
@@ -391,6 +400,7 @@ impl OrganizationRoleStore for EphemeralStore {
         let roles: Vec<_> = self
             .lock()?
             .organization_roles
+            .snapshot()?
             .iter()
             .filter(|role| role.organization_id == organization_id)
             .cloned()
@@ -450,8 +460,7 @@ impl OrganizationRoleStore for EphemeralStore {
         }
         let role = state
             .organization_roles
-            .get(id)
-            .cloned()
+            .get(id)?
             .ok_or_else(|| AuthError::not_found("Role not found"))?;
         let role: OrganizationRole = self.store_record(
             EntityRole::OrganizationRole,
@@ -459,11 +468,11 @@ impl OrganizationRoleStore for EphemeralStore {
             Some(patch),
             update.additional_fields,
         )?;
-        let _ = state.organization_roles.replace(id, role.clone());
+        let _ = state.organization_roles.replace(id, role.clone())?;
         self.output_organization_role(role)
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {
-        let _ = self.lock()?.organization_roles.remove(id);
+        let _ = self.lock()?.organization_roles.remove(id)?;
         Ok(())
     }
 }

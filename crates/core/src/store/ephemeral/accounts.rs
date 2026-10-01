@@ -26,7 +26,9 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         input: CreateAccount,
     ) -> AuthResult<Option<AccountView>> {
         let mut input = input.with_timestamps(Utc::now());
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             if crate::observability::database::with_database_hook(
@@ -75,6 +77,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             .raw("account", "findMany", |state| {
                 Ok(state
                     .accounts
+                    .snapshot()?
                     .iter()
                     .filter(|record| {
                         record.get(fields.record_storage_key("providerId"))
@@ -110,6 +113,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
                 Ok(crate::query::paginate_memory(
                     state
                         .accounts
+                        .snapshot()?
                         .iter()
                         .filter(|record| {
                             record.get(fields.record_storage_key("userId"))
@@ -140,7 +144,9 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         mut update: UpdateAccount,
     ) -> AuthResult<Option<AccountView>> {
         let original = update.clone();
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             match crate::observability::database::with_database_hook(
@@ -164,10 +170,9 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         let record = self
             .raw("account", "update", |state| {
                 Ok({
-                    if let Some(fields) = state
+                    if let Some(mut fields) = state
                         .accounts
-                        .iter_mut()
-                        .find(|row| row.get("id").and_then(Value::as_str) == Some(id))
+                        .find_mut(|row| row.get("id").and_then(Value::as_str) == Some(id))?
                     {
                         fields.extend(patch);
                         Some(fields.clone())
@@ -191,6 +196,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             .raw("account", "findOne", |state| {
                 Ok(state
                     .accounts
+                    .snapshot()?
                     .iter()
                     .find(|row| row.get("id").and_then(Value::as_str) == Some(id))
                     .cloned())
@@ -200,7 +206,9 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         let Some(account) = record.and_then(|record| self.output_account(&record).ok()) else {
             return Ok(());
         };
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             if crate::observability::database::with_database_hook(
@@ -216,13 +224,9 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             }
         }
         self.raw("account", "delete", |state| {
-            if let Some(position) = state
+            let _ = state
                 .accounts
-                .iter()
-                .position(|row| row.get("id").and_then(Value::as_str) == Some(id))
-            {
-                let _ = state.accounts.remove(position);
-            }
+                .remove_first(|row| row.get("id").and_then(Value::as_str) == Some(id))?;
             Ok(())
         })
         .await?;
@@ -234,7 +238,9 @@ impl EphemeralStore {
     pub(super) async fn delete_user_accounts_with_hooks(&self, user_id: &str) -> AuthResult<()> {
         // Upstream catches only the batch snapshot; the matching database deletion still runs.
         let accounts = self.get_user_accounts(user_id).await.unwrap_or_default();
-        let transaction = EphemeralTransaction { store: self };
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
         let context = self.hook_context(&transaction);
         for account in &accounts {
             for hook in &self.hooks {
@@ -256,7 +262,7 @@ impl EphemeralStore {
             state.accounts.retain(|record| {
                 record.get(schema.record_storage_key("userId"))
                     != Some(&Value::String(user_id.to_owned()))
-            });
+            })?;
             Ok(())
         })
         .await?;

@@ -122,6 +122,7 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
     let user = store.create_user(CreateUser::new()).await.unwrap();
     let session = store
         .create_session(CreateSession {
+            additional_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: user.created_at + std::time::Duration::from_secs(3600),
             ip_address: None,

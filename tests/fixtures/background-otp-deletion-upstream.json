@@ -1,0 +1,34 @@
+[
+  {
+    "outcome": "commit",
+    "foundInside": false,
+    "error": null,
+    "events": [
+      "before",
+      "after-delete",
+      "after"
+    ],
+    "count": 0
+  },
+  {
+    "outcome": "rollback",
+    "foundInside": false,
+    "error": "rollback",
+    "events": [
+      "before",
+      "after-delete"
+    ],
+    "count": 1
+  },
+  {
+    "outcome": "after-error",
+    "foundInside": false,
+    "error": "after-error",
+    "events": [
+      "before",
+      "after-delete",
+      "after"
+    ],
+    "count": 0
+  }
+]

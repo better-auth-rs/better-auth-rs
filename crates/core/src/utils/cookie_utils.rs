@@ -36,12 +36,16 @@ use sha2::Sha256;
 
 /// Sign a cookie value using the upstream HMAC-SHA256 format.
 #[expect(clippy::expect_used, reason = "HMAC-SHA256 accepts every key length")]
-pub fn sign_cookie_value(value: &str, secret: &str) -> String {
+pub fn sign_cookie_value_raw(value: &str, secret: &str) -> String {
     let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
         .expect("HMAC-SHA256 accepts every key length");
     mac.update(value.as_bytes());
-    let signed = format!("{value}.{}", STANDARD.encode(mac.finalize().into_bytes()));
-    utf8_percent_encode(&signed, COOKIE_COMPONENT).to_string()
+    format!("{value}.{}", STANDARD.encode(mac.finalize().into_bytes()))
+}
+
+/// Sign and percent-encode a cookie value for an HTTP response.
+pub fn sign_cookie_value(value: &str, secret: &str) -> String {
+    encode_cookie_value(&sign_cookie_value_raw(value, secret))
 }
 
 /// Verify a signed cookie. Invalid or malformed signatures are unauthenticated.
@@ -219,6 +223,19 @@ pub fn create_clear_cookie(name: &str, config: &AuthConfig) -> String {
     cookie.set_max_age(cookie::time::Duration::seconds(0));
     cookie.unset_expires();
     render_cookie(cookie, &resolved)
+}
+
+/// Remove a cookie and its chunks from both response scopes before explicit expiration.
+pub fn remove_set_cookie_entries(
+    req: &crate::AuthRequest,
+    response_headers: Option<&mut crate::Headers>,
+    name: &str,
+) -> crate::AuthResult<()> {
+    req.remove_response_cookie(name)?;
+    if let Some(headers) = response_headers {
+        headers.remove_set_cookie(name);
+    }
+    Ok(())
 }
 
 fn template_for_name(name: &str, max_age: Option<i64>, config: &AuthConfig) -> ResolvedCookie {

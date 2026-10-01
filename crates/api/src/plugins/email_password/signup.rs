@@ -159,6 +159,8 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
     let user_metadata = ctx.metadata.clone();
     let supports_native_json = database.supports_native_json();
 
+    let signup_callback_url = body.callback_url.clone();
+    let require_email_verification = config.require_email_verification;
     let dont_remember = body.remember_me == Some(false);
     let admission_context = ctx.clone();
     let admission_request = req.clone();
@@ -220,9 +222,23 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
                     })
                     .await?;
 
+                if let Some(verification) =
+                    EmailVerificationPlugin::from_context(&admission_context)
+                {
+                    verification
+                        .send_verification_on_sign_up(
+                            &user,
+                            require_email_verification,
+                            signup_callback_url.as_deref(),
+                            &endpoint,
+                        )
+                        .await?;
+                }
+
                 if auto_sign_in {
                     let session = tx
                         .create_session(CreateSession {
+                            additional_fields: Default::default(),
                             user_id: user.id().into_owned(),
                             expires_at: chrono::Utc::now() + expires_in,
                             ip_address,
@@ -273,25 +289,5 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
     let Some(response) = result else {
         return synthetic_response(body, &synthetic_create, config, ctx);
     };
-    let verification = EmailVerificationPlugin::from_context(ctx);
-    if let Some(verification) = verification {
-        let user = UserView::try_from(response.user.clone())?;
-        if let Err(error) = verification
-            .send_verification_on_sign_up(
-                &user,
-                config.require_email_verification,
-                Some(req),
-                body.callback_url.as_deref(),
-                ctx,
-            )
-            .await
-        {
-            // Delivery is a background-compatible notification in the upstream signup route.
-            better_auth_core::observability::logger::current().error(
-                "Signup verification email failed",
-                &[better_auth_core::observability::LogArgument::Error(&error)],
-            );
-        }
-    }
     Ok(response)
 }

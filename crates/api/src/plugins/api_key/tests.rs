@@ -28,6 +28,7 @@ async fn create_test_context_with_user() -> (AuthContext<TestSchema>, UserView, 
 
     let session = database
         .create_session(CreateSession {
+            additional_fields: Default::default(),
             user_id: user.id().into_owned(),
             expires_at: Utc::now() + Duration::hours(24),
             ip_address: Some("127.0.0.1".to_string()),
@@ -60,6 +61,7 @@ async fn create_user_with_session(
     let session = ctx
         .database
         .create_session(CreateSession {
+            additional_fields: Default::default(),
             user_id: user.id().into_owned(),
             expires_at: Utc::now() + Duration::hours(24),
             ip_address: None,
@@ -957,4 +959,43 @@ async fn list_sqlite_applies_adapter_default_before_public_pagination() {
     ));
     let ctx = AuthContext::new(config, store);
     check_list_default_limit(&ctx).await;
+}
+
+#[tokio::test]
+async fn native_schema_rejects_nonfinite_numbers_before_storage() {
+    let plugin = ApiKeyPlugin::builder().build();
+    let (ctx, user, _) = create_test_context_with_user().await;
+    for (value, received) in [
+        (f64::INFINITY, "Infinity"),
+        (f64::NEG_INFINITY, "-Infinity"),
+        (f64::NAN, "NaN"),
+    ] {
+        let result = plugin
+            .create_key(
+                &ctx,
+                &CreateKeyRequest {
+                    user_id: Some(user.id.typed().unwrap().to_owned()),
+                    expires_in: Some(value),
+                    prefix: Some("!".into()),
+                    ..Default::default()
+                },
+            )
+            .await;
+        let response = result.unwrap_err().to_auth_response();
+        assert_eq!(response.status, 400);
+        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(
+            body["message"],
+            format!(
+                "[body.expiresIn] Invalid input: expected number, received {received}; [body.prefix] Invalid prefix format, must be alphanumeric and contain only underscores and hyphens."
+            )
+        );
+    }
+    assert!(
+        ctx.database
+            .list_api_keys_by_reference(user.id.typed().unwrap())
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }

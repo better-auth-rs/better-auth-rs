@@ -1,12 +1,12 @@
+use better_auth_core::AuthRequest;
 pub(crate) use better_auth_core::wire::ApiKeyView;
-use better_auth_core::{AuthRequest, AuthResponse};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use validator::Validate;
 
 /// API key creation parameters for HTTP and trusted server callers.
 #[serde_with::skip_serializing_none]
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateKeyRequest {
     /// Configuration to use, or the default configuration when absent.
@@ -53,7 +53,7 @@ pub struct CreateKeyRequest {
 
 /// API key updates for HTTP and trusted server callers.
 #[serde_with::skip_serializing_none]
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateKeyRequest {
     /// Configuration used to locate the key.
@@ -99,70 +99,6 @@ pub struct UpdateKeyRequest {
     pub expires_in: Option<Option<f64>>,
 }
 
-/// Parse with the DTO schema and retain the field path in upstream validation errors.
-pub(crate) fn parse_api_key_body<T>(request: &AuthRequest) -> Result<T, AuthResponse>
-where
-    T: serde::de::DeserializeOwned + Validate,
-{
-    let mut deserializer =
-        serde_json::Deserializer::from_slice(request.body.as_deref().unwrap_or(b"null"));
-    let body: T = serde_path_to_error::deserialize(&mut deserializer).map_err(|error| {
-        let mut path = error.path().to_string().replace('[', ".").replace(']', "");
-        if path == "." {
-            path.clear();
-        }
-        let detail = error.inner().to_string();
-        let message = if let Some(field) = detail
-            .strip_prefix("missing field `")
-            .and_then(|rest| rest.split('`').next())
-        {
-            path = field.to_string();
-            "Invalid input: expected string, received undefined".to_string()
-        } else if let Some((received, expected)) = detail
-            .strip_prefix("invalid type: ")
-            .and_then(|detail| detail.split_once(", expected "))
-        {
-            let expected = expected.split(" at line ").next().unwrap_or(expected);
-            let expected = match expected {
-                "a string" => "string",
-                "a boolean" => "boolean",
-                "f64" => "number",
-                "a sequence" => "array",
-                "a map" => "record",
-                _ => "object",
-            };
-            let received = if received.starts_with("string") {
-                "string"
-            } else if received.starts_with("integer") || received.starts_with("floating point") {
-                "number"
-            } else if received.starts_with("boolean") {
-                "boolean"
-            } else {
-                match received {
-                    "sequence" => "array",
-                    "map" => "object",
-                    value => value,
-                }
-            };
-            format!("Invalid input: expected {expected}, received {received}")
-        } else {
-            detail
-        };
-        let location = if path.is_empty() {
-            "body".to_string()
-        } else {
-            format!("body.{path}")
-        };
-        validation_response(&location, &message)
-    })?;
-    deserializer
-        .end()
-        .map_err(|error| validation_response("body", &error.to_string()))?;
-    body.validate()
-        .map_err(|error| better_auth_core::validation_error_response(&error))?;
-    Ok(body)
-}
-
 impl Validate for CreateKeyRequest {
     fn validate(&self) -> Result<(), validator::ValidationErrors> {
         let mut errors = numeric_errors(&[
@@ -204,6 +140,17 @@ impl Validate for UpdateKeyRequest {
     }
 }
 
+pub(super) fn nonfinite_number_error(value: f64) -> String {
+    let received = if value.is_nan() {
+        "NaN"
+    } else if value.is_sign_negative() {
+        "-Infinity"
+    } else {
+        "Infinity"
+    };
+    format!("Invalid input: expected number, received {received}")
+}
+
 fn numeric_errors(
     fields: &[(&'static str, Option<f64>, Option<f64>)],
 ) -> validator::ValidationErrors {
@@ -213,7 +160,7 @@ fn numeric_errors(
             continue;
         };
         let message = if !value.is_finite() {
-            Some("Invalid input: expected number, received number".to_string())
+            Some(nonfinite_number_error(value))
         } else {
             minimum
                 .filter(|minimum| value < *minimum)
@@ -228,7 +175,7 @@ fn numeric_errors(
     errors
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DeleteKeyRequest {
     #[serde(default, deserialize_with = "present")]
@@ -289,13 +236,6 @@ impl ListKeysQuery {
     pub(crate) fn from_request(req: &AuthRequest) -> better_auth_core::AuthResult<Self> {
         crate::plugins::query_input::parse(&req.query)
     }
-}
-
-fn validation_response(location: &str, message: &str) -> AuthResponse {
-    let body = serde_json::json!({
-        "code": "VALIDATION_ERROR", "message": format!("[{location}] {message}")
-    });
-    AuthResponse::text(400, body.to_string()).with_header("content-type", "application/json")
 }
 
 /// Paginated API key response; absent pagination parameters are omitted.

@@ -43,6 +43,10 @@ Without an error URL, `/error` returns HTML outside production and redirects to 
 
 The error page reads the original Request URL. A native call must supply `EndpointInput.request`; `EndpointInput.query` does not replace that URL. The first duplicate query value wins. The renderer escapes description markup and preserves upstream's supported HTML entities.
 
+## Background verification notifications
+
+`advanced.background_tasks: Option<BackgroundTasks>` defaults to `None`, which awaits supported notification delivery. `BackgroundTasks::new(handler)` receives an already-running `BackgroundTask`. Keep or await the task in the application lifetime manager; dropping the handle does not abort delivery. Async notification errors and handler errors are logged. Direct Phone OTP delivery without a handler instead propagates its asynchronous error. A callback factory error occurs before scheduling and remains an endpoint error. See [email verification](/docs/authentication/email-verification) for the current integration scope and retained transaction behavior.
+
 ## SessionConfig
 
 | Field | Type | Default | Description |

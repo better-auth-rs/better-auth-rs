@@ -22,6 +22,16 @@ fn endpoint_error(error: AuthError, request: &AuthRequest) -> AuthResult<AuthErr
     Ok(error.capture_endpoint_headers(request.take_response_headers()?))
 }
 
+pub(crate) fn core_routes() -> [better_auth_core::AuthRoute; 4] {
+    [
+        better_auth_core::AuthRoute::get(core_paths::OK, "ok"),
+        better_auth_core::AuthRoute::get(core_paths::ERROR, "error"),
+        better_auth_core::AuthRoute::get(core_paths::OPENAPI_SPEC, "openapi_spec"),
+        better_auth_core::AuthRoute::post(core_paths::UPDATE_USER, "updateUser")
+            .body_validator(better_auth_core::endpoint_input::record_body),
+    ]
+}
+
 pub struct BetterAuth<S: AuthSchema> {
     config: Arc<AuthConfig>,
     hooks: better_auth_core::observability::EndpointHooks<S>,
@@ -502,13 +512,7 @@ impl<S: AuthSchema> BetterAuth<S> {
         let Some(path) = super::http_routing::route_path(req, context.base_path()) else {
             return Ok(Some(AuthResponse::new(404)));
         };
-        let core_routes = [
-            better_auth_core::AuthRoute::get(core_paths::OK, "ok"),
-            better_auth_core::AuthRoute::get(core_paths::ERROR, "error"),
-            better_auth_core::AuthRoute::get(core_paths::OPENAPI_SPEC, "openapi_spec"),
-            better_auth_core::AuthRoute::post(core_paths::UPDATE_USER, "updateUser"),
-        ];
-        let selected = core_routes
+        let selected = core_routes()
             .into_iter()
             .chain(self.plugins.iter().flat_map(|plugin| plugin.routes()))
             .find_map(|route| {
@@ -666,10 +670,9 @@ impl<S: AuthSchema> BetterAuth<S> {
         }
         input_patch.apply(&mut internal_req)?;
         update_request_hook_context(&internal_req)?;
-        let route = self
-            .plugins
-            .iter()
-            .flat_map(|plugin| plugin.routes())
+        let route = core_routes()
+            .into_iter()
+            .chain(self.plugins.iter().flat_map(|plugin| plugin.routes()))
             .find(|route| route.matches(internal_req.method(), internal_req.path()));
         let snapshot = better_auth_core::hooks::current_request_hook_context();
         let route_name = snapshot
@@ -875,42 +878,31 @@ impl<S: AuthSchema> BetterAuth<S> {
         req: &AuthRequest,
         context: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
-        let (current_user, session) = context.require_session(req).await?;
-        let body: serde_json::Value = req
-            .body_as_json()
-            .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
-        let body = match body.as_object() {
-            Some(body) => body,
-            None => {
-                let actual = match &body {
-                    serde_json::Value::Null => "null",
-                    serde_json::Value::Bool(_) => "boolean",
-                    serde_json::Value::Number(_) => "number",
-                    serde_json::Value::String(_) => "string",
-                    serde_json::Value::Array(_) => "array",
-                    serde_json::Value::Object(_) => "record",
-                };
-                return Ok(AuthResponse::json(
-                    400,
-                    &better_auth_core::ErrorCodeMessageResponse {
-                        code: Some("VALIDATION_ERROR".to_string()),
-                        message: format!(
-                            "[body] Invalid input: expected record, received {}",
-                            actual
-                        ),
+        let mut body = better_auth_core::endpoint_input::record_input(req)?;
+        let (current_user, session) =
+            context
+                .require_session(req)
+                .await
+                .map_err(|error| match error {
+                    AuthError::Unauthenticated => AuthError::Upstream {
+                        status: 401,
+                        code: "UNAUTHORIZED",
+                        message: "Unauthorized",
                     },
-                )?);
-            }
-        };
+                    error => error,
+                })?;
 
-        if body.contains_key("email") {
+        if body
+            .get("email")
+            .is_some_and(better_auth_core::user_fields::is_truthy)
+        {
             return Err(AuthError::bad_request("Email can not be updated"));
         }
+        let _ = body.remove("email");
 
         let clear_phone_number = context.get_metadata("phone-number.enabled")
             == Some(&serde_json::Value::Bool(true))
             && body.get("phoneNumber") == Some(&serde_json::Value::Null);
-        let body = body.clone();
         let additional_fields = context.parse_user_input(&body, false)?;
         let update_req: UpdateUserRequest = serde_json::from_value(serde_json::Value::Object(body))
             .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;

@@ -91,7 +91,7 @@ Content-Type: application/json
 }
 ```
 
-All fields are optional. Only provided fields are updated.
+The body must be a JSON object. HTTP and native endpoints validate the body before checking the session. All fields are optional; an update with no writable fields returns 400. A truthy `email` value is rejected; `null`, `false`, zero and an empty string leave the email unchanged. Use `/change-email` to change the email address.
 
 ### Delete User
 

@@ -1,5 +1,6 @@
+use crate::TransactionConnection;
 use async_trait::async_trait;
-use sea_orm::{DatabaseConnection, DatabaseTransaction};
+use sea_orm::DatabaseConnection;
 
 use better_auth_core::AuthResult;
 use better_auth_core::config::AuthConfig;
@@ -30,7 +31,7 @@ impl HookControl {
 pub struct SeaOrmHookContext<'a, S: AuthSchema> {
     pub config: &'a AuthConfig,
     pub db: &'a DatabaseConnection,
-    pub tx: Option<&'a DatabaseTransaction>,
+    pub tx: Option<&'a TransactionConnection>,
     /// The same transaction exposed through the adapter-independent store API.
     pub transaction: Option<&'a dyn better_auth_core::store::AuthTransaction<S>>,
     pub request: Option<RequestHookContext>,

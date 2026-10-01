@@ -12,6 +12,7 @@ pub(super) mod handlers;
 pub(crate) mod storage;
 pub use storage::ApiKeyStorage;
 mod callbacks;
+mod request;
 pub(super) mod types;
 mod verification;
 
@@ -705,18 +706,53 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx
-            .require_session(req)
-            .await
-            .map_err(|error| match error {
-                AuthError::Unauthenticated => api_key_error(ApiKeyErrorCode::UnauthorizedSession),
-                error => error,
-            })?;
-        let body: CreateKeyRequest = match parse_api_key_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
-        let response = create_key_core(&body, user.id().typed()?, self, ctx, Some(req)).await?;
+        let body: CreateKeyRequest = request::read(req)?;
+        let config = self.resolve_configuration(body.config_id.as_deref())?;
+        let session = ctx
+            .session_manager()
+            .resolve(req, better_auth_core::session::SessionRead::Authoritative)
+            .await?
+            .data;
+        let original = req.original_request().or_else(|| {
+            better_auth_core::hooks::current_request_hook_context()
+                .is_some_and(|context| context.is_http)
+                .then_some(req)
+        });
+        let client = req.endpoint_headers().is_some() || original.is_some();
+        if client {
+            validate_client_create(&body)?;
+        }
+        if original.is_some() && body.user_id.is_some() {
+            return Err(api_key_error(ApiKeyErrorCode::UnauthorizedSession));
+        }
+        let actor = session
+            .as_ref()
+            .and_then(|data| data.user.id.as_str())
+            .or_else(|| {
+                (!client || config.references == ApiKeyReferences::Organization)
+                    .then_some(body.user_id.as_deref())
+                    .flatten()
+            })
+            .filter(|id| !id.is_empty());
+        if config.references == ApiKeyReferences::User
+            && !client
+            && session.is_some()
+            && body
+                .user_id
+                .as_deref()
+                .filter(|id| !id.is_empty())
+                .is_some_and(|id| Some(id) != actor)
+        {
+            return Err(api_key_error(ApiKeyErrorCode::UnauthorizedSession));
+        }
+        // Organization selection precedes the actor check in the upstream handler.
+        if config.references == ApiKeyReferences::Organization
+            && body.organization_id.as_deref().is_none_or(str::is_empty)
+        {
+            return Err(api_key_error(ApiKeyErrorCode::OrganizationIdRequired));
+        }
+        let actor = actor.ok_or_else(|| api_key_error(ApiKeyErrorCode::UnauthorizedSession))?;
+        let response = create_key_for_user(&body, actor, self, ctx, original).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -750,18 +786,36 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx
-            .require_session(req)
-            .await
-            .map_err(|error| match error {
-                AuthError::Unauthenticated => api_key_error(ApiKeyErrorCode::UnauthorizedSession),
-                error => error,
-            })?;
-        let body: UpdateKeyRequest = match parse_api_key_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
+        let body: UpdateKeyRequest = request::read(req)?;
+        let session = ctx
+            .session_manager()
+            .resolve(req, better_auth_core::session::SessionRead::Authoritative)
+            .await?
+            .data;
+        let client = req.endpoint_headers().is_some()
+            || req.original_request().is_some()
+            || better_auth_core::hooks::current_request_hook_context()
+                .is_some_and(|context| context.is_http);
+        let actor = session
+            .as_ref()
+            .and_then(|data| data.user.id.as_str())
+            .or_else(|| (!client).then_some(body.user_id.as_deref()).flatten())
+            .filter(|id| !id.is_empty())
+            .ok_or_else(|| api_key_error(ApiKeyErrorCode::UnauthorizedSession))?;
+        if session.is_some()
+            && body
+                .user_id
+                .as_deref()
+                .filter(|id| !id.is_empty())
+                .is_some_and(|id| id != actor)
+        {
+            return Err(api_key_error(ApiKeyErrorCode::UnauthorizedSession));
+        }
+        let response = if client {
+            update_key_core(&body, actor, self, ctx).await?
+        } else {
+            update_key_for_user(&body, actor, self, ctx).await?
         };
-        let response = update_key_core(&body, user.id().typed()?, self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -770,14 +824,11 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
+        let body: DeleteKeyRequest = request::read(req)?;
         let (user, _session) = ctx.require_session(req).await?;
         if user.banned() {
             return Err(AuthError::authentication_failed("User is banned"));
         }
-        let body: DeleteKeyRequest = match parse_api_key_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
         let response = delete_key_core(&body, user.id().typed()?, self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
@@ -790,10 +841,10 @@ impl ApiKeyPlugin {
 better_auth_core::impl_auth_plugin! {
     ApiKeyPlugin, "api-key";
     routes {
-        post "/api-key/create"                    => handle_create,             "createApiKey";
+        post "/api-key/create"                    => handle_create,             "createApiKey", body = request::validate;
         get  "/api-key/get"                       => handle_get,                "getApiKey", query = crate::plugins::query_input::api_key_get;
-        post "/api-key/update"                    => handle_update,             "updateApiKey";
-        post "/api-key/delete"                    => handle_delete,             "deleteApiKey";
+        post "/api-key/update"                    => handle_update,             "updateApiKey", body = request::validate;
+        post "/api-key/delete"                    => handle_delete,             "deleteApiKey", body = request::validate;
         get  "/api-key/list"                      => handle_list,               "listApiKeys", query = crate::plugins::query_input::api_key_list;
     }
     extra {

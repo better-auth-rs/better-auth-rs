@@ -10,9 +10,7 @@ use better_auth::plugins::api_key::{
     ApiKeyConfig, ApiKeyErrorCode, ApiKeyPlugin, ApiKeyVerificationError,
 };
 use better_auth::prelude::CreateUser;
-use better_auth::server_api::{
-    CreateKeyOptions, FieldUpdate, RequiredActions, UpdateKeyOptions, VerifyKeyOptions,
-};
+use better_auth::server_api::{CreateKeyOptions, FieldUpdate, UpdateKeyOptions, VerifyKeyOptions};
 use better_auth::{AuthConfig, AuthError, BetterAuth};
 use better_auth_seaorm::{Database, SeaOrmStore};
 use serde_json::json;
@@ -38,7 +36,7 @@ async fn build_auth(
     Ok((auth, user.id.typed().unwrap().clone()))
 }
 
-fn required(actions: RequiredActions) -> VerifyKeyOptions {
+fn required(actions: Vec<String>) -> VerifyKeyOptions {
     VerifyKeyOptions {
         config_id: Some("machine".into()),
         permissions: Some(HashMap::from([("nodes".into(), actions)])),
@@ -136,10 +134,7 @@ async fn issue_verify_and_revoke_machine_credential() -> Result<(), Box<dyn std:
     let denied = api_keys
         .verify(
             &issued.key,
-            required(RequiredActions::All(vec![
-                "heartbeat".into(),
-                "delete".into(),
-            ])),
+            required(vec!["heartbeat".into(), "delete".into()]),
         )
         .await;
     assert!(
@@ -149,23 +144,14 @@ async fn issue_verify_and_revoke_machine_credential() -> Result<(), Box<dyn std:
     let verified = api_keys
         .verify(
             &issued.key,
-            required(RequiredActions::All(vec![
-                "read".into(),
-                "heartbeat".into(),
-            ])),
+            required(vec!["read".into(), "heartbeat".into()]),
         )
         .await?;
     assert_eq!(verified.remaining, Some(2.5));
     assert_eq!(verified.config_id, "machine");
 
     let verified = api_keys
-        .verify(
-            &issued.key,
-            required(RequiredActions::Any(vec![
-                "delete".into(),
-                "heartbeat".into(),
-            ])),
-        )
+        .verify(&issued.key, required(vec!["heartbeat".into()]))
         .await?;
     assert_eq!(verified.remaining, Some(1.5));
 
@@ -182,10 +168,7 @@ async fn issue_verify_and_revoke_machine_credential() -> Result<(), Box<dyn std:
         .await?;
     assert!(!revoked.enabled);
     let rejected = api_keys
-        .verify(
-            &issued.key,
-            required(RequiredActions::All(vec!["heartbeat".into()])),
-        )
+        .verify(&issued.key, required(vec!["heartbeat".into()]))
         .await;
     assert!(
         matches!(rejected, Err(ApiKeyVerificationError::Validation(error)) if error.code == ApiKeyErrorCode::KeyDisabled)

@@ -228,7 +228,11 @@ pub(super) async fn disable_core(
                 .delete_verification_by_identifier(trust_identifier)
                 .await?;
         }
-        set_cookie_headers.push(clear_cookie_header(&ctx.config, TRUST_DEVICE_COOKIE_SUFFIX));
+        set_cookie_headers.push(clear_cookie_header(
+            req,
+            &ctx.config,
+            TRUST_DEVICE_COOKIE_SUFFIX,
+        )?);
     }
 
     Ok((StatusResponse { status: true }, set_cookie_headers))
@@ -325,12 +329,12 @@ pub(super) async fn send_otp_core<S: better_auth_core::AuthSchema>(
         Legacy(L),
     }
 
-    let body = request::send_otp(req).map_err(AuthError::from)?;
+    let body = request::read::<serde_json::Value>(req, false)?;
     let callback = ctx
         .extensions
         .get::<Arc<TwoFactorCallbacks<S>>>()
         .and_then(|callbacks| callbacks.sender.as_ref());
-    let sender = match (callback, config.send_otp.as_deref()) {
+    let sender = match (callback, config.send_otp.as_ref()) {
         (Some(callback), _) => Sender::Callback(callback),
         (None, Some(sender)) => Sender::Legacy(sender),
         (None, None) => return Err(AuthError::bad_request("otp isn't configured")),
@@ -366,16 +370,21 @@ pub(super) async fn send_otp_core<S: better_auth_core::AuthSchema>(
         })
         .await?;
 
-    let delivered = match sender {
-        Sender::Callback(callback) => callback(state.user(), &otp, &endpoint).await,
-        Sender::Legacy(sender) => sender.send(state.user(), &otp).await,
+    let task: Option<better_auth_core::background::BackgroundFuture> = match sender {
+        Sender::Callback(callback) => callback(state.user(), &otp, &endpoint)?,
+        Sender::Legacy(sender) => {
+            let sender = sender.clone();
+            let user = state.user().clone();
+            Some(Box::pin(async move { sender.send(&user, &otp).await }))
+        }
     };
-    if let Err(error) = delivered {
-        better_auth_core::observability::logger::current().warn(
-            "Failed to send two-factor OTP",
-            &[better_auth_core::observability::LogArgument::Error(&error)],
-        );
-    }
+    better_auth_core::background::run_or_await_with_error_message(
+        task,
+        ctx.config.advanced.background_tasks.as_ref(),
+        &ctx.config.logger,
+        "Failed to send two-factor OTP",
+    )
+    .await;
 
     Ok(StatusResponse { status: true })
 }

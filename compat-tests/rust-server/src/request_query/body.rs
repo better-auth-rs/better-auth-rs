@@ -20,11 +20,16 @@ impl BodyTrace {
         response: Option<&AuthResponse>,
     ) {
         let Some(context) = context.filter(|context| {
-            context.path.starts_with("/organization/")
+            (context.path.starts_with("/api-key/")
+                || context.path.starts_with("/two-factor/")
+                || context.path.starts_with("/admin/")
+                || context.path.starts_with("/organization/"))
                 || matches!(
                     context.path.as_str(),
                     "/sign-in/email"
                         | "/sign-up/email"
+                        | "/update-user"
+                        | "/update-session"
                         | "/request-password-reset"
                         | "/change-password"
                         | "/verify-password"
@@ -313,6 +318,30 @@ impl better_auth::plugins::SendMagicLink for BodyTrace {
             .unwrap()
             .insert("kind".into(), "magic".into());
         self.1.lock().unwrap().push(value);
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl better_auth::plugins::api_key::ApiKeyDefaultPermissions for BodyTrace {
+    async fn permissions(
+        &self,
+        _: &str,
+        _: better_auth::plugins::api_key::ApiKeyEndpoint<'_>,
+    ) -> AuthResult<better_auth::plugins::api_key::ApiKeyPermissions> {
+        self.current("key.permissions", None);
+        Ok(std::collections::HashMap::from([(
+            "record".into(),
+            vec!["read".into()],
+        )]))
+    }
+}
+
+#[async_trait::async_trait]
+impl better_auth::plugins::two_factor::SendTwoFactorOtp for BodyTrace {
+    async fn send(&self, _: &better_auth_core::wire::UserView, otp: &str) -> AuthResult<()> {
+        self.current("otp.sender", None);
+        self.1.lock().unwrap().push(json!({"kind":"otp","otp":otp}));
         Ok(())
     }
 }
