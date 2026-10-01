@@ -16,6 +16,7 @@ This page documents the public configuration types in `crates/core/src/config.rs
 | `base_path` | `String` | `"/api/auth"` | Auth route mount prefix |
 | `trusted_origins` | `TrustedValues` | `Static(vec![])` | Static origins or an asynchronous Request resolver |
 | `disabled_paths` | `Vec<String>` | `[]` | Routes that should behave as disabled |
+| `api_error` | `ApiErrorConfig` | see below | HTTP error policy and error-page appearance |
 | `session` | `SessionConfig` | see below | Session token and cookie behavior |
 | `verification` | `VerificationConfig` | see below | Verification persistence and identifier policies |
 | `jwt` | `JwtConfig` | see below | Optional JWT behavior |
@@ -27,6 +28,20 @@ This page documents the public configuration types in `crates/core/src/config.rs
 `build()` resolves explicit nonempty `secret`, then `BETTER_AUTH_SECRET`, then `AUTH_SECRET`. Without a key, development uses Better Auth's default key. `NODE_ENV=production` rejects that default single key. As upstream does, `NODE_ENV=test` or nonempty `TEST` other than the exact string `false` skips single-key validation.
 
 Explicit `secrets`, including an invalid empty vector, takes precedence over `BETTER_AUTH_SECRETS`. The environment format is `2:current-key,1:previous-key`; entries and values are trimmed, and values may contain colons. Versioned keys always require nonempty values and unique versions, including in test environments. `VersionedSecret.version` is a `u128` with a canonical JavaScript integer value below `1e21`; environment versions follow upstream decimal-prefix parsing and JavaScript number rounding. The explicit or environment single key remains available for decrypting legacy records, except the default development key.
+
+## ApiErrorConfig
+
+`api_error.throw_errors` rethrows ordinary HTTP endpoint failures. The default is `false`, which returns an empty HTTP 500. API errors from an endpoint or after hook remain endpoint responses. Before-hook and body-decoding errors reach the HTTP error policy. Native `call_endpoint` calls bypass the policy, and `on_http_request` and `on_http_response` failures remain outside its catch boundary.
+
+Install `AuthBuilder::on_api_error(Arc<dyn ApiErrorHandler<S>>)` to observe failures with the resolved `AuthContext<S>`. The callback returns `AuthResult<Option<ApiErrorTask>>`. An immediate `Err` replaces the original error. Return `None` after synchronous work, or return a future for detached asynchronous work. The runtime polls that future once before returning the response and preserves request scope while the future continues. A detached failure is logged and cannot replace the response; this is the Rust runtime equivalent of upstream's unawaited callback Promise. `throw_errors = true` bypasses this callback.
+
+`AuthError::redirect(location)` represents upstream's symbolic `FOUND` error and bypasses the policy. A numeric 302 error made with `AuthError::from(AuthResponse)` follows the ordinary API error policy. Returning a redirect response from an endpoint does not invoke the error policy.
+
+`api_error.error_url` is the `/error` redirect destination and the default OAuth error destination. The renderer appends the sanitized error code and the original description as URL parameters. Invalid configured URLs fail when the error route runs. This setting does not redirect unrelated endpoint failures.
+
+Without an error URL, `/error` returns HTML outside production and redirects to `/?error=...` in production. Set `customize_default_error_page = Some(ErrorPageCustomization::default())` to keep the HTML page in production. `ErrorPageColors`, `ErrorPageFont`, and `ErrorPageSize` customize trusted application CSS. The three `disable_*` flags remove the title border, corner decorations, and background grid. Upstream accepts `radius_md` and `radius_lg` but does not use them in its current renderer.
+
+The error page reads the original Request URL. A native call must supply `EndpointInput.request`; `EndpointInput.query` does not replace that URL. The first duplicate query value wins. The renderer escapes description markup and preserves upstream's supported HTML entities.
 
 ## SessionConfig
 
@@ -176,6 +191,7 @@ Memory and database denials preserve the counter and return the remaining window
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
+| `skip_trailing_slashes` | `bool` | `false` | Match HTTP routes with or without one trailing slash |
 | `ip_address` | `IpAddressConfig` | see below | Client IP extraction behavior |
 | `disable_csrf_check` | `Option<bool>` | `None` | Explicit CSRF policy; unset inherits the legacy `disable_origin_check` behavior |
 | `disable_origin_check` | `bool` | `false` | Skip callback / redirect target origin validation |
@@ -186,6 +202,8 @@ Memory and database denials preserve the counter and return the remaining window
 | `database` | `AdvancedDatabaseConfig` | see below | Database-related defaults |
 | `trusted_proxy_headers` | `bool` | `false` | Trust validated forwarded host and protocol during URL resolution |
 | `use_secure_cookies` | `Option<bool>` | `None` | Override secure cookie naming and its initial attribute |
+
+`skip_trailing_slashes` preserves the original Request URL and does not redirect. Consecutive slashes return 404. Endpoint hooks receive the declared path template. Native endpoint calls use exact paths. Disabled-path checks remove the request's base prefix and trailing slashes before HTTP hooks; configured disabled strings remain unchanged.
 
 ### IpAddressConfig
 

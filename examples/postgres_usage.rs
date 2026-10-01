@@ -171,7 +171,7 @@ mod user {
                 name: Set(create_user.name),
                 email: Set(create_user.email),
                 email_verified: Set(create_user.email_verified.unwrap_or(false)),
-                image: Set(create_user.image),
+                image: Set(create_user.image.flatten()),
                 username: Set(create_user.username.flatten()),
                 display_username: Set(create_user.display_username.flatten()),
                 two_factor_enabled: Set(false),
@@ -195,7 +195,7 @@ mod user {
                 active.name = Set(Some(name));
             }
             if let Some(image) = update.image {
-                active.image = Set(Some(image));
+                active.image = Set(image);
             }
             if let Some(email_verified) = update.email_verified {
                 active.email_verified = Set(email_verified);

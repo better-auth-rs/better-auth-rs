@@ -1,0 +1,136 @@
+{
+  "formatVersion": 1,
+  "source": "better-auth/dist/plugins/organization",
+  "schemaSource": "better-auth/dist/db/to-zod.mjs",
+  "generatorSource": "better-auth/dist/plugins/open-api/generator.mjs",
+  "endpoints": [
+    {
+      "key": "createOrganization",
+      "model": "organization",
+      "schemaPointer": "/content/application~1json/schema",
+      "mergeOrder": [
+        "base",
+        "additionalFields"
+      ],
+      "partial": false,
+      "source": "routes/crud-org.mjs:20"
+    },
+    {
+      "key": "updateOrganization",
+      "model": "organization",
+      "schemaPointer": "/content/application~1json/schema/properties/data",
+      "mergeOrder": [
+        "additionalFields",
+        "base"
+      ],
+      "partial": true,
+      "source": "routes/crud-org.mjs:166"
+    },
+    {
+      "key": "createInvitation",
+      "model": "invitation",
+      "schemaPointer": "/content/application~1json/schema",
+      "mergeOrder": [
+        "base",
+        "additionalFields"
+      ],
+      "partial": false,
+      "source": "routes/crud-invites.mjs:37"
+    },
+    {
+      "key": "addMember",
+      "model": "member",
+      "schemaPointer": "/content/application~1json/schema",
+      "mergeOrder": [
+        "base",
+        "additionalFields"
+      ],
+      "partial": false,
+      "source": "routes/crud-members.mjs:20"
+    },
+    {
+      "key": "createTeam",
+      "model": "team",
+      "schemaPointer": "/content/application~1json/schema",
+      "mergeOrder": [
+        "base",
+        "additionalFields"
+      ],
+      "partial": false,
+      "source": "routes/crud-team.mjs:18"
+    },
+    {
+      "key": "updateTeam",
+      "model": "team",
+      "schemaPointer": "/content/application~1json/schema/properties/data",
+      "mergeOrder": [
+        "base",
+        "additionalFields"
+      ],
+      "partial": true,
+      "source": "routes/crud-team.mjs:216"
+    },
+    {
+      "key": "createOrgRole",
+      "model": "organizationRole",
+      "schemaPointer": "/content/application~1json/schema/properties/additionalFields",
+      "mergeOrder": [
+        "additionalFields"
+      ],
+      "partial": false,
+      "fieldPolicy": "capture-before-update-constructor",
+      "source": "routes/crud-access-control.mjs:29"
+    },
+    {
+      "key": "updateOrgRole",
+      "model": "organizationRole",
+      "schemaPointer": "/content/application~1json/schema/allOf/0/properties/data",
+      "mergeOrder": [
+        "base",
+        "additionalFields"
+      ],
+      "partial": false,
+      "fieldPolicy": "force-required-false",
+      "source": "routes/crud-access-control.mjs:436"
+    }
+  ],
+  "fieldRules": {
+    "include": "field.input !== false; returned and defaults do not change the client schema",
+    "required": "field.required !== false, unless the endpoint applies partial",
+    "optional": "required:false is nullish; endpoint partial adds omission but does not add null",
+    "types": {
+      "string": {
+        "type": "string"
+      },
+      "number": {
+        "type": "number"
+      },
+      "boolean": {
+        "type": "boolean"
+      },
+      "date": {
+        "type": "string"
+      },
+      "json": {
+        "type": "string"
+      },
+      "string[]": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "number[]": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        }
+      },
+      "enum": {}
+    },
+    "nullish": "Append null to type; without type, emit anyOf:[schema,{type:'null'}]",
+    "ordering": "Merge schema properties in endpoint mergeOrder. An overwritten key retains its first insertion position. Rebuild required in final property order.",
+    "policies": "Do not execute defaultValue, validators or transforms. Do not emit defaults from toZodSchema.",
+    "roleTiming": "createOrgRole captures the original policy before updateOrgRole mutates every role field.required=false. Final component models see the mutated policy."
+  }
+}

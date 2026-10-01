@@ -9,4 +9,5 @@ pub mod jwe;
 pub mod password;
 pub mod path;
 pub mod symmetric;
+pub mod url;
 pub mod username;

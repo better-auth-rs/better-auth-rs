@@ -798,6 +798,19 @@ better_auth_core::impl_auth_plugin! {
         get  "/api-key/list"                      => handle_list,               "api_key_list";
     }
     extra {
+        fn openapi(&self) -> AuthResult<better_auth_core::openapi::OpenApiPluginMetadata> {
+            let mut metadata = better_auth_core::openapi::OpenApiPluginMetadata::from_routes(
+                <Self as better_auth_core::AuthPlugin<S>>::name(self),
+                <Self as better_auth_core::AuthPlugin<S>>::routes(self),
+            )?;
+            if let [config] = self.configurations.as_slice() {
+                metadata = metadata
+                    .model_default("apikey", "rateLimitMax", serde_json::json!(config.rate_limit.max_requests))?
+                    .model_default("apikey", "rateLimitTimeWindow", serde_json::json!(config.rate_limit.time_window))?;
+            }
+            Ok(metadata)
+        }
+
         async fn on_init(&self, _ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
             if self.configurations.len() > 1 {
                 let mut ids = std::collections::HashSet::new();

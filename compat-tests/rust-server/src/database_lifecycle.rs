@@ -56,6 +56,7 @@ struct Trace {
     options: Value,
     events: Vec<Value>,
     cache: BTreeMap<String, String>,
+    held_delete: Option<(Arc<tokio::sync::Semaphore>, Arc<tokio::sync::Semaphore>)>,
 }
 #[derive(Clone)]
 struct Events {
@@ -212,10 +213,20 @@ impl SecondaryStorage for Events {
     }
     async fn delete(&self, key: &str) -> AuthResult<()> {
         self.record("cache.delete", json!({"key":key})).await?;
+        let held = {
+            let trace = self.trace.lock().unwrap();
+            (trace.options["holdDeleteKey"] == key).then(|| trace.held_delete.clone().unwrap())
+        };
+        if let Some((released, _)) = &held {
+            released.acquire().await.unwrap().forget();
+        }
         if self.options()["cacheFailure"] == "delete" || self.options()["failDeleteKey"] == key {
             return Err(rejected());
         }
         let _ = self.trace.lock().unwrap().cache.remove(key);
+        if let Some((_, completed)) = held {
+            completed.add_permits(1);
+        }
         Ok(())
     }
 }
@@ -477,7 +488,16 @@ impl Fixture {
         Ok(())
     }
     async fn configure(&self, options: Value) -> AuthResult<()> {
-        self.events.trace.lock().unwrap().options = options.clone();
+        {
+            let mut trace = self.events.trace.lock().unwrap();
+            trace.options = options.clone();
+            trace.held_delete = options["holdDeleteKey"].as_str().map(|_| {
+                (
+                    Arc::new(tokio::sync::Semaphore::new(0)),
+                    Arc::new(tokio::sync::Semaphore::new(0)),
+                )
+            });
+        }
         let db = &self.events.database;
         if options["databaseUpdateFailure"] == true {
             db.execute_unprepared("CREATE TRIGGER fixture_reject_session_update BEFORE UPDATE ON sessions BEGIN SELECT RAISE(ABORT, 'fixture session update rejected'); END").await.map_err(database_error)?;
@@ -532,6 +552,13 @@ impl Fixture {
         match body["operation"].as_str().unwrap() {
             "delete-user-sessions" => store.delete_user_sessions("u1").await?,
             "delete-user" => store.delete_user("u1").await?,
+            "delete-sessions" => {
+                let tokens: Vec<String> = body.get("tokens").map_or_else(
+                    || vec!["s1-token".into(), "s2-token".into()],
+                    |tokens| serde_json::from_value(tokens.clone()).unwrap(),
+                );
+                store.delete_sessions(&tokens).await?;
+            }
             "delete-session" => store.delete_session("s1-token").await?,
             "update-session" => {
                 let patch = body
@@ -555,6 +582,18 @@ async fn control(State(fixture): State<Fixture>, Json(body): Json<Value>) -> Jso
     match body["action"].as_str() {
         Some("seed") => fixture.seed().await.unwrap(),
         Some("configure") => fixture.configure(body["options"].clone()).await.unwrap(),
+        Some("release-delete") => {
+            let (released, completed) = fixture
+                .events
+                .trace
+                .lock()
+                .unwrap()
+                .held_delete
+                .clone()
+                .unwrap();
+            released.add_permits(1);
+            completed.acquire().await.unwrap().forget();
+        }
         Some("execute") => {
             let result = fixture.execute(&body).await;
             return Json(

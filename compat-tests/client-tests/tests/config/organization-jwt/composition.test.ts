@@ -71,6 +71,7 @@ compatScenario("teams, transformed user fields and custom session fields survive
 compatScenario("OIDC mapped fields use the shared user schema on creation and profile updates", async ctx => {
   const email = ctx.uniqueEmail("mapped-fields");
   const sub = ctx.uniqueToken("mapped-fields");
+  const localImage = "https://example.com/local-image.png";
   const observations: unknown[] = [];
   let userId: string | undefined;
   for (const [mode, alias] of [["mapped-image", "picture"], ["valid", "plain"]]) {
@@ -88,6 +89,7 @@ compatScenario("OIDC mapped fields use the shared user schema on creation and pr
     expect(fresh.status).toBe(200);
     const user = (fresh.body as any).user;
     expect(user).toMatchObject({ email, department: "identity", alias: `${alias}:in:in:out`, internalCode: "server" });
+    if (mode === "valid") expect(user.image).toBe(localImage);
     expect(user).not.toHaveProperty("secretNote");
     expect((cached.body as any).user).toEqual(user);
     if (userId) expect(user.id).toBe(userId);
@@ -97,6 +99,9 @@ compatScenario("OIDC mapped fields use the shared user schema on creation and pr
     expect(accounts.data).toHaveLength(1);
     expect(accounts.data![0]!.accountId).toBe(`external-${sub}`);
     observations.push({ callback, cached, fresh, accounts: ctx.snapshot(accounts) });
+    if (mode === "mapped-image") {
+      expect((await ctx.actor().client.updateUser({ image: localImage })).error).toBeNull();
+    }
     expect((await ctx.actor().client.signOut()).error).toBeNull();
   }
   return observations;

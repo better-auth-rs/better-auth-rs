@@ -120,11 +120,18 @@ where
             .await
             .map_err(map_db_err)?
         else {
-            if tx.is_none() {
-                for hook in self.hooks() {
-                    hook.after_update_user(None, &hook_context).await?;
-                }
-            }
+            let store = self.clone();
+            super::transaction_hooks::after_write(
+                tx,
+                Box::pin(async move {
+                    let context = store.hook_context(None);
+                    for hook in store.hooks() {
+                        hook.after_update_user(None, &context).await?;
+                    }
+                    Ok(())
+                }),
+            )
+            .await?;
             return Err(AuthError::UserNotFound);
         };
 

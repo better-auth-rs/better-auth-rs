@@ -225,8 +225,9 @@ pub(crate) async fn create_user_core(
     create_user.ban_expires = ban_expiry(&data)?;
     create_user.image = data
         .get("image")
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_owned);
+        .cloned()
+        .map(serde_json::from_value)
+        .transpose()?;
     create_user.email_verified = data
         .get("emailVerified")
         .and_then(serde_json::Value::as_bool);
@@ -360,9 +361,12 @@ pub(crate) async fn update_user_core(
     if let Some(value) = body.data.get("name").and_then(|value| value.as_str()) {
         update.name = Some(value.to_string());
     }
-    if let Some(value) = body.data.get("image").and_then(|value| value.as_str()) {
-        update.image = Some(value.to_string());
-    }
+    update.image = body
+        .data
+        .get("image")
+        .cloned()
+        .map(serde_json::from_value)
+        .transpose()?;
     if let Some(value) = body
         .data
         .get("emailVerified")

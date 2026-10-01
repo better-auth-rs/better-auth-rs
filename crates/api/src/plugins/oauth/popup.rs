@@ -9,10 +9,10 @@ use better_auth_core::{
         verify_cookie_value,
     },
 };
-use serde_json::{Map, Value};
+use serde_json::Value;
 use std::sync::Arc;
 
-use super::{handlers, resolved::ResolvedOAuthConfig, state::filter_additional_state_data};
+use super::{handlers, resolved::ResolvedOAuthConfig, state_json::StateExtras};
 use crate::plugins::json_body;
 
 mod completion;
@@ -208,12 +208,8 @@ async fn start(req: &AuthRequest, ctx: &AuthContext<impl AuthSchema>) -> AuthRes
         .get("scopes")
         .filter(|value| !value.is_empty())
         .map(|scopes| scopes.split(',').map(str::to_owned).collect::<Vec<_>>());
-    let additional = req
-        .query
-        .get("additionalData")
-        .filter(|value| !value.is_empty())
-        .map(|text| better_auth_core::utils::json::safe_json_parse(text))
-        .unwrap_or(Value::Null);
+    let additional =
+        StateExtras::popup_entries(req.query.get("additionalData").map(String::as_str));
     let request = handlers::FlowStartRequest {
         redirect_base: None,
         anonymous_user_id: None,
@@ -227,7 +223,7 @@ async fn start(req: &AuthRequest, ctx: &AuthContext<impl AuthSchema>) -> AuthRes
         login_hint: None,
         request_sign_up: (req.query.get("requestSignUp").map(String::as_str) == Some("true"))
             .then_some(true),
-        additional_data: filter_additional_state_data(Some(entries(additional))),
+        additional_data: additional,
         link: None,
         disable_redirect: false,
     };
@@ -265,28 +261,6 @@ async fn start(req: &AuthRequest, ctx: &AuthContext<impl AuthSchema>) -> AuthRes
             Ok(response)
         }
         Err(error) => failed_start(response, &origin, &nonce, error, ctx),
-    }
-}
-
-fn entries(value: Value) -> Map<String, Value> {
-    match value {
-        Value::Object(fields) => fields,
-        Value::Array(values) => values
-            .into_iter()
-            .enumerate()
-            .map(|(index, value)| (index.to_string(), value))
-            .collect(),
-        Value::String(value)
-            if better_auth_core::utils::json::parse_json_date(&value).is_some() =>
-        {
-            Map::new()
-        }
-        Value::String(value) => value
-            .chars()
-            .enumerate()
-            .map(|(index, value)| (index.to_string(), value.to_string().into()))
-            .collect(),
-        _ => Map::new(),
     }
 }
 

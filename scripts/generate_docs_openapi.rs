@@ -210,7 +210,7 @@ async fn main() -> Result<(), DynError> {
 
 async fn generate_docs_openapi() -> Result<Value, DynError> {
     let auth = build_docs_auth().await?;
-    let mut spec = auth.openapi_spec().to_value()?;
+    let mut spec = auth.openapi_spec()?.to_value()?;
     rewrite_for_docs(&mut spec)?;
     Ok(spec)
 }

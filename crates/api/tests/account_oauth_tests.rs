@@ -828,7 +828,7 @@ async fn test_account_info_returns_provider_user_info_for_local_account_id() {
 
     assert_eq!(resp.status, 200);
     let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
-    assert!(body["user"].get("id").is_none());
+    assert_eq!(body["user"]["id"], "mock-user-id-123");
     assert_eq!(body["data"]["sub"], "mock-user-id-123");
     assert_eq!(body["account"]["id"], account_id);
     assert_eq!(body["account"]["providerId"], "google");

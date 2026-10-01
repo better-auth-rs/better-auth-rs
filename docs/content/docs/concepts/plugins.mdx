@@ -67,6 +67,11 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
         &self, req: &AuthRequest, ctx: &AuthContext<S>
     ) -> AuthResult<Option<AuthResponse>>;
 
+    /// Inspect the completed HTTP router response.
+    async fn on_http_response(
+        &self, req: &AuthRequest, response: &mut AuthResponse, ctx: &AuthContext<S>
+    ) -> AuthResult<Option<AuthResponse>>;
+
     /// Called after the response and session cookies are available.
     async fn after_request(
         &self, req: &AuthRequest, response: &mut AuthResponse, ctx: &AuthContext<S>
@@ -74,11 +79,13 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
 }
 ```
 
-`on_init`, `on_http_request`, `before_request`, and `after_request` have default no-op implementations. Plugins must implement `name`, `routes`, and `on_request`.
+`on_init`, `on_http_request`, `on_http_response`, `before_request`, and `after_request` have default no-op implementations. Plugins must implement `name`, `routes`, and `on_request`.
 
 `on_http_request(&AuthRequest, &AuthContext<S>) -> AuthResult<Option<AuthResponse>>` runs only for HTTP calls, after rate limiting and before endpoint middleware and validation. Returning a response skips the endpoint and its `before_request` / `after_request` hooks. Native plugin API calls bypass this phase.
 
-`before_request` hooks run for registered endpoints in plugin registration order. `ReplaceBody` replaces the request body and continues the hook chain. `InjectSession` supplies a session for the remaining hooks and route handler. `Respond` skips the endpoint and all after hooks. Unmatched paths and methods return an empty HTTP 404 after `on_http_request`, without endpoint hooks.
+`before_request` hooks run for registered endpoints in plugin registration order. `ReplaceBody` replaces the request body and continues the hook chain. `InjectSession` supplies a session for the remaining hooks and route handler. `Respond` skips the endpoint and all after hooks. Unmatched paths and methods return an empty HTTP 404 after `on_http_request`, without endpoint hooks. HTTP response hooks still run.
+
+`on_http_response(&AuthRequest, &mut AuthResponse, &AuthContext<S>) -> AuthResult<Option<AuthResponse>>` runs after HTTP routing, including route misses and body-decoding errors. Hooks run in registration order and may mutate the response. Returning `Some(response)` replaces the response and stops the chain. Disabled paths, early HTTP request responses, and native calls bypass this hook. `WithCallbacks` forwards this hook to its wrapped plugin.
 
 | Failure phase | HTTP behavior | Native behavior |
 |---------------|---------------|-----------------|

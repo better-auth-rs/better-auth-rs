@@ -535,3 +535,90 @@ async fn ephemeral_delete_snapshot_projection_error_does_not_cancel_the_batch_wr
     reject.store(false, Ordering::SeqCst);
     assert!(store.get_session(session.token()).await.unwrap().is_none());
 }
+
+async fn check_token_batch<S: AuthSchema>(
+    store: Arc<dyn AuthStore<S>>,
+    hooks: Hooks,
+    preserve: bool,
+) {
+    let user = store
+        .create_user(CreateUser::new().with_email("token-batch@example.com"))
+        .await
+        .unwrap();
+    let first = store.create_session(session(&user.id())).await.unwrap();
+    let second = store.create_session(session(&user.id())).await.unwrap();
+    let untouched = store.create_session(session(&user.id())).await.unwrap();
+    let tokens = vec![
+        first.token().to_owned(),
+        first.token().to_owned(),
+        second.token().to_owned(),
+        "missing-token".into(),
+    ];
+    hooks.events.lock().unwrap().clear();
+    let result = if preserve {
+        store.end_sessions(&tokens).await
+    } else {
+        store.delete_sessions(&tokens).await
+    };
+    assert!(
+        store
+            .get_session(untouched.token())
+            .await
+            .unwrap()
+            .is_some()
+    );
+    if hooks.cancel_second {
+        result.unwrap();
+        assert_eq!(
+            *hooks.events.lock().unwrap(),
+            ["session.before", "session.before"]
+        );
+        assert!(store.get_session(first.token()).await.unwrap().is_some());
+        assert!(store.get_session(second.token()).await.unwrap().is_some());
+    } else {
+        assert!(matches!(result, Err(AuthError::Internal(message)) if message == "session.after"));
+        assert_eq!(
+            *hooks.events.lock().unwrap(),
+            ["session.before", "session.before", "session.after"]
+        );
+        for token in [first.token(), second.token()] {
+            let row = store.get_session(token).await.unwrap();
+            if preserve {
+                assert!(row.is_none_or(|row| row.expires_at() <= Utc::now()));
+            } else {
+                assert!(row.is_none());
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn token_batches_deduplicate_database_hooks_and_keep_cancel_and_after_error_write_boundaries()
+{
+    for preserve in [false, true] {
+        for cancel_second in [false, true] {
+            let hooks = Hooks {
+                cancel_second,
+                fail_after: Some("session.after"),
+                ..Default::default()
+            };
+            check_token_batch(
+                sqlite(Arc::new(AuthConfig::default()), hooks.clone()).await,
+                hooks,
+                preserve,
+            )
+            .await;
+            let hooks = Hooks {
+                cancel_second,
+                fail_after: Some("session.after"),
+                ..Default::default()
+            };
+            check_token_batch(
+                ephemeral(Arc::new(AuthConfig::default()), hooks.clone()),
+                hooks,
+                preserve,
+            )
+            .await;
+        }
+    }
+}

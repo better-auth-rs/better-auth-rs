@@ -25,6 +25,8 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 
 With a secondary backend, sessions use the cache by default. Set `session.store_session_in_database` to retain database rows. A missing cache entry falls back to the database only when this setting is enabled and `preserve_session_in_database` is disabled. Malformed cached session JSON returns no session even when database fallback is enabled.
 
+For `AuthEntity` session models, `field_name` accepts the Rust field name, its camel-case name, or its Serde serialization name. The same mapping applies to database writes, response projection and secondary-storage hydration. The cache stores logical field names. Handwritten session models with storage aliases must implement `AuthSession::serialized_field_name`.
+
 Each session token stores a session and user snapshot. `active-sessions-<userId>` stores the token list and expiration times. Listing sessions reads this index and the cached records. Updating a user through the authentication store refreshes cached user snapshots. A direct database update does not refresh the cache.
 
 Set `session.preserve_session_in_database` with database session storage to retain ended rows. Revocation removes the cache entry and expires live database rows. The database update also applies `updatedAt` and configured `on_update` fields. Expired rows keep their dates and receive no delete hooks. Database fallback remains disabled, so a retained row cannot restore a revoked session. Repeated revocation does not repeat delete hooks.

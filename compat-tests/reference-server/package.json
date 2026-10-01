@@ -13,5 +13,8 @@
     "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.4.0",
     "better-auth": "1.7.6"
+  },
+  "devDependencies": {
+    "@opentelemetry/api": "^1.9.1"
   }
 }

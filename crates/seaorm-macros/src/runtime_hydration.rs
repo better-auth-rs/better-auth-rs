@@ -7,6 +7,7 @@ pub(super) fn generate(
     fields: &FieldsNamed,
     known: &[&str],
     core: &TokenStream,
+    session: bool,
 ) -> syn::Result<TokenStream> {
     let rule = super::serde_serialized_name(&input.attrs, "rename_all")?
         .map(|rule| {
@@ -15,6 +16,7 @@ pub(super) fn generate(
         })
         .transpose()?;
     let mut values = Vec::new();
+    let mut serialized_names = Vec::new();
     for field in &fields.named {
         let Some(ident) = &field.ident else { continue };
         let rust_name = ident.to_string();
@@ -26,6 +28,10 @@ pub(super) fn generate(
                     .map_or_else(|| rust_name.clone(), |rule| rule.apply_to_field(&rust_name))
             })
         };
+        if !known.contains(&rust_name.as_str()) {
+            let aliases = field_aliases(&rust_name, &name);
+            serialized_names.push(quote!(#(#aliases)|* => #name,));
+        }
         let mut default = None;
         for attr in field
             .attrs
@@ -61,10 +67,29 @@ pub(super) fn generate(
         };
         values.push(quote!(#ident: #value));
     }
+    let serialized_names = session.then(|| {
+        quote! {
+            fn serialized_field_name(name: &str) -> &str {
+                match name { #(#serialized_names)* _ => name }
+            }
+        }
+    });
     Ok(quote! {
+        #serialized_names
         const SUPPORTS_RUNTIME_HYDRATION: bool = true;
         fn from_runtime_fields(mut fields: #core::serde_json::Map<String, #core::serde_json::Value>) -> #core::AuthResult<Self> {
             Ok(Self { #(#values,)* })
         }
     })
+}
+
+pub(super) fn field_aliases(rust_name: &str, serialized: &str) -> Vec<String> {
+    let mut aliases = vec![
+        rust_name.to_owned(),
+        serialized.to_owned(),
+        serde_rename_rule::RenameRule::CamelCase.apply_to_field(rust_name),
+    ];
+    aliases.sort();
+    aliases.dedup();
+    aliases
 }

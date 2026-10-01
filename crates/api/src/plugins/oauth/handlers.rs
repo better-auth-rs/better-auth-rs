@@ -238,43 +238,6 @@ pub(crate) fn validate_redirect_target(
     }
 }
 
-pub(super) fn build_redirect_url(
-    base_url: &str,
-    callback_url: Option<&str>,
-    params: &[(&str, &str)],
-) -> AuthResult<String> {
-    if callback_url.is_some_and(|target| target.starts_with("//") || target.starts_with("/\\")) {
-        return Err(AuthError::bad_request("Invalid callbackURL"));
-    }
-    let base = url::Url::parse(base_url)
-        .map_err(|error| AuthError::internal(format!("Invalid base URL: {error}")))?;
-    let mut url = if let Some(callback_url) = callback_url {
-        base.join(callback_url)
-            .map_err(|error| AuthError::bad_request(format!("Invalid callbackURL: {error}")))?
-    } else {
-        base.join("/error")
-            .map_err(|error| AuthError::internal(format!("Invalid error URL: {error}")))?
-    };
-    if !params.is_empty() {
-        let appended = url::form_urlencoded::Serializer::new(String::new())
-            .extend_pairs(params.iter().copied())
-            .finish();
-        let query = match url.query() {
-            Some(existing) if !existing.is_empty() => {
-                let separator = if existing.ends_with('&') { "" } else { "&" };
-                format!("{existing}{separator}{appended}")
-            }
-            _ => appended,
-        };
-        url.set_query(Some(&query));
-    }
-    if callback_url.is_some_and(|target| target.starts_with('/')) {
-        Ok(url[url::Position::BeforePath..].to_string())
-    } else {
-        Ok(url.to_string())
-    }
-}
-
 pub(super) fn auth_base_url(ctx: &AuthContext<impl better_auth_core::AuthSchema>) -> String {
     ctx.base_url().trim_end_matches('/').to_owned()
 }
@@ -312,7 +275,7 @@ pub(super) struct FlowStartRequest<'a> {
     pub(super) additional_params: Option<&'a IndexMap<String, String>>,
     pub(super) login_hint: Option<&'a str>,
     pub(super) request_sign_up: Option<bool>,
-    pub(super) additional_data: serde_json::Map<String, serde_json::Value>,
+    pub(super) additional_data: super::state_json::StateExtras,
     pub(super) link: Option<OAuthStateLink>,
     pub(super) disable_redirect: bool,
 }
@@ -389,6 +352,7 @@ pub(super) async fn complete_link_social(
             .await
             .map_err(|error| error.to_string())?;
 
+        apply_link_user_info(&link.user_id, user_info, ctx).await;
         return Ok(());
     }
 
@@ -417,6 +381,7 @@ pub(super) async fn complete_link_social(
         .await
         .map_err(|_| "unable_to_link_account".to_string())?;
 
+    apply_link_user_info(&link.user_id, user_info, ctx).await;
     Ok(())
 }
 
@@ -770,7 +735,7 @@ async fn social_sign_in_core(
             additional_params: body.additional_params.as_ref(),
             login_hint: body.login_hint.as_deref(),
             request_sign_up: body.request_sign_up,
-            additional_data: filter_additional_state_data(body.additional_data.clone()),
+            additional_data: filter_additional_state_data(body.additional_data.clone())?,
             link: None,
             disable_redirect: body.disable_redirect.unwrap_or(false),
         },
@@ -825,7 +790,7 @@ async fn link_social_core(
             additional_params: body.additional_params.as_ref(),
             login_hint: body.login_hint.as_deref(),
             request_sign_up: body.request_sign_up,
-            additional_data: filter_additional_state_data(body.additional_data.clone()),
+            additional_data: filter_additional_state_data(body.additional_data.clone())?,
             link: Some(OAuthStateLink {
                 email: email.to_lowercase(),
                 user_id: session.user_id().to_string(),
@@ -854,9 +819,7 @@ pub(super) fn prepare_oauth_flow(request: &FlowStartRequest<'_>) -> PreparedOAut
         request.request_sign_up,
         request.additional_data.clone(),
     );
-    let _ = payload
-        .additional_data
-        .insert("oauthState".into(), state.clone().into());
+    payload.oauth_state = Some(state.clone());
     if let Some(user_id) = &request.anonymous_user_id {
         let _ = payload
             .server_context

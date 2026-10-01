@@ -229,6 +229,18 @@ impl<S: AuthSchema> AuthPlugin<S> for LastLoginMethodPlugin<S> {
         Vec::new()
     }
 
+    fn openapi(&self) -> AuthResult<better_auth_core::openapi::OpenApiPluginMetadata> {
+        let metadata = better_auth_core::openapi::OpenApiPluginMetadata::from_routes(
+            <Self as better_auth_core::AuthPlugin<S>>::name(self),
+            <Self as better_auth_core::AuthPlugin<S>>::routes(self),
+        )?;
+        Ok(if self.config.store_in_database {
+            metadata
+        } else {
+            metadata.remove_model("user")
+        })
+    }
+
     async fn on_init(&self, context: &mut AuthInitContext<S>) -> AuthResult<()> {
         if self.config.store_in_database {
             context.register_user_fields(UserConfig {

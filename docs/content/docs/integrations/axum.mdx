@@ -20,6 +20,8 @@ serde_json = "1"
 
 ## Mounting Auth Routes
 
+Axum nest mounts supply the route relative to the mount prefix. The integration preserves the original transport URL separately for callbacks and request context. Trailing-slash routing and disabled paths use the relative path even when the mount differs from the configured base path.
+
 Use `.axum_router()` when `Arc<BetterAuth<YourSchema>>` is the router state:
 
 ```rust

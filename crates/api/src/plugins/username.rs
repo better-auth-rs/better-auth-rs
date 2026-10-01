@@ -81,6 +81,18 @@ impl<S: AuthSchema> AuthPlugin<S> for UsernamePlugin {
             AuthRoute::post("/is-username-available", "is_username_available"),
         ]
     }
+    fn openapi(&self) -> AuthResult<better_auth_core::openapi::OpenApiPluginMetadata> {
+        let mut metadata = better_auth_core::openapi::OpenApiPluginMetadata::from_routes(
+            <Self as better_auth_core::AuthPlugin<S>>::name(self),
+            <Self as better_auth_core::AuthPlugin<S>>::routes(self),
+        )?
+        .model("user", &self.fields());
+        if !self.config.display_username {
+            metadata = metadata.remove_field("user", "displayUsername");
+        }
+        Ok(metadata)
+    }
+
     async fn on_init(&self, context: &mut AuthInitContext<S>) -> AuthResult<()> {
         let required = if self.config.display_username {
             &["username", "display_username"][..]

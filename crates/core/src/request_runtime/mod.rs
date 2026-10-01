@@ -7,7 +7,7 @@ mod url;
 
 pub use config::{BaseUrl, BaseUrlProtocol, DynamicBaseUrl, TrustedValues, TrustedValuesResolver};
 pub use cookies::{CookieSettings, ResolvedCookie};
-pub(crate) use scope::Identity as RuntimeIdentity;
+pub(crate) use scope::{Identity as RuntimeIdentity, spawn as spawn_with_request_context};
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -151,6 +151,10 @@ impl<S: AuthSchema> AuthContext<S> {
             || self.config.trusted_origins.as_static().unwrap_or(&[]),
             |values| values.trusted_origins.as_slice(),
         )
+    }
+
+    pub(crate) fn is_production(&self) -> AuthResult<bool> {
+        Ok(self.runtime_values()?.is_production)
     }
 
     pub fn trusted_providers(&self) -> &[String] {

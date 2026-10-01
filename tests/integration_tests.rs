@@ -373,7 +373,9 @@ async fn test_ok_endpoint() {
 async fn test_error_endpoint() {
     let auth = create_test_auth_memory().await;
 
-    let (status, response_data) = send_request(&auth, get_request("/error")).await;
+    let request =
+        get_request("/error").with_url("http://localhost:3000/api/auth/error".parse().unwrap());
+    let (status, response_data) = send_request(&auth, request).await;
     assert_eq!(status, 200);
     let html = response_data.as_str().unwrap_or_default();
     let text = html_text_content(html);

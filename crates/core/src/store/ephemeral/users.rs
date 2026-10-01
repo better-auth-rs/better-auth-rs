@@ -71,7 +71,7 @@ impl EphemeralStore {
                 if let Some(fields) = &mut user.visible_fields {
                     let _ = fields.insert("image".into());
                 }
-                user.image = Some(image);
+                user.image = image;
             }
             if let Some(email_verified) = update.email_verified {
                 user.email_verified = email_verified;
@@ -210,7 +210,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             name: create_user.name,
             email: create_user.email,
             email_verified: create_user.email_verified.unwrap_or(false),
-            image: create_user.image,
+            image: create_user.image.flatten(),
             created_at: now,
             updated_at: now,
             is_anonymous: create_user.is_anonymous,

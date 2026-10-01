@@ -73,7 +73,7 @@ async fn id_token_profile_is_preferred_and_mapping_cannot_change_account_subject
     assert_eq!(response.user.name.as_deref(), Some("Mapped name"));
     assert!(response.user.email_verified);
     assert_eq!(
-        response.user.image.as_deref(),
+        response.user.image.as_ref().and_then(Option::as_deref),
         Some("https://example.com/image.png")
     );
     assert_eq!(response.data["email"], "original@example.com");
@@ -100,7 +100,7 @@ impl OAuthProfileMapper for ClearProfileFields {
 }
 
 #[tokio::test]
-async fn mapped_null_clears_provider_name_and_image_without_changing_raw_profile() {
+async fn mapped_null_omits_image_without_changing_raw_profile() {
     let provider = provider(
         GenericOAuthConfig {
             map_profile_to_user: Some(Arc::new(ClearProfileFields)),
@@ -228,7 +228,7 @@ async fn id_token_without_email_falls_back_to_userinfo_with_access_token() {
     assert_eq!(response.user.email, "userinfo@example.com");
     assert!(!response.user.email_verified);
     assert_eq!(
-        response.user.image.as_deref(),
+        response.user.image.as_ref().and_then(Option::as_deref),
         Some("https://example.com/picture.png")
     );
     task.await.unwrap();

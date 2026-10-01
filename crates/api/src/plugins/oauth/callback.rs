@@ -1,3 +1,4 @@
+use better_auth_core::utils::url::append_query_params;
 use std::collections::HashMap;
 
 use better_auth_core::entity::AuthVerification;
@@ -5,9 +6,8 @@ use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthRe
 
 use super::handlers::{
     FlowStartRequest, attach_cookie_state_payload, attach_state_cookie, auth_base_url,
-    build_redirect_url, complete_link_social, create_account_cookie_headers,
-    fetch_user_info_from_provider, initiate_oauth_flow_core, parse_callback_user_payload,
-    redirect_response,
+    complete_link_social, create_account_cookie_headers, fetch_user_info_from_provider,
+    initiate_oauth_flow_core, parse_callback_user_payload, redirect_response,
 };
 use super::provider_tokens::validate_authorization_code_via_provider;
 use super::providers::OAuthUserInfoRequest;
@@ -24,7 +24,13 @@ pub(super) async fn handle_callback(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let default_error_url = format!("{}/error", auth_base_url(ctx));
+    let default_error_url = ctx
+        .config
+        .api_error
+        .error_url
+        .clone()
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| format!("{}/error", auth_base_url(ctx)));
     let meta = better_auth_core::RequestMeta::from_request_with_config(
         req,
         &ctx.config.advanced.ip_address,
@@ -127,14 +133,10 @@ pub(super) async fn handle_callback(
                         }
                     };
                 }
-                let separator = if default_error_url.contains('?') {
-                    '&'
-                } else {
-                    '?'
-                };
-                return Ok(redirect_response(&format!(
-                    "{default_error_url}{separator}error=state_not_found"
-                )));
+                return Ok(redirect_response(&append_query_params(
+                    &default_error_url,
+                    "error=state_not_found",
+                )?));
             }
         };
     let payload = match ctx.config.account.store_state_strategy() {
@@ -146,24 +148,26 @@ pub(super) async fn handle_callback(
             {
                 Some(verification) => verification,
                 None => {
-                    return Ok(redirect_response(&format!(
-                        "{default_error_url}?error=state_mismatch"
-                    )));
+                    return Ok(redirect_response(&append_query_params(
+                        &default_error_url,
+                        "error=state_mismatch",
+                    )?));
                 }
             };
 
             let payload = match OAuthStatePayload::parse(verification.value()) {
                 Ok(payload) => payload,
                 Err(_) => {
-                    return Ok(redirect_response(&format!(
-                        "{default_error_url}?error=internal_server_error"
-                    )));
+                    return Ok(redirect_response(&append_query_params(
+                        &default_error_url,
+                        "error=internal_server_error",
+                    )?));
                 }
             };
             let bound_state_matches = payload
-                .additional_data
-                .get("oauthState")
-                .is_none_or(|value| value.as_str() == Some(state_param.as_str()));
+                .oauth_state
+                .as_deref()
+                .is_none_or(|value| value == state_param);
             let cookie_matches = ctx.config.account.skip_state_cookie_check
                 || get_cookie(req, &state_cookie_name(&ctx.config))
                     .and_then(|value| {
@@ -171,10 +175,9 @@ pub(super) async fn handle_callback(
                     })
                     .is_some_and(|value| value == state_param);
             if !bound_state_matches || !cookie_matches {
-                return Ok(redirect_response(&build_redirect_url(
-                    &auth_base_url(ctx),
-                    payload.error_url.as_deref().or(Some(&default_error_url)),
-                    &[("error", "state_mismatch")],
+                return Ok(redirect_response(&append_query_params(
+                    payload.error_url.as_deref().unwrap_or(&default_error_url),
+                    "error=state_mismatch",
                 )?));
             }
             ctx.database
@@ -184,29 +187,26 @@ pub(super) async fn handle_callback(
         }
         better_auth_core::OAuthStateStrategy::Cookie => {
             let Some(cookie_value) = get_cookie(req, &state_cookie_name(&ctx.config)) else {
-                return Ok(redirect_response(&format!(
-                    "{default_error_url}?error=state_mismatch"
-                )));
+                return Ok(redirect_response(&append_query_params(
+                    &default_error_url,
+                    "error=state_mismatch",
+                )?));
             };
             match decode_cookie_state_value(ctx.config.encryption_secret(), &cookie_value) {
                 Ok(payload) => {
-                    if !payload
-                        .additional_data
-                        .get("oauthState")
-                        .is_some_and(|value| value.as_str() == Some(state_param.as_str()))
-                    {
-                        return Ok(redirect_response(&build_redirect_url(
-                            &auth_base_url(ctx),
-                            payload.error_url.as_deref().or(Some(&default_error_url)),
-                            &[("error", "state_mismatch")],
+                    if payload.oauth_state.as_deref() != Some(state_param.as_str()) {
+                        return Ok(redirect_response(&append_query_params(
+                            payload.error_url.as_deref().unwrap_or(&default_error_url),
+                            "error=state_mismatch",
                         )?));
                     }
                     payload
                 }
                 Err(_) => {
-                    return Ok(redirect_response(&format!(
-                        "{default_error_url}?error=state_invalid"
-                    )));
+                    return Ok(redirect_response(&append_query_params(
+                        &default_error_url,
+                        "error=state_invalid",
+                    )?));
                 }
             }
         }
@@ -221,39 +221,25 @@ pub(super) async fn handle_callback(
         .clone()
         .unwrap_or_else(|| default_error_url.clone());
 
-    let redirect_on_error = |error_code: &str, description: Option<&str>| {
-        let mut response = redirect_response(
-            &build_redirect_url(
-                &auth_base_url(ctx),
-                Some(&error_url),
-                &[("error", error_code)],
+    let redirect_on_error =
+        |error_code: &str, description: Option<&str>| -> AuthResult<AuthResponse> {
+            let mut params = url::form_urlencoded::Serializer::new(String::new());
+            let _ = params.append_pair("error", error_code);
+            if let Some(description) = description.filter(|value| !value.is_empty()) {
+                let _ = params.append_pair("error_description", description);
+            }
+            Ok(
+                redirect_response(&append_query_params(&error_url, &params.finish())?)
+                    .with_appended_header("Set-Cookie", clear_state_cookie.clone()),
             )
-            .unwrap_or_else(|_| format!("{default_error_url}?error={error_code}")),
-        )
-        .with_appended_header("Set-Cookie", clear_state_cookie.clone());
-        if let Some(description) = description {
-            response = redirect_response(
-                &build_redirect_url(
-                    &auth_base_url(ctx),
-                    Some(&error_url),
-                    &[("error", error_code), ("error_description", description)],
-                )
-                .unwrap_or_else(|_| format!("{default_error_url}?error={error_code}")),
-            )
-            .with_appended_header("Set-Cookie", clear_state_cookie.clone());
-        }
-        response
-    };
+        };
 
     if payload.is_expired() {
-        return Ok(redirect_on_error("state_mismatch", None));
+        return redirect_on_error("state_mismatch", None);
     }
 
     if let Some(error) = error.as_deref().filter(|error| !error.is_empty()) {
-        return Ok(redirect_on_error(
-            error,
-            merged.get("error_description").map(String::as_str),
-        ));
+        return redirect_on_error(error, merged.get("error_description").map(String::as_str));
     }
 
     if let Some(user_id) = payload.server_context.get("anonymousUserId") {
@@ -261,11 +247,11 @@ pub(super) async fn handle_callback(
     }
 
     let Some(code) = merged.get("code").filter(|code| !code.is_empty()).cloned() else {
-        return Ok(redirect_on_error("no_code", None));
+        return redirect_on_error("no_code", None);
     };
 
     let Some(provider) = config.providers.get(provider_name) else {
-        return Ok(redirect_on_error("oauth_provider_not_found", None));
+        return redirect_on_error("oauth_provider_not_found", None);
     };
 
     if let (Some(received), Some(expected)) = (
@@ -273,10 +259,10 @@ pub(super) async fn handle_callback(
         provider.issuer(),
     ) && received != expected
     {
-        return Ok(redirect_on_error("issuer_mismatch", None));
+        return redirect_on_error("issuer_mismatch", None);
     }
     if provider.requires_nonce() && payload.id_token_nonce.as_ref().is_none_or(String::is_empty) {
-        return Ok(redirect_on_error("nonce_binding_missing", None));
+        return redirect_on_error("nonce_binding_missing", None);
     }
 
     let tokens = match validate_authorization_code_via_provider(
@@ -289,7 +275,7 @@ pub(super) async fn handle_callback(
     .await
     {
         Ok(tokens) => tokens,
-        Err(_) => return Ok(redirect_on_error("invalid_code", None)),
+        Err(_) => return redirect_on_error("invalid_code", None),
     };
 
     let user_info = match fetch_user_info_from_provider(
@@ -310,7 +296,7 @@ pub(super) async fn handle_callback(
     .await
     {
         Ok(response) => response,
-        Err(_) => return Ok(redirect_on_error("unable_to_get_user_info", None)),
+        Err(_) => return redirect_on_error("unable_to_get_user_info", None),
     };
 
     let callback_body = if req.method() == &better_auth_core::HttpMethod::Post {
@@ -336,7 +322,7 @@ pub(super) async fn handle_callback(
         .await
         {
             let (code, description) = error.redirect_parts()?;
-            return Ok(redirect_on_error(&code, description.as_deref()));
+            return redirect_on_error(&code, description.as_deref());
         }
 
         return Ok(redirect_response(&payload.callback_url)
@@ -367,7 +353,7 @@ pub(super) async fn handle_callback(
         Ok(outcome) => outcome,
         Err(error) => {
             let (code, description) = error.redirect_parts()?;
-            return Ok(redirect_on_error(&code, description.as_deref()));
+            return redirect_on_error(&code, description.as_deref());
         }
     };
 

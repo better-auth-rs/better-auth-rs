@@ -1,50 +1,56 @@
 ---
 title: OpenAPI
-description: Route inventory in OpenAPI format.
+description: Generate an instance-specific OpenAPI schema and Scalar reference page.
 ---
 
-Better Auth RS generates an OpenAPI 3.1 route inventory from its registered plugins and routes.
+Better Auth RS generates the Better Auth 1.7.6 OpenAPI 3.1.1 document from the authentication instance's configuration. The document includes request bodies, parameters, response metadata, model fields, security schemes, and error responses.
 
-There is no public HTTP route for the spec. The internal test harness mounts a private endpoint at `GET /auth/__test/openapi.json`, but production integrations should use the programmatic API.
+## HTTP reference
 
-The docs site consumes a committed schema artifact at `docs/better-auth.json`.
-That artifact is generated from the Rust runtime's v1 docs profile and then
-split into per-tag pages for Fumadocs.
-
-## Programmatic Access
-
-Generate the spec without a web server:
-
-This example assumes you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
+Register `OpenApiPlugin` to expose `GET /open-api/generate-schema` and `GET /reference` under your authentication base path:
 
 ```rust
+use better_auth::plugins::{OpenApiConfig, OpenApiPlugin};
+
 let auth = BetterAuth::<AppAuthSchema>::new(config)
     .store(store)
     .plugin(EmailPasswordPlugin::new())
+    .plugin(OpenApiPlugin::with_config(OpenApiConfig {
+        path: "/reference".into(),
+        theme: Some("moon".into()),
+        nonce: Some("application-csp-nonce".into()),
+        ..Default::default()
+    }))
     .build()
     .await?;
-
-let spec = auth.openapi_spec();
-let json = serde_json::to_string_pretty(&spec)?;
-println!("{}", json);
 ```
 
-## Spec Contents
+The reference page uses Scalar. `disable_default_reference: true` keeps the reference endpoint registered and makes the endpoint return an empty 404 response. The schema endpoint remains available.
 
-The generated specification includes:
+The nonce applies to the two executable scripts. Configure the application's Content Security Policy separately. Treat the theme and nonce as trusted application configuration.
 
-- **Info**: Title, version, and description
-- **Paths**: All registered routes with HTTP methods
-- **Tags**: Grouped by plugin name
+This example assumes an existing `AppAuthSchema` and store. See the [Axum integration guide](/docs/integrations/axum) for a complete application.
 
-Each route entry includes the path, method, operation ID, summary, and plugin tag. Responses contain a generic success description. Request bodies, response schemas, parameters, authentication schemes, and complete error responses are not generated.
+## Programmatic access
 
-## Using with API Tools
+Generate the document from the initialized authentication instance:
 
-The OpenAPI spec can be imported into tools like:
+```rust
+let spec = auth.openapi_spec()?;
+let json = spec.to_json()?;
+```
 
-- Swagger UI
-- Postman
-- Insomnia
+Use `call_endpoint` with `EndpointInput.request` to resolve a dynamic base URL for a native schema request. The HTTP schema and reference endpoints resolve the base URL from each request. Concurrent tenant requests do not change the instance's initial context.
 
-The inventory supports route browsing. It does not contain enough type information to generate a typed client SDK.
+## Document behavior
+
+- Core endpoint metadata is included even when a feature is disabled. The endpoint's handler enforces the feature setting.
+- `disabled_paths` removes matching paths from the document.
+- Configured plugins contribute their endpoint metadata and logical models. OpenAPI plugin routes and server-only endpoints are omitted.
+- Physical table and column mappings do not rename logical model or field keys.
+- Additional field policies control documented properties, required fields, and read-only flags. Schema generation does not call default factories, transforms, or validators.
+- User input properties are merged into the signup and update-user request bodies. The model projection and input projection retain their separate policy precedence.
+
+Custom plugins can attach `OpenApiRouteMetadata` with `AuthRoute::openapi`. Return custom model metadata from `AuthPlugin::openapi`. Metadata describes the endpoint; the endpoint retains responsibility for input validation.
+
+The docs site consumes `docs/better-auth.json`, which is generated from the Rust docs profile. The runtime document uses the configuration of the serving authentication instance.

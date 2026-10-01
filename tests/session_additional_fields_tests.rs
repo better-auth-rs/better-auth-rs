@@ -9,8 +9,10 @@ use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
 use better_auth::prelude::{AuthRequest, HttpMethod};
 use better_auth::seaorm::sea_orm::{self, ConnectionTrait, Schema, entity::prelude::*};
 use better_auth::seaorm::{AuthEntity, Database, SeaOrmStore};
+use better_auth::store::{MemoryCacheAdapter, SecondaryStorage};
 use better_auth::{AuthConfig, AuthSchema, BetterAuth};
 use serde_json::{Value, json};
+use std::sync::Arc;
 
 mod session {
     use super::*;
@@ -76,6 +78,19 @@ fn request(path: &str, cookie: &str, body: Option<Value>) -> AuthRequest {
 // Rust-specific surface: application-owned SeaORM fields must preserve the upstream update-session input and output contract.
 #[tokio::test]
 async fn update_session_persists_only_allowed_fields_and_returns_the_configured_shape() {
+    check_session_fields("storedLabel", None).await;
+}
+
+#[tokio::test]
+async fn session_storage_aliases_survive_database_and_secondary_round_trips() {
+    for alias in ["display_label", "displayLabel", "storedLabel"] {
+        for database in [false, true] {
+            check_session_fields(alias, Some(database)).await;
+        }
+    }
+}
+
+async fn check_session_fields(alias: &str, secondary: Option<bool>) {
     let db = Database::connect("sqlite::memory:").await.unwrap();
     better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&db)
         .await
@@ -90,7 +105,7 @@ async fn update_session_persists_only_allowed_fields_and_returns_the_configured_
     let _ = config.session.additional_fields.insert(
         "label".into(),
         SessionFieldConfig {
-            field_name: Some("storedLabel".into()),
+            field_name: Some(alias.into()),
             ..Default::default()
         },
     );
@@ -107,8 +122,14 @@ async fn update_session_persists_only_allowed_fields_and_returns_the_configured_
         .session
         .additional_fields
         .insert("deviceColor".into(), SessionFieldConfig::default());
-    let auth = BetterAuth::<AppSchema>::new(config.clone())
-        .store(SeaOrmStore::<AppSchema>::new(config, db.clone()))
+    config.session.store_session_in_database = secondary.unwrap_or(true);
+    let cache = Arc::new(MemoryCacheAdapter::new());
+    let mut builder = BetterAuth::<AppSchema>::new(config.clone())
+        .store(SeaOrmStore::<AppSchema>::new(config, db.clone()));
+    if secondary.is_some() {
+        builder = builder.secondary_storage(cache.clone());
+    }
+    let auth = builder
         .plugin(EmailPasswordPlugin::new().enable_signup(true))
         .plugin(SessionManagementPlugin::new())
         .build()
@@ -141,10 +162,21 @@ async fn update_session_persists_only_allowed_fields_and_returns_the_configured_
     assert_eq!(body["session"]["label"], "Work laptop");
     assert_ne!(body["session"]["token"], "attacker");
     assert!(body["session"].get("internalNote").is_none());
-    let stored = session::Entity::find().one(&db).await.unwrap().unwrap();
-    assert_eq!(stored.display_label.as_deref(), Some("Work laptop"));
-    assert_eq!(stored.device_color.as_deref(), Some("silver"));
-    assert!(stored.internal_note.is_none());
+    if secondary != Some(false) {
+        let stored = session::Entity::find().one(&db).await.unwrap().unwrap();
+        assert_eq!(stored.display_label.as_deref(), Some("Work laptop"));
+        assert_eq!(stored.device_color.as_deref(), Some("silver"));
+        assert!(stored.internal_note.is_none());
+    } else {
+        assert!(session::Entity::find().one(&db).await.unwrap().is_none());
+    }
+    let token = body["session"]["token"].as_str().unwrap().to_owned();
+    if secondary.is_some() {
+        let cached = cache.get(&token).await.unwrap().unwrap();
+        let cached: Value = serde_json::from_str(cached.as_str().unwrap()).unwrap();
+        assert_eq!(cached["session"]["label"], "Work laptop");
+        assert!(cached["session"].get(alias).is_none());
+    }
     let response = auth
         .handle_request(request("/get-session", cookie, None))
         .await
@@ -168,8 +200,10 @@ async fn update_session_persists_only_allowed_fields_and_returns_the_configured_
         let body: Value = serde_json::from_slice(&response.body).unwrap();
         assert_eq!(body.get("code").and_then(Value::as_str), code);
     }
-    let stored = session::Entity::find().one(&db).await.unwrap().unwrap();
-    assert_eq!(stored.display_label.as_deref(), Some("Work laptop"));
+    if secondary != Some(false) {
+        let stored = session::Entity::find().one(&db).await.unwrap().unwrap();
+        assert_eq!(stored.display_label.as_deref(), Some("Work laptop"));
+    }
     let response = auth
         .handle_request(request(
             "/update-session",
@@ -179,4 +213,26 @@ async fn update_session_persists_only_allowed_fields_and_returns_the_configured_
         .await
         .unwrap();
     assert_eq!(response.status, 401);
+    let response = auth
+        .handle_request(request(
+            "/update-session",
+            cookie,
+            Some(json!({"label":null})),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status, 200);
+    let cleared: Value = serde_json::from_slice(&response.body).unwrap();
+    assert_eq!(cleared["session"].get("label"), Some(&Value::Null));
+    let response = auth
+        .handle_request(request("/get-session", cookie, None))
+        .await
+        .unwrap();
+    let cleared: Value = serde_json::from_slice(&response.body).unwrap();
+    assert_eq!(cleared["session"].get("label"), Some(&Value::Null));
+    assert_eq!(cleared["session"]["deviceColor"], "silver");
+    if secondary != Some(false) {
+        let stored = session::Entity::find().one(&db).await.unwrap().unwrap();
+        assert!(stored.display_label.is_none());
+    }
 }

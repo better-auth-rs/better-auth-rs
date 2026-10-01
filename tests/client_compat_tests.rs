@@ -203,6 +203,16 @@ fn dynamic_environment_case(profile: &str) -> Option<serde_json::Value> {
 }
 
 fn proxy_environment<'a>(command: &'a mut Command, profile: &str, port: u16) -> &'a mut Command {
+    if matches!(profile, "api-error" | "api-error-production") {
+        let _ = command.env(
+            "NODE_ENV",
+            if profile == "api-error-production" {
+                "production"
+            } else {
+                "development"
+            },
+        );
+    }
     for key in [
         "VERCEL_URL",
         "NETLIFY_URL",
@@ -434,6 +444,11 @@ async fn configuration_client_compat() {
     let selected = std::env::var("COMPAT_TEST_PROFILE").ok();
     let mut matched = false;
     for profile in [
+        "api-error",
+        "api-error-production",
+        "trailing-slashes-default",
+        "trailing-slashes-true",
+        "trailing-slashes-false",
         "organization-callbacks",
         "organization-custom-team",
         "organization-extended",
@@ -593,6 +608,7 @@ async fn configuration_client_compat() {
         "jwt-remote",
         "jwt-cache",
         "jwt-adapter",
+        "openapi",
         "database-lifecycle",
         "database-lifecycle-cache",
         "database-lifecycle-database",
@@ -640,6 +656,10 @@ async fn configuration_client_compat() {
             run_client_compat_profile(&["./tests/config/admin-options/"], profile).await;
         } else if profile.starts_with("last-login-") {
             run_client_compat_profile(&["./tests/config/last-login/"], profile).await;
+        } else if matches!(profile, "api-error" | "api-error-production") {
+            run_client_compat_profile(&["./tests/config/api-error/"], profile).await;
+        } else if profile.starts_with("trailing-slashes-") {
+            run_client_compat_profile(&["./tests/config/trailing-slashes/"], profile).await;
         } else if profile.starts_with("username-") {
             run_client_compat_profile(&["./tests/config/username-options/"], profile).await;
         } else if profile.starts_with("stateless-") {

@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { createDynamicContextFixture } from "./dynamic-context";
+import { runOpenApi } from "./openapi";
 import { createOAuthPopupFixture } from "./oauth-popup";
 import { mappedPluginSchema, mappedPluginExtras } from "./plugin-schema";
 import { createOrganizationCallbacks } from "./organization-callbacks";
@@ -20,6 +21,8 @@ import { createAdminOptionsFixture } from "./admin-options";
 import { createStatelessFixture } from "./stateless";
 import { createLastLoginFixture } from "./last-login";
 import { createUsernameFixture } from "./username-options";
+import { createTrailingSlashesFixture } from "./trailing-slashes";
+import { createApiErrorFixture } from "./api-error";
 import { createDispatchErrorsFixture } from "./dispatch-errors";
 import { createIdentityContextFixture } from "./identity-context";
 import { createRateLimitFixture } from "./rate-limit-options";
@@ -122,6 +125,11 @@ const statelessFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("stateles
 const lastLoginFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("last-login-")
   ? await createLastLoginFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`)
   : undefined;
+const apiErrorFixture = ["api-error", "api-error-production"].includes(process.env.COMPAT_PROFILE ?? "")
+  ? createApiErrorFixture(`http://localhost:${PORT}`) : null;
+const trailingSlashesFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("trailing-slashes-")
+  ? createTrailingSlashesFixture(process.env.COMPAT_PROFILE!, `http://localhost:${PORT}`)
+  : undefined;
 const usernameFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("username-")
   ? await createUsernameFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`)
   : undefined;
@@ -151,6 +159,7 @@ const defaultSocialProfile = (): SocialProfile => ({
   emailVerified: true,
 });
 let socialProfile = defaultSocialProfile();
+let socialImageProvided = false;
 let socialIdTokenValid = true;
 type GitHubEmailRecord = {
   email: string;
@@ -357,7 +366,10 @@ const authOptions = {
   ...oauthPopupFixture.options,
   ...(oauthPopupFixture.hooks ? { databaseHooks: oauthPopupFixture.hooks } : {}),
   basePath: "/api/auth",
-  ...(process.env.COMPAT_PROFILE === "oauth-proxy-cookie" ? { account: { storeStateStrategy: "cookie" as const } } : {}),
+  ...(process.env.COMPAT_PROFILE?.startsWith("oauth-proxy") ? { account: {
+    ...(process.env.COMPAT_PROFILE === "oauth-proxy-cookie" ? { storeStateStrategy: "cookie" as const } : {}),
+    accountLinking: { updateUserInfoOnLink: true },
+  } } : {}),
   ...(oauthLinkIdToken.enabled ? { account: oauthLinkIdToken.account, databaseHooks: oauthLinkIdToken.databaseHooks } : {}),
   ...(adminOptions.databaseHooks ? { databaseHooks: adminOptions.databaseHooks } : {}),
   secret: ["compat", "test", "only", "key", "not", "real", "minimum", "32chars"].join("-"),
@@ -459,7 +471,9 @@ const authOptions = {
             id: socialProfile.sub,
             email: socialProfile.email,
             name: socialProfile.name,
-            image: socialProfile.image ?? undefined,
+            image: process.env.COMPAT_PROFILE?.startsWith("oauth-proxy") && socialImageProvided
+              ? socialProfile.image
+              : socialProfile.image ?? undefined,
             emailVerified: socialProfile.emailVerified,
           },
           data: {
@@ -641,10 +655,19 @@ async function resetDatabaseState() {
 const server = Bun.serve({
   port: PORT,
   async fetch(request) {
+    if (apiErrorFixture) return apiErrorFixture.handle(request);
+    if (trailingSlashesFixture) return trailingSlashesFixture.handle(request);
     if (usernameFixture) return usernameFixture.handle(request);
     if (jwtAdapterFixture) return jwtAdapterFixture.handle(request);
     if (databaseLifecycleFixture) return databaseLifecycleFixture.handle(request);
     if (identityContextFixture) return identityContextFixture.handle(request);
+    if (process.env.COMPAT_PROFILE === "openapi") {
+      const path = new URL(request.url).pathname;
+      if (request.method === "POST" && path === "/__test/openapi") return Response.json(await runOpenApi(await request.json()));
+      if (request.method === "POST" && path === "/__test/reset-state") return Response.json({ success: true });
+      if (request.method === "GET" && ["/health", "/__health"].includes(path)) return Response.json({ status: "ok" });
+      return new Response(null, { status: 404 });
+    }
     if (dynamicContextFixture) return dynamicContextFixture.handle(request);
     if (dispatchErrorsFixture) return dispatchErrorsFixture.handle(request);
     if (rateLimitFixture) return rateLimitFixture.handle(request);
@@ -777,6 +800,7 @@ const server = Bun.serve({
         resetPasswordMode = "capture";
         oauthRefreshMode = "success";
         socialProfile = defaultSocialProfile();
+        socialImageProvided = false;
         socialIdTokenValid = true;
         githubProfile = defaultGitHubProfile();
         return jsonResponse({ status: true });
@@ -974,6 +998,7 @@ const server = Bun.serve({
         const body = (await readJson(request)) as Partial<SocialProfile> & {
           idTokenValid?: boolean;
         } | null;
+        if (body && hasOwn(body, "image")) socialImageProvided = true;
         socialProfile = {
           ...socialProfile,
           ...(body?.sub ? { sub: body.sub } : {}),

@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 /// An endpoint error response whose body and headers are excluded from diagnostics.
-pub struct ApiErrorResponse(crate::types::AuthResponse);
+pub struct ApiErrorResponse(crate::types::AuthResponse, bool);
 
 impl std::fmt::Debug for ApiErrorResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -128,6 +128,37 @@ pub enum AuthError {
 }
 
 impl AuthError {
+    /// Create a redirect that bypasses the HTTP error callback, like upstream `FOUND`.
+    /// Numeric 302 errors created from `AuthResponse` retain the ordinary API error policy.
+    pub fn redirect(location: impl Into<String>) -> Self {
+        Self::Response(ApiErrorResponse(
+            crate::AuthResponse::new(302)
+                .with_header("location", location)
+                .with_header("content-type", "application/json"),
+            true,
+        ))
+    }
+
+    /// Whether this error is an explicit `FOUND` redirect.
+    pub fn is_found_redirect(&self) -> bool {
+        matches!(self, Self::Response(ApiErrorResponse(_, true)))
+    }
+
+    /// Attach endpoint headers while preserving the redirect's error-policy behavior.
+    pub fn capture_endpoint_headers(self, headers: crate::Headers) -> Self {
+        match self {
+            Self::Response(mut response) => {
+                response.0.capture_error_headers(headers);
+                Self::Response(response)
+            }
+            other => {
+                let mut response = other.to_auth_response();
+                response.capture_error_headers(headers);
+                response.into()
+            }
+        }
+    }
+
     /// Whether the error is an intentional endpoint rejection, including redirects and server API errors.
     pub fn is_api_error(&self) -> bool {
         match self {
@@ -369,7 +400,7 @@ pub type AuthResult<T> = Result<T, AuthError>;
 
 impl From<crate::types::AuthResponse> for AuthError {
     fn from(response: crate::types::AuthResponse) -> Self {
-        Self::Response(ApiErrorResponse(response))
+        Self::Response(ApiErrorResponse(response, false))
     }
 }
 

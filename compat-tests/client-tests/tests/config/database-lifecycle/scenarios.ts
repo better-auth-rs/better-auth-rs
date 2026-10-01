@@ -1,5 +1,6 @@
 import { compatScenario } from "../../../support/scenario";
 import { contracts, type StorageMode } from "./contracts";
+import { tokenListContracts } from "./token-list-contracts";
 
 const modes: Record<string, StorageMode> = {
   "database-lifecycle": "database",
@@ -9,7 +10,7 @@ const modes: Record<string, StorageMode> = {
 };
 const mode = modes[process.env.COMPAT_PROFILE!];
 if (!mode) throw new Error("Unknown database lifecycle profile");
-for (const contract of contracts.filter(contract => !contract.modes || contract.modes.includes(mode))) {
+for (const contract of [...contracts, ...tokenListContracts].filter(contract => !contract.modes || contract.modes.includes(mode))) {
   compatScenario(contract.name, ctx => contract.run(async body => {
     const response = await fetch(`${ctx.baseURL}/__test/database-lifecycle`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),

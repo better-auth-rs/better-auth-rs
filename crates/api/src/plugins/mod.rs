@@ -19,6 +19,7 @@ pub mod multi_session;
 pub mod oauth;
 pub mod one_tap;
 pub mod one_time_token;
+pub mod open_api;
 pub mod organization;
 pub mod passkey;
 pub mod password_management;
@@ -228,6 +229,7 @@ pub use multi_session::{MultiSessionConfig, MultiSessionPlugin};
 pub use oauth::{OAuthPopupPlugin, OAuthProxyConfig, OAuthProxyPlugin};
 pub use one_tap::{OneTapConfig, OneTapPlugin};
 pub use one_time_token::{OneTimeTokenConfig, OneTimeTokenPlugin, TokenStorage};
+pub use open_api::{OpenApiConfig, OpenApiPlugin};
 pub use organization::{OrganizationConfig, OrganizationPlugin};
 pub use passkey::{PasskeyConfig, PasskeyPlugin};
 pub use password_management::{

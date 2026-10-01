@@ -51,7 +51,7 @@ pub(super) fn run<S: AuthSchema, T>(
 }
 
 /// Promise-all peers keep running after another resolver rejects.
-pub(super) fn spawn<T: Send + 'static>(
+pub(crate) fn spawn<T: Send + 'static>(
     future: impl Future<Output = T> + Send + 'static,
 ) -> tokio::task::JoinHandle<T> {
     let contexts = CONTEXTS.try_with(Clone::clone).unwrap_or_default();

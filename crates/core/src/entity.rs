@@ -69,6 +69,10 @@ pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static 
 
 /// Trait representing a session entity.
 pub trait AuthSession: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    /// Resolve an application field alias to the model's serialized key.
+    fn serialized_field_name(name: &str) -> &str {
+        name
+    }
     /// Already projected fields from a cached session view.
     fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
         None

@@ -263,6 +263,16 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         "organization"
     }
 
+    fn openapi(
+        &self,
+    ) -> better_auth_core::AuthResult<better_auth_core::openapi::OpenApiPluginMetadata> {
+        better_auth_core::openapi::OpenApiPluginMetadata::from_routes(
+            <Self as better_auth_core::AuthPlugin<S>>::name(self),
+            <Self as better_auth_core::AuthPlugin<S>>::routes(self),
+        )?
+        .organization_fields(&self.config.schema)
+    }
+
     async fn on_init(
         &self,
         ctx: &mut better_auth_core::AuthInitContext<S>,

@@ -309,6 +309,18 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         expires_at: chrono::DateTime<chrono::Utc>,
     ) -> AuthResult<S::Session>;
     async fn delete_session(&self, token: &str) -> AuthResult<()>;
+    /// Delete a token list through one batch lifecycle. Do not update active-session indices.
+    async fn delete_sessions(&self, _tokens: &[String]) -> AuthResult<()> {
+        Err(AuthError::config(
+            "The store must support token-list batch session deletion",
+        ))
+    }
+    /// End live rows for a token list through one batch lifecycle, preserving stored rows.
+    async fn end_sessions(&self, _tokens: &[String]) -> AuthResult<()> {
+        Err(AuthError::config(
+            "The store must support token-list batch session expiry",
+        ))
+    }
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()>;
     async fn delete_expired_sessions(&self) -> AuthResult<usize>;
     async fn update_session_active_team(

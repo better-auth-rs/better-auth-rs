@@ -54,7 +54,7 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
         assert!(update.image.is_none());
         Ok(DatabaseHookUpdate::Patch(if self.first {
             UpdateUser {
-                image: Some("first-image".into()),
+                image: Some(Some("first-image".into())),
                 ..Default::default()
             }
         } else {

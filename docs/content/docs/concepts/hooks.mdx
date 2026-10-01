@@ -132,7 +132,7 @@ impl SeaOrmHooks<AppAuthSchema> for BlockDisposableEmails {
 
 Create hooks receive mutable references. Each update hook receives the original patch and returns `DatabaseHookUpdate::Continue`, `Cancel`, or `Patch(data)`. Returned patches merge in registration order. A later hook can overwrite fields returned by an earlier hook, but cannot observe the earlier patch through its input. `SessionUpdate` and `VerificationUpdate` provide the corresponding session and verification fields. Nullable fields use `Option<Option<T>>` to distinguish omission from clearing a value.
 
-After-update hooks receive `None` when the database matches no row. A cancelled update does not run after-update hooks.
+After-update hooks receive `None` when the database matches no row. The store still returns `UserNotFound` for a missing user. If a transaction caller catches that error and commits, the nullable after hook runs in its original queue position. Rollback discards the hook. A cancelled update does not run after-update hooks.
 
 ```rust
 #[async_trait]

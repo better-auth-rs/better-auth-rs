@@ -32,7 +32,8 @@ pub struct OAuthUserInfo {
     pub id: String,
     pub email: String,
     pub name: Option<String>,
-    pub image: Option<String>,
+    /// Omit the image with `None`, clear it with `Some(None)`, or supply a URL.
+    pub image: Option<Option<String>>,
     pub email_verified: bool,
 }
 
@@ -211,8 +212,10 @@ impl OAuthUserInfoHandler for GitHubUserInfoHandler {
                     .or(login),
                 image: profile
                     .get("avatar_url")
-                    .and_then(Value::as_str)
-                    .map(String::from),
+                    .cloned()
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|error| format!("Invalid GitHub avatar: {error}"))?,
                 email_verified,
             },
             data: profile,
@@ -273,7 +276,12 @@ impl OAuthProvider {
                         .ok_or("missing email")?
                         .to_string(),
                     name: v.get("name").and_then(|v| v.as_str()).map(String::from),
-                    image: v.get("picture").and_then(|v| v.as_str()).map(String::from),
+                    image: v
+                        .get("picture")
+                        .cloned()
+                        .map(serde_json::from_value)
+                        .transpose()
+                        .map_err(|error| format!("Invalid Google picture: {error}"))?,
                     email_verified: v
                         .get("email_verified")
                         .and_then(|v| v.as_bool())
@@ -361,11 +369,11 @@ impl OAuthProvider {
                         .to_string(),
                     name: v.get("username").and_then(|v| v.as_str()).map(String::from),
                     image: v.get("avatar").and_then(|v| v.as_str()).map(|a| {
-                        format!(
+                        Some(format!(
                             "https://cdn.discordapp.com/avatars/{}/{}.png",
                             v.get("id").and_then(|v| v.as_str()).unwrap_or(""),
                             a
-                        )
+                        ))
                     }),
                     email_verified: v.get("verified").and_then(|v| v.as_bool()).unwrap_or(false),
                 })
@@ -520,7 +528,7 @@ mod tests {
         assert_eq!(response.user.email, "octocat@example.com");
         assert_eq!(response.user.name.as_deref(), Some("octocat"));
         assert_eq!(
-            response.user.image.as_deref(),
+            response.user.image.as_ref().and_then(Option::as_deref),
             Some("https://avatars.githubusercontent.com/u/42?v=4")
         );
         assert!(response.user.email_verified);

@@ -19,12 +19,19 @@ export function cookies(response: Response, previous = "") {
   return [...jar].map(([name, value]) => `${name}=${value}`).join("; ");
 }
 
-export async function start(ctx: any, link = false) {
+export async function start(ctx: any, link = false, providerProfile?: { image?: string | null }, sessionCookie?: string) {
   const peer = ctx.baseURL === TS_BASE_URL ? RUST_BASE_URL : TS_BASE_URL;
   await fetch(`${peer}/__test/reset-state`, { method: "POST" });
+  if (providerProfile !== undefined) {
+    const configured = await fetch(`${peer}/__test/set-social-profile`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(providerProfile),
+    });
+    expect(configured.status).toBe(200);
+  }
   const before = await fetch(`${peer}/__test/oauth-proxy/stats`).then(response => response.json());
   const initiation = await ctx.actor().fetch(`${ctx.baseURL}/api/auth/${link ? "link-social" : "sign-in/social"}`, {
-    method: "POST", headers: { "content-type": "application/json" },
+    method: "POST", headers: { "content-type": "application/json", ...(sessionCookie !== undefined ? { cookie: sessionCookie } : {}) },
     body: JSON.stringify({ provider: "google", callbackURL: "/return", newUserCallbackURL: "/welcome", disableRedirect: true }),
   });
   expect(initiation.status).toBe(200);
@@ -51,10 +58,55 @@ export async function start(ctx: any, link = false) {
   expect(profile.account.accountId).toBe("google-account-id");
   expect(profile.userInfo.emailVerified).toBe(true);
   expect(profile.callbackURL).toBe("/return");
-  return { completion, profile, cookie: cookies(initiation), productionUnchanged: after };
+  return { completion, profile, cookie: cookies(initiation, sessionCookie), productionUnchanged: after };
 }
 
 export function registerProxyScenarios(cookieState = false) {
+  compatScenario("OAuth proxy retains image presence through encryption, creation and linking", async ctx => {
+    const original = "https://example.com/local-image.png";
+    const replacement = "https://example.com/provider-image.png";
+    const observations: unknown[] = [];
+    for (const providerProfile of [{}, { image: null }, { image: replacement }]) {
+      await fetch(`${ctx.baseURL}/__test/reset-state`, { method: "POST" });
+      const created = await start(ctx, false, providerProfile, "");
+      const project = (user: any) => Object.hasOwn(user, "image") ? { image: user.image } : {};
+      expect(project(created.profile.userInfo)).toEqual(providerProfile);
+      const completion = await fetch(created.completion, { headers: { cookie: created.cookie }, redirect: "manual" });
+      expect(completion.status).toBe(302);
+      expect(completion.headers.get("location")).toBe("/welcome");
+      let cookie = cookies(completion, created.cookie);
+      const readSession = async () => {
+        const response = await fetch(`${ctx.baseURL}/api/auth/get-session?disableCookieCache=true`, { headers: { cookie } });
+        expect(response.status).toBe(200);
+        return response.json();
+      };
+      const initial = await readSession();
+      expect(initial.user.image).toBe("image" in providerProfile ? providerProfile.image : null);
+      const updated = await fetch(`${ctx.baseURL}/api/auth/update-user`, {
+        method: "POST", headers: { "content-type": "application/json", cookie, origin: ctx.baseURL },
+        body: JSON.stringify({ image: original }),
+      });
+      expect(updated.status).toBe(200);
+      cookie = cookies(updated, cookie);
+      expect((await readSession()).user.image).toBe(original);
+      const linked = await start(ctx, true, providerProfile, cookie);
+      expect(project(linked.profile.userInfo)).toEqual(providerProfile);
+      const linkedResponse = await fetch(linked.completion, { headers: { cookie: linked.cookie }, redirect: "manual" });
+      expect(linkedResponse.status).toBe(302);
+      expect(linkedResponse.headers.get("location")).toBe("/return");
+      expect(linkedResponse.headers.getSetCookie().some(value => value.includes("session_token="))).toBe(false);
+      cookie = cookies(linkedResponse, linked.cookie);
+      const final = await readSession();
+      expect(final.user.id).toBe(initial.user.id);
+      expect(final.session.id).toBe(initial.session.id);
+      expect(final.user.image).toBe("image" in providerProfile ? providerProfile.image : original);
+      const replay = await fetch(linked.completion, { headers: { cookie }, redirect: "manual" });
+      expect(replay.status).toBe(302);
+      expect(new URL(replay.headers.get("location")!).searchParams.get("error")).toBe("state_mismatch");
+      observations.push({ image: providerProfile, initial, final, production: linked.productionUnchanged });
+    }
+    return observations;
+  });
   compatScenario("OAuth proxy exchanges real OIDC tokens across runtimes", async ctx => {
     const peer = ctx.baseURL === TS_BASE_URL ? RUST_BASE_URL : TS_BASE_URL;
     await fetch(`${peer}/__test/reset-state`, { method: "POST" });

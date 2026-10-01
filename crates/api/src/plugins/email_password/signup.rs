@@ -108,7 +108,7 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
         .with_email(body.email.to_lowercase())
         .with_name(&body.name);
     apply_user_create_fields(ctx, &body.additional_fields, &mut create_user)?;
-    create_user.image = body.image.clone();
+    create_user.image = body.image.clone().map(Some);
     let protect_enumeration = config.require_email_verification || !config.auto_sign_in;
     if let Some(user) = ctx
         .database

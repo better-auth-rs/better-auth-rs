@@ -427,7 +427,9 @@ async fn test_completed_phase_endpoints_present() {
 #[tokio::test]
 async fn test_generated_openapi_has_core_routes() {
     let auth = create_full_auth().await;
-    let spec = auth.openapi_spec();
+    let spec = auth
+        .openapi_spec()
+        .expect("OpenAPI registry should be initialized");
 
     assert!(spec.paths.contains_key("/ok"), "OpenAPI spec missing /ok");
     assert!(
@@ -464,9 +466,11 @@ async fn test_generated_openapi_has_core_routes() {
 #[tokio::test]
 async fn test_generated_openapi_metadata() {
     let auth = create_full_auth().await;
-    let spec = auth.openapi_spec();
+    let spec = auth
+        .openapi_spec()
+        .expect("OpenAPI registry should be initialized");
 
-    assert_eq!(spec.openapi, "3.1.0");
+    assert_eq!(spec.openapi, "3.1.1");
     assert_eq!(spec.info.title, "Better Auth");
     assert!(spec.info.description.is_some());
 }
@@ -512,9 +516,11 @@ async fn test_contract_ok_endpoint() {
 #[tokio::test]
 async fn test_contract_error_endpoint() {
     let auth = create_full_auth().await;
-    let (status, body) = send_json_request(&auth, HttpMethod::Get, "/error", None).await;
-    assert_eq!(status, 200);
-    let html = body.as_str().expect("/error should return HTML text");
+    let request = AuthRequest::new(HttpMethod::Get, "/error")
+        .with_url("http://localhost:3000/api/auth/error".parse().unwrap());
+    let response = auth.handle_request(request).await.unwrap();
+    assert_eq!(response.status, 200);
+    let html = std::str::from_utf8(&response.body).expect("/error should return HTML text");
     // The HTML page uses inline-styled elements matching the TS template
     // (not plain `<h1>ERROR</h1>` — both TS and Rust use styled tags).
     assert!(

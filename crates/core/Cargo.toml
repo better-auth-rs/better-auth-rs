@@ -53,7 +53,7 @@ sha2.workspace = true
 josekit.workspace = true
 percent-encoding = "2.3.2"
 better-auth-schema-registry.workspace = true
-indexmap = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
 scrypt.workspace = true
 hex.workspace = true
 chacha20poly1305.workspace = true

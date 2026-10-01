@@ -121,12 +121,16 @@ pub(crate) struct RefreshTokenResponse {
 #[derive(Debug, Serialize)]
 pub(crate) struct AccountInfoUser {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     pub email: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub image: Option<String>,
+    pub image: Option<Option<String>>,
     #[serde(rename = "emailVerified")]
     pub email_verified: bool,
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]

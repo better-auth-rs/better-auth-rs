@@ -561,6 +561,17 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
         "email-password"
     }
 
+    fn openapi(&self) -> AuthResult<better_auth_core::openapi::OpenApiPluginMetadata> {
+        if self.config.username {
+            <crate::plugins::username::UsernamePlugin as AuthPlugin<S>>::openapi(&Default::default())
+        } else {
+            better_auth_core::openapi::OpenApiPluginMetadata::from_routes(
+                <Self as better_auth_core::AuthPlugin<S>>::name(self),
+                <Self as better_auth_core::AuthPlugin<S>>::routes(self),
+            )
+        }
+    }
+
     fn password_hasher(&self) -> Option<Arc<dyn PasswordHasher>> {
         self.config.password_hasher.clone()
     }

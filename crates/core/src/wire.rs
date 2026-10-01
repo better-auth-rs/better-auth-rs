@@ -269,7 +269,9 @@ impl SessionView {
                     fields.get(name).cloned()
                 } else {
                     let value = model
-                        .get(field.field_name.as_deref().unwrap_or(name))
+                        .get(T::serialized_field_name(
+                            field.field_name.as_deref().unwrap_or(name),
+                        ))
                         .or_else(|| model.get(name))
                         .cloned();
                     field.adapter_output(value, supports_native_json)?

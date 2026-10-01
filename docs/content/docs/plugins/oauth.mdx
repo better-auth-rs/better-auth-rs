@@ -112,7 +112,9 @@ Generic OAuth reads an ID-token profile when it contains `sub` and `email`, then
 
 Set `OAuthProfile.additional_fields` to supply configured application user fields. Sign-up and profile updates apply the shared user schema, including input transforms, defaults, and protected-field filtering. OAuth Proxy preserves these mapped fields through its encrypted callback. Raw provider claims remain separate from mapped application fields.
 
-For `OAuthProfile.name` and `OAuthProfile.image`, `None` preserves the provider value, `Some(None)` clears the value, and `Some(Some(value))` replaces it. Other optional mapper fields preserve the provider value when omitted. Set `override_user_info: true` to update an existing user's profile on sign-in.
+For `OAuthProfile.name` and `OAuthProfile.image`, `None` preserves the provider value, `Some(None)` clears the mapped provider value, and `Some(Some(value))` replaces it. Generic OAuth then normalizes a null image to omission, so an existing local image remains unchanged. Other optional mapper fields preserve the provider value when omitted. Set `override_user_info: true` to update an existing user's profile on sign-in.
+
+For a social provider's `OAuthUserInfo.image`, `None` omits the field, `Some(None)` supplies explicit null, and `Some(Some(url))` supplies a string. Profile updates preserve the local image when omitted and clear it for explicit null. New-user creation, user admission, `/account-info`, and OAuth Proxy retain this distinction. Raw JSON mappers must preserve key presence before decoding a nullable image.
 
 The account subject comes from the original profile's `sub` for OIDC or `id` for OAuth. Implement `OAuthAccountSubject` through `account_subject` for providers with another stable identifier. Mapped user fields cannot change that identifier. `/account-info` fetches the profile for an existing linked account and keeps the stored account subject.
 
@@ -168,7 +170,7 @@ The OAuth plugin exposes the following endpoints. For full request/response deta
 
 ## Provider Account Info
 
-Use `GET /account-info` to fetch provider-specific user info for a linked account.
+Use `GET /account-info` to fetch provider-specific user info for a linked account. The response preserves the provider user ID and mapped additional fields. Generic OAuth includes an ID only when the profile mapper supplies one.
 Pass the local account `id` returned by `/list-accounts` as the `accountId` query parameter.
 
 ```http

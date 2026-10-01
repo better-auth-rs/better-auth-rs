@@ -29,6 +29,7 @@ pub use proxy::{OAuthProxyConfig, OAuthProxyPlugin};
 mod resolved;
 mod signin;
 mod state;
+mod state_json;
 mod token;
 mod types;
 

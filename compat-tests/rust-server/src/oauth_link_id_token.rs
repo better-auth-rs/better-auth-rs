@@ -24,6 +24,7 @@ struct State {
     provider: Value,
     failure: String,
     events: Vec<String>,
+    image_updates: Vec<Value>,
     admissions: usize,
 }
 #[derive(Clone, Default)]
@@ -52,11 +53,20 @@ impl OAuthUserInfoHandler for OAuthLinkIdTokenFixture {
                 id: data["id"].as_str().unwrap_or_default().into(),
                 email: data["email"].as_str().unwrap_or_default().into(),
                 name: data["name"].as_str().map(str::to_owned),
-                image: data["image"].as_str().map(str::to_owned),
+                image: data
+                    .get("image")
+                    .cloned()
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|error| error.to_string())?,
                 email_verified: data["emailVerified"] == true,
                 additional_fields,
             },
-            data,
+            data: {
+                let mut data = data;
+                data["sub"] = data["id"].clone();
+                data
+            },
         })
     }
 }
@@ -156,7 +166,7 @@ impl OAuthLinkIdTokenFixture {
                 let mut state=fixture.state.lock().unwrap();
                 if let Some(provider)=body.get("provider") { state.provider=provider.clone(); }
                 if let Some(failure)=body["failure"].as_str() { state.failure=failure.into(); }
-                if body["clear"]==true { state.events.clear(); state.admissions=0; }
+                if body["clear"]==true { state.events.clear(); state.image_updates.clear(); state.admissions=0; }
             }
             let user=match body["email"].as_str() { Some(email)=>auth.store().get_user_by_email(email).await?, None=>None };
             let secret=auth.config().encryption_secret();
@@ -172,7 +182,7 @@ impl OAuthLinkIdTokenFixture {
                 Ok::<_,AuthError>(json!({"encrypted":access.as_ref().is_some_and(|token|!token.is_empty() && Some(token.as_str())!=account.access_token()),"accessToken":access,"refreshToken":refresh,"idToken":account.id_token(),"scope":account.scope(),"accessTokenExpiresAt":account.access_token_expires_at()}))
             }).transpose()?;
             let state=fixture.state.lock().unwrap();
-            Ok::<_,AuthError>(Json(json!({"events":state.events,"admissions":state.admissions,"nestedAccounts":accounts.iter().filter(|account|account.provider_id()=="nested-cancel").count(),"user":user.map(|user|json!({"name":user.name(),"email":user.email(),"emailVerified":user.email_verified(),"image":user.image(),"department":user.department,"internalCode":user.internal_code})),"account":account})))
+            Ok::<_,AuthError>(Json(json!({"events":state.events,"imageUpdates":state.image_updates,"admissions":state.admissions,"nestedAccounts":accounts.iter().filter(|account|account.provider_id()=="nested-cancel").count(),"user":user.map(|user|json!({"name":user.name(),"email":user.email(),"emailVerified":user.email_verified(),"image":user.image(),"department":user.department,"internalCode":user.internal_code})),"account":account})))
         }}))
     }
 }
@@ -241,9 +251,23 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
     async fn before_update_user(
         &self,
         _: &str,
-        _: &UpdateUser,
+        update: &UpdateUser,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<better_auth::seaorm::DatabaseHookUpdate<UpdateUser>> {
+        if ctx
+            .request
+            .as_ref()
+            .is_some_and(|request| request.path.ends_with("/link-social"))
+        {
+            self.state
+                .lock()
+                .unwrap()
+                .image_updates
+                .push(match &update.image {
+                    Some(image) => json!({ "image": image }),
+                    None => json!({}),
+                });
+        }
         self.hook("user.update.before", ctx)?;
         Ok(better_auth::seaorm::DatabaseHookUpdate::Continue)
     }

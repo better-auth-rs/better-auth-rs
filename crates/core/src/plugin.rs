@@ -50,6 +50,11 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
     /// Routes that this plugin handles
     fn routes(&self) -> Vec<AuthRoute>;
 
+    /// Document this configured plugin without invoking application field policies.
+    fn openapi(&self) -> AuthResult<crate::openapi::OpenApiPluginMetadata> {
+        crate::openapi::OpenApiPluginMetadata::from_routes(self.name(), self.routes())
+    }
+
     /// Select the base password hasher before plugin initialization wraps it.
     fn password_hasher(&self) -> Option<Arc<dyn crate::utils::password::PasswordHasher>> {
         None
@@ -71,6 +76,18 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
     async fn on_http_request(
         &self,
         _req: &AuthRequest,
+        _ctx: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        Ok(None)
+    }
+
+    /// Inspect the HTTP router response, including route misses and body errors.
+    /// Early HTTP request responses and native endpoint calls skip this hook.
+    /// A replacement response stops the remaining HTTP response hooks.
+    async fn on_http_response(
+        &self,
+        _req: &AuthRequest,
+        _response: &mut AuthResponse,
         _ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
         Ok(None)
@@ -182,6 +199,10 @@ pub struct AuthRoute {
     pub method: HttpMethod,
     /// Identifier used as the OpenAPI `operationId` for this route.
     pub operation_id: String,
+    /// Explicit OpenAPI documentation. This does not validate endpoint input.
+    pub openapi: Option<crate::openapi::OpenApiRouteMetadata>,
+    /// Upstream API key used when excluding plugin endpoints that replace core endpoints.
+    pub endpoint_key: Option<String>,
     /// HTTP media types accepted before endpoint middleware. Empty uses the JSON default.
     pub allowed_media_types: Vec<String>,
 }
@@ -251,6 +272,16 @@ impl AuthRoute {
         actual.next().is_none()
     }
 
+    pub fn openapi(mut self, metadata: crate::openapi::OpenApiRouteMetadata) -> Self {
+        self.openapi = Some(metadata);
+        self
+    }
+
+    pub fn endpoint_key(mut self, key: impl Into<String>) -> Self {
+        self.endpoint_key = Some(key.into());
+        self
+    }
+
     pub fn allowed_media_types(mut self, types: &[&str]) -> Self {
         self.allowed_media_types = types.iter().map(|value| (*value).to_owned()).collect();
         self
@@ -265,6 +296,8 @@ impl AuthRoute {
             path: path.into(),
             method,
             operation_id: operation_id.into(),
+            openapi: None,
+            endpoint_key: None,
             allowed_media_types: Vec::new(),
         }
     }

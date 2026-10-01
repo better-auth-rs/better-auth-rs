@@ -24,7 +24,7 @@ use better_auth::plugins::{
     UserManagementPlugin,
     email_verification::SendVerificationEmail,
     oauth::{
-        OAuthIdTokenVerifier, OAuthProvider, OAuthRefreshTokenHandler, OAuthTokenSet,
+        GenericOAuthConfig, GenericOAuthUserInfoHandler, OAuthIdTokenVerifier, OAuthProvider, OAuthRefreshTokenHandler, OAuthTokenSet,
         OAuthUserInfo, OAuthUserInfoHandler, OAuthUserInfoRequest, OAuthUserInfoResponse,
     },
     organization::{
@@ -78,6 +78,7 @@ mod oauth_link_id_token;
 mod oauth_popup;
 mod oidc;
 mod one_tap;
+mod openapi;
 mod otp_callbacks;
 mod passkey_options;
 mod password_policy;
@@ -89,6 +90,8 @@ mod session_fields;
 mod signup_enumeration;
 mod stateless;
 mod token_routes;
+mod trailing_slashes;
+mod api_error;
 mod two_factor_context;
 mod two_factor_options;
 mod user_admission;
@@ -180,6 +183,8 @@ struct SocialProfile {
     email: String,
     name: String,
     image: Option<String>,
+    #[serde(skip)]
+    image_present: bool,
     email_verified: bool,
 }
 
@@ -189,6 +194,7 @@ fn default_social_profile() -> SocialProfile {
         email: "google@example.com".to_string(),
         name: "Google Compat User".to_string(),
         image: None,
+        image_present: false,
         email_verified: true,
     }
 }
@@ -371,6 +377,7 @@ impl SendChangeEmailConfirmation for CompatChangeEmailSender {
 #[derive(Clone)]
 struct CompatGoogleUserInfoHandler {
     profile: Arc<Mutex<SocialProfile>>,
+    preserve_image_null: bool,
 }
 
 #[async_trait::async_trait]
@@ -386,7 +393,11 @@ impl OAuthUserInfoHandler for CompatGoogleUserInfoHandler {
                 id: profile.sub.clone(),
                 email: profile.email.clone(),
                 name: Some(profile.name.clone()),
-                image: profile.image.clone(),
+                image: if self.preserve_image_null && profile.image_present {
+                    Some(profile.image.clone())
+                } else {
+                    profile.image.clone().map(Some)
+                },
                 email_verified: profile.email_verified,
             },
             data: serde_json::json!({
@@ -506,13 +517,20 @@ struct SeedOAuthAccountRequest {
     scope: Option<String>,
 }
 
+fn deserialize_social_image<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Option<String>>, D::Error> {
+    Option::<String>::deserialize(deserializer).map(Some)
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SetSocialProfileRequest {
     sub: Option<String>,
     email: Option<String>,
     name: Option<String>,
-    image: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_social_image")]
+    image: Option<Option<String>>,
     email_verified: Option<bool>,
     id_token_valid: Option<bool>,
 }
@@ -532,45 +550,44 @@ fn parse_rfc3339(value: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
     DateTime::parse_from_rfc3339(value).map(|value| value.with_timezone(&Utc))
 }
 
+struct MockGenericUserInfo;
+
+#[async_trait::async_trait]
+impl GenericOAuthUserInfoHandler for MockGenericUserInfo {
+    async fn get_user_info(
+        &self,
+        _tokens: &OAuthUserInfoRequest,
+    ) -> better_auth::AuthResult<serde_json::Value> {
+        Ok(serde_json::json!({
+            "id": "mock-account-id",
+            "email": "mock@example.com",
+            "name": "Mock OAuth User",
+            "image": null,
+            "emailVerified": true,
+        }))
+    }
+}
+
 fn mock_oauth_plugin(
     port: u16,
     social_profile: Arc<Mutex<SocialProfile>>,
     social_id_token_valid: Arc<Mutex<bool>>,
     oauth_refresh_mode: Arc<Mutex<OAuthRefreshMode>>,
+    preserve_image_null: bool,
 ) -> OAuthPlugin {
     OAuthPlugin::new()
-        .add_provider(
+        .add_generic_provider(
             "mock",
-            OAuthProvider {
+            GenericOAuthConfig {
                 client_id: "mock-client-id".to_string(),
+                client_secret: Some("mock-client-secret".to_string()),
                 end_session_endpoint: Some("https://idp.example.test/logout".to_string()),
-                post_logout_redirect_uri: None,
-                client_secret: "mock-client-secret".to_string(),
-                auth_url: format!("http://localhost:{port}/__test/oauth/authorize"),
-                token_url: format!("http://127.0.0.1:{port}/__test/oauth/token"),
+                authorization_url: Some(format!("http://localhost:{port}/__test/oauth/authorize")),
+                token_url: Some(format!("http://127.0.0.1:{port}/__test/oauth/token")),
                 user_info_url: Some(format!("http://127.0.0.1:{port}/__test/oauth/userinfo")),
-                scopes: vec![
-                    "openid".to_string(),
-                    "email".to_string(),
-                    "profile".to_string(),
-                ],
-                authorization_params: Vec::new(),
-                map_user_info: Some(|_value| {
-                    Ok(OAuthUserInfo {
-                        additional_fields: Default::default(),
-                        id: "mock-account-id".to_string(),
-                        email: "mock@example.com".to_string(),
-                        name: Some("Mock OAuth User".to_string()),
-                        image: None,
-                        email_verified: true,
-                    })
-                }),
-                get_user_info: None,
-                refresh_access_token: None,
-                verify_id_token: None,
-                disable_implicit_sign_up: false,
-                disable_sign_up: false,
-                override_user_info_on_sign_in: false,
+                scopes: vec!["openid".into(), "email".into(), "profile".into()],
+                get_user_info: Some(Arc::new(MockGenericUserInfo)),
+                ..Default::default()
             },
         )
         .add_provider(
@@ -610,6 +627,7 @@ fn mock_oauth_plugin(
                 map_user_info: None,
                 get_user_info: Some(Arc::new(CompatGoogleUserInfoHandler {
                     profile: social_profile,
+                    preserve_image_null,
                 })),
                 refresh_access_token: Some(Arc::new(CompatGoogleRefreshHandler {
                     mode: oauth_refresh_mode,
@@ -642,9 +660,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         axum::serve(listener, app).await?;
         return Ok(());
     }
+    if matches!(device_profile.as_str(), "api-error" | "api-error-production") {
+        let app = api_error::router(&format!("http://localhost:{port}"));
+        axum::serve(listener, app).await?;
+        return Ok(());
+    }
+    if device_profile.starts_with("trailing-slashes-") {
+        let app =
+            trailing_slashes::router(&device_profile, &format!("http://localhost:{port}")).await?;
+        axum::serve(listener, app).await?;
+        return Ok(());
+    }
     if device_profile.starts_with("username-") {
         let app = username_options::router(&device_profile, &format!("http://localhost:{port}")).await?;
         axum::serve(listener, app).await?;
+        return Ok(());
+    }
+    if device_profile == "openapi" {
+        axum::serve(listener, openapi::router()).await?;
         return Ok(());
     }
     if device_profile == "jwt-adapter" {
@@ -715,8 +748,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
     let jwt_fixture = jwt_fixture::JwtFixture::new(&config, &device_profile).await?;
-    if device_profile == "oauth-proxy-cookie" {
-        config.account.store_state_strategy = Some(better_auth::config::OAuthStateStrategy::Cookie);
+    if device_profile.starts_with("oauth-proxy") {
+        config.account.account_linking.update_user_info_on_link = true;
+        if device_profile == "oauth-proxy-cookie" {
+            config.account.store_state_strategy = Some(better_auth::config::OAuthStateStrategy::Cookie);
+        }
     }
 
     if matches!(device_profile.as_str(), "user-fields" | "organization-jwt") {
@@ -1136,6 +1172,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 social_profile.clone(),
                 social_id_token_valid.clone(),
                 oauth_refresh_mode.clone(),
+                device_profile.starts_with("oauth-proxy"),
             )),
         )));
     let builder = if device_profile.starts_with("oauth-popup-") {
@@ -1866,8 +1903,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(name) = body.name {
                         profile.name = name;
                     }
-                    if body.image.is_some() {
-                        profile.image = body.image;
+                    if let Some(image) = body.image {
+                        profile.image = image;
+                        profile.image_present = true;
                     }
                     if let Some(email_verified) = body.email_verified {
                         profile.email_verified = email_verified;

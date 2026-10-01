@@ -25,6 +25,8 @@ export function createDatabaseLifecycleFixture(mode: StorageMode, database: Data
   const entries = new Map<string, string>();
   const events: any[] = [];
   let control: any = {};
+  let heldDelete: ReturnType<typeof Promise.withResolvers<void>> | undefined;
+  let completedDelete: ReturnType<typeof Promise.withResolvers<void>> | undefined;
 
   function rawSessions() {
     return storesSessions ? database.query('SELECT * FROM "session" ORDER BY id').all().map(sessionView) : [];
@@ -46,8 +48,10 @@ export function createDatabaseLifecycleFixture(mode: StorageMode, database: Data
     },
     async delete(key: string) {
       event("cache.delete", { key });
+      if (key === control.holdDeleteKey) await heldDelete!.promise;
       if (control.cacheFailure === "delete" || control.failDeleteKey === key) throw new Error("fixture cache delete rejected");
       entries.delete(key);
+      if (key === control.holdDeleteKey) completedDelete!.resolve();
     },
   };
   function deletionHooks(model: string) {
@@ -144,6 +148,10 @@ export function createDatabaseLifecycleFixture(mode: StorageMode, database: Data
     }
     if (body.action === "configure") {
       control = body.options ?? {};
+      if (control.holdDeleteKey) {
+        heldDelete = Promise.withResolvers<void>();
+        completedDelete = Promise.withResolvers<void>();
+      }
       if (control.databaseUpdateFailure) database.exec(`CREATE TRIGGER fixture_reject_session_update BEFORE UPDATE ON "session" BEGIN SELECT RAISE(ABORT, 'fixture session update rejected'); END`);
       if (control.batchWriteFailure) database.exec(`CREATE TRIGGER fixture_reject_session_batch BEFORE ${mode === "preserved" ? "UPDATE" : "DELETE"} ON "session" BEGIN SELECT RAISE(ABORT, 'fixture session batch rejected'); END`);
       if (control.expireSecond && storesSessions) database.query('UPDATE "session" SET expiresAt = ? WHERE id = ?').run(new Date("2000-01-01T00:00:00Z").getTime(), "s2");
@@ -154,11 +162,17 @@ export function createDatabaseLifecycleFixture(mode: StorageMode, database: Data
       events.length = 0;
       return Response.json({ ok: true, state: snapshot() });
     }
+    if (body.action === "release-delete") {
+      heldDelete!.resolve();
+      await completedDelete!.promise;
+      return Response.json({ ok: true, state: snapshot() });
+    }
     if (body.action === "execute") {
       try {
         let result: any;
         if (body.operation === "delete-user-sessions") result = await adapter.deleteUserSessions("u1");
         else if (body.operation === "delete-user") result = await adapter.deleteUser("u1");
+        else if (body.operation === "delete-sessions") result = await adapter.deleteSessions(body.tokens ?? ["s1-token", "s2-token"]);
         else if (body.operation === "delete-session") result = await adapter.deleteSession("s1-token");
         else if (body.operation === "update-session") result = await adapter.updateSession("s1-token", dates(body.patch ?? { label: "request" }));
         else throw new Error(`Unknown fixture operation: ${body.operation}`);

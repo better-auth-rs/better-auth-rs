@@ -167,6 +167,10 @@ async fn convert_axum_request(
 
     let (parts, body) = req.into_parts();
     let url = transport_url(&parts)?;
+    let mounted = parts
+        .extensions
+        .get::<axum::extract::OriginalUri>()
+        .is_some_and(|original| original.0.path() != parts.uri.path());
 
     // Convert method
     let method = match parts.method {
@@ -240,6 +244,11 @@ async fn convert_axum_request(
     };
 
     let request = AuthRequest::from_parts(method, path, headers, body_bytes, query);
+    let request = if mounted {
+        request.with_base_relative_path()
+    } else {
+        request
+    };
     Ok(match url {
         Some(url) => request.with_url(url),
         None => request,

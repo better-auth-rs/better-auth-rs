@@ -131,7 +131,9 @@ impl OneTapPlugin {
             email_verified: claim("email_verified").as_bool() == Some(true)
                 || claim("email_verified").as_str() == Some("true"),
             name: Some(claim("name").as_str().unwrap_or_default().to_owned()),
-            image: claim("picture").as_str().map(str::to_owned),
+            image: claim("picture")
+                .as_str()
+                .map(|value| Some(value.to_owned())),
         };
         let fallback = OAuthProvider::google(first_audience, "");
         let provider = provider.unwrap_or(&fallback);

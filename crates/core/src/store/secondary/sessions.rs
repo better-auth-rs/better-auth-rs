@@ -21,11 +21,12 @@ pub(super) struct SessionReference {
 impl<S: AuthSchema> SecondaryStore<S> {
     pub(super) fn hydrate_session(&self, mut fields: Map<String, Value>) -> AuthResult<S::Session> {
         for (name, field) in &self.config.session.additional_fields {
-            if let Some(storage) = &field.field_name
-                && storage != name
+            let storage =
+                S::Session::serialized_field_name(field.field_name.as_deref().unwrap_or(name));
+            if storage != name
                 && let Some(value) = fields.remove(name)
             {
-                let _ = fields.insert(storage.clone(), value);
+                let _ = fields.insert(storage.to_owned(), value);
             }
         }
         S::Session::from_runtime_fields(fields)
@@ -486,6 +487,25 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         } else {
             self.inner.delete_session(token).await
         }
+    }
+
+    async fn delete_sessions(&self, tokens: &[String]) -> AuthResult<()> {
+        let Some(storage) = self.storage.clone() else {
+            return self.inner.delete_sessions(tokens).await;
+        };
+        super::session_tokens::delete_cached_tokens(storage, tokens.to_vec()).await?;
+        if !self.database_sessions() {
+            return Ok(());
+        }
+        if self.config.session.preserve_session_in_database {
+            self.inner.end_sessions(tokens).await
+        } else {
+            self.inner.delete_sessions(tokens).await
+        }
+    }
+
+    async fn end_sessions(&self, tokens: &[String]) -> AuthResult<()> {
+        self.inner.end_sessions(tokens).await
     }
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {

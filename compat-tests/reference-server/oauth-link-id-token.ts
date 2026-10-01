@@ -6,6 +6,7 @@ export function createOAuthLinkIdTokenFixture(profile: string) {
   let failure = "";
   let admissions = 0;
   const events: string[] = [];
+  const imageUpdates: Array<{ image?: string | null }> = [];
   function hook(name: string, ctx: any) {
     if (ctx?.path !== "/link-social") return;
     events.push(name);
@@ -43,15 +44,18 @@ export function createOAuthLinkIdTokenFixture(profile: string) {
         }, after: async (_: any, ctx: any) => { hook("account.create.after", ctx); } },
         update: { before: async (_: any, ctx: any) => hook("account.update.before", ctx), after: async (_: any, ctx: any) => { hook("account.update.after", ctx); } },
       },
-      user: { update: { before: async (_: any, ctx: any) => { hook("user.update.before", ctx); }, after: async (_: any, ctx: any) => { hook("user.update.after", ctx); } } },
+      user: { update: { before: async (row: any, ctx: any) => {
+        if (ctx?.path === "/link-social") imageUpdates.push(row.image === undefined ? {} : { image: row.image });
+        hook("user.update.before", ctx);
+      }, after: async (_: any, ctx: any) => { hook("user.update.after", ctx); } } },
     },
-    reset() { provider = {}; failure = ""; admissions = 0; events.length = 0; },
+    reset() { provider = {}; failure = ""; admissions = 0; events.length = 0; imageUpdates.length = 0; },
     async route(request: Request, auth: any): Promise<Response | null> {
       if (!enabled || new URL(request.url).pathname !== "/__test/oauth-link-id-token" || request.method !== "POST") return null;
       const body = await request.json();
       if (body.provider) provider = body.provider;
       if (typeof body.failure === "string") failure = body.failure;
-      if (body.clear) { events.length = 0; admissions = 0; }
+      if (body.clear) { events.length = 0; imageUpdates.length = 0; admissions = 0; }
       const context = await auth.$context;
       const user = body.email ? (await context.internalAdapter.findUserByEmail(body.email))?.user : null;
       if (body.seed && user) {
@@ -62,7 +66,7 @@ export function createOAuthLinkIdTokenFixture(profile: string) {
       const access = account ? await decryptOAuthToken(account.accessToken, context) : null;
       const refresh = account ? await decryptOAuthToken(account.refreshToken, context) : null;
       return Response.json({
-        events, admissions, nestedAccounts: accounts.filter((row: any) => row.providerId === "nested-cancel").length,
+        events, imageUpdates, admissions, nestedAccounts: accounts.filter((row: any) => row.providerId === "nested-cancel").length,
         user: user ? { name: user.name, email: user.email, emailVerified: user.emailVerified, image: user.image ?? null, department: user.department ?? null, internalCode: user.internalCode ?? null } : null,
         account: account ? { accessToken: access ?? null, refreshToken: refresh ?? null, idToken: account.idToken ?? null, scope: account.scope ?? null, accessTokenExpiresAt: account.accessTokenExpiresAt ?? null, encrypted: !!access && account.accessToken !== access } : null,
       });

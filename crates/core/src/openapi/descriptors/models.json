@@ -1,0 +1,1362 @@
+{
+  "formatVersion": 1,
+  "versions": {
+    "better-auth": "1.7.6",
+    "@better-auth/core": "1.7.6",
+    "@better-auth/api-key": "1.7.6",
+    "@better-auth/passkey": "1.7.6",
+    "zod": "4.6.5"
+  },
+  "groups": [
+    {
+      "kind": "core",
+      "id": null,
+      "models": [
+        {
+          "key": "user",
+          "fields": [
+            {
+              "key": "name",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "email",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "emailVerified",
+              "property": {
+                "type": "boolean",
+                "default": false,
+                "readOnly": true
+              },
+              "required": true
+            },
+            {
+              "key": "image",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "updatedAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            }
+          ]
+        },
+        {
+          "key": "session",
+          "fields": [
+            {
+              "key": "expiresAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "token",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "updatedAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "ipAddress",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "userAgent",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "userId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            }
+          ]
+        },
+        {
+          "key": "account",
+          "fields": [
+            {
+              "key": "accountId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "providerId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "userId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "accessToken",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "refreshToken",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "idToken",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "accessTokenExpiresAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": false
+            },
+            {
+              "key": "refreshTokenExpiresAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": false
+            },
+            {
+              "key": "scope",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "password",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "updatedAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            }
+          ]
+        },
+        {
+          "key": "verification",
+          "fields": [
+            {
+              "key": "identifier",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "value",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "expiresAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "updatedAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            }
+          ],
+          "condition": "verification-database"
+        },
+        {
+          "key": "rateLimit",
+          "fields": [
+            {
+              "key": "key",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "count",
+              "property": {
+                "type": "number"
+              },
+              "required": true
+            },
+            {
+              "key": "lastRequest",
+              "property": {
+                "type": "number"
+              },
+              "required": true
+            }
+          ],
+          "condition": "database-rate-limit",
+          "placement": "after-plugin-models"
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "id": "organization",
+      "models": [
+        {
+          "key": "organization",
+          "fields": [
+            {
+              "key": "name",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "slug",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "logo",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "metadata",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            }
+          ]
+        },
+        {
+          "key": "organizationRole",
+          "fields": [
+            {
+              "key": "organizationId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "role",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "permission",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "updatedAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": false
+            }
+          ],
+          "condition": "organization-roles"
+        },
+        {
+          "key": "team",
+          "fields": [
+            {
+              "key": "name",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "memberCount",
+              "property": {
+                "type": "number",
+                "default": 0,
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "organizationId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "updatedAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": false
+            }
+          ],
+          "condition": "organization-teams"
+        },
+        {
+          "key": "teamMember",
+          "fields": [
+            {
+              "key": "teamId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "userId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "membershipKey",
+              "property": {
+                "type": "string",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": false
+            }
+          ],
+          "condition": "organization-teams"
+        },
+        {
+          "key": "member",
+          "fields": [
+            {
+              "key": "organizationId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "userId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "role",
+              "property": {
+                "type": "string",
+                "default": "member"
+              },
+              "required": true
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            }
+          ]
+        },
+        {
+          "key": "invitation",
+          "fields": [
+            {
+              "key": "organizationId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "email",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "role",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "teamId",
+              "property": {
+                "type": "string"
+              },
+              "required": false,
+              "condition": "organization-teams"
+            },
+            {
+              "key": "status",
+              "property": {
+                "type": "string",
+                "default": "pending"
+              },
+              "required": true
+            },
+            {
+              "key": "expiresAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "inviterId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            }
+          ]
+        },
+        {
+          "key": "session",
+          "fields": [
+            {
+              "key": "activeOrganizationId",
+              "property": {
+                "type": "string",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "activeTeamId",
+              "property": {
+                "type": "string",
+                "readOnly": true
+              },
+              "required": false,
+              "condition": "organization-teams"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "id": "api-key",
+      "models": [
+        {
+          "key": "apikey",
+          "fields": [
+            {
+              "key": "configId",
+              "property": {
+                "type": "string",
+                "default": "default",
+                "readOnly": true
+              },
+              "required": true
+            },
+            {
+              "key": "name",
+              "property": {
+                "type": "string",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "start",
+              "property": {
+                "type": "string",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "referenceId",
+              "property": {
+                "type": "string",
+                "readOnly": true
+              },
+              "required": true
+            },
+            {
+              "key": "prefix",
+              "property": {
+                "type": "string",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "key",
+              "property": {
+                "type": "string",
+                "readOnly": true
+              },
+              "required": true
+            },
+            {
+              "key": "refillInterval",
+              "property": {
+                "type": "number",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "refillAmount",
+              "property": {
+                "type": "number",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "lastRefillAt",
+              "property": {
+                "type": "string",
+                "format": "date-time",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "enabled",
+              "property": {
+                "type": "boolean",
+                "default": true,
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "rateLimitEnabled",
+              "property": {
+                "type": "boolean",
+                "default": true,
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "rateLimitTimeWindow",
+              "property": {
+                "type": "number",
+                "default": 86400000,
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "rateLimitMax",
+              "property": {
+                "type": "number",
+                "default": 10,
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "requestCount",
+              "property": {
+                "type": "number",
+                "default": 0,
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "remaining",
+              "property": {
+                "type": "number",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "lastRequest",
+              "property": {
+                "type": "string",
+                "format": "date-time",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "expiresAt",
+              "property": {
+                "type": "string",
+                "format": "date-time",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time",
+                "readOnly": true
+              },
+              "required": true
+            },
+            {
+              "key": "updatedAt",
+              "property": {
+                "type": "string",
+                "format": "date-time",
+                "readOnly": true
+              },
+              "required": true
+            },
+            {
+              "key": "permissions",
+              "property": {
+                "type": "string",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "metadata",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "id": "passkey",
+      "models": [
+        {
+          "key": "passkey",
+          "fields": [
+            {
+              "key": "name",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "publicKey",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "userId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "credentialID",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "counter",
+              "property": {
+                "type": "number"
+              },
+              "required": true
+            },
+            {
+              "key": "deviceType",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "backedUp",
+              "property": {
+                "type": "boolean"
+              },
+              "required": true
+            },
+            {
+              "key": "transports",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": false
+            },
+            {
+              "key": "aaguid",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "id": "admin",
+      "models": [
+        {
+          "key": "user",
+          "fields": [
+            {
+              "key": "role",
+              "property": {
+                "type": "string",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "banned",
+              "property": {
+                "type": "boolean",
+                "default": false,
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "banReason",
+              "property": {
+                "type": "string",
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "banExpires",
+              "property": {
+                "type": "string",
+                "format": "date-time",
+                "readOnly": true
+              },
+              "required": false
+            }
+          ]
+        },
+        {
+          "key": "session",
+          "fields": [
+            {
+              "key": "impersonatedBy",
+              "property": {
+                "type": "string",
+                "readOnly": true
+              },
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "id": "anonymous",
+      "models": [
+        {
+          "key": "user",
+          "fields": [
+            {
+              "key": "isAnonymous",
+              "property": {
+                "type": "boolean",
+                "default": false,
+                "readOnly": true
+              },
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "id": "bearer",
+      "models": []
+    },
+    {
+      "kind": "plugin",
+      "id": "device-authorization",
+      "models": [
+        {
+          "key": "deviceCode",
+          "fields": [
+            {
+              "key": "deviceCode",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "userCode",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "userId",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "expiresAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "status",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "lastPolledAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": false
+            },
+            {
+              "key": "pollingInterval",
+              "property": {
+                "type": "number"
+              },
+              "required": false
+            },
+            {
+              "key": "clientId",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "scope",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "id": "custom-session",
+      "models": []
+    },
+    {
+      "kind": "plugin",
+      "id": "generic-oauth",
+      "models": []
+    },
+    {
+      "kind": "plugin",
+      "id": "have-i-been-pwned",
+      "models": []
+    },
+    {
+      "kind": "plugin",
+      "id": "email-otp",
+      "models": []
+    },
+    {
+      "kind": "plugin",
+      "id": "jwt",
+      "models": [
+        {
+          "key": "jwks",
+          "fields": [
+            {
+              "key": "publicKey",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "privateKey",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            },
+            {
+              "key": "expiresAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": false
+            },
+            {
+              "key": "alg",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "crv",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "id": "magic-link",
+      "models": []
+    },
+    {
+      "kind": "plugin",
+      "id": "multi-session",
+      "models": []
+    },
+    {
+      "kind": "plugin",
+      "id": "oauth-proxy",
+      "models": []
+    },
+    {
+      "kind": "plugin",
+      "id": "oauth-popup",
+      "models": []
+    },
+    {
+      "kind": "plugin",
+      "id": "one-tap",
+      "models": []
+    },
+    {
+      "kind": "plugin",
+      "id": "one-time-token",
+      "models": []
+    },
+    {
+      "kind": "plugin",
+      "id": "phone-number",
+      "models": [
+        {
+          "key": "user",
+          "fields": [
+            {
+              "key": "phoneNumber",
+              "property": {
+                "type": "string"
+              },
+              "required": false,
+              "inputProperty": {
+                "type": "string"
+              },
+              "inputRequired": false
+            },
+            {
+              "key": "phoneNumberVerified",
+              "property": {
+                "type": "boolean",
+                "readOnly": true
+              },
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "id": "siwe",
+      "models": [
+        {
+          "key": "walletAddress",
+          "fields": [
+            {
+              "key": "userId",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "address",
+              "property": {
+                "type": "string"
+              },
+              "required": true
+            },
+            {
+              "key": "chainId",
+              "property": {
+                "type": "number"
+              },
+              "required": true
+            },
+            {
+              "key": "isPrimary",
+              "property": {
+                "type": "boolean",
+                "default": false
+              },
+              "required": false
+            },
+            {
+              "key": "createdAt",
+              "property": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "required": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "id": "two-factor",
+      "models": [
+        {
+          "key": "user",
+          "fields": [
+            {
+              "key": "twoFactorEnabled",
+              "property": {
+                "type": "boolean",
+                "default": false,
+                "readOnly": true
+              },
+              "required": false
+            }
+          ]
+        },
+        {
+          "key": "twoFactor",
+          "fields": [
+            {
+              "key": "secret",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "backupCodes",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "userId",
+              "property": {
+                "type": "string"
+              },
+              "required": false
+            },
+            {
+              "key": "verified",
+              "property": {
+                "type": "boolean",
+                "default": true,
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "failedVerificationCount",
+              "property": {
+                "type": "number",
+                "default": 0,
+                "readOnly": true
+              },
+              "required": false
+            },
+            {
+              "key": "lockedUntil",
+              "property": {
+                "type": "string",
+                "format": "date-time",
+                "readOnly": true
+              },
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "id": "username",
+      "models": [
+        {
+          "key": "user",
+          "fields": [
+            {
+              "key": "username",
+              "property": {
+                "type": "string"
+              },
+              "required": false,
+              "inputProperty": {
+                "type": "string"
+              },
+              "inputRequired": false
+            },
+            {
+              "key": "displayUsername",
+              "property": {
+                "type": "string"
+              },
+              "required": false,
+              "inputProperty": {
+                "type": "string"
+              },
+              "inputRequired": false,
+              "condition": "display-username"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "id": "captcha",
+      "models": []
+    },
+    {
+      "kind": "plugin",
+      "id": "last-login-method",
+      "models": [
+        {
+          "key": "user",
+          "fields": [
+            {
+              "key": "lastLoginMethod",
+              "property": {
+                "type": "string",
+                "readOnly": true
+              },
+              "required": false
+            }
+          ],
+          "condition": "last-login-database"
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "id": "open-api",
+      "models": []
+    }
+  ],
+  "conditions": {
+    "verification-database": "!options.secondaryStorage || options.verification.storeInDatabase",
+    "database-rate-limit": "options.rateLimit.storage === 'database'",
+    "organization-teams": "organization.teams.enabled",
+    "organization-roles": "organization.dynamicAccessControl.enabled",
+    "last-login-database": "lastLoginMethod.storeInDatabase",
+    "display-username": "username.displayUsername !== false"
+  },
+  "runtimeRules": {
+    "session": "Always include Session: the upstream OpenAPI generator forces storeSessionInDatabase=true for schema collection.",
+    "order": "Merge core models, configured plugin groups in registration order, then database rateLimit. An overwritten model or field retains its first insertion position.",
+    "overrides": "Apply effective field policies last for each logical model. Recompute required for overridden fields; do not union a stale required set.",
+    "corePrecedence": "Core fields, plugin schema fields in registration order, then application additionalFields. Component projection uses logical keys, not modelName or fieldName.",
+    "functions": "Function defaults are already absent. Do not create stand-in UserFieldConfig factories. Project actual configured policies without executing callbacks.",
+    "apiKeyDefaults": [
+      {
+        "model": "apikey",
+        "field": "rateLimitMax",
+        "source": "One configuration: normalized rateLimit.maxRequests; otherwise 10."
+      },
+      {
+        "model": "apikey",
+        "field": "rateLimitTimeWindow",
+        "source": "One configuration: normalized rateLimit.timeWindow; otherwise 86400000."
+      }
+    ],
+    "extensionFields": "Merge actual plugin-specific additions such as DeviceAuthorization grant.deviceCodeSchemaFields before schema overrides."
+  }
+}

@@ -1,6 +1,8 @@
 use chrono::{Duration, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer, de::DeserializeOwned};
 use serde_json::{Map, Value};
+
+use super::state_json::StateExtras;
 
 use better_auth_core::entity::AuthAccount;
 use better_auth_core::{
@@ -14,63 +16,61 @@ pub(crate) struct OAuthStateLink {
     pub user_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct OAuthStatePayload {
-    #[serde(rename = "callbackURL")]
     pub callback_url: String,
-    #[serde(rename = "codeVerifier")]
     pub code_verifier: String,
-    #[serde(rename = "errorURL", skip_serializing_if = "Option::is_none")]
     pub error_url: Option<String>,
-    #[serde(rename = "newUserURL", skip_serializing_if = "Option::is_none")]
     pub new_user_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub link: Option<OAuthStateLink>,
-    #[serde(rename = "expiresAt")]
     pub expires_at: f64,
-    #[serde(rename = "requestSignUp", skip_serializing_if = "Option::is_none")]
     pub request_sign_up: Option<bool>,
-    #[serde(
-        rename = "serverContext",
-        default,
-        skip_serializing_if = "Map::is_empty"
-    )]
     pub server_context: Map<String, Value>,
-    #[serde(rename = "idTokenNonce", skip_serializing_if = "Option::is_none")]
     pub id_token_nonce: Option<String>,
-    #[serde(flatten)]
-    pub additional_data: Map<String, Value>,
+    pub oauth_state: Option<String>,
+    pub additional_data: StateExtras,
 }
 
 impl OAuthStatePayload {
     pub(crate) fn parse(value: &str) -> AuthResult<Self> {
-        let mut value: Value = serde_json::from_str(value)?;
-        for field in [
-            "errorURL",
-            "newUserURL",
-            "link",
-            "requestSignUp",
-            "idTokenNonce",
-            "serverContext",
-        ] {
-            if value.get(field).is_some_and(Value::is_null) {
-                return Err(AuthError::bad_request("Invalid OAuth state payload"));
+        let mut fields: StateExtras = serde_json::from_str(value)?;
+        let callback_url = required(&mut fields, "callbackURL")?;
+        let code_verifier = required(&mut fields, "codeVerifier")?;
+        let error_url = optional(&mut fields, "errorURL")?;
+        let new_user_url = optional(&mut fields, "newUserURL")?;
+        let expires_at = required(&mut fields, "expiresAt")?;
+        let oauth_state = optional(&mut fields, "oauthState")?;
+        let link = match fields.remove("link") {
+            None => None,
+            Some(raw) => {
+                let mut value: Value = serde_json::from_str(raw.get())?;
+                if let Some(link) = value.as_object_mut() {
+                    let user_id =
+                        better_auth_core::SchemaValue::<String>::from_json(link.remove("userId"))
+                            .display_string()?;
+                    let _ = link.insert("userId".into(), user_id.into());
+                }
+                Some(serde_json::from_value(value)?)
             }
-        }
-        if let Some(link) = value.get_mut("link").and_then(Value::as_object_mut) {
-            let user_id = better_auth_core::SchemaValue::<String>::from_json(link.remove("userId"))
-                .display_string()?;
-            let _ = link.insert("userId".into(), user_id.into());
-        }
-        let payload: Self = serde_json::from_value(value)?;
-        if payload
-            .additional_data
-            .get("oauthState")
-            .is_some_and(|value| !value.is_string())
-        {
-            return Err(AuthError::bad_request("Invalid OAuth state nonce"));
-        }
-        Ok(payload)
+        };
+        let request_sign_up = optional(&mut fields, "requestSignUp")?;
+        let id_token_nonce = optional(&mut fields, "idTokenNonce")?;
+        let server_context = optional(&mut fields, "serverContext")?.unwrap_or_default();
+        // Zod's loose object drops this top-level key; nested extras remain raw.
+        fields.retain(|key| key != "__proto__");
+        Ok(Self {
+            callback_url,
+            code_verifier,
+            error_url,
+            new_user_url,
+            link,
+            expires_at,
+            request_sign_up,
+            server_context,
+            id_token_nonce,
+            oauth_state,
+            additional_data: fields,
+        })
     }
 
     pub(crate) fn new(
@@ -80,7 +80,7 @@ impl OAuthStatePayload {
         new_user_url: Option<String>,
         link: Option<OAuthStateLink>,
         request_sign_up: Option<bool>,
-        additional_data: Map<String, Value>,
+        additional_data: StateExtras,
     ) -> Self {
         Self {
             callback_url,
@@ -92,6 +92,7 @@ impl OAuthStatePayload {
             request_sign_up,
             server_context: Map::new(),
             id_token_nonce: None,
+            oauth_state: None,
             additional_data,
         }
     }
@@ -99,6 +100,57 @@ impl OAuthStatePayload {
     pub(crate) fn is_expired(&self) -> bool {
         self.expires_at < Utc::now().timestamp_millis() as f64
     }
+
+    fn raw_fields(&self) -> serde_json::Result<StateExtras> {
+        let mut fields = self.additional_data.clone();
+        fields.insert("callbackURL", &self.callback_url)?;
+        fields.insert("codeVerifier", &self.code_verifier)?;
+        fields.insert("expiresAt", &self.expires_at)?;
+        if let Some(value) = &self.error_url {
+            fields.insert("errorURL", value)?;
+        }
+        if let Some(value) = &self.new_user_url {
+            fields.insert("newUserURL", value)?;
+        }
+        if let Some(value) = &self.link {
+            fields.insert("link", value)?;
+        }
+        if let Some(value) = &self.request_sign_up {
+            fields.insert("requestSignUp", value)?;
+        }
+        if let Some(value) = &self.id_token_nonce {
+            fields.insert("idTokenNonce", value)?;
+        }
+        if let Some(value) = &self.oauth_state {
+            fields.insert("oauthState", value)?;
+        }
+        if !self.server_context.is_empty() {
+            fields.insert("serverContext", &self.server_context)?;
+        }
+        Ok(fields)
+    }
+}
+
+impl Serialize for OAuthStatePayload {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.raw_fields()
+            .map_err(serde::ser::Error::custom)?
+            .serialize(serializer)
+    }
+}
+
+fn required<T: DeserializeOwned>(fields: &mut StateExtras, name: &str) -> AuthResult<T> {
+    let value = fields
+        .remove(name)
+        .ok_or_else(|| AuthError::bad_request(format!("Missing OAuth state field: {name}")))?;
+    Ok(serde_json::from_str(value.get())?)
+}
+
+fn optional<T: DeserializeOwned>(fields: &mut StateExtras, name: &str) -> AuthResult<Option<T>> {
+    fields
+        .remove(name)
+        .map(|value| serde_json::from_str(value.get()).map_err(Into::into))
+        .transpose()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -268,15 +320,13 @@ pub(crate) fn related_cookie_name(config: &AuthConfig, suffix: &str) -> String {
 
 pub(crate) fn filter_additional_state_data(
     additional_data: Option<Map<String, Value>>,
-) -> Map<String, Value> {
-    additional_data
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|(key, _)| !reserved_state_key(key))
-        .collect()
+) -> AuthResult<StateExtras> {
+    let mut fields = StateExtras::from_values(additional_data.unwrap_or_default())?;
+    fields.retain(|key| !reserved_state_key(key));
+    Ok(fields)
 }
 
-fn reserved_state_key(key: &str) -> bool {
+pub(super) fn reserved_state_key(key: &str) -> bool {
     matches!(
         key,
         "oauthState"
@@ -290,4 +340,35 @@ fn reserved_state_key(key: &str) -> bool {
             | "expiresAt"
             | "requestSignUp"
     )
+}
+
+#[cfg(test)]
+mod raw_state_tests {
+    use super::*;
+
+    #[test]
+    fn payload_keeps_raw_extras_and_validates_reserved_values() {
+        let input = r#"{"callbackURL":"/done","codeVerifier":"verifier","expiresAt":123.5,"oauthState":"bound","\ud800":{"v":"\udc00","day":"2026-02-30T00:00:00Z","__proto__":"nested"},"__proto__":"top"}"#;
+        let payload = OAuthStatePayload::parse(input).unwrap();
+        assert_eq!(payload.oauth_state.as_deref(), Some("bound"));
+        let output = serde_json::to_string(&payload).unwrap();
+        assert!(output.contains(
+            r#""\ud800":{"v":"\udc00","day":"2026-02-30T00:00:00Z","__proto__":"nested"}"#
+        ));
+        assert!(!output.contains(r#""top""#));
+        assert!(
+            OAuthStatePayload::parse(
+                &input.replace(r#""oauthState":"bound""#, r#""oauthState":null"#)
+            )
+            .is_err()
+        );
+        assert!(
+            OAuthStatePayload::parse(
+                &input.replace(r#""codeVerifier":"verifier""#, r#""codeVerifier":null"#)
+            )
+            .is_err()
+        );
+        let output = serde_json::to_string(&OAuthStatePayload::parse(&output).unwrap()).unwrap();
+        assert!(output.contains("2026-02-30T00:00:00Z"));
+    }
 }

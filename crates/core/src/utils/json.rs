@@ -2,6 +2,9 @@
 
 use serde_json::Value;
 
+mod stringify;
+pub use stringify::{array_index, stringify};
+
 /// Parse upstream JSON values and revive ISO date strings. Invalid JSON produces null.
 pub fn safe_json_parse(text: &str) -> Value {
     let mut value: Value = match serde_json::from_str(text) {

@@ -360,6 +360,18 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         Ok(())
     }
 
+    async fn delete_sessions(&self, tokens: &[String]) -> AuthResult<()> {
+        self.delete_sessions_with_hooks(|row| tokens.contains(&row.token), false)
+            .await
+            .map(|_| ())
+    }
+
+    async fn end_sessions(&self, tokens: &[String]) -> AuthResult<()> {
+        self.delete_sessions_with_hooks(|row| tokens.contains(&row.token), true)
+            .await
+            .map(|_| ())
+    }
+
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
         self.delete_user_sessions_optional(user_id, false)
             .await

@@ -350,10 +350,12 @@ pub(super) async fn handle_account_info(
         let info = fetch_user_info_from_provider(provider, request, None).await?;
         (
             AccountInfoUser {
+                id: Some(info.user.id),
                 name: info.user.name,
                 email: info.user.email,
                 image: info.user.image,
                 email_verified: info.user.email_verified,
+                additional_fields: info.user.additional_fields,
             },
             info.data,
         )

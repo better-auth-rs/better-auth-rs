@@ -620,7 +620,12 @@ pub(super) async fn validate_provider_user<S: better_auth_core::AuthSchema>(
         let _ = fields.insert("name".into(), name.clone().into());
     }
     if let Some(image) = &user.image {
-        let _ = fields.insert("image".into(), image.clone().into());
+        let _ = fields.insert(
+            "image".into(),
+            image
+                .clone()
+                .map_or(serde_json::Value::Null, serde_json::Value::String),
+        );
     }
     crate::plugins::user_admission::validate(
         crate::plugins::user_admission::UserValidationData {

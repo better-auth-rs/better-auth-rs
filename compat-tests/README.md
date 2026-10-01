@@ -207,3 +207,7 @@ The seven `username-*` profiles compare all Username options through actual SQLi
 The `dynamic-context` profile passes nine paired scenarios for request URL resolution, proxy trust, asynchronous origins/providers, native source precedence, initialization and callback errors, plugin origin merging, and concurrent tenant isolation. Cookie cases use real signup and authentication with custom names and attributes, a chunked cache, and complete deletion. The shared renderer preserves dotted Domain spelling and parent chunk attributes.
 
 `dynamic-environment` runs ten independent server processes with isolated URL environment sources. `dynamic-oauth` verifies tenant-bound persisted OAuth state and trusted-provider linking in real SQLite. `dynamic-native` passes five scenarios for source-free/fallback facades, header-only Admin and transaction-bound Email OTP; rejected transactions retain no OTP. `tests/dynamic_runtime_tests.rs` separately verifies per-instance database-hook context and scope restoration after errors.
+
+### Trailing slashes and HTTP response hooks
+
+The `trailing-slashes-default`, `trailing-slashes-true`, and `trailing-slashes-false` profiles run four paired scenarios each. They cover GET/POST route shapes, declared trailing slashes, dynamic endpoint templates, consecutive slashes, base-path boundaries, disabled-path precedence, original Request URLs, body errors, early replies, mutable response-hook chains, and replacement stopping. Query coverage uses single values; repeated query values remain a separate contract.

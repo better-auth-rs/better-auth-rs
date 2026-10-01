@@ -18,6 +18,36 @@ async function setup(ctx: Context, suffix: string) {
 const link = (ctx: Context, token: any = {}) => post(ctx, "/link-social", { provider: "google", idToken: { token: "id-token", ...token } });
 
 export function linkScenarios(disabled: boolean) {
+  compatScenario("owned provider image keeps omission distinct from explicit null", async ctx => {
+    const { email, provider } = await setup(ctx, "link-image");
+    await control(ctx, { email, seed: true, clear: true });
+    const { image: originalImage, ...withoutImage } = provider;
+    const observations: unknown[] = [];
+    for (const [profile, expected, patch] of [
+      [{ ...provider, image: "https://example.com/updated.png" }, "https://example.com/updated.png", { image: "https://example.com/updated.png" }],
+      [withoutImage, "https://example.com/updated.png", {}],
+      [{ ...provider, image: null }, null, { image: null }],
+      [{ ...provider, image: originalImage }, originalImage, { image: originalImage }],
+    ] as const) {
+      await control(ctx, { provider: profile, clear: true });
+      const result = await link(ctx, { accessToken: "image-access" });
+      expect(result.status).toBe(200);
+      const snapshot = await control(ctx, { email });
+      expect(snapshot.user.image).toBe(expected);
+      expect(snapshot.imageUpdates).toEqual([patch]);
+      expect(snapshot.events).toEqual(["account.update.before", "account.update.after", "user.update.before", "user.update.after"]);
+      expect(snapshot.account.accessToken).toBe("image-access");
+      const accounts = await ctx.actor().client.listAccounts();
+      expect(accounts.error).toBeNull();
+      const account = accounts.data!.find(row => row.providerId === "google")!;
+      const info = await ctx.rawRequest({ path: `/api/auth/account-info?accountId=${encodeURIComponent(account.id)}` });
+      expect(info.status).toBe(200);
+      if (Object.hasOwn(patch, "image")) expect((info.body as any).user.image).toBe(expected);
+      else expect((info.body as any).user).not.toHaveProperty("image");
+      observations.push({ result, snapshot, info });
+    }
+    return observations;
+  });
   compatScenario("owned ID-token link refreshes tokens and profile before linking policy", async ctx => {
     const { email, provider } = await setup(ctx, "owned-link");
     await control(ctx, { email, seed: true, clear: true });

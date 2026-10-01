@@ -11,7 +11,7 @@ Use `BetterAuth::stateless(config)` without an application schema or database. E
 
 Configure application user fields with `AuthConfig.user.additional_fields` and matching application-owned entity columns. See [user fields](docs/content/docs/concepts/users-accounts.mdx) for input validation, defaults, transforms, and public visibility.
 
-Use [OAuth Popup](docs/content/docs/plugins/oauth-popup.mdx) to return OAuth sign-in results to a trusted popup opener.
+Use [OAuth Popup](docs/content/docs/plugins/oauth-popup.mdx) to return OAuth sign-in results to a trusted popup opener. Enable [OpenAPI](docs/content/docs/reference/openapi.mdx) for the configured runtime schema and Scalar reference page.
 
 The [JWT plugin](docs/content/docs/plugins/jwt.mdx) supports local and custom signing, server-only verification, and asymmetric session cookie caches.
 

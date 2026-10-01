@@ -3,7 +3,7 @@ use std::sync::Arc;
 use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse,
     AuthResult, AuthSchema, AuthStore, BeforeRequestAction, EmailProvider, HttpMethod, OkResponse,
-    OpenApiBuilder, OpenApiSpec, SessionManager, UpdateUser, UpdateUserRequest, core_paths,
+    OpenApiRegistry, OpenApiSpec, SessionManager, UpdateUser, UpdateUserRequest, core_paths,
     entity::AuthUser,
     hooks::{
         RequestHookContext, set_request_hook_route, update_request_hook_context,
@@ -19,9 +19,7 @@ fn endpoint_error(error: AuthError, request: &AuthRequest) -> AuthResult<AuthErr
     if !error.is_api_error() {
         return Ok(error);
     }
-    let mut response = error.to_auth_response();
-    response.capture_error_headers(request.take_response_headers()?);
-    Ok(response.into())
+    Ok(error.capture_endpoint_headers(request.take_response_headers()?))
 }
 
 pub struct BetterAuth<S: AuthSchema> {
@@ -42,6 +40,7 @@ pub struct AuthBuilder<S: AuthSchema> {
     config: AuthConfig,
     validate_user_info:
         Option<Arc<dyn better_auth_api::plugins::user_admission::ValidateUserInfo<S>>>,
+    api_error_handler: Option<Arc<dyn better_auth_core::api_error::ApiErrorHandler<S>>>,
     store: Option<Arc<dyn AuthStore<S>>>,
     ephemeral_store: Option<EphemeralStoreFactory<S>>,
     secondary_storage: Option<Arc<dyn better_auth_core::store::SecondaryStorage>>,
@@ -58,6 +57,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
         Self {
             config,
             validate_user_info: None,
+            api_error_handler: None,
             store: None,
             ephemeral_store: None,
             secondary_storage: None,
@@ -100,6 +100,15 @@ impl<S: AuthSchema> AuthBuilder<S> {
         callback: Arc<dyn better_auth_api::plugins::user_admission::ValidateUserInfo<S>>,
     ) -> Self {
         self.validate_user_info = Some(callback);
+        self
+    }
+
+    /// Observe HTTP routing failures. Native calls bypass this callback.
+    pub fn on_api_error(
+        mut self,
+        callback: Arc<dyn better_auth_core::api_error::ApiErrorHandler<S>>,
+    ) -> Self {
+        self.api_error_handler = Some(callback);
         self
     }
 
@@ -167,6 +176,9 @@ impl<S: AuthSchema> AuthBuilder<S> {
             .extensions
             .insert(self.csrf_config.clone().unwrap_or_default());
         init_context.secondary_storage = self.secondary_storage;
+        if let Some(callback) = self.api_error_handler {
+            init_context.extensions.insert(callback);
+        }
         if let Some(callback) = self.validate_user_info {
             init_context.extensions.insert(callback);
         }
@@ -226,6 +238,20 @@ impl<S: AuthSchema> AuthBuilder<S> {
                 ),
             )
         };
+
+        let openapi = OpenApiRegistry::new(
+            &adapter_config,
+            &config.user,
+            self.plugins
+                .iter()
+                .map(|plugin| plugin.openapi())
+                .collect::<AuthResult<Vec<_>>>()?,
+            init_parts.secondary_storage.is_some(),
+            self.rate_limit_config.as_ref().is_some_and(|config| {
+                config.storage == Some(better_auth_core::RateLimitStorageKind::Database)
+            }),
+        )?;
+        init_parts.extensions.insert(openapi);
 
         // Create context
         context.config = config.clone();
@@ -323,8 +349,12 @@ impl<S: AuthSchema> BetterAuth<S> {
         // Ignore any caller-supplied virtual session value; only internal
         // before_request hooks may inject this during dispatch.
         let url = req.url().cloned();
+        let mounted = req.base_relative_path().is_some();
         let mut req =
             AuthRequest::from_parts(req.method, req.path, req.headers, req.body, req.query);
+        if mounted {
+            req = req.with_base_relative_path();
+        }
         if let Some(url) = url {
             req = req.with_url(url);
         }
@@ -342,25 +372,22 @@ impl<S: AuthSchema> BetterAuth<S> {
                     if let Some(response) = self.handle_http_phase(&req, &context).await? {
                         return middleware::run_after(&self.middlewares, &req, response).await;
                     }
-                    match self.parse_endpoint_http_body(&mut req, &context) {
-                        Ok(Some(response)) => {
-                            return middleware::run_after(&self.middlewares, &req, response).await;
-                        }
+                    let original_request = req.clone();
+                    let response = match self.parse_endpoint_http_body(&mut req, &context) {
+                        Ok(Some(response)) => response,
                         Err(error) => {
-                            return middleware::run_after(
-                                &self.middlewares,
-                                &req,
-                                error.to_http_response(),
-                            )
-                            .await;
+                            better_auth_core::api_error::handle_http_error(error, &context).await?
                         }
-                        Ok(None) => {}
-                    }
-                    let response = match self.dispatch_endpoint(&mut req, true, &context).await {
-                        Ok(response) => response,
-                        Err(error) => error.to_http_response(),
+                        Ok(None) => match self.dispatch_endpoint(&mut req, true, &context).await {
+                            Ok(response) => response,
+                            Err(error) => {
+                                better_auth_core::api_error::handle_http_error(error, &context)
+                                    .await?
+                            }
+                        },
                     };
-                    middleware::run_after(&self.middlewares, &req, response).await
+                    self.finish_http_response(&original_request, response, &context)
+                        .await
                 })
                 .await
             })
@@ -372,16 +399,12 @@ impl<S: AuthSchema> BetterAuth<S> {
         req: &AuthRequest,
         context: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
-        let path = if context.base_path().is_empty() || context.base_path() == "/" {
-            req.path()
-        } else {
-            req.path()
-                .strip_prefix(context.base_path())
-                .unwrap_or(req.path())
-        }
-        .to_owned();
-        if context.config.is_path_disabled(&path) {
-            return Ok(Some(AuthResponse::new(404)));
+        let path = super::http_routing::disabled_path(req, context.base_path());
+        if context.config.is_path_disabled(path) {
+            return Ok(Some(
+                AuthResponse::text(404, "Not Found")
+                    .with_header("content-type", "text/plain;charset=UTF-8"),
+            ));
         }
         if let Some(response) = middleware::run_before(&self.http_middlewares, req).await? {
             return Ok(Some(response));
@@ -394,39 +417,61 @@ impl<S: AuthSchema> BetterAuth<S> {
         Ok(None)
     }
 
+    async fn finish_http_response(
+        &self,
+        request: &AuthRequest,
+        mut response: AuthResponse,
+        context: &AuthContext<S>,
+    ) -> AuthResult<AuthResponse> {
+        for plugin in &self.plugins {
+            if let Some(replacement) = plugin
+                .on_http_response(request, &mut response, context)
+                .await?
+            {
+                response = replacement;
+                break;
+            }
+        }
+        middleware::run_after(&self.middlewares, request, response).await
+    }
+
     fn parse_endpoint_http_body(
         &self,
         req: &mut AuthRequest,
         context: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
-        let path = if context.base_path() == "/" {
-            req.path()
-        } else {
-            req.path()
-                .strip_prefix(context.base_path())
-                .unwrap_or(req.path())
-        }
-        .to_owned();
-        let route = self
-            .plugins
-            .iter()
-            .flat_map(|plugin| plugin.routes())
-            .find(|route| route.matches(req.method(), &path));
-        let core_route = matches!(
-            (req.method(), path.as_str()),
-            (
-                HttpMethod::Get,
-                core_paths::OK | core_paths::ERROR | core_paths::OPENAPI_SPEC
-            ) | (HttpMethod::Post, core_paths::UPDATE_USER)
-        );
-        if route.is_none() && !core_route {
+        let Some(path) = super::http_routing::route_path(req, context.base_path()) else {
             return Ok(Some(AuthResponse::new(404)));
-        }
-        set_request_hook_route(&path, route.as_ref());
-        let allowed = route
-            .filter(|route| !route.allowed_media_types.is_empty())
-            .map(|route| route.allowed_media_types)
-            .unwrap_or_else(|| vec!["application/json".to_owned()]);
+        };
+        let core_routes = [
+            better_auth_core::AuthRoute::get(core_paths::OK, "ok"),
+            better_auth_core::AuthRoute::get(core_paths::ERROR, "error"),
+            better_auth_core::AuthRoute::get(core_paths::OPENAPI_SPEC, "openapi_spec"),
+            better_auth_core::AuthRoute::post(core_paths::UPDATE_USER, "update_user"),
+        ];
+        let selected = core_routes
+            .into_iter()
+            .chain(self.plugins.iter().flat_map(|plugin| plugin.routes()))
+            .find_map(|route| {
+                super::http_routing::matched_path(
+                    &route,
+                    req.method(),
+                    path,
+                    context.config.advanced.skip_trailing_slashes,
+                )
+                .map(|path| (route, path))
+            });
+        let Some((route, path)) = selected else {
+            return Ok(Some(AuthResponse::new(404)));
+        };
+        set_request_hook_route(&path, Some(&route));
+        // Dispatch uses the matched declaration's slash shape. Keep the transport URL unchanged.
+        req.path = path;
+        let allowed = if route.allowed_media_types.is_empty() {
+            vec!["application/json".to_owned()]
+        } else {
+            route.allowed_media_types
+        };
         req.parse_http_body(&allowed)?;
         Ok(None)
     }
@@ -463,10 +508,9 @@ impl<S: AuthSchema> BetterAuth<S> {
         // Strip base_path prefix from the request path for internal routing.
         // This happens BEFORE plugin hooks so that `before_request` sees the
         // same normalised path that `on_request` / core handlers use.
-        // External callers send e.g. "/api/auth/sign-in/email"; internally
-        // handlers match against "/sign-in/email".
+        // HTTP routing already selected a base-relative path. Native callers may include the base path.
         let base_path = context.base_path();
-        let stripped_path = if !base_path.is_empty() && base_path != "/" {
+        let stripped_path = if !http && !base_path.is_empty() && base_path != "/" {
             req.path().strip_prefix(base_path).unwrap_or(req.path())
         } else {
             req.path()
@@ -534,7 +578,7 @@ impl<S: AuthSchema> BetterAuth<S> {
                 Err(error) => return Err(error),
             }
         }
-        if response.is_api_error() {
+        if response.is_api_error() && !http {
             response.capture_error_headers(response.headers.clone());
             Err(response.into())
         } else {
@@ -622,17 +666,13 @@ impl<S: AuthSchema> BetterAuth<S> {
         self.plugins.iter().map(|p| p.name()).collect()
     }
 
-    /// Generate the OpenAPI spec for all registered routes.
-    pub fn openapi_spec(&self) -> OpenApiSpec {
-        let mut builder = OpenApiBuilder::new("Better Auth", env!("CARGO_PKG_VERSION"))
-            .description("Authentication API")
-            .core_routes();
-
-        for plugin in &self.plugins {
-            builder = builder.plugin(plugin.as_ref());
-        }
-
-        builder.build()
+    /// Generate documentation for the configured instance and its initialized base URL.
+    pub fn openapi_spec(&self) -> AuthResult<OpenApiSpec> {
+        self.context
+            .extensions
+            .get::<OpenApiRegistry>()
+            .map(|registry| registry.generate(self.context.base_url()))
+            .ok_or_else(|| AuthError::config("OpenAPI registry is not initialized"))
     }
 
     /// Handle core authentication requests.
@@ -645,21 +685,13 @@ impl<S: AuthSchema> BetterAuth<S> {
             (HttpMethod::Get, core_paths::OK) => {
                 Ok(Some(AuthResponse::json(200, &OkResponse { ok: true })?))
             }
-            (HttpMethod::Get, core_paths::ERROR) => {
-                let error_code = req
-                    .query
-                    .get("error")
-                    .cloned()
-                    .unwrap_or_else(|| "UNKNOWN".to_string());
-                let error_description = req.query.get("error_description").map(String::as_str);
-                let html = better_auth_core::config::core_paths::error_page_html_with_description(
-                    &error_code,
-                    error_description,
-                );
-                Ok(Some(AuthResponse::html(200, html)))
-            }
+            (HttpMethod::Get, core_paths::ERROR) => Ok(Some(context.error_page_response(req)?)),
             (HttpMethod::Get, core_paths::OPENAPI_SPEC) => {
-                let spec = self.openapi_spec();
+                let spec = context
+                    .extensions
+                    .get::<OpenApiRegistry>()
+                    .ok_or_else(|| AuthError::config("OpenAPI registry is not initialized"))?
+                    .generate(context.base_url());
                 Ok(Some(AuthResponse::json(200, &spec)?))
             }
             (HttpMethod::Post, core_paths::UPDATE_USER) => {

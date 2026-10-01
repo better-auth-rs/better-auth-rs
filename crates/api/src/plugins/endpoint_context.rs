@@ -124,6 +124,9 @@ impl<S: AuthSchema, P: AuthPlugin<S>, C: Send + Sync + 'static> AuthPlugin<S>
     fn routes(&self) -> Vec<AuthRoute> {
         self.plugin.routes()
     }
+    fn openapi(&self) -> AuthResult<better_auth_core::openapi::OpenApiPluginMetadata> {
+        self.plugin.openapi()
+    }
     fn password_hasher(&self) -> Option<Arc<dyn better_auth_core::PasswordHasher>> {
         self.plugin.password_hasher()
     }
@@ -148,6 +151,14 @@ impl<S: AuthSchema, P: AuthPlugin<S>, C: Send + Sync + 'static> AuthPlugin<S>
     ) -> AuthResult<Option<AuthResponse>> {
         self.plugin.on_http_request(req, ctx).await
     }
+    async fn on_http_response(
+        &self,
+        req: &AuthRequest,
+        response: &mut AuthResponse,
+        ctx: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        self.plugin.on_http_response(req, response, ctx).await
+    }
     async fn on_request(
         &self,
         req: &AuthRequest,
@@ -164,3 +175,6 @@ impl<S: AuthSchema, P: AuthPlugin<S>, C: Send + Sync + 'static> AuthPlugin<S>
         self.plugin.after_request(req, response, ctx).await
     }
 }
+
+#[cfg(test)]
+mod tests;

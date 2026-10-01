@@ -17,6 +17,7 @@ extern crate self as better_auth;
 mod api_key_start;
 pub use api_key_start::ApiKeyStart;
 
+pub mod api_error;
 pub mod config;
 pub mod email;
 pub mod entity;
@@ -81,7 +82,10 @@ pub use middleware::{
     RateLimitDecision, RateLimitMiddleware, RateLimitOverride, RateLimitRuleResolver,
     RateLimitStorage, RateLimitStorageKind,
 };
-pub use openapi::{OpenApiBuilder, OpenApiInfo, OpenApiOperation, OpenApiResponse, OpenApiSpec};
+pub use openapi::{
+    OpenApiBuilder, OpenApiInfo, OpenApiPluginMetadata, OpenApiRegistry, OpenApiRouteMetadata,
+    OpenApiSpec,
+};
 pub use plugin::{AuthContext, AuthInitContext, AuthPlugin, AuthRoute, BeforeRequestAction};
 pub use schema::AuthSchema;
 #[doc(hidden)]

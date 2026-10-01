@@ -129,10 +129,15 @@ async fn test_openapi_spec_includes_core_and_plugin_routes() {
     let auth = build_auth_with_route_plugin().await;
     let spec = auth
         .openapi_spec()
+        .expect("OpenAPI registry should be initialized")
         .to_value()
         .expect("OpenAPI spec should serialize to JSON");
 
-    assert!(spec["paths"]["/ok"]["get"]["operationId"].is_string());
+    assert_eq!(
+        spec["paths"]["/ok"]["get"]["responses"]["200"]["description"],
+        "API is working"
+    );
+    assert!(spec["paths"]["/ok"]["get"].get("operationId").is_none());
     assert_eq!(
         spec["paths"]["/route-test"]["get"]["operationId"],
         "route_test"

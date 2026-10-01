@@ -79,8 +79,12 @@ struct ProfileUser {
     name: String,
     #[serde(default)]
     email_verified: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    image: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "::serde_with::rust::double_option"
+    )]
+    image: Option<Option<String>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -383,22 +387,26 @@ impl OAuthProxyPlugin {
             return Ok(None);
         }
         let Ok(state) = symmetric::decrypt(self.encryption_key(ctx), &package.state_cookie)
-            .and_then(|plain| {
-                serde_json::from_str::<OAuthStatePayload>(&plain).map_err(Into::into)
-            })
+            .and_then(|plain| OAuthStatePayload::parse(&plain))
         else {
             return Ok(None);
         };
-        let default_error = format!("{}/error", handlers::auth_base_url(ctx));
+        let default_error = ctx
+            .config
+            .api_error
+            .error_url
+            .clone()
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| format!("{}/error", handlers::auth_base_url(ctx)));
         let error_url = state
             .error_url
             .as_deref()
             .filter(|url| !url.is_empty())
             .unwrap_or(&default_error);
         if state
-            .additional_data
-            .get("oauthState")
-            .is_some_and(|value| value != &Value::String(package.state.clone()))
+            .oauth_state
+            .as_deref()
+            .is_some_and(|value| value != package.state)
         {
             return Ok(Some(redirect_error(error_url, "state_mismatch", None)?));
         }
@@ -519,7 +527,13 @@ impl OAuthProxyPlugin {
             ));
         };
         handlers::validate_redirect_target(callback, ctx, "Invalid callbackURL")?;
-        let default_error = format!("{}/error", ctx.base_url().trim_end_matches('/'));
+        let default_error = ctx
+            .config
+            .api_error
+            .error_url
+            .clone()
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| format!("{}/error", ctx.base_url().trim_end_matches('/')));
         let Some(encrypted) = req.query.get("profile").filter(|value| !value.is_empty()) else {
             return redirect_error(&default_error, "missing_profile", None);
         };
@@ -548,9 +562,7 @@ impl OAuthProxyPlugin {
                 .database
                 .consume_verification_by_identifier(&profile.state)
                 .await?
-                .and_then(|verification| {
-                    serde_json::from_str::<OAuthStatePayload>(verification.value()).ok()
-                }),
+                .and_then(|verification| OAuthStatePayload::parse(verification.value()).ok()),
             OAuthStateStrategy::Cookie => {
                 state::get_cookie(req, &state::state_cookie_name(&ctx.config))
                     .and_then(|value| {
@@ -559,10 +571,7 @@ impl OAuthProxyPlugin {
                     })
                     .filter(|state| {
                         !state.is_expired()
-                            && state
-                                .additional_data
-                                .get("oauthState")
-                                .is_some_and(|value| value.as_str() == Some(profile.state.as_str()))
+                            && state.oauth_state.as_deref() == Some(profile.state.as_str())
                     })
             }
         };
@@ -571,9 +580,9 @@ impl OAuthProxyPlugin {
         };
         if state.is_expired()
             || state
-                .additional_data
-                .get("oauthState")
-                .is_some_and(|value| value != &Value::String(profile.state.clone()))
+                .oauth_state
+                .as_deref()
+                .is_some_and(|value| value != profile.state)
         {
             return redirect_error(error_url, "state_mismatch", None);
         }
@@ -700,14 +709,12 @@ fn redirect_error(
     error: &str,
     description: Option<&str>,
 ) -> AuthResult<AuthResponse> {
-    let separator = if target.contains('?') { '&' } else { '?' };
     let mut params = url::form_urlencoded::Serializer::new(String::new());
     let _ = params.append_pair("error", error);
     if let Some(description) = description {
         let _ = params.append_pair("error_description", description);
     }
-    Ok(handlers::redirect_response(&format!(
-        "{target}{separator}{}",
-        params.finish()
-    )))
+    Ok(handlers::redirect_response(
+        &better_auth_core::utils::url::append_query_params(target, &params.finish())?,
+    ))
 }

@@ -364,6 +364,22 @@ where
         Ok(())
     }
 
+    async fn delete_sessions(&self, tokens: &[String]) -> AuthResult<()> {
+        let condition =
+            Condition::all().add(S::Session::token_column().is_in(tokens.iter().cloned()));
+        self.delete_sessions_with_connection(self.connection(), None, condition, false)
+            .await
+            .map(|_| ())
+    }
+
+    async fn end_sessions(&self, tokens: &[String]) -> AuthResult<()> {
+        let condition =
+            Condition::all().add(S::Session::token_column().is_in(tokens.iter().cloned()));
+        self.delete_sessions_with_connection(self.connection(), None, condition, true)
+            .await
+            .map(|_| ())
+    }
+
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
         self.delete_user_sessions_optional(user_id, false)
             .await

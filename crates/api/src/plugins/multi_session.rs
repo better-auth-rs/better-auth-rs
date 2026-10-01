@@ -39,9 +39,13 @@ better_auth_core::impl_auth_plugin! {
         async fn after_request(&self, req: &AuthRequest, response: &mut AuthResponse, ctx: &AuthContext<S>) -> AuthResult<()> {
             self.remember_session(req, response, ctx).await?;
             if req.path() == "/sign-out" {
+                let mut tokens = Vec::new();
                 for (name, token) in device_cookies(req, &ctx.config) {
-                    ctx.database.delete_session(&token).await?;
                     response.headers.append("Set-Cookie", create_clear_cookie(&name, &ctx.config));
+                    tokens.push(token);
+                }
+                if !tokens.is_empty() {
+                    ctx.database.delete_sessions(&tokens).await?;
                 }
             }
             Ok(())
@@ -163,20 +167,22 @@ impl MultiSessionPlugin {
                     .len()
             })
             .unwrap_or_default();
-        let mut removed = 0;
+        let mut tokens_to_delete = Vec::new();
         for (name, previous_token) in device_cookies(req, &ctx.config) {
             if find_session(ctx, &previous_token)
                 .await?
                 .is_some_and(|(_, previous)| previous.id == user.id)
             {
-                ctx.database.delete_session(&previous_token).await?;
                 response
                     .headers
                     .append("Set-Cookie", create_clear_cookie(&name, &ctx.config));
-                removed += 1;
+                tokens_to_delete.push(previous_token);
             }
         }
-        if multi_count - removed + 1 > self.config.maximum_sessions {
+        if !tokens_to_delete.is_empty() {
+            ctx.database.delete_sessions(&tokens_to_delete).await?;
+        }
+        if multi_count - tokens_to_delete.len() + 1 > self.config.maximum_sessions {
             return Ok(());
         }
         response.headers.append(

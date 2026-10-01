@@ -8,6 +8,7 @@ pub use better_auth_api::plugins::have_i_been_pwned::{
     HaveIBeenPwnedConfig, HaveIBeenPwnedPlugin, PasswordCompromiseClient, is_password_compromised,
 };
 pub use better_auth_api::plugins::user_admission;
+pub use better_auth_api::plugins::{OpenApiConfig, OpenApiPlugin, open_api};
 
 pub use better_auth_api::plugins::{
     CustomSessionCallback, CustomSessionInput, CustomSessionPlugin, custom_session,

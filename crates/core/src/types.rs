@@ -43,6 +43,7 @@ pub struct AuthRequest {
     pub body: Option<Vec<u8>>,
     pub query: HashMap<String, String>,
     url: Option<url::Url>,
+    base_relative_path: bool,
     original_request: Option<std::sync::Arc<AuthRequest>>,
     pub(crate) parsed_http_body: Option<crate::http_body::ParsedHttpBody>,
     /// Session authenticated by a trusted plugin hook for the current request.
@@ -227,7 +228,12 @@ pub struct CreateUser {
     pub id: Option<String>,
     pub email: Option<String>,
     pub name: Option<String>,
-    pub image: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_nullable_update"
+    )]
+    pub image: Option<Option<String>>,
     pub email_verified: Option<bool>,
     #[serde(
         default,
@@ -259,7 +265,12 @@ pub struct UpdateUser {
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub email: Option<String>,
     pub name: Option<String>,
-    pub image: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_nullable_update"
+    )]
+    pub image: Option<Option<String>>,
     pub email_verified: Option<bool>,
     #[serde(
         default,
@@ -423,6 +434,7 @@ impl AuthRequest {
             body: None,
             query: HashMap::new(),
             url: None,
+            base_relative_path: false,
             original_request: None,
             parsed_http_body: None,
             virtual_session: None,
@@ -451,6 +463,7 @@ impl AuthRequest {
             body,
             query,
             url: None,
+            base_relative_path: false,
             original_request: None,
             parsed_http_body: None,
             virtual_session: None,
@@ -541,6 +554,18 @@ impl AuthRequest {
     pub fn with_url(mut self, url: url::Url) -> Self {
         self.url = Some(url);
         self
+    }
+
+    /// Mark the current path as relative to a server router mount.
+    /// The integration must remove the mount prefix before calling this method.
+    pub fn with_base_relative_path(mut self) -> Self {
+        self.base_relative_path = true;
+        self
+    }
+
+    /// Return the path supplied by a mounted server router.
+    pub fn base_relative_path(&self) -> Option<&str> {
+        self.base_relative_path.then_some(self.path())
     }
 
     /// Return the original transport URL, if the integration supplied one.
@@ -779,7 +804,12 @@ pub struct UpdateUserRequest {
     pub name: Option<String>,
     #[validate(email(message = "Invalid email address"))]
     pub email: Option<String>,
-    pub image: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_nullable_update"
+    )]
+    pub image: Option<Option<String>>,
     pub role: Option<String>,
     pub metadata: Option<serde_json::Value>,
 }
@@ -931,6 +961,7 @@ mod tests {
             body: Some(br#"{"name":"test"}"#.to_vec()),
             query: HashMap::new(),
             url: None,
+            base_relative_path: false,
             original_request: None,
             parsed_http_body: None,
             virtual_session: None,

@@ -169,7 +169,11 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                     |rule| rule.apply_to_field(&ident.to_string()),
                 )
             });
-            let mut aliases = vec![name];
+            let mut aliases = if matches!(role, EntityRole::Session) {
+                runtime_hydration::field_aliases(&ident.to_string(), &name)
+            } else {
+                vec![name]
+            };
             if ident == "username" || ident == "display_username" {
                 let canonical = if ident == "username" {
                     "username"
@@ -213,7 +217,13 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
     };
 
     let hydration = if matches!(role, EntityRole::Session | EntityRole::Verification) {
-        match runtime_hydration::generate(input, fields, &all_known, &core_root) {
+        match runtime_hydration::generate(
+            input,
+            fields,
+            &all_known,
+            &core_root,
+            matches!(role, EntityRole::Session),
+        ) {
             Ok(methods) => methods,
             Err(error) => return error.to_compile_error(),
         }
@@ -409,7 +419,7 @@ fn gen_user(
                     ),
                     email: #seaorm_root::sea_orm::ActiveValue::Set(create_user.email),
                     name: #seaorm_root::sea_orm::ActiveValue::Set(create_user.name),
-                    image: #seaorm_root::sea_orm::ActiveValue::Set(create_user.image),
+                    image: #seaorm_root::sea_orm::ActiveValue::Set(create_user.image.flatten()),
                     email_verified: #seaorm_root::sea_orm::ActiveValue::Set(create_user.email_verified.unwrap_or(false)),
                     created_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
                     updated_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
@@ -430,7 +440,7 @@ fn gen_user(
                     active.name = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(name));
                 }
                 if let ::std::option::Option::Some(image) = update.image {
-                    active.image = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(image));
+                    active.image = #seaorm_root::sea_orm::ActiveValue::Set(image);
                 }
                 if let ::std::option::Option::Some(email_verified) = update.email_verified {
                     active.email_verified = #seaorm_root::sea_orm::ActiveValue::Set(email_verified);
