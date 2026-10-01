@@ -138,13 +138,10 @@ fn profile(claims: &Value, graph: Option<&Value>) -> AuthResult<Value> {
     };
     let email = match email {
         Some(email) => email.clone(),
-        None => {
-            let email = format!("{oid}@microsoft-entra-id.placeholder.invalid");
-            if !json_body::valid_email(&email)? {
-                return Err(AuthError::internal("Invalid placeholder email"));
-            }
-            Value::String(email)
-        }
+        None => Value::String(super::social_profile::placeholder_email(
+            oid,
+            "microsoft-entra-id",
+        )?),
     };
     let _ = output.insert("email".into(), email);
     let _ = output.insert("emailVerified".into(), verified);

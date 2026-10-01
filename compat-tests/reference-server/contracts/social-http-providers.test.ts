@@ -36,6 +36,7 @@ async function withUserInfo(
   responseBody: unknown = id === "kick" ? { data: [profile] }
     : id === "linear" ? { data: { viewer: profile } }
     : id === "cloudflare" ? { success: true, result: profile } : profile,
+  status = 200,
 ) {
   const events: string[] = [];
   const requests: { path: string; method: string; authorization: string | null; body?: string }[] = [];
@@ -44,6 +45,7 @@ async function withUserInfo(
     port: 0,
     async fetch(request) {
       events.push("http");
+      if (id === "reddit") expect(request.headers.get("user-agent")).toBe("better-auth");
       let body = request.method === "POST" ? await request.text() : undefined;
       if (id === "linear") {
         expect(request.headers.get("content-type")).toBe("application/json");
@@ -58,7 +60,7 @@ async function withUserInfo(
         authorization: request.headers.get("authorization"),
         ...(body === undefined ? {} : { body }),
       });
-      return Response.json(responseBody);
+      return Response.json(responseBody, { status });
     },
   });
   const originalFetch = globalThis.fetch;
@@ -137,7 +139,7 @@ test("uses pinned Better Auth core 1.7.6", async () => {
   expect(core.version).toBe(fixture.version);
 });
 
-for (const id of ["gitlab", "spotify", "huggingface", "polar", "vercel", "figma", "dropbox", "kick", "linkedin", "slack", "naver", "linear", "cloudflare"] as const) {
+for (const id of ["gitlab", "spotify", "huggingface", "polar", "vercel", "figma", "dropbox", "kick", "linkedin", "slack", "naver", "linear", "atlassian", "reddit", "kakao", "cloudflare"] as const) {
   const data = fixture.providers[id];
   for (const scopeCase of data.scopeCases) {
     test(`${id} ${scopeCase.name} scopes preserve order and PKCE`, async () => {
@@ -157,13 +159,15 @@ for (const id of ["gitlab", "spotify", "huggingface", "polar", "vercel", "figma"
         client_id: fixture.clientId,
         state: fixture.state,
         redirect_uri: redirectURI,
-        ...(["linkedin", "slack", "naver", "linear"].includes(id) ? {} : {
+        ...(["linkedin", "slack", "naver", "linear", "reddit", "kakao"].includes(id) ? {} : {
           code_challenge_method: "S256",
           code_challenge: fixture.codeChallenge,
         }),
-        ...("loginHint" in scopeCase && !["slack", "naver"].includes(id) ? { login_hint: scopeCase.loginHint } : {}),
+        ...("loginHint" in scopeCase && !["slack", "naver", "atlassian", "reddit", "kakao"].includes(id) ? { login_hint: scopeCase.loginHint } : {}),
         ...("additionalParams" in scopeCase ? scopeCase.additionalParams : {}),
+        ...("duration" in scopeCase ? { duration: scopeCase.duration } : {}),
         ...(scopeCase.scope === null ? {} : { scope: scopeCase.scope }),
+        ...(id === "atlassian" ? { audience: "api.atlassian.com" } : {}),
         ...("tokenAccessType" in scopeCase ? { token_access_type: scopeCase.tokenAccessType } : {}),
         ...("prompt" in scopeCase.options && scopeCase.options.prompt
           ? { prompt: scopeCase.options.prompt }
@@ -359,7 +363,7 @@ test("figma returns null when its default userinfo mapper rejects", async () => 
   });
 });
 
-for (const id of ["figma", "kick", "linkedin", "slack", "naver", "linear"] as const) {
+for (const id of ["figma", "kick", "linkedin", "slack", "naver", "linear", "atlassian", "reddit", "kakao"] as const) {
   for (const grant of ["code", "refresh"] as const) {
     test(`${id} ${grant} grant sends configured client authentication and the original parameters over HTTP`, async () => {
       const data = fixture.providers[id];
@@ -369,6 +373,11 @@ for (const id of ["figma", "kick", "linkedin", "slack", "naver", "linear"] as co
         hostname: "127.0.0.1",
         port: 0,
         async fetch(request) {
+          if (id === "reddit") {
+            expect(request.headers.get("accept")).toBe(fixture.providers.reddit.tokenContract.headers[grant].accept);
+            if (grant === "code") expect(request.headers.get("user-agent")).toBe("better-auth");
+            else expect(request.headers.get("user-agent")).not.toBe("better-auth");
+          }
           requests.push({
             path: new URL(request.url).pathname,
             method: request.method,
@@ -402,11 +411,11 @@ for (const id of ["figma", "kick", "linkedin", "slack", "naver", "linear"] as co
           authorization: contract.authorization,
           contentType: "application/x-www-form-urlencoded",
           body: {
-            ...(id !== "figma" ? { client_id: fixture.clientId, client_secret: fixture.clientSecret } : {}),
+            ...(!["figma", "reddit"].includes(id) ? { client_id: fixture.clientId, client_secret: fixture.clientSecret } : {}),
             ...(grant === "code" ? {
               grant_type: "authorization_code",
               code: contract.code.code,
-              ...(["linkedin", "slack", "naver", "linear"].includes(id) ? {} : { code_verifier: contract.code.codeVerifier }),
+              ...(["linkedin", "slack", "naver", "linear", "reddit", "kakao"].includes(id) ? {} : { code_verifier: contract.code.codeVerifier }),
               redirect_uri: contract.code.redirectURI,
             } : {
               grant_type: "refresh_token",
@@ -523,4 +532,95 @@ test("cloudflare ignores request hints and parameters while preserving configure
   const configured = await provider("cloudflare", data.options);
   const url = await configured.createAuthorizationURL(data.input);
   expect(Object.fromEntries(url.searchParams)).toEqual(data.authorization);
+});
+
+
+test("atlassian ignores an absent access token and a null profile before mapping", async () => {
+  await withUserInfo("atlassian", null, async ({ options, events, requests }) => {
+    const configured = await provider("atlassian", {
+      ...options,
+      mapProfileToUser: async () => { events.push("map"); return {}; },
+    });
+    expect(await configured.getUserInfo({})).toBeNull();
+    expect(await configured.getUserInfo({ accessToken: "" })).toBeNull();
+    expect(events).toEqual([]);
+    expect(requests).toEqual([]);
+    expect(await configured.getUserInfo(tokens)).toBeNull();
+    expect(events).toEqual(["http"]);
+    expect(requests).toEqual(expectedRequest("atlassian"));
+  });
+});
+
+test("atlassian custom userinfo and refresh callbacks retain precedence", async () => {
+  const events: string[] = [];
+  const configured = await provider("atlassian", {
+    getUserInfo: async (request: unknown) => { expect(request).toEqual({}); events.push("custom"); return null; },
+    mapProfileToUser: async () => { throw new Error("Custom userinfo must skip mapping"); },
+    refreshAccessToken: async (token: string) => { events.push(token); return { accessToken: "custom-atlassian-access" }; },
+  });
+  expect(await configured.getUserInfo({})).toBeNull();
+  expect(await configured.refreshAccessToken!("ordinary-refresh")).toEqual({ accessToken: "custom-atlassian-access" });
+  expect(events).toEqual(["custom", "ordinary-refresh"]);
+});
+
+for (const options of [{ clientId: "", clientSecret: "secret" }, { clientId: "client", clientSecret: "" }]) {
+  test(`atlassian requires both credentials before authorization: ${JSON.stringify(options)}`, async () => {
+    const configured = await provider("atlassian", options);
+    await expect(configured.createAuthorizationURL({ state: fixture.state, codeVerifier: fixture.codeVerifier, redirectURI: "http://app.example.test/api/auth/callback/atlassian" })).rejects.toThrow("CLIENT_ID_AND_SECRET_REQUIRED");
+  });
+}
+
+for (const emailCase of fixture.providers.reddit.emailCases) {
+  test(`reddit ${emailCase.name} applies placeholder after the awaited mapper`, async () => {
+    const data = fixture.providers.reddit;
+    await withUserInfo("reddit", data.profile, async ({ options, events }) => {
+      const configured = await provider("reddit", {
+        ...options,
+        mapProfileToUser: async (raw: unknown) => {
+          expect(raw).toEqual(data.profile);
+          events.push("map");
+          return { ...emailCase.patch, ...("undefinedEmail" in emailCase ? { email: undefined } : {}) };
+        },
+      });
+      expect(await configured.getUserInfo(tokens)).toEqual({
+        user: { ...data.defaultUser, email: emailCase.email }, data: data.profile,
+      });
+      expect(events).toEqual(["http", "map"]);
+    });
+  });
+}
+
+test("reddit preserves an ordinary mapper error", async () => {
+  const failure = new Error("Ordinary Reddit mapper failed");
+  await withUserInfo("reddit", fixture.providers.reddit.profile, async ({ options, events }) => {
+    const configured = await provider("reddit", {
+      ...options,
+      mapProfileToUser: async () => { events.push("map"); throw failure; },
+    });
+    await expect(configured.getUserInfo(tokens)).rejects.toBe(failure);
+    expect(events).toEqual(["http", "map"]);
+  });
+});
+
+test("reddit HTTP 503 returns no profile before mapping", async () => {
+  await withUserInfo("reddit", fixture.providers.reddit.profile, async ({ options, events }) => {
+    const configured = await provider("reddit", {
+      ...options,
+      mapProfileToUser: async () => { events.push("map"); return {}; },
+    });
+    expect(await configured.getUserInfo(tokens)).toBeNull();
+    expect(events).toEqual(["http"]);
+  }, { message: "Ordinary unavailable response" }, 503);
+});
+
+test("kakao custom refresh callback retains precedence", async () => {
+  const events: string[] = [];
+  const configured = await provider("kakao", {
+    refreshAccessToken: async (token: string) => {
+      events.push(token);
+      return { accessToken: "custom-kakao-access" };
+    },
+  });
+  expect(await configured.refreshAccessToken!("ordinary-refresh")).toEqual({ accessToken: "custom-kakao-access" });
+  expect(events).toEqual(["ordinary-refresh"]);
 });

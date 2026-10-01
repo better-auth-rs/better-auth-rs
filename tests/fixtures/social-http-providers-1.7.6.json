@@ -2024,6 +2024,978 @@
           }
         }
       ]
+    },
+    "atlassian": {
+      "authorizationEndpoint": "https://auth.atlassian.com/authorize",
+      "tokenEndpoint": "https://auth.atlassian.com/oauth/token",
+      "userinfoEndpoint": "https://api.atlassian.com/me",
+      "subjectField": "account_id",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "read:jira-user offline_access"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "read:jira-user",
+              "read:me"
+            ],
+            "prompt": "consent"
+          },
+          "requestScopes": [
+            "offline_access"
+          ],
+          "loginHint": "owner@example.test",
+          "additionalParams": {
+            "audience": "request-audience",
+            "request_marker": "ordinary-value"
+          },
+          "scope": "read:jira-user offline_access read:jira-user read:me offline_access"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "read:me"
+            ]
+          },
+          "requestScopes": [
+            "read:jira-user"
+          ],
+          "scope": "read:me read:jira-user"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "account_type": "atlassian",
+        "account_id": "atlassian-owner",
+        "name": "Atlassian Owner",
+        "email": "atlassian-owner@example.test",
+        "picture": "https://images.example.test/atlassian.png",
+        "nickname": "ordinary-owner",
+        "locale": "en-US",
+        "extended_profile": {
+          "job_title": "Engineer",
+          "organization": "Example"
+        }
+      },
+      "defaultUser": {
+        "name": "Atlassian Owner",
+        "email": "atlassian-owner@example.test",
+        "image": "https://images.example.test/atlassian.png",
+        "emailVerified": false
+      },
+      "mapperPatch": {
+        "name": "Mapped Atlassian Owner",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Atlassian Owner",
+        "email": "atlassian-owner@example.test",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Atlassian Owner",
+        "email": "atlassian-owner@example.test",
+        "image": "https://images.example.test/custom-atlassian.png",
+        "emailVerified": false
+      },
+      "normalProfileCases": [
+        {
+          "name": "omitted picture stays omitted",
+          "profile": {
+            "account_type": "atlassian",
+            "account_id": "atlassian-owner",
+            "name": "Atlassian Owner",
+            "email": "atlassian-owner@example.test",
+            "nickname": "ordinary-owner",
+            "locale": "en-US",
+            "extended_profile": {
+              "job_title": "Engineer",
+              "organization": "Example"
+            }
+          },
+          "user": {
+            "name": "Atlassian Owner",
+            "email": "atlassian-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "null picture stays null",
+          "profile": {
+            "account_type": "atlassian",
+            "account_id": "atlassian-owner",
+            "name": "Atlassian Owner",
+            "email": "atlassian-owner@example.test",
+            "picture": null,
+            "nickname": "ordinary-owner",
+            "locale": "en-US",
+            "extended_profile": {
+              "job_title": "Engineer",
+              "organization": "Example"
+            }
+          },
+          "user": {
+            "name": "Atlassian Owner",
+            "email": "atlassian-owner@example.test",
+            "image": null,
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "omitted email stays omitted",
+          "profile": {
+            "account_type": "atlassian",
+            "account_id": "atlassian-owner",
+            "name": "Atlassian Owner",
+            "picture": "https://images.example.test/atlassian.png",
+            "nickname": "ordinary-owner",
+            "locale": "en-US",
+            "extended_profile": {
+              "job_title": "Engineer",
+              "organization": "Example"
+            }
+          },
+          "user": {
+            "name": "Atlassian Owner",
+            "image": "https://images.example.test/atlassian.png",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "null email stays null",
+          "profile": {
+            "account_type": "atlassian",
+            "account_id": "atlassian-owner",
+            "name": "Atlassian Owner",
+            "email": null,
+            "picture": "https://images.example.test/atlassian.png",
+            "nickname": "ordinary-owner",
+            "locale": "en-US",
+            "extended_profile": {
+              "job_title": "Engineer",
+              "organization": "Example"
+            }
+          },
+          "user": {
+            "name": "Atlassian Owner",
+            "email": null,
+            "image": "https://images.example.test/atlassian.png",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "empty name stays empty",
+          "profile": {
+            "account_type": "atlassian",
+            "account_id": "atlassian-owner",
+            "name": "",
+            "email": "atlassian-owner@example.test",
+            "picture": "https://images.example.test/atlassian.png",
+            "nickname": "ordinary-owner",
+            "locale": "en-US",
+            "extended_profile": {
+              "job_title": "Engineer",
+              "organization": "Example"
+            }
+          },
+          "user": {
+            "name": "",
+            "email": "atlassian-owner@example.test",
+            "image": "https://images.example.test/atlassian.png",
+            "emailVerified": false
+          }
+        }
+      ],
+      "tokenContract": {
+        "authorization": null,
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/atlassian",
+          "deviceId": "ordinary-device"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "atlassian-access-token",
+          "refresh_token": "atlassian-refresh-token",
+          "token_type": "Bearer",
+          "scope": "read:jira-user offline_access"
+        }
+      }
+    },
+    "reddit": {
+      "authorizationEndpoint": "https://www.reddit.com/api/v1/authorize",
+      "tokenEndpoint": "https://www.reddit.com/api/v1/access_token",
+      "userinfoEndpoint": "https://oauth.reddit.com/api/v1/me",
+      "subjectField": "id",
+      "scopeCases": [
+        {
+          "name": "default",
+          "options": {},
+          "scope": "identity"
+        },
+        {
+          "name": "configured and requested duplicates",
+          "options": {
+            "scope": [
+              "history",
+              "identity"
+            ]
+          },
+          "requestScopes": [
+            "read",
+            "history"
+          ],
+          "scope": "identity history identity read history"
+        },
+        {
+          "name": "disabled defaults",
+          "options": {
+            "disableDefaultScope": true
+          },
+          "scope": null
+        },
+        {
+          "name": "ignores dedicated login hint",
+          "options": {},
+          "loginHint": "ordinary-hint",
+          "scope": "identity"
+        },
+        {
+          "name": "configured permanent duration",
+          "options": {
+            "duration": "permanent"
+          },
+          "scope": "identity",
+          "duration": "permanent"
+        },
+        {
+          "name": "request duration overrides configured",
+          "options": {
+            "duration": "permanent"
+          },
+          "additionalParams": {
+            "duration": "temporary",
+            "request_marker": "ordinary"
+          },
+          "scope": "identity",
+          "duration": "temporary"
+        },
+        {
+          "name": "empty duration is omitted",
+          "options": {
+            "duration": ""
+          },
+          "scope": "identity"
+        }
+      ],
+      "profile": {
+        "id": "r12345",
+        "name": "Reddit Owner",
+        "icon_img": "https://images.example.test/reddit.png?width=256&format=png",
+        "has_verified_email": true,
+        "oauth_client_id": "ordinary-client",
+        "verified": true
+      },
+      "defaultUser": {
+        "name": "Reddit Owner",
+        "image": "https://images.example.test/reddit.png",
+        "email": "r12345@reddit.placeholder.invalid",
+        "emailVerified": false
+      },
+      "mapperPatch": {
+        "name": "Mapped Reddit Owner",
+        "image": "https://images.example.test/mapped-reddit.png",
+        "emailVerified": true,
+        "locale": "en-GB"
+      },
+      "mappedUser": {
+        "name": "Mapped Reddit Owner",
+        "image": "https://images.example.test/mapped-reddit.png",
+        "email": "r12345@reddit.placeholder.invalid",
+        "emailVerified": true,
+        "locale": "en-GB"
+      },
+      "customUser": {
+        "name": "Custom Reddit Owner",
+        "image": "https://images.example.test/custom-reddit.png",
+        "email": "custom-reddit@example.test",
+        "emailVerified": false
+      },
+      "normalProfileCases": [
+        {
+          "name": "null icon omits image",
+          "profile": {
+            "id": "r12345",
+            "name": "Reddit Owner",
+            "icon_img": null,
+            "has_verified_email": true,
+            "oauth_client_id": "ordinary-client",
+            "verified": true
+          },
+          "user": {
+            "name": "Reddit Owner",
+            "email": "r12345@reddit.placeholder.invalid",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "empty icon remains empty",
+          "profile": {
+            "id": "r12345",
+            "name": "Reddit Owner",
+            "icon_img": "",
+            "has_verified_email": true,
+            "oauth_client_id": "ordinary-client",
+            "verified": true
+          },
+          "user": {
+            "name": "Reddit Owner",
+            "image": "",
+            "email": "r12345@reddit.placeholder.invalid",
+            "emailVerified": false
+          }
+        }
+      ],
+      "emailCases": [
+        {
+          "name": "omitted mapper email",
+          "patch": {},
+          "email": "r12345@reddit.placeholder.invalid"
+        },
+        {
+          "name": "undefined mapper email",
+          "patch": {},
+          "undefinedEmail": true,
+          "email": "r12345@reddit.placeholder.invalid"
+        },
+        {
+          "name": "null mapper email",
+          "patch": {
+            "email": null
+          },
+          "email": "r12345@reddit.placeholder.invalid"
+        },
+        {
+          "name": "empty mapper email",
+          "patch": {
+            "email": ""
+          },
+          "email": "r12345@reddit.placeholder.invalid"
+        },
+        {
+          "name": "nonempty mapper email",
+          "patch": {
+            "email": "mapped-reddit@example.test"
+          },
+          "email": "mapped-reddit@example.test"
+        }
+      ],
+      "tokenContract": {
+        "authorization": "Basic c29jaWFsLWh0dHAtY2xpZW50Om9yZGluYXJ5LWNsaWVudC1zZWNyZXQ=",
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/reddit",
+          "deviceId": "ordinary-device"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "reddit-access-token",
+          "refresh_token": "reddit-refresh-token",
+          "token_type": "Bearer",
+          "expires_in": 3600,
+          "scope": "identity history"
+        },
+        "headers": {
+          "code": {
+            "accept": "text/plain",
+            "userAgent": "better-auth"
+          },
+          "refresh": {
+            "accept": "application/json"
+          }
+        }
+      }
+    },
+    "salesforce": {
+      "authorizationEndpoint": "https://login.salesforce.com/services/oauth2/authorize",
+      "tokenEndpoint": "https://login.salesforce.com/services/oauth2/token",
+      "userinfoEndpoint": "https://login.salesforce.com/services/oauth2/userinfo",
+      "subjectField": "user_id",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "openid email profile"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "api",
+              "email"
+            ]
+          },
+          "requestScopes": [
+            "refresh_token",
+            "api"
+          ],
+          "scope": "openid email profile api email refresh_token api"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "api"
+            ]
+          },
+          "requestScopes": [
+            "refresh_token"
+          ],
+          "scope": "api refresh_token"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "sub": "https://login.salesforce.com/id/org/owner",
+        "user_id": "salesforce-owner",
+        "organization_id": "ordinary-org",
+        "name": "Salesforce Owner",
+        "email": "salesforce-owner@example.test",
+        "email_verified": true,
+        "photos": {
+          "picture": "https://images.example.test/salesforce.png",
+          "thumbnail": "https://images.example.test/salesforce-small.png"
+        }
+      },
+      "defaultUser": {
+        "name": "Salesforce Owner",
+        "email": "salesforce-owner@example.test",
+        "image": "https://images.example.test/salesforce.png",
+        "emailVerified": true
+      },
+      "mapperPatch": {
+        "name": "Mapped Salesforce Owner",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Salesforce Owner",
+        "email": "salesforce-owner@example.test",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Salesforce Owner",
+        "email": "salesforce-owner@example.test",
+        "image": "https://images.example.test/salesforce.png",
+        "emailVerified": true
+      },
+      "normalProfileCases": [],
+      "tokenContract": {
+        "authorization": null,
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/salesforce",
+          "deviceId": "ordinary-device"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "salesforce-access-token",
+          "refresh_token": "salesforce-refresh-token",
+          "token_type": "Bearer",
+          "scope": "openid email profile"
+        }
+      }
+    },
+    "kakao": {
+      "authorizationEndpoint": "https://kauth.kakao.com/oauth/authorize",
+      "tokenEndpoint": "https://kauth.kakao.com/oauth/token",
+      "userinfoEndpoint": "https://kapi.kakao.com/v2/user/me",
+      "subjectField": "id",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "account_email profile_image profile_nickname"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "account_email",
+              "profile_nickname"
+            ]
+          },
+          "requestScopes": [
+            "profile_image"
+          ],
+          "loginHint": "owner@example.test",
+          "additionalParams": {
+            "request_marker": "ordinary-value"
+          },
+          "scope": "account_email profile_image profile_nickname account_email profile_nickname profile_image"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "profile_nickname"
+            ]
+          },
+          "requestScopes": [
+            "profile_image"
+          ],
+          "scope": "profile_nickname profile_image"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "id": 123456789,
+        "connected_at": "2025-01-01T00:00:00Z",
+        "properties": {
+          "nickname": "Legacy Owner"
+        },
+        "kakao_account": {
+          "name": "Kakao Account Owner",
+          "email": "kakao-owner@example.test",
+          "is_email_valid": true,
+          "is_email_verified": true,
+          "profile": {
+            "nickname": "Kakao Owner",
+            "profile_image_url": "https://images.example.test/kakao.png",
+            "thumbnail_image_url": "https://images.example.test/kakao-thumb.png"
+          }
+        }
+      },
+      "defaultUser": {
+        "name": "Kakao Owner",
+        "email": "kakao-owner@example.test",
+        "image": "https://images.example.test/kakao.png",
+        "emailVerified": true
+      },
+      "mapperPatch": {
+        "name": "Mapped Kakao Owner",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Kakao Owner",
+        "email": "kakao-owner@example.test",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Kakao Owner",
+        "email": "kakao-owner@example.test",
+        "image": "https://images.example.test/custom-kakao.png",
+        "emailVerified": true
+      },
+      "normalProfileCases": [
+        {
+          "name": "empty nickname uses account name",
+          "profile": {
+            "id": 123456789,
+            "connected_at": "2025-01-01T00:00:00Z",
+            "properties": {
+              "nickname": "Legacy Owner"
+            },
+            "kakao_account": {
+              "name": "Kakao Account Owner",
+              "email": "kakao-owner@example.test",
+              "is_email_valid": true,
+              "is_email_verified": true,
+              "profile": {
+                "nickname": "",
+                "profile_image_url": "https://images.example.test/kakao.png",
+                "thumbnail_image_url": "https://images.example.test/kakao-thumb.png"
+              }
+            }
+          },
+          "user": {
+            "name": "Kakao Account Owner",
+            "email": "kakao-owner@example.test",
+            "image": "https://images.example.test/kakao.png",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "omitted profile uses account name",
+          "profile": {
+            "id": 123456789,
+            "connected_at": "2025-01-01T00:00:00Z",
+            "properties": {
+              "nickname": "Legacy Owner"
+            },
+            "kakao_account": {
+              "name": "Kakao Account Owner",
+              "email": "kakao-owner@example.test",
+              "is_email_valid": true,
+              "is_email_verified": true
+            }
+          },
+          "user": {
+            "name": "Kakao Account Owner",
+            "email": "kakao-owner@example.test",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "empty nickname and account name become empty",
+          "profile": {
+            "id": 123456789,
+            "connected_at": "2025-01-01T00:00:00Z",
+            "properties": {
+              "nickname": "Legacy Owner"
+            },
+            "kakao_account": {
+              "name": "",
+              "email": "kakao-owner@example.test",
+              "is_email_valid": true,
+              "is_email_verified": true,
+              "profile": {
+                "nickname": "",
+                "profile_image_url": "https://images.example.test/kakao.png",
+                "thumbnail_image_url": "https://images.example.test/kakao-thumb.png"
+              }
+            }
+          },
+          "user": {
+            "name": "",
+            "email": "kakao-owner@example.test",
+            "image": "https://images.example.test/kakao.png",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "empty main image uses thumbnail",
+          "profile": {
+            "id": 123456789,
+            "connected_at": "2025-01-01T00:00:00Z",
+            "properties": {
+              "nickname": "Legacy Owner"
+            },
+            "kakao_account": {
+              "name": "Kakao Account Owner",
+              "email": "kakao-owner@example.test",
+              "is_email_valid": true,
+              "is_email_verified": true,
+              "profile": {
+                "nickname": "Kakao Owner",
+                "profile_image_url": "",
+                "thumbnail_image_url": "https://images.example.test/kakao-thumb.png"
+              }
+            }
+          },
+          "user": {
+            "name": "Kakao Owner",
+            "email": "kakao-owner@example.test",
+            "image": "https://images.example.test/kakao-thumb.png",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "null main image uses thumbnail",
+          "profile": {
+            "id": 123456789,
+            "connected_at": "2025-01-01T00:00:00Z",
+            "properties": {
+              "nickname": "Legacy Owner"
+            },
+            "kakao_account": {
+              "name": "Kakao Account Owner",
+              "email": "kakao-owner@example.test",
+              "is_email_valid": true,
+              "is_email_verified": true,
+              "profile": {
+                "nickname": "Kakao Owner",
+                "profile_image_url": null,
+                "thumbnail_image_url": "https://images.example.test/kakao-thumb.png"
+              }
+            }
+          },
+          "user": {
+            "name": "Kakao Owner",
+            "email": "kakao-owner@example.test",
+            "image": "https://images.example.test/kakao-thumb.png",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "omitted images remain omitted",
+          "profile": {
+            "id": 123456789,
+            "connected_at": "2025-01-01T00:00:00Z",
+            "properties": {
+              "nickname": "Legacy Owner"
+            },
+            "kakao_account": {
+              "name": "Kakao Account Owner",
+              "email": "kakao-owner@example.test",
+              "is_email_valid": true,
+              "is_email_verified": true,
+              "profile": {
+                "nickname": "Kakao Owner"
+              }
+            }
+          },
+          "user": {
+            "name": "Kakao Owner",
+            "email": "kakao-owner@example.test",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "null thumbnail stays null without main image",
+          "profile": {
+            "id": 123456789,
+            "connected_at": "2025-01-01T00:00:00Z",
+            "properties": {
+              "nickname": "Legacy Owner"
+            },
+            "kakao_account": {
+              "name": "Kakao Account Owner",
+              "email": "kakao-owner@example.test",
+              "is_email_valid": true,
+              "is_email_verified": true,
+              "profile": {
+                "nickname": "Kakao Owner",
+                "thumbnail_image_url": null
+              }
+            }
+          },
+          "user": {
+            "name": "Kakao Owner",
+            "email": "kakao-owner@example.test",
+            "image": null,
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "omitted email remains omitted",
+          "profile": {
+            "id": 123456789,
+            "connected_at": "2025-01-01T00:00:00Z",
+            "properties": {
+              "nickname": "Legacy Owner"
+            },
+            "kakao_account": {
+              "name": "Kakao Account Owner",
+              "is_email_valid": true,
+              "is_email_verified": true,
+              "profile": {
+                "nickname": "Kakao Owner",
+                "profile_image_url": "https://images.example.test/kakao.png",
+                "thumbnail_image_url": "https://images.example.test/kakao-thumb.png"
+              }
+            }
+          },
+          "user": {
+            "name": "Kakao Owner",
+            "image": "https://images.example.test/kakao.png",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "null email remains null",
+          "profile": {
+            "id": 123456789,
+            "connected_at": "2025-01-01T00:00:00Z",
+            "properties": {
+              "nickname": "Legacy Owner"
+            },
+            "kakao_account": {
+              "name": "Kakao Account Owner",
+              "email": null,
+              "is_email_valid": true,
+              "is_email_verified": true,
+              "profile": {
+                "nickname": "Kakao Owner",
+                "profile_image_url": "https://images.example.test/kakao.png",
+                "thumbnail_image_url": "https://images.example.test/kakao-thumb.png"
+              }
+            }
+          },
+          "user": {
+            "name": "Kakao Owner",
+            "email": null,
+            "image": "https://images.example.test/kakao.png",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "invalid email flag is false",
+          "profile": {
+            "id": 123456789,
+            "connected_at": "2025-01-01T00:00:00Z",
+            "properties": {
+              "nickname": "Legacy Owner"
+            },
+            "kakao_account": {
+              "name": "Kakao Account Owner",
+              "email": "kakao-owner@example.test",
+              "is_email_valid": false,
+              "is_email_verified": true,
+              "profile": {
+                "nickname": "Kakao Owner",
+                "profile_image_url": "https://images.example.test/kakao.png",
+                "thumbnail_image_url": "https://images.example.test/kakao-thumb.png"
+              }
+            }
+          },
+          "user": {
+            "name": "Kakao Owner",
+            "email": "kakao-owner@example.test",
+            "image": "https://images.example.test/kakao.png",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "unverified email flag is false",
+          "profile": {
+            "id": 123456789,
+            "connected_at": "2025-01-01T00:00:00Z",
+            "properties": {
+              "nickname": "Legacy Owner"
+            },
+            "kakao_account": {
+              "name": "Kakao Account Owner",
+              "email": "kakao-owner@example.test",
+              "is_email_valid": true,
+              "is_email_verified": false,
+              "profile": {
+                "nickname": "Kakao Owner",
+                "profile_image_url": "https://images.example.test/kakao.png",
+                "thumbnail_image_url": "https://images.example.test/kakao-thumb.png"
+              }
+            }
+          },
+          "user": {
+            "name": "Kakao Owner",
+            "email": "kakao-owner@example.test",
+            "image": "https://images.example.test/kakao.png",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "omitted email flags become false",
+          "profile": {
+            "id": 123456789,
+            "connected_at": "2025-01-01T00:00:00Z",
+            "properties": {
+              "nickname": "Legacy Owner"
+            },
+            "kakao_account": {
+              "name": "Kakao Account Owner",
+              "email": "kakao-owner@example.test",
+              "profile": {
+                "nickname": "Kakao Owner",
+                "profile_image_url": "https://images.example.test/kakao.png",
+                "thumbnail_image_url": "https://images.example.test/kakao-thumb.png"
+              }
+            }
+          },
+          "user": {
+            "name": "Kakao Owner",
+            "email": "kakao-owner@example.test",
+            "image": "https://images.example.test/kakao.png",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "null email flags become false",
+          "profile": {
+            "id": 123456789,
+            "connected_at": "2025-01-01T00:00:00Z",
+            "properties": {
+              "nickname": "Legacy Owner"
+            },
+            "kakao_account": {
+              "name": "Kakao Account Owner",
+              "email": "kakao-owner@example.test",
+              "is_email_valid": null,
+              "is_email_verified": null,
+              "profile": {
+                "nickname": "Kakao Owner",
+                "profile_image_url": "https://images.example.test/kakao.png",
+                "thumbnail_image_url": "https://images.example.test/kakao-thumb.png"
+              }
+            }
+          },
+          "user": {
+            "name": "Kakao Owner",
+            "email": "kakao-owner@example.test",
+            "image": "https://images.example.test/kakao.png",
+            "emailVerified": false
+          }
+        }
+      ],
+      "tokenContract": {
+        "authorization": null,
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/kakao",
+          "deviceId": "ordinary-device"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "kakao-access-token",
+          "refresh_token": "kakao-refresh-token",
+          "token_type": "Bearer",
+          "scope": "account_email profile_image profile_nickname"
+        }
+      }
     }
   },
   "promptCases": [
@@ -2104,6 +3076,21 @@
     },
     {
       "provider": "linear",
+      "configured": "consent",
+      "expected": null
+    },
+    {
+      "provider": "atlassian",
+      "configured": "consent",
+      "expected": "consent"
+    },
+    {
+      "provider": "reddit",
+      "configured": "consent",
+      "expected": null
+    },
+    {
+      "provider": "kakao",
       "configured": "consent",
       "expected": null
     }

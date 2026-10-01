@@ -46,14 +46,16 @@ pub(super) fn build_authorization_url(
     };
     let options = generic.map(|generic| &generic.config);
     if generic.is_none()
-        && provider.config.is_figma()
         && (provider.config.client_id.is_empty() || provider.config.client_secret.is_empty())
+        && let Some(message) = provider.config.required_credentials_message()
     {
-        better_auth_core::observability::logger::current().error(
-            "Client Id and Client Secret are required for Figma. Make sure to provide them in the options.",
-            &[],
-        );
+        better_auth_core::observability::logger::current().error(message, &[]);
         return Err(AuthError::internal("CLIENT_ID_AND_SECRET_REQUIRED"));
+    }
+    if generic.is_none() && provider.config.is_salesforce() && input.code_challenge.is_empty() {
+        return Err(AuthError::internal(
+            "codeVerifier is required for Salesforce",
+        ));
     }
     if provider.config.auth_url.is_empty() {
         return Err(AuthError::Upstream {
@@ -155,6 +157,11 @@ pub(super) fn build_authorization_url(
         .chain(input.additional_params.into_iter().flatten())
     {
         if !RESERVED_PARAMS.contains(&key.as_str()) {
+            set(key, value);
+        }
+    }
+    if generic.is_none() {
+        for (key, value) in provider.config.fixed_authorization_params() {
             set(key, value);
         }
     }

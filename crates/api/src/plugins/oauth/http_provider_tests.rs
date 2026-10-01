@@ -34,6 +34,9 @@ fn provider(id: &str) -> OAuthProvider {
         "slack" => OAuthProvider::slack("social-http-client", "secret"),
         "naver" => OAuthProvider::naver("social-http-client", "secret"),
         "linear" => OAuthProvider::linear("social-http-client", "secret"),
+        "atlassian" => OAuthProvider::atlassian("social-http-client", "secret"),
+        "kakao" => OAuthProvider::kakao("social-http-client", "secret"),
+        "reddit" => OAuthProvider::reddit("social-http-client", "secret"),
         "cloudflare" => OAuthProvider::cloudflare("social-http-client", "secret"),
         _ => {
             assert_eq!(id, "polar");
@@ -70,6 +73,9 @@ async fn authorization_preserves_provider_defaults_append_order_and_pkce() {
         "slack",
         "naver",
         "linear",
+        "atlassian",
+        "reddit",
+        "kakao",
         "cloudflare",
     ] {
         let expected = &fixture["providers"][id];
@@ -89,6 +95,14 @@ async fn authorization_preserves_provider_defaults_append_order_and_pkce() {
                 config
                     .authorization_params
                     .push(("token_access_type".into(), access_type.into()));
+            }
+            if let Some(duration) = case["options"]["duration"]
+                .as_str()
+                .filter(|value| !value.is_empty())
+            {
+                config
+                    .authorization_params
+                    .push(("duration".into(), duration.into()));
             }
             let additional_params: Option<indexmap::IndexMap<String, String>> =
                 serde_json::from_value(case["additionalParams"].clone()).unwrap();
@@ -113,14 +127,17 @@ async fn authorization_preserves_provider_defaults_append_order_and_pkce() {
                 .collect();
             assert_eq!(json!(query.get("scope")), case["scope"]);
             assert_eq!(json!(query.get("prompt")), case["options"]["prompt"]);
-            if matches!(id, "linkedin" | "slack" | "naver" | "linear") {
+            if matches!(
+                id,
+                "linkedin" | "slack" | "naver" | "linear" | "reddit" | "kakao"
+            ) {
                 assert!(!query.contains_key("code_challenge_method"));
                 assert!(!query.contains_key("code_challenge"));
             } else {
                 assert_eq!(query["code_challenge_method"], "S256");
                 assert_eq!(query["code_challenge"], fixture["codeChallenge"]);
             }
-            if matches!(id, "slack" | "naver") {
+            if matches!(id, "slack" | "naver" | "atlassian" | "reddit" | "kakao") {
                 assert!(!query.contains_key("login_hint"));
             } else {
                 assert_eq!(json!(query.get("login_hint")), case["loginHint"]);
@@ -129,6 +146,10 @@ async fn authorization_preserves_provider_defaults_append_order_and_pkce() {
                 json!(query.get("request_marker")),
                 case["additionalParams"]["request_marker"]
             );
+            if id == "atlassian" {
+                assert_eq!(query["audience"], "api.atlassian.com");
+            }
+            assert_eq!(json!(query.get("duration")), case["duration"]);
             assert_eq!(query["state"], fixture["state"]);
             assert_eq!(
                 json!(query.get("token_access_type")),
@@ -193,7 +214,7 @@ impl OAuthUserInfoHandler for FailedCustomProfile {
 
 #[tokio::test]
 async fn custom_handler_errors_remain_outside_the_default_profile_catch() {
-    for id in ["figma", "cloudflare"] {
+    for id in ["figma", "cloudflare", "atlassian"] {
         let mut config = provider(id);
         config.user_info_url = None;
         config.get_user_info = Some(Arc::new(FailedCustomProfile));
@@ -212,29 +233,37 @@ async fn custom_handler_errors_remain_outside_the_default_profile_catch() {
 }
 
 #[tokio::test]
-async fn figma_authorization_requires_a_nonempty_client_secret() {
-    let resolved = resolve("figma", OAuthProvider::figma("client", "")).await;
-    let error = authorization::build_authorization_url(
-        &resolved.providers["figma"],
-        authorization::AuthorizationRequest {
-            callback_url: "https://app.example.test/api/auth/callback/figma",
-            scopes: None,
-            state: "state",
-            code_challenge: "challenge",
-            login_hint: None,
-            nonce: None,
-            additional_params: None,
-        },
-    )
-    .unwrap_err();
-    assert!(
-        matches!(error, AuthError::Internal(message) if message == "CLIENT_ID_AND_SECRET_REQUIRED")
-    );
+async fn figma_and_atlassian_require_both_credentials_before_authorization() {
+    for id in ["figma", "atlassian"] {
+        for (client_id, client_secret) in [("client", ""), ("", "secret")] {
+            let mut config = provider(id);
+            config.client_id = client_id.into();
+            config.client_secret = client_secret.into();
+            let resolved = resolve(id, config).await;
+            let error = authorization::build_authorization_url(
+                &resolved.providers[id],
+                authorization::AuthorizationRequest {
+                    callback_url: "https://app.example.test/api/auth/callback/provider",
+                    scopes: None,
+                    state: "state",
+                    code_challenge: "challenge",
+                    login_hint: None,
+                    nonce: None,
+                    additional_params: None,
+                },
+            )
+            .unwrap_err();
+            assert!(
+                matches!(error, AuthError::Internal(message) if message == "CLIENT_ID_AND_SECRET_REQUIRED")
+            );
+        }
+    }
 }
 
 struct ProfileServer {
     url: String,
     task: tokio::task::JoinHandle<()>,
+    headers: Arc<Mutex<String>>,
 }
 
 impl Drop for ProfileServer {
@@ -250,9 +279,21 @@ impl ProfileServer {
         method: &str,
         expected_body: Option<Value>,
     ) -> Self {
+        Self::with_status(profile, events, method, expected_body, "200 OK").await
+    }
+
+    async fn with_status(
+        profile: Value,
+        events: Arc<Mutex<Vec<&'static str>>>,
+        method: &str,
+        expected_body: Option<Value>,
+        status: &'static str,
+    ) -> Self {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("http://{}", listener.local_addr().unwrap());
         let method = method.to_ascii_lowercase();
+        let headers = Arc::new(Mutex::new(String::new()));
+        let captured_headers = headers.clone();
         let task = tokio::spawn(async move {
             let (socket, _) = listener.accept().await.unwrap();
             let mut socket = BufReader::new(socket);
@@ -266,6 +307,7 @@ impl ProfileServer {
                 }
             }
             let request = request.to_ascii_lowercase();
+            *captured_headers.lock().unwrap() = request.clone();
             assert!(request.starts_with(&format!("{method} /profile http/1.1")));
             assert!(request.contains("authorization: bearer ordinary-access"));
             let length = request
@@ -284,7 +326,7 @@ impl ProfileServer {
             events.lock().unwrap().push("http");
             let body = profile.to_string();
             let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                 body.len()
             );
             socket
@@ -293,7 +335,7 @@ impl ProfileServer {
                 .await
                 .unwrap();
         });
-        Self { url, task }
+        Self { url, task, headers }
     }
 }
 
@@ -352,12 +394,23 @@ impl OAuthUserInfoHandler for CustomProfile {
 fn public_user(user: OAuthUserInfo) -> Value {
     let mut output = user.additional_fields;
     let _ = output.insert("name".into(), json!(user.name));
-    let _ = output.insert("email".into(), json!(user.email));
+    if !user.email.is_undefined() {
+        let _ = output.insert("email".into(), json!(user.email));
+    }
     let _ = output.insert("emailVerified".into(), json!(user.email_verified));
     if let Some(image) = user.image {
         let _ = output.insert("image".into(), json!(image));
     }
     Value::Object(output)
+}
+
+fn profile_response(id: &str, profile: &Value) -> Value {
+    match id {
+        "kick" => json!({"data": [profile]}),
+        "linear" => json!({"data": {"viewer": profile}}),
+        "cloudflare" => json!({"success": true, "result": profile}),
+        _ => profile.clone(),
+    }
 }
 
 #[tokio::test]
@@ -376,6 +429,9 @@ async fn normal_profiles_and_mapper_precedence_match_pinned_provider_results() {
         "slack",
         "naver",
         "linear",
+        "atlassian",
+        "reddit",
+        "kakao",
         "cloudflare",
     ] {
         let case = &fixture["providers"][id];
@@ -392,15 +448,7 @@ async fn normal_profiles_and_mapper_precedence_match_pinned_provider_results() {
             let events = Arc::new(Mutex::new(Vec::new()));
             let started = Arc::new(tokio::sync::Notify::new());
             let resume = Arc::new(tokio::sync::Notify::new());
-            let profile = if id == "kick" {
-                json!({"data": [case["profile"]]})
-            } else if id == "linear" {
-                json!({"data": {"viewer": case["profile"]}})
-            } else if id == "cloudflare" {
-                json!({"success": true, "result": case["profile"]})
-            } else {
-                case["profile"].clone()
-            };
+            let profile = profile_response(id, &case["profile"]);
             let server = ProfileServer::start(
                 profile,
                 events.clone(),
@@ -448,6 +496,15 @@ async fn normal_profiles_and_mapper_precedence_match_pinned_provider_results() {
             }
             let response = response.await.unwrap().unwrap().unwrap();
             events.lock().unwrap().push("returned");
+            if id == "reddit" && mode != "custom" {
+                assert!(
+                    server
+                        .headers
+                        .lock()
+                        .unwrap()
+                        .contains("user-agent: better-auth")
+                );
+            }
             if mode != "custom" {
                 assert_eq!(response.data, case["profile"]);
             }
@@ -462,18 +519,32 @@ async fn normal_profiles_and_mapper_precedence_match_pinned_provider_results() {
                 }
             );
         }
-        let resolved = resolve(id, provider(id)).await;
-        let config = &resolved.providers[id].config;
         for variant in case["normalProfileCases"].as_array().unwrap() {
-            assert_eq!(
-                public_user(
-                    config
-                        .decode_profile(variant["profile"].clone())
-                        .unwrap()
-                        .unwrap()
-                ),
-                variant["user"]
-            );
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let server = ProfileServer::start(
+                profile_response(id, &variant["profile"]),
+                events.clone(),
+                case["profileMethod"].as_str().unwrap_or("GET"),
+                case.get("profileBody").cloned(),
+            )
+            .await;
+            let mut config = provider(id);
+            config.user_info_url = Some(format!("{}/profile", server.url));
+            let resolved = resolve(id, config).await;
+            let response = social_profile::fetch_user_info_for_code(
+                &resolved.providers[id],
+                OAuthUserInfoRequest {
+                    access_token: Some("ordinary-access".into()),
+                    ..Default::default()
+                },
+                None,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(public_user(response.user), variant["user"]);
+            assert_eq!(response.data, variant["profile"]);
+            assert_eq!(*events.lock().unwrap(), ["http"]);
         }
     }
     let case = &fixture["providers"]["gitlab"];
@@ -649,4 +720,154 @@ async fn cloudflare_ignores_request_parameters_and_retains_configured_url_option
         .into_owned()
         .collect();
     assert_eq!(json!(query), case["authorization"]);
+}
+
+#[tokio::test]
+async fn atlassian_missing_token_and_null_profile_skip_mapping() {
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let server = ProfileServer::start(Value::Null, events.clone(), "GET", None).await;
+    let mut config = provider("atlassian");
+    config.user_info_url = Some(format!("{}/profile", server.url));
+    let case = &fixture()["providers"]["atlassian"];
+    let resume = Arc::new(tokio::sync::Notify::new());
+    resume.notify_one();
+    config.map_profile_to_user = Some(Arc::new(Mapper {
+        raw: case["profile"].clone(),
+        patch: case["mapperPatch"].clone(),
+        events: events.clone(),
+        started: Default::default(),
+        resume,
+    }));
+    let resolved = resolve("atlassian", config).await;
+    for access_token in [None, Some(String::new())] {
+        let result = social_profile::fetch_user_info_for_code(
+            &resolved.providers["atlassian"],
+            OAuthUserInfoRequest {
+                access_token,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(result.is_none());
+        assert!(events.lock().unwrap().is_empty());
+    }
+    let result = social_profile::fetch_user_info_for_code(
+        &resolved.providers["atlassian"],
+        OAuthUserInfoRequest {
+            access_token: Some("ordinary-access".into()),
+            ..Default::default()
+        },
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(result.is_none());
+    assert_eq!(*events.lock().unwrap(), ["http"]);
+}
+
+struct RedditEmailMapper(Value, Value, Arc<Mutex<Vec<&'static str>>>);
+
+#[async_trait]
+impl OAuthProfileMapper for RedditEmailMapper {
+    async fn map_profile(&self, raw: &Value) -> AuthResult<OAuthProfile> {
+        assert_eq!(raw, &self.1);
+        self.2.lock().unwrap().push("map");
+        let email = if self.0["undefinedEmail"].as_bool() == Some(true) {
+            Some(better_auth_core::SchemaValue::Undefined)
+        } else {
+            self.0["patch"]
+                .get("email")
+                .cloned()
+                .map(serde_json::from_value::<Option<String>>)
+                .transpose()?
+                .map(better_auth_core::SchemaValue::Typed)
+        };
+        Ok(OAuthProfile {
+            email,
+            ..Default::default()
+        })
+    }
+}
+
+#[tokio::test]
+async fn reddit_placeholder_follows_mapper_email_presence() {
+    let fixture = fixture();
+    let data = &fixture["providers"]["reddit"];
+    for case in data["emailCases"].as_array().unwrap() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let server =
+            ProfileServer::start(data["profile"].clone(), events.clone(), "GET", None).await;
+        let mut config = provider("reddit");
+        config.user_info_url = Some(format!("{}/profile", server.url));
+        config.map_profile_to_user = Some(Arc::new(RedditEmailMapper(
+            case.clone(),
+            data["profile"].clone(),
+            events.clone(),
+        )));
+        let resolved = resolve("reddit", config).await;
+        let response = social_profile::fetch_user_info_for_code(
+            &resolved.providers["reddit"],
+            OAuthUserInfoRequest {
+                access_token: Some("ordinary-access".into()),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let mut expected = data["defaultUser"].clone();
+        expected["email"] = case["email"].clone();
+        assert_eq!(public_user(response.user), expected, "{}", case["name"]);
+        assert_eq!(response.data, data["profile"]);
+        assert_eq!(*events.lock().unwrap(), ["http", "map"]);
+    }
+}
+
+struct FailedRedditMapper;
+
+#[async_trait]
+impl OAuthProfileMapper for FailedRedditMapper {
+    async fn map_profile(&self, _: &Value) -> AuthResult<OAuthProfile> {
+        Err(AuthError::internal("Ordinary Reddit mapper failed"))
+    }
+}
+
+#[tokio::test]
+async fn reddit_http_failure_skips_mapper_and_mapper_error_propagates() {
+    let data = &fixture()["providers"]["reddit"];
+    for status in ["503 Service Unavailable", "200 OK"] {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let server = ProfileServer::with_status(
+            data["profile"].clone(),
+            events.clone(),
+            "GET",
+            None,
+            status,
+        )
+        .await;
+        let mut config = provider("reddit");
+        config.user_info_url = Some(format!("{}/profile", server.url));
+        config.map_profile_to_user = Some(Arc::new(FailedRedditMapper));
+        let resolved = resolve("reddit", config).await;
+        let result = social_profile::fetch_user_info_for_code(
+            &resolved.providers["reddit"],
+            OAuthUserInfoRequest {
+                access_token: Some("ordinary-access".into()),
+                ..Default::default()
+            },
+            None,
+        )
+        .await;
+        if status.starts_with("503") {
+            assert!(result.unwrap().is_none());
+        } else {
+            assert!(
+                matches!(result, Err(AuthError::Internal(message)) if message == "Ordinary Reddit mapper failed")
+            );
+        }
+        assert_eq!(*events.lock().unwrap(), ["http"]);
+    }
 }

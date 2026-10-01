@@ -56,6 +56,8 @@ async fn custom_null_skips_default_http_and_mapper() -> AuthResult<()> {
         OAuthProvider::dropbox,
         OAuthProvider::kick,
         OAuthProvider::cloudflare,
+        OAuthProvider::atlassian,
+        OAuthProvider::kakao,
     ];
     for constructor in constructors {
         let calls = Arc::new(Mutex::new(Vec::new()));

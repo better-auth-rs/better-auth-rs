@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { betterAuth } from "better-auth";
 import fixture from "../../../tests/fixtures/social-redirect-uri-1.7.6.json";
 
-for (const id of ["google", "github", "discord", "gitlab", "spotify", "huggingface", "polar", "vercel", "figma", "dropbox", "kick", "cloudflare", "linkedin", "slack", "naver", "linear"]) {
+for (const id of ["google", "github", "discord", "gitlab", "spotify", "huggingface", "polar", "vercel", "figma", "dropbox", "kick", "cloudflare", "linkedin", "slack", "naver", "linear", "atlassian", "reddit", "salesforce", "kakao"]) {
   for (const entry of fixture.cases) {
     test(`${id} ${entry.name} callback URI matches authorization and code exchange`, async () => {
       const bodies: URLSearchParams[] = [];
@@ -51,7 +51,7 @@ for (const id of ["google", "github", "discord", "gitlab", "spotify", "huggingfa
         expect(bodies).toHaveLength(1);
         expect(bodies[0]!.get("redirect_uri")).toBe(entry.expected);
         expect(bodies[0]!.get("code")).toBe("ordinary-code");
-        expect(bodies[0]!.get("code_verifier")).toBe(["discord", "linkedin", "slack", "naver", "linear"].includes(id) ? null : "ordinary-code-verifier-at-least-forty-three-characters");
+        expect(bodies[0]!.get("code_verifier")).toBe(["discord", "linkedin", "slack", "naver", "linear", "reddit", "kakao"].includes(id) ? null : "ordinary-code-verifier-at-least-forty-three-characters");
       } finally {
         globalThis.fetch = originalFetch;
         await server.stop(true);

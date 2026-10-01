@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use better_auth_core::{AuthError, AuthRequest, AuthResult};
 use chrono::{DateTime, Duration, Utc};
-use reqwest::header::HeaderMap;
+use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::Value;
 
 use super::generic::{OAuthCodeExchange, RefreshTokenParameters};
@@ -63,7 +63,11 @@ pub(super) async fn validate_authorization_code_via_provider(
         return apply_default_expiry(tokens, provider);
     }
     let token_endpoint = token_endpoint(provider)?;
-    let empty_headers = HeaderMap::new();
+    let mut social_headers = HeaderMap::new();
+    if generic.is_none() && provider.config.is_reddit() {
+        let _ = social_headers.insert("accept", HeaderValue::from_static("text/plain"));
+        let _ = social_headers.insert("user-agent", HeaderValue::from_static("better-auth"));
+    }
     let empty_params = HashMap::new();
     let mut request = TokenRequest::authorization_code(AuthorizationCodeRequest {
         code,
@@ -86,7 +90,7 @@ pub(super) async fn validate_authorization_code_via_provider(
         },
         headers: generic
             .map(|generic| &generic.authorization_headers)
-            .unwrap_or(&empty_headers),
+            .unwrap_or(&social_headers),
         additional_params: generic
             .map(|generic| &generic.token_url_params)
             .unwrap_or(&empty_params),

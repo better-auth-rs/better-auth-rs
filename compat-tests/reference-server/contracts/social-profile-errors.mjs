@@ -35,6 +35,7 @@ function setup(id, custom, proxy) {
       assert.deepEqual(body, provider.profileBody);
     }
     if (failure === "api-failure") return Response.json({ resultcode: "99", message: "Temporarily unavailable" });
+    if (failure === "null-profile") return Response.json(null);
     if (failure === "missing-viewer") return Response.json({ data: {} });
     return failure === "http503" ? Response.json({ error: "temporarily_unavailable" }, { status: 503 }) : Response.json(id === "linear" ? { data: { viewer: provider.profile } } : provider.profile);
   } });
@@ -81,15 +82,15 @@ function setup(id, custom, proxy) {
 }
 
 let cases = 0;
-for (const id of ["figma", "polar", "slack", "naver", "linear"]) {
-  const failures = ["http503", "mapper", "custom", ...(id === "naver" ? ["api-failure"] : []), ...(id === "linear" ? ["missing-viewer"] : [])];
+for (const id of ["figma", "polar", "slack", "naver", "linear", "atlassian", "salesforce", "kakao"]) {
+  const failures = ["http503", "mapper", "custom", ...(id === "naver" ? ["api-failure"] : []), ...(id === "linear" ? ["missing-viewer"] : []), ...(["atlassian", "kakao"].includes(id) ? ["null-profile"] : [])];
   for (const proxy of [false, true]) {
     for (const failure of failures) {
       const sample = setup(id, failure === "custom", proxy);
       try {
         sample.setFailure(failure);
         const response = await sample.login();
-        const missing = failure === "http503" || failure === "api-failure" || failure === "missing-viewer" || (id === "figma" && failure === "mapper");
+        const missing = failure === "http503" || failure === "api-failure" || failure === "missing-viewer" || failure === "null-profile" || (["figma", "atlassian", "salesforce"].includes(id) && failure === "mapper");
         assert.equal(response.status, missing ? 302 : 500, `${id} ${failure} proxy=${proxy}`);
         assert.equal(response.headers.get("location"), missing ? `${baseURL}/api/auth/error?error=unable_to_get_user_info` : null);
         if (!missing) assert.equal(await response.text(), "");
@@ -109,7 +110,7 @@ for (const id of ["figma", "polar", "slack", "naver", "linear"]) {
       sample.events.length = 0;
       sample.setFailure(failure);
       const response = await sample.auth.handler(request(`/account-info?${new URLSearchParams({ accountId: String(sample.database.account[0].id) })}`, undefined, cookieHeader(login)));
-      const missing = failure === "http503" || failure === "api-failure" || failure === "missing-viewer" || (id === "figma" && failure === "mapper");
+      const missing = failure === "http503" || failure === "api-failure" || failure === "missing-viewer" || failure === "null-profile" || (["figma", "atlassian", "salesforce"].includes(id) && failure === "mapper");
       assert.equal(response.status, missing ? 401 : 500);
       if (missing) assert.deepEqual(await response.json(), { code: "FAILED_TO_GET_USER_INFO", message: "Failed to get user info" });
       else assert.equal(await response.text(), "");
@@ -182,7 +183,7 @@ try {
 console.log(`${cases} ordinary Social profile error contracts passed`);
 
 let apiErrorCases = 0;
-for (const id of ["figma", "polar", "slack", "naver", "linear"]) {
+for (const id of ["figma", "polar", "slack", "naver", "linear", "atlassian", "salesforce", "kakao"]) {
   for (const endpoint of ["callback", "proxy", "account-info"]) {
     const sample = setup(id, true, endpoint === "proxy");
     try {

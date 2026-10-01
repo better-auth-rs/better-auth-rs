@@ -27,7 +27,11 @@ pub(super) enum ProviderKind {
     Slack,
     Naver,
     Linear,
+    Atlassian,
+    Reddit,
+    Kakao,
     Cloudflare,
+    Salesforce,
 }
 
 impl ProviderKind {
@@ -46,7 +50,11 @@ impl ProviderKind {
             Self::LinkedIn => &["profile", "email", "openid"],
             Self::Naver => &["profile", "email"],
             Self::Linear => &["read"],
+            Self::Atlassian => &["read:jira-user", "offline_access"],
+            Self::Reddit => &["identity"],
+            Self::Kakao => &["account_email", "profile_image", "profile_nickname"],
             Self::Cloudflare => &["user-details.read"],
+            Self::Salesforce => &["openid", "email", "profile"],
         }
     }
     pub(super) fn decode_profile(&self, profile: Value) -> AuthResult<Option<OAuthUserInfo>> {
@@ -66,6 +74,7 @@ impl ProviderKind {
             Self::Polar => polar_profile,
             Self::Vercel if profile.is_null() => return Ok(None),
             Self::Figma if profile.is_null() => return Ok(None),
+            Self::Salesforce if profile.is_null() => return Ok(None),
             Self::Vercel => vercel_profile,
             Self::Figma => figma_profile,
             Self::Dropbox => dropbox_profile,
@@ -77,7 +86,11 @@ impl ProviderKind {
             }
             Self::Naver => naver_profile,
             Self::Linear => linear_profile,
+            Self::Atlassian => atlassian_profile,
+            Self::Reddit => reddit_profile,
+            Self::Kakao => kakao_profile,
             Self::Cloudflare => cloudflare_profile,
+            Self::Salesforce => salesforce_profile,
             Self::GitHub { .. } | Self::Custom => {
                 return Err(AuthError::internal("Missing user-info mapper for provider"));
             }
@@ -96,8 +109,57 @@ fn profile_email(profile: &Value) -> Result<SchemaValue<Option<String>>, String>
         .map_err(|error| format!("Invalid provider email: {error}"))
 }
 
+fn salesforce_profile(profile: Value) -> Result<OAuthUserInfo, String> {
+    let image = profile
+        .pointer("/photos/picture")
+        .filter(|value| value.as_str().is_some_and(|value| !value.is_empty()))
+        .or_else(|| profile.pointer("/photos/thumbnail"));
+    Ok(OAuthUserInfo {
+        id: profile
+            .get("user_id")
+            .and_then(Value::as_str)
+            .ok_or("missing user_id")?
+            .into(),
+        email: profile_email(&profile)?,
+        name: profile
+            .get("name")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        image: image
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| format!("Invalid Salesforce image: {error}"))?,
+        email_verified: profile
+            .get("email_verified")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        additional_fields: Default::default(),
+    })
+}
+
 fn google_profile(v: Value) -> Result<OAuthUserInfo, String> {
     openid_profile(v, "Google")
+}
+
+fn atlassian_profile(v: Value) -> Result<OAuthUserInfo, String> {
+    Ok(OAuthUserInfo {
+        additional_fields: Default::default(),
+        id: v
+            .get("account_id")
+            .and_then(Value::as_str)
+            .ok_or("missing account_id")?
+            .into(),
+        email: profile_email(&v)?,
+        name: v.get("name").and_then(Value::as_str).map(str::to_owned),
+        image: v
+            .get("picture")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| format!("Invalid Atlassian picture: {error}"))?,
+        email_verified: false,
+    })
 }
 
 fn linkedin_profile(v: Value) -> Result<OAuthUserInfo, String> {
@@ -172,6 +234,64 @@ fn linear_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .transpose()
             .map_err(|error| format!("Invalid Linear avatar: {error}"))?,
         email_verified: false,
+    })
+}
+
+fn kakao_profile(v: Value) -> Result<OAuthUserInfo, String> {
+    let account = v.get("kakao_account").unwrap_or(&Value::Null);
+    let profile = account.get("profile").unwrap_or(&Value::Null);
+    Ok(OAuthUserInfo {
+        additional_fields: Default::default(),
+        id: v
+            .get("id")
+            .and_then(Value::as_i64)
+            .map(|id| id.to_string())
+            .ok_or("missing id")?,
+        email: profile_email(account)?,
+        name: Some(
+            profile
+                .get("nickname")
+                .and_then(Value::as_str)
+                .filter(|name| !name.is_empty())
+                .or_else(|| account.get("name").and_then(Value::as_str))
+                .unwrap_or_default()
+                .into(),
+        ),
+        image: profile
+            .get("profile_image_url")
+            .filter(|image| !image.is_null() && image.as_str() != Some(""))
+            .or_else(|| profile.get("thumbnail_image_url"))
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| format!("Invalid Kakao image: {error}"))?,
+        email_verified: account.get("is_email_valid").and_then(Value::as_bool) == Some(true)
+            && account.get("is_email_verified").and_then(Value::as_bool) == Some(true),
+    })
+}
+
+fn reddit_profile(v: Value) -> Result<OAuthUserInfo, String> {
+    let image: Option<String> =
+        serde_json::from_value(v.get("icon_img").cloned().unwrap_or(Value::Null))
+            .map_err(|error| format!("Invalid Reddit icon: {error}"))?;
+    Ok(OAuthUserInfo {
+        id: v
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or("missing id")?
+            .into(),
+        email: SchemaValue::Undefined,
+        name: v.get("name").and_then(Value::as_str).map(str::to_owned),
+        image: image.map(|image| {
+            Some(
+                image
+                    .split_once('?')
+                    .map_or(image.as_str(), |(path, _)| path)
+                    .to_owned(),
+            )
+        }),
+        email_verified: false,
+        additional_fields: Default::default(),
     })
 }
 

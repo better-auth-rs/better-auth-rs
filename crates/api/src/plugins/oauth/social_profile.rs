@@ -49,25 +49,38 @@ pub(super) async fn fetch_user_info_with_claims(
         }
         return Ok(response);
     }
-    let result = fetch_default_user_info(provider, request, claims).await;
-    if provider.config.is_figma() {
-        match result {
-            Ok(None) => {
-                better_auth_core::observability::logger::current()
-                    .error("Failed to fetch user from Figma", &[]);
-                Ok(None)
-            }
-            Err(error) => {
-                better_auth_core::observability::logger::current().error(
-                    "Failed to fetch user info from Figma:",
-                    &[better_auth_core::observability::LogArgument::Error(&error)],
-                );
-                Ok(None)
-            }
-            response => response,
+    if provider.config.is_atlassian() && request.access_token.as_deref().is_none_or(str::is_empty) {
+        return Ok(None);
+    }
+    match fetch_default_user_info(provider, request, claims).await {
+        Ok(None) if provider.config.is_figma() || provider.config.is_salesforce() => {
+            better_auth_core::observability::logger::current().error(
+                if provider.config.is_salesforce() {
+                    "Failed to fetch user info from Salesforce"
+                } else {
+                    "Failed to fetch user from Figma"
+                },
+                &[],
+            );
+            Ok(None)
         }
-    } else {
-        result
+        Err(error)
+            if provider.config.is_figma()
+                || provider.config.is_atlassian()
+                || provider.config.is_salesforce() =>
+        {
+            // Atlassian retains the Figma diagnostic from its pinned default-profile catch.
+            better_auth_core::observability::logger::current().error(
+                if provider.config.is_salesforce() {
+                    "Failed to fetch user info from Salesforce:"
+                } else {
+                    "Failed to fetch user info from Figma:"
+                },
+                &[better_auth_core::observability::LogArgument::Error(&error)],
+            );
+            Ok(None)
+        }
+        response => response,
     }
 }
 
@@ -125,6 +138,9 @@ async fn fetch_default_user_info(
         if let Some(verified) = mapped.email_verified {
             response.user.email_verified = verified;
         }
+    }
+    if provider.config.is_reddit() && response.user.email()?.is_none_or(str::is_empty) {
+        response.user.email = Some(placeholder_email(&response.user.id, "reddit")?).into();
     }
     let _ = response.user.email()?;
     Ok(Some(response))
@@ -204,6 +220,14 @@ pub(super) fn missing_profile() -> AuthError {
         code: "FAILED_TO_GET_USER_INFO",
         message: "Failed to get user info",
     }
+}
+
+pub(super) fn placeholder_email(identifier: &str, namespace: &str) -> AuthResult<String> {
+    let email = format!("{identifier}@{namespace}.placeholder.invalid");
+    if !crate::plugins::json_body::valid_email(&email)? {
+        return Err(AuthError::internal("Invalid placeholder email"));
+    }
+    Ok(email)
 }
 
 #[cfg(test)]

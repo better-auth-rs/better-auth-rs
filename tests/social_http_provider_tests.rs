@@ -34,6 +34,7 @@ struct ProviderState {
     profile_body: Option<Value>,
     events: Arc<Mutex<Vec<String>>>,
     token_requests: Arc<Mutex<Vec<TokenRequest>>>,
+    profile_headers: Arc<Mutex<Option<HeaderMap>>>,
 }
 
 #[derive(Clone)]
@@ -81,6 +82,7 @@ async fn profile(
     } else {
         assert!(body.is_empty());
     }
+    *state.profile_headers.lock().unwrap() = Some(headers);
     state.events.lock().unwrap().push("profile".into());
     Json(state.profile)
 }
@@ -104,6 +106,7 @@ impl Server {
             profile_body,
             events: Default::default(),
             token_requests: Default::default(),
+            profile_headers: Default::default(),
         };
         let router = Router::new()
             .route("/token", post(token))
@@ -172,6 +175,10 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             "slack",
             "naver",
             "linear",
+            "atlassian",
+            "reddit",
+            "salesforce",
+            "kakao",
         ]
         .into_iter()
         .map(|id| (id, None));
@@ -213,6 +220,14 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 "slack" => OAuthProvider::slack("social-http-client", "ordinary-client-secret"),
                 "naver" => OAuthProvider::naver("social-http-client", "ordinary-client-secret"),
                 "linear" => OAuthProvider::linear("social-http-client", "ordinary-client-secret"),
+                "atlassian" => {
+                    OAuthProvider::atlassian("social-http-client", "ordinary-client-secret")
+                }
+                "kakao" => OAuthProvider::kakao("social-http-client", "ordinary-client-secret"),
+                "reddit" => OAuthProvider::reddit("social-http-client", "ordinary-client-secret"),
+                "salesforce" => {
+                    OAuthProvider::salesforce("social-http-client", "ordinary-client-secret")
+                }
                 "cloudflare" => {
                     OAuthProvider::cloudflare("social-http-client", "ordinary-client-secret")
                 }
@@ -259,7 +274,18 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             )));
             let auth = auth(id, provider).await;
             let mut sign_in = json!({"provider":id,"callbackURL":"http://app.example.test/welcome","disableRedirect":true});
-            if matches!(id, "cloudflare" | "linkedin" | "slack" | "naver" | "linear") {
+            if matches!(
+                id,
+                "cloudflare"
+                    | "linkedin"
+                    | "slack"
+                    | "naver"
+                    | "linear"
+                    | "atlassian"
+                    | "reddit"
+                    | "salesforce"
+                    | "kakao"
+            ) {
                 sign_in["loginHint"] = json!("owner@example.test");
                 sign_in["additionalParams"] = json!({"request_marker":"request-value"});
             }
@@ -278,7 +304,10 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             let body: Value = serde_json::from_slice(&start.body).unwrap();
             let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
             let query: HashMap<_, _> = url.query_pairs().into_owned().collect();
-            if matches!(id, "linkedin" | "slack" | "naver" | "linear") {
+            if matches!(
+                id,
+                "linkedin" | "slack" | "naver" | "linear" | "reddit" | "kakao"
+            ) {
                 assert!(!query.contains_key("code_challenge_method"));
                 assert!(!query.contains_key("code_challenge"));
                 if matches!(id, "linkedin" | "linear") {
@@ -290,7 +319,16 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             } else {
                 assert_eq!(query["code_challenge_method"], "S256");
             }
+            if id == "atlassian" {
+                assert!(!query.contains_key("login_hint"));
+                assert_eq!(query["request_marker"], "request-value");
+                assert_eq!(query["audience"], "api.atlassian.com");
+            }
             assert_eq!(query["redirect_uri"], expected_redirect);
+            if id == "salesforce" {
+                assert!(!query.contains_key("login_hint"));
+                assert_eq!(query["request_marker"], "request-value");
+            }
             if id == "cloudflare" {
                 assert!(!query.contains_key("login_hint"));
                 assert!(!query.contains_key("request_marker"));
@@ -303,7 +341,18 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 .join("; ");
             assert!(!cookies.is_empty());
             let mut callback_query = json!({"code":"ordinary-code","state":query["state"]});
-            if matches!(id, "cloudflare" | "linkedin" | "slack" | "naver" | "linear") {
+            if matches!(
+                id,
+                "cloudflare"
+                    | "linkedin"
+                    | "slack"
+                    | "naver"
+                    | "linear"
+                    | "atlassian"
+                    | "reddit"
+                    | "salesforce"
+                    | "kakao"
+            ) {
                 callback_query["device_id"] = json!("ordinary-device");
             }
             let callback = auth
@@ -452,30 +501,52 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 let _ = expected_form.insert("redirect_uri".into(), expected_redirect.clone());
                 let _ = expected_form.insert("code_verifier".into(), form["code_verifier"].clone());
                 assert_eq!(*form, expected_form);
-            } else if id == "figma" {
+            } else if matches!(id, "figma" | "reddit") {
                 assert_eq!(
                     requests[0].headers["authorization"],
                     case["tokenContract"]["authorization"].as_str().unwrap()
                 );
                 assert!(!form.contains_key("client_id"));
                 assert!(!form.contains_key("client_secret"));
-                assert_eq!(form.len(), 4);
+                assert_eq!(form.len(), if id == "reddit" { 3 } else { 4 });
             } else {
                 assert_eq!(form["client_id"], "social-http-client");
                 assert_eq!(form["client_secret"], "ordinary-client-secret");
-                if matches!(id, "dropbox" | "kick") {
+                if matches!(id, "dropbox" | "kick" | "atlassian" | "salesforce") {
                     assert!(requests[0].headers.get("authorization").is_none());
                     assert_eq!(form.len(), 6);
-                } else if matches!(id, "linkedin" | "slack" | "naver" | "linear") {
+                    assert!(!form.contains_key("device_id"));
+                } else if matches!(
+                    id,
+                    "linkedin" | "slack" | "naver" | "linear" | "reddit" | "kakao"
+                ) {
                     assert!(requests[0].headers.get("authorization").is_none());
                     assert_eq!(form.len(), 5);
                     assert!(!form.contains_key("device_id"));
                 }
             }
-            if matches!(id, "linkedin" | "slack" | "naver" | "linear") {
+            if matches!(
+                id,
+                "linkedin" | "slack" | "naver" | "linear" | "reddit" | "kakao"
+            ) {
                 assert!(!form.contains_key("code_verifier"));
             } else {
                 assert!(!form["code_verifier"].is_empty());
+            }
+            if id == "reddit" {
+                assert!(!form.contains_key("device_id"));
+                assert_eq!(requests[0].headers["accept"], "text/plain");
+                assert_eq!(requests[0].headers["user-agent"], "better-auth");
+                assert_eq!(
+                    server
+                        .state
+                        .profile_headers
+                        .lock()
+                        .unwrap()
+                        .as_ref()
+                        .unwrap()["user-agent"],
+                    "better-auth"
+                );
             }
             assert_eq!(form["redirect_uri"], expected_redirect);
             if matches!(
@@ -487,7 +558,11 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     | "slack"
                     | "naver"
                     | "linear"
+                    | "atlassian"
+                    | "reddit"
+                    | "kakao"
                     | "cloudflare"
+                    | "salesforce"
             ) {
                 let cookies = callback
                     .headers
@@ -541,7 +616,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                         expected["contentType"].as_str().unwrap()
                     );
                     expected_form = serde_json::from_value(expected["body"].clone()).unwrap();
-                } else if id == "figma" {
+                } else if matches!(id, "figma" | "reddit") {
                     assert_eq!(
                         requests[1].headers["authorization"],
                         case["tokenContract"]["authorization"].as_str().unwrap()
@@ -554,6 +629,16 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     ]);
                 }
                 assert_eq!(requests[1].form, expected_form);
+                if id == "reddit" {
+                    assert_eq!(requests[1].headers["accept"], "application/json");
+                    assert_ne!(
+                        requests[1]
+                            .headers
+                            .get("user-agent")
+                            .and_then(|value| value.to_str().ok()),
+                        Some("better-auth")
+                    );
+                }
                 assert_eq!(
                     *server.state.events.lock().unwrap(),
                     ["token", "profile", "map", "token"]

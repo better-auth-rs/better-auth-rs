@@ -17,6 +17,7 @@ use better_auth::plugins::oauth::{
     OAuthUserInfoHandler, OAuthUserInfoRequest, OAuthUserInfoResponse,
 };
 use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
+use better_auth_core::observability::{LogArgument, LogLevel, LogSink};
 use better_auth_core::{AuthError, AuthRequest, AuthResponse, AuthResult, HttpMethod};
 use better_auth_seaorm::{
     SeaOrmStore,
@@ -34,8 +35,9 @@ const BASE_URL: &str = "http://figma-errors.example.test";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Failure {
     Http503,
-    ApiFailure,
+    ApiRejected,
     MissingViewer,
+    NullProfile,
     Mapper,
     Custom,
     ApiError,
@@ -48,6 +50,21 @@ struct ProviderState {
     provider_id: &'static str,
     failure: Arc<Mutex<Option<Failure>>>,
     events: Arc<Mutex<Vec<&'static str>>>,
+    logs: Arc<ProfileLogs>,
+}
+
+#[derive(Default)]
+struct ProfileLogs(Mutex<Vec<(String, Vec<String>)>>);
+
+impl LogSink for ProfileLogs {
+    fn log(&self, level: LogLevel, message: LogArgument<'_>, arguments: &[LogArgument<'_>]) {
+        if level == LogLevel::Error {
+            self.0.lock().unwrap().push((
+                message.to_string(),
+                arguments.iter().map(ToString::to_string).collect(),
+            ));
+        }
+    }
 }
 
 async fn token(State(state): State<ProviderState>, headers: HeaderMap) -> Json<Value> {
@@ -83,11 +100,13 @@ async fn profile(
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({"error":"temporarily_unavailable"})),
         )
-    } else if failure == Some(Failure::ApiFailure) {
+    } else if failure == Some(Failure::ApiRejected) {
         (
             StatusCode::OK,
             Json(json!({"resultcode":"99","message":"Temporarily unavailable"})),
         )
+    } else if failure == Some(Failure::NullProfile) {
+        (StatusCode::OK, Json(Value::Null))
     } else if failure == Some(Failure::MissingViewer) {
         (StatusCode::OK, Json(json!({"data": {}})))
     } else if state.provider_id == "linear" {
@@ -146,12 +165,19 @@ impl OAuthUserInfoHandler for CustomProfile {
         } else {
             &profile
         };
+        let subject = &subject_profile[self.0.fixture["subjectField"].as_str().unwrap()];
+        let subject = match subject {
+            Value::String(value) => value.clone(),
+            Value::Number(value) => value.to_string(),
+            _ => {
+                return Err(AuthError::internal(
+                    "fixture subject must be a string or number",
+                ));
+            }
+        };
         Ok(Some(OAuthUserInfoResponse {
             user: OAuthUserInfo {
-                id: subject_profile[self.0.fixture["subjectField"].as_str().unwrap()]
-                    .as_str()
-                    .unwrap()
-                    .into(),
+                id: subject,
                 email: Some(user["email"].as_str().unwrap().into()).into(),
                 name: user["name"].as_str().map(str::to_owned),
                 image: user
@@ -193,6 +219,7 @@ impl Fixture {
             provider_id,
             failure: Default::default(),
             events: Default::default(),
+            logs: Default::default(),
         };
         let router = Router::new()
             .route("/token", post(token))
@@ -213,6 +240,9 @@ impl Fixture {
             "slack" => OAuthProvider::slack,
             "naver" => OAuthProvider::naver,
             "linear" => OAuthProvider::linear,
+            "atlassian" => OAuthProvider::atlassian,
+            "salesforce" => OAuthProvider::salesforce,
+            "kakao" => OAuthProvider::kakao,
             _ => {
                 assert_eq!(provider_id, "polar");
                 OAuthProvider::polar
@@ -228,8 +258,9 @@ impl Fixture {
         if custom {
             provider.get_user_info = Some(Arc::new(CustomProfile(state.clone())));
         }
-        let config = AuthConfig::new("figma-public-error-test-secret-more-than-32-characters")
+        let mut config = AuthConfig::new("figma-public-error-test-secret-more-than-32-characters")
             .base_url(BASE_URL);
+        config.logger.log = Some(state.logs.clone());
         let database = Database::connect("sqlite::memory:").await.unwrap();
         migrator::run_migrations(&database).await.unwrap();
         let builder =
@@ -276,7 +307,10 @@ impl Fixture {
         let body: Value = serde_json::from_slice(&start.body).unwrap();
         let authorization = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
         let query: HashMap<_, _> = authorization.query_pairs().into_owned().collect();
-        if matches!(self.state.provider_id, "slack" | "naver" | "linear") {
+        if matches!(
+            self.state.provider_id,
+            "slack" | "naver" | "linear" | "kakao"
+        ) {
             assert!(!query.contains_key("code_challenge_method"));
             assert!(!query.contains_key("code_challenge"));
         } else {
@@ -335,9 +369,10 @@ async fn callback_profile_failures_redirect_without_persisting_rows() {
         );
         assert_eq!(fixture.row_counts().await, [0, 0, 0], "{failure:?}");
         let expected: &[&str] = match failure {
-            Failure::Http503 | Failure::ApiFailure | Failure::MissingViewer => {
-                &["token", "profile"]
-            }
+            Failure::Http503
+            | Failure::ApiRejected
+            | Failure::MissingViewer
+            | Failure::NullProfile => &["token", "profile"],
             Failure::Mapper => &["token", "profile", "map"],
             Failure::Custom | Failure::ApiError => &["token", "custom"],
         };
@@ -386,7 +421,10 @@ async fn account_info_profile_failures_return_401_and_preserve_rows() {
         );
         assert_eq!(fixture.row_counts().await, [1, 1, 1], "{failure:?}");
         let expected: &[&str] = match failure {
-            Failure::Http503 | Failure::ApiFailure | Failure::MissingViewer => &["profile"],
+            Failure::Http503
+            | Failure::ApiRejected
+            | Failure::MissingViewer
+            | Failure::NullProfile => &["profile"],
             Failure::Mapper => &["profile", "map"],
             Failure::Custom | Failure::ApiError => &["custom"],
         };
@@ -396,20 +434,34 @@ async fn account_info_profile_failures_return_401_and_preserve_rows() {
 
 #[tokio::test]
 async fn social_callback_and_proxy_preserve_original_callback_errors() {
-    for provider_id in ["figma", "polar", "slack", "naver", "linear"] {
+    for provider_id in [
+        "figma",
+        "polar",
+        "slack",
+        "naver",
+        "linear",
+        "atlassian",
+        "salesforce",
+        "kakao",
+    ] {
         for proxy in [false, true] {
             for failure in [Failure::Http503, Failure::Mapper, Failure::Custom]
                 .into_iter()
-                .chain((provider_id == "naver").then_some(Failure::ApiFailure))
+                .chain((provider_id == "naver").then_some(Failure::ApiRejected))
                 .chain((provider_id == "linear").then_some(Failure::MissingViewer))
+                .chain(matches!(provider_id, "atlassian" | "kakao").then_some(Failure::NullProfile))
             {
                 let fixture = Fixture::new(provider_id, failure == Failure::Custom, proxy).await;
                 *fixture.state.failure.lock().unwrap() = Some(failure);
                 let response = fixture.login().await;
                 let missing = matches!(
                     failure,
-                    Failure::Http503 | Failure::ApiFailure | Failure::MissingViewer
-                ) || (provider_id == "figma" && failure == Failure::Mapper);
+                    Failure::Http503
+                        | Failure::ApiRejected
+                        | Failure::MissingViewer
+                        | Failure::NullProfile
+                ) || (matches!(provider_id, "figma" | "atlassian" | "salesforce")
+                    && failure == Failure::Mapper);
                 if missing {
                     assert_eq!(
                         response.status, 302,
@@ -429,13 +481,36 @@ async fn social_callback_and_proxy_preserve_original_callback_errors() {
                 }
                 assert_eq!(fixture.row_counts().await, [0, 0, 0]);
                 let expected: &[&str] = match failure {
-                    Failure::Http503 | Failure::ApiFailure | Failure::MissingViewer => {
-                        &["token", "profile"]
-                    }
+                    Failure::Http503
+                    | Failure::ApiRejected
+                    | Failure::MissingViewer
+                    | Failure::NullProfile => &["token", "profile"],
                     Failure::Mapper => &["token", "profile", "map"],
                     Failure::Custom | Failure::ApiError => &["token", "custom"],
                 };
                 assert_eq!(fixture.state.events.lock().unwrap().as_slice(), expected);
+                if provider_id == "salesforce" {
+                    let logs = fixture.state.logs.0.lock().unwrap();
+                    let logs: Vec<_> = logs
+                        .iter()
+                        .filter(|(message, _)| {
+                            message.starts_with("Failed to fetch user info from Salesforce")
+                        })
+                        .collect();
+                    match failure {
+                        Failure::Http503 => assert_eq!(
+                            logs,
+                            [&("Failed to fetch user info from Salesforce".into(), vec![])]
+                        ),
+                        Failure::Mapper => {
+                            assert_eq!(logs.len(), 1);
+                            assert_eq!(logs[0].0, "Failed to fetch user info from Salesforce:");
+                            assert_eq!(logs[0].1.len(), 1);
+                            assert!(logs[0].1[0].contains("Ordinary profile mapper failed"));
+                        }
+                        _ => assert!(logs.is_empty()),
+                    }
+                }
             }
         }
     }
@@ -452,13 +527,24 @@ async fn social_account_info_distinguishes_missing_profile_from_original_callbac
         ("slack", Failure::Mapper),
         ("slack", Failure::Custom),
         ("naver", Failure::Http503),
-        ("naver", Failure::ApiFailure),
+        ("naver", Failure::ApiRejected),
         ("naver", Failure::Mapper),
         ("naver", Failure::Custom),
         ("linear", Failure::Http503),
         ("linear", Failure::MissingViewer),
         ("linear", Failure::Mapper),
         ("linear", Failure::Custom),
+        ("atlassian", Failure::Http503),
+        ("atlassian", Failure::NullProfile),
+        ("atlassian", Failure::Mapper),
+        ("atlassian", Failure::Custom),
+        ("salesforce", Failure::Http503),
+        ("salesforce", Failure::Mapper),
+        ("salesforce", Failure::Custom),
+        ("kakao", Failure::Http503),
+        ("kakao", Failure::NullProfile),
+        ("kakao", Failure::Mapper),
+        ("kakao", Failure::Custom),
     ] {
         let fixture = Fixture::new(provider_id, failure == Failure::Custom, false).await;
         let login = fixture.login().await;
@@ -482,8 +568,9 @@ async fn social_account_info_distinguishes_missing_profile_from_original_callbac
         let response = fixture.auth.handle_request(account_info).await.unwrap();
         if matches!(
             failure,
-            Failure::Http503 | Failure::ApiFailure | Failure::MissingViewer
-        ) {
+            Failure::Http503 | Failure::ApiRejected | Failure::MissingViewer | Failure::NullProfile
+        ) || (matches!(provider_id, "atlassian" | "salesforce") && failure == Failure::Mapper)
+        {
             assert_eq!(response.status, 401);
             assert_eq!(
                 serde_json::from_slice::<Value>(&response.body).unwrap(),
@@ -495,7 +582,10 @@ async fn social_account_info_distinguishes_missing_profile_from_original_callbac
         }
         assert_eq!(fixture.row_counts().await, [1, 1, 1]);
         let expected: &[&str] = match failure {
-            Failure::Http503 | Failure::ApiFailure | Failure::MissingViewer => &["profile"],
+            Failure::Http503
+            | Failure::ApiRejected
+            | Failure::MissingViewer
+            | Failure::NullProfile => &["profile"],
             Failure::Mapper => &["profile", "map"],
             Failure::Custom | Failure::ApiError => &["custom"],
         };
@@ -505,7 +595,16 @@ async fn social_account_info_distinguishes_missing_profile_from_original_callbac
 
 #[tokio::test]
 async fn userinfo_api_errors_preserve_status_body_and_headers_on_social_endpoints() {
-    for provider_id in ["figma", "polar", "slack", "naver", "linear"] {
+    for provider_id in [
+        "figma",
+        "polar",
+        "slack",
+        "naver",
+        "linear",
+        "atlassian",
+        "salesforce",
+        "kakao",
+    ] {
         for endpoint in ["callback", "proxy", "account-info"] {
             let fixture = Fixture::new(provider_id, true, endpoint == "proxy").await;
             let response = if endpoint == "account-info" {

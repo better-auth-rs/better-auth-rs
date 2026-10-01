@@ -53,6 +53,10 @@ Better Auth RS includes pre-configured providers with correct URLs and user info
 | Slack | `OAuthProvider::slack(client_id, client_secret)` | `openid`, `profile`, `email` |
 | Naver | `OAuthProvider::naver(client_id, client_secret)` | `profile`, `email` |
 | Linear | `OAuthProvider::linear(client_id, client_secret)` | `read` |
+| Atlassian | `OAuthProvider::atlassian(client_id, client_secret)` | `read:jira-user`, `offline_access` |
+| Reddit | `OAuthProvider::reddit(client_id, client_secret)` | `identity` |
+| Salesforce | `OAuthProvider::salesforce(client_id, client_secret)` | `openid`, `email`, `profile` |
+| Kakao | `OAuthProvider::kakao(client_id, client_secret)` | `account_email`, `profile_image`, `profile_nickname` |
 
 ### Social provider inputs
 
@@ -80,7 +84,7 @@ To migrate a handler, use `AuthResult<Option<OAuthUserInfoResponse>>`, wrap succ
 
 Discord prepares `image_url` before invoking the mapper. The default decoder reuses that value for PNG, animated GIF, and default avatars. Display names use `global_name`, then `username`, then an empty string.
 
-Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. Google, GitHub, Discord, Polar, and custom providers forward the configured `prompt`. GitLab, Spotify, Hugging Face, Vercel, Figma, Dropbox, Kick, Cloudflare, LinkedIn, and Linear ignore this option. Omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
+Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. Google, GitHub, Discord, Polar, Atlassian, and custom providers forward the configured `prompt`. GitLab, Spotify, Hugging Face, Vercel, Figma, Dropbox, Kick, Cloudflare, LinkedIn, Slack, Naver, Linear, Reddit, Salesforce, and Kakao ignore this option. Omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
 
 Set `redirect_uri` when the provider callback URI differs from the route URI. Authorization and code exchange use the same configured value. Omitted or empty values use the route URI. Register the configured URI with the provider and route the callback to Better Auth; the option does not create another HTTP route.
 
@@ -94,9 +98,9 @@ Hugging Face and Polar use the same code/PKCE, client-secret-post and Bearer use
 
 Figma uses PKCE and HTTP Basic client authentication for code exchange and refresh. Both credentials must be nonempty when authorization starts. The default decoder maps `handle`, `email`, and `img_url`, preserves an omitted or null image, and sets `emailVerified` to false before applying the profile mapper. The shared refresh route retains the stored account scope even when the token endpoint returns a different scope. The constructor does not install an ID-token verifier.
 
-A missing Social profile redirects code callbacks and OAuth Proxy callbacks with `unable_to_get_user_info`. Direct sign-in, direct linking, and `/account-info` return `401 FAILED_TO_GET_USER_INFO`. Default provider HTTP errors produce a missing profile. GitLab inactive or locked profiles and empty Vercel/Figma profiles use the same result. Figma also converts errors from its default HTTP, decoder, and async mapper into a missing profile. Its custom `get_user_info` handler remains outside that conversion.
+A missing Social profile redirects code callbacks and OAuth Proxy callbacks with `unable_to_get_user_info`. Direct sign-in, direct linking, and `/account-info` return `401 FAILED_TO_GET_USER_INFO`. Default provider HTTP errors produce a missing profile. GitLab inactive or locked profiles and empty Vercel/Figma profiles use the same result. Figma, Atlassian, and Salesforce also convert errors from their default HTTP, decoder, and async mapper into a missing profile. Their custom `get_user_info` handlers remain outside that conversion.
 
-Other Social mapper errors and all application `get_user_info` errors propagate to the existing HTTP/native error boundary. Ordinary runtime errors produce an empty HTTP 500 response; typed API errors retain their status. A custom `get_user_info` handler returns a profile or an `AuthError`; JavaScript's custom-handler null result has no equivalent in that Rust trait.
+Other Social mapper errors and all application `get_user_info` errors propagate to the existing HTTP/native error boundary. Ordinary runtime errors produce an empty HTTP 500 response; typed API errors retain their status. A custom `get_user_info` handler returns `Ok(Some(profile))`, `Ok(None)`, or an `AuthError`. A successful missing profile skips default HTTP and mapping.
 
 GitHub keeps its default HTTP profile lookup separate from application callbacks. An HTTP error from the optional email lookup preserves the available profile, while a transport or decoding error propagates. A successful email list replaces a missing, null, or empty profile email with the primary address or first address. A successful empty list omits email; an unavailable list preserves the original value. An explicitly empty selected address remains empty. The mapper and JSON profile observe this result before public output. Rust requires JSON responses with the documented field types. The upstream fetch helper can retain non-JSON text, so arbitrary text and malformed response shapes are not claimed equivalent. Missing or null email reaches the async mapper. Other missing or wrongly typed required fields can fail in Rust decoding before the mapper runs; arbitrary JavaScript profile shapes are not supported. Generic OAuth retains its existing error mapping. Google verification and stored-account profile boundaries described above remain unchanged.
 
@@ -143,6 +147,23 @@ Linear uses client-secret-post for code exchange and refresh, without PKCE or ca
 
 Linear HTTP failures and absent or null viewers use the shared missing-profile result. Application mapper and custom-handler errors propagate unchanged. Ordinary localhost contracts cover the query, callback and proxy responses, account-info errors, SQLite persistence, and refresh. Typed fields remain stricter than JavaScript; malformed response shapes and provider-specific transport/JSON error timing are not claimed to match.
 
+Reddit uses HTTP Basic client authentication for code exchange and refresh. Code exchange adds `Accept: text/plain` and `User-Agent: better-auth`; refresh retains the shared JSON accept header without that provider user agent. Userinfo uses GET with a Bearer token and `User-Agent: better-auth`. Reddit omits PKCE, callback device IDs, configured prompt, and standalone hints/nonces. It appends `identity`, configured scopes, and request scopes without deduplication.
+
+Set `reddit.authorization_params.push(("duration".into(), "permanent".into()))` for persistent access, or use `"temporary"` for temporary access. Omit the entry for the provider default. To represent an omitted or empty upstream `duration` option, omit the entry. Request `additionalParams.duration` overrides the configured entry. No dedicated duration field is required.
+
+The default Reddit profile keeps `name`, removes the query from `icon_img`, and defaults `emailVerified` to false. The async mapper receives the original profile. After mapping, an omitted, undefined, null, or empty email becomes `<profile.id>@reddit.placeholder.invalid`; a nonempty mapper email remains unchanged. The existing placeholder validator is shared with Microsoft Entra ID. Custom user-info handlers return directly and skip this normalization. Ordinary localhost and SQLite contracts cover mapping, email fallback, token headers, persistence, and refresh. HTTP 503 produces a missing profile, and ordinary mapper errors propagate. Existing state, verification, account binding, storage, and admission policies are unchanged. Provider-specific malformed response and transport timing are not claimed equivalent.
+
+
+
+Atlassian requires nonempty client ID and secret before authorization. Its fixed protocol uses PKCE, client-secret-post for code exchange and refresh, and GET/Bearer userinfo. Scopes combine `read:jira-user`, `offline_access`, configured scopes, and request scopes in order. Configured prompt and ordinary additional parameters remain effective; standalone login hints, nonces, and callback device IDs are omitted. The fixed `audience=api.atlassian.com` overrides other audience parameters.
+
+Atlassian maps `account_id` to the provider subject and reads `name`, optional `email`, and optional `picture`. Omitted and null email/image values remain distinct, and default `emailVerified` is false. The async mapper receives the original profile; custom user-info and refresh handlers retain precedence. An absent access token or null profile returns a missing profile without mapping. Default HTTP and mapper errors also become a missing profile, while custom-handler errors propagate. The upstream default-error diagnostic contains the name Figma; Rust preserves that diagnostic. Ordinary pinned and SQLite contracts cover successful code/refresh flows, callback URI selection, optional fields, and callback/proxy/account-info error responses. The constructor adds no ID-token verifier. Strict JSON field types, JavaScript coercion, and untested network-error timing remain explicit boundaries.
+
+Kakao uses client-secret-post for code exchange and refresh. Its default scopes are `account_email`, `profile_image`, and `profile_nickname`, followed by configured scopes and request scopes without deduplication. The fixed protocol omits PKCE, standalone hints/nonces, configured prompt, and callback device IDs. Ordinary additional parameters and configured callback URIs remain effective.
+
+Kakao profile lookup uses GET/Bearer and passes the complete profile to the async mapper and returned data. The default decoder converts the documented numeric ID to the existing string account key, selects profile nickname before account name, and selects the main profile image before the thumbnail. Missing names become empty strings. Omitted and null email/image values retain their normal JSON shape. The default `emailVerified` is true only when both documented email flags are true. Pinned cases confirm false, omitted, and null flags produce false; Kakao emits a concrete boolean for these cases. This does not resolve the shared boolean-presence boundary for other providers or add arbitrary JavaScript truthiness coercion.
+
+Custom user-info and refresh handlers retain precedence. HTTP failures and null profiles return the shared missing-profile result; application mapper and custom-handler errors propagate unchanged. Ordinary pinned and SQLite contracts cover authorization, code/refresh encoding, callback URIs, profile fallbacks, mapper order, persistence, and callback/proxy/account-info errors. The constructor adds no ID-token verifier. Typed fields and untested malformed shapes or network/JSON failure timing remain explicit boundaries.
 
 ## Generic OAuth / OIDC
 
@@ -323,7 +344,7 @@ For `POST /unlink-account`, send `{ "accountId": "local-account-id" }`. Access-t
 
 ### PKCE Flow
 
-Social authorization-code flows use PKCE (Proof Key for Code Exchange), except for the fixed LinkedIn, Slack, Naver, and Linear protocols. Generic OAuth enables PKCE by default; set `GenericOAuthConfig.pkce: false` for a provider that does not support it. Direct ID-token sign-in does not perform a code exchange.
+Social authorization-code flows use PKCE (Proof Key for Code Exchange), except for the fixed LinkedIn, Slack, Naver, Linear, Reddit, and Kakao protocols. Generic OAuth enables PKCE by default; set `GenericOAuthConfig.pkce: false` for a provider that does not support it. Direct ID-token sign-in does not perform a code exchange.
 
 1. A random `code_verifier` is generated
 2. A `code_challenge` is derived using SHA-256
@@ -376,3 +397,17 @@ LINE Web ID tokens use HS256. The LINE handler posts a received ID token and cli
 This differs from Better Auth 1.7.6’s Generic LINE helper, which decodes the ID token in its profile handler: the Rust default adds one verification HTTP round trip. The default constructor retains Generic LINE’s authorization-code scope, with no generated ID-token nonce or direct ID-token login. Stored-account profile reads use the same handler and can therefore fail when LINE rejects a stored token. Complete error, network-timing, and stored-token behavior parity is not claimed.
 
 LINE’s documented userinfo response has no email field. Applications that use an access-token-only profile need their existing profile mapper to supply an application email before signup; the constructor does not invent an email. Ordinary local fixtures cover signed Web-token profiles, nullable and absent fields, access-token userinfo with an explicit application mapper, and request form encoding. The fixtures do not establish live-provider acceptance or native/LIFF token behavior. See LINE’s [ID-token guide](https://developers.line.biz/en/docs/line-login/verify-id-token/) and [API reference](https://developers.line.biz/en/reference/line-login/#verify-id-token).
+
+Salesforce uses PKCE, client-secret-post for code exchange and refresh, and a GET/Bearer user-info request. Authorization requires a nonempty client ID and secret. Default scopes precede configured scopes and request scopes without deduplication. Request-level additional parameters remain effective; standalone login hints, nonces, callback device IDs, and configured prompt are ignored by this provider helper. The constructor does not install an ID-token verifier.
+
+Salesforce reads the internal account subject from `user_id`. Display fields use `name`, nullable or omitted `email`, and the nonempty `photos.picture` or `photos.thumbnail`. The selected thumbnail retains omission, null, or an empty string. An omitted or null `email_verified` defaults to false. The async mapper sees the original profile and overrides these display fields. Default HTTP or mapper failures log a Salesforce diagnostic and return a missing profile; custom handlers retain their original errors. Refresh rotates tokens while preserving the stored scope.
+
+The constructor selects the production login host. Set all three existing endpoint fields for a sandbox or custom Salesforce login host:
+
+```rust
+let mut provider = OAuthProvider::salesforce("client-id", "client-secret");
+let login_origin = "https://test.salesforce.com"; // Or an application's Salesforce login origin.
+provider.auth_url = format!("{login_origin}/services/oauth2/authorize");
+provider.token_url = format!("{login_origin}/services/oauth2/token");
+provider.user_info_url = Some(format!("{login_origin}/services/oauth2/userinfo"));
+```

@@ -32,6 +32,8 @@ mod proxy;
 pub use proxy::{OAuthProxyConfig, OAuthProxyPlugin};
 mod request;
 mod resolved;
+#[cfg(test)]
+mod salesforce_tests;
 mod signin;
 mod social_profile;
 mod state;
