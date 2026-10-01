@@ -22,3 +22,7 @@ An anonymous session cannot create another anonymous session. A successful sign-
 Post-link cleanup follows Better Auth: a database deletion failure is logged and does not invalidate the successful sign-in. Explicit deletion returns an error when deletion fails.
 
 Disabling the plugin hides stored `isAnonymous` values on database reads. Existing signed session caches retain their previous user shape until expiry or a cache version change, matching upstream. See [user field visibility](/docs/concepts/users-accounts).
+
+Use `.callbacks(AnonymousCallbacks::<AppAuthSchema>::default().generate_name(...).on_link_account(...))` when the callbacks need the typed `EndpointContext`. Each closure returns `Box::pin(async move { ... })`. The name callback receives the arbitrary sign-in body before identity creation. The link callback also receives `AnonymousLink`, the completed endpoint response, and the previous authenticated session. A configured typed callback takes precedence over the corresponding context-free callback.
+
+The link's new user and session are the exact snapshots supplied when the endpoint issued its session cookie, including hidden fields. Later database updates do not replace those snapshots. The previous session retains its public field filtering. A link callback failure preserves both identities and the newly created session; only a successful callback permits anonymous cleanup. API errors retain issued cookies and callback response headers, while ordinary errors follow the shared [plugin error contract](/docs/concepts/plugins).

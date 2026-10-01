@@ -1,9 +1,11 @@
+use super::hooks::CommittedWrite;
 use super::*;
+use crate::store::database_hooks::{DatabaseHookControl, SessionUpdate};
 use better_auth_schema_registry::EntityRole;
 use serde_json::{Map, json};
 
-impl MemoryStore {
-    fn output_session(&self, mut session: SessionView) -> AuthResult<SessionView> {
+impl EphemeralStore {
+    pub(super) fn output_session(&self, mut session: SessionView) -> AuthResult<SessionView> {
         let mut output = Map::new();
         for (name, field) in &self.session_config.additional_fields {
             let value = session
@@ -20,7 +22,7 @@ impl MemoryStore {
 }
 
 #[async_trait]
-impl SessionStore<BundledSchema> for MemoryStore {
+impl SessionStore<StatelessSchema> for EphemeralStore {
     async fn accept_invitation_with_teams(
         &self,
         invitation_id: &str,
@@ -30,7 +32,7 @@ impl SessionStore<BundledSchema> for MemoryStore {
         maximum: crate::store::TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
         let invitation_snapshot = {
-            let mut state = self.lock();
+            let mut state = self.lock()?;
             let invitation = state
                 .invitations
                 .get_mut(invitation_id)
@@ -61,7 +63,7 @@ impl SessionStore<BundledSchema> for MemoryStore {
                 .filter(|id| !id.is_empty())
             {
                 {
-                    let state = self.lock();
+                    let state = self.lock()?;
                     if !state.teams.get(team_id).is_some_and(|team| {
                         team.organization_id == invitation_snapshot.organization_id
                     }) {
@@ -70,7 +72,7 @@ impl SessionStore<BundledSchema> for MemoryStore {
                 }
                 let limit = maximum.maximum(team_id).await?;
                 {
-                    let state = self.lock();
+                    let state = self.lock()?;
                     if !state
                         .team_members
                         .iter()
@@ -87,9 +89,9 @@ impl SessionStore<BundledSchema> for MemoryStore {
                         return Err(AuthError::forbidden("Team member limit reached"));
                     }
                 }
-                limits.insert(team_id.to_owned(), limit);
+                let _ = limits.insert(team_id.to_owned(), limit);
             }
-            let mut state = self.lock();
+            let mut state = self.lock()?;
             let invitation = state
                 .invitations
                 .get(invitation_id)
@@ -105,9 +107,15 @@ impl SessionStore<BundledSchema> for MemoryStore {
                 .split(',')
                 .filter(|id| !id.is_empty())
                 .collect();
-            if session_token.is_some_and(|token| !state.sessions.contains_key(token)) {
-                return Err(AuthError::SessionNotFound);
-            }
+            let session = session_token
+                .map(|token| {
+                    state
+                        .sessions
+                        .get(token)
+                        .cloned()
+                        .ok_or(AuthError::SessionNotFound)
+                })
+                .transpose()?;
             if state.members.values().any(|member| {
                 member.organization_id == invitation.organization_id && member.user_id == user_id
             }) {
@@ -115,13 +123,11 @@ impl SessionStore<BundledSchema> for MemoryStore {
             }
             let mut reserved_teams = HashMap::new();
             for team_id in &team_ids {
-                if !state
+                let team = state
                     .teams
                     .get(*team_id)
-                    .is_some_and(|team| team.organization_id == invitation.organization_id)
-                {
-                    return Err(AuthError::bad_request("Team not found"));
-                }
+                    .filter(|team| team.organization_id == invitation.organization_id)
+                    .ok_or_else(|| AuthError::bad_request("Team not found"))?;
                 if !state
                     .team_members
                     .iter()
@@ -134,23 +140,25 @@ impl SessionStore<BundledSchema> for MemoryStore {
                         .filter(|member| member.team_id == *team_id)
                         .count();
                     let (team, reserved) = self.reserve_team_seat(
-                        state.teams.get(*team_id).unwrap().clone(),
+                        team.clone(),
                         actual,
-                        limits[*team_id],
+                        *limits.get(*team_id).ok_or_else(|| {
+                            AuthError::internal("Invitation teams changed while resolving capacity")
+                        })?,
                     )?;
                     if !reserved {
                         return Err(AuthError::forbidden("Team member limit reached"));
                     }
-                    reserved_teams.insert((*team_id).to_owned(), team);
+                    let _ = reserved_teams.insert((*team_id).to_owned(), team);
                 }
             }
             let organization_id = invitation.organization_id.typed()?.clone();
             let member = Member {
                 additional_fields: Default::default(),
                 id: uuid::Uuid::new_v4().to_string(),
-                organization_id: (invitation.organization_id.clone()).into(),
+                organization_id: invitation.organization_id.clone(),
                 user_id: (user_id.to_owned()).into(),
-                role: (invitation.role).into(),
+                role: invitation.role,
                 created_at: (Utc::now()).into(),
             };
             let member: Member = self.store_record(EntityRole::Member, member, None, Map::new())?;
@@ -170,11 +178,10 @@ impl SessionStore<BundledSchema> for MemoryStore {
                 }
             }
             state.teams.extend(reserved_teams);
-            state.members.insert(member.id.clone(), member.clone());
-            let Some(session_token) = session_token else {
+            let _ = state.members.insert(member.id.clone(), member.clone());
+            let Some(mut session) = session else {
                 return Ok((member_output, None));
             };
-            let session = state.sessions.get_mut(session_token).unwrap();
             let cookie_session = if let [team_id] = team_ids.as_slice() {
                 session.active_team_id = Some((*team_id).to_owned());
                 session.updated_at = Utc::now();
@@ -184,6 +191,7 @@ impl SessionStore<BundledSchema> for MemoryStore {
             };
             session.active_organization_id = Some(organization_id);
             session.updated_at = Utc::now();
+            let _ = state.sessions.insert(session.token.clone(), session);
             Ok((member_output, cookie_session))
         }
         .await;
@@ -191,7 +199,7 @@ impl SessionStore<BundledSchema> for MemoryStore {
             Ok((member, session)) => Ok((member, accepted, session)),
             Err(error) => {
                 let restored = {
-                    let mut state = self.lock();
+                    let mut state = self.lock()?;
                     if let Some(invitation) = state
                         .invitations
                         .get_mut(invitation_id)
@@ -220,7 +228,27 @@ impl SessionStore<BundledSchema> for MemoryStore {
         }
     }
 
-    async fn create_session(&self, create_session: CreateSession) -> AuthResult<SessionView> {
+    async fn before_create_runtime_session(&self, input: &mut CreateSession) -> AuthResult<()> {
+        let transaction = EphemeralTransaction { store: self };
+        let context = self.hook_context(&transaction);
+        for hook in &self.hooks {
+            if hook.before_create_session(input, &context).await? == DatabaseHookControl::Cancel {
+                return Err(AuthError::forbidden(
+                    "session creation cancelled by database hook",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    async fn after_create_runtime_session(&self, session: &SessionView) -> AuthResult<()> {
+        self.after(CommittedWrite::SessionCreated(session.clone()))
+            .await
+    }
+
+    async fn create_session(&self, mut create_session: CreateSession) -> AuthResult<SessionView> {
+        self.before_create_runtime_session(&mut create_session)
+            .await?;
         let now = Utc::now();
         let token = format!("session_{}", uuid::Uuid::new_v4());
         let session = SessionView {
@@ -242,12 +270,14 @@ impl SessionStore<BundledSchema> for MemoryStore {
                 .field_schema()
                 .storage_fields(self.session_config.default_fields(), true)?,
         };
-        self.lock().sessions.insert(token, session.clone());
-        self.output_session(session)
+        let _ = self.lock()?.sessions.insert(token, session.clone());
+        let session = self.output_session(session)?;
+        self.after_create_runtime_session(&session).await?;
+        Ok(session)
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<SessionView>> {
-        self.lock()
+        self.lock()?
             .sessions
             .get(token)
             .cloned()
@@ -260,21 +290,18 @@ impl SessionStore<BundledSchema> for MemoryStore {
         token: &str,
         fields: serde_json::Map<String, serde_json::Value>,
     ) -> AuthResult<Option<SessionView>> {
-        let mut data = self.lock();
-        let Some(session) = data.sessions.get_mut(token) else {
-            return Ok(None);
-        };
-        session.additional_fields.extend(
-            self.session_config
-                .field_schema()
-                .storage_fields(fields, false)?,
-        );
-        session.updated_at = Utc::now();
-        self.output_session(session.clone()).map(Some)
+        self.update_session_with_hooks(
+            token,
+            SessionUpdate {
+                additional_fields: fields,
+                ..Default::default()
+            },
+        )
+        .await
     }
 
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<SessionView>> {
-        self.lock()
+        self.lock()?
             .sessions
             .values()
             .filter(|session| session.user_id == user_id)
@@ -288,40 +315,35 @@ impl SessionStore<BundledSchema> for MemoryStore {
         token: &str,
         expires_at: DateTime<Utc>,
     ) -> AuthResult<SessionView> {
-        if let Some(session) = self.lock().sessions.get_mut(token) {
-            session.expires_at = expires_at;
-            session.updated_at = Utc::now();
-            session.additional_fields.extend(
-                self.session_config
-                    .field_schema()
-                    .storage_fields(Default::default(), false)?,
-            );
-            self.output_session(session.clone())
-        } else {
-            Err(AuthError::SessionNotFound)
-        }
+        self.update_session_with_hooks(
+            token,
+            SessionUpdate {
+                expires_at: Some(expires_at),
+                ..Default::default()
+            },
+        )
+        .await?
+        .ok_or(AuthError::SessionNotFound)
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
-        self.lock().sessions.remove(token);
+        let _ = self
+            .delete_sessions_with_hooks(|session| session.token == token)
+            .await?;
         Ok(())
     }
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
-        self.lock()
-            .sessions
-            .retain(|_, session| session.user_id != user_id);
+        let _ = self
+            .delete_sessions_with_hooks(|session| session.user_id == user_id)
+            .await?;
         Ok(())
     }
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
         let now = Utc::now();
-        let mut state = self.lock();
-        let before = state.sessions.len();
-        state
-            .sessions
-            .retain(|_, session| session.expires_at > now && session.active);
-        Ok(before - state.sessions.len())
+        self.delete_sessions_with_hooks(|session| session.expires_at <= now || !session.active)
+            .await
     }
 
     async fn update_session_active_organization(
@@ -329,38 +351,30 @@ impl SessionStore<BundledSchema> for MemoryStore {
         token: &str,
         organization_id: Option<&str>,
     ) -> AuthResult<SessionView> {
-        let mut state = self.lock();
-        let session = state
-            .sessions
-            .get_mut(token)
-            .ok_or(AuthError::SessionNotFound)?;
-        session.active_organization_id = organization_id.map(str::to_owned);
-        session.updated_at = Utc::now();
-        session.additional_fields.extend(
-            self.session_config
-                .field_schema()
-                .storage_fields(Default::default(), false)?,
-        );
-        self.output_session(session.clone())
+        self.update_session_with_hooks(
+            token,
+            SessionUpdate {
+                active_organization_id: Some(organization_id.map(str::to_owned)),
+                ..Default::default()
+            },
+        )
+        .await?
+        .ok_or(AuthError::SessionNotFound)
     }
     async fn update_session_active_team(
         &self,
         token: &str,
         team_id: Option<&str>,
     ) -> AuthResult<SessionView> {
-        let mut state = self.lock();
-        let session = state
-            .sessions
-            .get_mut(token)
-            .ok_or(AuthError::SessionNotFound)?;
-        session.active_team_id = team_id.map(str::to_owned);
-        session.updated_at = Utc::now();
-        session.additional_fields.extend(
-            self.session_config
-                .field_schema()
-                .storage_fields(Default::default(), false)?,
-        );
-        self.output_session(session.clone())
+        self.update_session_with_hooks(
+            token,
+            SessionUpdate {
+                active_team_id: Some(team_id.map(str::to_owned)),
+                ..Default::default()
+            },
+        )
+        .await?
+        .ok_or(AuthError::SessionNotFound)
     }
 }
 
@@ -396,7 +410,7 @@ async fn invitation_fields_update_atomically_with_team_membership() {
     let schema = UserConfig {
         additional_fields: [("marker".into(), field)].into(),
     };
-    let store = MemoryStore::new(test_config());
+    let store = EphemeralStore::new(test_config());
     store
         .configure_organization_fields(OrganizationFields {
             member: schema.clone(),

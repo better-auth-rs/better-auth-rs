@@ -2,8 +2,11 @@ use std::sync::Arc;
 
 use axum::{Json, Router, routing::post};
 use better_auth::{AuthConfig, BetterAuth};
-use better_auth_core::{AuthAccount, AuthUser, AuthVerification, CreateUser, CreateVerification, SecretKey, VersionedSecret};
 use better_auth_core::utils::{jwe, symmetric};
+use better_auth_core::{
+    AuthAccount, AuthUser, AuthVerification, CreateUser, CreateVerification, SecretKey,
+    VersionedSecret,
+};
 use chrono::{Duration, Utc};
 use serde_json::{Value, json};
 
@@ -13,12 +16,17 @@ pub(super) const CURRENT: &str = "current-rotation-key-with-32-characters-123";
 pub(super) const PREVIOUS: &str = "previous-rotation-key-with-32-characters-456";
 
 pub(super) fn configure(profile: &str, config: &mut AuthConfig) {
-    if !profile.starts_with("crypto-") { return; }
-    config.secrets = Some(vec![VersionedSecret::new(2, CURRENT), VersionedSecret::new(1, PREVIOUS)]);
+    if !profile.starts_with("crypto-") {
+        return;
+    }
+    config.secrets = Some(vec![
+        VersionedSecret::new(2, CURRENT),
+        VersionedSecret::new(1, PREVIOUS),
+    ]);
     config.account.encrypt_oauth_tokens = true;
-    config.account.store_account_cookie = true;
+    config.account.store_account_cookie = Some(true);
     if profile == "crypto-cookie" {
-        config.account.store_state_strategy = better_auth::config::OAuthStateStrategy::Cookie;
+        config.account.store_state_strategy = Some(better_auth::config::OAuthStateStrategy::Cookie);
     }
 }
 

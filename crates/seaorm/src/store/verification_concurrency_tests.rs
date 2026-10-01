@@ -61,7 +61,7 @@ impl crate::hooks::SeaOrmHooks<BundledSchema> for RejectVerificationHook {
     async fn before_delete_verification(
         &self,
         _verification: &<BundledSchema as better_auth_core::AuthSchema>::Verification,
-        _ctx: &crate::hooks::SeaOrmHookContext<'_>,
+        _ctx: &crate::hooks::SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<crate::hooks::HookControl> {
         Ok(self.0)
     }
@@ -69,7 +69,7 @@ impl crate::hooks::SeaOrmHooks<BundledSchema> for RejectVerificationHook {
     async fn after_delete_verification(
         &self,
         _verification: &<BundledSchema as better_auth_core::AuthSchema>::Verification,
-        ctx: &crate::hooks::SeaOrmHookContext<'_>,
+        ctx: &crate::hooks::SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(ctx.tx.is_none());
         Err(better_auth_core::AuthError::internal("after hook failed"))

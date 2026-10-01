@@ -256,12 +256,16 @@ pub fn admin_plugin_enabled(ctx: &AuthContext<impl better_auth_core::AuthSchema>
 
 /// Resolve the configured message shown when a banned user attempts to create
 /// a session.
-pub fn admin_banned_user_message(
+pub async fn admin_banned_user_message(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> Option<String> {
-    ctx.get_metadata("admin.banned_user_message")
-        .and_then(|value| value.as_str())
-        .map(ToOwned::to_owned)
+    user: &impl AuthUser,
+) -> AuthResult<String> {
+    let message = ctx
+        .extensions
+        .get::<super::admin::BannedUserMessage>()
+        .cloned()
+        .unwrap_or_default();
+    message.resolve(&ctx.internal_user_view(user)?).await
 }
 
 /// Issue a session for the given user, applying admin-plugin ban semantics
@@ -305,7 +309,7 @@ pub(crate) async fn session_user<S: better_auth_core::AuthSchema>(
     user_id: &str,
     transaction: Option<&dyn better_auth_core::store::AuthTransaction<S>>,
 ) -> Result<S::User, SessionIssueError> {
-    let mut user = match transaction {
+    let user = match transaction {
         Some(tx) => tx.get_user_by_id(user_id).await?,
         None => ctx.database.get_user_by_id(user_id).await?,
     }
@@ -314,23 +318,22 @@ pub(crate) async fn session_user<S: better_auth_core::AuthSchema>(
     if admin_plugin_enabled(ctx) && user.banned() {
         if user
             .ban_expires()
-            .is_some_and(|expires| expires <= Utc::now())
+            .is_some_and(|expires| expires < Utc::now())
         {
             let update = UpdateUser {
                 banned: Some(false),
-                ban_reason: None,
-                ban_expires: None,
+                ban_reason: Some(None),
+                ban_expires: Some(None),
                 ..Default::default()
             };
-            user = match transaction {
+            // Session admission updates storage without replacing the route's user snapshot.
+            let _ = match transaction {
                 Some(tx) => tx.update_user(user_id, update).await?,
                 None => ctx.database.update_user(user_id, update).await?,
             };
         } else {
             return Err(SessionIssueError::Banned {
-                message: admin_banned_user_message(ctx).unwrap_or_else(|| {
-                    "You have been banned from this application. Please contact support if you believe this is an error.".to_string()
-                }),
+                message: admin_banned_user_message(ctx, &user).await?,
             });
         }
     }
@@ -370,7 +373,7 @@ pub fn delete_session_cookie_headers(
         &related_cookie_name(config, "dont_remember"),
         config,
     ));
-    if config.account.store_account_cookie {
+    if config.account.store_account_cookie() {
         cookies.extend(create_clear_chunked_cookies(
             req,
             &related_cookie_name(config, "account_data"),
@@ -378,7 +381,7 @@ pub fn delete_session_cookie_headers(
         ));
     }
     if matches!(
-        config.account.store_state_strategy,
+        config.account.store_state_strategy(),
         OAuthStateStrategy::Cookie
     ) {
         cookies.push(create_clear_cookie(

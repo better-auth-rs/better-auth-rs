@@ -798,25 +798,20 @@ pub async fn handle_accept_invitation(
         Err(response) => return Ok(response),
     };
     let (response, snapshot) = accept_invitation_core(&body, &user, &session, config, ctx).await?;
-    let mut response = AuthResponse::json(200, &response)?;
+    let response = AuthResponse::json(200, &response)?;
     if let Some(snapshot) = snapshot {
-        response = super::team::with_session_cookie(response, req, session.token(), ctx);
         let manager = ctx.session_manager();
         // Upstream writes the team cookie before updating the active organization in the transaction.
         manager
-            .write_cache(
+            .set_session_cookie(
                 req,
-                &better_auth_core::session::SessionData {
+                better_auth_core::session::SessionData {
                     session: snapshot,
                     user,
                 },
-                manager.dont_remember(req),
+                None,
             )
             .await?;
-        // Preserve the explicit snapshot when response finalization processes the credential cookie.
-        for (name, value) in req.take_response_headers()? {
-            response.headers.append(name, value);
-        }
     }
     Ok(response)
 }

@@ -6,7 +6,7 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
     AuthVerification, CreateVerification,
-    utils::cookie_utils::{create_session_cookie, verify_cookie_value},
+    utils::cookie_utils::verify_cookie_value,
     wire::{SessionView, UserView},
 };
 use chrono::{Duration, Utc};
@@ -176,7 +176,7 @@ impl OneTimeTokenPlugin {
         let Some((session, user)) = find_session(ctx, verification.value()).await? else {
             return message_error("Session not found");
         };
-        let mut response = if session.expires_at < Utc::now() {
+        let response = if session.expires_at < Utc::now() {
             message_error("Session expired")?
         } else {
             AuthResponse::json(
@@ -185,10 +185,13 @@ impl OneTimeTokenPlugin {
             )?
         };
         if !self.config.disable_set_session_cookie {
-            response.headers.append(
-                "Set-Cookie",
-                create_session_cookie(&session.token, &ctx.config),
-            );
+            ctx.session_manager()
+                .set_session_cookie(
+                    req,
+                    better_auth_core::session::SessionData { session, user },
+                    None,
+                )
+                .await?;
         }
         Ok(response)
     }

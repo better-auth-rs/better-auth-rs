@@ -80,7 +80,7 @@ const V1_DOCS_PATHS: &[(&str, &str)] = &[
     ("/sign-up/email", DEFAULT_TAG),
     ("/sign-in/email", DEFAULT_TAG),
     ("/sign-in/social", DEFAULT_TAG),
-    ("/callback/{provider}", DEFAULT_TAG),
+    ("/callback/{id}", DEFAULT_TAG),
     ("/list-accounts", DEFAULT_TAG),
     ("/link-social", DEFAULT_TAG),
     ("/unlink-account", DEFAULT_TAG),
@@ -376,7 +376,7 @@ mod tests {
 
     #[test]
     fn v1_route_groups_include_callback_and_username_surface() {
-        assert!(V1_DOCS_PATHS.contains(&("/callback/{provider}", DEFAULT_TAG)));
+        assert!(V1_DOCS_PATHS.contains(&("/callback/{id}", DEFAULT_TAG)));
         assert!(V1_DOCS_PATHS.contains(&("/sign-in/username", USERNAME_TAG)));
         assert!(V1_DOCS_PATHS.contains(&("/is-username-available", USERNAME_TAG)));
     }

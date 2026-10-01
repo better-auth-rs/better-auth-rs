@@ -1,28 +1,68 @@
 use super::SecondaryStore;
-use crate::store::{AuthTransaction, BoxedTransactionValue, TransactionStore, TransactionWork};
+use crate::store::{
+    AuthTransaction, BoxedTransactionValue, TransactionStore, TransactionWork,
+    TypedTransactionFuture,
+};
 use crate::types::{CreateAccount, CreateSession, CreateUser};
-use crate::{AuthError, AuthResult, AuthSchema};
+use crate::{AuthResult, AuthSchema};
 use async_trait::async_trait;
-use std::sync::{Arc, Mutex};
-
-enum CommittedEffect<S: AuthSchema> {
-    Session(S::Session),
-    Verification(S::Verification),
-    UserUpdated(S::User),
-    UserDeleted {
-        id: String,
-        sessions: Vec<super::sessions::SessionReference>,
-    },
-}
 
 struct Transaction<'a, S: AuthSchema> {
     inner: &'a dyn AuthTransaction<S>,
     runtime: SecondaryStore<S>,
-    effects: Arc<Mutex<Vec<CommittedEffect<S>>>>,
+}
+
+impl<S: AuthSchema> Transaction<'_, S> {
+    async fn create_session_with_storage(
+        &self,
+        mut input: CreateSession,
+        deferred: bool,
+    ) -> AuthResult<S::Session> {
+        let session = if self.runtime.database_sessions() {
+            self.inner.create_session(input).await?
+        } else {
+            self.inner.before_create_runtime_session(&mut input).await?;
+            self.runtime.new_session(input)?
+        };
+        if !deferred {
+            self.runtime
+                .mirror_session_in_transaction(&session, Some(self.inner))
+                .await?;
+        }
+        if !self.runtime.database_sessions() {
+            let runtime = self.runtime.clone();
+            let created = session.clone();
+            self.inner.queue_after_commit(Box::pin(async move {
+                runtime.inner.after_create_runtime_session(&created).await
+            }))?;
+        }
+        if deferred {
+            let runtime = self.runtime.clone();
+            let created = session.clone();
+            self.inner.queue_after_commit(Box::pin(async move {
+                if let Err(error) = runtime.mirror_session(&created).await {
+                    // Upstream tolerates a committed mirror failure only with database fallback.
+                    if runtime.database_sessions()
+                        && !runtime.config.session.preserve_session_in_database
+                    {
+                        tracing::error!(%error, "Failed to mirror committed session to secondary storage");
+                    } else {
+                        return Err(error);
+                    }
+                }
+                Ok(())
+            }))?;
+        }
+        Ok(session)
+    }
 }
 
 #[async_trait]
 impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
+    fn queue_after_commit(&self, effect: TypedTransactionFuture<'static, ()>) -> AuthResult<()> {
+        self.inner.queue_after_commit(effect)
+    }
+
     async fn create_verification(
         &self,
         input: crate::CreateVerification,
@@ -32,10 +72,14 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
             .create_verification_in_transaction(input, Some(self.inner))
             .await?;
         if !self.runtime.database_verifications() {
-            self.effects
-                .lock()
-                .map_err(|_| AuthError::internal("Transaction cache queue lock poisoned"))?
-                .push(CommittedEffect::Verification(verification.clone()));
+            let runtime = self.runtime.clone();
+            let created = verification.clone();
+            self.inner.queue_after_commit(Box::pin(async move {
+                runtime
+                    .inner
+                    .after_create_runtime_verification(&created)
+                    .await
+            }))?;
         }
         Ok(verification)
     }
@@ -58,10 +102,15 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
     }
     async fn update_user(&self, id: &str, update: crate::UpdateUser) -> AuthResult<S::User> {
         let user = self.inner.update_user(id, update).await?;
-        self.effects
-            .lock()
-            .map_err(|_| AuthError::internal("Transaction cache queue lock poisoned"))?
-            .push(CommittedEffect::UserUpdated(user.clone()));
+        let runtime = self.runtime.clone();
+        let updated = user.clone();
+        self.inner.queue_after_commit(Box::pin(async move {
+            // Upstream logs a committed cache refresh failure and continues the hook queue.
+            if let Err(error) = runtime.refresh_user_sessions(&updated).await {
+                tracing::error!(%error, "Failed to refresh committed user sessions in secondary storage");
+            }
+            Ok(())
+        }))?;
         Ok(user)
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
@@ -70,14 +119,14 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
         }
         let sessions = self.runtime.references(id).await?;
         self.inner.delete_user(id).await?;
-        self.effects
-            .lock()
-            .map_err(|_| AuthError::internal("Transaction cache queue lock poisoned"))?
-            .push(CommittedEffect::UserDeleted {
-                id: id.to_owned(),
-                sessions,
-            });
-        Ok(())
+        let runtime = self.runtime.clone();
+        let id = id.to_owned();
+        self.inner.queue_after_commit(Box::pin(async move {
+            if let Err(error) = runtime.delete_cached_sessions(&id, &sessions).await {
+                tracing::error!(%error, "Failed to delete committed user sessions from secondary storage");
+            }
+            Ok(())
+        }))
     }
     async fn create_passkey(&self, input: crate::CreatePasskey) -> AuthResult<crate::Passkey> {
         self.inner.create_passkey(input).await
@@ -88,18 +137,14 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
     async fn create_account(&self, input: CreateAccount) -> AuthResult<S::Account> {
         self.inner.create_account(input).await
     }
-    async fn create_session(&self, mut input: CreateSession) -> AuthResult<S::Session> {
-        let session = if self.runtime.database_sessions() {
-            self.inner.create_session(input).await?
-        } else {
-            self.inner.before_create_runtime_session(&mut input).await?;
-            self.runtime.new_session(input)?
-        };
-        self.effects
-            .lock()
-            .map_err(|_| AuthError::internal("Session transaction queue lock poisoned"))?
-            .push(CommittedEffect::Session(session.clone()));
-        Ok(session)
+    async fn create_session(&self, input: CreateSession) -> AuthResult<S::Session> {
+        self.create_session_with_storage(input, false).await
+    }
+    async fn create_session_with_deferred_secondary(
+        &self,
+        input: CreateSession,
+    ) -> AuthResult<S::Session> {
+        self.create_session_with_storage(input, true).await
     }
 }
 
@@ -109,62 +154,21 @@ impl<S: AuthSchema> TransactionStore<S> for SecondaryStore<S> {
         &self,
         work: Box<TransactionWork<S>>,
     ) -> AuthResult<BoxedTransactionValue> {
-        let effects = Arc::new(Mutex::new(Vec::new()));
-        let queued = effects.clone();
         let runtime = self.clone();
-        let result = self
-            .inner
+        self.inner
             .transaction_boxed(Box::new(move |inner| {
-                Box::pin(async move {
-                    work(&Transaction {
-                        inner,
-                        runtime,
-                        effects: queued,
-                    })
-                    .await
-                })
+                Box::pin(async move { work(&Transaction { inner, runtime }).await })
             }))
-            .await?;
-        let committed = std::mem::take(
-            &mut *effects
-                .lock()
-                .map_err(|_| AuthError::internal("Session transaction queue lock poisoned"))?,
-        );
-        for effect in committed {
-            let session = match effect {
-                CommittedEffect::Session(session) => session,
-                CommittedEffect::Verification(verification) => {
-                    self.inner
-                        .after_create_runtime_verification(&verification)
-                        .await?;
-                    continue;
-                }
-                CommittedEffect::UserUpdated(user) => {
-                    // Upstream runs cache refresh after commit and logs backend failures.
-                    if let Err(error) = self.refresh_user_sessions(&user).await {
-                        tracing::error!(%error, "Failed to refresh committed user sessions in secondary storage");
-                    }
-                    continue;
-                }
-                CommittedEffect::UserDeleted { id, sessions } => {
-                    if let Err(error) = self.delete_cached_sessions(&id, &sessions).await {
-                        tracing::error!(%error, "Failed to delete committed user sessions from secondary storage");
-                    }
-                    continue;
-                }
-            };
-            if let Err(error) = self.mirror_session(&session).await {
-                // Upstream tolerates mirror failure after commit only when database session fallback is available.
-                if self.database_sessions() && !self.config.session.preserve_session_in_database {
-                    tracing::error!(%error, "Failed to mirror committed session to secondary storage");
-                } else {
-                    return Err(error);
-                }
-            }
-            if !self.database_sessions() {
-                self.inner.after_create_runtime_session(&session).await?;
-            }
-        }
-        Ok(result)
+            .await
+    }
+}
+
+#[async_trait]
+impl<S: AuthSchema> crate::store::JwksStore for Transaction<'_, S> {
+    async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>> {
+        crate::store::JwksStore::list_jwks(self.inner).await
+    }
+    async fn create_jwk(&self, input: crate::CreateJwk) -> AuthResult<crate::Jwk> {
+        crate::store::JwksStore::create_jwk(self.inner, input).await
     }
 }

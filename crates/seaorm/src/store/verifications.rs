@@ -1,14 +1,15 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter,
-    QueryOrder, QuerySelect, SqliteTransactionMode, TransactionOptions, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, SqliteTransactionMode, TransactionOptions, TransactionTrait,
 };
 
 use better_auth_core::store::VerificationStore;
 
 use crate::entity::AuthVerification;
 use crate::error::AuthResult;
+use crate::hooks::{DatabaseHookUpdate, VerificationUpdate};
 use crate::schema::{AuthSchema, SeaOrmVerificationModel};
 use crate::types::CreateVerification;
 
@@ -24,6 +25,9 @@ impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> Verifi
 where
     S: AuthSchema + Send + Sync,
     S::Verification: SeaOrmVerificationModel,
+    S::User: crate::schema::SeaOrmUserModel,
+    S::Account: crate::schema::SeaOrmAccountModel,
+    S::Session: crate::schema::SeaOrmSessionModel,
 {
     async fn reserve_verification(
         &self,
@@ -66,21 +70,45 @@ where
         value: Option<String>,
         expires_at: Option<chrono::DateTime<Utc>>,
     ) -> AuthResult<()> {
-        let mut query = <S::Verification as SeaOrmVerificationModel>::Entity::update_many()
-            .filter(S::Verification::identifier_column().eq(identifier));
-        if let Some(value) = value {
-            query = query.col_expr(
-                S::Verification::value_column(),
-                sea_orm::sea_query::Expr::value(value),
-            );
+        let mut update = VerificationUpdate {
+            value,
+            expires_at,
+            ..Default::default()
+        };
+        let original = update.clone();
+        let context = self.hook_context(None);
+        for hook in self.hooks() {
+            match hook
+                .before_update_verification(identifier, &original, &context)
+                .await?
+            {
+                DatabaseHookUpdate::Continue => {}
+                DatabaseHookUpdate::Cancel => return Ok(()),
+                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+            }
         }
-        if let Some(expires_at) = expires_at {
-            query = query.col_expr(
-                S::Verification::expires_at_column(),
-                sea_orm::sea_query::Expr::value(expires_at),
-            );
+        let reselect = match update.id.as_deref() {
+            Some(id) => S::Verification::id_column().eq(S::Verification::parse_id(id)?),
+            None => S::Verification::identifier_column()
+                .eq(update.identifier.as_deref().unwrap_or(identifier)),
+        };
+        let _ = update.updated_at.get_or_insert_with(Utc::now);
+        let mut active = <S::Verification as SeaOrmVerificationModel>::ActiveModel::default();
+        S::Verification::apply_update(&mut active, update)?;
+        let verification = super::updates::update_returning_one::<
+            <S::Verification as SeaOrmVerificationModel>::Entity,
+            _,
+        >(
+            self.connection(),
+            active,
+            S::Verification::identifier_column().eq(identifier),
+            reselect,
+        )
+        .await?;
+        for hook in self.hooks() {
+            hook.after_update_verification(verification.as_ref(), &context)
+                .await?;
         }
-        let _ = query.exec(self.connection()).await.map_err(map_db_err)?;
         Ok(())
     }
 
@@ -254,11 +282,14 @@ impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrm
 where
     S: AuthSchema + Send + Sync,
     S::Verification: SeaOrmVerificationModel,
+    S::User: crate::schema::SeaOrmUserModel,
+    S::Account: crate::schema::SeaOrmAccountModel,
+    S::Session: crate::schema::SeaOrmSessionModel,
 {
     pub(super) async fn delete_expired_verifications_with_connection<C: ConnectionTrait>(
         &self,
         connection: &C,
-        tx: Option<&DatabaseTransaction>,
+        tx: Option<super::HookTransaction<'_, S>>,
     ) -> AuthResult<(usize, Vec<S::Verification>)> {
         let now = Utc::now();
         let filter = <S::Verification as SeaOrmVerificationModel>::expires_at_column().lt(now);
@@ -292,11 +323,14 @@ impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrm
 where
     S: AuthSchema + Send + Sync,
     S::Verification: SeaOrmVerificationModel,
+    S::User: crate::schema::SeaOrmUserModel,
+    S::Account: crate::schema::SeaOrmAccountModel,
+    S::Session: crate::schema::SeaOrmSessionModel,
 {
     pub(super) async fn before_runtime_verification_in_tx(
         &self,
         verification: &mut CreateVerification,
-        tx: Option<&DatabaseTransaction>,
+        tx: Option<super::HookTransaction<'_, S>>,
     ) -> AuthResult<()> {
         let context = self.hook_context(tx);
         for hook in self.hooks() {
@@ -314,7 +348,7 @@ where
     pub(super) async fn create_verification_with_connection<C: ConnectionTrait>(
         &self,
         connection: &C,
-        tx: Option<&DatabaseTransaction>,
+        tx: Option<super::HookTransaction<'_, S>>,
         mut verification: CreateVerification,
     ) -> AuthResult<S::Verification> {
         self.before_runtime_verification_in_tx(&mut verification, tx)
@@ -351,6 +385,11 @@ where
             })
             .await
             .map_err(map_db_err)?;
+        let hook_transaction = super::SeaOrmTransaction {
+            store: self,
+            tx: &transaction,
+            effects: std::sync::Mutex::new(Vec::new()),
+        };
         let result: AuthResult<Option<S::Verification>> = async {
             let Some(model) = <S::Verification as SeaOrmVerificationModel>::Entity::find()
                 .filter(
@@ -368,7 +407,7 @@ where
             if expected_value.is_some_and(|value| model.value() != value) {
                 return Ok(None);
             }
-            let hook_context = self.hook_context(Some(&transaction));
+            let hook_context = self.hook_context(Some((&transaction, &hook_transaction)));
             for hook in self.hooks() {
                 if hook
                     .before_delete_verification(&model, &hook_context)
@@ -398,8 +437,12 @@ where
             Ok(Some(model))
         }
         .await;
+        let effects = hook_transaction.effects.into_inner().map_err(|_| {
+            better_auth_core::AuthError::internal("Transaction hook queue lock poisoned")
+        })?;
         if result.is_ok() {
             transaction.commit().await.map_err(map_db_err)?;
+            self.finish_transaction_effects(effects).await?;
         } else {
             transaction.rollback().await.map_err(map_db_err)?;
         }

@@ -1,0 +1,36 @@
+{
+  "user": { "modelName": "app_users" },
+  "organization": {
+    "modelName": "app_organizations",
+    "additionalFields": {
+      "name": { "type": "string", "required": true, "fieldName": "display_name", "index": true },
+      "slug": { "type": "string", "required": true },
+      "lookup": { "type": "string", "required": false, "index": true },
+      "uniqueCode": { "type": "string", "required": false, "fieldName": "unique_code", "index": true, "unique": true },
+      "sorted": { "type": "string", "required": false, "sortable": true },
+      "implicitRequired": { "type": "string", "defaultValue": "adapter-default" },
+      "fractional": { "type": "number", "required": false },
+      "wideFractional": { "type": "number", "required": false, "bigint": true },
+      "owner": { "type": "number", "required": false, "fieldName": "owner_id", "references": { "model": "user", "field": "id" } },
+      "bigOwner": { "type": "number", "required": false, "bigint": true, "references": { "model": "user", "field": "id" } },
+      "transformedOwner": { "type": "number", "required": false, "references": { "model": "user", "field": "id" } },
+      "flagOwner": { "type": "boolean", "required": false, "references": { "model": "user", "field": "id" } },
+      "jsonOwner": { "type": "json", "required": false, "references": { "model": "user", "field": "id" } },
+      "arrayOwner": { "type": "string[]", "required": false, "references": { "model": "user", "field": "id" } },
+      "mappedOwner": { "type": "string", "required": false, "fieldName": "mapped_owner", "references": { "model": "organization", "field": "uniqueCode", "onDelete": "set null" } },
+      "cascadeOwner": { "type": "string", "required": false, "references": { "model": "external_tenants", "field": "tenant_code" } },
+      "restrictedOwner": { "type": "string", "required": false, "references": { "model": "external_tenants", "field": "tenant_code", "onDelete": "restrict" } },
+      "noActionOwner": { "type": "string", "required": false, "references": { "model": "external_tenants", "field": "tenant_code", "onDelete": "no action" } },
+      "nullOwner": { "type": "string", "required": false, "references": { "model": "external_tenants", "field": "tenant_code", "onDelete": "set null" } },
+      "defaultOwner": { "type": "string", "required": false, "references": { "model": "external_tenants", "field": "tenant_code", "onDelete": "set default" } }
+    }
+  },
+  "member": {
+    "modelName": "app_members",
+    "additionalFields": { "organizationId": { "type": "string", "required": true, "fieldName": "workspace_id" } }
+  },
+  "team": {
+    "modelName": "app_teams",
+    "additionalFields": { "organizationId": { "type": "string", "required": true, "fieldName": "workspace_id", "references": { "model": "organization", "field": "id", "onDelete": "restrict" } } }
+  }
+}

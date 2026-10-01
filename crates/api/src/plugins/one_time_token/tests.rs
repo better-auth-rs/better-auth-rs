@@ -1,5 +1,5 @@
 use super::*;
-use crate::plugins::test_helpers::create_test_context_with_user;
+use crate::plugins::test_helpers::{create_test_context_with_user, finalize_response};
 use better_auth_core::{CreateUser, HttpMethod};
 
 fn verify_request(token: &str) -> AuthRequest {
@@ -30,12 +30,16 @@ async fn concurrent_redemption_issues_one_cookie_and_expired_proofs_cannot_authe
             .unwrap()
             .is_none()
     );
-    let request = verify_request(&token);
+    let first_request = verify_request(&token);
+    let second_request = verify_request(&token);
     let (first, second) = tokio::join!(
-        plugin.handle_verify(&request, &ctx),
-        plugin.handle_verify(&request, &ctx)
+        plugin.handle_verify(&first_request, &ctx),
+        plugin.handle_verify(&second_request, &ctx)
     );
-    let responses = [first.unwrap(), second.unwrap()];
+    let responses = [
+        finalize_response(&ctx, &first_request, first.unwrap()),
+        finalize_response(&ctx, &second_request, second.unwrap()),
+    ];
     assert_eq!(
         responses
             .iter()
@@ -59,10 +63,9 @@ async fn concurrent_redemption_issues_one_cookie_and_expired_proofs_cannot_authe
     );
     let expired = OneTimeTokenPlugin::new().expires_in(Duration::seconds(-1));
     let token = expired.generate(&ctx, session, user).await.unwrap();
-    let response = expired
-        .handle_verify(&verify_request(&token), &ctx)
-        .await
-        .unwrap();
+    let request = verify_request(&token);
+    let response = expired.handle_verify(&request, &ctx).await.unwrap();
+    let response = finalize_response(&ctx, &request, response);
     assert_eq!(response.status, 400);
     assert!(!response.headers.contains_key("set-cookie"));
     assert!(

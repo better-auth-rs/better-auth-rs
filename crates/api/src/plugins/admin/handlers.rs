@@ -10,6 +10,8 @@ use better_auth_core::{
 
 use crate::plugins::StatusResponse;
 
+use validator::ValidateEmail;
+
 use super::access::has_permission;
 use super::types::*;
 use super::{AdminConfig, target_is_admin};
@@ -83,25 +85,44 @@ fn joined_role(role: &RoleInput) -> String {
 }
 
 fn validate_role_input(role: &RoleInput, config: &AdminConfig) -> AuthResult<()> {
-    if role.is_empty() {
-        return Err(AuthError::bad_request("role is required"));
+    if let Some(roles) = &config.roles
+        && role.roles().iter().any(|role| !roles.contains_key(role))
+    {
+        return Err(AuthError::bad_request(MESSAGE_NON_EXISTENT_ROLE));
     }
+    Ok(())
+}
 
-    if config.roles.is_empty() {
-        return Ok(());
-    }
-
-    let unknown_roles: Vec<_> = role
-        .roles()
-        .into_iter()
-        .filter(|item| !config.roles.contains_key(*item))
-        .collect();
-
-    if unknown_roles.is_empty() {
+fn require_user_permission(
+    user: &UserView,
+    config: &AdminConfig,
+    action: &str,
+    message: &str,
+) -> AuthResult<()> {
+    let permission = std::collections::HashMap::from([("user".into(), vec![action.into()])]);
+    if has_permission(Some(&user.id), user.role.as_deref(), config, &permission) {
         Ok(())
     } else {
-        Err(AuthError::bad_request(MESSAGE_NON_EXISTENT_ROLE))
+        Err(AuthError::forbidden(message))
     }
+}
+
+fn has_ban_data(data: &serde_json::Map<String, serde_json::Value>) -> bool {
+    ["banned", "banReason", "banExpires"]
+        .iter()
+        .any(|key| data.contains_key(*key))
+}
+
+fn ban_expiry(
+    data: &serde_json::Map<String, serde_json::Value>,
+) -> AuthResult<Option<chrono::DateTime<Utc>>> {
+    data.get("banExpires")
+        .filter(|value| !value.is_null())
+        .map(|value| {
+            serde_json::from_value(value.clone())
+                .map_err(|_| AuthError::bad_request("Invalid banExpires"))
+        })
+        .transpose()
 }
 
 pub(crate) async fn set_role_core(
@@ -109,13 +130,12 @@ pub(crate) async fn set_role_core(
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<UserResponse<AdminUserView>> {
+    validate_role_input(&body.role, config)?;
     let _target = ctx
         .database
         .get_user_by_id(&body.user_id)
         .await?
         .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
-
-    validate_role_input(&body.role, config)?;
 
     let update = UpdateUser {
         role: Some(joined_role(&body.role)),
@@ -142,33 +162,80 @@ pub(crate) async fn get_user_core(
 
 pub(crate) async fn create_user_core(
     body: &CreateUserRequest,
-    req: &better_auth_core::AuthRequest,
-    session: (
+    req: Option<&better_auth_core::AuthRequest>,
+    session: Option<(
         better_auth_core::wire::UserView,
         better_auth_core::wire::SessionView,
-    ),
+    )>,
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<UserResponse<AdminUserView>> {
-    if ctx.database.get_user_by_email(&body.email).await?.is_some() {
+    let mut data = body.data.clone().unwrap_or_default();
+    let data_role = data.remove("role");
+    if (body.role.is_some() || data_role.is_some())
+        && let Some((user, _)) = &session
+    {
+        require_user_permission(user, config, "set-role", MESSAGE_CHANGE_ROLE)?;
+    }
+    let role = match &body.role {
+        Some(role) => Some(role.clone()),
+        None => data_role
+            .map(serde_json::from_value::<RoleInput>)
+            .transpose()
+            .map_err(|_| AuthError::bad_request(MESSAGE_INVALID_ROLE_TYPE))?,
+    };
+    if let Some(role) = &role {
+        validate_role_input(role, config)?;
+    }
+    if has_ban_data(&data)
+        && let Some((user, _)) = &session
+    {
+        require_user_permission(user, config, "ban", "You are not allowed to ban users")?;
+    }
+    let email = body.email.to_lowercase();
+    if !email.validate_email() {
+        return Err(AuthError::bad_request("Invalid email"));
+    }
+    if let Some(password) = body
+        .password
+        .as_deref()
+        .filter(|password| !password.is_empty())
+        && password.encode_utf16().count() > ctx.password_policy.max_length
+    {
+        return Err(AuthError::bad_request("Password too long"));
+    }
+    if ctx.database.get_user_by_email(&email).await?.is_some() {
         return Err(AuthError::bad_request(
             "User already exists. Use another email.",
         ));
     }
-
-    let role = body
-        .role
-        .as_ref()
-        .map(joined_role)
-        .unwrap_or_else(|| config.default_role.clone());
-
     let mut create_user = better_auth_core::CreateUser::new()
-        .with_email(&body.email)
+        .with_email(email)
         .with_name(&body.name)
-        .with_role(role);
-    create_user.additional_fields = body.data.clone().unwrap_or_default();
+        .with_role(
+            role.as_ref()
+                .map(joined_role)
+                .unwrap_or_else(|| config.default_role.clone()),
+        );
+    create_user.banned = data.get("banned").and_then(serde_json::Value::as_bool);
+    create_user.ban_reason = data
+        .get("banReason")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned);
+    create_user.ban_expires = ban_expiry(&data)?;
+    create_user.image = data
+        .get("image")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned);
+    create_user.email_verified = data
+        .get("emailVerified")
+        .and_then(serde_json::Value::as_bool);
+    create_user.additional_fields = data;
 
-    let mut input: serde_json::Map<String, serde_json::Value> = req.body_as_json()?;
+    let mut input: serde_json::Map<String, serde_json::Value> = match req {
+        Some(req) => req.body_as_json()?,
+        None => serde_json::from_value(serde_json::to_value(body)?)?,
+    };
     input.retain(|key, _| {
         matches!(
             key.as_str(),
@@ -176,8 +243,9 @@ pub(crate) async fn create_user_core(
         )
     });
     let mut endpoint =
-        crate::plugins::endpoint_context::EndpointContext::new(Some(req), input.into(), ctx);
-    endpoint.session = Some(session);
+        crate::plugins::endpoint_context::EndpointContext::new(req, input.into(), ctx);
+    endpoint.path = Some("/admin/create-user");
+    endpoint.session = session;
     let user = crate::plugins::user_admission::create_user(create_user, "admin", &endpoint).await?;
 
     if let Some(password) = body
@@ -219,6 +287,11 @@ pub(crate) async fn update_user_core(
         return Err(AuthError::bad_request(MESSAGE_NO_DATA_TO_UPDATE));
     }
 
+    if body.data.contains_key("password") {
+        return Err(AuthError::bad_request(
+            "Password cannot be updated through update-user. Use the set-user-password endpoint instead",
+        ));
+    }
     let mut update = UpdateUser {
         additional_fields: body.data.clone(),
         ..Default::default()
@@ -242,9 +315,48 @@ pub(crate) async fn update_user_core(
         update.role = Some(joined_role(&role));
     }
 
-    if let Some(value) = body.data.get("email").and_then(|value| value.as_str()) {
-        update.email = Some(value.to_string());
+    if has_ban_data(&body.data) {
+        require_user_permission(
+            acting_user,
+            config,
+            "ban",
+            "You are not allowed to ban users",
+        )?;
+        if body.data.get("banned") == Some(&serde_json::Value::Bool(true))
+            && body.user_id == acting_user.id
+        {
+            return Err(AuthError::bad_request("You cannot ban yourself"));
+        }
     }
+    if body.data.contains_key("email") || body.data.contains_key("emailVerified") {
+        require_user_permission(
+            acting_user,
+            config,
+            "set-email",
+            "You are not allowed to update users email",
+        )?;
+        if let Some(value) = body.data.get("email") {
+            let email = better_auth_core::SchemaValue::<String>::Dynamic(value.clone())
+                .display_string()?
+                .to_lowercase();
+            if !email.validate_email() {
+                return Err(AuthError::bad_request("Invalid email"));
+            }
+            if let Some(existing) = ctx.database.get_user_by_email(&email).await?
+                && existing.id() != body.user_id
+            {
+                return Err(AuthError::bad_request(
+                    "User already exists. Use another email.",
+                ));
+            }
+            update.email = Some(email);
+        }
+    }
+    let _target = ctx
+        .database
+        .get_user_by_id(&body.user_id)
+        .await?
+        .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
     if let Some(value) = body.data.get("name").and_then(|value| value.as_str()) {
         update.name = Some(value.to_string());
     }
@@ -291,14 +403,14 @@ pub(crate) async fn update_user_core(
     if let Some(value) = body.data.get("banned").and_then(|value| value.as_bool()) {
         update.banned = Some(value);
     }
-    if let Some(value) = body.data.get("banReason").and_then(|value| value.as_str()) {
-        update.ban_reason = Some(value.to_string());
+    if let Some(value) = body.data.get("banReason") {
+        update.ban_reason = Some(
+            serde_json::from_value(value.clone())
+                .map_err(|_| AuthError::bad_request("Invalid banReason"))?,
+        );
     }
-    if let Some(value) = body.data.get("banExpires").and_then(|value| value.as_str()) {
-        let parsed = chrono::DateTime::parse_from_rfc3339(value)
-            .map_err(|_| AuthError::bad_request("Invalid banExpires"))?
-            .with_timezone(&Utc);
-        update.ban_expires = Some(parsed);
+    if body.data.contains_key("banExpires") {
+        update.ban_expires = Some(ban_expiry(&body.data)?);
     }
     if let Some(value) = body
         .data
@@ -316,6 +428,9 @@ pub(crate) async fn update_user_core(
     }
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
+    if body.data.get("banned") == Some(&serde_json::Value::Bool(true)) {
+        ctx.database.delete_user_sessions(&body.user_id).await?;
+    }
     ctx.user_view(&updated_user)
 }
 
@@ -384,13 +499,13 @@ pub(crate) async fn ban_user_core(
 
     let update = UpdateUser {
         banned: Some(true),
-        ban_reason: Some(
+        ban_reason: Some(Some(
             body.ban_reason
                 .clone()
                 .or_else(|| config.default_ban_reason.clone())
                 .unwrap_or_else(|| "No reason".to_string()),
-        ),
-        ban_expires,
+        )),
+        ban_expires: Some(ban_expires),
         ..Default::default()
     };
 
@@ -417,8 +532,8 @@ pub(crate) async fn unban_user_core(
 
     let update = UpdateUser {
         banned: Some(false),
-        ban_reason: None,
-        ban_expires: None,
+        ban_reason: Some(None),
+        ban_expires: Some(None),
         ..Default::default()
     };
 
@@ -430,13 +545,16 @@ pub(crate) async fn unban_user_core(
 
 pub(crate) async fn impersonate_user_core(
     body: &UserIdRequest,
-    admin_user_id: impl AsRef<str>,
+    acting_user: &UserView,
     ip_address: Option<&str>,
     user_agent: Option<&str>,
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(SessionUserResponse<SessionView, UserView>, String)> {
-    if body.user_id == admin_user_id.as_ref() {
+) -> AuthResult<(
+    SessionUserResponse<SessionView, UserView>,
+    better_auth_core::session::SessionData,
+)> {
+    if body.user_id == acting_user.id.as_str() {
         return Err(AuthError::bad_request("Cannot impersonate yourself"));
     }
 
@@ -449,7 +567,12 @@ pub(crate) async fn impersonate_user_core(
     if !config.allow_impersonating_admins
         && target_is_admin(Some(&body.user_id), target.role(), config)
     {
-        return Err(AuthError::forbidden(MESSAGE_CANNOT_IMPERSONATE_ADMINS));
+        require_user_permission(
+            acting_user,
+            config,
+            "impersonate-admins",
+            MESSAGE_CANNOT_IMPERSONATE_ADMINS,
+        )?;
     }
 
     if target.banned() {
@@ -463,14 +586,19 @@ pub(crate) async fn impersonate_user_core(
                     &body.user_id,
                     UpdateUser {
                         banned: Some(false),
-                        ban_reason: None,
-                        ban_expires: None,
+                        ban_reason: Some(None),
+                        ban_expires: Some(None),
                         ..Default::default()
                     },
                 )
                 .await?;
         } else {
-            return Err(AuthError::banned_user(config.banned_user_message.clone()));
+            return Err(AuthError::banned_user(
+                config
+                    .banned_user_message
+                    .resolve(&ctx.internal_user_view(&target)?)
+                    .await?,
+            ));
         }
     }
 
@@ -482,25 +610,31 @@ pub(crate) async fn impersonate_user_core(
         expires_at,
         ip_address: ip_address.map(|value| value.to_string()),
         user_agent: user_agent.map(|value| value.to_string()),
-        impersonated_by: Some(admin_user_id.as_ref().to_string()),
+        impersonated_by: Some(acting_user.id.as_str().to_string()),
         active_organization_id: None,
     };
 
     let session = ctx.database.create_session(create_session).await?;
-    let token = session.token().to_string();
+    let data = ctx
+        .session_manager()
+        .internal_data(&target, &session)
+        .await?;
     let response = SessionUserResponse {
         session: ctx.session_view(&session).await?,
         user: ctx.user_view(&target)?,
     };
 
-    Ok((response, token))
+    Ok((response, data))
 }
 
 pub(crate) async fn stop_impersonating_core(
     session: &impl AuthSession,
     admin_cookie: &AdminSessionCookiePayload,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(SessionUserResponse<SessionView, UserView>, String)> {
+) -> AuthResult<(
+    SessionUserResponse<SessionView, UserView>,
+    better_auth_core::session::SessionData,
+)> {
     let admin_id = session
         .impersonated_by()
         .ok_or_else(|| AuthError::bad_request(MESSAGE_NOT_IMPERSONATING))?
@@ -526,19 +660,19 @@ pub(crate) async fn stop_impersonating_core(
         .delete_session(session.token())
         .await?;
 
-    let token = admin_session.token().to_string();
-    let session = if let Some(mut data) = snapshot {
-        data.session.filter_returned_fields(&ctx.config.session);
-        data.session
+    let data = if let Some(data) = snapshot {
+        data
     } else {
-        ctx.session_view(&admin_session).await?
+        ctx.session_manager()
+            .internal_data(&admin_user, &admin_session)
+            .await?
     };
     let response = SessionUserResponse {
-        session,
-        user: ctx.user_view(&admin_user)?,
+        session: ctx.session_view(&data.session).await?,
+        user: ctx.user_view(&data.user)?,
     };
 
-    Ok((response, token))
+    Ok((response, data))
 }
 
 pub(crate) async fn revoke_user_session_core(

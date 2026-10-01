@@ -91,7 +91,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     async fn before_create_session(
         &self,
         _: &mut CreateSession,
-        _: &SeaOrmHookContext<'_>,
+        _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         self.push("session.create.before");
         Ok(HookControl::Continue)
@@ -99,7 +99,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     async fn after_create_session(
         &self,
         _: &S::Session,
-        _: &SeaOrmHookContext<'_>,
+        _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.push("session.create.after");
         Ok(())
@@ -107,7 +107,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     async fn before_delete_session(
         &self,
         _: &S::Session,
-        _: &SeaOrmHookContext<'_>,
+        _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         self.push("session.delete.before");
         Ok(HookControl::Continue)
@@ -115,7 +115,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     async fn after_delete_session(
         &self,
         _: &S::Session,
-        _: &SeaOrmHookContext<'_>,
+        _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.push("session.delete.after");
         Ok(())
@@ -123,7 +123,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     async fn before_create_verification(
         &self,
         _: &mut CreateVerification,
-        _: &SeaOrmHookContext<'_>,
+        _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         self.push("verification.create.before");
         Ok(HookControl::Continue)
@@ -131,7 +131,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     async fn after_create_verification(
         &self,
         _: &S::Verification,
-        _: &SeaOrmHookContext<'_>,
+        _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.push("verification.create.after");
         Ok(())
@@ -139,7 +139,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     async fn before_delete_verification(
         &self,
         _: &S::Verification,
-        _: &SeaOrmHookContext<'_>,
+        _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         self.push("verification.delete.before");
         Ok(HookControl::Continue)
@@ -147,7 +147,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     async fn after_delete_verification(
         &self,
         _: &S::Verification,
-        _: &SeaOrmHookContext<'_>,
+        _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.push("verification.delete.after");
         Ok(())
@@ -367,7 +367,7 @@ impl SecondaryFixture {
                 let result = transaction(auth.store().as_ref(), move |tx| {
                     Box::pin(async move {
                         let _ = tx
-                            .create_session(CreateSession {
+                            .create_session_with_deferred_secondary(CreateSession {
                                 user_id,
                                 expires_at: Utc::now() + chrono::Duration::days(7),
                                 ip_address: None,

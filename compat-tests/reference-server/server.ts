@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { createOAuthPopupFixture } from "./oauth-popup";
 import { mappedPluginSchema, mappedPluginExtras } from "./plugin-schema";
 import { createOrganizationCallbacks } from "./organization-callbacks";
 import { organizationFieldOptions } from "./organization-fields";
@@ -14,6 +15,12 @@ import { getMigrations } from "better-auth/db/migration";
 import { apiKey } from "@better-auth/api-key";
 import { createApiKeyCallbacks } from "./api-key-callbacks";
 import { admin, bearer, deviceAuthorization, twoFactor, username } from "better-auth/plugins";
+import { createAdminOptionsFixture } from "./admin-options";
+import { createStatelessFixture } from "./stateless";
+import { createLastLoginFixture } from "./last-login";
+import { createDispatchErrorsFixture } from "./dispatch-errors";
+import { createIdentityContextFixture } from "./identity-context";
+import { createRateLimitFixture } from "./rate-limit-options";
 import { organization } from "better-auth/plugins/organization";
 import { createAccessControl } from "better-auth/plugins/access";
 import { defaultStatements } from "better-auth/plugins/organization/access";
@@ -75,6 +82,10 @@ function hasOwn(obj: unknown, key: string) {
 }
 
 const PORT = getPort();
+const identityContextFixture = process.env.COMPAT_PROFILE === "identity-context" ? createIdentityContextFixture(`http://localhost:${PORT}`) : undefined;
+const dispatchErrorsFixture = process.env.COMPAT_PROFILE === "dispatch-errors" ? createDispatchErrorsFixture(`http://localhost:${PORT}`) : undefined;
+const rateLimitFixture = process.env.COMPAT_PROFILE === "rate-limit-options" ? await createRateLimitFixture(`http://localhost:${PORT}`) : undefined;
+const oauthPopupFixture = createOAuthPopupFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`);
 const captchaFixture = createCaptchaFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`);
 const jwtFixture = await createJwtFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`);
 const database = new Database(":memory:");
@@ -97,6 +108,13 @@ const emailOtpFixture = createEmailOtpFixture(database, process.env.COMPAT_PROFI
 const emailOtpNative = createEmailOtpNativeFixture(process.env.COMPAT_PROFILE ?? "");
 const emailOtpTransaction = createEmailOtpTransactionFixture(process.env.COMPAT_PROFILE ?? "");
 const oauthLinkIdToken = createOAuthLinkIdTokenFixture(process.env.COMPAT_PROFILE ?? "");
+const adminOptions = createAdminOptionsFixture(process.env.COMPAT_PROFILE ?? "");
+const statelessFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("stateless-")
+  ? await createStatelessFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`)
+  : undefined;
+const lastLoginFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("last-login-")
+  ? await createLastLoginFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`)
+  : undefined;
 const oneTapFixture = createOneTapFixture(process.env.COMPAT_PROFILE ?? "");
 const organizationCallbacks = createOrganizationCallbacks(process.env.COMPAT_PROFILE ?? "");
 const resetPasswordOutbox = new Map<string, { url: string; token: string }>();
@@ -326,9 +344,12 @@ const authOptions = {
   verification: { ...(apiKeyStorageFixture.enabled ? { storeInDatabase: true } : {}), ...emailOtpTransaction.verification },
   baseURL: proxyCase.baseURL ?? `http://localhost:${PORT}`,
   trustedOrigins: proxyCase.trustedOrigins ?? [],
+  ...oauthPopupFixture.options,
+  ...(oauthPopupFixture.hooks ? { databaseHooks: oauthPopupFixture.hooks } : {}),
   basePath: "/api/auth",
   ...(process.env.COMPAT_PROFILE === "oauth-proxy-cookie" ? { account: { storeStateStrategy: "cookie" as const } } : {}),
   ...(oauthLinkIdToken.enabled ? { account: oauthLinkIdToken.account, databaseHooks: oauthLinkIdToken.databaseHooks } : {}),
+  ...(adminOptions.databaseHooks ? { databaseHooks: adminOptions.databaseHooks } : {}),
   secret: ["compat", "test", "only", "key", "not", "real", "minimum", "32chars"].join("-"),
   database,
   emailAndPassword: {
@@ -378,7 +399,7 @@ const authOptions = {
     ...userAdmission.user,
     ...emailOtpTransaction.user,
     ...(oauthLinkIdToken.enabled ? oauthLinkIdToken.user : {}),
-    additionalFields: (oauthLinkIdToken.enabled ? oauthLinkIdToken.user.additionalFields : undefined) ?? authLifecycle.options.user?.additionalFields ?? signupEnumeration?.userFields ?? cookieVersionFixture.userFields ?? (["user-fields", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? userFields : ["organization-callbacks", "organization-custom-team", "two-factor-context"].includes(process.env.COMPAT_PROFILE ?? "") ? { secretNote: { type: "string", required: false, returned: false, defaultValue: "hidden" } } : undefined),
+    additionalFields: (adminOptions.plugin ? adminOptions.userFields : undefined) ?? (oauthLinkIdToken.enabled ? oauthLinkIdToken.user.additionalFields : undefined) ?? authLifecycle.options.user?.additionalFields ?? signupEnumeration?.userFields ?? cookieVersionFixture.userFields ?? (["user-fields", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? userFields : ["organization-callbacks", "organization-custom-team", "two-factor-context"].includes(process.env.COMPAT_PROFILE ?? "") ? { secretNote: { type: "string", required: false, returned: false, defaultValue: "hidden" } } : undefined),
     changeEmail: {
       enabled: true,
       async sendChangeEmailConfirmation({
@@ -459,6 +480,7 @@ const authOptions = {
   },
   plugins: [
     ...captchaFixture.plugins,
+    ...oauthPopupFixture.plugins,
     ...userAdmission.plugins,
     ...(process.env.COMPAT_PROFILE?.startsWith("password-security") && process.env.COMPAT_PROFILE !== "password-security-after" ? [passwordSecurity.plugin(process.env.COMPAT_PROFILE)] : []),
     ...jwtFixture.plugins,
@@ -473,7 +495,7 @@ const authOptions = {
     ...((process.env.COMPAT_PROFILE?.startsWith("email-otp") && !emailOtpNative.enabled && !emailOtpTransaction.enabled) || process.env.COMPAT_PROFILE === "user-fields" ? [emailOtpFixture.plugin] : []),
     ...(process.env.COMPAT_PROFILE?.startsWith("one-tap") ? [oneTapFixture.plugin] : []),
     ...(process.env.COMPAT_PROFILE === "device-bearer" ? [bearer()] : []),
-    admin(),
+    adminOptions.plugin ?? admin(),
     apiKey(apiKeyCallbacks.configurations ?? [
       { configId: "default", enableMetadata: true, defaultKeyLength: process.env.COMPAT_PROFILE === "api-key-zero" ? 0 : 64 },
       { configId: "secondary", enableMetadata: true },
@@ -538,6 +560,7 @@ const authOptions = {
     genericOAuth({
       config: [
         ...oidcProviders,
+        ...oauthPopupFixture.providers,
         {
           providerId: "mock",
           endSessionEndpoint: "https://idp.example.test/logout",
@@ -608,6 +631,11 @@ async function resetDatabaseState() {
 const server = Bun.serve({
   port: PORT,
   async fetch(request) {
+    if (identityContextFixture) return identityContextFixture.handle(request);
+    if (dispatchErrorsFixture) return dispatchErrorsFixture.handle(request);
+    if (rateLimitFixture) return rateLimitFixture.handle(request);
+    if (lastLoginFixture) return lastLoginFixture.handle(request);
+    if (statelessFixture) return statelessFixture.handle(request);
     try {
       const url = new URL(request.url);
 
@@ -633,6 +661,10 @@ const server = Bun.serve({
       if (emailOtpTransactionResponse) return emailOtpTransactionResponse;
       const oauthLinkIdTokenResponse = await oauthLinkIdToken.route(request, auth);
       if (oauthLinkIdTokenResponse) return oauthLinkIdTokenResponse;
+      const oauthPopupResponse = await oauthPopupFixture.route(request, auth);
+      if (oauthPopupResponse) return oauthPopupResponse;
+      const adminOptionsResponse = await adminOptions.route(request, auth);
+      if (adminOptionsResponse) return adminOptionsResponse;
       const deviceGeneratorsResponse = await deviceGenerators.handle(request);
       if (deviceGeneratorsResponse) return deviceGeneratorsResponse;
       if (lifecycleResponse) return lifecycleResponse;
@@ -706,6 +738,8 @@ const server = Bun.serve({
         emailOtpNative.reset();
         emailOtpTransaction.reset();
         oauthLinkIdToken.reset();
+        adminOptions.reset();
+        oauthPopupFixture.reset();
         otpCallbacks.reset();
         authLifecycle.reset();
         captchaFixture.reset();

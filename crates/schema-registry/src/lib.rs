@@ -22,6 +22,7 @@ pub enum EntityRole {
     TwoFactor,
     Jwk,
     WalletAddress,
+    RateLimit,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -139,6 +140,7 @@ pub fn core_fields(role: EntityRole) -> &'static [FieldDef] {
         EntityRole::Session => SESSION_CORE,
         EntityRole::Account => ACCOUNT_CORE,
         EntityRole::Verification => VERIFICATION_CORE,
+        EntityRole::RateLimit => RATE_LIMIT.fields,
         role => PLUGINS
             .iter()
             .flat_map(|plugin| plugin.extra_entities)
@@ -146,6 +148,19 @@ pub fn core_fields(role: EntityRole) -> &'static [FieldDef] {
             .map_or(&[], |entity| entity.fields),
     }
 }
+
+/// Core database storage selected by `rateLimit.storage = "database"`.
+pub static RATE_LIMIT: ExtraEntitySchema = ExtraEntitySchema {
+    mod_name: "rate_limit",
+    table_name: "rate_limit",
+    role: Some(EntityRole::RateLimit),
+    fields: &[
+        pk!("id", "String"),
+        f!("key", "String"),
+        f!("count", "better_auth::seaorm::SqlNumber"),
+        f!("last_request", "i64"),
+    ],
+};
 
 // ── Plugin schemas ───────────────────────────────────────────────────
 
@@ -208,6 +223,12 @@ static PLUGINS: &[PluginSchema] = &[
             f!("username", "Option<String>"),
             f!("display_username", "Option<String>"),
         ],
+        session_fields: &[],
+        extra_entities: &[],
+    },
+    PluginSchema {
+        name: "last-login-method",
+        user_fields: &[f!("last_login_method", "Option<String>")],
         session_fields: &[],
         extra_entities: &[],
     },
@@ -497,6 +518,7 @@ pub fn entity_indexes(table: &str) -> &'static [IndexDef] {
         "api_keys" => &[unique!("key"), index!("reference_id"), index!("config_id")],
         "passkeys" => &[unique!("credential_id"), index!("user_id")],
         "wallet_address" => &[index!("user_id")],
+        "rate_limit" => &[unique!("key")],
         _ => &[],
     }
 }

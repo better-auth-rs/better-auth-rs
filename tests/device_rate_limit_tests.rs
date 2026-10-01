@@ -18,18 +18,24 @@ type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_sch
 async fn device_limits_respect_base_paths_overrides_and_disable()
 -> Result<(), Box<dyn std::error::Error>> {
     let cases = [
-        (RateLimitConfig::new(), 5),
+        (RateLimitConfig::new().enabled(true), 5),
         (
-            RateLimitConfig::new().endpoint("/device", Duration::from_secs(60), 2),
+            RateLimitConfig::new()
+                .enabled(true)
+                .endpoint("/device", Duration::from_secs(60), 2),
             2,
         ),
         (
-            RateLimitConfig::new().endpoint("/custom/auth/device", Duration::from_secs(60), 3),
-            3,
+            RateLimitConfig::new().enabled(true).endpoint(
+                "/custom/auth/device",
+                Duration::from_secs(60),
+                3,
+            ),
+            5,
         ),
         (RateLimitConfig::new().enabled(false), 6),
     ];
-    for (rate_limit, allowed) in cases {
+    for (case, (rate_limit, allowed)) in cases.into_iter().enumerate() {
         let config = AuthConfig::new("device-limit-tests-secret-at-least-32-characters")
             .base_path("/custom/auth");
         let database = Database::connect("sqlite::memory:").await?;
@@ -43,6 +49,9 @@ async fn device_limits_respect_base_paths_overrides_and_disable()
             .await?;
         for index in 0..6 {
             let mut request = AuthRequest::new(HttpMethod::Get, "/custom/auth/device");
+            let _ = request
+                .headers
+                .insert("x-forwarded-for".into(), format!("192.0.2.{}", case + 1));
             let _ = request.query.insert("user_code".into(), "UNKNOWN".into());
             let response = auth.handle_request(request).await?;
             assert_eq!(response.status, if index < allowed { 400 } else { 429 });

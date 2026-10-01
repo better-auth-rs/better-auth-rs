@@ -15,6 +15,8 @@ use crate::entity::{
 };
 use crate::types::InvitationStatus;
 
+mod account_view;
+
 /// Public user response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(
@@ -25,7 +27,7 @@ pub struct UserView {
     /// Configured application fields after output transforms.
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
-    /// Enabled public plugin fields. `None` preserves an unconfigured internal view.
+    /// Present optional core fields and enabled plugin fields. `None` preserves an unconfigured view.
     #[serde(skip)]
     pub visible_fields: Option<std::collections::BTreeSet<String>>,
     pub id: String,
@@ -120,7 +122,14 @@ pub struct SessionView {
 
 /// Public account response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(
+    into = "serde_json::Map<String, serde_json::Value>",
+    try_from = "serde_json::Map<String, serde_json::Value>"
+)]
 pub struct AccountView {
+    /// Present optional fields for process-local records and decoded snapshots.
+    #[serde(skip)]
+    pub visible_fields: Option<std::collections::BTreeSet<String>>,
     pub id: String,
     #[serde(rename = "accountId")]
     pub account_id: String,
@@ -172,7 +181,7 @@ impl<T: AuthUser> From<&T> for UserView {
     fn from(user: &T) -> Self {
         Self {
             additional_fields: user.projected_fields().cloned().unwrap_or_default(),
-            visible_fields: None,
+            visible_fields: user.field_presence().cloned(),
             id: user.id().into_owned(),
             name: user.name().map(str::to_owned),
             email: user.email().map(str::to_owned),
@@ -266,7 +275,9 @@ impl SessionView {
                     field.adapter_output(value, supports_native_json)?
                 };
                 if let Some(mut value) = value {
-                    field.normalize_date(&mut value)?;
+                    if !field.references_id() {
+                        field.normalize_date(&mut value)?;
+                    }
                     let _ = view.additional_fields.insert(name.clone(), value);
                 }
             }
@@ -278,6 +289,7 @@ impl SessionView {
 impl<T: AuthAccount> From<&T> for AccountView {
     fn from(account: &T) -> Self {
         Self {
+            visible_fields: account.field_presence().cloned(),
             id: account.id().into_owned(),
             account_id: account.account_id().to_owned(),
             provider_id: account.provider_id().to_owned(),
@@ -309,6 +321,9 @@ impl<T: AuthVerification> From<&T> for VerificationView {
 }
 
 impl AuthUser for UserView {
+    fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
+        self.visible_fields.as_ref()
+    }
     fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
         Some(&self.additional_fields)
     }
@@ -438,6 +453,9 @@ impl AuthSession for SessionView {
 }
 
 impl AuthAccount for AccountView {
+    fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
+        self.visible_fields.as_ref()
+    }
     fn id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.id)
     }
@@ -808,6 +826,7 @@ mod tests {
     #[test]
     fn account_view_omits_password_on_serialize() {
         let account = AccountView {
+            visible_fields: None,
             id: "acc-1".to_string(),
             account_id: "account-id".to_string(),
             provider_id: "credential".to_string(),

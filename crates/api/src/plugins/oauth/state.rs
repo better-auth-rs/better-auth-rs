@@ -103,6 +103,8 @@ impl OAuthStatePayload {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct AccountCookiePayload {
+    #[serde(skip)]
+    pub visible_fields: Option<std::collections::BTreeSet<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(rename = "userId")]
@@ -132,8 +134,26 @@ pub(crate) struct AccountCookiePayload {
 }
 
 impl AccountCookiePayload {
+    pub(crate) fn optional<T>(
+        &self,
+        name: &str,
+        value: Option<T>,
+    ) -> better_auth_core::SchemaValue<Option<T>> {
+        if value.is_some()
+            || self
+                .visible_fields
+                .as_ref()
+                .is_none_or(|fields| fields.contains(name))
+        {
+            better_auth_core::SchemaValue::Typed(value)
+        } else {
+            better_auth_core::SchemaValue::Undefined
+        }
+    }
+
     pub(crate) fn from_account(account: &impl AuthAccount) -> Self {
         Self {
+            visible_fields: account.field_presence().cloned(),
             id: Some(account.id().to_string()),
             user_id: account.user_id().to_string(),
             provider_id: account.provider_id().to_string(),
@@ -149,7 +169,7 @@ impl AccountCookiePayload {
 }
 
 pub(crate) fn state_cookie_name(config: &AuthConfig) -> String {
-    match config.account.store_state_strategy {
+    match config.account.store_state_strategy() {
         OAuthStateStrategy::Cookie => related_cookie_name(config, "oauth_state"),
         OAuthStateStrategy::Database => related_cookie_name(config, "state"),
     }
@@ -192,8 +212,27 @@ pub(crate) fn create_account_cookie_value<'a>(
     payload: &AccountCookiePayload,
     max_age: Duration,
 ) -> AuthResult<String> {
+    let mut fields: serde_json::Map<String, Value> =
+        serde_json::from_value(serde_json::to_value(payload)?)?;
+    for name in [
+        "accessToken",
+        "refreshToken",
+        "idToken",
+        "accessTokenExpiresAt",
+        "refreshTokenExpiresAt",
+        "scope",
+    ] {
+        if !fields.contains_key(name)
+            && payload
+                .visible_fields
+                .as_ref()
+                .is_none_or(|fields| fields.contains(name))
+        {
+            let _ = fields.insert(name.into(), Value::Null);
+        }
+    }
     better_auth_core::utils::jwe::encode(
-        serde_json::from_value(serde_json::to_value(payload)?)?,
+        fields,
         secret,
         "better-auth-account",
         max_age.num_seconds(),
@@ -205,7 +244,10 @@ pub(crate) fn decode_account_cookie_value<'a>(
     token: &str,
 ) -> Option<AccountCookiePayload> {
     let payload = better_auth_core::utils::jwe::decode(token, secret, "better-auth-account")?;
-    serde_json::from_value(Value::Object(payload)).ok()
+    let visible_fields = Some(payload.keys().cloned().collect());
+    let mut account: AccountCookiePayload = serde_json::from_value(Value::Object(payload)).ok()?;
+    account.visible_fields = visible_fields;
+    Some(account)
 }
 
 pub(crate) fn get_cookie(req: &AuthRequest, name: &str) -> Option<String> {

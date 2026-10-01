@@ -36,7 +36,7 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     async fn before_create_verification(
         &self,
         _: &mut CreateVerification,
-        context: &SeaOrmHookContext<'_>,
+        context: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<HookControl> {
         assert!(context.tx.is_some());
         self.events.lock().unwrap().push("before");
@@ -45,7 +45,7 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     async fn after_create_verification(
         &self,
         _: &Verification,
-        context: &SeaOrmHookContext<'_>,
+        context: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(context.tx.is_none());
         assert_eq!(
@@ -80,15 +80,9 @@ async fn create(auth: &Arc<BetterAuth<BundledSchema>>, reject: bool) -> AuthResu
     let runtime = auth.clone();
     transaction(auth.store().as_ref(), move |tx| {
         Box::pin(async move {
-            let endpoint = EndpointContext {
-                request: None,
-                path: Some("/sign-up/email"),
-                body: serde_json::json!({}),
-                auth: runtime.context(),
-                transaction: Some(tx),
-                session: None,
-                response: None,
-            };
+            let mut endpoint = EndpointContext::new(None, serde_json::json!({}), runtime.context());
+            endpoint.path = Some("/sign-up/email");
+            endpoint.transaction = Some(tx);
             let api = endpoint.email_otp()?;
             assert_eq!(
                 api.create("Native@Example.com", EmailOtpType::SignIn)

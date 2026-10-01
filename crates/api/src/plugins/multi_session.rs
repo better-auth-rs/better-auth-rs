@@ -3,8 +3,7 @@
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema,
     utils::cookie_utils::{
-        create_clear_cookie, create_cookie, create_session_cookie, get_cookie, sign_cookie_value,
-        verify_cookie_value,
+        create_clear_cookie, create_cookie, get_cookie, sign_cookie_value, verify_cookie_value,
     },
     wire::{SessionView, UserView},
 };
@@ -83,14 +82,18 @@ impl MultiSessionPlugin {
             req.append_response_header("Set-Cookie", create_clear_cookie(&name, &ctx.config))?;
             return Err(invalid_session());
         };
-        Ok(AuthResponse::json(
+        let response = AuthResponse::json(
             200,
             &serde_json::json!({ "session": session, "user": user }),
-        )?
-        .with_header(
-            "Set-Cookie",
-            create_session_cookie(&session.token, &ctx.config),
-        ))
+        )?;
+        ctx.session_manager()
+            .set_session_cookie(
+                req,
+                better_auth_core::session::SessionData { session, user },
+                None,
+            )
+            .await?;
+        Ok(response)
     }
 
     async fn handle_revoke<S: AuthSchema>(
@@ -111,11 +114,14 @@ impl MultiSessionPlugin {
         if token != current.token {
             return Ok(response);
         }
-        if let Some((session, _)) = list_sessions(req, ctx).await?.into_iter().next() {
-            response.headers.append(
-                "Set-Cookie",
-                create_session_cookie(&session.token, &ctx.config),
-            );
+        if let Some((session, user)) = list_sessions(req, ctx).await?.into_iter().next() {
+            ctx.session_manager()
+                .set_session_cookie(
+                    req,
+                    better_auth_core::session::SessionData { session, user },
+                    None,
+                )
+                .await?;
         } else {
             for cookie in delete_session_cookie_headers(req, &ctx.config) {
                 response.headers.append("Set-Cookie", cookie);

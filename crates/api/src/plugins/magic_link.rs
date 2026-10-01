@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
     AuthUser, AuthVerification, CreateUser, CreateVerification, RequestMeta,
-    middleware::EndpointRateLimit, utils::cookie_utils::create_session_cookie,
+    middleware::EndpointRateLimit,
 };
 use chrono::{Duration, Utc};
 use rand::Rng;
@@ -18,6 +18,9 @@ use super::{
     helpers::{SessionIssueError, apply_default_role, issue_user_session},
     one_time_token::TokenStorage,
 };
+
+mod callbacks;
+pub use callbacks::{MagicLinkCallbackFuture, MagicLinkCallbacks};
 
 /// Payload delivered by the configured magic-link sender.
 #[derive(Debug, Clone, Serialize)]
@@ -64,11 +67,11 @@ pub struct MagicLinkConfig {
     #[config(default = None, skip)]
     pub send_magic_link: Option<Arc<dyn SendMagicLink>>,
     /// Plugin endpoint limit window in seconds.
-    #[config(default = 60)]
-    pub rate_limit_window: u64,
+    #[config(default = 60.0)]
+    pub rate_limit_window: f64,
     /// Maximum requests in the limit window.
-    #[config(default = 5)]
-    pub rate_limit_max: u32,
+    #[config(default = 5.0)]
+    pub rate_limit_max: f64,
 }
 
 /// Sign in or register after proving control of an email address.
@@ -83,26 +86,32 @@ better_auth_core::impl_auth_plugin! {
         get "/magic-link/verify" => handle_verify, "verifyMagicLink";
     }
     extra {
-        fn rate_limits(&self) -> AuthResult<Vec<(String, EndpointRateLimit)>> {
-            Ok(["/sign-in/magic-link", "/magic-link/verify"].into_iter().map(|path| (path.into(), EndpointRateLimit {
-                window: std::time::Duration::from_secs(if self.config.rate_limit_window == 0 { 60 } else { self.config.rate_limit_window }),
-                max_requests: if self.config.rate_limit_max == 0 { 5 } else { self.config.rate_limit_max },
-            })).collect())
+        fn rate_limits(&self) -> AuthResult<Vec<better_auth_core::middleware::PluginRateLimit>> {
+            let window = self.config.rate_limit_window;
+            let max = self.config.rate_limit_max;
+            let rule = EndpointRateLimit {
+                window: if window == 0.0 || window.is_nan() { 60.0 } else { window },
+                max_requests: if max == 0.0 || max.is_nan() { 5.0 } else { max },
+            };
+            Ok(["/sign-in/magic-link", "/magic-link/verify"].into_iter()
+                .map(|path| better_auth_core::middleware::PluginRateLimit::prefix(path, rule)).collect())
         }
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SendBody {
     email: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
-    #[serde(rename = "callbackURL")]
+    #[serde(rename = "callbackURL", skip_serializing_if = "Option::is_none")]
     callback_url: Option<String>,
-    #[serde(rename = "newUserCallbackURL")]
+    #[serde(rename = "newUserCallbackURL", skip_serializing_if = "Option::is_none")]
     new_user_callback_url: Option<String>,
-    #[serde(rename = "errorCallbackURL")]
+    #[serde(rename = "errorCallbackURL", skip_serializing_if = "Option::is_none")]
     error_callback_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     metadata: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
@@ -129,11 +138,14 @@ impl MagicLinkPlugin {
             Ok(body) => body,
             Err(response) => return Ok(response),
         };
-        let sender = self
-            .config
-            .send_magic_link
-            .as_ref()
-            .ok_or_else(|| AuthError::config("Magic link requires a sender"))?;
+        if req.endpoint_headers().is_none() {
+            return Err(super::json_body::validation_error("Headers is required").into());
+        }
+        let endpoint = super::endpoint_context::EndpointContext::new(
+            Some(req),
+            serde_json::to_value(&body)?,
+            ctx,
+        );
         let token = match &self.config.generate_token {
             Some(generate) => generate(body.email.clone()).await?,
             None => rand::thread_rng()
@@ -155,7 +167,7 @@ impl MagicLinkPlugin {
                 identifier: stored,
                 value: serde_json::to_string(&Proof {
                     email: body.email.clone(),
-                    name: body.name,
+                    name: body.name.clone(),
                 })?,
                 expires_at: Utc::now() + lifetime,
             })
@@ -188,14 +200,22 @@ impl MagicLinkPlugin {
                 let _ = query.append_pair("errorCallbackURL", &value);
             }
         }
-        sender
-            .send(&MagicLinkMessage {
-                email: body.email,
-                url: url.into(),
-                token,
-                metadata: body.metadata,
-            })
-            .await?;
+        let message = MagicLinkMessage {
+            email: body.email,
+            url: url.into(),
+            token,
+            metadata: body.metadata,
+        };
+        if let Some(callbacks) = ctx.extensions.get::<Arc<MagicLinkCallbacks<S>>>() {
+            (callbacks.sender)(&message, &endpoint).await?;
+        } else {
+            self.config
+                .send_magic_link
+                .as_ref()
+                .ok_or_else(|| AuthError::config("Magic link requires a sender"))?
+                .send(&message)
+                .await?;
+        }
         Ok(AuthResponse::json(
             200,
             &serde_json::json!({ "status": true }),
@@ -212,6 +232,9 @@ impl MagicLinkPlugin {
                 "[query.token] Invalid input: expected string, received undefined",
             ));
         };
+        if req.endpoint_headers().is_none() {
+            return Err(super::json_body::validation_error("Headers is required").into());
+        }
         let base = Url::parse(&ctx.config.base_url)
             .map_err(|error| AuthError::config(format!("Invalid base URL: {error}")))?;
         let callback = callback_url(req, ctx, &base, "callbackURL", "/")?;
@@ -302,10 +325,15 @@ impl MagicLinkPlugin {
                 callback
             })
         };
-        Ok(response.with_header(
-            "Set-Cookie",
-            create_session_cookie(issued.session.token(), &ctx.config),
-        ))
+        let manager = ctx.session_manager();
+        manager
+            .set_session_cookie(
+                req,
+                manager.internal_data(&issued.user, &issued.session).await?,
+                None,
+            )
+            .await?;
+        Ok(response)
     }
 }
 

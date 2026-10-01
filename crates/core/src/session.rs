@@ -8,7 +8,7 @@ use crate::schema::AuthSchema;
 use crate::store::AuthStore;
 use crate::types::CreateSession;
 use crate::utils::cookie_utils::{
-    create_clear_cookie, create_session_cookie, get_cookie, related_cookie_name,
+    create_clear_cookie, create_session_cookies, get_cookie, related_cookie_name,
     verify_cookie_value,
 };
 use crate::wire::{SessionView, UserView};
@@ -20,7 +20,7 @@ mod cache_tests;
 mod cookie_cache;
 mod response;
 mod signer;
-pub use signer::SessionCookieSigner;
+pub use signer::{SessionCookieContext, SessionCookieSigner};
 #[cfg(test)]
 mod response_tests;
 mod view;
@@ -53,18 +53,22 @@ pub enum SessionRead {
 
 /// Session manager handles session creation, validation, and cleanup
 pub struct SessionManager<S: AuthSchema> {
+    capabilities: crate::store::StoreCapabilities,
     secondary_storage: bool,
     user_metadata: crate::plugin::MetadataMap,
+    adapter_user_fields: crate::user_fields::UserConfig,
     config: Arc<AuthConfig>,
     database: Arc<dyn AuthStore<S>>,
-    signer: Option<Arc<dyn SessionCookieSigner>>,
+    signer: Option<Arc<dyn SessionCookieSigner<S>>>,
 }
 
 impl<S: AuthSchema> Clone for SessionManager<S> {
     fn clone(&self) -> Self {
         Self {
+            capabilities: self.capabilities,
             secondary_storage: self.secondary_storage,
             user_metadata: self.user_metadata.clone(),
+            adapter_user_fields: self.adapter_user_fields.clone(),
             config: self.config.clone(),
             database: self.database.clone(),
             signer: self.signer.clone(),
@@ -75,7 +79,9 @@ impl<S: AuthSchema> Clone for SessionManager<S> {
 impl<S: AuthSchema> SessionManager<S> {
     pub fn new(config: Arc<AuthConfig>, database: Arc<dyn AuthStore<S>>) -> Self {
         Self {
+            capabilities: Default::default(),
             secondary_storage: false,
+            adapter_user_fields: config.user.clone(),
             config,
             database,
             user_metadata: Default::default(),
@@ -83,9 +89,23 @@ impl<S: AuthSchema> SessionManager<S> {
         }
     }
 
+    /// Select adapter transforms separately from public field visibility.
+    pub fn with_adapter_user_fields(mut self, fields: crate::user_fields::UserConfig) -> Self {
+        self.adapter_user_fields = fields;
+        self
+    }
+
     /// Attach enabled user plugin schemas for database and cache projections.
     pub fn with_user_metadata(mut self, metadata: crate::plugin::MetadataMap) -> Self {
         self.user_metadata = metadata;
+        self
+    }
+
+    pub(crate) fn with_store_capabilities(
+        mut self,
+        capabilities: crate::store::StoreCapabilities,
+    ) -> Self {
+        self.capabilities = capabilities;
         self
     }
 
@@ -95,8 +115,9 @@ impl<S: AuthSchema> SessionManager<S> {
     }
 
     fn user_view(&self, user: &impl AuthUser) -> AuthResult<UserView> {
-        UserView::with_fields_for_adapter(
+        UserView::with_field_policies(
             user,
+            &self.adapter_user_fields,
             &self.config.user,
             &self.user_metadata,
             self.database.supports_native_json(),
@@ -148,10 +169,61 @@ impl<S: AuthSchema> SessionManager<S> {
     fn internal_user_view(&self, user: &impl AuthUser) -> AuthResult<UserView> {
         UserView::with_internal_fields_for_adapter(
             user,
-            &self.config.user,
+            &self.adapter_user_fields,
             &self.user_metadata,
             self.database.supports_native_json(),
         )
+    }
+
+    /// Project an adapter result without removing fields available to trusted callbacks.
+    pub async fn internal_data(
+        &self,
+        user: &impl AuthUser,
+        session: &impl AuthSession,
+    ) -> AuthResult<SessionData> {
+        Ok(SessionData {
+            user: self.internal_user_view(user)?,
+            session: self.internal_session_view(session).await?,
+        })
+    }
+
+    /// Write session credentials and retain the supplied identity for endpoint after hooks.
+    pub async fn set_session_cookie(
+        &self,
+        req: &AuthRequest,
+        data: SessionData,
+        dont_remember: Option<bool>,
+    ) -> AuthResult<()> {
+        self.issue_session_cookie(req, data, dont_remember, None)
+            .await
+    }
+
+    /// Issue credentials while keeping signing-key reads and writes in the active transaction.
+    pub async fn set_session_cookie_in_transaction(
+        &self,
+        req: &AuthRequest,
+        data: SessionData,
+        dont_remember: Option<bool>,
+        transaction: &dyn crate::store::AuthTransaction<S>,
+    ) -> AuthResult<()> {
+        self.issue_session_cookie(req, data, dont_remember, Some(transaction))
+            .await
+    }
+
+    async fn issue_session_cookie(
+        &self,
+        req: &AuthRequest,
+        data: SessionData,
+        dont_remember: Option<bool>,
+        transaction: Option<&dyn crate::store::AuthTransaction<S>>,
+    ) -> AuthResult<()> {
+        let dont_remember = dont_remember.unwrap_or_else(|| self.dont_remember(req));
+        for cookie in create_session_cookies(&data.session.token, dont_remember, &self.config) {
+            req.append_response_header("Set-Cookie", cookie)?;
+        }
+        self.write_cache_with_response(req, &data, dont_remember, None, transaction)
+            .await?;
+        req.set_new_session(data)
     }
 
     fn public_data(&self, mut data: SessionData) -> SessionData {
@@ -161,7 +233,7 @@ impl<S: AuthSchema> SessionManager<S> {
     }
 
     /// Install a plugin-provided signer without coupling core to the plugin implementation.
-    pub fn with_cookie_signer(mut self, signer: Option<Arc<dyn SessionCookieSigner>>) -> Self {
+    pub fn with_cookie_signer(mut self, signer: Option<Arc<dyn SessionCookieSigner<S>>>) -> Self {
         self.signer = signer;
         self
     }
@@ -261,7 +333,7 @@ impl<S: AuthSchema> SessionManager<S> {
             .session
             .cookie_cache
             .as_ref()
-            .filter(|cache| cache.enabled);
+            .filter(|cache| cache.enabled());
         let token = self.extract_session_token(req);
         if token.is_none() && cache.is_some() {
             return Ok(none());
@@ -274,12 +346,20 @@ impl<S: AuthSchema> SessionManager<S> {
         let Some(token) = token else {
             return Ok(none());
         };
-        let disable_cache =
-            matches!(read, SessionRead::Authoritative) || query_flag(req, "disableCookieCache");
+        let disable_cache = (matches!(read, SessionRead::Authoritative)
+            && self.capabilities.server_sessions())
+            || query_flag(req, "disableCookieCache");
         if !disable_cache && let (Some(cache), Some(value)) = (cache, cache_value.as_deref()) {
             let decoded = if let Some(signer) = &self.signer {
                 signer
-                    .verify(value)
+                    .verify(
+                        value,
+                        SessionCookieContext {
+                            request: req,
+                            config: &self.config,
+                            transaction: None,
+                        },
+                    )
                     .await?
                     .and_then(cookie_cache::parse_jwt)
             } else {
@@ -295,6 +375,22 @@ impl<S: AuthSchema> SessionManager<S> {
                 && expires >= Utc::now().timestamp_millis()
                 && payload.data.session.expires_at >= Utc::now()
             {
+                if !self.capabilities.server_sessions()
+                    && let Some(update_age) = cache.refresh_age()
+                    && expires - Utc::now().timestamp_millis() < update_age.num_milliseconds()
+                {
+                    self.write_cache(req, &payload.data, false).await?;
+                    let max_age = (!self.dont_remember(req))
+                        .then_some(self.config.session.expires_in.num_seconds());
+                    req.append_response_header(
+                        "Set-Cookie",
+                        crate::utils::cookie_utils::create_session_cookie_with_max_age(
+                            Some(&payload.data.session.token),
+                            max_age,
+                            &self.config,
+                        ),
+                    )?;
+                }
                 payload.data.user.filter_cached_fields(&self.config.user);
                 payload
                     .data
@@ -362,9 +458,11 @@ impl<S: AuthSchema> SessionManager<S> {
                 result => result?,
             };
             data.session = self.internal_session_view(&updated).await?;
-            req.append_response_header("Set-Cookie", create_session_cookie(&token, &self.config))?;
+            self.set_session_cookie(req, data.clone(), Some(false))
+                .await?;
+        } else {
+            self.write_cache(req, &data, false).await?;
         }
-        self.write_cache(req, &data, false).await?;
         Ok(SessionResolution {
             data: Some(self.public_data(data)),
             needs_refresh: None,
@@ -378,21 +476,54 @@ impl<S: AuthSchema> SessionManager<S> {
         data: &SessionData,
         dont_remember: bool,
     ) -> AuthResult<()> {
+        self.write_cache_with_response(req, data, dont_remember, None, None)
+            .await
+    }
+
+    async fn write_cache_with_response(
+        &self,
+        req: &AuthRequest,
+        data: &SessionData,
+        dont_remember: bool,
+        response_headers: Option<&crate::Headers>,
+        transaction: Option<&dyn crate::store::AuthTransaction<S>>,
+    ) -> AuthResult<()> {
         let signed = if let (Some(signer), Some(cache)) = (
             &self.signer,
             self.config
                 .session
                 .cookie_cache
                 .as_ref()
-                .filter(|cache| cache.enabled),
+                .filter(|cache| cache.enabled()),
         ) {
             let (payload, max_age) =
                 cookie_cache::payload(data, &self.config, cache, dont_remember).await?;
-            Some(signer.sign(payload, max_age).await?)
+            Some(
+                signer
+                    .sign(
+                        payload,
+                        max_age,
+                        SessionCookieContext {
+                            request: req,
+                            config: &self.config,
+                            transaction,
+                        },
+                    )
+                    .await?,
+            )
         } else {
             None
         };
-        cookie_cache::write(req, data, &self.config, dont_remember, signed).await
+        cookie_cache::write(
+            req,
+            data,
+            &self.config,
+            dont_remember,
+            signed,
+            self.capabilities.database,
+            response_headers,
+        )
+        .await
     }
 
     /// Read the signed marker for a browser-session-only login.
@@ -410,11 +541,11 @@ impl<S: AuthSchema> SessionManager<S> {
         )?;
         cookie_cache::clear(req, &self.config)?;
         for suffix in ["dont_remember", "oauth_state", "account_data"] {
-            if suffix == "account_data" && !self.config.account.store_account_cookie {
+            if suffix == "account_data" && !self.config.account.store_account_cookie() {
                 continue;
             }
             if suffix == "oauth_state"
-                && self.config.account.store_state_strategy
+                && self.config.account.store_state_strategy()
                     != crate::config::OAuthStateStrategy::Cookie
             {
                 continue;

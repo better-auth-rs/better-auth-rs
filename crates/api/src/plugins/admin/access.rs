@@ -60,6 +60,7 @@ pub(super) fn default_roles() -> HashMap<String, RolePermissions> {
                         "impersonate",
                         "delete",
                         "set-password",
+                        "set-email",
                         "get",
                         "update",
                     ],
@@ -71,18 +72,17 @@ pub(super) fn default_roles() -> HashMap<String, RolePermissions> {
 }
 
 fn configured_roles(config: &AdminConfig) -> HashMap<String, RolePermissions> {
-    if config.roles.is_empty() {
-        default_roles()
-    } else {
-        config.roles.clone()
-    }
+    config.roles.clone().unwrap_or_else(default_roles)
 }
 
 fn role_names<'a>(role: Option<&'a str>, default_role: &'a str) -> Vec<&'a str> {
-    role.unwrap_or(default_role)
+    role.filter(|role| !role.is_empty())
+        .unwrap_or(if default_role.is_empty() {
+            "user"
+        } else {
+            default_role
+        })
         .split(',')
-        .map(str::trim)
-        .filter(|role| !role.is_empty())
         .collect()
 }
 
@@ -115,5 +115,35 @@ pub(super) fn has_permission(
 pub(super) fn is_admin_role(role: Option<&str>, config: &AdminConfig) -> bool {
     role_names(role, &config.default_role)
         .into_iter()
-        .any(|role| config.admin_roles.iter().any(|admin| admin == role))
+        .any(|role| match &config.admin_roles {
+            Some(admins) => admins.iter().any(|admin| admin.trim() == role),
+            None => role == "admin",
+        })
+}
+
+impl AdminConfig {
+    /// Validate explicitly supplied administrator roles against the active role map.
+    pub fn validate(&self) -> better_auth_core::AuthResult<()> {
+        let Some(admin_roles) = &self.admin_roles else {
+            return Ok(());
+        };
+        let roles = configured_roles(self);
+        let invalid: Vec<_> = admin_roles
+            .iter()
+            .filter(|role| {
+                !roles
+                    .keys()
+                    .any(|defined| defined.to_lowercase() == role.to_lowercase())
+            })
+            .cloned()
+            .collect();
+        if invalid.is_empty() {
+            Ok(())
+        } else {
+            Err(better_auth_core::AuthError::config(format!(
+                "Invalid admin roles: {}. Admin roles must be defined in the 'roles' configuration.",
+                invalid.join(", ")
+            )))
+        }
+    }
 }

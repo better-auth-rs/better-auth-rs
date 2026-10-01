@@ -4,6 +4,13 @@ use std::future::Future;
 use std::pin::Pin;
 
 pub mod cache;
+mod capabilities;
+mod runtime;
+pub use runtime::RuntimeStore;
+pub mod database_hooks;
+mod ephemeral;
+pub use capabilities::StoreCapabilities;
+pub use ephemeral::{EphemeralStore, StatelessSchema};
 pub mod secondary;
 
 use crate::error::{AuthError, AuthResult};
@@ -29,7 +36,11 @@ pub type TransactionWork<S> =
     dyn for<'tx> FnOnce(&'tx dyn AuthTransaction<S>) -> TransactionFuture<'tx> + Send;
 
 #[async_trait]
-pub trait AuthTransaction<S: AuthSchema>: Send + Sync {
+pub trait AuthTransaction<S: AuthSchema>: JwksStore + Send + Sync {
+    /// Queue an effect in write order. Run it after commit, discard it on rollback,
+    /// and stop later effects if it fails. Preserve the current request hook context.
+    fn queue_after_commit(&self, effect: TypedTransactionFuture<'static, ()>) -> AuthResult<()>;
+
     /// Run verification creation hooks for secondary-only values in this transaction.
     async fn before_create_runtime_verification(
         &self,
@@ -61,6 +72,14 @@ pub trait AuthTransaction<S: AuthSchema>: Send + Sync {
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<S::User>;
     async fn create_account(&self, create_account: CreateAccount) -> AuthResult<S::Account>;
     async fn create_session(&self, create_session: CreateSession) -> AuthResult<S::Session>;
+    /// Defer secondary session writes until commit, after the session's database after hooks.
+    /// Database-only adapters can use the ordinary transaction creation path.
+    async fn create_session_with_deferred_secondary(
+        &self,
+        create_session: CreateSession,
+    ) -> AuthResult<S::Session> {
+        self.create_session(create_session).await
+    }
 }
 
 /// Persistent records invalidated when an unverified user proves email ownership.
@@ -718,6 +737,26 @@ pub trait OrganizationRoleStore: Send + Sync {
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()>;
 }
 
+/// A persistent database rate-limit record. Timestamps use Unix milliseconds.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RateLimitRecord {
+    pub id: String,
+    pub key: String,
+    pub count: f64,
+    pub last_request: i64,
+}
+
+/// Atomically consume an allowance using the database adapter's comparison semantics.
+#[async_trait]
+pub trait RateLimitStore: Send + Sync {
+    async fn consume_rate_limit(
+        &self,
+        key: &str,
+        rule: crate::middleware::EndpointRateLimit,
+        cleanup_window: f64,
+    ) -> AuthResult<crate::middleware::RateLimitDecision>;
+}
+
 pub trait AuthStore<S: AuthSchema>:
     UserStore<S>
     + SessionStore<S>
@@ -734,7 +773,9 @@ pub trait AuthStore<S: AuthSchema>:
     + DeviceCodeStore
     + WalletStore
     + JwksStore
+    + RateLimitStore
     + TransactionStore<S>
+    + RuntimeStore<S>
     + Send
     + Sync
 {
@@ -759,7 +800,9 @@ where
         + WalletStore
         + WalletStore
         + JwksStore
+        + RateLimitStore
         + TransactionStore<S>
+        + RuntimeStore<S>
         + Send
         + Sync,
 {

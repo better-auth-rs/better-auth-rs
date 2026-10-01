@@ -218,13 +218,12 @@ impl PasswordManagementPlugin {
         let auth_response = AuthResponse::json(200, &response)?;
 
         // Set session cookie if a new session was created
-        if let Some(token) = new_token {
-            let cookie_header =
-                better_auth_core::utils::cookie_utils::create_session_cookie(&token, &ctx.config);
-            Ok(auth_response.with_header("Set-Cookie", cookie_header))
-        } else {
-            Ok(auth_response)
+        if let Some(data) = new_token {
+            ctx.session_manager()
+                .set_session_cookie(req, data, None)
+                .await?;
         }
+        Ok(auth_response)
     }
 
     async fn handle_verify_password(
@@ -263,11 +262,9 @@ impl PasswordManagementPlugin {
                 let mut headers = better_auth_core::Headers::new();
                 let _ = headers.insert("Location".to_string(), url);
                 let _ = headers.insert("content-type".to_string(), "application/json".to_string());
-                Ok(AuthResponse {
-                    status: 302,
-                    headers,
-                    body: Vec::new(),
-                })
+                let mut response = AuthResponse::new(302);
+                response.headers = headers;
+                Ok(response)
             }
         }
     }

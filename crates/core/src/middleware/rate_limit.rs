@@ -1,140 +1,151 @@
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
 use async_trait::async_trait;
-use std::collections::HashMap;
-use std::sync::Mutex;
-use std::time::{Duration, Instant};
 
 use super::Middleware;
-use crate::error::AuthResult;
-use crate::types::{AuthRequest, AuthResponse};
+use crate::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema};
 
-/// Configuration for the rate limiting middleware.
-#[derive(Debug, Clone)]
-pub struct RateLimitConfig {
-    /// Default rate limit applied to all endpoints.
-    pub default: EndpointRateLimit,
+mod memory;
+mod types;
+pub use types::*;
 
-    /// Per-endpoint overrides. Key is the path (e.g. "/sign-in/email").
-    pub per_endpoint: HashMap<String, EndpointRateLimit>,
+static IP_WARNING_LOGGED: AtomicBool = AtomicBool::new(false);
 
-    /// Whether rate limiting is enabled.
-    pub enabled: bool,
-}
-
-/// Rate limit parameters for a single endpoint.
-#[derive(Debug, Clone)]
-pub struct EndpointRateLimit {
-    /// Idle duration after the last allowed request before the counter resets.
-    pub window: Duration,
-
-    /// Maximum number of requests allowed within the window.
-    pub max_requests: u32,
-}
-
-impl Default for RateLimitConfig {
-    fn default() -> Self {
-        Self {
-            default: EndpointRateLimit {
-                window: Duration::from_secs(60),
-                max_requests: 100,
-            },
-            per_endpoint: HashMap::new(),
-            enabled: true,
-        }
-    }
-}
-
-impl RateLimitConfig {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn default_limit(mut self, window: Duration, max_requests: u32) -> Self {
-        self.default = EndpointRateLimit {
-            window,
-            max_requests,
-        };
-        self
-    }
-
-    pub fn endpoint(
-        mut self,
-        path: impl Into<String>,
-        window: Duration,
-        max_requests: u32,
-    ) -> Self {
-        _ = self.per_endpoint.insert(
-            path.into(),
-            EndpointRateLimit {
-                window,
-                max_requests,
-            },
-        );
-        self
-    }
-
-    pub fn enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
-        self
-    }
-}
-
-/// In-memory rate limiter with a counter that resets after an idle window.
-///
-/// For production use with multiple instances, a `CacheAdapter`-backed
-/// implementation should be used instead. This implementation is suitable
-/// for single-process deployments and testing.
 pub struct RateLimitMiddleware {
     config: RateLimitConfig,
     ip_address: crate::config::IpAddressConfig,
-    /// Keyed by (client_identifier, path).
-    buckets: Mutex<HashMap<String, RateLimitBucket>>,
-}
-
-struct RateLimitBucket {
-    count: u32,
-    last_request: Instant,
-}
-
-impl RateLimitBucket {
-    fn consume(&mut self, now: Instant, limit: &EndpointRateLimit) -> Option<u64> {
-        let elapsed = now.duration_since(self.last_request);
-        if self.count == 0 || elapsed >= limit.window {
-            self.count = 1;
-        } else if self.count >= limit.max_requests {
-            let remaining = limit.window - elapsed;
-            return Some(
-                remaining
-                    .as_secs()
-                    .saturating_add(u64::from(remaining.subsec_nanos() != 0)),
-            );
-        } else {
-            self.count += 1;
-        }
-        self.last_request = now;
-        None
-    }
+    base_path: String,
+    plugin_limits: Vec<PluginRateLimit>,
+    storage: Option<Arc<dyn RateLimitStorage>>,
 }
 
 impl RateLimitMiddleware {
-    pub fn new(config: RateLimitConfig) -> Self {
+    pub fn new(mut config: RateLimitConfig) -> Self {
+        if config.default.window == 0.0 || config.default.window.is_nan() {
+            config.default.window = 10.0;
+        }
+        if config.default.max_requests == 0.0 || config.default.max_requests.is_nan() {
+            config.default.max_requests = 100.0;
+        }
+        let storage = config.custom_storage.clone().or_else(|| {
+            matches!(config.storage, None | Some(RateLimitStorageKind::Memory))
+                .then(|| Arc::new(memory::MemoryRateLimitStorage) as Arc<dyn RateLimitStorage>)
+        });
         Self {
             config,
-            ip_address: crate::config::IpAddressConfig::default(),
-            buckets: Mutex::new(HashMap::new()),
+            ip_address: Default::default(),
+            base_path: String::new(),
+            plugin_limits: Vec::new(),
+            storage,
         }
     }
 
-    /// Use the same client-address policy as session creation and HTTP plugins.
+    pub fn from_context<S: AuthSchema>(
+        config: RateLimitConfig,
+        context: &AuthContext<S>,
+        plugin_limits: Vec<PluginRateLimit>,
+    ) -> Self {
+        let mut limiter = Self::new(config);
+        limiter.ip_address = context.config.advanced.ip_address.clone();
+        limiter.base_path = context.config.base_path.clone();
+        limiter.plugin_limits = plugin_limits;
+        if limiter.config.custom_storage.is_none() {
+            let kind = limiter.config.storage.unwrap_or_else(|| {
+                if context.secondary_storage.is_some() {
+                    RateLimitStorageKind::Secondary
+                } else {
+                    RateLimitStorageKind::Memory
+                }
+            });
+            limiter.storage = Some(match kind {
+                RateLimitStorageKind::Memory => Arc::new(memory::MemoryRateLimitStorage),
+                RateLimitStorageKind::Secondary => Arc::new(SecondaryRateLimitStorage {
+                    storage: context.secondary_storage.clone(),
+                }),
+                RateLimitStorageKind::Database => Arc::new(DatabaseRateLimitStorage {
+                    store: context.database.clone(),
+                    cleanup_window: limiter.configured_window(),
+                }),
+            });
+        }
+        limiter
+    }
+
     pub fn ip_address_config(mut self, config: crate::config::IpAddressConfig) -> Self {
         self.ip_address = config;
         self
     }
 
-    fn limit_for_path(&self, path: &str) -> &EndpointRateLimit {
-        self.config
-            .per_endpoint
-            .get(path)
-            .unwrap_or(&self.config.default)
+    fn configured_window(&self) -> f64 {
+        std::iter::once(self.config.default.window)
+            .chain(self.plugin_limits.iter().map(|rule| rule.limit.window))
+            .chain(
+                self.config
+                    .custom_rules
+                    .values()
+                    .filter_map(|rule| match rule {
+                        CustomRateLimitRule::Fixed(RateLimitOverride::Limit(rule)) => {
+                            Some(rule.window)
+                        }
+                        _ => None,
+                    }),
+            )
+            .filter(|window| window.is_finite() && *window > 0.0)
+            .fold(60.0, f64::max)
+    }
+
+    async fn resolve(
+        &self,
+        request: &AuthRequest,
+        path: &str,
+    ) -> AuthResult<Option<EndpointRateLimit>> {
+        let mut rule = self.config.default;
+        if ["/sign-in", "/sign-up", "/change-password", "/change-email"]
+            .iter()
+            .any(|prefix| path.starts_with(prefix))
+        {
+            rule = EndpointRateLimit {
+                window: 10.0,
+                max_requests: 3.0,
+            };
+        } else if matches!(
+            path,
+            "/request-password-reset"
+                | "/send-verification-email"
+                | "/email-otp/send-verification-otp"
+                | "/email-otp/request-password-reset"
+        ) || path.starts_with("/forget-password")
+        {
+            rule = EndpointRateLimit {
+                window: 60.0,
+                max_requests: 3.0,
+            };
+        }
+        for plugin in &self.plugin_limits {
+            if plugin.matches(path)? {
+                rule = plugin.limit;
+                break;
+            }
+        }
+        for (pattern, custom) in &self.config.custom_rules {
+            if !crate::utils::path::matches(pattern, path)? {
+                continue;
+            }
+            let resolved = match custom {
+                CustomRateLimitRule::Fixed(rule) => *rule,
+                CustomRateLimitRule::Dynamic(resolver) => resolver.resolve(request, rule).await?,
+            };
+            match resolved {
+                RateLimitOverride::Unchanged => {}
+                RateLimitOverride::Disabled => return Ok(None),
+                RateLimitOverride::Limit(replacement) => rule = replacement,
+            }
+            break;
+        }
+        Ok(Some(rule))
     }
 }
 
@@ -144,174 +155,106 @@ impl Middleware for RateLimitMiddleware {
         "rate-limit"
     }
 
-    async fn before_request(&self, req: &AuthRequest) -> AuthResult<Option<AuthResponse>> {
+    async fn before_request(&self, request: &AuthRequest) -> AuthResult<Option<AuthResponse>> {
         if !self.config.enabled || self.ip_address.disable_ip_tracking {
             return Ok(None);
         }
-
-        let limit = self.limit_for_path(&req.path);
-        let ip = self.ip_address.resolve(req);
-        let key = format!("{}|{}", ip.as_deref().unwrap_or("no-trusted-ip"), req.path);
-        let now = Instant::now();
-        let mut buckets = self
-            .buckets
-            .lock()
-            .map_err(|_| crate::error::AuthError::internal("Rate-limit lock poisoned"))?;
-        let bucket = buckets.entry(key).or_insert(RateLimitBucket {
-            count: 0,
-            last_request: now,
-        });
-        if let Some(retry_after) = bucket.consume(now, limit) {
-            return Ok(Some(
-                AuthResponse::json(
-                    429,
-                    &crate::types::ErrorCodeMessageResponse {
-                        code: None,
-                        message: "Too many requests. Please try again later.".to_string(),
-                    },
-                )?
-                .with_header("content-type", "text/plain;charset=UTF-8")
-                .with_header("X-Retry-After", retry_after.to_string()),
-            ));
+        let path = request.url().map_or(request.path(), |url| url.path());
+        let path = normalize_path(path, &self.base_path);
+        let ip = self.ip_address.resolve(request);
+        if ip.is_none() && !IP_WARNING_LOGGED.swap(true, Ordering::Relaxed) {
+            tracing::warn!(
+                "Rate limiting could not determine a client IP; requests share one per-path bucket. Configure trusted client IP headers or proxies."
+            );
         }
+        let Some(rule) = self.resolve(request, path).await? else {
+            return Ok(None);
+        };
+        let key = format!("{}|{path}", ip.as_deref().unwrap_or("no-trusted-ip"));
+        let storage = self.storage.as_ref().ok_or_else(|| {
+            AuthError::config(
+                "Configure database or secondary rate limiting through the BetterAuth builder",
+            )
+        })?;
+        let decision = storage.consume(&key, rule).await?;
+        if decision.allowed {
+            return Ok(None);
+        }
+        Ok(Some(
+            AuthResponse::json(
+                429,
+                &crate::types::ErrorCodeMessageResponse {
+                    code: None,
+                    message: "Too many requests. Please try again later.".to_owned(),
+                },
+            )?
+            .with_header("content-type", "text/plain;charset=utf-8")
+            .with_header(
+                "X-Retry-After",
+                crate::schema_value::number_string(decision.retry_after.unwrap_or(rule.window)),
+            ),
+        ))
+    }
+}
 
-        Ok(None)
+fn normalize_path<'a>(path: &'a str, base_path: &str) -> &'a str {
+    let path = path
+        .split(['?', '#'])
+        .next()
+        .unwrap_or("/")
+        .trim_end_matches('/');
+    let base = base_path.trim_end_matches('/');
+    let path = if path == base {
+        "/"
+    } else if let Some(suffix) = path
+        .strip_prefix(base)
+        .filter(|suffix| suffix.starts_with('/'))
+    {
+        suffix
+    } else {
+        path
+    };
+    if path.is_empty() { "/" } else { path }
+}
+
+struct SecondaryRateLimitStorage {
+    storage: Option<Arc<dyn crate::store::SecondaryStorage>>,
+}
+
+#[async_trait]
+impl RateLimitStorage for SecondaryRateLimitStorage {
+    async fn consume(&self, key: &str, rule: EndpointRateLimit) -> AuthResult<RateLimitDecision> {
+        let storage = self.storage.as_ref().ok_or_else(|| {
+            AuthError::config(
+                "Secondary-storage rate limiting requires SecondaryStorage.increment.",
+            )
+        })?;
+        let allowed = storage.increment(key, rule.window).await? <= rule.max_requests;
+        Ok(RateLimitDecision {
+            allowed,
+            retry_after: (!allowed).then_some(rule.window),
+        })
+    }
+}
+
+struct DatabaseRateLimitStorage<S: AuthSchema> {
+    store: Arc<dyn crate::store::AuthStore<S>>,
+    cleanup_window: f64,
+}
+
+#[async_trait]
+impl<S: AuthSchema> RateLimitStorage for DatabaseRateLimitStorage<S> {
+    async fn consume(&self, key: &str, rule: EndpointRateLimit) -> AuthResult<RateLimitDecision> {
+        let cleanup_window = if rule.window > self.cleanup_window {
+            rule.window
+        } else {
+            self.cleanup_window
+        };
+        self.store
+            .consume_rate_limit(key, rule, cleanup_window)
+            .await
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::HttpMethod;
-    use std::collections::HashMap as StdHashMap;
-
-    #[test]
-    fn counter_resets_only_after_idle_window_and_denials_do_not_extend_it() {
-        let start = Instant::now();
-        let limit = EndpointRateLimit {
-            window: Duration::from_secs(2),
-            max_requests: 5,
-        };
-        let mut bucket = RateLimitBucket {
-            count: 0,
-            last_request: start,
-        };
-        assert_eq!(bucket.consume(start, &limit), None);
-        for _ in 0..4 {
-            assert_eq!(
-                bucket.consume(start + Duration::from_millis(1300), &limit),
-                None
-            );
-        }
-        assert_eq!(
-            bucket.consume(start + Duration::from_millis(2200), &limit),
-            Some(2)
-        );
-        assert_eq!(
-            bucket.consume(start + Duration::from_millis(3200), &limit),
-            Some(1)
-        );
-        assert_eq!(
-            bucket.consume(start + Duration::from_millis(3300), &limit),
-            None
-        );
-        for _ in 0..4 {
-            assert_eq!(
-                bucket.consume(start + Duration::from_millis(3300), &limit),
-                None
-            );
-        }
-        assert_eq!(
-            bucket.consume(start + Duration::from_millis(3300), &limit),
-            Some(2)
-        );
-    }
-
-    fn make_request(path: &str, ip: &str) -> AuthRequest {
-        let mut headers = StdHashMap::new();
-        headers.insert("x-forwarded-for".to_string(), ip.to_string());
-        AuthRequest::from_parts(
-            HttpMethod::Post,
-            path.to_string(),
-            headers,
-            None,
-            StdHashMap::new(),
-        )
-    }
-
-    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
-    #[tokio::test]
-    async fn test_rate_limit_allows_within_limit() {
-        let config = RateLimitConfig::new().default_limit(Duration::from_secs(60), 5);
-        let mw = RateLimitMiddleware::new(config);
-        let req = make_request("/sign-in/email", "1.2.3.4");
-
-        for _ in 0..5 {
-            assert!(mw.before_request(&req).await.unwrap().is_none());
-        }
-    }
-
-    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
-    #[tokio::test]
-    async fn test_rate_limit_blocks_over_limit() {
-        let config = RateLimitConfig::new().default_limit(Duration::from_secs(60), 3);
-        let mw = RateLimitMiddleware::new(config);
-        let req = make_request("/sign-in/email", "1.2.3.4");
-
-        for _ in 0..3 {
-            assert!(mw.before_request(&req).await.unwrap().is_none());
-        }
-
-        let resp = mw.before_request(&req).await.unwrap();
-        assert!(resp.is_some());
-        assert_eq!(resp.unwrap().status, 429);
-    }
-
-    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
-    #[tokio::test]
-    async fn test_rate_limit_per_client() {
-        let config = RateLimitConfig::new().default_limit(Duration::from_secs(60), 2);
-        let mw = RateLimitMiddleware::new(config);
-
-        let req_a = make_request("/sign-in/email", "1.1.1.1");
-        let req_b = make_request("/sign-in/email", "2.2.2.2");
-
-        // Client A uses up its limit
-        for _ in 0..2 {
-            assert!(mw.before_request(&req_a).await.unwrap().is_none());
-        }
-        assert!(mw.before_request(&req_a).await.unwrap().is_some());
-
-        // Client B should still be allowed
-        assert!(mw.before_request(&req_b).await.unwrap().is_none());
-    }
-
-    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
-    #[tokio::test]
-    async fn test_rate_limit_per_endpoint_override() {
-        let config = RateLimitConfig::new()
-            .default_limit(Duration::from_secs(60), 100)
-            .endpoint("/sign-in/email", Duration::from_secs(60), 2);
-        let mw = RateLimitMiddleware::new(config);
-        let req = make_request("/sign-in/email", "1.2.3.4");
-
-        for _ in 0..2 {
-            assert!(mw.before_request(&req).await.unwrap().is_none());
-        }
-        assert!(mw.before_request(&req).await.unwrap().is_some());
-    }
-
-    // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
-    #[tokio::test]
-    async fn test_rate_limit_disabled() {
-        let config = RateLimitConfig::new()
-            .default_limit(Duration::from_secs(60), 1)
-            .enabled(false);
-        let mw = RateLimitMiddleware::new(config);
-        let req = make_request("/sign-in/email", "1.2.3.4");
-
-        for _ in 0..10 {
-            assert!(mw.before_request(&req).await.unwrap().is_none());
-        }
-    }
-}
+mod tests;

@@ -104,8 +104,8 @@ async fn test_custom_admin_role_can_use_permission_engine() {
         .unwrap();
 
     let plugin = AdminPlugin::with_config(AdminConfig {
-        admin_roles: vec!["superadmin".to_string()],
-        roles: HashMap::from([(
+        admin_roles: Some(vec!["superadmin".to_string()]),
+        roles: Some(HashMap::from([(
             "superadmin".to_string(),
             RolePermissions::new()
                 .allow(
@@ -123,7 +123,7 @@ async fn test_custom_admin_role_can_use_permission_engine() {
                     ],
                 )
                 .allow("session", ["list", "revoke", "delete"]),
-        )]),
+        )])),
         ..Default::default()
     });
 
@@ -220,6 +220,7 @@ async fn test_impersonation_session_tracks_admin_id() {
     );
 
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
+    let resp = test_helpers::finalize_response(&ctx, &req, resp);
     let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
     assert!(
         set_cookie_value(&resp, &admin_cookie_name).is_some(),
@@ -248,6 +249,7 @@ async fn test_stop_impersonating_restores_admin_session() {
         })),
     );
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
+    let resp = test_helpers::finalize_response(&ctx, &req, resp);
     let impersonation_token = json_body(&resp)["session"]["token"]
         .as_str()
         .unwrap()
@@ -267,6 +269,7 @@ async fn test_stop_impersonating_restores_admin_session() {
         format!("{admin_cookie_name}={admin_cookie}"),
     );
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
+    let resp = test_helpers::finalize_response(&ctx, &req, resp);
     let body = json_body(&resp);
 
     let restored_token = body["session"]["token"].as_str().unwrap();

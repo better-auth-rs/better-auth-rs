@@ -127,8 +127,13 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
 
     let has = |name: &str| idents.iter().any(|i| i == name);
 
-    // Extra fields: not core, not plugin — user-defined.
-    let all_known: Vec<&str> = core.iter().chain(plugin.iter()).copied().collect();
+    // LastLoginMethod uses runtime field policies rather than typed CreateUser fields.
+    let all_known: Vec<&str> = core
+        .iter()
+        .chain(plugin.iter())
+        .copied()
+        .filter(|name| *name != "last_login_method")
+        .collect();
     let extra_not_set: Vec<_> = idents
         .iter()
         .filter(|ident| !all_known.iter().any(|known| ident == known))
@@ -138,7 +143,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
         .collect();
 
     let ident = &input.ident;
-    let extra_updates = (|| -> syn::Result<(Vec<TokenStream>, Vec<TokenStream>)> {
+    let extra_updates = (|| -> syn::Result<(Vec<TokenStream>, TokenStream)> {
         let rule = serde_serialized_name(&input.attrs, "rename_all")?
             .map(|rule| {
                 serde_rename_rule::RenameRule::from_rename_all_str(&rule)
@@ -147,6 +152,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             .transpose()?;
         let mut updates = Vec::new();
         let mut json_columns = Vec::new();
+        let mut field_columns = Vec::new();
         for field in &fields.named {
             let Some(ident) = &field.ident else {
                 continue;
@@ -172,10 +178,22 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             json_columns.push(quote! {
                 #name => matches!(#seaorm_root::sea_orm::ColumnTrait::def(&Column::#column).get_column_type(), #seaorm_root::sea_orm::ColumnType::Json | #seaorm_root::sea_orm::ColumnType::JsonBinary),
             });
+            field_columns.push(quote! { #name => Ok(Column::#column), });
         }
-        Ok((updates, json_columns))
+        let methods = quote! {
+            fn native_json_field(name: &str) -> bool {
+                match name { #(#json_columns)* _ => false }
+            }
+            fn field_column(name: &str) -> #core_root::AuthResult<<Self::Entity as #seaorm_root::sea_orm::EntityTrait>::Column> {
+                match name {
+                    #(#field_columns)*
+                    _ => Err(#core_root::AuthError::config(format!("Unknown reference model field: {name}"))),
+                }
+            }
+        };
+        Ok((updates, methods))
     })();
-    let (extra_updates, json_columns) = match extra_updates {
+    let (extra_updates, field_methods) = match extra_updates {
         Ok(updates) => updates,
         Err(error) => return error.to_compile_error(),
     };
@@ -195,7 +213,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             &has,
             &extra_not_set,
             &extra_updates,
-            &json_columns,
+            &field_methods,
             &seaorm_root,
             &core_root,
         ),
@@ -205,7 +223,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             &has,
             &extra_not_set,
             &extra_updates,
-            &json_columns,
+            &field_methods,
             (&seaorm_root, &core_root),
         ),
         EntityRole::Account => gen_account(ident, &extra_not_set, &seaorm_root, &core_root),
@@ -217,7 +235,8 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
         | EntityRole::Passkey
         | EntityRole::TwoFactor
         | EntityRole::Jwk
-        | EntityRole::WalletAddress) => {
+        | EntityRole::WalletAddress
+        | EntityRole::RateLimit) => {
             plugin_model::generate(input, fields, role, &seaorm_root, &core_root)
                 .unwrap_or_else(syn::Error::into_compile_error)
         }
@@ -231,7 +250,7 @@ fn gen_user(
     has: &dyn Fn(&str) -> bool,
     extras: &[TokenStream],
     extra_updates: &[TokenStream],
-    json_columns: &[TokenStream],
+    field_methods: &TokenStream,
     seaorm_root: &TokenStream,
     core_root: &TokenStream,
 ) -> TokenStream {
@@ -340,9 +359,7 @@ fn gen_user(
         }
 
         impl #seaorm_root::SeaOrmUserModel for #ident {
-            fn native_json_field(name: &str) -> bool {
-                match name { #(#json_columns)* _ => false }
-            }
+            #field_methods
             fn apply_fields(active: &mut Self::ActiveModel, fields: #core_root::serde_json::Map<::std::string::String, #core_root::serde_json::Value>) -> #core_root::AuthResult<()> {
                 for (name, value) in fields {
                     match name.as_str() {
@@ -440,13 +457,15 @@ fn plugin_set_fields_user(
         out.push(quote! { role: #seaorm_root::sea_orm::ActiveValue::Set(create_user.role) });
     }
     if has("banned") {
-        out.push(quote! { banned: #seaorm_root::sea_orm::ActiveValue::Set(false) });
+        out.push(quote! { banned: #seaorm_root::sea_orm::ActiveValue::Set(create_user.banned.unwrap_or(false)) });
     }
     if has("ban_reason") {
-        out.push(quote! { ban_reason: #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::None) });
+        out.push(
+            quote! { ban_reason: #seaorm_root::sea_orm::ActiveValue::Set(create_user.ban_reason) },
+        );
     }
     if has("ban_expires") {
-        out.push(quote! { ban_expires: #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::None) });
+        out.push(quote! { ban_expires: #seaorm_root::sea_orm::ActiveValue::Set(create_user.ban_expires) });
     }
     if has("metadata") {
         out.push(quote! { metadata: #seaorm_root::sea_orm::ActiveValue::Set(create_user.metadata.unwrap_or(#seaorm_root::sea_orm::entity::prelude::Json::Object(::std::default::Default::default()))) });
@@ -504,30 +523,15 @@ fn plugin_update_fields_user(
             }
         });
     }
-    if has("banned") && has("ban_reason") && has("ban_expires") {
-        out.push(quote! {
-            if let ::std::option::Option::Some(banned) = update.banned {
-                active.banned = #seaorm_root::sea_orm::ActiveValue::Set(banned);
-                if !banned {
-                    active.ban_reason = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::None);
-                    active.ban_expires = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::None);
+    for name in ["banned", "ban_reason", "ban_expires"] {
+        if has(name) {
+            let field = format_ident!("{name}");
+            out.push(quote! {
+                if let Some(value) = update.#field {
+                    active.#field = #seaorm_root::sea_orm::ActiveValue::Set(value);
                 }
-            }
-            if update.banned != ::std::option::Option::Some(false) {
-                if let ::std::option::Option::Some(ban_reason) = update.ban_reason {
-                    active.ban_reason = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(ban_reason));
-                }
-                if let ::std::option::Option::Some(ban_expires) = update.ban_expires {
-                    active.ban_expires = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(ban_expires));
-                }
-            }
-        });
-    } else if has("banned") {
-        out.push(quote! {
-            if let ::std::option::Option::Some(banned) = update.banned {
-                active.banned = #seaorm_root::sea_orm::ActiveValue::Set(banned);
-            }
-        });
+            });
+        }
     }
     out
 }
@@ -538,9 +542,14 @@ fn gen_session(
     has: &dyn Fn(&str) -> bool,
     extras: &[TokenStream],
     extra_updates: &[TokenStream],
-    json_columns: &[TokenStream],
+    field_methods: &TokenStream,
     (seaorm_root, core_root): (&TokenStream, &TokenStream),
 ) -> TokenStream {
+    let updates = ["id", "token", "user_id", "expires_at", "created_at", "updated_at", "ip_address", "user_agent", "impersonated_by", "active_organization_id", "active_team_id"]
+        .into_iter().filter(|name| has(name)).map(|name| {
+            let field = format_ident!("{name}");
+            quote! { if let Some(value) = update.#field { active.#field = #seaorm_root::sea_orm::ActiveValue::Set(value); } }
+        });
     let plugin_fields: Vec<_> = registry::plugin_field_names(EntityRole::Session)
         .into_iter()
         .filter(|name| has(name))
@@ -632,9 +641,11 @@ fn gen_session(
         }
 
         impl #seaorm_root::SeaOrmSessionModel for #ident {
-            fn native_json_field(name: &str) -> bool {
-                match name { #(#json_columns)* _ => false }
+            fn apply_update(active: &mut Self::ActiveModel, update: #seaorm_root::SessionUpdate) -> #core_root::AuthResult<()> {
+                #(#updates)*
+                Ok(())
             }
+            #field_methods
             type Id = ::std::string::String;
             type UserId = ::std::string::String;
             type Entity = Entity;
@@ -819,6 +830,10 @@ fn gen_verification(
     seaorm_root: &TokenStream,
     core_root: &TokenStream,
 ) -> TokenStream {
+    let updates = ["id", "identifier", "value", "expires_at", "created_at", "updated_at"].into_iter().map(|name| {
+        let field = format_ident!("{name}");
+        quote! { if let Some(value) = update.#field { active.#field = #seaorm_root::sea_orm::ActiveValue::Set(value); } }
+    });
     // Verification has no plugin-optional fields.
     quote! {
         impl #core_root::entity::AuthVerification for #ident {
@@ -832,6 +847,10 @@ fn gen_verification(
         }
 
         impl #seaorm_root::SeaOrmVerificationModel for #ident {
+            fn apply_update(active: &mut Self::ActiveModel, update: #seaorm_root::VerificationUpdate) -> #core_root::AuthResult<()> {
+                #(#updates)*
+                Ok(())
+            }
             type Id = ::std::string::String;
             type Entity = Entity;
             type ActiveModel = ActiveModel;
@@ -888,6 +907,7 @@ fn parse_role(input: &DeriveInput) -> Result<EntityRole, syn::Error> {
                     "two_factor" => EntityRole::TwoFactor,
                     "jwk" => EntityRole::Jwk,
                     "wallet_address" => EntityRole::WalletAddress,
+                    "rate_limit" => EntityRole::RateLimit,
                     "organization" => EntityRole::Organization,
                     "member" => EntityRole::Member,
                     "invitation" => EntityRole::Invitation,
@@ -897,7 +917,7 @@ fn parse_role(input: &DeriveInput) -> Result<EntityRole, syn::Error> {
                     _ => {
                         return Err(syn::Error::new_spanned(
                             role,
-                            "unsupported auth role; expected user, session, account, or verification",
+                            "unsupported auth role; use a core, organization, or supported plugin model role",
                         ));
                     }
                 });

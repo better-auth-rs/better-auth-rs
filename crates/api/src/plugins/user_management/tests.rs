@@ -190,7 +190,7 @@ async fn test_delete_user_immediate() {
 async fn test_delete_user_immediate_clears_account_cookie_when_enabled() {
     let plugin = UserManagementPlugin::new().delete_user_enabled(true);
     let config = test_helpers::create_test_config().account(AccountConfig {
-        store_account_cookie: true,
+        store_account_cookie: Some(true),
         ..Default::default()
     });
     let ctx = test_helpers::create_test_context_with_config(config).await;
@@ -292,7 +292,7 @@ async fn test_delete_user_callback_clears_account_cookie_when_enabled() {
         .delete_user_enabled(true)
         .send_delete_account_verification(Arc::new(NoopDeleteSender));
     let config = test_helpers::create_test_config().account(AccountConfig {
-        store_account_cookie: true,
+        store_account_cookie: Some(true),
         ..Default::default()
     });
     let ctx = test_helpers::create_test_context_with_config(config).await;

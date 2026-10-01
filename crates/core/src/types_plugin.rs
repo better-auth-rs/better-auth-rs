@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use crate::entity::{AuthApiKey, AuthPasskey, AuthTwoFactor};
 
 /// Two-factor authentication response shape.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TwoFactor {
     pub id: String,
     pub secret: String,
@@ -52,7 +52,7 @@ pub struct UpdateTwoFactor {
 }
 
 /// Passkey response shape.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Passkey {
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -113,7 +113,7 @@ pub struct UpdatePasskeyAuthentication {
 }
 
 /// Device authorization code storage shape.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DeviceCode {
     pub id: String,
     #[serde(rename = "deviceCode")]
@@ -165,7 +165,7 @@ pub struct UpdateDeviceCode {
 }
 
 /// API key response shape.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ApiKey {
     pub id: String,
     pub name: Option<String>,
@@ -461,7 +461,7 @@ impl<T: AuthPasskey> From<&T> for Passkey {
 }
 
 /// Persisted SIWE wallet identity. Multiple chains can belong to one user.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WalletAddress {
     pub id: String,
     pub user_id: String,

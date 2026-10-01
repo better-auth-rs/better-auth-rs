@@ -105,7 +105,7 @@ fn test_config_with_account_cookie() -> AuthConfig {
         .base_url("http://localhost:3000")
         .password_min_length(6)
         .account(AccountConfig {
-            store_account_cookie: true,
+            store_account_cookie: Some(true),
             ..Default::default()
         })
 }

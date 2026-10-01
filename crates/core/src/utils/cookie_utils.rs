@@ -63,6 +63,25 @@ pub fn get_cookie(req: &crate::AuthRequest, name: &str) -> Option<String> {
         .map(|cookie| cookie.value().to_string())
 }
 
+/// Encode a cookie value using the upstream `encodeURIComponent` character set.
+pub fn encode_cookie_value(value: &str) -> String {
+    utf8_percent_encode(value, COOKIE_COMPONENT).to_string()
+}
+
+/// Current session cookie attributes, without a value or an expiration override.
+pub fn session_cookie_template(config: &AuthConfig) -> Cookie<'static> {
+    let session = &config.session;
+    Cookie::build((session.cookie_name.clone(), String::new()))
+        .path("/")
+        .secure(
+            session.cookie_secure
+                || matches!(session.cookie_same_site, crate::config::SameSite::None),
+        )
+        .http_only(session.cookie_http_only)
+        .same_site(map_same_site(&session.cookie_same_site))
+        .build()
+}
+
 /// Build a `Set-Cookie` header value for an arbitrary cookie using the auth
 /// config's session cookie attributes for consistency.
 pub fn create_cookie(name: &str, value: &str, max_age_seconds: i64, config: &AuthConfig) -> String {
@@ -98,6 +117,28 @@ pub fn create_session_cookie_with_max_age(
     )
 }
 
+/// Build session-token cookies and the explicit browser-session preference.
+pub fn create_session_cookies(
+    token: &str,
+    dont_remember: bool,
+    config: &AuthConfig,
+) -> Vec<String> {
+    let mut cookies = vec![create_session_cookie_with_max_age(
+        Some(token),
+        (!dont_remember).then_some(config.session.expires_in.num_seconds()),
+        config,
+    )];
+    if dont_remember {
+        cookies.push(create_session_like_cookie(
+            &related_cookie_name(config, "dont_remember"),
+            &sign_cookie_value("true", config.signing_secret()),
+            None,
+            config,
+        ));
+    }
+    cookies
+}
+
 /// Build a `Set-Cookie` header value using the session cookie attributes for
 /// an arbitrary cookie name.
 pub fn create_session_like_cookie(
@@ -106,32 +147,15 @@ pub fn create_session_like_cookie(
     max_age_seconds: Option<i64>,
     config: &AuthConfig,
 ) -> String {
-    let session_config = &config.session;
-    let same_site = map_same_site(&session_config.cookie_same_site);
-
-    let mut cookie = Cookie::build((name, value))
-        .path("/")
-        .secure(session_config.cookie_secure)
-        .http_only(session_config.cookie_http_only)
-        .same_site(same_site);
-
+    let mut cookie = session_cookie_template(config);
+    cookie.set_name(name.to_owned());
+    cookie.set_value(value.to_owned());
     if let Some(max_age_seconds) = max_age_seconds {
-        let expires_offset = cookie::time::OffsetDateTime::now_utc()
-            + cookie::time::Duration::seconds(max_age_seconds);
-        cookie = cookie
-            .expires(expires_offset)
-            .max_age(cookie::time::Duration::seconds(max_age_seconds));
+        let age = cookie::time::Duration::seconds(max_age_seconds);
+        cookie.set_expires(cookie::time::OffsetDateTime::now_utc() + age);
+        cookie.set_max_age(age);
     }
-
-    // SameSite=None requires the Secure attribute per the spec
-    if matches!(
-        session_config.cookie_same_site,
-        crate::config::SameSite::None
-    ) {
-        cookie = cookie.secure(true);
-    }
-
-    cookie.build().to_string()
+    cookie.to_string()
 }
 
 /// Build a `Set-Cookie` header value that clears the session cookie.

@@ -11,10 +11,6 @@ use better_auth_core::{
 };
 
 use super::{email_verification::EmailVerificationPlugin, two_factor};
-use better_auth_core::utils::cookie_utils::{
-    create_session_cookie, create_session_cookie_with_max_age, create_session_like_cookie,
-    related_cookie_name, sign_cookie_value,
-};
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
 use better_auth_core::utils::username::{
     UsernameValidationError, normalize_username, validate_username,
@@ -46,17 +42,6 @@ fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult
     .map_err(AuthError::from)
 }
 
-fn create_session_cookie_for_remember_me(
-    token: &str,
-    remember_me: Option<bool>,
-    config: &better_auth_core::AuthConfig,
-) -> String {
-    if remember_me == Some(false) {
-        create_session_cookie_with_max_age(Some(token), None, config)
-    } else {
-        create_session_cookie(token, config)
-    }
-}
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
     config: EmailPasswordConfig,
@@ -119,6 +104,8 @@ pub(crate) struct SignUpRequest {
     display_username: Option<String>,
     #[serde(rename = "callbackURL")]
     callback_url: Option<String>,
+    #[serde(rename = "rememberMe")]
+    remember_me: Option<bool>,
     #[serde(flatten)]
     additional_fields: serde_json::Map<String, serde_json::Value>,
 }
@@ -182,7 +169,6 @@ pub(crate) struct SignInUsernameResponse<U: Serialize> {
 pub(crate) enum SignInCoreResult<U: Serialize> {
     Success {
         response: SignInResponse<U>,
-        token: String,
         set_cookie_headers: Vec<String>,
     },
     TwoFactorRedirect {
@@ -279,6 +265,18 @@ impl EmailPasswordPlugin {
             request::complete_signup_username(&mut endpoint_body);
         }
         let mut parsed_body = endpoint_body.clone();
+        if let Some(value) = parsed_body.get("rememberMe")
+            && !value.is_boolean()
+        {
+            return Err(
+                super::json_body::validation_error(&super::json_body::invalid_type(
+                    "body.rememberMe",
+                    "boolean",
+                    Some(value),
+                ))
+                .into(),
+            );
+        }
         if !self.config.username
             && let Some(body) = parsed_body.as_object_mut()
         {
@@ -337,15 +335,9 @@ impl EmailPasswordPlugin {
             }
         }
 
-        let (response, session_token) =
-            sign_up_core(&signup_req, endpoint_body, &self.config, req, ctx).await?;
+        let response = sign_up_core(&signup_req, endpoint_body, &self.config, req, ctx).await?;
 
-        if let Some(token) = session_token {
-            let cookie_header = create_session_cookie(&token, &ctx.config);
-            Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
-        } else {
-            Ok(AuthResponse::json(200, &response)?)
-        }
+        Ok(AuthResponse::json(200, &response)?)
     }
 
     async fn handle_sign_in(
@@ -372,17 +364,9 @@ impl EmailPasswordPlugin {
         {
             SignInCoreResult::Success {
                 response,
-                token,
                 set_cookie_headers,
             } => {
-                let mut auth_response = AuthResponse::json(200, &response)?.with_appended_header(
-                    "Set-Cookie",
-                    create_session_cookie_for_remember_me(
-                        &token,
-                        signin_req.remember_me,
-                        &ctx.config,
-                    ),
-                );
+                let mut auth_response = AuthResponse::json(200, &response)?;
                 for cookie in set_cookie_headers {
                     auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
                 }
@@ -456,7 +440,6 @@ impl EmailPasswordPlugin {
         {
             Ok(SignInCoreResult::Success {
                 response,
-                token,
                 set_cookie_headers,
             }) => {
                 let username_response = SignInUsernameResponse {
@@ -465,15 +448,7 @@ impl EmailPasswordPlugin {
                     url: response.url,
                     user: response.user,
                 };
-                let mut auth_response = AuthResponse::json(200, &username_response)?
-                    .with_appended_header(
-                        "Set-Cookie",
-                        create_session_cookie_for_remember_me(
-                            &token,
-                            signin_req.remember_me,
-                            &ctx.config,
-                        ),
-                    );
+                let mut auth_response = AuthResponse::json(200, &username_response)?;
                 for cookie in set_cookie_headers {
                     auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
                 }
@@ -623,26 +598,27 @@ async fn finalize_sign_in_with_user_core(
     )
     .await
     .map_err(SessionIssueError::into_auth_error)?;
-    let session = issued.session;
-    let token = session.token().to_string();
-    if remember_me == Some(false) {
-        set_cookie_headers.push(create_session_like_cookie(
-            &related_cookie_name(&ctx.config, "dont_remember"),
-            &sign_cookie_value("true", ctx.config.signing_secret()),
-            None,
-            &ctx.config,
-        ));
-    }
+    let token = issued.session.token().to_string();
+    let manager = ctx.session_manager();
+    manager
+        .set_session_cookie(
+            req,
+            manager.internal_data(&issued.user, &issued.session).await?,
+            Some(remember_me == Some(false)),
+        )
+        .await?;
 
+    if let Some(callback) = callback_url.filter(|url| !url.is_empty()) {
+        req.set_response_header("Location", callback)?;
+    }
     let response = SignInResponse {
-        redirect: false,
+        redirect: callback_url.is_some_and(|url| !url.is_empty()),
         token: token.clone(),
-        url: None,
+        url: callback_url.map(str::to_owned),
         user: ctx.user_view(&issued.user)?,
     };
     Ok(SignInCoreResult::Success {
         response,
-        token,
         set_cookie_headers,
     })
 }
@@ -870,6 +846,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::test_helpers;
     use better_auth_core::AuthContext;
     use better_auth_core::config::AuthConfig;
     use std::collections::HashMap;
@@ -923,6 +900,7 @@ mod tests {
 
         let req = create_signup_request("auto@example.com", "Password123!");
         let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
+        let response = test_helpers::finalize_response(&ctx, &req, response);
         assert_eq!(response.status, 200);
 
         // Response should NOT have a Set-Cookie header
@@ -950,6 +928,7 @@ mod tests {
 
         let req = create_signup_request("autotrue@example.com", "Password123!");
         let response = plugin.handle_sign_up(&req, &ctx).await.unwrap();
+        let response = test_helpers::finalize_response(&ctx, &req, response);
         assert_eq!(response.status, 200);
 
         // Response SHOULD have a Set-Cookie header

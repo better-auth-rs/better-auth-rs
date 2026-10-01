@@ -135,23 +135,31 @@ impl<S: AuthSchema> SecondaryStore<S> {
     }
 
     pub(super) async fn mirror_session(&self, session: &S::Session) -> AuthResult<()> {
+        self.mirror_session_in_transaction(session, None).await
+    }
+
+    pub(super) async fn mirror_session_in_transaction(
+        &self,
+        session: &S::Session,
+        transaction: Option<&dyn crate::store::AuthTransaction<S>>,
+    ) -> AuthResult<()> {
         if self.storage.is_none() || ttl(session.expires_at()) == 0 {
             return Ok(());
         }
         self.add_reference(session).await?;
-        let user = self
-            .inner
-            .get_user_by_id(&session.user_id())
-            .await?
-            .map(|user| {
-                UserView::with_internal_fields_for_adapter(
-                    &user,
-                    &self.config.user,
-                    &self.metadata,
-                    self.inner.supports_native_json(),
-                )
-            })
-            .transpose()?;
+        let user = match transaction {
+            Some(transaction) => transaction.get_user_by_id(&session.user_id()).await?,
+            None => self.inner.get_user_by_id(&session.user_id()).await?,
+        }
+        .map(|user| {
+            UserView::with_internal_fields_for_adapter(
+                &user,
+                &self.config.user,
+                &self.metadata,
+                self.inner.supports_native_json(),
+            )
+        })
+        .transpose()?;
         let value = json!({ "session": self.session_fields(session)?, "user": user });
         self.secondary()?
             .set(

@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::utils::cookie_utils::{
-    create_clear_cookie, create_session_cookie_with_max_age, create_session_like_cookie,
-    related_cookie_name, sign_cookie_value,
+    create_clear_cookie, create_session_like_cookie, related_cookie_name,
 };
 use better_auth_core::utils::username::{UsernameValidationError, validate_username};
 use better_auth_core::wire::{SessionView, UserView};
@@ -13,6 +12,13 @@ use better_auth_core::{
 use validator::Validate;
 
 pub mod access;
+mod banned_message;
+mod native;
+pub use banned_message::{BannedUserMessage, BannedUserMessageFuture};
+pub use native::AdminApi;
+pub use types::{
+    CreateUserRequest as CreateAdminUser, RoleInput as AdminRole, UserResponse as AdminUserResponse,
+};
 pub(super) mod handlers;
 pub(super) mod types;
 
@@ -64,15 +70,15 @@ pub struct AdminConfig {
     #[config(default = "user".to_string())]
     pub default_role: String,
     /// Roles treated as "admin" for target-admin checks such as impersonation.
-    #[config(default = vec!["admin".to_string()])]
-    pub admin_roles: Vec<String>,
+    #[config(default = None)]
+    pub admin_roles: Option<Vec<String>>,
     /// Users that always bypass admin permission checks.
     #[config(default = None)]
     pub admin_user_ids: Option<Vec<String>>,
     /// Custom role definitions. When provided, these replace the built-in
     /// `admin` and `user` role permissions.
-    #[config(default = HashMap::new())]
-    pub roles: HashMap<String, access::RolePermissions>,
+    #[config(default = None)]
+    pub roles: Option<HashMap<String, access::RolePermissions>>,
     /// Default reason applied when banning a user without an explicit reason.
     #[config(default = None)]
     pub default_ban_reason: Option<String>,
@@ -83,8 +89,8 @@ pub struct AdminConfig {
     #[config(default = None)]
     pub impersonation_session_duration: Option<i64>,
     /// Message surfaced to banned users.
-    #[config(default = "You have been banned from this application. Please contact support if you believe this is an error.".to_string())]
-    pub banned_user_message: String,
+    #[config(default = BannedUserMessage::default(), skip)]
+    pub banned_user_message: BannedUserMessage,
     /// Whether other admin users may be impersonated.
     #[config(default = false)]
     pub allow_impersonating_admins: bool,
@@ -114,6 +120,7 @@ better_auth_core::impl_auth_plugin! {
             &self,
             ctx: &mut better_auth_core::AuthInitContext<S>,
         ) -> better_auth_core::AuthResult<()> {
+            self.config.validate()?;
             S::User::require_plugin_fields("admin", &["role", "banned", "ban_reason", "ban_expires"])?;
             S::Session::require_plugin_fields("admin", &["impersonated_by"])?;
             ctx.set_metadata("admin.enabled", serde_json::Value::Bool(true));
@@ -121,16 +128,20 @@ better_auth_core::impl_auth_plugin! {
                 "admin.default_role",
                 serde_json::Value::String(self.config.default_role.clone()),
             );
-            ctx.set_metadata(
-                "admin.banned_user_message",
-                serde_json::Value::String(self.config.banned_user_message.clone()),
-            );
+            ctx.extensions.insert(self.config.banned_user_message.clone());
+            ctx.extensions.insert(self.config.clone());
             Ok(())
         }
     }
 }
 
 impl AdminPlugin {
+    /// Set a fixed or asynchronous message for rejected session creation.
+    pub fn banned_user_message(mut self, message: impl Into<BannedUserMessage>) -> Self {
+        self.config.banned_user_message = message.into();
+        self
+    }
+
     async fn require_session(
         &self,
         req: &AuthRequest,
@@ -204,8 +215,8 @@ impl AdminPlugin {
         };
         let response = create_user_core(
             &body,
-            req,
-            (ctx.user_view(&user)?, ctx.session_view(&_session).await?),
+            Some(req),
+            Some((ctx.user_view(&user)?, ctx.session_view(&_session).await?)),
             &self.config,
             ctx,
         )
@@ -366,9 +377,9 @@ impl AdminPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let (response, token) = impersonate_user_core(
+        let (response, data) = impersonate_user_core(
             &body,
-            user.id.as_str(),
+            &user,
             ctx.config.advanced.ip_address.resolve(req).as_deref(),
             req.headers.get("user-agent").map(|value| value.as_str()),
             &self.config,
@@ -386,11 +397,10 @@ impl AdminPlugin {
         )?;
         let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
 
-        let mut auth_response = AuthResponse::json(200, &response)?;
         for cookie in delete_session_cookie_headers(req, &ctx.config) {
-            auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
+            req.append_response_header("Set-Cookie", cookie)?;
         }
-        auth_response = auth_response.with_appended_header(
+        req.append_response_header(
             "Set-Cookie",
             create_session_like_cookie(
                 &admin_cookie_name,
@@ -398,20 +408,11 @@ impl AdminPlugin {
                 Some(ctx.config.session.expires_in.num_seconds()),
                 &ctx.config,
             ),
-        );
-        auth_response = auth_response.with_appended_header(
-            "Set-Cookie",
-            create_session_cookie_with_max_age(Some(&token), None, &ctx.config),
-        );
-        auth_response = auth_response.with_appended_header(
-            "Set-Cookie",
-            create_session_like_cookie(
-                &related_cookie_name(&ctx.config, "dont_remember"),
-                &sign_cookie_value("true", ctx.config.signing_secret()),
-                None,
-                &ctx.config,
-            ),
-        );
+        )?;
+        ctx.session_manager()
+            .set_session_cookie(req, data, Some(true))
+            .await?;
+        let auth_response = AuthResponse::json(200, &response)?;
         Ok(auth_response)
     }
 
@@ -438,32 +439,12 @@ impl AdminPlugin {
             decode_admin_session_cookie_value(ctx.config.signing_secret(), &admin_cookie_value)
                 .map_err(|_| AuthError::internal("Failed to find admin session"))?;
 
-        let (response, new_token) = stop_impersonating_core(&session, &admin_cookie, ctx).await?;
+        let (response, data) = stop_impersonating_core(&session, &admin_cookie, ctx).await?;
 
+        ctx.session_manager()
+            .set_session_cookie(req, data, Some(admin_cookie.dont_remember))
+            .await?;
         let mut auth_response = AuthResponse::json(200, &response)?;
-        auth_response = auth_response.with_appended_header(
-            "Set-Cookie",
-            create_session_cookie_with_max_age(
-                Some(&new_token),
-                if admin_cookie.dont_remember {
-                    None
-                } else {
-                    Some(ctx.config.session.expires_in.num_seconds())
-                },
-                &ctx.config,
-            ),
-        );
-        if admin_cookie.dont_remember {
-            auth_response = auth_response.with_appended_header(
-                "Set-Cookie",
-                create_session_like_cookie(
-                    &related_cookie_name(&ctx.config, "dont_remember"),
-                    &sign_cookie_value("true", ctx.config.signing_secret()),
-                    None,
-                    &ctx.config,
-                ),
-            );
-        }
         auth_response = auth_response.with_appended_header(
             "Set-Cookie",
             create_clear_cookie(&admin_cookie_name, &ctx.config),

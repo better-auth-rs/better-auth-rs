@@ -1,7 +1,6 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use better_auth_core::types::WalletAddress;
-use better_auth_core::utils::cookie_utils::create_session_cookie;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
     AuthUser, CreateAccount, CreateUser, CreateVerification, RequestMeta,
@@ -380,7 +379,18 @@ impl SiwePlugin {
         let issued = issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
             .await
             .map_err(SessionIssueError::into_auth_error)?;
-        Ok(AuthResponse::json(200,&json!({"token":issued.session.token(),"success":true,"user":{"id":user.id(),"walletAddress":address,"chainId":chain_id}}))?.with_header("Set-Cookie",create_session_cookie(issued.session.token(),&ctx.config)))
+        let manager = ctx.session_manager();
+        manager
+            .set_session_cookie(
+                req,
+                manager.internal_data(&issued.user, &issued.session).await?,
+                None,
+            )
+            .await?;
+        Ok(AuthResponse::json(
+            200,
+            &json!({"token":issued.session.token(),"success":true,"user":{"id":user.id(),"walletAddress":address,"chainId":chain_id}}),
+        )?)
     }
 }
 

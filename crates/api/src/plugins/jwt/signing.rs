@@ -42,15 +42,26 @@ impl JwtPlugin {
     /// Sign a payload with explicit protected headers and key selection.
     pub async fn sign_with_options<S: AuthSchema>(
         &self,
-        mut payload: Map<String, Value>,
+        payload: Map<String, Value>,
         options: &JwtSigningOptions,
         ctx: &AuthContext<S>,
     ) -> AuthResult<String> {
-        self.default_claims(&mut payload, ctx)?;
+        self.sign_with_store(payload, options, &ctx.config, ctx.database.as_ref())
+            .await
+    }
+
+    pub(super) async fn sign_with_store(
+        &self,
+        mut payload: Map<String, Value>,
+        options: &JwtSigningOptions,
+        config: &better_auth_core::AuthConfig,
+        store: &dyn better_auth_core::store::JwksStore,
+    ) -> AuthResult<String> {
+        self.default_claims(&mut payload, config)?;
         if let Some(callback) = &self.config.custom_sign {
             return callback(payload, options.clone()).await;
         }
-        let mut keys = ctx.database.list_jwks().await?;
+        let mut keys = store.list_jwks().await?;
         keys.sort_by_key(|key| std::cmp::Reverse(key.created_at));
         let selected = if let Some(id) = &options.key_id {
             let key = keys
@@ -95,7 +106,8 @@ impl JwtPlugin {
                     .ok_or_else(|| {
                         AuthError::config("Requested JWT algorithm is not configured")
                     })?;
-                self.create_key_pair(parameters, ctx).await?
+                self.create_key_pair_with_store(parameters, config, store)
+                    .await?
             }
         };
         if (options.key_id.is_some() || options.algorithm.is_some())
@@ -107,7 +119,7 @@ impl JwtPlugin {
             key.private_key
         } else {
             crate::plugins::symmetric::decrypt(
-                ctx.config.encryption_secret(),
+                config.encryption_secret(),
                 &serde_json::from_str::<String>(&key.private_key)?,
             )?
         };
@@ -132,10 +144,10 @@ impl JwtPlugin {
         josekit::jwt::encode_with_signer(&payload, &header, signer.as_ref()).map_err(jose_error)
     }
 
-    fn default_claims<S: AuthSchema>(
+    fn default_claims(
         &self,
         payload: &mut Map<String, Value>,
-        ctx: &AuthContext<S>,
+        config: &better_auth_core::AuthConfig,
     ) -> AuthResult<()> {
         let issued = payload
             .get("iat")
@@ -148,7 +160,7 @@ impl JwtPlugin {
                 self.config
                     .issuer
                     .as_ref()
-                    .unwrap_or(&ctx.config.base_url)
+                    .unwrap_or(&config.base_url)
                     .clone()
                     .into(),
             ),
@@ -156,7 +168,7 @@ impl JwtPlugin {
                 "aud",
                 match &self.config.audience {
                     Some(audience) => serde_json::to_value(audience)?,
-                    None => ctx.config.base_url.clone().into(),
+                    None => config.base_url.clone().into(),
                 },
             ),
         ] {

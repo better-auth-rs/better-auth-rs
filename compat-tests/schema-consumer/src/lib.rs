@@ -1,8 +1,11 @@
 #[cfg(test)]
 mod tests {
     mod dynamic_fields;
+    mod field_attributes;
     mod organization;
     mod plugins;
+    mod rate_limits;
+    mod reference_fields;
 
     use std::sync::Arc;
 
@@ -54,7 +57,10 @@ mod tests {
         let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
             .await
             .unwrap();
-        (status, serde_json::from_slice(&bytes).unwrap())
+        let body = serde_json::from_slice(&bytes).unwrap_or_else(|error| {
+            panic!("{path} returned {status} with invalid JSON: {error}; body={bytes:?}")
+        });
+        (status, body)
     }
 
     #[tokio::test]

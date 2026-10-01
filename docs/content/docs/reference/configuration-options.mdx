@@ -43,7 +43,7 @@ Explicit `secrets`, including an invalid empty vector, takes precedence over `BE
 | `cookie_secure` | `bool` | Derived from `base_url` | `true` for HTTPS URLs, `false` for HTTP URLs |
 | `cookie_http_only` | `bool` | `true` | Prevent JavaScript access to the cookie |
 | `cookie_same_site` | `SameSite` | `Lax` | SameSite policy |
-| `cookie_cache` | `Option<CookieCacheConfig>` | `None` | Optional cookie-backed session cache |
+| `cookie_cache` | `Option<CookieCacheConfig>` | Resolved during `build()` | Omitted configuration enables JWE caching only when database and secondary storage are both absent |
 | `bearer` | `Option<BearerConfig>` | `None` | Enable Bearer authentication; `require_signature` rejects unsigned tokens |
 | `additional_fields` | `IndexMap<String, SessionFieldConfig>` | Empty | Session field defaults, validators, transforms, update generators, mappings, and visibility |
 
@@ -69,9 +69,10 @@ Without secondary storage, session and verification data remain in the database 
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | `bool` | `false` | Whether the cache is active |
-| `max_age` | `chrono::Duration` | `5 minutes` | Max age before forcing a DB lookup |
-| `strategy` | `CookieCacheStrategy` | `Compact` | Protection strategy for the cached payload |
+| `enabled` | `Option<bool>` | `None` | Resolves to `true` without server session storage, otherwise `false` |
+| `max_age` | `Option<chrono::Duration>` | `None` | Resolves to session lifetime without server storage, otherwise 5 minutes |
+| `strategy` | `Option<CookieCacheStrategy>` | `None` | Resolves to `Jwe` without server storage, otherwise `Compact` |
+| `refresh` | `Option<CookieCacheRefresh>` | `None` | Stateless renewal: `Disabled`, `Enabled` (final 20%), or `After(duration)`; disabled with server storage |
 | `version` | `CookieCacheVersion` | `"1".into()` | Constant or asynchronous snapshot version; reject caches with a different version |
 
 `CookieCacheStrategy` variants:
@@ -118,8 +119,8 @@ The default password hasher uses Better Auth-compatible scrypt. These retained l
 | `update_account_on_sign_in` | `bool` | `true` | Refresh stored OAuth account data during sign-in |
 | `account_linking` | `AccountLinkingConfig` | see below | Account-linking behavior |
 | `encrypt_oauth_tokens` | `bool` | `false` | Encrypt stored OAuth tokens |
-| `store_account_cookie` | `bool` | `false` | Store account data in a cookie for OAuth token flows |
-| `store_state_strategy` | `OAuthStateStrategy` | `Database` | Where to persist OAuth state |
+| `store_account_cookie` | `Option<bool>` | `None` | Resolves to `true` without a database, including secondary-only authentication |
+| `store_state_strategy` | `Option<OAuthStateStrategy>` | `None` | Resolves to `Cookie` without server storage, otherwise `Database` |
 | `skip_state_cookie_check` | `bool` | `false` | Skip callback cookie-state verification |
 
 ### AccountLinkingConfig
@@ -138,6 +139,40 @@ The default password hasher uses Better Auth-compatible scrypt. These retained l
 
 - `Cookie`
 - `Database`
+
+## RateLimitConfig
+
+Configure HTTP rate limits with `BetterAuth::rate_limit`. Limits are enabled by default when `NODE_ENV=production`. The default window is 10 seconds and the default maximum is 100 requests. Native endpoint calls do not consume HTTP rate limits.
+
+```rust
+use std::time::Duration;
+use better_auth::middleware::{RateLimitConfig, RateLimitOverride, RateLimitStorageKind};
+
+let limits = RateLimitConfig::new()
+    .enabled(true)
+    .storage(RateLimitStorageKind::Database)
+    .endpoint("/sign-in/email", Duration::from_secs(60), 5)
+    .rule("/health/**", RateLimitOverride::Disabled);
+let auth = BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
+    .rate_limit(limits)
+    .build()
+    .await?;
+```
+
+Rules match paths after removal of the auth base path and trailing slashes. Sign-in, sign-up, change-password, and change-email prefixes use 3 requests per 10 seconds. Password-reset and verification-email endpoints use 3 requests per 60 seconds. The first matching plugin rule replaces the built-in rule. The first matching application rule then replaces or disables that rule. `*` matches one path segment; `**` can cross separators. An exact application path must omit the auth base path.
+
+Use `CustomRateLimitRule::Dynamic(Arc<dyn RateLimitRuleResolver>)` for asynchronous overrides. The resolver receives the original request and the current plugin or built-in rule. Return `RateLimitOverride::Unchanged` to retain that rule, `Disabled` to skip consumption, or `Limit(EndpointRateLimit)` to replace it. `EndpointRateLimit` uses floating-point seconds and request counts, preserving fractional values.
+
+| Storage | Behavior |
+|---------|----------|
+| Omitted | Select secondary storage when configured; otherwise use process memory |
+| `Memory` | Share counters across auth instances in the same process; allowed requests extend the window |
+| `Database` | Use atomic conditional updates in the auth store; requires the generated rate-limit table |
+| `Secondary` | Call `SecondaryStorage::increment` atomically; deny when the returned count exceeds the maximum |
+| `custom_storage` | Call `RateLimitStorage::consume`; overrides the selected built-in storage |
+
+Memory and database denials preserve the counter and return the remaining window. Secondary storage counts denied requests and returns the full window. A custom storage implementation must make the decision and counter update atomic. Storage and resolver errors propagate from the HTTP request phase. See [Database rate limits](/docs/concepts/database#database-rate-limits) for schema generation.
 
 ## AdvancedConfig
 

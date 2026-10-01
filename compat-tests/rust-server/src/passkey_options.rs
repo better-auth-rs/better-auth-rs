@@ -214,11 +214,25 @@ impl PasskeyRegistrationHook for PasskeyOptions {
             input.id = user.get("id").and_then(Value::as_str).map(str::to_owned);
             let created = ctx.users.create_user(input).await?;
             if let Some(banned) = user.get("banned").and_then(Value::as_bool) {
-                let _ = ctx.users.update_user(&created.id, better_auth_core::UpdateUser {
-                    banned: Some(banned),
-                    ban_expires: user.get("banExpires").and_then(Value::as_str).map(|value| chrono::DateTime::parse_from_rfc3339(value).unwrap().with_timezone(&chrono::Utc)),
-                    ..Default::default()
-                }).await?;
+                let _ = ctx
+                    .users
+                    .update_user(
+                        &created.id,
+                        better_auth_core::UpdateUser {
+                            banned: Some(banned),
+                            ban_expires: user.get("banExpires").and_then(Value::as_str).map(
+                                |value| {
+                                    Some(
+                                        chrono::DateTime::parse_from_rfc3339(value)
+                                            .unwrap()
+                                            .with_timezone(&chrono::Utc),
+                                    )
+                                },
+                            ),
+                            ..Default::default()
+                        },
+                    )
+                    .await?;
             }
             if let Some(name) = control.get("updateUserName").and_then(Value::as_str) {
                 let found = ctx
@@ -290,7 +304,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PasskeyOptions {
     async fn before_create_session(
         &self,
         _: &mut CreateSession,
-        _: &SeaOrmHookContext<'_>,
+        _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         self.event(json!({"event": "session.before"}));
         if self.control().get("failSession") == Some(&Value::Bool(true)) {
@@ -305,7 +319,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PasskeyOptions {
     async fn after_create_session(
         &self,
         _: &S::Session,
-        _: &SeaOrmHookContext<'_>,
+        _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.event(json!({"event": "session.after"}));
         Ok(())

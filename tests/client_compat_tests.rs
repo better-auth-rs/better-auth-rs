@@ -267,6 +267,7 @@ async fn run_client_compat(paths: &[&str]) {
 }
 
 async fn run_client_compat_profile(paths: &[&str], profile: &str) {
+    println!("Client compatibility profile: {profile}");
     let binary = rust_compat_binary();
     let oidc_port = allocate_port();
     let oidc_url = format!("http://127.0.0.1:{oidc_port}");
@@ -442,6 +443,24 @@ async fn configuration_client_compat() {
         "crypto-cookie",
         "oauth-link-id-token",
         "oauth-link-id-token-disabled",
+        "oauth-popup-database",
+        "oauth-popup-cookie",
+        "admin-default-options",
+        "admin-empty-roles",
+        "admin-options",
+        "stateless-default",
+        "stateless-explicit",
+        "stateless-refresh",
+        "stateless-no-refresh",
+        "stateless-secondary",
+        "dispatch-errors",
+        "identity-context",
+        "rate-limit-options",
+        "last-login-cookie",
+        "last-login-database",
+        "last-login-secondary",
+        "last-login-ephemeral",
+        "last-login-fields",
         "device-generators",
         "http-body",
         "http-body-csrf-explicit",
@@ -552,6 +571,14 @@ async fn configuration_client_compat() {
             run_client_compat_profile(&["./tests/config/password-security/"], profile).await;
         } else if profile.starts_with("http-body") {
             run_client_compat_profile(&["./tests/config/http-body/"], profile).await;
+        } else if profile.starts_with("oauth-popup-") {
+            run_client_compat_profile(&["./tests/config/oauth-popup/"], profile).await;
+        } else if profile.starts_with("admin-") {
+            run_client_compat_profile(&["./tests/config/admin-options/"], profile).await;
+        } else if profile.starts_with("last-login-") {
+            run_client_compat_profile(&["./tests/config/last-login/"], profile).await;
+        } else if profile.starts_with("stateless-") {
+            run_client_compat_profile(&["./tests/config/stateless/"], profile).await;
         } else if profile.starts_with("custom-session") {
             run_client_compat_profile(&["./tests/config/custom-session/"], profile).await;
         } else if profile.starts_with("two-factor-") && profile != "two-factor-context" {

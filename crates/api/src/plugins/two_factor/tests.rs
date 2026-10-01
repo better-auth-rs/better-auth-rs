@@ -212,7 +212,12 @@ async fn test_verify_existing_session_factor_enables_two_factor_and_reissues_ses
     let (ctx, user, session) =
         create_test_context_with_credential_user("reissue@example.com", false).await;
 
-    let (response, set_cookie_headers) = verify_existing_session_factor(
+    let request = AuthRequest::new(
+        better_auth_core::HttpMethod::Post,
+        "/two-factor/verify-totp",
+    );
+    let (response, _) = verify_existing_session_factor(
+        &request,
         user.clone(),
         session.clone(),
         Some(EnrollmentMethod::Totp),
@@ -221,6 +226,8 @@ async fn test_verify_existing_session_factor_enables_two_factor_and_reissues_ses
     .await
     .unwrap();
 
+    let queued = request.take_response_headers().unwrap();
+    let set_cookie_headers: Vec<_> = queued.get_all("set-cookie").collect();
     assert!(!response.user.two_factor_enabled);
     assert_eq!(response.token.as_deref(), Some(session.token.as_str()));
     assert_eq!(set_cookie_headers.len(), 1);

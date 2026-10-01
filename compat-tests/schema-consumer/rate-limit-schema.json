@@ -1,0 +1,10 @@
+{
+  "rateLimit": {
+    "modelName": "app_request_limits",
+    "fields": {
+      "key": "request_bucket",
+      "count": "request_total",
+      "lastRequest": "requested_at_ms"
+    }
+  }
+}

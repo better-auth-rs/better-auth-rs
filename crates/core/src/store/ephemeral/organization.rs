@@ -22,7 +22,7 @@ pub(super) fn compare_member_values(
 }
 
 #[async_trait]
-impl OrganizationStore for MemoryStore {
+impl OrganizationStore for EphemeralStore {
     fn configure_organization_fields(
         &self,
         fields: crate::organization_fields::OrganizationFields,
@@ -31,11 +31,12 @@ impl OrganizationStore for MemoryStore {
         *self
             .organization_fields
             .write()
-            .unwrap_or_else(|error| error.into_inner()) = fields;
+            .map_err(|_| AuthError::internal("Ephemeral organization schema lock poisoned"))? =
+            fields;
         Ok(())
     }
     async fn create_organization(&self, input: CreateOrganization) -> AuthResult<Organization> {
-        let mut state = self.lock();
+        let mut state = self.lock()?;
         if state
             .organizations
             .values()
@@ -44,7 +45,7 @@ impl OrganizationStore for MemoryStore {
             return Err(AuthError::bad_request("Organization already exists"));
         }
         let metadata = if self
-            .organization_fields()
+            .organization_fields()?
             .organization
             .additional_fields
             .contains_key("metadata")
@@ -58,9 +59,9 @@ impl OrganizationStore for MemoryStore {
         let org = Organization {
             additional_fields: Default::default(),
             id: input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
-            name: (input.name).into(),
-            slug: (input.slug).into(),
-            logo: (input.logo).into(),
+            name: input.name,
+            slug: input.slug,
+            logo: input.logo,
             metadata,
             created_at: (Utc::now()).into(),
         };
@@ -68,18 +69,18 @@ impl OrganizationStore for MemoryStore {
         let mut org: Organization =
             self.store_record(EntityRole::Organization, org, None, input.additional_fields)?;
         if !self
-            .organization_fields()
+            .organization_fields()?
             .organization
             .additional_fields
             .contains_key("metadata")
         {
             org.metadata = metadata;
         }
-        state.organizations.insert(org.id.clone(), org.clone());
+        let _ = state.organizations.insert(org.id.clone(), org.clone());
         self.output_organization(org)
     }
     async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>> {
-        self.lock()
+        self.lock()?
             .organizations
             .get(id)
             .cloned()
@@ -90,7 +91,7 @@ impl OrganizationStore for MemoryStore {
         &self,
         id: &serde_json::Value,
     ) -> AuthResult<Option<Organization>> {
-        self.lock()
+        self.lock()?
             .organizations
             .values()
             .find(|organization| json!(organization.id) == *id)
@@ -99,7 +100,7 @@ impl OrganizationStore for MemoryStore {
             .transpose()
     }
     async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>> {
-        self.lock()
+        self.lock()?
             .organizations
             .values()
             .find(|org| org.slug == slug)
@@ -111,7 +112,7 @@ impl OrganizationStore for MemoryStore {
         &self,
         slug: &serde_json::Value,
     ) -> AuthResult<Option<Organization>> {
-        for organization in self.lock().organizations.values() {
+        for organization in self.lock()?.organizations.values() {
             if organization.slug.json()?.as_ref() == Some(slug) {
                 return self.output_organization(organization.clone()).map(Some);
             }
@@ -119,7 +120,7 @@ impl OrganizationStore for MemoryStore {
         Ok(None)
     }
     async fn list_organizations_by_ids(&self, ids: &[String]) -> AuthResult<Vec<Organization>> {
-        self.lock()
+        self.lock()?
             .organizations
             .values()
             .filter(|org| ids.contains(&org.id))
@@ -132,7 +133,7 @@ impl OrganizationStore for MemoryStore {
         id: &str,
         update: UpdateOrganization,
     ) -> AuthResult<Organization> {
-        let mut state = self.lock();
+        let mut state = self.lock()?;
         let mut org = state
             .organizations
             .get(id)
@@ -156,7 +157,7 @@ impl OrganizationStore for MemoryStore {
         }
         if let Some(metadata) = update.metadata {
             if self
-                .organization_fields()
+                .organization_fields()?
                 .organization
                 .additional_fields
                 .contains_key("metadata")
@@ -178,22 +179,22 @@ impl OrganizationStore for MemoryStore {
             update.additional_fields,
         )?;
         if !self
-            .organization_fields()
+            .organization_fields()?
             .organization
             .additional_fields
             .contains_key("metadata")
         {
             result.metadata = metadata;
         }
-        state.organizations.remove(id);
-        state
+        let _ = state.organizations.shift_remove(id);
+        let _ = state
             .organizations
             .insert(result.id.clone(), result.clone());
         self.output_organization(result)
     }
     async fn delete_organization(&self, id: &str) -> AuthResult<()> {
-        let mut state = self.lock();
-        state.organizations.remove(id);
+        let mut state = self.lock()?;
+        let _ = state.organizations.shift_remove(id);
         state
             .members
             .retain(|_, member| member.organization_id != id);
@@ -216,7 +217,7 @@ impl OrganizationStore for MemoryStore {
         Ok(())
     }
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
-        let state = self.lock();
+        let state = self.lock()?;
         let mut organizations = Vec::new();
         for member in state
             .members
@@ -231,9 +232,9 @@ impl OrganizationStore for MemoryStore {
     }
 }
 #[async_trait]
-impl MemberStore for MemoryStore {
+impl MemberStore for EphemeralStore {
     async fn create_member(&self, input: CreateMember) -> AuthResult<Member> {
-        let mut state = self.lock();
+        let mut state = self.lock()?;
         if state.members.values().any(|member| {
             member.organization_id == input.organization_id && member.user_id == input.user_id
         }) {
@@ -244,16 +245,16 @@ impl MemberStore for MemoryStore {
             id: uuid::Uuid::new_v4().to_string(),
             organization_id: (input.organization_id).into(),
             user_id: (input.user_id).into(),
-            role: (input.role).into(),
+            role: input.role,
             created_at: (Utc::now()).into(),
         };
         let member: Member =
             self.store_record(EntityRole::Member, member, None, input.additional_fields)?;
-        state.members.insert(member.id.clone(), member.clone());
+        let _ = state.members.insert(member.id.clone(), member.clone());
         self.output_member(member)
     }
     async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>> {
-        self.lock()
+        self.lock()?
             .members
             .values()
             .find(|member| member.organization_id == organization_id && member.user_id == user_id)
@@ -266,7 +267,7 @@ impl MemberStore for MemoryStore {
         organization_id: &serde_json::Value,
         user_id: &serde_json::Value,
     ) -> AuthResult<Option<Member>> {
-        for member in self.lock().members.values() {
+        for member in self.lock()?.members.values() {
             if member.organization_id.json()?.as_ref() == Some(organization_id)
                 && member.user_id.json()?.as_ref() == Some(user_id)
             {
@@ -276,7 +277,7 @@ impl MemberStore for MemoryStore {
         Ok(None)
     }
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
-        self.lock()
+        self.lock()?
             .members
             .get(id)
             .cloned()
@@ -284,7 +285,7 @@ impl MemberStore for MemoryStore {
             .transpose()
     }
     async fn update_member_role(&self, id: &str, role: &str) -> AuthResult<Member> {
-        let mut state = self.lock();
+        let mut state = self.lock()?;
         let member = state
             .members
             .get_mut(id)
@@ -298,7 +299,7 @@ impl MemberStore for MemoryStore {
         self.output_member(member.clone())
     }
     async fn delete_member(&self, id: &str) -> AuthResult<()> {
-        let mut state = self.lock();
+        let mut state = self.lock()?;
         if let Some(member) = state.members.get(id).cloned() {
             let mut teams = Vec::new();
             for team in state
@@ -320,14 +321,14 @@ impl MemberStore for MemoryStore {
                     || !teams.iter().any(|team| team.id == team_member.team_id)
             });
             for team in teams {
-                state.teams.insert(team.id.clone(), team);
+                let _ = state.teams.insert(team.id.clone(), team);
             }
-            state.members.remove(id);
+            let _ = state.members.shift_remove(id);
         }
         Ok(())
     }
     async fn list_organization_members(&self, org: &str) -> AuthResult<Vec<Member>> {
-        self.lock()
+        self.lock()?
             .members
             .values()
             .filter(|member| member.organization_id == org)
@@ -341,9 +342,9 @@ impl MemberStore for MemoryStore {
     ) -> AuthResult<(Vec<Member>, usize)> {
         use crate::user_fields::UserFieldType;
         use serde_json::Value;
-        let schema = self.organization_fields().member;
+        let schema = self.organization_fields()?.member;
         let mut members: Vec<_> = self
-            .lock()
+            .lock()?
             .members
             .values()
             .filter(|member| member.organization_id == params.organization_id)
@@ -447,14 +448,14 @@ impl MemberStore for MemoryStore {
     }
     async fn count_organization_members(&self, org: &str) -> AuthResult<i64> {
         Ok(self
-            .lock()
+            .lock()?
             .members
             .values()
             .filter(|member| member.organization_id == org)
             .count() as i64)
     }
     async fn count_organization_owners(&self, org: &str) -> AuthResult<i64> {
-        self.lock()
+        self.lock()?
             .members
             .values()
             .filter(|member| member.organization_id == org)
@@ -464,14 +465,14 @@ impl MemberStore for MemoryStore {
     }
 }
 #[async_trait]
-impl InvitationStore for MemoryStore {
+impl InvitationStore for EphemeralStore {
     async fn create_invitation(&self, mut input: CreateInvitation) -> AuthResult<Invitation> {
         let mut invitation = Invitation {
             additional_fields: Default::default(),
             id: input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             organization_id: (input.organization_id).into(),
             email: (input.email).into(),
-            role: (input.role).into(),
+            role: input.role.into(),
             status: (input.status.unwrap_or_default()).into(),
             inviter_id: (input.inviter_id).into(),
             team_id: (input.team_id).into(),
@@ -496,13 +497,14 @@ impl InvitationStore for MemoryStore {
             None,
             input.additional_fields,
         )?;
-        self.lock()
+        let _ = self
+            .lock()?
             .invitations
             .insert(invitation.id.clone(), invitation.clone());
         self.output_invitation(invitation)
     }
     async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
-        self.lock()
+        self.lock()?
             .invitations
             .get(id)
             .cloned()
@@ -515,7 +517,7 @@ impl InvitationStore for MemoryStore {
         email: &str,
     ) -> AuthResult<Option<Invitation>> {
         for invitation in self
-            .lock()
+            .lock()?
             .invitations
             .values()
             .filter(|invitation| invitation.organization_id == org && invitation.is_pending())
@@ -531,7 +533,7 @@ impl InvitationStore for MemoryStore {
         id: &str,
         status: InvitationStatus,
     ) -> AuthResult<Invitation> {
-        let mut state = self.lock();
+        let mut state = self.lock()?;
         let invitation = state
             .invitations
             .get_mut(id)
@@ -549,7 +551,7 @@ impl InvitationStore for MemoryStore {
         id: &str,
         expires_at: DateTime<Utc>,
     ) -> AuthResult<Invitation> {
-        let mut state = self.lock();
+        let mut state = self.lock()?;
         let invitation = state
             .invitations
             .get_mut(id)
@@ -567,7 +569,7 @@ impl InvitationStore for MemoryStore {
         self.output_invitation(invitation.clone())
     }
     async fn list_organization_invitations(&self, org: &str) -> AuthResult<Vec<Invitation>> {
-        self.lock()
+        self.lock()?
             .invitations
             .values()
             .filter(|invitation| invitation.organization_id == org)
@@ -576,7 +578,7 @@ impl InvitationStore for MemoryStore {
             .collect()
     }
     async fn count_pending_organization_invitations(&self, org: &str) -> AuthResult<i64> {
-        self.lock()
+        self.lock()?
             .invitations
             .values()
             .filter(|invitation| invitation.organization_id == org && invitation.is_pending())
@@ -587,7 +589,7 @@ impl InvitationStore for MemoryStore {
     async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>> {
         let mut invitations = Vec::new();
         for invitation in self
-            .lock()
+            .lock()?
             .invitations
             .values()
             .filter(|invitation| invitation.is_pending())
@@ -610,7 +612,7 @@ mod query_tests {
     #[tokio::test]
     async fn native_json_policies_transform_raw_text_without_reencoding_reads() -> AuthResult<()> {
         use crate::store::OrganizationRoleStore;
-        let store = MemoryStore::default();
+        let store = EphemeralStore::default();
         let replace =
             |from: &'static str, to: &'static str| -> crate::user_fields::UserFieldTransform {
                 Arc::new(move |value| {
@@ -646,7 +648,7 @@ mod query_tests {
             Some(json!(r#"{"visible":1}"#))
         );
         assert_eq!(
-            store.lock().organizations[&organization.id]
+            store.lock().unwrap().organizations[&organization.id]
                 .metadata
                 .json()?,
             Some(json!(r#"{"stored":1}"#))
@@ -684,7 +686,7 @@ mod query_tests {
             Some(json!(r#"{"visible":["read"]}"#))
         );
         assert_eq!(
-            store.lock().organization_roles[&role.id]
+            store.lock().unwrap().organization_roles[&role.id]
                 .permission
                 .json()?,
             Some(json!(r#"{"stored":["read"]}"#))
@@ -702,7 +704,7 @@ mod query_tests {
 
     #[tokio::test]
     async fn member_queries_use_typed_storage_before_output_transforms() -> AuthResult<()> {
-        let store = MemoryStore::default();
+        let store = EphemeralStore::default();
         let mut fields = OrganizationFields::default();
         fields.member.additional_fields = [
             (

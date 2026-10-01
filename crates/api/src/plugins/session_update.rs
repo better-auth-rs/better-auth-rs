@@ -1,7 +1,6 @@
 use super::json_body;
 use super::json_body::is_truthy;
 use better_auth_core::session::SessionData;
-use better_auth_core::utils::cookie_utils::create_session_cookie_with_max_age;
 use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema};
 use serde_json::Value;
 
@@ -78,16 +77,7 @@ pub(super) async fn handle(
         session: manager.internal_session_view(&updated).await?,
         user,
     };
-    let dont_remember = manager.dont_remember(req);
-    req.append_response_header(
-        "Set-Cookie",
-        create_session_cookie_with_max_age(
-            Some(&data.session.token),
-            (!dont_remember).then_some(ctx.config.session.expires_in.num_seconds()),
-            &ctx.config,
-        ),
-    )?;
-    manager.write_cache(req, &data, dont_remember).await?;
+    manager.set_session_cookie(req, data.clone(), None).await?;
     data.session.filter_returned_fields(&ctx.config.session);
     Ok(AuthResponse::json(
         200,

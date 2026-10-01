@@ -146,7 +146,7 @@ fn account_cookie_max_age(config: &better_auth_core::AuthConfig) -> Duration {
         .session
         .cookie_cache
         .as_ref()
-        .map(|cache| cache.max_age)
+        .map(|cache| cache.max_age())
         .unwrap_or_else(|| Duration::minutes(5))
 }
 
@@ -521,13 +521,10 @@ async fn sign_in_with_id_token_core(
         token: Some(outcome.session.token().to_string()),
         user: Some(outcome.user),
     };
-    Ok(AuthResponse::json(200, &response)?.with_appended_header(
-        "Set-Cookie",
-        better_auth_core::utils::cookie_utils::create_session_cookie(
-            outcome.session.token(),
-            &ctx.config,
-        ),
-    ))
+    ctx.session_manager()
+        .set_session_cookie(req, outcome.issued, None)
+        .await?;
+    Ok(AuthResponse::json(200, &response)?)
 }
 
 async fn link_with_id_token_core(
@@ -827,73 +824,97 @@ async fn link_social_core(
     .await
 }
 
-/// Shared logic for social sign-in and link-social flows.
-///
-/// Both flows build a verification payload, store it, construct the
-/// authorization URL, and return a redirect response. The only difference
-/// is `link_user_id` (None for sign-in, Some for linking).
-pub(super) async fn initiate_oauth_flow_core(
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-    request: FlowStartRequest<'_>,
-) -> AuthResult<InitiatedOAuthFlow> {
+pub(super) struct PreparedOAuthFlow {
+    pub(super) state: String,
+    pub(super) payload: OAuthStatePayload,
+    code_challenge: String,
+}
+
+pub(super) fn prepare_oauth_flow(request: &FlowStartRequest<'_>) -> PreparedOAuthFlow {
     let (code_verifier, code_challenge) = generate_pkce();
     let state = random_base64url(24);
-
     let mut payload = OAuthStatePayload::new(
         request.callback_url.to_string(),
         code_verifier,
-        request.error_callback_url,
-        request.new_user_callback_url,
-        request.link,
+        request.error_callback_url.clone(),
+        request.new_user_callback_url.clone(),
+        request.link.clone(),
         request.request_sign_up,
-        request.additional_data,
+        request.additional_data.clone(),
     );
-
     let _ = payload
         .additional_data
         .insert("oauthState".into(), state.clone().into());
-    if let Some(user_id) = request.anonymous_user_id {
+    if let Some(user_id) = &request.anonymous_user_id {
         let _ = payload
             .server_context
             .insert("anonymousUserId".into(), serde_json::json!(user_id));
     }
-
     payload.id_token_nonce = request
         .provider
         .requires_nonce()
         .then(|| random_base64url(24));
-
-    match ctx.config.account.store_state_strategy {
-        better_auth_core::OAuthStateStrategy::Database => {
-            let _ = ctx
-                .database
-                .create_verification(CreateVerification {
-                    identifier: state.clone(),
-                    value: serde_json::to_string(&payload)?,
-                    expires_at: Utc::now() + Duration::minutes(10),
-                })
-                .await?;
-        }
-        better_auth_core::OAuthStateStrategy::Cookie => {}
+    PreparedOAuthFlow {
+        state,
+        payload,
+        code_challenge,
     }
+}
 
-    let url = build_authorization_url(
+pub(super) async fn store_oauth_flow(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    flow: &PreparedOAuthFlow,
+) -> AuthResult<()> {
+    if matches!(
+        ctx.config.account.store_state_strategy(),
+        better_auth_core::OAuthStateStrategy::Database
+    ) {
+        let _ = ctx
+            .database
+            .create_verification(CreateVerification {
+                identifier: flow.state.clone(),
+                value: serde_json::to_string(&flow.payload)?,
+                expires_at: Utc::now() + Duration::minutes(10),
+            })
+            .await?;
+    }
+    Ok(())
+}
+
+pub(super) fn oauth_authorization_url(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    request: &FlowStartRequest<'_>,
+    flow: &PreparedOAuthFlow,
+) -> AuthResult<String> {
+    build_authorization_url(
         request.provider,
         AuthorizationRequest {
             callback_url: &format!(
                 "{}/callback/{}",
-                request.redirect_base.unwrap_or_else(|| auth_base_url(ctx)),
+                request
+                    .redirect_base
+                    .clone()
+                    .unwrap_or_else(|| auth_base_url(ctx)),
                 request.provider_name
             ),
             scopes: request.scopes,
-            state: &state,
-            code_challenge: &code_challenge,
+            state: &flow.state,
+            code_challenge: &flow.code_challenge,
             login_hint: request.login_hint,
-            nonce: payload.id_token_nonce.as_deref(),
+            nonce: flow.payload.id_token_nonce.as_deref(),
             additional_params: request.additional_params,
         },
-    )?;
+    )
+}
 
+/// Prepare, persist, and authorize a social sign-in or account-link flow.
+pub(super) async fn initiate_oauth_flow_core(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    request: FlowStartRequest<'_>,
+) -> AuthResult<InitiatedOAuthFlow> {
+    let flow = prepare_oauth_flow(&request);
+    store_oauth_flow(ctx, &flow).await?;
+    let url = oauth_authorization_url(ctx, &request, &flow)?;
     Ok(InitiatedOAuthFlow {
         response: SocialSignInResponse {
             url: Some(url),
@@ -902,8 +923,8 @@ pub(super) async fn initiate_oauth_flow_core(
             token: None,
             user: None,
         },
-        state,
-        payload,
+        state: flow.state,
+        payload: flow.payload,
     })
 }
 
@@ -949,14 +970,8 @@ pub(crate) async fn handle_social_sign_in(
     {
         auth_response = auth_response.with_header("Location", url);
     }
-    if let Some(token) = response.token.as_deref() {
-        auth_response = auth_response.with_appended_header(
-            "Set-Cookie",
-            better_auth_core::utils::cookie_utils::create_session_cookie(token, &ctx.config),
-        );
-    }
 
-    match ctx.config.account.store_state_strategy {
+    match ctx.config.account.store_state_strategy() {
         better_auth_core::OAuthStateStrategy::Database => {
             if response.token.is_some() {
                 return Ok(auth_response);
@@ -1008,7 +1023,7 @@ pub(crate) async fn handle_link_social(
         auth_response = auth_response.with_header("Location", url);
     }
 
-    match ctx.config.account.store_state_strategy {
+    match ctx.config.account.store_state_strategy() {
         better_auth_core::OAuthStateStrategy::Database => {
             attach_state_cookie(auth_response, &ctx.config, &flow.state)
         }

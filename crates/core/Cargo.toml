@@ -58,6 +58,7 @@ scrypt.workspace = true
 hex.workspace = true
 chacha20poly1305.workspace = true
 subtle.workspace = true
+regex.workspace = true
 
 [features]
 default = []

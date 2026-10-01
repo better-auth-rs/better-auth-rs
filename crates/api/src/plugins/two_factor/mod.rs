@@ -12,8 +12,7 @@ use validator::Validate;
 
 use better_auth_core::entity::{AuthSession, AuthTwoFactor, AuthUser, AuthVerification};
 use better_auth_core::utils::cookie_utils::{
-    create_clear_cookie, create_session_cookie, create_session_cookie_with_max_age,
-    create_session_like_cookie, related_cookie_name,
+    create_clear_cookie, create_session_like_cookie, related_cookie_name,
 };
 use better_auth_core::wire::UserView;
 use better_auth_core::{
@@ -541,7 +540,7 @@ impl TwoFactorPlugin {
         };
 
         let (response, set_cookie_headers) =
-            enable_core(&body, &user, &session, &self.config, ctx).await?;
+            enable_core(req, &body, &user, &session, &self.config, ctx).await?;
         let mut auth_response = AuthResponse::json(200, &response)?;
         for cookie in set_cookie_headers {
             auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
@@ -727,6 +726,7 @@ async fn resolve_two_factor_state<S: better_auth_core::AuthSchema>(
 }
 
 async fn verify_existing_session_factor(
+    req: &AuthRequest,
     user: impl AuthUser,
     session: impl AuthSession,
     enrollment: Option<EnrollmentMethod>,
@@ -751,6 +751,16 @@ async fn verify_existing_session_factor(
         )
         .await
         .map_err(SessionIssueError::into_auth_error)?;
+        let manager = ctx.session_manager();
+        manager
+            .set_session_cookie(
+                req,
+                manager
+                    .internal_data(&updated_user, &issued.session)
+                    .await?,
+                None,
+            )
+            .await?;
         ctx.database.delete_session(session.token()).await?;
         return Ok((
             SessionTokenResponse {
@@ -767,7 +777,7 @@ async fn verify_existing_session_factor(
                     ctx.user_view(&user)?
                 },
             },
-            vec![create_session_cookie(issued.session.token(), &ctx.config)],
+            Vec::new(),
         ));
     }
 
@@ -816,23 +826,17 @@ async fn finalize_pending_two_factor<S: better_auth_core::AuthSchema>(
     .await
     .map_err(SessionIssueError::into_auth_error)?;
 
+    let manager = ctx.session_manager();
+    manager
+        .set_session_cookie(
+            req,
+            manager
+                .internal_data(&pending.user, &issued.session)
+                .await?,
+            None,
+        )
+        .await?;
     let mut set_cookie_headers = vec![clear_cookie_header(&ctx.config, TWO_FACTOR_COOKIE_SUFFIX)];
-    {
-        set_cookie_headers.push(create_session_cookie_for_dont_remember(
-            issued.session.token(),
-            pending.dont_remember,
-            &ctx.config,
-        ));
-        if pending.dont_remember {
-            set_cookie_headers.push(create_signed_cookie_header(
-                ctx.config.signing_secret(),
-                &ctx.config,
-                DONT_REMEMBER_COOKIE_SUFFIX,
-                "true",
-                None,
-            )?);
-        }
-    }
     if trust_device {
         set_cookie_headers.push(create_trust_device_cookie_header(&issued.user, ctx).await?);
         set_cookie_headers.push(clear_cookie_header(

@@ -9,10 +9,13 @@ use std::sync::Arc;
 
 /// The parsed endpoint input and the active authentication runtime.
 pub struct EndpointContext<'a, S: AuthSchema> {
+    input_request: Option<&'a AuthRequest>,
     /// Original HTTP request, when the call originates from HTTP.
     pub request: Option<&'a AuthRequest>,
     /// Endpoint path, including synthetic dispatch from another endpoint.
     pub path: Option<&'a str>,
+    /// Values captured from the matched endpoint template.
+    pub params: std::collections::HashMap<String, String>,
     /// Input after endpoint validation and unknown-field filtering.
     pub body: Value,
     /// Full typed runtime, including the store, options, metadata, and extensions.
@@ -28,19 +31,54 @@ pub struct EndpointContext<'a, S: AuthSchema> {
     pub response: Option<&'a AuthResponse>,
 }
 impl<'a, S: AuthSchema> EndpointContext<'a, S> {
+    /// Supplied endpoint headers, preserving omission for native calls.
+    pub fn headers(&self) -> Option<&std::collections::HashMap<String, String>> {
+        self.input_request.and_then(AuthRequest::endpoint_headers)
+    }
+
+    /// Set a response header without replacing other header names.
+    pub fn set_header(&self, name: &str, value: impl Into<String>) -> AuthResult<()> {
+        self.input_request
+            .ok_or_else(|| {
+                better_auth_core::AuthError::internal("Endpoint response is unavailable")
+            })?
+            .set_response_header(name, value.into())
+    }
+
+    /// Append a response header, including another `Set-Cookie` value.
+    pub fn append_header(&self, name: &str, value: impl Into<String>) -> AuthResult<()> {
+        self.input_request
+            .ok_or_else(|| {
+                better_auth_core::AuthError::internal("Endpoint response is unavailable")
+            })?
+            .append_response_header(name, value.into())
+    }
+
+    /// Identity supplied to the most recent session-cookie write in this endpoint.
+    pub fn new_session(&self) -> AuthResult<Option<better_auth_core::session::SessionData>> {
+        self.input_request
+            .map(AuthRequest::new_session)
+            .transpose()
+            .map(Option::flatten)
+    }
     /// Use the registered Email OTP plugin within this endpoint's active transaction.
     pub fn email_otp(&self) -> AuthResult<super::email_otp::EmailOtpApi<'a, S>> {
         super::email_otp::EmailOtpApi::from_endpoint(self)
     }
 
-    pub(crate) fn new(
-        request: Option<&'a AuthRequest>,
-        body: Value,
-        auth: &'a AuthContext<S>,
-    ) -> Self {
+    /// Construct an endpoint context from its request, validated body, and runtime.
+    /// Set `transaction` when the caller executes inside an active database transaction.
+    pub fn new(request: Option<&'a AuthRequest>, body: Value, auth: &'a AuthContext<S>) -> Self {
         Self {
-            request,
+            input_request: request,
+            request: request.filter(|_| {
+                better_auth_core::hooks::current_request_hook_context()
+                    .is_none_or(|context| context.is_http)
+            }),
             path: request.map(AuthRequest::path),
+            params: better_auth_core::hooks::current_request_hook_context()
+                .map(|context| context.params)
+                .unwrap_or_default(),
             body,
             auth,
             transaction: None,
@@ -68,9 +106,7 @@ impl<S: AuthSchema, P: AuthPlugin<S>, C: Send + Sync + 'static> AuthPlugin<S>
     fn password_hasher(&self) -> Option<Arc<dyn better_auth_core::PasswordHasher>> {
         self.plugin.password_hasher()
     }
-    fn rate_limits(
-        &self,
-    ) -> AuthResult<Vec<(String, better_auth_core::middleware::EndpointRateLimit)>> {
+    fn rate_limits(&self) -> AuthResult<Vec<better_auth_core::middleware::PluginRateLimit>> {
         self.plugin.rate_limits()
     }
     async fn on_init(&self, ctx: &mut AuthInitContext<S>) -> AuthResult<()> {

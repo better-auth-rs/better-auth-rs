@@ -9,7 +9,7 @@ The production callback exchanges the authorization code and encrypts the verifi
 
 Generic OAuth/OIDC providers use the same resolved provider configuration and token exchange on both servers. Configure the provider redirect URI to match the production callback. API-key sessions can initiate account linking. Anonymous upgrades restore the original user from the bound OAuth state, including callbacks without the anonymous session cookie.
 
-`GET /callback/{provider}/oauth-proxy` completes the transfer. `GET /oauth-proxy-callback` retains the upstream deprecated entry point. Both require `callbackURL`; the profile is carried in the encrypted `profile` parameter. The implementation validates the callback origin, provider identity, profile age, and OAuth state before creating a session. The default maximum profile age is sixty seconds; use `.max_age(...)` to change it.
+`GET /callback/{id}/oauth-proxy` completes the transfer. The `id` is the provider identifier. `GET /oauth-proxy-callback` retains the upstream deprecated entry point. Both require `callbackURL`; the profile is carried in the encrypted `profile` parameter. The implementation validates the callback origin, provider identity, profile age, and OAuth state before creating a session. The default maximum profile age is sixty seconds; use `.max_age(...)` to change it.
 
 Set `x-skip-oauth-proxy` to bypass proxying for a request. Requests on the configured production origin also use the normal OAuth callback. Without an explicit current URL, only a trusted request host can become the profile receiver; other hosts fall back to the hosting environment or configured base URL.
 

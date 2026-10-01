@@ -38,6 +38,13 @@ pub trait SeaOrmUserModel:
         false
     }
 
+    /// Resolve an application field's serialized name to its database column.
+    fn field_column(name: &str) -> AuthResult<<Self::Entity as EntityTrait>::Column> {
+        Err(better_auth_core::AuthError::config(format!(
+            "The user model does not resolve reference field: {name}"
+        )))
+    }
+
     fn new_active(
         id: Option<Self::Id>,
         create_user: CreateUser,
@@ -80,6 +87,13 @@ pub trait SeaOrmSessionModel:
         false
     }
 
+    /// Resolve an application field's serialized name to its database column.
+    fn field_column(name: &str) -> AuthResult<<Self::Entity as EntityTrait>::Column> {
+        Err(better_auth_core::AuthError::config(format!(
+            "The session model does not resolve reference field: {name}"
+        )))
+    }
+
     fn new_active(
         id: Option<Self::Id>,
         token: String,
@@ -88,6 +102,9 @@ pub trait SeaOrmSessionModel:
     ) -> Self::ActiveModel;
     fn set_expires_at(active: &mut Self::ActiveModel, expires_at: DateTime<Utc>);
     fn set_updated_at(active: &mut Self::ActiveModel, updated_at: DateTime<Utc>);
+    /// Apply core and enabled plugin values returned by session update hooks.
+    fn apply_update(active: &mut Self::ActiveModel, update: crate::SessionUpdate)
+    -> AuthResult<()>;
     /// Persist the active team after plugin field validation.
     fn set_active_team_id(_active: &mut Self::ActiveModel, _team_id: Option<String>) {}
     fn set_active_organization_id(active: &mut Self::ActiveModel, organization_id: Option<String>);
@@ -156,4 +173,9 @@ pub trait SeaOrmVerificationModel:
         verification: CreateVerification,
         now: DateTime<Utc>,
     ) -> Self::ActiveModel;
+    /// Apply values returned by verification update hooks.
+    fn apply_update(
+        active: &mut Self::ActiveModel,
+        update: crate::VerificationUpdate,
+    ) -> AuthResult<()>;
 }

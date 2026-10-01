@@ -1,8 +1,6 @@
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse};
 
-use better_auth_core::utils::cookie_utils::create_session_cookie;
-
 mod callbacks;
 mod options;
 mod registration;
@@ -101,11 +99,12 @@ impl PasskeyPlugin {
         match registration::verify_registration_core(body, req, user, &self.config, ctx).await? {
             PasskeyHandlerOutcome::Success((result, token)) => {
                 let response = AuthResponse::json(200, &result)?;
-                Ok(match token {
-                    Some(token) => response
-                        .with_header("Set-Cookie", create_session_cookie(&token, &ctx.config)),
-                    None => response,
-                })
+                if let Some(data) = token {
+                    ctx.session_manager()
+                        .set_session_cookie(req, data, None)
+                        .await?;
+                }
+                Ok(response)
             }
             PasskeyHandlerOutcome::Response(response) => Ok(response),
         }
@@ -138,9 +137,11 @@ impl PasskeyPlugin {
         match verify_authentication_core(&body, req, &self.config, ip_address, user_agent, ctx)
             .await?
         {
-            PasskeyHandlerOutcome::Success((response, token)) => {
-                let cookie_header = create_session_cookie(&token, &ctx.config);
-                Ok(AuthResponse::json(200, &response)?.with_header("Set-Cookie", cookie_header))
+            PasskeyHandlerOutcome::Success((response, data)) => {
+                ctx.session_manager()
+                    .set_session_cookie(req, data, None)
+                    .await?;
+                Ok(AuthResponse::json(200, &response)?)
             }
             PasskeyHandlerOutcome::Response(response) => Ok(response),
         }

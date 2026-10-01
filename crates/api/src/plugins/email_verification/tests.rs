@@ -784,6 +784,7 @@ async fn test_verify_email_auto_sign_in_creates_session() {
     let req =
         test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
     let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
+    let response = test_helpers::finalize_response(&ctx, &req, response);
 
     assert_eq!(response.status, 200);
     let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
@@ -819,6 +820,7 @@ async fn test_verify_email_no_auto_sign_in_no_session() {
     let req =
         test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
     let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
+    let response = test_helpers::finalize_response(&ctx, &req, response);
 
     assert_eq!(response.status, 200);
     let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
@@ -857,6 +859,7 @@ async fn test_verify_email_auto_sign_in_redirect_includes_cookie() {
     let req =
         test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
     let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
+    let response = test_helpers::finalize_response(&ctx, &req, response);
 
     assert_eq!(response.status, 302);
     assert_eq!(response.headers["Location"], "/verified");
@@ -889,6 +892,7 @@ async fn test_verify_email_redirect_without_auto_sign_in_no_cookie() {
     let req =
         test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
     let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
+    let response = test_helpers::finalize_response(&ctx, &req, response);
 
     assert_eq!(response.status, 302);
     assert!(!response.headers.contains_key("Set-Cookie"));

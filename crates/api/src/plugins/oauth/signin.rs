@@ -53,6 +53,7 @@ impl OAuthSignInOptions<'_> {
 }
 
 pub(super) struct ProcessOAuthUserResult {
+    pub(super) issued: better_auth_core::session::SessionData,
     pub(super) session: SessionView,
     pub(super) user: UserView,
     pub(super) is_register: bool,
@@ -267,8 +268,9 @@ pub(super) async fn process_oauth_sign_in(
         let account_cookie =
             ctx.config
                 .account
-                .store_account_cookie
+                .store_account_cookie()
                 .then(|| AccountCookiePayload {
+                    visible_fields: existing_account.field_presence().cloned(),
                     id: Some(existing_account.id().to_string()),
                     user_id: existing_account.user_id().to_string(),
                     provider_id: provider_name.to_string(),
@@ -294,6 +296,11 @@ pub(super) async fn process_oauth_sign_in(
                 });
 
         return Ok(ProcessOAuthUserResult {
+            issued: ctx
+                .session_manager()
+                .internal_data(&issued.user, &issued.session)
+                .await
+                .map_err(|error| error.to_string())?,
             session: ctx
                 .session_view(&issued.session)
                 .await
@@ -417,10 +424,15 @@ pub(super) async fn process_oauth_sign_in(
         let account_cookie = ctx
             .config
             .account
-            .store_account_cookie
+            .store_account_cookie()
             .then(|| AccountCookiePayload::from_account(&created_account));
 
         Ok(ProcessOAuthUserResult {
+            issued: ctx
+                .session_manager()
+                .internal_data(&issued.user, &issued.session)
+                .await
+                .map_err(|error| error.to_string())?,
             session: ctx
                 .session_view(&issued.session)
                 .await
@@ -516,10 +528,15 @@ pub(super) async fn process_oauth_sign_in(
         let account_cookie = ctx
             .config
             .account
-            .store_account_cookie
+            .store_account_cookie()
             .then(|| AccountCookiePayload::from_account(&created_account));
 
         Ok(ProcessOAuthUserResult {
+            issued: ctx
+                .session_manager()
+                .internal_data(&issued.user, &issued.session)
+                .await
+                .map_err(|error| error.to_string())?,
             session: ctx
                 .session_view(&issued.session)
                 .await
@@ -578,17 +595,13 @@ pub(crate) async fn sign_in_verified_profile(
         OAuthSignInError::Admission(error) => error.into_auth_error(),
         OAuthSignInError::Endpoint(response) => response.into(),
     })?;
+    ctx.session_manager()
+        .set_session_cookie(req, outcome.issued, None)
+        .await?;
     Ok(AuthResponse::json(
         200,
         &serde_json::json!({"token": outcome.session.token(), "user": outcome.user}),
-    )?
-    .with_appended_header(
-        "Set-Cookie",
-        better_auth_core::utils::cookie_utils::create_session_cookie(
-            outcome.session.token(),
-            &ctx.config,
-        ),
-    ))
+    )?)
 }
 
 pub(super) async fn validate_provider_user<S: better_auth_core::AuthSchema>(

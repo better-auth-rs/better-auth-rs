@@ -5,6 +5,20 @@ use crate::{AuthResult, AuthSchema};
 use async_trait::async_trait;
 
 #[async_trait]
+impl<S: AuthSchema> RateLimitStore for SecondaryStore<S> {
+    async fn consume_rate_limit(
+        &self,
+        key: &str,
+        rule: crate::middleware::EndpointRateLimit,
+        cleanup_window: f64,
+    ) -> AuthResult<crate::middleware::RateLimitDecision> {
+        self.inner
+            .consume_rate_limit(key, rule, cleanup_window)
+            .await
+    }
+}
+
+#[async_trait]
 impl<S: AuthSchema> AccountStore<S> for SecondaryStore<S> {
     async fn create_account(&self, create_account: CreateAccount) -> AuthResult<S::Account> {
         self.inner.create_account(create_account).await

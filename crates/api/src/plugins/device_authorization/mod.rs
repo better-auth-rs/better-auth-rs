@@ -611,12 +611,12 @@ better_auth_core::impl_auth_plugin! {
             }
             Ok(())
         }
-        fn rate_limits(&self) -> AuthResult<Vec<(String, better_auth_core::middleware::EndpointRateLimit)>> {
-            let window = self.config.expires_in.to_std()
-                .map_err(|_| AuthError::config("Device code expiration must not be negative"))?;
-            Ok(vec![("/device".to_string(), better_auth_core::middleware::EndpointRateLimit {
+        fn rate_limits(&self) -> AuthResult<Vec<better_auth_core::middleware::PluginRateLimit>> {
+            let window = self.config.expires_in.num_seconds() as f64
+                + f64::from(self.config.expires_in.subsec_nanos()) / 1_000_000_000.0;
+            Ok(vec![better_auth_core::middleware::PluginRateLimit::exact("/device", better_auth_core::middleware::EndpointRateLimit {
                 window,
-                max_requests: 5,
+                max_requests: 5.0,
             })])
         }
     }

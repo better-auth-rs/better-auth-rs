@@ -13,6 +13,56 @@ use crate::plugins::api_key::{
 };
 use crate::{AuthError, AuthResult, AuthSchema, BetterAuth};
 
+/// Input to a registered endpoint called from trusted server code.
+#[derive(Debug, Default)]
+pub struct EndpointInput {
+    /// Preserve omitted headers separately from an explicitly empty header collection.
+    pub headers: Option<HashMap<String, String>>,
+    /// JSON input subject to the endpoint's schema.
+    pub body: Option<Value>,
+    /// Endpoint query parameters.
+    pub query: HashMap<String, String>,
+}
+
+impl<S: AuthSchema> BetterAuth<S> {
+    /// Call a registered endpoint with its plugin hooks, without the HTTP transport phase.
+    /// API errors retain response headers; ordinary errors retain their original Rust variant.
+    pub async fn call_endpoint(
+        &self,
+        method: better_auth_core::HttpMethod,
+        path: &str,
+        input: EndpointInput,
+    ) -> AuthResult<better_auth_core::AuthResponse> {
+        let mut request =
+            better_auth_core::AuthRequest::new(method, path).with_optional_headers(input.headers);
+        request.body = input
+            .body
+            .map(|body| serde_json::to_vec(&body))
+            .transpose()?;
+        request.query = input.query;
+        let mut context = better_auth_core::RequestHookContext::from_request(&request);
+        context.body = request
+            .body
+            .as_ref()
+            .map(|_| request.body_as_json())
+            .transpose()?;
+        context.meta = better_auth_core::RequestMeta::from_request_with_config(
+            &request,
+            &self.config().advanced.ip_address,
+        );
+        let route = self
+            .plugins()
+            .iter()
+            .flat_map(|plugin| plugin.routes())
+            .find(|route| route.matches(request.method(), path));
+        better_auth_core::with_request_hook_context_value(context, async {
+            better_auth_core::hooks::set_request_hook_route(path, route.as_ref());
+            self.dispatch_endpoint(&mut request, false).await
+        })
+        .await
+    }
+}
+
 /// A nullable field update with an explicit distinction between omission and clearing.
 #[derive(Debug, Default)]
 pub enum FieldUpdate<T> {
@@ -245,5 +295,12 @@ impl<S: AuthSchema> BetterAuth<S> {
     /// Access server-only Email OTP creation and retrieval using the registered plugin.
     pub fn email_otp(&self) -> AuthResult<better_auth_api::plugins::email_otp::EmailOtpApi<'_, S>> {
         better_auth_api::plugins::email_otp::EmailOtpApi::from_context(self.context())
+    }
+}
+
+impl<S: AuthSchema> BetterAuth<S> {
+    /// Provision users through the registered Admin plugin from trusted server code.
+    pub fn admin(&self) -> AuthResult<better_auth_api::plugins::admin::AdminApi<'_, S>> {
+        better_auth_api::plugins::admin::AdminApi::from_context(self.context())
     }
 }

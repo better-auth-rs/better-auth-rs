@@ -151,7 +151,7 @@ where
                     };
                     return Ok(VerifyEmailResult::Redirect {
                         url: redirect_url(callback_url, Some(error_code)),
-                        session_token: None,
+                        session_data: None,
                     });
                 }
 
@@ -204,24 +204,29 @@ where
                 if let Some(callback_url) = query.callback_url.as_deref() {
                     return Ok(VerifyEmailResult::Redirect {
                         url: redirect_url(callback_url, None),
-                        session_token: None,
+                        session_data: None,
                     });
                 }
 
                 return Ok(VerifyEmailResult::Json {
                     body: serde_json::json!({ "status": true }),
-                    session_token: None,
+                    session_data: None,
                 });
             }
             Some("change-email-verification") => {
-                let (_session_user, session): (UserView, SessionView) = match current_session {
+                let (mut session_user, session): (UserView, SessionView) = match current_session {
                     Some((user, session)) => (user, session),
                     None => {
                         let session = issue_user_session(ctx, &user.id(), ip_address, user_agent)
                             .await
                             .map_err(SessionIssueError::into_auth_error)?
                             .session;
-                        (ctx.user_view(&user)?, ctx.session_view(&session).await?)
+                        (
+                            ctx.internal_user_view(&user)?,
+                            ctx.session_manager()
+                                .internal_session_view(&session)
+                                .await?,
+                        )
                     }
                 };
 
@@ -241,11 +246,17 @@ where
                     let hook_user = ctx.user_view(&updated_user)?;
                     hook(&hook_user).await?;
                 }
+                session_user.email = Some(update_to.into());
+                session_user.email_verified = true;
+                let data = better_auth_core::session::SessionData {
+                    user: session_user,
+                    session,
+                };
 
                 if let Some(callback_url) = query.callback_url.as_deref() {
                     return Ok(VerifyEmailResult::Redirect {
                         url: redirect_url(callback_url, None),
-                        session_token: Some(session.token().to_string()),
+                        session_data: Some(data),
                     });
                 }
 
@@ -254,10 +265,24 @@ where
                         "status": true,
                         "user": ctx.user_view(&updated_user)?,
                     }),
-                    session_token: Some(session.token().to_string()),
+                    session_data: Some(data),
                 });
             }
             _ => {
+                let (mut session_user, session) = match current_session {
+                    Some(pair) => pair,
+                    None => {
+                        let issued = issue_user_session(ctx, &user.id(), ip_address, user_agent)
+                            .await
+                            .map_err(SessionIssueError::into_auth_error)?;
+                        (
+                            ctx.internal_user_view(&user)?,
+                            ctx.session_manager()
+                                .internal_session_view(&issued.session)
+                                .await?,
+                        )
+                    }
+                };
                 let updated_user = ctx
                     .database
                     .update_user(
@@ -285,11 +310,17 @@ where
                     let wire_user = ctx.user_view(&updated_user)?;
                     sender.send(&wire_user, &url, &new_token).await?;
                 }
+                session_user.email = Some(update_to.into());
+                session_user.email_verified = false;
+                let data = better_auth_core::session::SessionData {
+                    user: session_user,
+                    session,
+                };
 
                 if let Some(callback_url) = query.callback_url.as_deref() {
                     return Ok(VerifyEmailResult::Redirect {
                         url: redirect_url(callback_url, None),
-                        session_token: None,
+                        session_data: Some(data),
                     });
                 }
 
@@ -298,7 +329,7 @@ where
                         "status": true,
                         "user": updated_user,
                     }),
-                    session_token: None,
+                    session_data: Some(data),
                 });
             }
         }
@@ -308,13 +339,13 @@ where
         if let Some(callback_url) = query.callback_url.as_deref() {
             return Ok(VerifyEmailResult::Redirect {
                 url: redirect_url(callback_url, None),
-                session_token: None,
+                session_data: None,
             });
         }
 
         return Ok(VerifyEmailResult::Json {
             body: serde_json::json!({ "status": true, "user": serde_json::Value::Null }),
-            session_token: None,
+            session_data: None,
         });
     }
 
@@ -339,30 +370,24 @@ where
         hook(&hook_user).await?;
     }
 
-    let session_token = if config.auto_sign_in_after_verification {
-        if let Some((session_user, session)) = current_session {
-            if session_user.email().unwrap_or_default() == claims.email {
-                Some(session.token().to_string())
-            } else {
-                Some(
-                    issue_user_session(ctx, &user.id(), ip_address, user_agent)
-                        .await
-                        .map_err(SessionIssueError::into_auth_error)?
-                        .session
-                        .token()
-                        .to_string(),
-                )
+    let session_data = if config.auto_sign_in_after_verification {
+        let mut data = if let Some((session_user, session)) =
+            current_session.filter(|(user, _)| user.email().unwrap_or_default() == claims.email)
+        {
+            better_auth_core::session::SessionData {
+                user: session_user,
+                session,
             }
         } else {
-            Some(
-                issue_user_session(ctx, &user.id(), ip_address, user_agent)
-                    .await
-                    .map_err(SessionIssueError::into_auth_error)?
-                    .session
-                    .token()
-                    .to_string(),
-            )
-        }
+            let issued = issue_user_session(ctx, &user.id(), ip_address, user_agent)
+                .await
+                .map_err(SessionIssueError::into_auth_error)?;
+            ctx.session_manager()
+                .internal_data(&user, &issued.session)
+                .await?
+        };
+        data.user.email_verified = true;
+        Some(data)
     } else {
         None
     };
@@ -370,12 +395,12 @@ where
     if let Some(callback_url) = query.callback_url.as_deref() {
         return Ok(VerifyEmailResult::Redirect {
             url: redirect_url(callback_url, None),
-            session_token,
+            session_data,
         });
     }
 
     Ok(VerifyEmailResult::Json {
         body: serde_json::json!({ "status": true, "user": serde_json::Value::Null }),
-        session_token,
+        session_data,
     })
 }

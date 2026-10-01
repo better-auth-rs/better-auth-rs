@@ -361,6 +361,7 @@ async fn test_change_password_sets_cookie_on_session_revocation() {
     );
 
     let response = plugin.handle_change_password(&req, &ctx).await.unwrap();
+    let response = test_helpers::finalize_response(&ctx, &req, response);
     assert_eq!(response.status, 200);
 
     // Verify Set-Cookie header is present

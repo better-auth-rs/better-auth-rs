@@ -91,7 +91,7 @@ async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
             ..Default::default()
         },
     );
-    let store = MemoryStore::new(test_config());
+    let store = EphemeralStore::new(test_config());
     store.configure_organization_fields(fields).unwrap();
     let team = store
         .create_team(CreateTeam {
@@ -147,9 +147,9 @@ async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
     );
 }
 
-impl MemoryStore {
+impl EphemeralStore {
     fn field_config(&self, role: EntityRole) -> AuthResult<crate::user_fields::UserConfig> {
-        let fields = self.organization_fields();
+        let fields = self.organization_fields()?;
         match role {
             EntityRole::Organization => Ok(fields.organization),
             EntityRole::Member => Ok(fields.member),
@@ -189,7 +189,7 @@ impl MemoryStore {
                 }
             }
             if role == EntityRole::Invitation {
-                core.entry("teamId".to_owned()).or_insert(Value::Null);
+                let _ = core.entry("teamId".to_owned()).or_insert(Value::Null);
             }
             for name in schema.additional_fields.keys().filter(|name| *name != "id") {
                 let _ = record.remove(name);
@@ -208,12 +208,12 @@ impl MemoryStore {
                     let _ = record.insert(name.clone(), Value::Null);
                 }
             } else if create {
-                stored.entry(storage_name.clone()).or_insert(Value::Null);
+                let _ = stored.entry(storage_name.clone()).or_insert(Value::Null);
             }
         }
         record.extend(stored);
         if create && role == EntityRole::Organization {
-            record.entry("logo".to_owned()).or_insert(Value::Null);
+            let _ = record.entry("logo".to_owned()).or_insert(Value::Null);
         }
         decode_record(&schema, record)
     }
@@ -234,7 +234,7 @@ impl MemoryStore {
             .filter_map(|name| raw.get(&name).cloned().map(|value| (name, value)))
             .collect();
         if role == EntityRole::Invitation {
-            core.entry("teamId".to_owned()).or_insert(Value::Null);
+            let _ = core.entry("teamId".to_owned()).or_insert(Value::Null);
         }
         let mut storage = raw;
         for (name, field) in &schema.additional_fields {
@@ -322,7 +322,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
             },
         );
     }
-    let store = MemoryStore::new(test_config());
+    let store = EphemeralStore::new(test_config());
     store.configure_organization_fields(config).unwrap();
     let mut create = CreateOrganization::new("original", "original");
     create.id = Some("chosen-id".into());
@@ -337,7 +337,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
     assert_eq!(organization.metadata, Some(Value::Null));
     assert!(organization.additional_fields.is_empty());
     assert_eq!(
-        store.lock().organizations[&organization.id].name,
+        store.lock().unwrap().organizations[&organization.id].name,
         "original:in"
     );
     let updated = store
@@ -444,7 +444,7 @@ async fn invalid_builtin_transform_cannot_partially_update_a_memory_record() {
         organization_fields::OrganizationFields,
         user_fields::{UserConfig, UserFieldConfig},
     };
-    let store = MemoryStore::new(test_config());
+    let store = EphemeralStore::new(test_config());
     let organization = store
         .create_organization(CreateOrganization::new("original", "original"))
         .await
@@ -479,7 +479,7 @@ async fn invalid_builtin_transform_cannot_partially_update_a_memory_record() {
             .await
             .is_err()
     );
-    let state = store.lock();
+    let state = store.lock().unwrap();
     assert_eq!(state.organizations[&organization.id].name, "original");
     assert_eq!(state.organizations[&organization.id].slug, "original");
 }
@@ -490,7 +490,7 @@ async fn memory_core_fields_keep_dynamic_values_and_output_omission() {
         SchemaValue, organization_fields::OrganizationFields, user_fields::UserFieldConfig,
     };
     use serde_json::json;
-    let store = MemoryStore::new(test_config());
+    let store = EphemeralStore::new(test_config());
     let mut fields = OrganizationFields::default();
     fields.organization.additional_fields.insert(
         "name".into(),
@@ -535,7 +535,7 @@ async fn memory_core_fields_keep_dynamic_values_and_output_omission() {
     assert!(omitted.name.is_undefined());
     assert!(serde_json::to_value(omitted).unwrap().get("name").is_none());
     assert_eq!(
-        store.lock().organizations[&organization.id]
+        store.lock().unwrap().organizations[&organization.id]
             .name
             .json()
             .unwrap(),

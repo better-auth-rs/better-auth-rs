@@ -20,6 +20,11 @@ use crate::{SchemaValue, types::InvitationStatus};
 /// The framework reads user fields through these getters. Custom types
 /// must provide all framework fields and may have additional fields.
 pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    /// Field presence for runtime records and signed snapshots. Database models use `None`.
+    /// A missing optional core field differs from a present field containing JSON null.
+    fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
+        None
+    }
     /// Already projected application fields, for views reconstructed from session caches.
     /// Storage models return `None` so the output transform runs exactly once per database read.
     fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
@@ -125,6 +130,10 @@ fn require_plugin_fields(
 
 /// Trait representing an account entity (OAuth provider linking).
 pub trait AuthAccount: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    /// Optional field presence for runtime records; database models expose every mapped column.
+    fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
+        None
+    }
     fn id(&self) -> Cow<'_, str>;
     fn account_id(&self) -> &str;
     fn provider_id(&self) -> &str;

@@ -12,8 +12,8 @@ struct FailAfterVerification;
 impl crate::hooks::SeaOrmHooks<BundledSchema> for FailAfterVerification {
     async fn after_update_user(
         &self,
-        _user: &<BundledSchema as AuthSchema>::User,
-        ctx: &crate::hooks::SeaOrmHookContext<'_>,
+        _user: Option<&<BundledSchema as AuthSchema>::User>,
+        ctx: &crate::hooks::SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(ctx.tx.is_none());
         Err(better_auth_core::AuthError::internal(

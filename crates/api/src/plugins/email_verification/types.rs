@@ -21,10 +21,10 @@ pub(crate) struct VerifyEmailQuery {
 pub(crate) enum VerifyEmailResult {
     Redirect {
         url: String,
-        session_token: Option<String>,
+        session_data: Option<better_auth_core::session::SessionData>,
     },
     Json {
         body: serde_json::Value,
-        session_token: Option<String>,
+        session_data: Option<better_auth_core::session::SessionData>,
     },
 }

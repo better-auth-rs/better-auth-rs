@@ -1,0 +1,363 @@
+//! Adapter-independent hooks for application-owned authentication writes.
+
+use crate::hooks::RequestHookContext;
+use crate::store::AuthTransaction;
+use crate::types::{
+    CreateAccount, CreateSession, CreateUser, CreateVerification, UpdateAccount, UpdateUser,
+};
+use crate::{AuthConfig, AuthResult, AuthSchema};
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+
+/// Partial session values supplied to update hooks.
+#[derive(Clone, Default)]
+pub struct SessionUpdate {
+    /// Replacement record ID.
+    pub id: Option<String>,
+    /// Replacement session token.
+    pub token: Option<String>,
+    /// Replacement owner ID.
+    pub user_id: Option<String>,
+    /// Replacement expiration time.
+    pub expires_at: Option<DateTime<Utc>>,
+    /// Replacement creation time.
+    pub created_at: Option<DateTime<Utc>>,
+    /// Replacement modification time.
+    pub updated_at: Option<DateTime<Utc>>,
+    /// Set or clear the client IP address.
+    pub ip_address: Option<Option<String>>,
+    /// Set or clear the user agent.
+    pub user_agent: Option<Option<String>>,
+    /// Set or clear the impersonating administrator.
+    pub impersonated_by: Option<Option<String>>,
+    /// Set or clear the active organization.
+    pub active_organization_id: Option<Option<String>>,
+    /// Set or clear the active team.
+    pub active_team_id: Option<Option<String>>,
+    /// Application fields keyed by their public names.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+}
+
+/// Partial verification values supplied to update hooks.
+#[derive(Clone, Default)]
+pub struct VerificationUpdate {
+    /// Replacement record ID.
+    pub id: Option<String>,
+    /// Replacement verification identifier.
+    pub identifier: Option<String>,
+    /// Replacement verification value.
+    pub value: Option<String>,
+    /// Replacement expiration time.
+    pub expires_at: Option<DateTime<Utc>>,
+    /// Replacement creation time.
+    pub created_at: Option<DateTime<Utc>>,
+    /// Replacement modification time.
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+impl UpdateUser {
+    /// Merge supplied fields without replacing fields omitted from the patch.
+    pub fn merge(&mut self, patch: Self) {
+        macro_rules! fields {
+            ($($field:ident),* $(,)?) => {$(if patch.$field.is_some() { self.$field = patch.$field; })*};
+        }
+        fields!(
+            email,
+            name,
+            image,
+            email_verified,
+            username,
+            display_username,
+            is_anonymous,
+            phone_number,
+            phone_number_verified,
+            role,
+            banned,
+            ban_reason,
+            ban_expires,
+            two_factor_enabled,
+            metadata
+        );
+        self.additional_fields.extend(patch.additional_fields);
+    }
+}
+
+impl UpdateAccount {
+    /// Merge supplied fields without replacing fields omitted from the patch.
+    pub fn merge(&mut self, patch: Self) {
+        macro_rules! fields {
+            ($($field:ident),* $(,)?) => {$(if patch.$field.is_some() { self.$field = patch.$field; })*};
+        }
+        fields!(
+            access_token,
+            refresh_token,
+            id_token,
+            access_token_expires_at,
+            refresh_token_expires_at,
+            scope,
+            password
+        );
+    }
+}
+
+impl SessionUpdate {
+    /// Merge supplied fields and shallow-merge application fields.
+    pub fn merge(&mut self, patch: Self) {
+        macro_rules! fields {
+            ($($field:ident),* $(,)?) => {$(if patch.$field.is_some() { self.$field = patch.$field; })*};
+        }
+        fields!(
+            id,
+            token,
+            user_id,
+            expires_at,
+            created_at,
+            updated_at,
+            ip_address,
+            user_agent,
+            impersonated_by,
+            active_organization_id,
+            active_team_id
+        );
+        self.additional_fields.extend(patch.additional_fields);
+    }
+}
+
+impl VerificationUpdate {
+    /// Merge supplied fields without replacing fields omitted from the patch.
+    pub fn merge(&mut self, patch: Self) {
+        macro_rules! fields {
+            ($($field:ident),* $(,)?) => {$(if patch.$field.is_some() { self.$field = patch.$field; })*};
+        }
+        fields!(id, identifier, value, expires_at, created_at, updated_at);
+    }
+}
+
+/// Continue or cancel the current write before storage changes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DatabaseHookControl {
+    /// Continue the write after all before hooks complete.
+    Continue,
+    /// Cancel only this write.
+    Cancel,
+}
+
+/// Outcome of a before-update hook. A patch contains only the fields to overwrite.
+pub enum DatabaseHookUpdate<T> {
+    /// Keep the accumulated update unchanged.
+    Continue,
+    /// Cancel only this update.
+    Cancel,
+    /// Merge the supplied fields into the accumulated update.
+    Patch(T),
+}
+
+/// Request and active transaction available to application database hooks.
+pub struct DatabaseHookContext<'a, S: AuthSchema> {
+    /// Effective authentication configuration.
+    pub config: &'a AuthConfig,
+    /// Request metadata; absent for a native call without a request scope.
+    pub request: Option<RequestHookContext>,
+    /// Active transaction before commit. After hooks receive `None`.
+    pub transaction: Option<&'a dyn AuthTransaction<S>>,
+}
+
+/// Application lifecycle hooks for user, account, session, and verification writes.
+#[async_trait]
+pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
+    /// Edit a user before creation or cancel the write.
+    async fn before_create_user(
+        &self,
+        _data: &mut CreateUser,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        Ok(DatabaseHookControl::Continue)
+    }
+    /// Observe a committed user creation.
+    async fn after_create_user(
+        &self,
+        _data: &S::User,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+    /// Inspect the original user update and return a patch or cancellation.
+    async fn before_update_user(
+        &self,
+        _data: &UpdateUser,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+        Ok(DatabaseHookUpdate::Continue)
+    }
+    /// Observe a committed user update.
+    async fn after_update_user(
+        &self,
+        _data: Option<&S::User>,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+    /// Cancel a user deletion before storage changes.
+    async fn before_delete_user(
+        &self,
+        _data: &S::User,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        Ok(DatabaseHookControl::Continue)
+    }
+    /// Observe a committed user deletion.
+    async fn after_delete_user(
+        &self,
+        _data: &S::User,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+
+    /// Edit an account before creation or cancel the write.
+    async fn before_create_account(
+        &self,
+        _data: &mut CreateAccount,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        Ok(DatabaseHookControl::Continue)
+    }
+    /// Observe a committed account creation.
+    async fn after_create_account(
+        &self,
+        _data: &S::Account,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+    /// Inspect the original account update and return a patch or cancellation.
+    async fn before_update_account(
+        &self,
+        _data: &UpdateAccount,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
+        Ok(DatabaseHookUpdate::Continue)
+    }
+    /// Observe a committed account update.
+    async fn after_update_account(
+        &self,
+        _data: Option<&S::Account>,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+    /// Cancel an account deletion before storage changes.
+    async fn before_delete_account(
+        &self,
+        _data: &S::Account,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        Ok(DatabaseHookControl::Continue)
+    }
+    /// Observe a committed account deletion.
+    async fn after_delete_account(
+        &self,
+        _data: &S::Account,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+
+    /// Edit a session before creation or cancel the write.
+    async fn before_create_session(
+        &self,
+        _data: &mut CreateSession,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        Ok(DatabaseHookControl::Continue)
+    }
+    /// Observe a committed session creation.
+    async fn after_create_session(
+        &self,
+        _data: &S::Session,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+    /// Inspect the original session update and return a patch or cancellation.
+    async fn before_update_session(
+        &self,
+        _data: &SessionUpdate,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
+        Ok(DatabaseHookUpdate::Continue)
+    }
+    /// Observe a committed session update.
+    async fn after_update_session(
+        &self,
+        _data: Option<&S::Session>,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+    /// Cancel a session deletion before storage changes.
+    async fn before_delete_session(
+        &self,
+        _data: &S::Session,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        Ok(DatabaseHookControl::Continue)
+    }
+    /// Observe a committed session deletion.
+    async fn after_delete_session(
+        &self,
+        _data: &S::Session,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+
+    /// Edit a verification before creation or cancel the write.
+    async fn before_create_verification(
+        &self,
+        _data: &mut CreateVerification,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        Ok(DatabaseHookControl::Continue)
+    }
+    /// Observe a committed verification creation.
+    async fn after_create_verification(
+        &self,
+        _data: &S::Verification,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+    /// Inspect the original verification update and return a patch or cancellation.
+    async fn before_update_verification(
+        &self,
+        _data: &VerificationUpdate,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookUpdate<VerificationUpdate>> {
+        Ok(DatabaseHookUpdate::Continue)
+    }
+    /// Observe a committed verification update.
+    async fn after_update_verification(
+        &self,
+        _data: Option<&S::Verification>,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+    /// Cancel a verification deletion before storage changes.
+    async fn before_delete_verification(
+        &self,
+        _data: &S::Verification,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        Ok(DatabaseHookControl::Continue)
+    }
+    /// Observe a committed verification deletion.
+    async fn after_delete_verification(
+        &self,
+        _data: &S::Verification,
+        _ctx: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+}

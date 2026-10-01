@@ -130,11 +130,11 @@ pub struct EmailOtpConfig {
     #[config(default = false)]
     pub override_default_email_verification: bool,
     /// Endpoint rate limit window. Zero means 60 seconds.
-    #[config(default = 60)]
-    pub rate_limit_window: u64,
+    #[config(default = 60.0)]
+    pub rate_limit_window: f64,
     /// Endpoint rate limit maximum. Zero means 3.
-    #[config(default = 3)]
-    pub rate_limit_max: u32,
+    #[config(default = 3.0)]
+    pub rate_limit_max: f64,
 }
 
 /// Email OTP plugin with all nine public upstream routes.
@@ -160,10 +160,15 @@ better_auth_core::impl_auth_plugin! {
             ctx.extensions.insert(self.config.clone());
             Ok(())
         }
-        fn rate_limits(&self) -> AuthResult<Vec<(String, better_auth_core::middleware::EndpointRateLimit)>> {
-            let window = if self.config.rate_limit_window == 0 { 60 } else { self.config.rate_limit_window };
-            let max = if self.config.rate_limit_max == 0 { 3 } else { self.config.rate_limit_max };
-            Ok(<Self as better_auth_core::AuthPlugin<S>>::routes(self).into_iter().map(|route| (route.path, better_auth_core::middleware::EndpointRateLimit { window: std::time::Duration::from_secs(window), max_requests: max })).collect())
+        fn rate_limits(&self) -> AuthResult<Vec<better_auth_core::middleware::PluginRateLimit>> {
+            let window = self.config.rate_limit_window;
+            let max = self.config.rate_limit_max;
+            let rule = better_auth_core::middleware::EndpointRateLimit {
+                window: if window == 0.0 || window.is_nan() { 60.0 } else { window },
+                max_requests: if max == 0.0 || max.is_nan() { 3.0 } else { max },
+            };
+            Ok(<Self as better_auth_core::AuthPlugin<S>>::routes(self).into_iter()
+                .map(|route| better_auth_core::middleware::PluginRateLimit::exact(route.path, rule)).collect())
         }
 
         async fn after_request(&self, req: &AuthRequest, response: &mut AuthResponse, ctx: &AuthContext<S>) -> AuthResult<()> {

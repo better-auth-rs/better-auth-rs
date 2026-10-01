@@ -6,8 +6,6 @@ pub use better_auth_core::email::{EmailVerificationHook, SendVerificationEmail};
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse};
 
-use better_auth_core::utils::cookie_utils::create_session_cookie;
-
 use super::StatusResponse;
 
 pub(super) mod handlers;
@@ -178,28 +176,25 @@ impl EmailVerificationPlugin {
         )
         .await?
         {
-            VerifyEmailResult::Redirect { url, session_token } => {
+            VerifyEmailResult::Redirect { url, session_data } => {
                 let mut headers = better_auth_core::Headers::new();
                 _ = headers.insert("Location".to_string(), url);
                 _ = headers.insert("content-type".to_string(), "application/json".to_string());
-                if let Some(token) = session_token {
-                    let cookie = create_session_cookie(&token, &ctx.config);
-                    headers.append("Set-Cookie".to_string(), cookie);
+                if let Some(data) = session_data {
+                    ctx.session_manager()
+                        .set_session_cookie(req, data, None)
+                        .await?;
                 }
-                Ok(AuthResponse {
-                    status: 302,
-                    headers,
-                    body: Vec::new(),
-                })
+                let mut response = AuthResponse::new(302);
+                response.headers = headers;
+                Ok(response)
             }
-            VerifyEmailResult::Json {
-                body,
-                session_token,
-            } => {
-                let mut response = AuthResponse::json(200, &body)?;
-                if let Some(token) = session_token {
-                    let cookie = create_session_cookie(&token, &ctx.config);
-                    response = response.with_header("Set-Cookie", cookie);
+            VerifyEmailResult::Json { body, session_data } => {
+                let response = AuthResponse::json(200, &body)?;
+                if let Some(data) = session_data {
+                    ctx.session_manager()
+                        .set_session_cookie(req, data, None)
+                        .await?;
                 }
                 Ok(response)
             }

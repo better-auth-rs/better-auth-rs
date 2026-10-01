@@ -7,6 +7,11 @@ pub(crate) fn parse(req: &AuthRequest) -> Result<Option<Value>, AuthResponse> {
     let Some(bytes) = req.body.as_deref().filter(|bytes| !bytes.is_empty()) else {
         return Ok(None);
     };
+    if better_auth_core::hooks::current_request_hook_context()
+        .is_some_and(|context| !context.is_http)
+    {
+        return decode(bytes).map(Some);
+    }
     let content_type = req
         .headers
         .iter()

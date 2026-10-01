@@ -49,6 +49,8 @@ pub struct AuthRequest {
     /// Cookie updates from session middleware, shared by normalized request clones.
     response_headers: std::sync::Arc<std::sync::Mutex<Headers>>,
     server_context: std::sync::Arc<std::sync::Mutex<serde_json::Map<String, serde_json::Value>>>,
+    headers_present: bool,
+    new_session: std::sync::Arc<std::sync::Mutex<Option<crate::session::SessionData>>>,
 }
 
 /// Metadata extracted from an incoming request for session creation.
@@ -85,6 +87,9 @@ pub struct AuthResponse {
     pub status: u16,
     pub headers: Headers,
     pub body: Vec<u8>,
+    api_error: bool,
+    error_headers: Option<Headers>,
+    captured_headers: Option<Headers>,
 }
 
 /// Response headers preserving repeated header names such as `Set-Cookie`.
@@ -92,6 +97,17 @@ pub struct AuthResponse {
 pub struct Headers(Vec<(String, String)>);
 
 impl Headers {
+    /// Merge endpoint headers. Cookies accumulate; other headers replace earlier values.
+    pub fn merge(&mut self, headers: Self) {
+        for (name, value) in headers {
+            if name.eq_ignore_ascii_case("set-cookie") {
+                self.append(name, value);
+            } else {
+                let _ = self.insert(name, value);
+            }
+        }
+    }
+
     /// Create an empty header collection.
     pub fn new() -> Self {
         Self::default()
@@ -133,6 +149,13 @@ impl Headers {
         self.0.iter().filter_map(move |(existing_name, value)| {
             existing_name.eq_ignore_ascii_case(name).then_some(value)
         })
+    }
+
+    pub(crate) fn has_set_cookie(&self, name: &str) -> bool {
+        let exact = format!("{name}=");
+        let chunk = format!("{name}.");
+        self.get_all("set-cookie")
+            .any(|value| value.starts_with(&exact) || value.starts_with(&chunk))
     }
 
     /// Check whether a header name exists.
@@ -210,6 +233,9 @@ pub struct CreateUser {
     pub phone_number: Option<String>,
     pub phone_number_verified: Option<bool>,
     pub role: Option<String>,
+    pub banned: Option<bool>,
+    pub ban_reason: Option<String>,
+    pub ban_expires: Option<DateTime<Utc>>,
     pub metadata: Option<serde_json::Value>,
 }
 
@@ -226,14 +252,39 @@ pub struct UpdateUser {
     pub username: Option<String>,
     pub display_username: Option<String>,
     pub is_anonymous: Option<bool>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_nullable_update"
+    )]
     pub phone_number: Option<Option<String>>,
     pub phone_number_verified: Option<bool>,
     pub role: Option<String>,
     pub banned: Option<bool>,
-    pub ban_reason: Option<String>,
-    pub ban_expires: Option<DateTime<Utc>>,
+    /// Omission preserves the reason; an explicit null clears it.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_nullable_update"
+    )]
+    pub ban_reason: Option<Option<String>>,
+    /// Omission preserves expiration; an explicit null clears it.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_nullable_update"
+    )]
+    pub ban_expires: Option<Option<DateTime<Utc>>>,
     pub two_factor_enabled: Option<bool>,
     pub metadata: Option<serde_json::Value>,
+}
+
+fn deserialize_nullable_update<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    <Option<T> as serde::Deserialize>::deserialize(deserializer).map(Some)
 }
 
 /// Session creation data
@@ -297,6 +348,9 @@ impl CreateUser {
             phone_number: None,
             phone_number_verified: None,
             role: None,
+            banned: None,
+            ban_reason: None,
+            ban_expires: None,
             metadata: None,
         }
     }
@@ -351,6 +405,8 @@ impl AuthRequest {
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),
+            headers_present: true,
+            new_session: Default::default(),
         }
     }
 
@@ -375,11 +431,46 @@ impl AuthRequest {
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),
+            headers_present: true,
+            new_session: Default::default(),
         }
     }
 
     pub fn method(&self) -> &HttpMethod {
         &self.method
+    }
+
+    /// Supply native endpoint headers while preserving omission separately from an empty set.
+    pub fn with_optional_headers(mut self, headers: Option<HashMap<String, String>>) -> Self {
+        self.headers_present = headers.is_some();
+        self.headers = headers.unwrap_or_default();
+        self
+    }
+
+    /// Headers supplied to the endpoint, including an explicitly empty set.
+    pub fn endpoint_headers(&self) -> Option<&HashMap<String, String>> {
+        self.headers_present.then_some(&self.headers)
+    }
+
+    /// The exact identity last passed to the session-cookie writer during this endpoint call.
+    pub fn new_session(&self) -> crate::AuthResult<Option<crate::session::SessionData>> {
+        Ok(self
+            .new_session
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Session snapshot lock poisoned"))?
+            .clone())
+    }
+
+    pub(crate) fn set_new_session(
+        &self,
+        data: crate::session::SessionData,
+    ) -> crate::AuthResult<()> {
+        *self
+            .new_session
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Session snapshot lock poisoned"))? =
+            Some(data);
+        Ok(())
     }
 
     /// Attach the original URL supplied by the server transport.
@@ -449,12 +540,34 @@ impl AuthRequest {
     }
 
     /// Queue a response header from request-scoped authentication middleware.
+    pub fn set_response_header(
+        &self,
+        name: &str,
+        value: impl Into<String>,
+    ) -> crate::AuthResult<()> {
+        let _ = self
+            .response_headers
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Session response headers lock poisoned"))?
+            .insert(name, value.into());
+        Ok(())
+    }
+
+    /// Append a response header without replacing earlier values.
     pub fn append_response_header(&self, name: &str, value: String) -> crate::AuthResult<()> {
         self.response_headers
             .lock()
             .map_err(|_| crate::AuthError::internal("Session response headers lock poisoned"))?
             .append(name, value);
         Ok(())
+    }
+
+    pub(crate) fn has_response_cookie(&self, name: &str) -> crate::AuthResult<bool> {
+        Ok(self
+            .response_headers
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Session response headers lock poisoned"))?
+            .has_set_cookie(name))
     }
 
     /// Drain response headers queued by authentication middleware.
@@ -478,11 +591,62 @@ impl AuthRequest {
 }
 
 impl AuthResponse {
+    /// Whether the returned value represents an API error rather than an ordinary response.
+    pub fn is_api_error(&self) -> bool {
+        self.api_error
+    }
+
+    pub(crate) fn into_api_error(mut self) -> Self {
+        self.api_error = true;
+        if self.error_headers.is_none() {
+            self.error_headers = Some(self.headers.clone());
+        }
+        self
+    }
+
+    /// Explicit headers supplied by the API error before dispatch merged response headers.
+    pub fn api_error_headers(&self) -> Option<&Headers> {
+        self.error_headers.as_ref()
+    }
+
+    /// Endpoint headers captured on a thrown native API error.
+    pub fn captured_headers(&self) -> Option<&Headers> {
+        self.captured_headers.as_ref()
+    }
+
+    /// Attach the endpoint header accumulator without changing the error's HTTP headers.
+    pub fn capture_error_headers(&mut self, headers: Headers) {
+        self.captured_headers = Some(headers);
+    }
+
+    /// Replace the returned JSON value while preserving response status and accumulated headers.
+    pub fn replace_json<T: Serialize + ?Sized>(
+        &mut self,
+        value: &T,
+    ) -> Result<(), serde_json::Error> {
+        self.body = serde_json::to_vec(value)?;
+        self.api_error = false;
+        self.error_headers = None;
+        self.captured_headers = None;
+        Ok(())
+    }
+
+    /// Replace the endpoint's returned value while retaining accumulated response headers.
+    pub fn replace_returned(&mut self, mut returned: Self) {
+        let mut headers = std::mem::take(&mut self.headers);
+        headers.merge(std::mem::take(&mut returned.headers));
+        returned.headers = headers;
+        *self = returned;
+    }
+
     pub fn new(status: u16) -> Self {
         Self {
             status,
             headers: Headers::new(),
             body: Vec::new(),
+            api_error: false,
+            error_headers: None,
+            captured_headers: None,
         }
     }
 
@@ -495,6 +659,9 @@ impl AuthResponse {
             status,
             headers,
             body,
+            api_error: false,
+            error_headers: None,
+            captured_headers: None,
         })
     }
 
@@ -507,6 +674,9 @@ impl AuthResponse {
             status,
             headers,
             body,
+            api_error: false,
+            error_headers: None,
+            captured_headers: None,
         }
     }
 
@@ -522,6 +692,9 @@ impl AuthResponse {
             status,
             headers,
             body,
+            api_error: false,
+            error_headers: None,
+            captured_headers: None,
         }
     }
 
@@ -704,6 +877,8 @@ mod tests {
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),
+            headers_present: true,
+            new_session: Default::default(),
         };
         let val: serde_json::Value = req.body_as_json().expect("parse");
         assert_eq!(val["name"], "test");
@@ -856,6 +1031,34 @@ mod tests {
         let cu = CreateUser::default();
         assert!(cu.id.is_none());
         assert!(cu.email.is_none());
+    }
+
+    #[test]
+    fn nullable_user_updates_preserve_omission_null_and_values() {
+        let cases = [
+            serde_json::json!({}),
+            serde_json::json!({
+                "phone_number": null,
+                "ban_reason": null,
+                "ban_expires": null,
+            }),
+            serde_json::json!({
+                "phone_number": "+12025550123",
+                "ban_reason": "review",
+                "ban_expires": "2030-01-01T00:00:00Z",
+            }),
+        ];
+        for input in cases {
+            let patch: UpdateUser = serde_json::from_value(input.clone()).unwrap();
+            let output = serde_json::to_value(&patch).unwrap();
+            for field in ["phone_number", "ban_reason", "ban_expires"] {
+                assert_eq!(output.get(field), input.get(field));
+            }
+            let restored: UpdateUser = serde_json::from_value(output).unwrap();
+            assert_eq!(restored.phone_number, patch.phone_number);
+            assert_eq!(restored.ban_reason, patch.ban_reason);
+            assert_eq!(restored.ban_expires, patch.ban_expires);
+        }
     }
 
     // ── is_false helper ─────────────────────────────────────────────────

@@ -9,6 +9,7 @@ pub mod member;
 pub mod organization;
 pub mod organization_role;
 pub mod passkey;
+pub mod rate_limit;
 pub mod session;
 pub mod team;
 pub mod team_member;

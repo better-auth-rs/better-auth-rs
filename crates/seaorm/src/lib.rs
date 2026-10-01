@@ -6,6 +6,10 @@ mod config;
 mod conversions;
 mod entity;
 mod error;
+mod reference_id;
+pub use reference_id::ReferenceId;
+mod sql_number;
+pub use sql_number::SqlNumber;
 pub mod hooks;
 pub mod organization_schema;
 pub mod plugin_schema;
@@ -20,7 +24,10 @@ mod types_org;
 mod utils;
 
 pub use better_auth_seaorm_macros::AuthEntity;
-pub use hooks::{HookControl, SeaOrmHookContext, SeaOrmHooks, current_request_hook_context};
+pub use hooks::{
+    DatabaseHookUpdate, HookControl, SeaOrmHookContext, SeaOrmHooks, SessionUpdate,
+    VerificationUpdate, current_request_hook_context,
+};
 pub use schema::{
     SeaOrmAccountModel, SeaOrmSessionModel, SeaOrmUserModel, SeaOrmVerificationModel,
 };

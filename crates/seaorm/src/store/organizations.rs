@@ -70,8 +70,13 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         {
             let _ = core.insert("metadata".into(), value);
         }
-        let mut active =
-            models::active::<O::Organization>(core, org.additional_fields, &config, true)?;
+        let mut active = models::active::<O::Organization>(
+            core,
+            org.additional_fields,
+            &config,
+            true,
+            self.connection().get_database_backend(),
+        )?;
         // Native JSON retains SQL NULL separately from a stored JSON null value.
         let metadata = match org.metadata {
             better_auth_core::SchemaValue::Typed(value) => value,
@@ -174,8 +179,13 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         {
             let _ = core.insert("metadata".into(), value);
         }
-        let mut active =
-            models::active::<O::Organization>(core, update.additional_fields, &config, false)?;
+        let mut active = models::active::<O::Organization>(
+            core,
+            update.additional_fields,
+            &config,
+            false,
+            self.connection().get_database_backend(),
+        )?;
         if !overridden_metadata && let Some(metadata) = update.metadata {
             active.set(
                 O::Organization::column("metadata")?,

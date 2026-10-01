@@ -1,7 +1,7 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResult, AuthSchema, CreatePasskey, CreateSession,
-    entity::{AuthSession, AuthUser, AuthVerification},
+    entity::{AuthUser, AuthVerification},
     store::AuthTransaction,
     wire::{PasskeyView, UserView},
 };
@@ -152,7 +152,7 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
     session_user: Option<UserView>,
     config: &PasskeyConfig,
     ctx: &AuthContext<S>,
-) -> PasskeyHandlerResult<(Value, Option<String>)> {
+) -> PasskeyHandlerResult<(Value, Option<better_auth_core::session::SessionData>)> {
     let Some(origins) = resolve_origins(config, req) else {
         return response_message(400, "Failed to verify registration");
     };
@@ -266,7 +266,7 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
                 );
                 let _ = object.insert("user".into(), serde_json::to_value(ctx.user_view(&user)?)?);
             }
-            Some(session.token().to_owned())
+            Some(ctx.session_manager().internal_data(&user, &session).await?)
         } else {
             None
         };
@@ -364,7 +364,7 @@ impl<S: AuthSchema> Registration<S> {
                 active_organization_id: None,
             };
             let session = match transaction {
-                Some(tx) => tx.create_session(input).await?,
+                Some(tx) => tx.create_session_with_deferred_secondary(input).await?,
                 None => self.ctx.database.create_session(input).await?,
             };
             Some((user, session))

@@ -13,6 +13,7 @@ pub mod have_i_been_pwned;
 pub mod helpers;
 mod json_body;
 pub mod jwt;
+pub mod last_login_method;
 pub mod magic_link;
 pub mod multi_session;
 pub mod oauth;
@@ -49,6 +50,18 @@ pub(crate) mod test_helpers {
     use chrono::{Duration, Utc};
 
     pub type TestDatabase = dyn better_auth_core::store::AuthStore<BundledSchema>;
+
+    /// Apply the dispatch response boundary after invoking an internal handler directly.
+    pub fn finalize_response(
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+        req: &AuthRequest,
+        mut response: better_auth_core::AuthResponse,
+    ) -> better_auth_core::AuthResponse {
+        ctx.session_manager()
+            .finish_response(req, &mut response)
+            .expect("endpoint response should finalize");
+        response
+    }
 
     pub fn create_test_config() -> AuthConfig {
         let mut config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
@@ -204,7 +217,7 @@ pub use jwt::{
 };
 pub use magic_link::{MagicLinkConfig, MagicLinkMessage, MagicLinkPlugin, SendMagicLink};
 pub use multi_session::{MultiSessionConfig, MultiSessionPlugin};
-pub use oauth::{OAuthProxyConfig, OAuthProxyPlugin};
+pub use oauth::{OAuthPopupPlugin, OAuthProxyConfig, OAuthProxyPlugin};
 pub use one_tap::{OneTapConfig, OneTapPlugin};
 pub use one_time_token::{OneTimeTokenConfig, OneTimeTokenPlugin, TokenStorage};
 pub use organization::{OrganizationConfig, OrganizationPlugin};
@@ -219,3 +232,8 @@ pub use user_management::{
 };
 
 pub mod user_admission;
+
+pub use last_login_method::{
+    BeforeStoreLastLoginCookie, LastLoginMethodConfig, LastLoginMethodPlugin,
+    LastLoginMethodResolver,
+};

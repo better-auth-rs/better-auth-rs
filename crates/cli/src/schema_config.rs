@@ -18,7 +18,7 @@ pub(crate) struct ModelConfig {
     pub additional_fields: indexmap::IndexMap<String, AdditionalField>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AdditionalField {
     #[serde(rename = "type")]
@@ -27,9 +27,56 @@ pub(crate) struct AdditionalField {
     pub required: Option<bool>,
     #[serde(default)]
     pub unique: bool,
+    #[serde(default)]
+    pub index: bool,
+    #[serde(default)]
+    pub bigint: bool,
+    #[serde(default)]
+    pub sortable: bool,
+    pub references: Option<Reference>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct Reference {
+    pub model: String,
+    pub field: String,
+    pub on_delete: Option<OnDelete>,
+}
+
+#[derive(Clone, Copy, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum OnDelete {
+    #[serde(rename = "no action")]
+    NoAction,
+    Restrict,
+    #[default]
+    Cascade,
+    #[serde(rename = "set null")]
+    SetNull,
+    #[serde(rename = "set default")]
+    SetDefault,
+}
+
+impl AdditionalField {
+    fn rust_type(&self) -> Result<&'static str, String> {
+        let field_type = self.field_type.rust_type()?;
+        Ok(
+            if self
+                .references
+                .as_ref()
+                .is_some_and(|reference| reference.field == "id")
+            {
+                // The migration uses the ID storage type even when the public field is a number.
+                "better_auth::seaorm::ReferenceId"
+            } else {
+                field_type
+            },
+        )
+    }
+}
+
+#[derive(Clone, Deserialize)]
 #[serde(untagged)]
 pub(crate) enum FieldType {
     Name(String),
@@ -41,7 +88,7 @@ impl FieldType {
         match self {
             Self::Name(name) => match name.as_str() {
                 "string" => Ok("String"),
-                "number" => Ok("f64"),
+                "number" => Ok("better_auth::seaorm::SqlNumber"),
                 "boolean" => Ok("bool"),
                 "date" => Ok("DateTimeUtc"),
                 "json" => Ok("Json"),
@@ -70,12 +117,14 @@ pub(crate) struct Entity {
 
 pub(crate) struct Field {
     pub ident: syn::Ident,
+    pub logical_name: String,
     pub ty: syn::Type,
     pub column: String,
     pub registry_column: Option<&'static str>,
     pub serialized: Option<String>,
     pub primary_key: bool,
     pub unique: Option<bool>,
+    pub attributes: Option<AdditionalField>,
 }
 
 impl SchemaConfig {
@@ -92,6 +141,7 @@ impl SchemaConfig {
                     | "twoFactor"
                     | "jwks"
                     | "walletAddress"
+                    | "rateLimit"
                     | "session"
                     | "organization"
                     | "member"
@@ -133,13 +183,21 @@ impl Entity {
                     Ok(Field {
                         ident: syn::parse_str(field.name)
                             .map_err(|error| format!("invalid field name: {error}"))?,
+                        logical_name: match (definition.mod_name, field.name) {
+                            ("api_key", "key_hash") => "key".to_owned(),
+                            ("passkey", "credential_id") => "credentialID".to_owned(),
+                            _ => field.name.to_lower_camel_case(),
+                        },
                         ty: syn::parse_str(field.ty)
                             .map_err(|error| format!("invalid field type: {error}"))?,
                         column: field.column_name.unwrap_or(field.name).to_owned(),
                         registry_column: Some(field.column_name.unwrap_or(field.name)),
-                        serialized: None,
+                        serialized: (definition.mod_name == "user"
+                            && field.name == "last_login_method")
+                            .then(|| "lastLoginMethod".to_owned()),
                         primary_key: field.is_primary_key,
                         unique: None,
+                        attributes: None,
                     })
                 })
                 .collect::<Result<_, String>>()?,
@@ -166,6 +224,9 @@ impl Entity {
                         format!("unknown configurable field `{}.{name}`", entity.name)
                     })?;
                 field.column.clone_from(column);
+                if field.serialized.is_some() {
+                    field.serialized = Some(column.clone());
+                }
             }
             for (name, field) in &config.additional_fields {
                 if let Some((definition, existing)) = fields
@@ -180,9 +241,9 @@ impl Entity {
                 let ident = syn::parse_str(&rust_name)
                     .or_else(|_| syn::parse_str(&format!("{rust_name}_")))
                     .map_err(|error| format!("invalid additional field `{name}`: {error}"))?;
-                let ty = field.field_type.rust_type()?;
+                let ty = field.rust_type()?;
                 // Upstream makes organization role fields optional while constructing update-role.
-                let ty = if field.required == Some(true)
+                let ty = if field.required != Some(false)
                     && entity.role != Some(EntityRole::OrganizationRole)
                 {
                     ty.to_owned()
@@ -192,6 +253,7 @@ impl Entity {
                 let column = field.field_name.as_ref().unwrap_or(name).clone();
                 entity.fields.push(Field {
                     ident,
+                    logical_name: name.clone(),
                     ty: syn::parse_str(&ty)
                         .map_err(|error| format!("invalid additional field type: {error}"))?,
                     column: column.clone(),
@@ -199,6 +261,7 @@ impl Entity {
                     serialized: Some(column),
                     primary_key: false,
                     unique: Some(field.unique),
+                    attributes: Some(field.clone()),
                 });
             }
         }
@@ -242,8 +305,8 @@ impl Field {
         if definition.is_primary_key {
             return Ok(());
         }
-        let kind = config.field_type.rust_type()?;
-        let kind = if config.required == Some(true) && model != "organization_role" {
+        let kind = config.rust_type()?;
+        let kind = if config.required != Some(false) && model != "organization_role" {
             kind.to_owned()
         } else {
             format!("Option<{kind}>")
@@ -256,6 +319,7 @@ impl Field {
             .unwrap_or_else(|| definition.column_name.unwrap_or(definition.name).to_owned());
         self.serialized = Some(self.column.clone());
         self.unique = Some(config.unique);
+        self.attributes = Some(config.clone());
         Ok(())
     }
 }

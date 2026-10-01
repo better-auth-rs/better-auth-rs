@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 /// Role input accepted by TypeScript admin routes.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub(crate) enum RoleInput {
+pub enum RoleInput {
     One(String),
     Many(Vec<String>),
 }
@@ -19,24 +19,11 @@ impl RoleInput {
         }
     }
 
-    pub(crate) fn roles(&self) -> Vec<&str> {
+    pub(crate) fn roles(&self) -> &[String] {
         match self {
-            Self::One(role) => role
-                .split(',')
-                .map(str::trim)
-                .filter(|role| !role.is_empty())
-                .collect(),
-            Self::Many(roles) => roles
-                .iter()
-                .flat_map(|role| role.split(','))
-                .map(str::trim)
-                .filter(|role| !role.is_empty())
-                .collect(),
+            Self::One(role) => std::slice::from_ref(role),
+            Self::Many(roles) => roles,
         }
-    }
-
-    pub(crate) fn is_empty(&self) -> bool {
-        self.roles().is_empty()
     }
 }
 
@@ -58,14 +45,16 @@ pub(crate) struct GetUserQuery {
     pub id: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
-pub(crate) struct CreateUserRequest {
-    #[validate(email(message = "Invalid email address"))]
+/// User provisioned by an administrator or trusted requestless server code.
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct CreateUserRequest {
     pub email: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
-    #[validate(length(min = 1, message = "Name is required"))]
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<RoleInput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
@@ -138,7 +127,7 @@ impl HasPermissionRequest {
 pub(crate) type AdminUserView = better_auth_core::wire::UserView;
 
 #[derive(Debug, Serialize)]
-pub(crate) struct UserResponse<U: Serialize> {
+pub struct UserResponse<U: Serialize> {
     pub user: U,
 }
 

@@ -1,4 +1,4 @@
-use better_auth_core::entity::{AuthPasskey, AuthSession, AuthUser, AuthVerification};
+use better_auth_core::entity::{AuthPasskey, AuthUser, AuthVerification};
 use better_auth_core::types::UpdatePasskeyAuthentication;
 use better_auth_core::wire::PasskeyView;
 use better_auth_core::{AuthContext, AuthError, AuthResult, CreateVerification};
@@ -250,7 +250,7 @@ pub(super) async fn verify_authentication_core(
     ip_address: Option<String>,
     user_agent: Option<String>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> PasskeyHandlerResult<(Value, String)> {
+) -> PasskeyHandlerResult<(Value, better_auth_core::session::SessionData)> {
     let Some(origin) = resolve_origins(config, req) else {
         return response_message(400, "origin missing");
     };
@@ -412,7 +412,7 @@ pub(super) async fn verify_authentication_core(
             session: ctx.session_view(&session).await?,
             user: ctx.user_view(&user)?,
         })?,
-        session.token().to_string(),
+        ctx.session_manager().internal_data(&user, &session).await?,
     )))
 }
 

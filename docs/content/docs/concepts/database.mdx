@@ -99,9 +99,29 @@ let store = SeaOrmStore::<auth_schema::AppAuthSchema>::new(config, database)
     .with_plugin_schema::<auth_schema::AppPluginSchema>();
 ```
 
-For existing entities, derive `AuthEntity` with role `api_key`, `device_code`, `passkey`, `two_factor`, `jwk`, or `wallet_address`. Keep the required Rust field names and types; use SeaORM `table_name` and `column_name` attributes for SQL names. Select models with `PluginModels<ApiKey, DeviceCode, Passkey, TwoFactor, Jwk, WalletAddress>`, or implement `SeaOrmPluginSchema`. Omitted `PluginModels` parameters use the bundled models. `with_plugin_schema` and `with_organization_schema` preserve each other's bindings.
+For existing entities, derive `AuthEntity` with role `api_key`, `device_code`, `passkey`, `two_factor`, `jwk`, `wallet_address`, or `rate_limit`. Keep the required Rust field names and types; use SeaORM `table_name` and `column_name` attributes for SQL names. Select models with `PluginModels<ApiKey, DeviceCode, Passkey, TwoFactor, Jwk, WalletAddress, RateLimit>`, or implement `SeaOrmPluginSchema`. Omitted `PluginModels` parameters use the bundled models. `with_plugin_schema` and `with_organization_schema` preserve each other's bindings.
 
 The generated migration maps indexes and foreign keys to the selected table and column names. Apply these names in application-owned migrations too. The library's bundled migration only manages bundled tables.
+
+## Database rate limits
+
+Select `RateLimitStorageKind::Database` in `RateLimitConfig` to share request counters through the auth store. Generate the table explicitly; `--plugins all` does not enable database rate-limit storage:
+
+```sh
+better-auth-rs generate --rate-limit-database --schema-config schema.json --output src/auth_schema.rs
+```
+
+The optional `rateLimit` schema entry accepts `modelName` and mappings for `key`, `count`, and `lastRequest`:
+
+```json
+{"rateLimit":{"modelName":"request_limits","fields":{"key":"bucket","count":"requests","lastRequest":"requested_at_ms"}}}
+```
+
+Bind the generated `AppPluginSchema` through `with_plugin_schema`. The rate-limit model uses a unique string key, `SqlNumber` count stored in an INTEGER column, and an `i64` timestamp in Unix milliseconds. `SqlNumber` preserves fractional counters read from SQLite; comparisons retain the configured floating-point window and maximum without integer conversion.
+
+Custom auth stores implement `RateLimitStore::consume_rate_limit` as one atomic decision and update. Concurrent callers must share the same unique key and conditional counter updates. A denied request must not change the counter or timestamp. The cleanup window belongs to the current request's configured rules; the store must not retain a historical maximum.
+
+The SeaORM adapter prunes old rows only after a successful expired-window reset. Better Auth 1.7.6 logs pruning failures and preserves that successful decision. The adapter follows this specific behavior; counter reads, inserts, and updates still propagate errors. SQLite binds NaN comparisons as SQL NULL and preserves Infinity, matching the upstream database adapter's numerical behavior.
 
 ## Organization models
 
@@ -129,9 +149,23 @@ better-auth-rs generate --plugins organization --schema-config organization-sche
 
 The configuration accepts `organization`, `member`, `invitation`, `team`, `teamMember`, and `organizationRole`. Each model supports `modelName` and `fields` mappings. Core field keys use upstream camelCase names. Rust core fields retain their snake_case names. The `user`, `session`, `account`, and `verification` entries also support table and column mappings, including fields from enabled plugins. Primary key names remain `id`.
 
-All Organization models except `teamMember` support `additionalFields`. Supported types are `string`, `number`, `boolean`, `date`, `json`, `string[]`, `number[]`, and string arrays that define enum values. Array fields use transparent typed JSON wrappers. Enum fields use `String` storage; the CLI does not generate enum validation. For new fields, only `required: true` generates a nonnullable column. Omitted or false `required` generates an `Option` field. New organization role fields always remain nullable because upstream makes these fields optional when constructing the role update endpoint. `unique: true` generates a unique index.
+All Organization models except `teamMember` support `additionalFields`. Supported types are `string`, `number`, `boolean`, `date`, `json`, `string[]`, `number[]`, and string arrays that define enum values. Array fields use transparent typed JSON wrappers. Enum fields use `String` storage; the CLI does not generate enum validation. Omitted or true `required` generates a nonnullable column and field. `required: false` generates a nullable column and an `Option` field. Organization role fields always remain nullable because upstream makes these fields optional when constructing the role update endpoint.
 
-An additional field with a built-in public name, such as `name`, `logo`, or `createdAt`, replaces that field's generated type and nullability. Only `required: true` generates a nonnullable column; organization role fields remain nullable. A built-in override also replaces its `fields` mapping: `fieldName` selects the SQL column and Serde serialization name, and omitting `fieldName` restores the default column. Its `unique` setting replaces the single-column index; necessary composite identity constraints remain. The adapter owns `id`; an additional-field declaration does not change its type, column, or primary key.
+An additional field with a built-in public name, such as `name`, `logo`, or `createdAt`, replaces that field's generated type and nullability. Omitted or true `required` generates a nonnullable column; organization role fields remain nullable. A built-in override also replaces its `fields` mapping: `fieldName` selects the SQL column and Serde serialization name, and omitting `fieldName` restores the default column. Its `unique`, `index`, and `references` settings replace the original single-column indexes and foreign key; necessary composite identity constraints remain. The adapter owns `id`; an additional-field declaration does not change its type, column, or primary key.
+
+Migration attributes use the upstream field configuration:
+
+- `unique: true` creates a unique constraint. `index: true` creates an ordinary index unless `unique` is also true.
+- `sortable: true` selects a bounded string column on MySQL. This setting does not create an index.
+- `bigint: true` selects `BIGINT` for a `number` field. Generated numeric fields use `SqlNumber`, a transparent `f64` wrapper that reads both integer and floating-point SQL values. Use `f64::from(value)` to access the number. JSON output remains a number. SQLite can store and return fractional values in both `INTEGER` and `BIGINT` columns.
+- `references: { "model": "user", "field": "id" }` creates a foreign key. Known logical model and field names resolve through their configured table and column mappings. Unknown model or field names remain literal application table and column names.
+- `references.onDelete` accepts `"cascade"`, `"restrict"`, `"no action"`, `"set null"`, and `"set default"`. Omission selects `"cascade"`. Create referenced application tables before calling the initial migration scaffold.
+
+A reference to `id` uses the referenced ID storage type instead of the public field type. The generated string-ID schema uses `ReferenceId` for these fields. This type preserves scalar database bindings during writes and reads the database's text value. Declare matching runtime metadata with `UserFieldConfig { references: Some(UserFieldReference { model: "user".into(), field: "id".into() }), ..Default::default() }`. The adapter applies the application output transform before converting a non-null reference value to a string. JSON and array references to `id` therefore return strings, rather than decoded documents or arrays.
+
+Application-owned user and session models can use the same `ReferenceId` type and runtime metadata. `AuthEntity` resolves Serde field aliases to the corresponding SQL columns. A manually implemented `SeaOrmUserModel` or `SeaOrmSessionModel` must implement `field_column` for configured references; the default implementation reports a configuration error.
+
+The scaffold creates new tables. Constant `defaultValue` values remain adapter defaults and do not become SQL column defaults. With no SQL default, `"set default"` sets a nullable foreign key to SQL `NULL`. Use application-owned versioned migrations to alter existing tables or add database defaults.
 
 Organization records expose replaceable built-in fields as `SchemaValue<T>`. `Typed(T)` contains the default Rust type, `Dynamic(Value)` preserves another JSON type, and `Undefined` omits the field during serialization. Use `.typed()?` when an operation requires the default type and `.json()?` when an application accepts the configured type. Use `.into()` to construct a default value. Output transforms may return `None` to omit a field without removing the stored value. A timestamp replaced with a string retains that string without date normalization.
 
@@ -225,6 +259,16 @@ Internal behavior tests also use a bundled schema. Dual-server and client SDK co
 
 ## Secondary Session and Verification Storage
 
-Install `MemoryCacheAdapter`, `RedisAdapter`, or an application implementation through `BetterAuth::secondary_storage`. The runtime uses the backend for sessions and verification values. Set `session.store_session_in_database` and `verification.store_in_database` to retain database persistence. Database transactions publish new session cache entries after commit; rolled-back transactions publish none.
+Install `MemoryCacheAdapter`, `RedisAdapter`, or an application implementation through `BetterAuth::secondary_storage`. The runtime uses the backend for sessions and verification values. Set `session.store_session_in_database` and `verification.store_in_database` to retain database persistence. Session creation writes to secondary storage immediately by default, including inside a database transaction. The cache snapshot reads the user through the active transaction. A later rollback does not undo that cache write, matching upstream. `AuthTransaction::create_session_with_deferred_secondary` delays the cache write until commit, after session after hooks; Passkey registration uses this explicit mode. Rollback discards deferred writes.
+
+When rate limiting selects secondary storage, the adapter must implement `SecondaryStorage::increment(key, ttl_seconds)`. Increment or create the counter atomically and return the new count. Apply the TTL only when creating the counter; later increments must preserve its expiration. Both bundled adapters provide this operation. The default trait method returns a configuration error when rate limiting requires the missing operation.
+
+To run the Redis counter regression, set `REDIS_TEST_URL` to a disposable Redis 7+ instance:
+
+```bash
+devenv shell -- cargo test -p better-auth-core --locked --features redis-cache redis_counters_create_atomically_and_preserve_the_initial_expiration -- --ignored
+```
+
+Custom transaction adapters must implement `AuthTransaction::queue_after_commit`. Add each effect to the same ordered queue as database after hooks. Run the queue after commit, discard the queue on rollback, and stop at the first unhandled error. Capture the request hook context when each effect is queued. A separate cache queue would reorder effects around later database hooks and could skip an earlier cache refresh when a later hook fails.
 
 `AuthEntity` generates runtime hydration for custom session and verification models. The application retains typed model fields and does not need to deserialize the user model. Handwritten model implementations must provide the corresponding runtime hydration methods before enabling secondary storage. See [Secondary Storage](/docs/concepts/secondary-storage) for fallback rules and `VerificationIdentifierConfig` migration behavior.

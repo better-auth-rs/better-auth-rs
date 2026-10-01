@@ -94,9 +94,10 @@ impl AccountSelection {
                 .iter()
                 .find(|account| account.id().as_ref() == account_id.as_str())
                 .map(AccountCookiePayload::from_account),
-            Self::Cookie if ctx.config.account.store_account_cookie => {
-                decode_account_cookie(req, &ctx.config)?
-                    .filter(|account| account.user_id == user_id)
+            Self::Cookie if ctx.config.account.store_account_cookie() => {
+                decode_account_cookie(req, &ctx.config)?.filter(|account| {
+                    !ctx.store_capabilities().database || account.user_id == user_id
+                })
             }
             Self::Cookie => None,
         };
@@ -134,9 +135,13 @@ async fn persist_tokens(
             .or(account.refresh_token_expires_at),
         ..Default::default()
     };
-    if let Some(id) = account.id.as_deref() {
-        *account =
-            AccountCookiePayload::from_account(&ctx.database.update_account(id, update).await?);
+    if let Some(id) = account.id.as_deref()
+        && let Some(updated) = ctx
+            .database
+            .update_account_optional(id, update.clone())
+            .await?
+    {
+        *account = AccountCookiePayload::from_account(&updated);
     } else {
         account.access_token = update.access_token;
         account.refresh_token = update.refresh_token;
@@ -179,7 +184,7 @@ async fn valid_access_token(
             .unwrap_or_default();
             let tokens = refresh_tokens_via_provider(provider, &refresh_token, req).await?;
             persist_tokens(account, &tokens, ctx).await?;
-            if ctx.config.account.store_account_cookie {
+            if ctx.config.account.store_account_cookie() {
                 cookies = create_account_cookie_headers(req, &ctx.config, account)?;
             }
             Some(tokens)
@@ -277,16 +282,19 @@ pub(super) async fn handle_refresh_token(
                 .access_token_expires_at
                 .map(|value| value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
             refresh_token: Some(tokens.refresh_token.unwrap_or(refresh_token)),
-            refresh_token_expires_at: account
-                .refresh_token_expires_at
-                .map(|value| value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
-            scope: account.scope.clone(),
-            id_token: account.id_token.clone(),
+            refresh_token_expires_at: account.optional(
+                "refreshTokenExpiresAt",
+                account
+                    .refresh_token_expires_at
+                    .map(|value| value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
+            ),
+            scope: account.optional("scope", account.scope.clone()),
+            id_token: account.optional("idToken", account.id_token.clone()),
             provider_id: account.provider_id.clone(),
             account_id: account.id.clone(),
         };
         let cookies = if matches!(selection, AccountSelection::Cookie)
-            && ctx.config.account.store_account_cookie
+            && ctx.config.account.store_account_cookie()
         {
             create_account_cookie_headers(req, &ctx.config, &account)?
         } else {

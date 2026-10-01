@@ -48,7 +48,7 @@ where
 }
 
 /// Organization entity - matches OpenAPI schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Organization {
     /// Application fields projected by the configured organization schema.
     #[serde(flatten)]
@@ -73,7 +73,7 @@ pub struct Organization {
 }
 
 /// Organization member
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Member {
     /// Application fields projected by the configured member schema.
     #[serde(flatten)]
@@ -127,7 +127,7 @@ impl std::fmt::Display for InvitationStatus {
 }
 
 /// Organization invitation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Invitation {
     /// Application fields projected by the configured invitation schema.
     #[serde(flatten)]

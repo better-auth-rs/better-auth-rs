@@ -332,7 +332,7 @@ mod tests {
                 create_session_cookie("cors-session-token", &config),
             );
         let manager = SessionManager::new(Arc::new(config), test_database().await);
-        manager.finish_response(&req, &mut response).await.unwrap();
+        manager.finish_response(&req, &mut response).unwrap();
         let response = CorsMiddleware::new(cors)
             .after_request(&req, response)
             .await

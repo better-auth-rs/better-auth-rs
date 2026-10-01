@@ -14,7 +14,10 @@ use crate::types::{AuthRequest, AuthResponse, HttpMethod};
 /// Runtime metadata published by enabled plugins.
 pub type MetadataMap = HashMap<String, serde_json::Value>;
 
-pub struct AuthInitParts {
+pub struct AuthInitParts<S: AuthSchema> {
+    pub plugin_user_fields: crate::user_fields::UserConfig,
+    pub database_hooks: Vec<Arc<dyn crate::store::database_hooks::DatabaseHooks<S>>>,
+    pub runtime: crate::plugin_runtime::PluginRuntime<S>,
     pub extensions: crate::RuntimeExtensions,
     pub email_verification_policy: crate::email::EmailVerificationRuntimePolicy,
     pub metadata: MetadataMap,
@@ -52,7 +55,7 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
     }
 
     /// Default endpoint limits, overridden by explicit application limits.
-    fn rate_limits(&self) -> AuthResult<Vec<(String, crate::middleware::EndpointRateLimit)>> {
+    fn rate_limits(&self) -> AuthResult<Vec<crate::middleware::PluginRateLimit>> {
         Ok(Vec::new())
     }
 
@@ -184,6 +187,9 @@ pub struct AuthRoute {
 
 /// Initialization context passed to plugin setup.
 pub struct AuthInitContext<S: AuthSchema> {
+    plugin_user_fields: crate::user_fields::UserConfig,
+    database_hooks: Vec<Arc<dyn crate::store::database_hooks::DatabaseHooks<S>>>,
+    runtime: crate::plugin_runtime::PluginRuntime<S>,
     pub extensions: crate::RuntimeExtensions,
     pub email_verification_policy: crate::email::EmailVerificationRuntimePolicy,
     pub config: Arc<AuthConfig>,
@@ -281,6 +287,9 @@ impl<S: AuthSchema> AuthInitContext<S> {
         let email_provider = config.email_provider.clone();
         let password_policy = crate::utils::password::PasswordRuntimePolicy::new(&config.password);
         Self {
+            plugin_user_fields: Default::default(),
+            database_hooks: Vec::new(),
+            runtime: Default::default(),
             extensions: crate::RuntimeExtensions::default(),
             email_verification_policy: crate::email::EmailVerificationRuntimePolicy::default(),
             config,
@@ -292,6 +301,26 @@ impl<S: AuthSchema> AuthInitContext<S> {
         }
     }
 
+    /// Register user schema fields in plugin registration order.
+    pub fn register_user_fields(&mut self, fields: crate::user_fields::UserConfig) {
+        self.plugin_user_fields
+            .additional_fields
+            .extend(fields.additional_fields);
+    }
+
+    /// Register a database hook before application-owned adapter hooks.
+    pub fn register_database_hook(
+        &mut self,
+        hook: Arc<dyn crate::store::database_hooks::DatabaseHooks<S>>,
+    ) {
+        self.database_hooks.push(hook);
+    }
+
+    /// Obtain a weak handle that resolves after all store facades are installed.
+    pub fn runtime(&self) -> crate::plugin_runtime::PluginRuntime<S> {
+        self.runtime.clone()
+    }
+
     pub fn set_metadata(&mut self, key: impl Into<String>, value: serde_json::Value) {
         _ = self.metadata.insert(key.into(), value);
     }
@@ -300,8 +329,11 @@ impl<S: AuthSchema> AuthInitContext<S> {
         self.metadata.get(key)
     }
 
-    pub fn into_parts(self) -> AuthInitParts {
+    pub fn into_parts(self) -> AuthInitParts<S> {
         AuthInitParts {
+            plugin_user_fields: self.plugin_user_fields,
+            database_hooks: self.database_hooks,
+            runtime: self.runtime,
             extensions: self.extensions,
             email_verification_policy: self.email_verification_policy,
             metadata: self.metadata,
@@ -362,16 +394,33 @@ impl<S: AuthSchema> AuthContext<S> {
             .ok_or_else(|| AuthError::config("No email provider configured"))
     }
 
+    /// Explicit application storage configuration; adapter wrappers do not establish authority.
+    pub fn store_capabilities(&self) -> crate::store::StoreCapabilities {
+        self.extensions
+            .get::<crate::store::StoreCapabilities>()
+            .copied()
+            .unwrap_or_default()
+    }
+
     /// Create a `SessionManager` from this context's config and database.
     pub fn session_manager(&self) -> crate::session::SessionManager<S> {
         crate::session::SessionManager::new(self.config.clone(), self.database.clone())
             .with_secondary_storage(self.secondary_storage.is_some())
+            .with_store_capabilities(self.store_capabilities())
             .with_user_metadata(self.metadata.clone())
+            .with_adapter_user_fields(self.adapter_user_fields().clone())
             .with_cookie_signer(
                 self.extensions
-                    .get::<Arc<dyn crate::session::SessionCookieSigner>>()
+                    .get::<Arc<dyn crate::session::SessionCookieSigner<S>>>()
                     .cloned(),
             )
+    }
+
+    /// User policy used by the adapter before public output filtering.
+    pub fn adapter_user_fields(&self) -> &crate::user_fields::UserConfig {
+        self.extensions
+            .get::<crate::plugin_runtime::AdapterUserFields>()
+            .map_or(&self.config.user, |fields| &fields.0)
     }
 
     /// Project a user through the active user schema before returning public data.
@@ -379,8 +428,9 @@ impl<S: AuthSchema> AuthContext<S> {
         &self,
         user: &impl crate::entity::AuthUser,
     ) -> AuthResult<crate::wire::UserView> {
-        crate::wire::UserView::with_fields_for_adapter(
+        crate::wire::UserView::with_field_policies(
             user,
+            self.adapter_user_fields(),
             &self.config.user,
             &self.metadata,
             self.database.supports_native_json(),
@@ -394,7 +444,7 @@ impl<S: AuthSchema> AuthContext<S> {
     ) -> AuthResult<crate::wire::UserView> {
         crate::wire::UserView::with_internal_fields_for_adapter(
             user,
-            &self.config.user,
+            self.adapter_user_fields(),
             &self.metadata,
             self.database.supports_native_json(),
         )

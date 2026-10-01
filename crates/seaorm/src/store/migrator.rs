@@ -22,6 +22,7 @@ impl MigratorTrait for AuthMigrator {
             Box::new(super::identity_schema::IdentitySchema),
             Box::new(super::jwks::JwtKeys),
             Box::new(super::organization_extensions::OrganizationExtensions),
+            Box::new(super::rate_limits::RateLimitCounters),
         ]
     }
 

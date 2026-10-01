@@ -1,4 +1,6 @@
-use crate::schema_config::{Entity, SchemaConfig, model_name};
+use crate::schema_config::{
+    AdditionalField, Entity, FieldType, OnDelete, SchemaConfig, model_name,
+};
 use better_auth_schema_registry::{self as registry, EntityRole, ExtraEntitySchema};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -7,11 +9,18 @@ pub(crate) fn list_plugins() -> Vec<&'static str> {
     registry::plugin_schemas().iter().map(|p| p.name).collect()
 }
 
-pub(crate) fn generate_schema(plugins: &[String], config: &SchemaConfig) -> Result<String, String> {
+pub(crate) fn generate_schema(
+    plugins: &[String],
+    config: &SchemaConfig,
+    rate_limit_database: bool,
+) -> Result<String, String> {
     config.validate()?;
     let mut user = registry::core_fields(EntityRole::User).to_vec();
     let mut session = registry::core_fields(EntityRole::Session).to_vec();
     let mut extra_entities: Vec<&ExtraEntitySchema> = Vec::new();
+    if rate_limit_database {
+        extra_entities.push(&registry::RATE_LIMIT);
+    }
     for plugin_name in plugins {
         if let Some(schema) = registry::plugin_schemas()
             .iter()
@@ -65,7 +74,7 @@ pub(crate) fn generate_schema(plugins: &[String], config: &SchemaConfig) -> Resu
             .any(|entity| model_name(entity.name) == *name)
         {
             return Err(format!(
-                "schema model `{name}` requires its plugin to be enabled"
+                "schema model `{name}` requires its plugin or database storage option to be enabled"
             ));
         }
     }
@@ -92,7 +101,7 @@ pub(crate) fn generate_schema(plugins: &[String], config: &SchemaConfig) -> Resu
                 >;
             }
         });
-    let plugin_models = [("api_key", "ApiKey"), ("device_code", "DeviceCode"), ("passkey", "Passkey"), ("two_factor", "TwoFactor"), ("jwk", "Jwk"), ("wallet_address", "WalletAddress")]
+    let plugin_models = [("api_key", "ApiKey"), ("device_code", "DeviceCode"), ("passkey", "Passkey"), ("two_factor", "TwoFactor"), ("jwk", "Jwk"), ("wallet_address", "WalletAddress"), ("rate_limit", "RateLimit")]
         .map(|(name, role)| {
             let module = format_ident!("{name}");
             let role = format_ident!("{role}");
@@ -114,6 +123,7 @@ pub(crate) fn generate_schema(plugins: &[String], config: &SchemaConfig) -> Resu
                         | EntityRole::TwoFactor
                         | EntityRole::Jwk
                         | EntityRole::WalletAddress
+                        | EntityRole::RateLimit
                 )
             )
         })
@@ -141,7 +151,7 @@ pub(crate) fn generate_schema(plugins: &[String], config: &SchemaConfig) -> Resu
         use better_auth::seaorm::sea_orm;
         use better_auth::seaorm::sea_orm::entity::prelude::*;
         use better_auth::seaorm::sea_orm::{ConnectionTrait, Schema};
-        use better_auth::seaorm::sea_orm::sea_query::{Alias, ForeignKey, ForeignKeyAction, Index};
+        use better_auth::seaorm::sea_orm::sea_query::{Alias, ForeignKey, ForeignKeyAction, Index, Table};
         use better_auth::seaorm::AuthEntity;
 
         #(#arrays)*
@@ -193,10 +203,13 @@ fn gen_entity(entity: &Entity) -> TokenStream {
         let primary_key = field
             .primary_key
             .then(|| quote! { #[sea_orm(primary_key, auto_increment = false)] });
+        let number_storage = (entity.role == Some(EntityRole::RateLimit) && name == "count")
+            .then(|| quote!(#[sea_orm(column_type = "Integer")]));
         quote! {
             #column_attr
             #serialized
             #primary_key
+            #number_storage
             pub #name: #ty,
         }
     });
@@ -225,8 +238,15 @@ fn gen_entity(entity: &Entity) -> TokenStream {
 fn gen_table(entity: &Entity, entities: &[Entity]) -> Result<TokenStream, String> {
     let module = &entity.module;
     let table = &entity.table;
-    let foreign_keys = registry::entity_foreign_keys(entity.registry_table)
+    let mut foreign_keys = registry::entity_foreign_keys(entity.registry_table)
         .iter()
+        .filter(|entry| {
+            entity
+                .fields
+                .iter()
+                .find(|field| field.registry_column == Some(entry.0))
+                .is_none_or(|field| field.attributes.is_none())
+        })
         .map(|(column, target)| {
             let column = entity
                 .column(column)
@@ -246,7 +266,155 @@ fn gen_table(entity: &Entity, entities: &[Entity]) -> Result<TokenStream, String
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(quote! { schema.create_table_from_entity(#module::Entity) #(#foreign_keys)* .to_owned() })
+    for field in &entity.fields {
+        let Some(reference) = field
+            .attributes
+            .as_ref()
+            .and_then(|field| field.references.as_ref())
+        else {
+            continue;
+        };
+        let (target, target_column) = entities
+            .iter()
+            .find(|entity| model_name(entity.name) == reference.model)
+            .and_then(|entity| {
+                entity
+                    .fields
+                    .iter()
+                    .find(|field| field.logical_name == reference.field)
+                    .map(|field| (entity.table.as_str(), field.column.as_str()))
+            })
+            .unwrap_or((&reference.model, &reference.field));
+        let column = &field.column;
+        let name = format!("fk_{table}_{column}");
+        let action = match reference.on_delete.unwrap_or_default() {
+            OnDelete::NoAction => quote!(NoAction),
+            OnDelete::Restrict => quote!(Restrict),
+            OnDelete::Cascade => quote!(Cascade),
+            OnDelete::SetNull => quote!(SetNull),
+            OnDelete::SetDefault => quote!(SetDefault),
+        };
+        foreign_keys.push(quote! {
+            .foreign_key(ForeignKey::create()
+                .name(#name)
+                .from(Alias::new(#table), Alias::new(#column))
+                .to(Alias::new(#target), Alias::new(#target_column))
+                .on_delete(ForeignKeyAction::#action))
+        });
+    }
+    let types: Vec<_> = entity
+        .fields
+        .iter()
+        .filter_map(|field| {
+            let attributes = field.attributes.as_ref()?;
+            let name = &field.column;
+            let data_type = gen_column_type(attributes);
+            let nullability = if attributes.required != Some(false)
+                && entity.role != Some(EntityRole::OrganizationRole)
+            {
+                quote!(column.not_null();)
+            } else {
+                quote!(column.null();)
+            };
+            // Referenced unique columns must exist when foreign keys are created.
+            let unique = attributes.unique.then(|| quote!(column.unique_key();));
+            Some(quote! {
+                if column.get_column_name().as_str() == #name {
+                    #data_type #nullability #unique
+                }
+            })
+        })
+        .collect();
+    let configure_columns = if types.is_empty() {
+        quote! {
+            for column in schema.create_table_from_entity(#module::Entity).get_columns().clone() {
+                table.col(column);
+            }
+        }
+    } else {
+        quote! {
+            for mut column in schema.create_table_from_entity(#module::Entity).get_columns().clone() {
+                #(#types)*
+                table.col(column);
+            }
+        }
+    };
+    Ok(quote! {{
+        let mut table = Table::create();
+        table.table(Alias::new(#table));
+        #configure_columns
+        table #(#foreign_keys)* .to_owned()
+    }})
+}
+
+fn gen_column_type(field: &AdditionalField) -> TokenStream {
+    if field
+        .references
+        .as_ref()
+        .is_some_and(|reference| reference.field == "id")
+    {
+        return quote! {
+            if database.get_database_backend() == sea_orm::DbBackend::MySql {
+                column.string_len(36);
+            } else {
+                column.text();
+            }
+        };
+    }
+    let FieldType::Name(name) = &field.field_type else {
+        return quote!(column.text(););
+    };
+    match name.as_str() {
+        "number" if field.bigint => quote!(column.custom(Alias::new("BIGINT"));),
+        "number" => quote!(column.integer();),
+        "string"
+            if !field.unique && field.references.is_none() && !field.sortable && !field.index =>
+        {
+            quote!(column.text();)
+        }
+        "string" => {
+            let mysql = if field.unique {
+                quote!(column.string_len(255);)
+            } else if field.references.is_some() {
+                quote!(column.string_len(36);)
+            } else if field.sortable || field.index {
+                quote!(column.string_len(255);)
+            } else {
+                quote!(column.text();)
+            };
+            quote! {
+                if database.get_database_backend() == sea_orm::DbBackend::MySql {
+                    #mysql
+                } else {
+                    column.text();
+                }
+            }
+        }
+        "boolean" => quote! {
+            if database.get_database_backend() == sea_orm::DbBackend::Sqlite {
+                column.integer();
+            } else {
+                column.boolean();
+            }
+        },
+        "date" => quote! {
+            match database.get_database_backend() {
+                sea_orm::DbBackend::Sqlite => { column.date(); }
+                sea_orm::DbBackend::Postgres => { column.timestamp_with_time_zone(); }
+                sea_orm::DbBackend::MySql => { column.custom(Alias::new("timestamp(3)")); }
+                backend => return Err(sea_orm::DbErr::Custom(format!("Unsupported database backend: {backend:?}"))),
+            }
+        },
+        "json" | "string[]" | "number[]" => quote! {
+            match database.get_database_backend() {
+                sea_orm::DbBackend::Sqlite => { column.text(); }
+                sea_orm::DbBackend::Postgres => { column.json_binary(); }
+                sea_orm::DbBackend::MySql => { column.json(); }
+                backend => return Err(sea_orm::DbErr::Custom(format!("Unsupported database backend: {backend:?}"))),
+            }
+        },
+        _ => quote!(),
+    }
 }
 
 fn gen_indexes(entity: &Entity) -> Vec<TokenStream> {
@@ -265,8 +433,8 @@ fn gen_indexes(entity: &Entity) -> Vec<TokenStream> {
     for field in &entity.fields {
         if let Some(unique) = field.unique {
             indexes.retain(|(columns, _)| columns.as_slice() != [field.column.as_str()]);
-            if unique {
-                indexes.push((vec![field.column.as_str()], true));
+            if !unique && field.attributes.as_ref().is_some_and(|field| field.index) {
+                indexes.push((vec![field.column.as_str()], false));
             }
         }
     }

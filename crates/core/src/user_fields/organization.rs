@@ -82,11 +82,11 @@ impl UserConfig {
             let mut value = storage
                 .get(field.field_name.as_ref().unwrap_or(name))
                 .cloned();
-            if let Some(transform) = &field.output_transform {
-                value = transform(value)?;
-            }
+            value = field.adapter_output(value, true)?;
             if let Some(mut value) = value {
-                field.normalize_date(&mut value)?;
+                if !field.references_id() {
+                    field.normalize_date(&mut value)?;
+                }
                 let _ = output.insert(name.clone(), value);
             }
         }

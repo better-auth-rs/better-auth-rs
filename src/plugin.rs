@@ -4,3 +4,5 @@ pub use better_auth_core::openapi::{OpenApiBuilder, OpenApiSpec};
 pub use better_auth_core::plugin::{
     AuthContext, AuthInitContext, AuthPlugin, AuthRoute, BeforeRequestAction,
 };
+
+pub use better_auth_core::plugin_runtime::PluginRuntime;

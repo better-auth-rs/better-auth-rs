@@ -3,10 +3,20 @@ use crate::types::{AuthRequest, HttpMethod, RequestMeta};
 /// Request-derived data available to middleware, stores, and other hooks during request handling.
 #[derive(Debug, Clone)]
 pub struct RequestHookContext {
+    /// Request snapshot for plugin callbacks; native calls still use `is_http` to identify HTTP.
+    pub request: AuthRequest,
+    /// True only while the HTTP router owns response serialization.
+    /// Native calls can carry headers and still preserve their original errors.
+    pub is_http: bool,
     pub method: HttpMethod,
+    /// Matched endpoint template, with upstream `:parameter` segments.
     pub path: String,
+    /// Values captured from the matched endpoint path.
+    pub params: std::collections::HashMap<String, String>,
     pub headers: std::collections::HashMap<String, String>,
     pub query: std::collections::HashMap<String, String>,
+    /// Parsed endpoint input. An absent request body remains absent.
+    pub body: Option<serde_json::Value>,
     pub meta: RequestMeta,
 }
 
@@ -14,17 +24,21 @@ impl RequestHookContext {
     /// Build a request hook context from an incoming auth request.
     pub fn from_request(request: &AuthRequest) -> Self {
         Self {
+            request: request.clone(),
+            is_http: false,
             method: request.method().clone(),
             path: request.path().to_string(),
+            params: Default::default(),
             headers: request.headers.clone(),
             query: request.query.clone(),
+            body: request.parsed_http_body().cloned(),
             meta: RequestMeta::from_request(request),
         }
     }
 }
 
 tokio::task_local! {
-    static REQUEST_HOOK_CONTEXT: RequestHookContext;
+    static REQUEST_HOOK_CONTEXT: std::cell::RefCell<RequestHookContext>;
 }
 
 /// Run a future with request context available to downstream integrations.
@@ -40,9 +54,64 @@ pub async fn with_request_hook_context_value<T>(
     request_context: RequestHookContext,
     future: impl std::future::Future<Output = T>,
 ) -> T {
-    REQUEST_HOOK_CONTEXT.scope(request_context, future).await
+    REQUEST_HOOK_CONTEXT
+        .scope(std::cell::RefCell::new(request_context), future)
+        .await
 }
 
 pub fn current_request_hook_context() -> Option<RequestHookContext> {
-    REQUEST_HOOK_CONTEXT.try_with(Clone::clone).ok()
+    REQUEST_HOOK_CONTEXT
+        .try_with(|context| context.borrow().clone())
+        .ok()
+}
+
+/// Record the matched endpoint without changing the request's actual path.
+pub fn set_request_hook_route(path: &str, route: Option<&crate::AuthRoute>) {
+    let mut params = std::collections::HashMap::new();
+    let path = route.map_or_else(
+        || path.to_owned(),
+        |route| {
+            route
+                .path
+                .split('/')
+                .zip(path.split('/'))
+                .map(|(segment, value)| {
+                    if let Some(name) = segment
+                        .strip_prefix('{')
+                        .and_then(|name| name.strip_suffix('}'))
+                    {
+                        let _ = params.insert(name.to_owned(), value.to_owned());
+                        format!(":{name}")
+                    } else {
+                        segment.to_owned()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("/")
+        },
+    );
+    let _ = REQUEST_HOOK_CONTEXT.try_with(|context| {
+        let mut context = context.borrow_mut();
+        context.path = path;
+        context.params = params;
+    });
+}
+
+/// Refresh the active snapshot after HTTP parsing or body replacement.
+/// Preserve the matched route, trusted IP metadata, and HTTP error policy.
+pub fn update_request_hook_context(request: &AuthRequest) -> crate::AuthResult<()> {
+    let body = request
+        .body
+        .as_ref()
+        .map(|_| request.body_as_json())
+        .transpose()?;
+    let _ = REQUEST_HOOK_CONTEXT.try_with(|context| {
+        let mut context = context.borrow_mut();
+        context.method = request.method.clone();
+        context.headers = request.headers.clone();
+        context.query = request.query.clone();
+        context.body = body;
+        context.request = request.clone();
+    });
+    Ok(())
 }

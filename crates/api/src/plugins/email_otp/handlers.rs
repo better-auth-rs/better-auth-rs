@@ -7,7 +7,7 @@ use crate::plugins::endpoint_context::EndpointContext;
 use crate::plugins::helpers::{
     SessionIssueError, apply_user_create_fields, get_credential_account, issue_user_session,
 };
-use better_auth_core::utils::{cookie_utils::create_session_cookie, password};
+use better_auth_core::utils::password;
 use better_auth_core::wire::UserView;
 use better_auth_core::{
     AuthAccount, AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema,
@@ -324,6 +324,7 @@ impl EmailOtpPlugin {
             .await
             .map_err(session_error)?;
         let (email, new_email) = self.change_addresses(&user, &body)?;
+        let authenticated_user = user.clone();
         self.verify_otp(
             ctx,
             &EmailOtpType::ChangeEmail.identifier(&format!("{email}-{new_email}")),
@@ -339,11 +340,18 @@ impl EmailOtpPlugin {
         if ctx.database.get_user_by_email(&new_email).await?.is_some() {
             return Err(AuthError::bad_request("Email already in use"));
         }
-        let _ = self.mark_verified(ctx, &user, new_email).await?;
-        Ok(success()?.with_header(
-            "Set-Cookie",
-            create_session_cookie(session.token(), &ctx.config),
-        ))
+        let _ = self.mark_verified(ctx, &user, new_email.clone()).await?;
+        let mut user = authenticated_user;
+        user.email = Some(new_email);
+        user.email_verified = true;
+        ctx.session_manager()
+            .set_session_cookie(
+                req,
+                better_auth_core::session::SessionData { session, user },
+                None,
+            )
+            .await?;
+        success()
     }
 
     fn change_addresses(&self, user: &UserView, body: &Body) -> AuthResult<(String, String)> {
@@ -402,10 +410,15 @@ impl EmailOtpPlugin {
         } else {
             json!({"token": issued.session.token(), "user": user})
         };
-        Ok(AuthResponse::json(200, &body)?.with_header(
-            "Set-Cookie",
-            create_session_cookie(issued.session.token(), &ctx.config),
-        ))
+        let manager = ctx.session_manager();
+        manager
+            .set_session_cookie(
+                req,
+                manager.internal_data(&issued.user, &issued.session).await?,
+                None,
+            )
+            .await?;
+        Ok(AuthResponse::json(200, &body)?)
     }
 }
 

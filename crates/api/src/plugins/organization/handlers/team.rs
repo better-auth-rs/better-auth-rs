@@ -394,16 +394,19 @@ pub(crate) async fn handle_team_request(
                     if session.active_team_id().is_none() {
                         return Ok(Some(AuthResponse::json(200, &serde_json::Value::Null)?));
                     }
-                    let _ = ctx
+                    let updated = ctx
                         .database
                         .update_session_active_team(session.token(), None)
                         .await?;
-                    return Ok(Some(with_session_cookie(
-                        AuthResponse::json(200, &serde_json::Value::Null)?,
-                        req,
-                        session.token(),
-                        ctx,
-                    )));
+                    let manager = ctx.session_manager();
+                    manager
+                        .set_session_cookie(
+                            req,
+                            manager.internal_data(&user, &updated).await?,
+                            None,
+                        )
+                        .await?;
+                    return Ok(Some(AuthResponse::json(200, &serde_json::Value::Null)?));
                 }
                 NullableStringField::Value(id) if !id.is_empty() => Some(id),
                 _ => session.active_team_id().map(str::to_owned),
@@ -421,11 +424,15 @@ pub(crate) async fn handle_team_request(
             {
                 return Err(AuthError::forbidden("User is not a member of the team"));
             }
-            let _ = ctx
+            let updated = ctx
                 .database
                 .update_session_active_team(session.token(), Some(&team_id))
                 .await?;
-            with_session_cookie(AuthResponse::json(200, &team)?, req, session.token(), ctx)
+            let manager = ctx.session_manager();
+            manager
+                .set_session_cookie(req, manager.internal_data(&user, &updated).await?, None)
+                .await?;
+            AuthResponse::json(200, &team)?
         }
         (HttpMethod::Get, "/organization/list-user-teams") => {
             let target = req
@@ -613,23 +620,6 @@ pub(crate) async fn handle_team_request(
     Ok(Some(response))
 }
 
-pub(crate) fn with_session_cookie(
-    response: AuthResponse,
-    req: &AuthRequest,
-    token: &str,
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResponse {
-    response.with_header(
-        "Set-Cookie",
-        better_auth_core::utils::cookie_utils::create_session_cookie_with_max_age(
-            Some(token),
-            (!ctx.session_manager().dont_remember(req))
-                .then_some(ctx.config.session.expires_in.num_seconds()),
-            &ctx.config,
-        ),
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -781,6 +771,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
+        let active_response =
+            crate::plugins::test_helpers::finalize_response(&ctx, &active, active_response);
         assert!(
             active_response
                 .headers

@@ -43,8 +43,8 @@ async fn setup(config: AuthConfig) -> (SessionManager<BundledSchema>, SessionDat
 fn config(strategy: CookieCacheStrategy) -> AuthConfig {
     let mut config = AuthConfig::new("fixture-secret-at-least-32-characters");
     config.session.cookie_cache = Some(CookieCacheConfig {
-        enabled: true,
-        strategy,
+        enabled: Some(true),
+        strategy: Some(strategy),
         ..Default::default()
     });
     config
@@ -56,6 +56,116 @@ fn with_cache(mut req: AuthRequest, value: &str) -> AuthRequest {
         .unwrap()
         .push_str(&format!("; better-auth.session_data={value}"));
     req
+}
+
+#[tokio::test]
+async fn cache_renewal_preserves_account_binding_chunks_and_pending_cookies() {
+    let mut config = config(CookieCacheStrategy::Jwe);
+    config.account.store_account_cookie = Some(true);
+    let (manager, data) = setup(config).await;
+    let account = serde_json::json!({
+        "userId": "different-user", "accessToken": "x".repeat(8_000),
+        "providerAttribute": { "nested": true }
+    });
+    let value = crate::utils::jwe::encode(
+        account.as_object().unwrap().clone(),
+        manager.config.encryption_secret(),
+        "better-auth-account",
+        30,
+    )
+    .unwrap();
+    let name = "better-auth.account_data";
+    let account_cookies = crate::utils::cookie_utils::create_chunked_cookies(
+        &AuthRequest::new(HttpMethod::Get, "/"),
+        name,
+        &value,
+        Some(30),
+        &manager.config,
+    )
+    .unwrap();
+    assert!(account_cookies.len() > 1);
+    let request_with_account = || {
+        let mut req = request(&data.session.token, &manager.config);
+        for cookie in &account_cookies {
+            req.headers
+                .get_mut("cookie")
+                .unwrap()
+                .push_str(&format!("; {}", cookie.split(';').next().unwrap()));
+        }
+        req
+    };
+    for database in [false, true] {
+        let manager = manager
+            .clone()
+            .with_store_capabilities(crate::store::StoreCapabilities {
+                database,
+                secondary: !database,
+            });
+        let req = request_with_account();
+        manager.write_cache(&req, &data, false).await.unwrap();
+        let headers = req.take_response_headers().unwrap();
+        let cookies: Vec<_> = headers
+            .get_all("set-cookie")
+            .filter(|value| value.starts_with(name))
+            .collect();
+        assert!(!cookies.is_empty());
+        if database {
+            assert!(cookies.iter().all(|cookie| cookie.contains("Max-Age=0")));
+            for original in &account_cookies {
+                let original_name = original.split('=').next().unwrap();
+                assert!(
+                    cookies
+                        .iter()
+                        .any(|cookie| cookie.starts_with(&format!("{original_name}=")))
+                );
+            }
+        } else {
+            let mut renewed = AuthRequest::new(HttpMethod::Get, "/");
+            renewed.headers.insert(
+                "cookie".into(),
+                cookies
+                    .iter()
+                    .map(|cookie| cookie.split(';').next().unwrap())
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            );
+            let value = cookie_cache::read(&renewed, name).unwrap();
+            let payload = crate::utils::jwe::decode(
+                &value,
+                manager.config.encryption_secret(),
+                "better-auth-account",
+            )
+            .unwrap();
+            assert_eq!(payload.get("userId"), account.get("userId"));
+            assert_eq!(payload.get("accessToken"), account.get("accessToken"));
+            assert_eq!(
+                payload.get("providerAttribute"),
+                account.get("providerAttribute")
+            );
+        }
+    }
+    for queued in [false, true] {
+        let req = request_with_account();
+        let mut endpoint = crate::Headers::new();
+        let replacement = format!("{name}=new-account; Path=/");
+        if queued {
+            req.append_response_header("Set-Cookie", replacement.clone())
+                .unwrap();
+        } else {
+            endpoint.append("Set-Cookie", replacement.clone());
+        }
+        manager
+            .write_cache_with_response(&req, &data, false, Some(&endpoint), None)
+            .await
+            .unwrap();
+        let headers = req.take_response_headers().unwrap();
+        let cookies: Vec<_> = headers
+            .get_all("set-cookie")
+            .chain(endpoint.get_all("set-cookie"))
+            .filter(|value| value.starts_with(name))
+            .collect();
+        assert_eq!(cookies, vec![&replacement]);
+    }
 }
 
 #[tokio::test]
@@ -327,7 +437,7 @@ async fn bearer_requires_opt_in_and_supports_signed_tokens_and_case_folding() {
             "Set-Cookie",
             create_session_cookie(&data.session.token, &strict.config),
         );
-    strict.finish_response(&req, &mut response).await.unwrap();
+    strict.finish_response(&req, &mut response).unwrap();
     let signed_raw = percent_encoding::percent_decode_str(&signed)
         .decode_utf8()
         .unwrap();

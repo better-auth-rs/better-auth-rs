@@ -18,13 +18,16 @@ mod organization_roles;
 mod organizations;
 mod passkeys;
 mod plugin_models;
+mod rate_limits;
+mod runtime;
 mod sessions;
 mod team_capacity;
 mod team_invitation;
 mod teams;
-mod transaction_verifications;
+mod transaction_hooks;
 mod two_factor;
 mod two_factor_security;
+mod updates;
 mod user_verification;
 mod users;
 mod value_filter;
@@ -157,12 +160,13 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 
     pub(crate) fn hook_context<'a>(
         &'a self,
-        tx: Option<&'a DatabaseTransaction>,
-    ) -> SeaOrmHookContext<'a> {
+        tx: Option<HookTransaction<'a, S>>,
+    ) -> SeaOrmHookContext<'a, S> {
         SeaOrmHookContext {
             config: self.config.as_ref(),
             db: &self.db,
-            tx,
+            tx: tx.map(|(raw, _)| raw),
+            transaction: tx.map(|(_, store)| store),
             request: current_request_hook_context(),
         }
     }
@@ -172,6 +176,8 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     }
 }
 
+type HookTransaction<'a, S> = (&'a DatabaseTransaction, &'a dyn AuthTransaction<S>);
+
 struct SeaOrmTransaction<
     'a,
     S: AuthSchema,
@@ -180,7 +186,7 @@ struct SeaOrmTransaction<
 > {
     store: &'a SeaOrmStore<S, O, P>,
     tx: &'a DatabaseTransaction,
-    verification_effects: Mutex<Vec<transaction_verifications::Effect<S>>>,
+    effects: Mutex<Vec<transaction_hooks::PendingEffect<S>>>,
 }
 
 #[async_trait]
@@ -193,12 +199,26 @@ where
     S::Session: SeaOrmSessionModel,
     S::Verification: crate::schema::SeaOrmVerificationModel,
 {
+    fn queue_after_commit(
+        &self,
+        effect: better_auth_core::store::TypedTransactionFuture<'static, ()>,
+    ) -> AuthResult<()> {
+        self.effects
+            .lock()
+            .map_err(|_| AuthError::internal("Transaction hook queue lock poisoned"))?
+            .push(transaction_hooks::PendingEffect::External {
+                effect,
+                request: crate::hooks::current_request_hook_context(),
+            });
+        Ok(())
+    }
+
     async fn before_create_runtime_verification(
         &self,
         input: &mut better_auth_core::CreateVerification,
     ) -> AuthResult<()> {
         self.store
-            .before_runtime_verification_in_tx(input, Some(self.tx))
+            .before_runtime_verification_in_tx(input, Some((self.tx, self)))
             .await
     }
     async fn create_verification(
@@ -243,14 +263,19 @@ where
         id: &str,
         update: better_auth_core::UpdateUser,
     ) -> AuthResult<S::User> {
-        self.store
-            .update_user_with_connection(self.tx, Some(self.tx), id, update)
-            .await
+        let record = self
+            .store
+            .update_user_with_connection(self.tx, Some((self.tx, self)), id, update)
+            .await?;
+        self.queue(transaction_hooks::Effect::UserUpdated(Some(record.clone())))?;
+        Ok(record)
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
-        self.store
-            .delete_user_with_connection(self.tx, Some(self.tx), id)
-            .await
+        let record = self
+            .store
+            .delete_user_with_connection(self.tx, Some((self.tx, self)), id)
+            .await?;
+        self.queue(transaction_hooks::Effect::UserDeleted(record))
     }
     async fn create_passkey(
         &self,
@@ -265,29 +290,40 @@ where
         session: &mut better_auth_core::CreateSession,
     ) -> AuthResult<()> {
         self.store
-            .before_runtime_session_in_tx(session, Some(self.tx))
+            .before_runtime_session_in_tx(session, Some((self.tx, self)))
             .await
     }
     async fn create_user(&self, create_user: better_auth_core::CreateUser) -> AuthResult<S::User> {
-        self.store.create_user_in_tx(self.tx, create_user).await
+        let record = self
+            .store
+            .create_user_in_tx((self.tx, self), create_user)
+            .await?;
+        self.queue(transaction_hooks::Effect::UserCreated(record.clone()))?;
+        Ok(record)
     }
 
     async fn create_account(
         &self,
         create_account: better_auth_core::CreateAccount,
     ) -> AuthResult<S::Account> {
-        self.store
-            .create_account_in_tx(self.tx, create_account)
-            .await
+        let record = self
+            .store
+            .create_account_in_tx((self.tx, self), create_account)
+            .await?;
+        self.queue(transaction_hooks::Effect::AccountCreated(record.clone()))?;
+        Ok(record)
     }
 
     async fn create_session(
         &self,
         create_session: better_auth_core::CreateSession,
     ) -> AuthResult<S::Session> {
-        self.store
-            .create_session_in_tx(self.tx, create_session)
-            .await
+        let record = self
+            .store
+            .create_session_in_tx((self.tx, self), create_session)
+            .await?;
+        self.queue(transaction_hooks::Effect::SessionCreated(record.clone()))?;
+        Ok(record)
     }
 }
 
@@ -309,16 +345,17 @@ where
         let tx_store = SeaOrmTransaction {
             store: self,
             tx: &tx,
-            verification_effects: Mutex::new(Vec::new()),
+            effects: Mutex::new(Vec::new()),
         };
 
         match work(&tx_store).await {
             Ok(value) => {
-                let effects = tx_store.verification_effects.into_inner().map_err(|_| {
-                    AuthError::internal("Verification transaction queue lock poisoned")
-                })?;
+                let effects = tx_store
+                    .effects
+                    .into_inner()
+                    .map_err(|_| AuthError::internal("Transaction hook queue lock poisoned"))?;
                 tx.commit().await.map_err(map_db_err)?;
-                self.finish_verification_effects(effects).await?;
+                self.finish_transaction_effects(effects).await?;
                 Ok(value)
             }
             Err(err) => {

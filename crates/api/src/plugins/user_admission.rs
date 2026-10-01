@@ -199,6 +199,7 @@ pub(crate) async fn validate_create<S: AuthSchema>(
         }
     }
     for (name, value) in [
+        ("banned", input.banned),
         ("emailVerified", input.email_verified),
         ("isAnonymous", input.is_anonymous),
         ("phoneNumberVerified", input.phone_number_verified),
@@ -206,6 +207,12 @@ pub(crate) async fn validate_create<S: AuthSchema>(
         if let Some(value) = value {
             let _ = user.insert(name.into(), Value::Bool(value));
         }
+    }
+    if let Some(value) = &input.ban_reason {
+        let _ = user.insert("banReason".into(), value.clone().into());
+    }
+    if let Some(value) = input.ban_expires {
+        let _ = user.insert("banExpires".into(), serde_json::json!(value));
     }
     if let Some(value) = &input.metadata {
         let _ = user.insert("metadata".into(), value.clone());

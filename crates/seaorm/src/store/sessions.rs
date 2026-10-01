@@ -1,13 +1,14 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbErr, EntityTrait,
-    ExprTrait, IntoActiveModel, QueryFilter,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, ExprTrait, IntoActiveModel,
+    QueryFilter,
 };
 
 use better_auth_core::store::SessionStore;
 
 use crate::error::{AuthError, AuthResult};
+use crate::hooks::{DatabaseHookUpdate, SessionUpdate};
 use crate::schema::{AuthSchema, SeaOrmSessionModel};
 use crate::types::CreateSession;
 
@@ -40,13 +41,19 @@ where
                     self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
                     S::Session::native_json_field,
                 )?,
+        )?;
+        crate::reference_id::apply_bindings(
+            active,
+            &self.config().session.field_schema(),
+            self.connection().get_database_backend(),
+            S::Session::field_column,
         )
     }
 
     pub(crate) async fn before_runtime_session_in_tx(
         &self,
         session: &mut CreateSession,
-        tx: Option<&DatabaseTransaction>,
+        tx: Option<super::HookTransaction<'_, S>>,
     ) -> AuthResult<()> {
         let context = self.hook_context(tx);
         for hook in self.hooks() {
@@ -64,7 +71,7 @@ where
     async fn after_runtime_session_in_tx(
         &self,
         session: &S::Session,
-        tx: Option<&DatabaseTransaction>,
+        tx: Option<super::HookTransaction<'_, S>>,
     ) -> AuthResult<()> {
         let context = self.hook_context(tx);
         for hook in self.hooks() {
@@ -76,7 +83,7 @@ where
     async fn create_session_with_connection<C>(
         &self,
         db: &C,
-        tx: Option<&DatabaseTransaction>,
+        tx: Option<super::HookTransaction<'_, S>>,
         mut create_session: CreateSession,
     ) -> AuthResult<S::Session>
     where
@@ -105,18 +112,81 @@ where
                     S::Session::native_json_field,
                 )?,
         )?;
+        crate::reference_id::apply_bindings(
+            &mut active,
+            &self.config().session.field_schema(),
+            db.get_database_backend(),
+            S::Session::field_column,
+        )?;
         let session = active.insert(db).await.map_err(map_db_err)?;
-        self.after_runtime_session_in_tx(&session, tx).await?;
+        if tx.is_none() {
+            self.after_runtime_session_in_tx(&session, None).await?;
+        }
         Ok(session)
     }
 
     pub(crate) async fn create_session_in_tx(
         &self,
-        tx: &DatabaseTransaction,
+        tx: super::HookTransaction<'_, S>,
         create_session: CreateSession,
     ) -> AuthResult<S::Session> {
-        self.create_session_with_connection(tx, Some(tx), create_session)
+        self.create_session_with_connection(tx.0, Some(tx), create_session)
             .await
+    }
+
+    pub(super) async fn update_session_with_connection(
+        &self,
+        db: &impl ConnectionTrait,
+        tx: Option<super::HookTransaction<'_, S>>,
+        token: &str,
+        mut update: SessionUpdate,
+    ) -> AuthResult<Option<S::Session>> {
+        let context = self.hook_context(tx);
+        let original = update.clone();
+        for hook in self.hooks() {
+            match hook
+                .before_update_session(token, &original, &context)
+                .await?
+            {
+                DatabaseHookUpdate::Continue => {}
+                DatabaseHookUpdate::Cancel => return Ok(None),
+                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+            }
+        }
+        let reselect = match update.id.as_deref() {
+            Some(id) => S::Session::id_column().eq(S::Session::parse_id(id)?),
+            None => S::Session::token_column().eq(update.token.as_deref().unwrap_or(token)),
+        };
+        let mut active = <S::Session as SeaOrmSessionModel>::ActiveModel::default();
+        let fields = self
+            .config()
+            .session
+            .field_schema()
+            .storage_fields_for_adapter(
+                std::mem::take(&mut update.additional_fields),
+                false,
+                db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                S::Session::native_json_field,
+            )?;
+        let _ = update.updated_at.get_or_insert_with(Utc::now);
+        S::Session::apply_update(&mut active, update)?;
+        S::Session::apply_fields(&mut active, fields)?;
+        crate::reference_id::apply_bindings(
+            &mut active,
+            &self.config().session.field_schema(),
+            db.get_database_backend(),
+            S::Session::field_column,
+        )?;
+        let session = super::updates::update_returning_one::<
+            <S::Session as SeaOrmSessionModel>::Entity,
+            _,
+        >(db, active, S::Session::token_column().eq(token), reselect)
+        .await?;
+        for hook in self.hooks() {
+            hook.after_update_session(session.as_ref(), &context)
+                .await?;
+        }
+        Ok(session)
     }
 }
 
@@ -194,28 +264,16 @@ where
         token: &str,
         fields: serde_json::Map<String, serde_json::Value>,
     ) -> AuthResult<Option<S::Session>> {
-        let Some(model) = self.get_session(token).await? else {
-            return Ok(None);
-        };
-        let mut active = model.into_active_model();
-        S::Session::apply_fields(
-            &mut active,
-            self.config()
-                .session
-                .field_schema()
-                .storage_fields_for_adapter(
-                    fields,
-                    false,
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-                    S::Session::native_json_field,
-                )?,
-        )?;
-        S::Session::set_updated_at(&mut active, Utc::now());
-        active
-            .update(self.connection())
-            .await
-            .map(Some)
-            .map_err(map_db_err)
+        self.update_session_with_connection(
+            self.connection(),
+            None,
+            token,
+            SessionUpdate {
+                additional_fields: fields,
+                ..Default::default()
+            },
+        )
+        .await
     }
 
     async fn update_session_expiry(
@@ -223,27 +281,18 @@ where
         token: &str,
         expires_at: DateTime<Utc>,
     ) -> AuthResult<S::Session> {
-        let Some(model) = <S::Session as SeaOrmSessionModel>::Entity::find()
-            .filter(<S::Session as SeaOrmSessionModel>::token_column().eq(token))
-            .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-        else {
-            return Err(AuthError::SessionNotFound);
-        };
-
-        let mut active = model.into_active_model();
-        S::Session::set_expires_at(&mut active, expires_at);
-        self.apply_session_field_updates(&mut active)?;
-        S::Session::set_updated_at(&mut active, Utc::now());
-        active
-            .update(self.connection())
-            .await
-            .map_err(|error| match error {
-                DbErr::RecordNotUpdated | DbErr::RecordNotFound(_) => AuthError::SessionNotFound,
-                error => map_db_err(error),
-            })
+        self.update_session_with_connection(
+            self.connection(),
+            None,
+            token,
+            SessionUpdate {
+                expires_at: Some(expires_at),
+                updated_at: Some(Utc::now()),
+                ..Default::default()
+            },
+        )
+        .await?
+        .ok_or(AuthError::SessionNotFound)
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
@@ -301,21 +350,17 @@ where
         token: &str,
         organization_id: Option<&str>,
     ) -> AuthResult<S::Session> {
-        let Some(model) = <S::Session as SeaOrmSessionModel>::Entity::find()
-            .filter(<S::Session as SeaOrmSessionModel>::token_column().eq(token))
-            .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-        else {
-            return Err(AuthError::SessionNotFound);
-        };
-
-        let mut active = model.into_active_model();
-        S::Session::set_active_organization_id(&mut active, organization_id.map(str::to_owned));
-        self.apply_session_field_updates(&mut active)?;
-        S::Session::set_updated_at(&mut active, Utc::now());
-        active.update(self.connection()).await.map_err(map_db_err)
+        self.update_session_with_connection(
+            self.connection(),
+            None,
+            token,
+            SessionUpdate {
+                active_organization_id: Some(organization_id.map(str::to_owned)),
+                ..Default::default()
+            },
+        )
+        .await?
+        .ok_or(AuthError::SessionNotFound)
     }
     async fn accept_invitation_with_teams(
         &self,
@@ -343,20 +388,16 @@ where
         token: &str,
         team_id: Option<&str>,
     ) -> AuthResult<S::Session> {
-        let Some(model) = <S::Session as SeaOrmSessionModel>::Entity::find()
-            .filter(<S::Session as SeaOrmSessionModel>::token_column().eq(token))
-            .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-        else {
-            return Err(AuthError::SessionNotFound);
-        };
-
-        let mut active = model.into_active_model();
-        S::Session::set_active_team_id(&mut active, team_id.map(str::to_owned));
-        self.apply_session_field_updates(&mut active)?;
-        S::Session::set_updated_at(&mut active, Utc::now());
-        active.update(self.connection()).await.map_err(map_db_err)
+        self.update_session_with_connection(
+            self.connection(),
+            None,
+            token,
+            SessionUpdate {
+                active_team_id: Some(team_id.map(str::to_owned)),
+                ..Default::default()
+            },
+        )
+        .await?
+        .ok_or(AuthError::SessionNotFound)
     }
 }

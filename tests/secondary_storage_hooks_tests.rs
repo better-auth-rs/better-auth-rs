@@ -35,6 +35,7 @@ struct Hooks {
     cache: Arc<MemoryCacheAdapter>,
     events: Arc<Mutex<Vec<&'static str>>>,
     cancel: Arc<AtomicBool>,
+    deferred_session: Arc<AtomicBool>,
     pure: bool,
 }
 
@@ -43,7 +44,7 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     async fn before_create_session(
         &self,
         input: &mut CreateSession,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<HookControl> {
         self.events.lock().unwrap().push(if ctx.tx.is_some() {
             "before-session-tx"
@@ -60,11 +61,15 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     async fn after_create_session(
         &self,
         session: &Session,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         if self.pure {
             assert!(ctx.tx.is_none());
-            assert!(self.cache.get(session.token()).await?.is_some());
+            // Deferred upstream creates enqueue the after hook before the cache mirror.
+            assert_eq!(
+                self.cache.get(session.token()).await?.is_some(),
+                !self.deferred_session.load(Ordering::SeqCst)
+            );
         }
         self.events.lock().unwrap().push("after-session");
         Ok(())
@@ -72,7 +77,7 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     async fn before_create_verification(
         &self,
         input: &mut CreateVerification,
-        _: &SeaOrmHookContext<'_>,
+        _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<HookControl> {
         self.events.lock().unwrap().push("before-verification");
         input.value = "hook-value".into();
@@ -85,7 +90,7 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     async fn after_create_verification(
         &self,
         verification: &Verification,
-        _: &SeaOrmHookContext<'_>,
+        _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(
             self.cache
@@ -99,12 +104,16 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     async fn before_delete_session(
         &self,
         _: &Session,
-        _: &SeaOrmHookContext<'_>,
+        _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<HookControl> {
         self.events.lock().unwrap().push("before-delete");
         Ok(HookControl::Continue)
     }
-    async fn after_delete_session(&self, _: &Session, _: &SeaOrmHookContext<'_>) -> AuthResult<()> {
+    async fn after_delete_session(
+        &self,
+        _: &Session,
+        _: &SeaOrmHookContext<'_, BundledSchema>,
+    ) -> AuthResult<()> {
         self.events.lock().unwrap().push("after-delete");
         Ok(())
     }
@@ -120,6 +129,7 @@ async fn setup(preserve: bool) -> (BetterAuth<BundledSchema>, DatabaseConnection
         cache: Arc::new(MemoryCacheAdapter::new()),
         events: Default::default(),
         cancel: Default::default(),
+        deferred_session: Default::default(),
         pure: !preserve,
     };
     let auth = AuthBuilder::<BundledSchema>::new(config.clone())
@@ -228,6 +238,7 @@ async fn pure_secondary_creation_runs_hooks_and_cancellation_prevents_cache_writ
 #[tokio::test]
 async fn transaction_publishes_session_and_after_hook_only_after_commit() {
     let (auth, database, hooks) = setup(false).await;
+    hooks.deferred_session.store(true, Ordering::SeqCst);
     for commit in [false, true] {
         hooks.events.lock().unwrap().clear();
         let token = Arc::new(Mutex::new(String::new()));
@@ -240,7 +251,9 @@ async fn transaction_publishes_session_and_after_hook_only_after_commit() {
                 let user = tx
                     .create_user(CreateUser::new().with_email(tx_email))
                     .await?;
-                let session = tx.create_session(input(user.id)).await?;
+                let session = tx
+                    .create_session_with_deferred_secondary(input(user.id))
+                    .await?;
                 *captured.lock().unwrap() = session.token().to_owned();
                 assert!(cache.get(session.token()).await?.is_none());
                 if commit {
@@ -272,6 +285,60 @@ async fn transaction_publishes_session_and_after_hook_only_after_commit() {
         );
     }
     assert_eq!(SessionEntity::find().count(&database).await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn default_transaction_session_mirrors_the_uncommitted_user_without_deferral() {
+    for database_sessions in [false, true] {
+        for commit in [false, true] {
+            let (auth, database, hooks) = setup(database_sessions).await;
+            let token = Arc::new(Mutex::new(String::new()));
+            let captured = token.clone();
+            let cache = hooks.cache.clone();
+            let email = "immediate@example.com";
+            let result: AuthResult<()> = transaction(auth.store().as_ref(), move |tx| {
+                Box::pin(async move {
+                    let user = tx.create_user(CreateUser::new().with_email(email)).await?;
+                    let session = tx.create_session(input(user.id.clone())).await?;
+                    *captured.lock().unwrap() = session.token().to_owned();
+                    let encoded = cache.get(session.token()).await?.unwrap();
+                    let cached: serde_json::Value =
+                        serde_json::from_str(encoded.as_str().unwrap())?;
+                    assert_eq!(cached["user"]["id"], user.id);
+                    assert_eq!(cached["user"]["email"], email);
+                    if commit {
+                        Ok(())
+                    } else {
+                        Err(AuthError::internal("rollback after immediate cache write"))
+                    }
+                })
+            })
+            .await;
+            assert_eq!(result.is_ok(), commit);
+            let token = token.lock().unwrap().clone();
+            assert!(hooks.cache.get(&token).await.unwrap().is_some());
+            assert_eq!(
+                auth.store()
+                    .get_user_by_email(email)
+                    .await
+                    .unwrap()
+                    .is_some(),
+                commit
+            );
+            assert_eq!(
+                SessionEntity::find().count(&database).await.unwrap(),
+                u64::from(database_sessions && commit)
+            );
+            assert_eq!(
+                *hooks.events.lock().unwrap(),
+                if commit {
+                    vec!["before-session-tx", "after-session"]
+                } else {
+                    vec!["before-session-tx"]
+                }
+            );
+        }
+    }
 }
 
 #[tokio::test]
@@ -485,8 +552,8 @@ struct FailAfterVerification;
 impl SeaOrmHooks<BundledSchema> for FailAfterVerification {
     async fn after_update_user(
         &self,
-        _: &<BundledSchema as better_auth::AuthSchema>::User,
-        ctx: &SeaOrmHookContext<'_>,
+        _: Option<&<BundledSchema as better_auth::AuthSchema>::User>,
+        ctx: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(ctx.tx.is_none());
         Err(AuthError::internal("verification after hook failed"))

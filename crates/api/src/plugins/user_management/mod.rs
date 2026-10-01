@@ -256,13 +256,22 @@ impl UserManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
-        let user = ctx.user_view(&user)?;
+        let (mut user, session) = ctx.require_session(req).await?;
         let body: ChangeEmailRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
         let response = change_email_core(&body, &user, &self.config, ctx).await?;
+        if !user.email_verified && self.config.change_email.update_without_verification {
+            user.email = Some(body.new_email.to_lowercase());
+            ctx.session_manager()
+                .set_session_cookie(
+                    req,
+                    better_auth_core::session::SessionData { user, session },
+                    None,
+                )
+                .await?;
+        }
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -313,11 +322,8 @@ impl UserManagementPlugin {
         if let Some(callback_url) = query.callback_url {
             let mut headers = better_auth_core::Headers::new();
             _ = headers.insert("Location".to_string(), callback_url);
-            let mut response = AuthResponse {
-                status: 302,
-                headers,
-                body: Vec::new(),
-            };
+            let mut response = AuthResponse::new(302);
+            response.headers = headers;
             for (name, value) in req.take_response_headers()? {
                 response.headers.append(name, value);
             }

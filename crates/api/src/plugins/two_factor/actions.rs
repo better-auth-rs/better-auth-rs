@@ -1,6 +1,7 @@
 use super::*;
 
 pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
+    req: &AuthRequest,
     body: &EnableRequest,
     user: &impl AuthUser,
     current_session: &impl AuthSession,
@@ -46,6 +47,14 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
         )
         .await
         .map_err(SessionIssueError::into_auth_error)?;
+        let manager = ctx.session_manager();
+        manager
+            .set_session_cookie(
+                req,
+                manager.internal_data(&issued.user, &issued.session).await?,
+                None,
+            )
+            .await?;
         ctx.database.delete_session(current_session.token()).await?;
         return Ok((
             EnableResponse {
@@ -53,7 +62,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
                 totp_uri: None,
                 backup_codes: None,
             },
-            vec![create_session_cookie(issued.session.token(), &ctx.config)],
+            Vec::new(),
         ));
     }
     if config.totp_disabled {
@@ -84,7 +93,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
     let secret = generate_secret();
     let encrypted_secret = encrypt_value(ctx.config.encryption_secret(), &secret)?;
 
-    let mut set_cookie_headers = Vec::new();
+    let set_cookie_headers = Vec::new();
     if config.skip_verification_on_enable {
         let updated_user = ctx
             .database
@@ -104,8 +113,15 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
         )
         .await
         .map_err(SessionIssueError::into_auth_error)?;
+        let manager = ctx.session_manager();
+        manager
+            .set_session_cookie(
+                req,
+                manager.internal_data(&issued.user, &issued.session).await?,
+                None,
+            )
+            .await?;
         ctx.database.delete_session(current_session.token()).await?;
-        set_cookie_headers.push(create_session_cookie(issued.session.token(), &ctx.config));
     }
 
     if let Some(existing) = existing {
@@ -190,9 +206,17 @@ pub(super) async fn disable_core(
     )
     .await
     .map_err(SessionIssueError::into_auth_error)?;
+    let manager = ctx.session_manager();
+    manager
+        .set_session_cookie(
+            req,
+            manager.internal_data(&issued.user, &issued.session).await?,
+            None,
+        )
+        .await?;
     ctx.database.delete_session(current_session.token()).await?;
 
-    let mut set_cookie_headers = vec![create_session_cookie(issued.session.token(), &ctx.config)];
+    let mut set_cookie_headers = Vec::new();
 
     if let Some(trust_cookie) = read_signed_cookie(req, TRUST_DEVICE_COOKIE_SUFFIX, ctx)? {
         if let Some(trust_identifier) = trust_cookie
@@ -282,7 +306,8 @@ pub(super) async fn verify_totp_core(
 
     match state {
         ResolvedTwoFactorState::Session { user, session, .. } => {
-            verify_existing_session_factor(user, *session, Some(EnrollmentMethod::Totp), ctx).await
+            verify_existing_session_factor(req, user, *session, Some(EnrollmentMethod::Totp), ctx)
+                .await
         }
         ResolvedTwoFactorState::Pending(pending) => {
             finalize_pending_two_factor(pending, req, body.trust_device.unwrap_or(false), ctx).await
@@ -422,7 +447,8 @@ pub(super) async fn verify_otp_core(
 
     match state {
         ResolvedTwoFactorState::Session { user, session, .. } => {
-            verify_existing_session_factor(user, *session, Some(EnrollmentMethod::Otp), ctx).await
+            verify_existing_session_factor(req, user, *session, Some(EnrollmentMethod::Otp), ctx)
+                .await
         }
         ResolvedTwoFactorState::Pending(pending) => {
             finalize_pending_two_factor(pending, req, body.trust_device.unwrap_or(false), ctx).await
@@ -539,7 +565,7 @@ pub(super) async fn verify_backup_code_core(
                     Vec::new(),
                 ))
             } else {
-                verify_existing_session_factor(user, *session, None, ctx).await
+                verify_existing_session_factor(req, user, *session, None, ctx).await
             }
         }
         ResolvedTwoFactorState::Pending(pending) => {

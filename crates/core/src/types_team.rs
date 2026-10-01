@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// A team belonging to one organization.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Team {
     /// Application fields projected by the configured team schema.
@@ -47,7 +47,7 @@ pub struct UpdateTeam {
 }
 
 /// A user's membership in a team.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamMember {
     pub id: String,
@@ -58,7 +58,7 @@ pub struct TeamMember {
 }
 
 /// A dynamic role scoped to one organization.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct OrganizationRole {
     /// Application fields projected by the configured role schema.

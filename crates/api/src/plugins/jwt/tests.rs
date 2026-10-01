@@ -176,8 +176,8 @@ async fn cookie_signer_is_purpose_bound_and_cache_survives_store_revocation() {
     };
     let mut config = create_test_config();
     config.session.cookie_cache = Some(CookieCacheConfig {
-        enabled: true,
-        strategy: CookieCacheStrategy::Jwt,
+        enabled: Some(true),
+        strategy: Some(CookieCacheStrategy::Jwt),
         ..Default::default()
     });
     let mut ctx = create_test_context_with_config(config).await;
@@ -187,7 +187,10 @@ async fn cookie_signer_is_purpose_bound_and_cache_survives_store_revocation() {
         .audience("token-audience".into());
     let mut init = AuthInitContext::new(ctx.config.clone(), ctx.database.clone());
     plugin.on_init(&mut init).await.unwrap();
+    let runtime = init.runtime();
     ctx.extensions = init.extensions;
+    let ctx = Arc::new(ctx);
+    runtime.bind(&ctx).unwrap();
     let (user, session) = create_user_and_session(
         &ctx,
         CreateUser::new()
@@ -212,9 +215,22 @@ async fn cookie_signer_is_purpose_bound_and_cache_survives_store_revocation() {
     assert_eq!(header(cache_token)["typ"], "better-auth.session-cache+jwt");
     let signer = ctx
         .extensions
-        .get::<Arc<dyn SessionCookieSigner>>()
+        .get::<Arc<
+            dyn SessionCookieSigner<
+                better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema,
+            >,
+        >>()
         .unwrap();
-    let claims = signer.verify(cache_token).await.unwrap().unwrap();
+    let signing_context = || better_auth_core::session::SessionCookieContext {
+        request: &request,
+        config: &ctx.config,
+        transaction: None,
+    };
+    let claims = signer
+        .verify(cache_token, signing_context())
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(claims["iss"], ctx.config.base_url);
     assert_eq!(claims["aud"], "better-auth:session-cache");
     assert!(
@@ -225,7 +241,13 @@ async fn cookie_signer_is_purpose_bound_and_cache_survives_store_revocation() {
             .is_none()
     );
     let ordinary = plugin.sign(claims.clone(), &ctx).await.unwrap();
-    assert!(signer.verify(&ordinary).await.unwrap().is_none());
+    assert!(
+        signer
+            .verify(&ordinary, signing_context())
+            .await
+            .unwrap()
+            .is_none()
+    );
     let options = JwtSigningOptions {
         header: serde_json::from_value(json!({"typ": "better-auth.session-cache+jwt"})).unwrap(),
         ..Default::default()
@@ -243,7 +265,14 @@ async fn cookie_signer_is_purpose_bound_and_cache_survives_store_revocation() {
             .sign_with_options(invalid, &options, &ctx)
             .await
             .unwrap();
-        assert!(signer.verify(&token).await.unwrap().is_none(), "{field}");
+        assert!(
+            signer
+                .verify(&token, signing_context())
+                .await
+                .unwrap()
+                .is_none(),
+            "{field}"
+        );
     }
     ctx.database
         .delete_session(&data.session.token)

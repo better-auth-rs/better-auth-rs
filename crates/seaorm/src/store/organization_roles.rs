@@ -105,8 +105,13 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             .and_then(serde_json::Value::as_str)
             .unwrap_or(id)
             .to_owned();
-        let active =
-            models::active::<O::OrganizationRole>(core, input.additional_fields, &config, false)?;
+        let active = models::active::<O::OrganizationRole>(
+            core,
+            input.additional_fields,
+            &config,
+            false,
+            self.connection().get_database_backend(),
+        )?;
         let _ = Entity::<O::OrganizationRole>::update_many()
             .set(active)
             .filter(O::OrganizationRole::column("id")?.eq(id))

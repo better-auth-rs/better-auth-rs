@@ -38,10 +38,15 @@ pub use better_auth_api::plugins::{
     JwtAlgorithm, JwtAudience, JwtCallbackFuture, JwtCustomSign, JwtDefinePayload, JwtExpiration,
     JwtGetSubject, JwtKeyPairConfig, JwtPlugin, JwtPluginConfig, JwtSigningOptions, jwt,
 };
-pub use better_auth_api::plugins::{OAuthProxyConfig, OAuthProxyPlugin};
+pub use better_auth_api::plugins::{OAuthPopupPlugin, OAuthProxyConfig, OAuthProxyPlugin};
 pub use better_auth_api::plugins::{OneTapConfig, OneTapPlugin, one_tap};
 
 pub use anonymous::AnonymousPlugin;
 pub use better_auth_api::plugins::{anonymous, phone_number, siwe};
 pub use phone_number::PhoneNumberPlugin;
 pub use siwe::SiwePlugin;
+
+pub use better_auth_api::plugins::last_login_method::{
+    self, BeforeStoreLastLoginCookie, LastLoginMethodConfig, LastLoginMethodPlugin,
+    LastLoginMethodResolver,
+};

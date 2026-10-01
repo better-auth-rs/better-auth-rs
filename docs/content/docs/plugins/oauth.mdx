@@ -42,7 +42,7 @@ Better Auth RS includes pre-configured providers with correct URLs and user info
 
 ## Generic OAuth / OIDC
 
-Use `GenericOAuthConfig` for providers with explicit OAuth endpoints or OIDC discovery. Register the callback URL `{base_url}{base_path}/callback/{provider}` with the identity provider. For example, a provider named `oidc` uses `/auth/callback/oidc` when the auth base path is `/auth`.
+Use `GenericOAuthConfig` for providers with explicit OAuth endpoints or OIDC discovery. Register the callback URL `{base_url}{base_path}/callback/{id}` with the identity provider. The `id` is the provider identifier. For example, a provider named `oidc` uses `/auth/callback/oidc` when the auth base path is `/auth`.
 
 ```rust
 use better_auth::plugins::oauth::{GenericOAuthConfig, OAuthPlugin};
@@ -156,7 +156,7 @@ The OAuth plugin exposes the following endpoints. For full request/response deta
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/sign-in/social` | POST | Initiate OAuth sign-in flow |
-| `/callback/{provider}` | GET, POST | OAuth callback handler, including `form_post` responses |
+| `/callback/{id}` | GET, POST | OAuth callback handler, including `form_post` responses |
 | `/link-social` | POST | Link a social account to an existing user |
 | `/get-access-token` | POST | Retrieve stored OAuth access token |
 | `/refresh-token` | POST | Refresh the OAuth access token |

@@ -1,10 +1,12 @@
 mod cookie_cache;
 mod secrets;
+mod storage;
 mod verification;
 use crate::email::EmailProvider;
 use crate::error::AuthError;
 pub use crate::user_fields::{
-    UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType, UserFieldValidator,
+    UserConfig, UserFieldConfig, UserFieldReference, UserFieldTransform, UserFieldType,
+    UserFieldValidator,
 };
 use chrono::Duration;
 pub use cookie_cache::{CookieCacheVersion, CookieCacheVersionCallback};
@@ -523,9 +525,9 @@ pub struct AccountConfig {
     /// Encrypt OAuth tokens at rest (default: false)
     pub encrypt_oauth_tokens: bool,
     /// Store account data in an account cookie for OAuth-backed access token flows.
-    pub store_account_cookie: bool,
+    pub store_account_cookie: Option<bool>,
     /// Where to persist OAuth state during the authorization flow.
-    pub store_state_strategy: OAuthStateStrategy,
+    pub store_state_strategy: Option<OAuthStateStrategy>,
     /// Skip state-cookie verification during callback processing.
     ///
     /// This is security-sensitive and should stay disabled in normal use.
@@ -711,23 +713,31 @@ pub enum SameSite {
 /// subsequent requests can skip the database lookup.
 #[derive(Debug, Clone)]
 pub struct CookieCacheConfig {
-    /// Whether the cookie cache is active.
-    pub enabled: bool,
-
-    /// Maximum age of the cached cookie before a fresh DB lookup is required.
-    ///
-    /// Default: 5 minutes.
-    pub max_age: Duration,
-
-    /// Strategy used to protect the cached cookie value.
-    pub strategy: CookieCacheStrategy,
-
+    /// Enable caching. Omission enables caching only when no server session store exists.
+    pub enabled: Option<bool>,
+    /// Cache lifetime. Omission uses session expiry in stateless mode and five minutes otherwise.
+    pub max_age: Option<Duration>,
+    /// Cookie protection. Omission uses JWE in stateless mode and Compact otherwise.
+    pub strategy: Option<CookieCacheStrategy>,
+    /// Refresh a valid cookie near expiry without changing the session expiry.
+    pub refresh: Option<CookieCacheRefresh>,
     /// Cache version evaluated against the session and user on writes and cache reads.
     pub version: CookieCacheVersion,
 }
 
+/// Stateless cookie refresh policy. Server-backed sessions disable this policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CookieCacheRefresh {
+    /// Do not refresh a valid cookie.
+    Disabled,
+    /// Refresh when the remaining cookie lifetime is below twenty percent of its maximum age.
+    Enabled,
+    /// Refresh when the remaining cookie lifetime is below this duration.
+    After(Duration),
+}
+
 /// Strategy for signing / encrypting the cookie cache.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CookieCacheStrategy {
     /// Base64url-encoded payload + HMAC-SHA256 signature.
     Compact,
@@ -740,11 +750,52 @@ pub enum CookieCacheStrategy {
 impl Default for CookieCacheConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
-            max_age: Duration::minutes(5),
-            strategy: CookieCacheStrategy::Compact,
+            enabled: None,
+            max_age: None,
+            strategy: None,
+            refresh: None,
             version: "1".into(),
         }
+    }
+}
+
+impl CookieCacheConfig {
+    /// Read the effective cache setting after storage defaults are resolved.
+    pub fn enabled(&self) -> bool {
+        self.enabled.unwrap_or(false)
+    }
+    /// Read the effective cache lifetime.
+    pub fn max_age(&self) -> Duration {
+        self.max_age.unwrap_or_else(|| Duration::minutes(5))
+    }
+    /// Read the effective cookie protection strategy.
+    pub fn strategy(&self) -> CookieCacheStrategy {
+        self.strategy.unwrap_or(CookieCacheStrategy::Compact)
+    }
+    /// Read the refresh threshold after storage defaults are resolved.
+    pub fn refresh_age(&self) -> Option<Duration> {
+        match self.refresh {
+            None | Some(CookieCacheRefresh::Disabled) => None,
+            Some(CookieCacheRefresh::After(age)) => Some(age),
+            Some(CookieCacheRefresh::Enabled) => {
+                let age = self.max_age().num_seconds();
+                Some(Duration::seconds(
+                    if age == 0 { 300 } else { age }.div_euclid(5),
+                ))
+            }
+        }
+    }
+}
+
+impl AccountConfig {
+    /// Read the effective account-cookie setting.
+    pub fn store_account_cookie(&self) -> bool {
+        self.store_account_cookie.unwrap_or(false)
+    }
+    /// Read the effective OAuth state strategy.
+    pub fn store_state_strategy(&self) -> OAuthStateStrategy {
+        self.store_state_strategy
+            .unwrap_or(OAuthStateStrategy::Database)
     }
 }
 
@@ -754,8 +805,8 @@ impl Default for AccountConfig {
             update_account_on_sign_in: true,
             account_linking: AccountLinkingConfig::default(),
             encrypt_oauth_tokens: false,
-            store_account_cookie: false,
-            store_state_strategy: OAuthStateStrategy::Database,
+            store_account_cookie: None,
+            store_state_strategy: None,
             skip_state_cookie_check: false,
         }
     }
@@ -1521,9 +1572,9 @@ mod tests {
     #[test]
     fn cookie_cache_config_defaults() {
         let c = CookieCacheConfig::default();
-        assert!(!c.enabled);
-        assert_eq!(c.max_age, Duration::minutes(5));
-        assert_eq!(c.strategy, CookieCacheStrategy::Compact);
+        assert!(!c.enabled());
+        assert_eq!(c.max_age(), Duration::minutes(5));
+        assert_eq!(c.strategy(), CookieCacheStrategy::Compact);
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
@@ -1580,9 +1631,9 @@ mod tests {
     #[test]
     fn session_cookie_cache_builder() {
         let cache = CookieCacheConfig {
-            enabled: true,
-            max_age: Duration::minutes(10),
-            strategy: CookieCacheStrategy::Jwt,
+            enabled: Some(true),
+            max_age: Some(Duration::minutes(10)),
+            strategy: Some(CookieCacheStrategy::Jwt),
             ..Default::default()
         };
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567").session_cookie_cache(cache);
@@ -1590,8 +1641,8 @@ mod tests {
         let cc = cfg.session.cookie_cache.as_ref();
         assert!(cc.is_some());
         let cc = cc.unwrap();
-        assert!(cc.enabled);
-        assert_eq!(cc.strategy, CookieCacheStrategy::Jwt);
+        assert!(cc.enabled());
+        assert_eq!(cc.strategy(), CookieCacheStrategy::Jwt);
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.

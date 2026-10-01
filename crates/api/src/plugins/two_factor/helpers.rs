@@ -93,18 +93,6 @@ pub(super) fn trust_device_max_age(ctx: &AuthContext<impl better_auth_core::Auth
         .unwrap_or(DEFAULT_TRUST_DEVICE_MAX_AGE_SECS)
 }
 
-pub(super) fn create_session_cookie_for_dont_remember(
-    token: &str,
-    dont_remember: bool,
-    config: &better_auth_core::AuthConfig,
-) -> String {
-    if dont_remember {
-        create_session_cookie_with_max_age(Some(token), None, config)
-    } else {
-        create_session_cookie(token, config)
-    }
-}
-
 pub(super) fn clear_cookie_header(config: &better_auth_core::AuthConfig, suffix: &str) -> String {
     create_clear_cookie(&related_cookie_name(config, suffix), config)
 }

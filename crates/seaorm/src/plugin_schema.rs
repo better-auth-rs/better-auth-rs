@@ -47,6 +47,8 @@ pub trait SeaOrmPluginSchema: Send + Sync + 'static {
     type Jwk: SeaOrmPluginModel<Record = better_auth_core::Jwk>;
     /// WalletAddress persistence model.
     type WalletAddress: SeaOrmPluginModel<Record = better_auth_core::WalletAddress>;
+    /// Rate-limit database counters.
+    type RateLimit: SeaOrmPluginModel<Record = better_auth_core::store::RateLimitRecord>;
 }
 
 /// Select plugin models. Omitted parameters use the bundled tables.
@@ -57,9 +59,10 @@ pub struct PluginModels<
     M3 = crate::store::entities::two_factor::Model,
     M4 = crate::store::entities::jwk::Model,
     M5 = crate::store::entities::wallet_address::Model,
->(PhantomData<(M0, M1, M2, M3, M4, M5)>);
+    M6 = crate::store::entities::rate_limit::Model,
+>(PhantomData<(M0, M1, M2, M3, M4, M5, M6)>);
 
-impl<M0, M1, M2, M3, M4, M5> SeaOrmPluginSchema for PluginModels<M0, M1, M2, M3, M4, M5>
+impl<M0, M1, M2, M3, M4, M5, M6> SeaOrmPluginSchema for PluginModels<M0, M1, M2, M3, M4, M5, M6>
 where
     M0: SeaOrmPluginModel<Record = better_auth_core::ApiKey>,
     M1: SeaOrmPluginModel<Record = better_auth_core::DeviceCode>,
@@ -67,6 +70,7 @@ where
     M3: SeaOrmPluginModel<Record = better_auth_core::TwoFactor>,
     M4: SeaOrmPluginModel<Record = better_auth_core::Jwk>,
     M5: SeaOrmPluginModel<Record = better_auth_core::WalletAddress>,
+    M6: SeaOrmPluginModel<Record = better_auth_core::store::RateLimitRecord>,
 {
     type ApiKey = M0;
     type DeviceCode = M1;
@@ -74,4 +78,5 @@ where
     type TwoFactor = M3;
     type Jwk = M4;
     type WalletAddress = M5;
+    type RateLimit = M6;
 }

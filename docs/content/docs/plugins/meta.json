@@ -2,6 +2,7 @@
   "pages": [
     "oauth",
     "oauth-proxy",
+    "oauth-popup",
     "one-tap",
     "anonymous",
     "email-otp",
@@ -12,6 +13,7 @@
     "one-time-token",
     "multi-session",
     "custom-session",
+    "last-login-method",
     "have-i-been-pwned",
     "captcha",
     "device-authorization",

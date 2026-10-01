@@ -1,9 +1,6 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use better_auth_core::utils::{
-    cookie_utils::{create_session_cookie, create_session_cookie_with_max_age},
-    password::{hash_password, verify_password},
-};
+use better_auth_core::utils::password::{hash_password, verify_password};
 use better_auth_core::wire::UserView;
 use better_auth_core::{
     AuthAccount, AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema,
@@ -524,12 +521,15 @@ impl PhoneNumberPlugin {
         if status {
             let _ = output.insert("status".into(), json!(true));
         }
-        let cookie = if dont_remember {
-            create_session_cookie_with_max_age(Some(issued.session.token()), None, &ctx.config)
-        } else {
-            create_session_cookie(issued.session.token(), &ctx.config)
-        };
-        Ok(AuthResponse::json(200, &output)?.with_header("Set-Cookie", cookie))
+        let manager = ctx.session_manager();
+        manager
+            .set_session_cookie(
+                req,
+                manager.internal_data(&issued.user, &issued.session).await?,
+                Some(dont_remember),
+            )
+            .await?;
+        Ok(AuthResponse::json(200, &output)?)
     }
     async fn request_reset(
         &self,
@@ -738,22 +738,14 @@ better_auth_core::impl_auth_plugin!(PhoneNumberPlugin, "phone-number";
         }
         fn rate_limits(
             &self,
-        ) -> AuthResult<Vec<(String, better_auth_core::middleware::EndpointRateLimit)>> {
-            Ok([
-                "/phone-number/send-otp",
-                "/phone-number/verify",
-                "/phone-number/request-password-reset",
-                "/phone-number/reset-password",
-            ]
-            .into_iter()
-            .map(|path| (
-                path.into(),
+        ) -> AuthResult<Vec<better_auth_core::middleware::PluginRateLimit>> {
+            Ok(vec![better_auth_core::middleware::PluginRateLimit::prefix(
+                "/phone-number",
                 better_auth_core::middleware::EndpointRateLimit {
-                    window: std::time::Duration::from_secs(60),
-                    max_requests: 10,
+                    window: 60.0,
+                    max_requests: 10.0,
                 },
-            ))
-            .collect())
+            )])
         }
         async fn before_request(
             &self,

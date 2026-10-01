@@ -102,7 +102,7 @@ A `disableRefresh=true` query parameter prevents refresh for the request. Sessio
 
 `BetterAuth::secondary_storage` installs a backend for server-side session and user snapshots. Sessions use that backend by default. Set `session.store_session_in_database = true` to retain database rows and permit fallback on a missing cache entry. Set `session.preserve_session_in_database = true` to keep expired audit rows after revocation and disable that fallback. Malformed cached JSON never restores a session through database fallback.
 
-Database transactions publish cached sessions only after commit. User updates through the authentication store refresh cached user snapshots. See [Secondary Storage](/docs/concepts/secondary-storage) for backend methods, atomic verification consumption, and model hydration requirements.
+Session creation publishes its cache snapshot immediately by default. Explicitly deferred transaction creation, used by Passkey registration, publishes after commit; rollback discards that deferred write. User updates through the authentication store refresh cached user snapshots. See [Secondary Storage](/docs/concepts/secondary-storage) for backend methods, atomic verification consumption, and model hydration requirements.
 
 ## Cookie Cache
 
@@ -112,16 +112,17 @@ Enable a signed or encrypted session cache to avoid a database read on each requ
 use better_auth::config::{CookieCacheConfig, CookieCacheStrategy};
 
 config.session.cookie_cache = Some(CookieCacheConfig {
-    enabled: true,
-    max_age: Duration::minutes(5),
-    strategy: CookieCacheStrategy::Jwe,
+    enabled: Some(true),
+    max_age: Some(Duration::minutes(5)),
+    strategy: Some(CookieCacheStrategy::Jwe),
     version: "1".into(),
+    ..Default::default()
 });
 ```
 
 `Compact` uses HMAC-SHA256, `Jwt` uses HS256, and `Jwe` uses A256CBC-HS512 encryption. Register `JwtPlugin::new().session_cookie_cache(true)` with the `Jwt` strategy to use the plugin's asymmetric signing keys instead of HS256. See [JWT](../plugins/jwt) for the cache token's issuer, audience, and purpose checks. Each cache is bound to its signed session token and configuration version. Large values use numbered cookie chunks. Authentication writes the cache, and sign-out clears its chunks.
 
-Use `disableCookieCache=true` to read the authoritative session storage immediately. Session listing and revocation also use that storage. Changing `version` invalidates previously issued caches. This configuration uses a persistent session store; stateless cache refresh is not exposed.
+Use `disableCookieCache=true` to read the authoritative session storage immediately. Session listing and revocation also use that storage. Changing `version` invalidates previously issued caches. With a database or secondary storage, sensitive session reads bypass the cookie cache. Without either backend, those reads can use the encrypted session snapshot.
 
 Set `version` to a string with `.into()` or use `CookieCacheVersion::dynamic` for an asynchronous callback:
 
@@ -135,6 +136,31 @@ config.session.cookie_cache.as_mut().unwrap().version =
 ```
 
 The callback receives the snapshot at the cache write or read boundary. New sessions include hidden application fields before cookie filtering. Session lookups and signed cookie reads already contain filtered fields. Hidden fields stay out of the cookie and response. A version mismatch reads the session store; a callback error aborts the request. Compact, JWT, JWE, and plugin-signed JWT caches use the same callback.
+
+## Stateless Sessions
+
+Use `BetterAuth::stateless(config)` to build authentication without an application database schema or an explicit store:
+
+```rust
+use better_auth::{AuthConfig, BetterAuth};
+use better_auth::plugins::{EmailPasswordPlugin, SessionManagementPlugin};
+
+let auth = BetterAuth::stateless(AuthConfig::new("a-random-secret-of-at-least-32-characters"))
+    .plugin(EmailPasswordPlugin::new())
+    .plugin(SessionManagementPlugin::new())
+    .build()
+    .await?;
+```
+
+The builder uses `StatelessSchema` and a process-local `EphemeralStore`. Users, accounts, verification values, and plugin records disappear when that adapter is dropped. A valid encrypted session cookie remains readable after restart. This mode does not make password credentials or organization data durable.
+
+When both database and secondary storage are absent, omitted settings enable JWE session cookies, use the session lifetime as their maximum age, refresh the cache during its final 20%, and store OAuth state and account data in encrypted cookies. Explicit `Some(false)`, strategy, duration, and refresh settings take precedence. A cookie refresh preserves the original session expiry; the refresh does not extend authentication indefinitely.
+
+Configure cache refresh with `CookieCacheRefresh::Disabled`, `Enabled`, or `After(duration)`. `After` specifies the remaining cookie lifetime that triggers renewal. A configured database or secondary backend disables cookie-only renewal. Secondary storage alone keeps account cookies enabled, but stores OAuth state and sessions on the server.
+
+Server-side revocation cannot invalidate an already issued stateless session cookie. Sign-out clears the client's cookies. Use a database or secondary storage when the application requires centralized session revocation. `disableCookieCache=true` forces an adapter read and cannot restore an expired or missing process-local session after restart.
+
+Register process-local database hooks with `.database_hooks(Vec<Arc<dyn DatabaseHooks<StatelessSchema>>>)`. `EphemeralStore` also exposes `.with_hooks(...)` for explicit store use. Transactions isolate uncommitted changes, preserve concurrent unrelated writes, and run queued after-hooks only after commit. After-hook errors propagate after data has committed. Explicitly passing an `EphemeralStore` through `.store(...)` opts into server-store behavior; the builder does not infer durability from the adapter's concrete type.
 
 ## Using Sessions in Axum Handlers
 
@@ -188,3 +214,11 @@ When 2FA is enabled, sign-in verifies the primary credential first and then paus
 - Cookie transport should normally keep `Secure`, `HttpOnly`, and `SameSite` enabled.
 - Session records can retain audit metadata such as IP address and user-agent.
 - Users can hold multiple sessions across devices and revoke them selectively.
+
+## Session Issuance in Plugins
+
+Call `SessionManager::set_session_cookie(request, data, dont_remember)` when an endpoint issues session credentials. `data` is the exact `SessionData` snapshot for the user and session; `internal_data` constructs that snapshot from adapter records without removing hidden fields. The writer sets credential and cache cookies, then records the snapshot for `AuthRequest::new_session()` and `EndpointContext::new_session()`.
+
+Pass `None` to inherit the request's signed `dont_remember` cookie, or an explicit boolean to select persistence. Creating a database session, refreshing a cache, or appending a cookie directly does not establish a newly issued snapshot. Response finalization merges already queued cookies without rereading the database or inferring session issuance from response headers.
+
+Inside a database transaction, use `set_session_cookie_in_transaction` and pass the active `AuthTransaction<S>`. The signer receives that transaction through `SessionCookieContext<S>` so key generation cannot re-enter the global connection. Custom transaction adapters implement `JwksStore` on their transaction with the same connection or snapshot.

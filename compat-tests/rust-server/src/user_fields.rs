@@ -67,7 +67,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
     use serde_json::json;
     use std::sync::Arc;
     config.session.cookie_cache = Some(CookieCacheConfig {
-        enabled: true,
+        enabled: Some(true),
         ..Default::default()
     });
     config.user.additional_fields = [

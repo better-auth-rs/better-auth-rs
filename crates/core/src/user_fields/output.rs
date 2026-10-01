@@ -98,6 +98,19 @@ impl UserView {
         Self::project(user, config, metadata, true, supports_native_json)
     }
 
+    /// Apply adapter transforms once, then use the endpoint's field visibility.
+    pub fn with_field_policies<T: AuthUser>(
+        user: &T,
+        adapter: &super::UserConfig,
+        endpoint: &super::UserConfig,
+        metadata: &MetadataMap,
+        supports_native_json: bool,
+    ) -> AuthResult<Self> {
+        let mut view = Self::project(user, adapter, metadata, false, supports_native_json)?;
+        view.filter_cached_fields(endpoint);
+        Ok(view)
+    }
+
     /// Apply adapter transforms and active schemas without removing application-only fields.
     /// Use this view only for trusted callbacks, never for public responses.
     pub fn with_internal_fields<T: AuthUser>(
@@ -130,6 +143,15 @@ impl UserView {
                 .iter()
                 .filter(|(plugin, _)| metadata.get(*plugin).and_then(Value::as_bool) == Some(true))
                 .flat_map(|(_, fields)| fields.iter().map(|name| (*name).to_owned()))
+                .chain(
+                    ["name", "email", "image"]
+                        .into_iter()
+                        .filter(|name| {
+                            user.field_presence()
+                                .is_none_or(|fields| fields.contains(*name))
+                        })
+                        .map(str::to_owned),
+                )
                 .collect(),
         );
         view.additional_fields.clear();
@@ -150,7 +172,9 @@ impl UserView {
                     field.adapter_output(value, supports_native_json)?
                 };
                 if let Some(mut value) = value {
-                    field.normalize_date(&mut value)?;
+                    if !field.references_id() {
+                        field.normalize_date(&mut value)?;
+                    }
                     if !public || field.returned {
                         let _ = view.additional_fields.insert(name.clone(), value);
                     }
@@ -184,6 +208,15 @@ impl From<UserView> for Map<String, Value> {
                 ),
             ),
         ]);
+        for name in ["name", "email", "image"] {
+            if user
+                .visible_fields
+                .as_ref()
+                .is_some_and(|fields| !fields.contains(name))
+            {
+                let _ = result.remove(name);
+            }
+        }
         for (name, value) in [
             ("isAnonymous", json!(user.is_anonymous)),
             ("phoneNumber", json!(user.phone_number)),
@@ -243,6 +276,12 @@ impl TryFrom<Map<String, Value>> for UserView {
                 .flat_map(|(_, names)| names.iter())
                 .filter(|name| fields.contains_key(**name))
                 .map(|name| (*name).to_owned())
+                .chain(
+                    ["name", "email", "image"]
+                        .into_iter()
+                        .filter(|name| fields.contains_key(*name))
+                        .map(str::to_owned),
+                )
                 .collect(),
         );
         Ok(Self {

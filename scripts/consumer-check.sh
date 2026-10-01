@@ -13,6 +13,10 @@ cargo run --locked -p better-auth-cli -- generate --plugins all --schema-config 
 export BETTER_AUTH_PLUGIN_SCHEMA="$schema_dir/plugin_schema.rs"
 cargo run --locked -p better-auth-cli -- generate --plugins organization --schema-config compat-tests/schema-consumer/dynamic-schema.json --output "$schema_dir/dynamic_schema.rs"
 export BETTER_AUTH_DYNAMIC_SCHEMA="$schema_dir/dynamic_schema.rs"
+cargo run --locked -p better-auth-cli -- generate --plugins organization --schema-config compat-tests/schema-consumer/field-attributes-schema.json --output "$schema_dir/field_attributes_schema.rs"
+export BETTER_AUTH_FIELD_ATTRIBUTES_SCHEMA="$schema_dir/field_attributes_schema.rs"
+cargo run --locked -p better-auth-cli -- generate --rate-limit-database --schema-config compat-tests/schema-consumer/rate-limit-schema.json --output "$schema_dir/rate_limit_schema.rs"
+export BETTER_AUTH_RATE_LIMIT_SCHEMA="$schema_dir/rate_limit_schema.rs"
 cargo fmt --manifest-path compat-tests/schema-consumer/Cargo.toml -- --check
 cargo clippy --locked --manifest-path compat-tests/schema-consumer/Cargo.toml --all-targets -- -D warnings
 cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml

@@ -5,7 +5,8 @@ use better_auth::{
     AuthConfig, BetterAuth,
     integrations::axum::AxumIntegration,
     plugins::{
-        ApiKeyPlugin, EmailPasswordPlugin, JwtPlugin, SessionManagementPlugin, TwoFactorPlugin,
+        ApiKeyPlugin, EmailPasswordPlugin, JwtPlugin, LastLoginMethodConfig, LastLoginMethodPlugin,
+        SessionManagementPlugin, TwoFactorPlugin,
     },
     prelude::{
         CreateDeviceCode, CreatePasskey, UpdateDeviceCode, UpdatePasskeyAuthentication,
@@ -39,6 +40,11 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
                     .with_plugin_schema::<generated::AppPluginSchema>(),
             )
             .plugin(EmailPasswordPlugin::new().enable_signup(true))
+            .plugin(LastLoginMethodPlugin::new(LastLoginMethodConfig {
+                store_in_database: true,
+                field_name: Some("login_method".into()),
+                ..Default::default()
+            }))
             .plugin(SessionManagementPlugin::new())
             .plugin(ApiKeyPlugin::builder().build())
             .plugin(TwoFactorPlugin::new())
@@ -68,6 +74,30 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         .unwrap()
         .unwrap();
     assert_eq!(user.email.as_deref(), Some("mapped@example.com"));
+    assert_eq!(user.last_login_method.as_deref(), Some("email"));
+    assert_eq!(signup["user"]["lastLoginMethod"], "email");
+    database
+        .execute_unprepared("UPDATE mapped_user SET login_method = NULL")
+        .await
+        .unwrap();
+    let (status, signed_in) = request(
+        &router,
+        "/auth/sign-in/email",
+        Some(credentials.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{signed_in}");
+    assert_eq!(
+        generated::user::Entity::find_by_id(user_id)
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .last_login_method
+            .as_deref(),
+        Some("email")
+    );
     assert_eq!(
         request(&router, "/auth/get-session", None, Some(token))
             .await

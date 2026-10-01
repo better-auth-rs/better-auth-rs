@@ -5,6 +5,10 @@ description: Prove email ownership with a single-use sign-in link.
 
 Register `MagicLinkPlugin::new().custom_send_magic_link(sender)`. Implement `SendMagicLink` with your email delivery service. The sender receives the email address, verification URL, original token, and optional request metadata.
 
+For schema-aware delivery, attach `.callbacks(MagicLinkCallbacks::<AppAuthSchema>::new(|message, endpoint| Box::pin(async move { /* deliver message */ Ok(()) })))`. The callback borrows `MagicLinkMessage` and the typed `EndpointContext`, including parsed input, headers, runtime, and the original HTTP request. Native calls have no original HTTP request. Both Magic Link endpoints require a supplied headers collection, which may be empty; omitted headers produce a validation error before the callback runs. This callback takes precedence over the context-free sender.
+
+The verification proof is stored before delivery. A sender failure preserves that proof. API errors retain response headers added through the endpoint; ordinary errors follow the shared [plugin error contract](/docs/concepts/plugins).
+
 `POST /sign-in/magic-link` accepts `email`, optional `name`, `callbackURL`, `newUserCallbackURL`, `errorCallbackURL`, and `metadata`. `GET /magic-link/verify?token=...` consumes the token and creates a session. Supplying `callbackURL` selects a redirect response; omitting the field returns `token`, `session`, and `user` JSON.
 
 Tokens expire after five minutes and permit one verification. Use `.expires_in(chrono::Duration::minutes(10))` to change the lifetime. `.store_token(TokenStorage::Hashed)` stores a SHA-256 digest instead of the token. `TokenStorage::Custom` and `.generate_token(generator)` support application token policies. The shared `TokenStorage` type is exported from `plugins::one_time_token`.

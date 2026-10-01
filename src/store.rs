@@ -2,7 +2,12 @@
 
 #[cfg(feature = "redis-cache")]
 pub use better_auth_core::store::RedisAdapter;
+pub use better_auth_core::store::database_hooks::{
+    DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks, SessionUpdate,
+    VerificationUpdate,
+};
 pub use better_auth_core::store::{
-    AuthStore, AuthTransaction, CacheAdapter, MemoryCacheAdapter, SecondaryStorage,
+    AuthStore, AuthTransaction, CacheAdapter, EphemeralStore, MemoryCacheAdapter, RateLimitRecord,
+    RateLimitStore, RuntimeStore, SecondaryStorage, StatelessSchema, StoreCapabilities,
     VerificationCleanup, VerificationSessionCleanup, transaction,
 };

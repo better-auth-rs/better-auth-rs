@@ -157,7 +157,7 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
                 .as_ref()
                 .is_some_and(|cache| {
                     matches!(
-                        cache.strategy,
+                        cache.strategy(),
                         better_auth_core::config::CookieCacheStrategy::Jwt
                     )
                 })
@@ -171,11 +171,10 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
                     "session_cookie_cache requires locally managed JWT keys",
                 ));
             }
-            let signer: std::sync::Arc<dyn better_auth_core::session::SessionCookieSigner> =
+            let signer: std::sync::Arc<dyn better_auth_core::session::SessionCookieSigner<S>> =
                 std::sync::Arc::new(cache::CookieSigner {
                     plugin: Self::with_config(self.config.clone()),
-                    config: ctx.config.clone(),
-                    database: ctx.database.clone(),
+                    runtime: ctx.runtime(),
                 });
             ctx.extensions.insert(signer);
         }
@@ -274,6 +273,16 @@ impl JwtPlugin {
         parameters: JwtKeyPairConfig,
         ctx: &AuthContext<S>,
     ) -> AuthResult<better_auth_core::Jwk> {
+        self.create_key_pair_with_store(parameters, &ctx.config, ctx.database.as_ref())
+            .await
+    }
+
+    async fn create_key_pair_with_store(
+        &self,
+        parameters: JwtKeyPairConfig,
+        config: &better_auth_core::AuthConfig,
+        store: &dyn better_auth_core::store::JwksStore,
+    ) -> AuthResult<better_auth_core::Jwk> {
         if matches!(
             parameters.algorithm,
             JwtAlgorithm::Rs256 | JwtAlgorithm::Ps256
@@ -293,11 +302,11 @@ impl JwtPlugin {
             key.to_string()
         } else {
             serde_json::to_string(&super::symmetric::encrypt(
-                ctx.config.encryption_secret(),
+                config.encryption_secret(),
                 &key.to_string(),
             )?)?
         };
-        ctx.database
+        store
             .create_jwk(CreateJwk {
                 public_key,
                 private_key,

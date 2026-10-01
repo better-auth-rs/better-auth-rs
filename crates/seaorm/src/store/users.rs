@@ -1,13 +1,13 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait,
-    IntoActiveModel, QueryFilter,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, IntoActiveModel, QueryFilter,
 };
 
 use better_auth_core::store::UserStore;
 
 use crate::error::{AuthError, AuthResult};
+use crate::hooks::DatabaseHookUpdate;
 use crate::schema::{AuthSchema, SeaOrmUserModel};
 use crate::types::{CreateUser, ListUsersParams, UpdateUser};
 use crate::utils::email::{normalize_optional_user_email, normalize_user_email};
@@ -22,7 +22,7 @@ where
     async fn create_user_with_connection<C>(
         &self,
         db: &C,
-        tx: Option<&DatabaseTransaction>,
+        tx: Option<super::HookTransaction<'_, S>>,
         mut create_user: CreateUser,
     ) -> AuthResult<S::User>
     where
@@ -56,10 +56,18 @@ where
         )?;
         let mut model = S::User::new_active(user_id, create_user, now);
         S::User::apply_fields(&mut model, fields)?;
+        crate::reference_id::apply_bindings(
+            &mut model,
+            &self.config().user,
+            db.get_database_backend(),
+            S::User::field_column,
+        )?;
 
         let user = model.insert(db).await.map_err(map_db_err)?;
-        for hook in self.hooks() {
-            hook.after_create_user(&user, &hook_context).await?;
+        if tx.is_none() {
+            for hook in self.hooks() {
+                hook.after_create_user(&user, &hook_context).await?;
+            }
         }
         Ok(user)
     }
@@ -67,7 +75,7 @@ where
     pub(super) async fn update_user_with_connection(
         &self,
         db: &impl ConnectionTrait,
-        tx: Option<&DatabaseTransaction>,
+        tx: Option<super::HookTransaction<'_, S>>,
         id: &str,
         mut update: UpdateUser,
     ) -> AuthResult<S::User> {
@@ -77,13 +85,15 @@ where
         }
         let user_id = S::User::parse_id(id)?;
         let hook_context = self.hook_context(tx);
+        let original = update.clone();
         for hook in self.hooks() {
-            if hook
-                .before_update_user(id, &mut update, &hook_context)
+            match hook
+                .before_update_user(id, &original, &hook_context)
                 .await?
-                .is_cancelled()
             {
-                return Err(cancelled_by_hook("user update"));
+                DatabaseHookUpdate::Continue => {}
+                DatabaseHookUpdate::Cancel => return Err(cancelled_by_hook("user update")),
+                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
             }
         }
         if let Some(username) = update.username.as_mut() {
@@ -95,6 +105,11 @@ where
             .await
             .map_err(map_db_err)?
         else {
+            if tx.is_none() {
+                for hook in self.hooks() {
+                    hook.after_update_user(None, &hook_context).await?;
+                }
+            }
             return Err(AuthError::UserNotFound);
         };
 
@@ -107,19 +122,27 @@ where
         )?;
         S::User::apply_update(&mut active, update, Utc::now());
         S::User::apply_fields(&mut active, fields)?;
+        crate::reference_id::apply_bindings(
+            &mut active,
+            &self.config().user,
+            db.get_database_backend(),
+            S::User::field_column,
+        )?;
 
         let user = active.update(db).await.map_err(map_db_err)?;
-        for hook in self.hooks() {
-            hook.after_update_user(&user, &hook_context).await?;
+        if tx.is_none() {
+            for hook in self.hooks() {
+                hook.after_update_user(Some(&user), &hook_context).await?;
+            }
         }
         Ok(user)
     }
     pub(super) async fn delete_user_with_connection(
         &self,
         db: &impl ConnectionTrait,
-        tx: Option<&DatabaseTransaction>,
+        tx: Option<super::HookTransaction<'_, S>>,
         id: &str,
-    ) -> AuthResult<()> {
+    ) -> AuthResult<S::User> {
         let user_id = S::User::parse_id(id)?;
         let Some(user) = <S::User as SeaOrmUserModel>::Entity::find()
             .filter(<S::User as SeaOrmUserModel>::id_column().eq(user_id.clone()))
@@ -153,17 +176,19 @@ where
             .exec(db)
             .await
             .map_err(map_db_err)?;
-        for hook in self.hooks() {
-            hook.after_delete_user(&user, &hook_context).await?;
+        if tx.is_none() {
+            for hook in self.hooks() {
+                hook.after_delete_user(&user, &hook_context).await?;
+            }
         }
-        Ok(())
+        Ok(user)
     }
     pub(crate) async fn create_user_in_tx(
         &self,
-        tx: &DatabaseTransaction,
+        tx: super::HookTransaction<'_, S>,
         create_user: CreateUser,
     ) -> AuthResult<S::User> {
-        self.create_user_with_connection(tx, Some(tx), create_user)
+        self.create_user_with_connection(tx.0, Some(tx), create_user)
             .await
     }
 }
@@ -176,6 +201,7 @@ where
     S::User: SeaOrmUserModel,
     S::Account: crate::schema::SeaOrmAccountModel,
     S::Session: crate::schema::SeaOrmSessionModel,
+    S::Verification: crate::schema::SeaOrmVerificationModel,
 {
     fn supports_native_json(&self) -> bool {
         self.connection().get_database_backend() == sea_orm::DbBackend::Postgres
@@ -287,6 +313,7 @@ where
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
         self.delete_user_with_connection(self.connection(), None, id)
             .await
+            .map(|_| ())
     }
 
     async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<S::User>, usize)> {

@@ -1,13 +1,14 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait,
-    IntoActiveModel, QueryFilter, QueryOrder,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, IntoActiveModel, QueryFilter,
+    QueryOrder,
 };
 
 use better_auth_core::store::AccountStore;
 
 use crate::error::AuthResult;
+use crate::hooks::DatabaseHookUpdate;
 use crate::schema::{AuthSchema, SeaOrmAccountModel};
 use crate::types::{CreateAccount, UpdateAccount};
 
@@ -21,7 +22,7 @@ where
     async fn create_account_with_connection<C>(
         &self,
         db: &C,
-        tx: Option<&DatabaseTransaction>,
+        tx: Option<super::HookTransaction<'_, S>>,
         mut create_account: CreateAccount,
     ) -> AuthResult<Option<S::Account>>
     where
@@ -42,18 +43,20 @@ where
             .insert(db)
             .await
             .map_err(map_db_err)?;
-        for hook in self.hooks() {
-            hook.after_create_account(&account, &hook_context).await?;
+        if tx.is_none() {
+            for hook in self.hooks() {
+                hook.after_create_account(&account, &hook_context).await?;
+            }
         }
         Ok(Some(account))
     }
 
     pub(crate) async fn create_account_in_tx(
         &self,
-        tx: &DatabaseTransaction,
+        tx: super::HookTransaction<'_, S>,
         create_account: CreateAccount,
     ) -> AuthResult<S::Account> {
-        self.create_account_with_connection(tx, Some(tx), create_account)
+        self.create_account_with_connection(tx.0, Some(tx), create_account)
             .await?
             .ok_or_else(|| cancelled_by_hook("account creation"))
     }
@@ -116,13 +119,15 @@ where
     ) -> AuthResult<Option<S::Account>> {
         let account_id = <S::Account as SeaOrmAccountModel>::parse_id(id)?;
         let hook_context = self.hook_context(None);
+        let original = update.clone();
         for hook in self.hooks() {
-            if hook
-                .before_update_account(id, &mut update, &hook_context)
+            match hook
+                .before_update_account(id, &original, &hook_context)
                 .await?
-                .is_cancelled()
             {
-                return Ok(None);
+                DatabaseHookUpdate::Continue => {}
+                DatabaseHookUpdate::Cancel => return Ok(None),
+                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
             }
         }
         let Some(model) = <S::Account as SeaOrmAccountModel>::Entity::find()
@@ -131,7 +136,10 @@ where
             .await
             .map_err(map_db_err)?
         else {
-            return Err(crate::error::AuthError::not_found("Account not found"));
+            for hook in self.hooks() {
+                hook.after_update_account(None, &hook_context).await?;
+            }
+            return Ok(None);
         };
 
         let mut active = model.into_active_model();
@@ -139,7 +147,8 @@ where
 
         let account = active.update(self.connection()).await.map_err(map_db_err)?;
         for hook in self.hooks() {
-            hook.after_update_account(&account, &hook_context).await?;
+            hook.after_update_account(Some(&account), &hook_context)
+                .await?;
         }
         Ok(Some(account))
     }

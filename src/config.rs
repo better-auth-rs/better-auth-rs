@@ -2,11 +2,12 @@
 
 pub use better_auth_core::config::{
     AccountConfig, AccountLinkingConfig, AdvancedConfig, AdvancedDatabaseConfig, Argon2Config,
-    BearerConfig, CookieAttributes, CookieCacheConfig, CookieCacheStrategy, CookieCacheVersion,
-    CookieCacheVersionCallback, CookieOverride, CrossSubDomainConfig, IpAddressConfig, JwtConfig,
-    OAuthStateStrategy, PasswordConfig, SameSite, SecretKey, SessionConfig, SessionFieldConfig,
-    UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType, UserFieldValidator,
-    VersionedSecret, core_paths, extract_origin,
+    BearerConfig, CookieAttributes, CookieCacheConfig, CookieCacheRefresh, CookieCacheStrategy,
+    CookieCacheVersion, CookieCacheVersionCallback, CookieOverride, CrossSubDomainConfig,
+    IpAddressConfig, JwtConfig, OAuthStateStrategy, PasswordConfig, SameSite, SecretKey,
+    SessionConfig, SessionFieldConfig, UserConfig, UserFieldConfig, UserFieldReference,
+    UserFieldTransform, UserFieldType, UserFieldValidator, VersionedSecret, core_paths,
+    extract_origin,
 };
 
 pub use better_auth_core::config::{

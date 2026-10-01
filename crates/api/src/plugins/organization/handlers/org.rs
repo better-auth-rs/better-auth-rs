@@ -13,7 +13,6 @@ use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
 use better_auth_core::store::ListOrganizationMembersParams;
 use better_auth_core::types::{AuthRequest, AuthResponse, CreateOrganization, UpdateOrganization};
-use better_auth_core::utils::cookie_utils::create_session_cookie;
 use better_auth_core::wire::InvitationView;
 use std::collections::HashMap;
 
@@ -496,6 +495,7 @@ pub(crate) async fn check_slug_core(
 }
 
 pub(crate) async fn set_active_organization_core(
+    req: &AuthRequest,
     body: &SetActiveOrganizationRequest,
     user: &impl AuthUser,
     session: &impl AuthSession,
@@ -506,9 +506,13 @@ pub(crate) async fn set_active_organization_core(
             return Ok(None);
         }
 
-        let _ = ctx
+        let updated = ctx
             .database
             .update_session_active_organization(session.token(), None)
+            .await?;
+        let manager = ctx.session_manager();
+        manager
+            .set_session_cookie(req, manager.internal_data(user, &updated).await?, None)
             .await?;
         return Ok(None);
     }
@@ -534,16 +538,20 @@ pub(crate) async fn set_active_organization_core(
         .await?
         .ok_or_else(|| AuthError::forbidden("User is not a member of the organization"))?;
 
-    let _ = ctx
-        .database
-        .update_session_active_organization(session.token(), Some(&org_id))
-        .await?;
-
     let organization = ctx
         .database
         .get_organization_by_id(&org_id)
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+
+    let updated = ctx
+        .database
+        .update_session_active_organization(session.token(), Some(&org_id))
+        .await?;
+    let manager = ctx.session_manager();
+    manager
+        .set_session_cookie(req, manager.internal_data(user, &updated).await?, None)
+        .await?;
 
     Ok(Some(crate::plugins::organization::fields::organization(
         &organization,
@@ -820,9 +828,8 @@ pub async fn handle_set_active_organization(
         Ok(v) => v,
         Err(resp) => return Ok(resp),
     };
-    let organization = set_active_organization_core(&body, &user, &session, ctx).await?;
-    let cookie_header = create_session_cookie(session.token(), &ctx.config);
-    Ok(AuthResponse::json(200, &organization)?.with_header("Set-Cookie", cookie_header))
+    let organization = set_active_organization_core(req, &body, &user, &session, ctx).await?;
+    Ok(AuthResponse::json(200, &organization)?)
 }
 
 /// Handle leave organization request

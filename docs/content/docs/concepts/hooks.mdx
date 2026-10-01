@@ -5,6 +5,8 @@ description: Intercept SeaORM-backed auth operations with lifecycle hooks.
 
 SeaORM hooks let you run custom logic before and after auth writes. Use them for validation, auditing, provisioning, or rejecting operations while keeping the public auth runtime separate from your persistence integration.
 
+`ctx.request` contains the matched endpoint template, captured `params`, and parsed `body`. For `/callback/mock`, the hook path is `/callback/:id` and `params["id"]` is `mock`; `AuthRequest.path` retains the actual request path. Body replacements from earlier plugin hooks are visible to database hooks. Direct store calls have no request context. Native APIs can provide a body without setting `is_http`; HTTP response conversion remains the transport's responsibility.
+
 ## Setup
 
 These examples assume you've already defined `AppAuthSchema` and a `database: DatabaseConnection`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
@@ -22,7 +24,7 @@ impl SeaOrmHooks<AppAuthSchema> for AuditHook {
     async fn after_create_user(
         &self,
         user: &<AppAuthSchema as AuthSchema>::User,
-        _ctx: &SeaOrmHookContext<'_>,
+        _ctx: &SeaOrmHookContext<'_, AppAuthSchema>,
     ) -> better_auth::AuthResult<()> {
         println!("User created: {:?}", user.email());
         Ok(())
@@ -48,57 +50,57 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
     async fn before_create_user(
         &self,
         user: &mut CreateUser,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl>;
 
     async fn after_create_user(
         &self,
         user: &S::User,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()>;
 
     async fn before_update_user(
         &self,
         id: &str,
-        update: &mut UpdateUser,
-        ctx: &SeaOrmHookContext<'_>,
-    ) -> AuthResult<HookControl>;
+        update: &UpdateUser,
+        ctx: &SeaOrmHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>>;
 
     async fn after_update_user(
         &self,
-        user: &S::User,
-        ctx: &SeaOrmHookContext<'_>,
+        user: Option<&S::User>,
+        ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()>;
 
     async fn before_delete_user(
         &self,
         user: &S::User,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl>;
 
     async fn after_delete_user(
         &self,
         user: &S::User,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()>;
 
     async fn before_create_session(
         &self,
         session: &mut CreateSession,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl>;
 
     async fn after_create_session(
         &self,
         session: &S::Session,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()>;
 }
 ```
 
 ## Rejecting Operations
 
-Return `HookControl::Cancel` or an error from a `before_*` hook to abort the operation:
+Return `HookControl::Cancel` from a create or delete hook to cancel the write. Update hooks return `DatabaseHookUpdate::Cancel`. An error stops the operation and propagates to the caller.
 
 Atomic verification consumption returns `None` when a before-delete hook cancels. After-delete hooks run after the consumption transaction commits. An after-delete hook error propagates to the caller, but the consumed credential remains deleted.
 
@@ -108,7 +110,7 @@ impl SeaOrmHooks<AppAuthSchema> for BlockDisposableEmails {
     async fn before_create_user(
         &self,
         user: &mut CreateUser,
-        _ctx: &SeaOrmHookContext<'_>,
+        _ctx: &SeaOrmHookContext<'_, AppAuthSchema>,
     ) -> AuthResult<HookControl> {
         if let Some(email) = &user.email {
             if email.ends_with("@disposable.com") {
@@ -122,7 +124,9 @@ impl SeaOrmHooks<AppAuthSchema> for BlockDisposableEmails {
 
 ## Modifying Data
 
-`before_*` hooks receive mutable references, so you can normalize or enrich values before they are persisted:
+Create hooks receive mutable references. Each update hook receives the original patch and returns `DatabaseHookUpdate::Continue`, `Cancel`, or `Patch(data)`. Returned patches merge in registration order. A later hook can overwrite fields returned by an earlier hook, but cannot observe the earlier patch through its input. `SessionUpdate` and `VerificationUpdate` provide the corresponding session and verification fields. Nullable fields use `Option<Option<T>>` to distinguish omission from clearing a value.
+
+After-update hooks receive `None` when the database matches no row. A cancelled update does not run after-update hooks.
 
 ```rust
 #[async_trait]
@@ -130,7 +134,7 @@ impl SeaOrmHooks<AppAuthSchema> for NormalizeEmail {
     async fn before_create_user(
         &self,
         user: &mut CreateUser,
-        _ctx: &SeaOrmHookContext<'_>,
+        _ctx: &SeaOrmHookContext<'_, AppAuthSchema>,
     ) -> AuthResult<HookControl> {
         if let Some(email) = &mut user.email {
             *email = email.to_lowercase();
@@ -142,7 +146,9 @@ impl SeaOrmHooks<AppAuthSchema> for NormalizeEmail {
 
 ## Provisioning After Signup
 
-Use `after_create_user` to create application records. When `ctx.tx` is present, use that transaction for related writes. An `after_*` hook runs after the write, before the transaction commits. External side effects, such as sending email, do not roll back with the transaction.
+Use `after_create_user` to provision records after the authentication transaction commits. Before hooks receive the native SeaORM transaction in `ctx.tx` and the same transaction through the typed `ctx.transaction` interface. After hooks receive `ctx.tx == None` and run in write order after commit. Rollback discards queued after hooks. An after-hook error propagates, stops subsequent hooks, and leaves committed authentication data unchanged.
+
+Database hooks and deferred secondary-storage effects share one ordered commit queue. A user's cache refresh follows that update's after hooks and precedes hooks from later writes. `AuthTransaction::queue_after_commit` adds application effects to the same queue and preserves the request hook context from the enqueue point. Session creation writes its cache entry immediately by default. `create_session_with_deferred_secondary` runs session after hooks before publishing the cache entry; rollback discards that deferred write.
 
 ```rust
 use async_trait::async_trait;
@@ -160,18 +166,14 @@ impl SeaOrmHooks<AppAuthSchema> for ProvisionWorkspaceHook {
     async fn after_create_user(
         &self,
         user: &<AppAuthSchema as AuthSchema>::User,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, AppAuthSchema>,
     ) -> AuthResult<()> {
         let statement = Query::insert()
             .into_table(Alias::new("app_workspaces"))
             .columns([Alias::new("user_id"), Alias::new("name")])
             .values_panic([user.id().into_owned().into(), "Default Workspace".into()])
             .to_owned();
-        let result = if let Some(tx) = ctx.tx {
-            tx.execute(&statement).await
-        } else {
-            ctx.db.execute(&statement).await
-        };
+        let result = ctx.db.execute(&statement).await;
         result.map_err(|error| DatabaseError::Query(error.to_string()))?;
         Ok(())
     }
@@ -198,3 +200,11 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 ```
 
 If any `before_*` hook returns `HookControl::Cancel` or an error, subsequent hooks and the write itself are skipped.
+
+## Plugin hooks and runtime isolation
+
+Plugins register shared `DatabaseHooks<S>` through `AuthInitContext::register_database_hook`. These hooks run before application hooks. The SeaORM bridge preserves both the native transaction and the typed transaction; plugin writes can participate in the same transaction and commit queue.
+
+`AuthInitContext::runtime` returns a weak binding to the final `AuthContext<S>`. Read this binding from callbacks after initialization. The binding includes the final secondary-storage facade and avoids retaining the authentication runtime through its own store hooks. The provided adapters isolate hook registries and field policies when multiple authentication instances share underlying records.
+
+Plugins can declare user fields through `register_user_fields`. Adapter policies merge plugin fields before application fields. Endpoint validation and public filtering merge application fields before plugin fields. Cached users retain the adapter projection and only reapply public filtering.

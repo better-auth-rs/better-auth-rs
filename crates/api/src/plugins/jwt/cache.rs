@@ -1,19 +1,22 @@
 use super::*;
-use better_auth_core::session::SessionCookieSigner;
-use std::sync::Arc;
+use better_auth_core::session::{SessionCookieContext, SessionCookieSigner};
 
 const TYPE: &str = "better-auth.session-cache+jwt";
 const AUDIENCE: &str = "better-auth:session-cache";
 
 pub(super) struct CookieSigner<S: AuthSchema> {
     pub plugin: JwtPlugin,
-    pub config: Arc<better_auth_core::AuthConfig>,
-    pub database: Arc<dyn better_auth_core::store::AuthStore<S>>,
+    pub runtime: better_auth_core::plugin_runtime::PluginRuntime<S>,
 }
 
 #[async_trait::async_trait]
-impl<S: AuthSchema> SessionCookieSigner for CookieSigner<S> {
-    async fn sign(&self, mut payload: Map<String, Value>, expires_in: i64) -> AuthResult<String> {
+impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
+    async fn sign(
+        &self,
+        mut payload: Map<String, Value>,
+        expires_in: i64,
+        context: SessionCookieContext<'_, S>,
+    ) -> AuthResult<String> {
         let sid = payload
             .get("session")
             .and_then(|session| session.get("token"))
@@ -29,22 +32,32 @@ impl<S: AuthSchema> SessionCookieSigner for CookieSigner<S> {
             ("sub".into(), subject),
             ("iat".into(), Utc::now().timestamp().into()),
             ("exp".into(), (Utc::now().timestamp() + expires_in).into()),
-            ("iss".into(), self.issuer().into()),
+            ("iss".into(), issuer(context.config).into()),
             ("aud".into(), AUDIENCE.into()),
         ]);
+        let runtime = self.runtime.context()?;
+        let store: &dyn better_auth_core::store::JwksStore = match context.transaction {
+            Some(transaction) => transaction,
+            None => runtime.database.as_ref(),
+        };
         self.plugin
-            .sign_with_options(
+            .sign_with_store(
                 payload,
                 &JwtSigningOptions {
                     header: serde_json::from_value(json!({"typ": TYPE}))?,
                     ..Default::default()
                 },
-                &AuthContext::new(self.config.clone(), self.database.clone()),
+                context.config,
+                store,
             )
             .await
     }
 
-    async fn verify(&self, token: &str) -> AuthResult<Option<Map<String, Value>>> {
+    async fn verify(
+        &self,
+        token: &str,
+        context: SessionCookieContext<'_, S>,
+    ) -> AuthResult<Option<Map<String, Value>>> {
         if verification::protected_header(token)
             .and_then(|header| header.token_type().map(str::to_owned))
             .as_deref()
@@ -52,12 +65,17 @@ impl<S: AuthSchema> SessionCookieSigner for CookieSigner<S> {
         {
             return Ok(None);
         }
-        let keys = self.database.list_jwks().await?;
+        let runtime = self.runtime.context()?;
+        let store: &dyn better_auth_core::store::JwksStore = match context.transaction {
+            Some(transaction) => transaction,
+            None => runtime.database.as_ref(),
+        };
+        let keys = store.list_jwks().await?;
         let payload = verification::verify_local(
             token,
             &keys,
             self.plugin.config.algorithm,
-            self.issuer(),
+            issuer(context.config),
             &[AUDIENCE],
             15,
         );
@@ -75,12 +93,10 @@ impl<S: AuthSchema> SessionCookieSigner for CookieSigner<S> {
     }
 }
 
-impl<S: AuthSchema> CookieSigner<S> {
-    fn issuer(&self) -> &str {
-        if self.config.base_url.is_empty() {
-            AUDIENCE
-        } else {
-            &self.config.base_url
-        }
+fn issuer(config: &better_auth_core::AuthConfig) -> &str {
+    if config.base_url.is_empty() {
+        AUDIENCE
+    } else {
+        &config.base_url
     }
 }

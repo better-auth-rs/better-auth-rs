@@ -9,14 +9,16 @@ use crate::plugins::json_body::{self, SignOutBody};
 use super::providers::OAuthProvider;
 use super::resolved::ResolvedOAuthConfig as OAuthConfig;
 
-pub(super) async fn handle_sign_out(
-    config: &OAuthConfig,
+pub(crate) async fn handle_sign_out(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let body = match json_body::sign_out(req) {
         Ok(body) => body,
         Err(response) => return Ok(response),
+    };
+    let Some(config) = ctx.extensions.get::<std::sync::Arc<OAuthConfig>>() else {
+        return crate::plugins::session_management::handle_sign_out(req, ctx).await;
     };
     let user_id = if let Some(token) = ctx.session_manager().extract_session_token(req) {
         match ctx.database.get_session(&token).await {

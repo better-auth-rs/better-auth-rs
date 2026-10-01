@@ -14,6 +14,15 @@ pub type UserFieldTransform = Arc<dyn Fn(Option<Value>) -> AuthResult<Option<Val
 /// Synchronous public input validator. Return the validated value or a public validation message.
 pub type UserFieldValidator = Arc<dyn Fn(Value) -> AuthResult<Value> + Send + Sync>;
 
+/// Referenced model and logical field, shared with the application's migration configuration.
+#[derive(Clone, Debug)]
+pub struct UserFieldReference {
+    /// Logical model name, or the literal name of an application-owned table.
+    pub model: String,
+    /// Logical field name, or the literal column name of an application-owned table.
+    pub field: String,
+}
+
 /// Storage type of an application user field.
 #[derive(Clone, Debug, Default)]
 pub enum UserFieldType {
@@ -49,6 +58,8 @@ pub struct UserFieldConfig {
     pub returned: bool,
     /// Serialized application model field name.
     pub field_name: Option<String>,
+    /// Foreign-key metadata. References to `id` use the adapter's ID output conversion.
+    pub references: Option<UserFieldReference>,
     /// Constant creation default.
     pub default_value: Option<Value>,
     /// Creation default factory.
@@ -71,6 +82,7 @@ impl Default for UserFieldConfig {
             input: true,
             returned: true,
             field_name: None,
+            references: None,
             default_value: None,
             default_value_fn: None,
             on_update: None,

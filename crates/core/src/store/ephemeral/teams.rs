@@ -7,7 +7,7 @@ use crate::{
 use better_auth_schema_registry::EntityRole;
 use serde_json::{Map, json};
 #[async_trait]
-impl TeamStore for MemoryStore {
+impl TeamStore for EphemeralStore {
     async fn create_team(&self, mut input: CreateTeam) -> AuthResult<Team> {
         let team = Team {
             additional_fields: [("memberCount".into(), json!(0))].into_iter().collect(),
@@ -27,11 +27,11 @@ impl TeamStore for MemoryStore {
         };
         let team: Team =
             self.store_record(EntityRole::Team, team, None, input.additional_fields)?;
-        self.lock().teams.insert(team.id.clone(), team.clone());
+        let _ = self.lock()?.teams.insert(team.id.clone(), team.clone());
         self.output_team(team)
     }
     async fn get_team(&self, id: &str) -> AuthResult<Option<Team>> {
-        self.lock()
+        self.lock()?
             .teams
             .get(id)
             .cloned()
@@ -39,7 +39,7 @@ impl TeamStore for MemoryStore {
             .transpose()
     }
     async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<Team>> {
-        self.lock()
+        self.lock()?
             .teams
             .values()
             .find(|team| json!(team.id) == *id)
@@ -61,14 +61,14 @@ impl TeamStore for MemoryStore {
         if let Some(updated_at) = update.updated_at {
             let _ = patch.insert("updatedAt".into(), json!(updated_at));
         } else if !self
-            .organization_fields()
+            .organization_fields()?
             .team
             .additional_fields
             .contains_key("updatedAt")
         {
             let _ = patch.insert("updatedAt".into(), json!(Utc::now()));
         }
-        let mut state = self.lock();
+        let mut state = self.lock()?;
         let team = state
             .teams
             .get_mut(id)
@@ -82,7 +82,7 @@ impl TeamStore for MemoryStore {
         self.output_team(team.clone())
     }
     async fn delete_team(&self, id: &str) -> AuthResult<()> {
-        let mut state = self.lock();
+        let mut state = self.lock()?;
         let organization_id = &state
             .teams
             .get(id)
@@ -131,16 +131,16 @@ impl TeamStore for MemoryStore {
             updates.push(updated);
         }
         // Keep changes staged until every transform succeeds, matching transaction rollback.
-        state.teams.remove(id);
+        let _ = state.teams.shift_remove(id);
         state.team_members.retain(|member| member.team_id != id);
         for invitation in updates {
-            state.invitations.insert(invitation.id.clone(), invitation);
+            let _ = state.invitations.insert(invitation.id.clone(), invitation);
         }
         Ok(())
     }
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<Team>> {
         let teams: Vec<_> = self
-            .lock()
+            .lock()?
             .teams
             .values()
             .filter(|team| team.organization_id == organization_id)
@@ -164,7 +164,7 @@ impl TeamStore for MemoryStore {
             .collect()
     }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<Team>> {
-        let state = self.lock();
+        let state = self.lock()?;
         state
             .team_members
             .iter()
@@ -179,7 +179,7 @@ impl TeamStore for MemoryStore {
         user_id: &str,
     ) -> AuthResult<Option<TeamMember>> {
         Ok(self
-            .lock()
+            .lock()?
             .team_members
             .iter()
             .find(|member| member.team_id == team_id && member.user_id == user_id)
@@ -187,7 +187,7 @@ impl TeamStore for MemoryStore {
     }
     async fn list_team_members(&self, team_id: &str) -> AuthResult<Vec<TeamMember>> {
         Ok(self
-            .lock()
+            .lock()?
             .team_members
             .iter()
             .filter(|member| member.team_id == team_id)
@@ -200,10 +200,12 @@ impl TeamStore for MemoryStore {
         user_id: &str,
         maximum: Option<usize>,
     ) -> AuthResult<Option<TeamMember>> {
-        let mut state = self.lock();
-        if !state.teams.contains_key(team_id) {
-            return Err(AuthError::not_found("Team not found"));
-        }
+        let mut state = self.lock()?;
+        let team = state
+            .teams
+            .get(team_id)
+            .cloned()
+            .ok_or_else(|| AuthError::not_found("Team not found"))?;
         if let Some(member) = state
             .team_members
             .iter()
@@ -216,9 +218,8 @@ impl TeamStore for MemoryStore {
             .iter()
             .filter(|member| member.team_id == team_id)
             .count();
-        let (team, reserved) =
-            self.reserve_team_seat(state.teams.get(team_id).unwrap().clone(), actual, maximum)?;
-        state.teams.insert(team_id.to_owned(), team);
+        let (team, reserved) = self.reserve_team_seat(team, actual, maximum)?;
+        let _ = state.teams.insert(team_id.to_owned(), team);
         if !reserved {
             return Ok(None);
         }
@@ -232,7 +233,7 @@ impl TeamStore for MemoryStore {
         Ok(Some(member))
     }
     async fn remove_team_member(&self, team_id: &str, user_id: &str) -> AuthResult<()> {
-        let mut state = self.lock();
+        let mut state = self.lock()?;
         let deleted = state
             .team_members
             .iter()
@@ -240,7 +241,7 @@ impl TeamStore for MemoryStore {
             .count();
         if let Some(team) = state.teams.get(team_id).cloned() {
             let team = self.release_team_seats(team, deleted)?;
-            state.teams.insert(team_id.to_owned(), team);
+            let _ = state.teams.insert(team_id.to_owned(), team);
         }
         state
             .team_members
@@ -261,7 +262,7 @@ fn member_count(team: &Team) -> AuthResult<Option<f64>> {
     }
 }
 
-impl MemoryStore {
+impl EphemeralStore {
     pub(super) fn reserve_team_seat(
         &self,
         mut team: Team,
@@ -287,7 +288,8 @@ impl MemoryStore {
         if maximum.is_some_and(|maximum| count.is_none_or(|count| count >= maximum as f64)) {
             return Ok((team, false));
         }
-        team.additional_fields
+        let _ = team
+            .additional_fields
             .insert("memberCount".into(), json!(count.map(|count| count + 1.0)));
         let _ = self.output_team(team.clone())?;
         Ok((team, true))
@@ -297,7 +299,8 @@ impl MemoryStore {
         if deleted > 0
             && let Some(count) = member_count(&team)?.filter(|count| *count >= deleted as f64)
         {
-            team.additional_fields
+            let _ = team
+                .additional_fields
                 .insert("memberCount".into(), json!(count - deleted as f64));
             let _ = self.output_team(team.clone())?;
         }
@@ -306,12 +309,12 @@ impl MemoryStore {
 }
 
 #[async_trait]
-impl OrganizationRoleStore for MemoryStore {
+impl OrganizationRoleStore for EphemeralStore {
     async fn create_organization_role(
         &self,
         mut input: CreateOrganizationRole,
     ) -> AuthResult<OrganizationRole> {
-        let mut state = self.lock();
+        let mut state = self.lock()?;
         if state
             .organization_roles
             .values()
@@ -320,7 +323,7 @@ impl OrganizationRoleStore for MemoryStore {
             return Err(AuthError::bad_request("Role already exists"));
         }
         let permission = if self
-            .organization_fields()
+            .organization_fields()?
             .organization_role
             .additional_fields
             .contains_key("permission")
@@ -359,13 +362,13 @@ impl OrganizationRoleStore for MemoryStore {
             None,
             input.additional_fields,
         )?;
-        state
+        let _ = state
             .organization_roles
             .insert(role.id.clone(), role.clone());
         self.output_organization_role(role)
     }
     async fn get_organization_role(&self, id: &str) -> AuthResult<Option<OrganizationRole>> {
-        self.lock()
+        self.lock()?
             .organization_roles
             .get(id)
             .cloned()
@@ -377,7 +380,7 @@ impl OrganizationRoleStore for MemoryStore {
         organization_id: &str,
     ) -> AuthResult<Vec<OrganizationRole>> {
         let roles: Vec<_> = self
-            .lock()
+            .lock()?
             .organization_roles
             .values()
             .filter(|role| role.organization_id == organization_id)
@@ -411,7 +414,7 @@ impl OrganizationRoleStore for MemoryStore {
         }
         if let Some(permission) = update.permission {
             let value = if self
-                .organization_fields()
+                .organization_fields()?
                 .organization_role
                 .additional_fields
                 .contains_key("permission")
@@ -423,14 +426,14 @@ impl OrganizationRoleStore for MemoryStore {
             let _ = patch.insert("permission".into(), value);
         }
         if !self
-            .organization_fields()
+            .organization_fields()?
             .organization_role
             .additional_fields
             .contains_key("updatedAt")
         {
             let _ = patch.insert("updatedAt".into(), json!(Utc::now()));
         }
-        let mut state = self.lock();
+        let mut state = self.lock()?;
         for name in ["id", "organizationId", "role", "createdAt", "updatedAt"] {
             if let Some(value) = update.additional_fields.remove(name) {
                 let _ = patch.entry(name).or_insert(value);
@@ -447,21 +450,21 @@ impl OrganizationRoleStore for MemoryStore {
             Some(patch),
             update.additional_fields,
         )?;
-        let _ = state.organization_roles.remove(id);
+        let _ = state.organization_roles.shift_remove(id);
         let _ = state
             .organization_roles
             .insert(role.id.clone(), role.clone());
         self.output_organization_role(role)
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {
-        self.lock().organization_roles.remove(id);
+        let _ = self.lock()?.organization_roles.shift_remove(id);
         Ok(())
     }
 }
 
 #[tokio::test]
 async fn memory_organization_deletion_cleans_teams_and_roles() {
-    let store = MemoryStore::new(test_config());
+    let store = EphemeralStore::new(test_config());
     let org = store
         .create_organization(CreateOrganization::new("one", "one"))
         .await
@@ -527,7 +530,7 @@ async fn memory_team_deletion_rolls_back_invitation_output_errors() {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     for failure_stage in ["expired", "unassigned", "updated"] {
-        let store = MemoryStore::new(test_config());
+        let store = EphemeralStore::new(test_config());
         let config = OrganizationFields {
             invitation: UserConfig {
                 additional_fields: [(

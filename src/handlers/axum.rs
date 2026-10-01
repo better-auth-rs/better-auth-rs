@@ -291,7 +291,7 @@ fn transport_url(parts: &Parts) -> Result<Option<url::Url>, AuthError> {
 }
 
 #[cfg(feature = "axum")]
-fn convert_auth_response(auth_response: AuthResponse) -> Response {
+pub(super) fn convert_auth_response(auth_response: AuthResponse) -> Response {
     let mut response = Response::builder().status(
         StatusCode::from_u16(auth_response.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
     );
@@ -409,17 +409,7 @@ async fn resolve_session<T: AuthSchema>(
     parts: &Parts,
     auth: &BetterAuth<T>,
 ) -> better_auth_core::AuthResult<CurrentSession<T>> {
-    let mut request = AuthRequest::new(HttpMethod::Get, parts.uri.path());
-    request.headers = parts
-        .headers
-        .iter()
-        .filter_map(|(name, value)| {
-            value
-                .to_str()
-                .ok()
-                .map(|value| (name.to_string(), value.to_string()))
-        })
-        .collect();
+    let request = session_request(parts);
     let token = auth
         .session_manager()
         .extract_session_token(&request)
@@ -435,4 +425,20 @@ async fn resolve_session<T: AuthSchema>(
         .await?
         .ok_or(AuthError::UserNotFound)?;
     Ok(CurrentSession { user, session })
+}
+
+#[cfg(feature = "axum")]
+pub(super) fn session_request(parts: &Parts) -> AuthRequest {
+    let mut request = AuthRequest::new(HttpMethod::Get, parts.uri.path());
+    request.headers = parts
+        .headers
+        .iter()
+        .filter_map(|(name, value)| {
+            value
+                .to_str()
+                .ok()
+                .map(|value| (name.to_string(), value.to_string()))
+        })
+        .collect();
+    request
 }

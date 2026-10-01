@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use better_auth_core::entity::{AuthSession, AuthVerification};
+use better_auth_core::entity::AuthVerification;
 use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult};
 
 use super::handlers::{
@@ -118,7 +118,7 @@ pub(super) async fn handle_callback(
                         redirect_response(flow.response.url.as_deref().ok_or_else(|| {
                             AuthError::internal("Missing OAuth authorization URL")
                         })?);
-                    return match ctx.config.account.store_state_strategy {
+                    return match ctx.config.account.store_state_strategy() {
                         better_auth_core::OAuthStateStrategy::Database => {
                             attach_state_cookie(response, &ctx.config, &flow.state)
                         }
@@ -137,7 +137,7 @@ pub(super) async fn handle_callback(
                 )));
             }
         };
-    let payload = match ctx.config.account.store_state_strategy {
+    let payload = match ctx.config.account.store_state_strategy() {
         better_auth_core::OAuthStateStrategy::Database => {
             let verification = match ctx
                 .database
@@ -380,19 +380,15 @@ pub(super) async fn handle_callback(
     } else {
         payload.callback_url.clone()
     };
-    let mut response = redirect_response(&redirect_target)
-        .with_appended_header("Set-Cookie", clear_state_cookie)
-        .with_appended_header(
-            "Set-Cookie",
-            better_auth_core::utils::cookie_utils::create_session_cookie(
-                outcome.session.token(),
-                &ctx.config,
-            ),
-        );
+    req.append_response_header("Set-Cookie", clear_state_cookie)?;
     if let Some(account_cookie) = outcome.account_cookie.as_ref() {
         for cookie in create_account_cookie_headers(req, &ctx.config, account_cookie)? {
-            response = response.with_appended_header("Set-Cookie", cookie);
+            req.append_response_header("Set-Cookie", cookie)?;
         }
     }
+    ctx.session_manager()
+        .set_session_cookie(req, outcome.issued, None)
+        .await?;
+    let response = redirect_response(&redirect_target);
     Ok(response)
 }

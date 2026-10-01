@@ -13,7 +13,7 @@ impl better_auth_seaorm::SeaOrmHooks<TestSchema> for FailChallengeDeletion {
     async fn before_delete_verification(
         &self,
         verification: &<TestSchema as better_auth_core::AuthSchema>::Verification,
-        _ctx: &better_auth_seaorm::SeaOrmHookContext<'_>,
+        _ctx: &better_auth_seaorm::SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<better_auth_seaorm::HookControl> {
         if verification.identifier() == "failure-challenge" {
             return Err(AuthError::Database(better_auth_core::DatabaseError::Query(
@@ -123,9 +123,16 @@ async fn otp_enrollment_rotates_session_and_does_not_enroll_an_authenticator() {
         issuer: None,
         method: EnrollmentMethod::Otp,
     };
-    let missing_sender = enable_core(&body, &user, &session, &TwoFactorConfig::default(), &ctx)
-        .await
-        .unwrap_err();
+    let missing_sender = enable_core(
+        &AuthRequest::new(better_auth_core::HttpMethod::Post, "/two-factor/enable"),
+        &body,
+        &user,
+        &session,
+        &TwoFactorConfig::default(),
+        &ctx,
+    )
+    .await
+    .unwrap_err();
     assert_eq!(
         missing_sender.error_payload().1.as_deref(),
         Some("OTP_NOT_CONFIGURED")
@@ -134,9 +141,12 @@ async fn otp_enrollment_rotates_session_and_does_not_enroll_an_authenticator() {
         send_otp: Some(Arc::new(OtpOutbox::default())),
         ..Default::default()
     };
-    let (response, cookies) = enable_core(&body, &user, &session, &config, &ctx)
+    let request = AuthRequest::new(better_auth_core::HttpMethod::Post, "/two-factor/enable");
+    let (response, _) = enable_core(&request, &body, &user, &session, &config, &ctx)
         .await
         .unwrap();
+    let queued = request.take_response_headers().unwrap();
+    let cookies: Vec<_> = queued.get_all("set-cookie").collect();
     assert_eq!(
         serde_json::to_value(response).unwrap(),
         serde_json::json!({"method":"otp"})
@@ -176,9 +186,16 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
         method: EnrollmentMethod::Totp,
     };
     let config = TwoFactorConfig::default();
-    let (first, _) = enable_core(&body, &user, &session, &config, &ctx)
-        .await
-        .unwrap();
+    let (first, _) = enable_core(
+        &AuthRequest::new(better_auth_core::HttpMethod::Post, "/two-factor/enable"),
+        &body,
+        &user,
+        &session,
+        &config,
+        &ctx,
+    )
+    .await
+    .unwrap();
     let first_record = ctx
         .database
         .get_two_factor_by_user_id(&user.id)
@@ -186,9 +203,16 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
         .unwrap()
         .unwrap();
     assert!(!first_record.verified);
-    let (second, _) = enable_core(&body, &user, &session, &config, &ctx)
-        .await
-        .unwrap();
+    let (second, _) = enable_core(
+        &AuthRequest::new(better_auth_core::HttpMethod::Post, "/two-factor/enable"),
+        &body,
+        &user,
+        &session,
+        &config,
+        &ctx,
+    )
+    .await
+    .unwrap();
     let second_record = ctx
         .database
         .get_two_factor_by_user_id(&user.id)
@@ -240,9 +264,16 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
     )
     .await
     .unwrap();
-    let rejected = enable_core(&body, &user, &session, &config, &ctx)
-        .await
-        .unwrap_err();
+    let rejected = enable_core(
+        &AuthRequest::new(better_auth_core::HttpMethod::Post, "/two-factor/enable"),
+        &body,
+        &user,
+        &session,
+        &config,
+        &ctx,
+    )
+    .await
+    .unwrap_err();
     assert_eq!(
         rejected.error_payload().1.as_deref(),
         Some("TOTP_ALREADY_ENABLED")
@@ -267,6 +298,7 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
         ..Default::default()
     };
     let (enrollment, _) = enable_core(
+        &AuthRequest::new(better_auth_core::HttpMethod::Post, "/two-factor/enable"),
         &EnableRequest {
             password: Some("password123".into()),
             issuer: None,

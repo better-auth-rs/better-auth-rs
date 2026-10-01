@@ -2,7 +2,7 @@
 
 use better_auth_core::{
     AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
-    AuthSchema, AuthSession, AuthVerification, BeforeRequestAction, HttpMethod, OAuthStateStrategy,
+    AuthSchema, AuthVerification, BeforeRequestAction, HttpMethod, OAuthStateStrategy,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -130,7 +130,7 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthProxyPlugin {
     }
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::get("/callback/{provider}/oauth-proxy", "oauthProxyCompletion"),
+            AuthRoute::get("/callback/{id}/oauth-proxy", "oauthProxyCompletion"),
             AuthRoute::get("/oauth-proxy-callback", "oauthProxyCallback"),
         ]
     }
@@ -305,7 +305,7 @@ impl OAuthProxyPlugin {
             return Ok(());
         };
         let original_state = original_state.into_owned();
-        let payload = match ctx.config.account.store_state_strategy {
+        let payload = match ctx.config.account.store_state_strategy() {
             OAuthStateStrategy::Database => {
                 let verification = ctx
                     .database
@@ -546,7 +546,7 @@ impl OAuthProxyPlugin {
         if age > self.config.max_age as f64 || age < -10.0 {
             return redirect_error(error_url, "payload_expired", None);
         }
-        let state = match ctx.config.account.store_state_strategy {
+        let state = match ctx.config.account.store_state_strategy() {
             OAuthStateStrategy::Database => ctx
                 .database
                 .consume_verification_by_identifier(&profile.state)
@@ -685,15 +685,11 @@ impl OAuthProxyPlugin {
         } else {
             &profile.callback_url
         };
-        Ok(handlers::redirect_response(target)
-            .with_appended_header("Set-Cookie", clear)
-            .with_appended_header(
-                "Set-Cookie",
-                better_auth_core::utils::cookie_utils::create_session_cookie(
-                    outcome.session.token(),
-                    &ctx.config,
-                ),
-            ))
+        req.append_response_header("Set-Cookie", clear)?;
+        ctx.session_manager()
+            .set_session_cookie(req, outcome.issued, None)
+            .await?;
+        Ok(handlers::redirect_response(target))
     }
 }
 

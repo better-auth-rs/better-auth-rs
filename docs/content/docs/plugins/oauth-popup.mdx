@@ -1,0 +1,24 @@
+---
+title: OAuth Popup
+description: Return OAuth sign-in results to a trusted popup opener.
+---
+
+Register `OAuthPopupPlugin::new()` alongside `OAuthPlugin`. The plugin has no configuration options. Add the opener origin to `AuthConfig.trusted_origins`, and configure bearer authentication when the opener sends the returned token in an `Authorization` header.
+
+```rust,ignore
+use better_auth::plugins::oauth::{OAuthPlugin, OAuthPopupPlugin};
+
+let builder = builder
+    .plugin(OAuthPlugin::new())
+    .plugin(OAuthPopupPlugin::new());
+```
+
+Navigate the popup to `GET /api/auth/oauth-popup/start`. Supply `provider` and `popupOrigin`. Optional query parameters are `popupNonce`, `callbackURL`, `errorCallbackURL`, `newUserCallbackURL`, `scopes`, `requestSignUp`, and `additionalData`. Encode scopes as a comma-separated string and additional data as JSON. `requestSignUp=true` permits explicit sign-up for providers that disable implicit registration.
+
+The start endpoint validates the opener and redirect origins, writes OAuth state with the configured database or cookie strategy, and signs an opener marker cookie. The marker contains the opener origin and nonce. OAuth state independently validates the provider callback. The marker expires after ten minutes.
+
+After `/callback/{id}` or `/oauth2/callback/{id}` returns a redirect, the plugin reads the signed marker and clears a valid marker. A session cookie produces a completion page with the token and redirect URL. An OAuth error redirect produces the same page with an error code and optional description. The page sends a `better-auth:oauth-popup` message to the opener, or the parent window when there is no opener, and closes the popup. Verify the message origin and nonce in the receiving application.
+
+The token is the URL-decoded signed session cookie value. Keep the token out of logs and URLs. The completion response disables caching, escapes embedded JSON, and permits only the bundled completion script through a fixed Content Security Policy hash. `OAUTH_POPUP_COMPLETE_SCRIPT` and `OAUTH_POPUP_SCRIPT_CSP_HASH` are exported for applications that inspect the completion document.
+
+A missing or invalid marker preserves the ordinary OAuth response. A signed malformed marker is cleared without replacing the response. Redirect validation and provider failures return an HTML completion page; invalid opener origins return a forbidden response.

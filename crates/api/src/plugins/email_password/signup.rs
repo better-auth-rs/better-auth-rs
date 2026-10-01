@@ -37,13 +37,13 @@ pub struct SyntheticUserInput {
 pub type CustomSyntheticUser =
     dyn Fn(SyntheticUserInput) -> AuthResult<Map<String, Value>> + Send + Sync;
 
-type SignUpResult = (SignUpResponse<Map<String, Value>>, Option<String>);
+type SignUpResult = SignUpResponse<Map<String, Value>>;
 
-pub(super) fn synthetic_response(
+pub(super) fn synthetic_response<S: AuthSchema>(
     body: &SignUpRequest,
     create: &CreateUser,
     config: &EmailPasswordConfig,
-    ctx: &AuthContext<impl AuthSchema>,
+    ctx: &AuthContext<S>,
 ) -> AuthResult<SignUpResult> {
     let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     let mut core = Map::from_iter([
@@ -75,25 +75,21 @@ pub(super) fn synthetic_response(
         let _ = core.insert("id".into(), json!(id));
         core
     };
-    Ok((
-        SignUpResponse {
-            token: None,
-            user: UserView::synthetic_output(data, &ctx.config.user, &ctx.metadata),
-        },
-        None,
-    ))
+    Ok(SignUpResponse {
+        token: None,
+        user: UserView::synthetic_output(data, &ctx.config.user, &ctx.metadata),
+    })
 }
 
 /// Core sign-up logic.
 ///
-/// Returns `(response, Option<session_token>)`. The session token is present
-/// only when `auto_sign_in` is true.
-pub(super) async fn sign_up_core(
+/// Issue the session before transaction after hooks run, as in the upstream signup endpoint.
+pub(super) async fn sign_up_core<S: AuthSchema>(
     body: &SignUpRequest,
     endpoint_body: Value,
     config: &EmailPasswordConfig,
     req: &AuthRequest,
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ctx: &AuthContext<S>,
 ) -> AuthResult<SignUpResult> {
     if !config.enable_signup {
         return Err(AuthError::forbidden("User registration is not enabled"));
@@ -135,12 +131,7 @@ pub(super) async fn sign_up_core(
         let _ = password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.password)
             .await?;
         if let Some(callback) = &config.on_existing_user_sign_up {
-            let user = UserView::with_internal_fields_for_adapter(
-                &user,
-                &ctx.config.user,
-                &ctx.metadata,
-                ctx.database.supports_native_json(),
-            )?;
+            let user = ctx.internal_user_view(&user)?;
             if let Err(error) = callback.on_existing_user_sign_up(&user, Some(req)).await {
                 // Upstream runs this notification through runInBackgroundOrAwait, which logs failures.
                 tracing::error!(%error, "Existing-user signup notification failed");
@@ -154,15 +145,21 @@ pub(super) async fn sign_up_core(
     apply_default_role(ctx, &mut create_user);
     let auto_sign_in = config.auto_sign_in && !config.require_email_verification;
     let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
-    let expires_in = ctx.config.session.expires_in;
+    let expires_in = if body.remember_me == Some(false) {
+        chrono::Duration::days(1)
+    } else {
+        ctx.config.session.expires_in
+    };
     let ip_address = meta.ip_address.clone();
     let user_agent = meta.user_agent.clone();
     let database = ctx.database.clone();
     let transaction_database = database.clone();
     let user_config = ctx.config.user.clone();
+    let adapter_user_config = ctx.adapter_user_fields().clone();
     let user_metadata = ctx.metadata.clone();
     let supports_native_json = database.supports_native_json();
 
+    let dont_remember = body.remember_me == Some(false);
     let admission_context = ctx.clone();
     let admission_request = req.clone();
     let mut admission_input = synthetic_create.clone();
@@ -233,33 +230,39 @@ pub(super) async fn sign_up_core(
                         .await?;
                     let token = session.token().to_string();
 
-                    Ok(Some((
-                        SignUpResponse {
-                            token: Some(token.clone()),
-                            user: UserView::with_fields_for_adapter(
-                                &user,
-                                &user_config,
-                                &user_metadata,
-                                supports_native_json,
-                            )?
-                            .into(),
-                        },
-                        Some(token),
-                    )))
+                    let manager = admission_context.session_manager();
+                    let data = manager.internal_data(&user, &session).await?;
+                    manager
+                        .set_session_cookie_in_transaction(
+                            &admission_request,
+                            data,
+                            Some(dont_remember),
+                            tx,
+                        )
+                        .await?;
+                    Ok(Some(SignUpResponse {
+                        token: Some(token),
+                        user: UserView::with_field_policies(
+                            &user,
+                            &adapter_user_config,
+                            &user_config,
+                            &user_metadata,
+                            supports_native_json,
+                        )?
+                        .into(),
+                    }))
                 } else {
-                    Ok(Some((
-                        SignUpResponse {
-                            token: None,
-                            user: UserView::with_fields_for_adapter(
-                                &user,
-                                &user_config,
-                                &user_metadata,
-                                supports_native_json,
-                            )?
-                            .into(),
-                        },
-                        None,
-                    )))
+                    Ok(Some(SignUpResponse {
+                        token: None,
+                        user: UserView::with_field_policies(
+                            &user,
+                            &adapter_user_config,
+                            &user_config,
+                            &user_metadata,
+                            supports_native_json,
+                        )?
+                        .into(),
+                    }))
                 }
             })
         })
@@ -269,7 +272,7 @@ pub(super) async fn sign_up_core(
     };
     let verification = EmailVerificationPlugin::from_context(ctx);
     if let Some(verification) = verification {
-        let user = UserView::try_from(response.0.user.clone())?;
+        let user = UserView::try_from(response.user.clone())?;
         if let Err(error) = verification
             .send_verification_on_sign_up(
                 &user,

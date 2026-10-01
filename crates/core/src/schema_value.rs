@@ -105,15 +105,7 @@ impl<T: Serialize> SchemaValue<T> {
                     let number = number.as_f64().ok_or_else(|| {
                         AuthError::internal("JSON number exceeds JavaScript number range")
                     })?;
-                    if number == 0.0 {
-                        "0".to_owned()
-                    } else if number.abs() >= 1e21 {
-                        format!("{number:e}").replace('e', "e+")
-                    } else if number.abs() < 1e-6 {
-                        format!("{number:e}")
-                    } else {
-                        number.to_string()
-                    }
+                    number_string(number)
                 }
                 value => value.to_string(),
             })
@@ -122,6 +114,25 @@ impl<T: Serialize> SchemaValue<T> {
             .as_ref()
             .map(display)
             .unwrap_or_else(|| Ok("undefined".to_owned()))
+    }
+}
+
+pub(crate) fn number_string(number: f64) -> String {
+    if number == 0.0 {
+        "0".to_owned()
+    } else if number.is_infinite() {
+        if number.is_sign_positive() {
+            "Infinity"
+        } else {
+            "-Infinity"
+        }
+        .to_owned()
+    } else if number.abs() >= 1e21 {
+        format!("{number:e}").replace('e', "e+")
+    } else if number.abs() < 1e-6 {
+        format!("{number:e}")
+    } else {
+        number.to_string()
     }
 }
 

@@ -86,6 +86,7 @@ const profiles = {
     requiredPlugin("magicLink", { sendMagicLink: noopAsync }),
     requiredPlugin("multiSession"),
     requiredPlugin("oAuthProxy"),
+    requiredPlugin("oauthPopup"),
     requiredPlugin("oneTap", { clientId: "route-coverage-client" }),
     requiredPlugin("oneTimeToken"),
     requiredPlugin("phoneNumber"),
@@ -147,6 +148,7 @@ const profiles = {
     );
     pushIf(selected, optionalPlugin("multiSession"));
     pushIf(selected, optionalPlugin("oAuthProxy"));
+    pushIf(selected, optionalPlugin("oauthPopup"));
     const oidcProviderPlugin = optionalPlugin("oidcProvider", {
       loginPage: "/login",
     });

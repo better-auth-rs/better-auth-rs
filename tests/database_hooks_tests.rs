@@ -93,7 +93,7 @@ impl SeaOrmHooks<TestSchema> for OrderingHook {
     async fn before_create_user(
         &self,
         _user: &mut CreateUser,
-        _ctx: &SeaOrmHookContext<'_>,
+        _ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<HookControl> {
         self.events
             .lock()
@@ -105,7 +105,7 @@ impl SeaOrmHooks<TestSchema> for OrderingHook {
 
 #[derive(Clone)]
 struct RequestContextHook {
-    seen: Arc<Mutex<Vec<(bool, String)>>>,
+    seen: Arc<Mutex<Vec<Option<better_auth_core::RequestHookContext>>>>,
 }
 
 #[async_trait]
@@ -113,20 +113,68 @@ impl SeaOrmHooks<TestSchema> for RequestContextHook {
     async fn before_create_user(
         &self,
         _user: &mut CreateUser,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<HookControl> {
-        let entry = (
-            ctx.request.is_some(),
-            ctx.request
-                .as_ref()
-                .map(|request| request.path.clone())
-                .unwrap_or_else(|| "<none>".to_string()),
-        );
         self.seen
             .lock()
             .expect("request context mutex should lock")
-            .push(entry);
+            .push(ctx.request.clone());
         Ok(HookControl::Continue)
+    }
+}
+
+struct ReplaceSignupBody;
+
+#[async_trait]
+impl better_auth_core::AuthPlugin<TestSchema> for ReplaceSignupBody {
+    fn name(&self) -> &'static str {
+        "replace-signup-body"
+    }
+
+    fn routes(&self) -> Vec<better_auth_core::AuthRoute> {
+        vec![better_auth_core::AuthRoute::post(
+            "/callback/{id}",
+            "dynamic_fixture",
+        )]
+    }
+
+    async fn before_request(
+        &self,
+        request: &AuthRequest,
+        _context: &better_auth_core::AuthContext<TestSchema>,
+    ) -> AuthResult<Option<better_auth_core::BeforeRequestAction>> {
+        let mut body: serde_json::Value = request.body_as_json()?;
+        body["name"] = "Replaced Name".into();
+        Ok(Some(better_auth_core::BeforeRequestAction::ReplaceBody(
+            serde_json::to_vec(&body)?,
+        )))
+    }
+
+    async fn on_request(
+        &self,
+        request: &AuthRequest,
+        context: &better_auth_core::AuthContext<TestSchema>,
+    ) -> AuthResult<Option<better_auth_core::AuthResponse>> {
+        if !self
+            .routes()
+            .iter()
+            .any(|route| route.matches(request.method(), request.path()))
+        {
+            return Ok(None);
+        }
+        let body: serde_json::Value = request.body_as_json()?;
+        let _ = context
+            .database
+            .create_user(
+                CreateUser::new()
+                    .with_email("dynamic-context@example.com")
+                    .with_name(body["name"].as_str().expect("replaced name")),
+            )
+            .await?;
+        Ok(Some(better_auth_core::AuthResponse::json(
+            200,
+            &serde_json::json!({"actualPath": request.path()}),
+        )?))
     }
 }
 
@@ -140,7 +188,7 @@ impl ProvisioningService {
     async fn provision(
         &self,
         user: &impl AuthUser,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> Result<(), DatabaseError> {
         let statement = Query::insert()
             .into_table(Alias::new("app_workspaces"))
@@ -175,7 +223,7 @@ impl SeaOrmHooks<TestSchema> for OnboardingHook {
     async fn after_create_user(
         &self,
         user: &<TestSchema as better_auth_core::AuthSchema>::User,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<()> {
         self.service
             .provision(user, ctx)
@@ -194,7 +242,7 @@ impl SeaOrmHooks<TestSchema> for DeleteCaptureHook {
     async fn before_delete_user(
         &self,
         user: &<TestSchema as better_auth_core::AuthSchema>::User,
-        _ctx: &SeaOrmHookContext<'_>,
+        _ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<HookControl> {
         self.emails
             .lock()
@@ -251,16 +299,21 @@ async fn request_context_is_present_for_requests_and_absent_for_direct_store_cal
         .hook(RequestContextHook { seen: seen.clone() });
     let auth = AuthBuilder::<TestSchema>::new(config)
         .store(store)
+        .plugin(ReplaceSignupBody)
         .plugin(EmailPasswordPlugin::new())
         .build()
         .await
         .expect("auth should build");
 
+    let mut request = signup_request("request-context@example.com");
+    request.path = "/api/auth/sign-up/email".into();
     let response = auth
-        .handle_request(signup_request("request-context@example.com"))
+        .handle_request(request)
         .await
         .expect("sign-up request should succeed");
     assert_eq!(response.status, 200);
+    let response: serde_json::Value = serde_json::from_slice(&response.body).expect("signup body");
+    assert_eq!(response["user"]["name"], "Replaced Name");
 
     let _ = auth
         .store()
@@ -273,17 +326,76 @@ async fn request_context_is_present_for_requests_and_absent_for_direct_store_cal
         .expect("direct store call should succeed");
 
     assert_eq!(
-        *seen.lock().expect("request context mutex should lock"),
+        seen.lock()
+            .expect("request context mutex should lock")
+            .iter()
+            .map(|request| (
+                request.is_some(),
+                request
+                    .as_ref()
+                    .map(|request| request.path.clone())
+                    .unwrap_or_else(|| "<none>".to_string()),
+                request.as_ref().and_then(|request| request.body.clone()),
+            ))
+            .collect::<Vec<_>>(),
         vec![
-            (true, "/sign-up/email".to_string()),
-            (false, "<none>".to_string()),
+            (
+                true,
+                "/sign-up/email".to_string(),
+                Some(serde_json::json!({
+                    "email": "request-context@example.com",
+                    "password": "Password123!",
+                    "name": "Replaced Name",
+                }))
+            ),
+            (false, "<none>".to_string(), None),
         ]
+    );
+}
+
+#[tokio::test]
+async fn dynamic_request_context_keeps_route_params_when_body_is_replaced() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let config = test_config();
+    let store = test_store(&config)
+        .await
+        .hook(RequestContextHook { seen: seen.clone() });
+    let auth = AuthBuilder::<TestSchema>::new(config)
+        .store(store)
+        .plugin(ReplaceSignupBody)
+        .build()
+        .await
+        .expect("auth should build");
+    let mut request = signup_request("dynamic-context@example.com");
+    request.path = "/api/auth/callback/Mock-ID_123".into();
+    let response = auth.handle_request(request).await.expect("dynamic request");
+    assert_eq!(response.status, 200);
+    let response: serde_json::Value =
+        serde_json::from_slice(&response.body).expect("response body");
+    assert_eq!(response["actualPath"], "/callback/Mock-ID_123");
+    let seen = seen.lock().expect("request context mutex should lock");
+    assert_eq!(seen.len(), 1);
+    let request = seen
+        .first()
+        .expect("one hook call")
+        .as_ref()
+        .expect("request context");
+    assert_eq!(request.path, "/callback/:id");
+    assert_eq!(
+        request.params,
+        [("id".to_owned(), "Mock-ID_123".to_owned())]
+            .into_iter()
+            .collect()
+    );
+    assert_eq!(
+        request.body.as_ref().expect("parsed body")["name"],
+        "Replaced Name"
     );
 }
 
 // Upstream reference: packages/better-auth/src/db/db.test.ts :: describe("db") and packages/better-auth/src/plugins/organization/organization-hook.test.ts; adapted to the Rust database hook surface.
 #[tokio::test]
-async fn onboarding_hook_can_provision_app_data_with_the_shared_transaction() {
+async fn onboarding_hook_provisions_app_data_after_the_auth_transaction_commits() {
     let database = test_database().await;
     create_app_workspace_table(&database).await;
 
@@ -316,7 +428,7 @@ async fn onboarding_hook_can_provision_app_data_with_the_shared_transaction() {
         .expect("user id should be present");
 
     assert_eq!(app_workspace_rows_for_user(&database, user_id).await, 1);
-    assert!(tx_seen.load(Ordering::SeqCst));
+    assert!(!tx_seen.load(Ordering::SeqCst));
 }
 
 // Upstream reference: packages/better-auth/src/db/db.test.ts :: describe("db") and packages/better-auth/src/plugins/organization/organization-hook.test.ts; adapted to the Rust database hook surface.

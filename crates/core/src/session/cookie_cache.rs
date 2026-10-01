@@ -67,7 +67,7 @@ pub(super) async fn payload(
     let max_age = if dont_remember {
         300
     } else {
-        cache.max_age.num_seconds()
+        cache.max_age().num_seconds()
     };
     Ok((payload, max_age))
 }
@@ -80,7 +80,7 @@ pub(super) async fn encode(
 ) -> AuthResult<String> {
     let now = Utc::now();
     let (payload, max_age) = payload(data, config, cache, dont_remember).await?;
-    match cache.strategy {
+    match cache.strategy() {
         CookieCacheStrategy::Compact => {
             let expires_at = now.timestamp_millis()
                 + if dont_remember {
@@ -133,7 +133,7 @@ pub(super) fn decode(
     config: &AuthConfig,
     cache: &CookieCacheConfig,
 ) -> Option<(CachedSession, i64)> {
-    let (payload, expires_at) = match cache.strategy {
+    let (payload, expires_at) = match cache.strategy() {
         CookieCacheStrategy::Compact => {
             let raw: Value = serde_json::from_slice(&URL_SAFE_NO_PAD.decode(value).ok()?).ok()?;
             let payload = raw.get("session")?.as_object()?;
@@ -189,12 +189,14 @@ pub(super) async fn write(
     config: &AuthConfig,
     dont_remember: bool,
     signed: Option<String>,
+    bind_account_user: bool,
+    response_headers: Option<&crate::Headers>,
 ) -> AuthResult<()> {
     let Some(cache) = config
         .session
         .cookie_cache
         .as_ref()
-        .filter(|cache| cache.enabled)
+        .filter(|cache| cache.enabled())
     else {
         return Ok(());
     };
@@ -203,8 +205,54 @@ pub(super) async fn write(
         None => encode(data, config, cache, dont_remember).await?,
     };
     let name = related_cookie_name(config, "session_data");
-    let max_age = (!dont_remember).then_some(cache.max_age.num_seconds());
+    let max_age = (!dont_remember).then_some(cache.max_age().num_seconds());
     for cookie in create_chunked_cookies(req, &name, &value, max_age, config)? {
+        req.append_response_header("Set-Cookie", cookie)?;
+    }
+    renew_account_cookie(
+        req,
+        data,
+        config,
+        cache,
+        bind_account_user,
+        response_headers,
+    )
+}
+
+fn renew_account_cookie(
+    req: &AuthRequest,
+    data: &SessionData,
+    config: &AuthConfig,
+    cache: &CookieCacheConfig,
+    bind_account_user: bool,
+    response_headers: Option<&crate::Headers>,
+) -> AuthResult<()> {
+    let name = related_cookie_name(config, "account_data");
+    if !config.account.store_account_cookie()
+        || req.has_response_cookie(&name)?
+        || response_headers.is_some_and(|headers| headers.has_set_cookie(&name))
+    {
+        return Ok(());
+    }
+    let Some(account) = read(req, &name).and_then(|value| {
+        crate::utils::jwe::decode(&value, config.encryption_secret(), "better-auth-account")
+    }) else {
+        return Ok(());
+    };
+    if bind_account_user
+        && account.get("userId").and_then(Value::as_str) != Some(data.user.id.as_str())
+    {
+        return clear_chunked_cookie(req, &name, config);
+    }
+    let max_age = cache.max_age().num_seconds();
+    let max_age = if max_age == 0 { 300 } else { max_age };
+    let value = crate::utils::jwe::encode(
+        account,
+        config.encryption_secret(),
+        "better-auth-account",
+        max_age,
+    )?;
+    for cookie in create_chunked_cookies(req, &name, &value, Some(max_age), config)? {
         req.append_response_header("Set-Cookie", cookie)?;
     }
     Ok(())

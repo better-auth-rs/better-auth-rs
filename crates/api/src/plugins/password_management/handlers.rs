@@ -5,8 +5,8 @@ use uuid::Uuid;
 use better_auth_core::utils::password::{self as password_utils};
 use better_auth_core::wire::UserView;
 use better_auth_core::{
-    AuthAccount, AuthContext, AuthError, AuthResult, AuthSession, AuthUser, AuthVerification,
-    CreateAccount, RequestMeta, UpdateAccount,
+    AuthAccount, AuthContext, AuthError, AuthResult, AuthUser, AuthVerification, CreateAccount,
+    RequestMeta, UpdateAccount,
 };
 
 use crate::plugins::helpers::{
@@ -220,14 +220,17 @@ pub(crate) async fn reset_password_token_core(
     )?))
 }
 
-/// Change the user's password. Returns the response and an optional new session token.
+/// Change the user's password and preserve the optional replacement session.
 pub(crate) async fn change_password_core(
     body: &ChangePasswordRequest,
     user: &impl AuthUser,
     config: &PasswordManagementConfig,
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(ChangePasswordResponse<UserView>, Option<String>)> {
+) -> AuthResult<(
+    ChangePasswordResponse<UserView>,
+    Option<better_auth_core::session::SessionData>,
+)> {
     password_utils::validate_password(
         &body.new_password,
         ctx.password_policy.min_length,
@@ -280,13 +283,13 @@ pub(crate) async fn change_password_core(
         .await
         .map_err(SessionIssueError::into_auth_error)?
         .session;
-        Some(session.token().to_string())
+        Some(ctx.session_manager().internal_data(user, &session).await?)
     } else {
         None
     };
 
     let response = ChangePasswordResponse {
-        token: new_token.clone(),
+        token: new_token.as_ref().map(|data| data.session.token.clone()),
         user: ctx
             .database
             .get_user_by_id(&user.id())

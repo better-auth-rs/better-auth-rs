@@ -55,6 +55,7 @@ where
             Default::default(),
             &config,
             false,
+            self.connection().get_database_backend(),
         )?;
         let tx = self.connection().begin().await.map_err(map_db_err)?;
         let changed = Entity::<O::Invitation>::update_many()

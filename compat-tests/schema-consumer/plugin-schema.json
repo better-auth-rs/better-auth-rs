@@ -97,6 +97,7 @@
       "twoFactorEnabled": "otp_enabled",
       "username": "login_name",
       "displayUsername": "display_name",
+      "lastLoginMethod": "login_method",
       "phoneNumber": "telephone",
       "phoneNumberVerified": "telephone_verified",
       "isAnonymous": "guest",

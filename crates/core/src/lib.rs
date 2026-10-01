@@ -26,6 +26,7 @@ pub mod hooks;
 pub mod middleware;
 pub mod openapi;
 pub mod plugin;
+pub mod plugin_runtime;
 mod runtime_extensions;
 pub mod schema;
 pub mod session;
@@ -72,7 +73,9 @@ pub use error::{
 pub use hooks::{RequestHookContext, with_request_hook_context, with_request_hook_context_value};
 pub use middleware::{
     BodyLimitConfig, BodyLimitMiddleware, CorsConfig, CorsMiddleware, CsrfConfig, CsrfMiddleware,
-    EndpointRateLimit, Middleware, RateLimitConfig, RateLimitMiddleware,
+    CustomRateLimitRule, EndpointRateLimit, Middleware, PluginRateLimit, RateLimitConfig,
+    RateLimitDecision, RateLimitMiddleware, RateLimitOverride, RateLimitRuleResolver,
+    RateLimitStorage, RateLimitStorageKind,
 };
 pub use openapi::{OpenApiBuilder, OpenApiInfo, OpenApiOperation, OpenApiResponse, OpenApiSpec};
 pub use plugin::{AuthContext, AuthInitContext, AuthPlugin, AuthRoute, BeforeRequestAction};

@@ -57,6 +57,10 @@ fn invalid_schema_configuration_preserves_existing_output() {
             "unknown schema model",
         ),
         (
+            r#"{"rateLimit":{"modelName":"request_limits"}}"#,
+            "requires its plugin or database storage option to be enabled",
+        ),
+        (
             r#"{"organization":{"fields":{"missing":"custom"}}}"#,
             "unknown configurable field",
         ),
@@ -79,6 +83,14 @@ fn invalid_schema_configuration_preserves_existing_output() {
         (
             r#"{"teamMember":{"additionalFields":{"label":{"type":"string"}}}}"#,
             "does not support additionalFields",
+        ),
+        (
+            r#"{"organization":{"additionalFields":{"owner":{"type":"string","references":{"model":"user","field":"id","onDelete":"delete"}}}}}"#,
+            "unknown variant",
+        ),
+        (
+            r#"{"organization":{"additionalFields":{"owner":{"type":"string","references":{"model":"user"}}}}}"#,
+            "missing field `field`",
         ),
     ] {
         fs::write(&config, schema).unwrap();

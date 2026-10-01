@@ -82,10 +82,13 @@ pub(crate) struct SocialSignInResponse {
 pub(crate) struct AccessTokenResponse {
     #[serde(rename = "accessToken")]
     pub access_token: Option<String>,
-    #[serde(rename = "accessTokenExpiresAt")]
+    #[serde(
+        rename = "accessTokenExpiresAt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub access_token_expires_at: Option<String>,
     pub scopes: Vec<String>,
-    #[serde(rename = "idToken")]
+    #[serde(rename = "idToken", skip_serializing_if = "Option::is_none")]
     pub id_token: Option<String>,
 }
 
@@ -97,11 +100,18 @@ pub(crate) struct RefreshTokenResponse {
     pub access_token_expires_at: Option<String>,
     #[serde(rename = "refreshToken")]
     pub refresh_token: Option<String>,
-    #[serde(rename = "refreshTokenExpiresAt")]
-    pub refresh_token_expires_at: Option<String>,
-    pub scope: Option<String>,
-    #[serde(rename = "idToken")]
-    pub id_token: Option<String>,
+    #[serde(
+        rename = "refreshTokenExpiresAt",
+        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+    )]
+    pub refresh_token_expires_at: better_auth_core::SchemaValue<Option<String>>,
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    pub scope: better_auth_core::SchemaValue<Option<String>>,
+    #[serde(
+        rename = "idToken",
+        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+    )]
+    pub id_token: better_auth_core::SchemaValue<Option<String>>,
     #[serde(rename = "providerId")]
     pub provider_id: String,
     #[serde(rename = "accountId", skip_serializing_if = "Option::is_none")]

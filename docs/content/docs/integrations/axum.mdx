@@ -207,9 +207,37 @@ async fn home(
 }
 ```
 
+### `CachedSession` — Cookie and Server Sessions
+
+Use `CachedSession<YourSchema>` when the route can accept the configured signed cookie cache. Use `CachedSession<StatelessSchema>` with `BetterAuth::stateless`. The extractor returns `UserView` and `SessionView`, including configured public fields. `CurrentSession` continues to return application-owned models from server storage.
+
+Return the extractor with the response to send refreshed cookies, Bearer response headers and the session endpoint's cache-prevention headers. The extractor preserves application cookies already present in the response.
+
+```rust
+use better_auth::integrations::axum::CachedSession;
+use better_auth::store::StatelessSchema;
+use axum::{Json, response::IntoResponse};
+
+async fn profile(session: CachedSession<StatelessSchema>) -> impl IntoResponse {
+    let body = Json(serde_json::json!({ "user": session.user }));
+    (session, body)
+}
+```
+
+Use `OptionalCachedSession<YourSchema>` for optional authentication. Missing or expired credentials produce `data: None`; storage and callback failures remain errors. Return the extractor with the response even when `data` is `None`, so the response clears rejected credentials.
+
+```rust
+use better_auth::integrations::axum::OptionalCachedSession;
+
+async fn home(session: OptionalCachedSession<StatelessSchema>) -> impl IntoResponse {
+    let body = Json(serde_json::json!({ "session": session.data }));
+    (session, body)
+}
+```
+
 ### Token Extraction
 
-Both extractors look for the session token in this order:
+The extractors look for the session token in this order:
 
 1. `Authorization: Bearer <token>` header
 2. Session cookie (name from `SessionConfig::cookie_name`, default `better-auth.session_token`)

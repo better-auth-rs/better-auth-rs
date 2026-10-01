@@ -35,6 +35,10 @@ enum Command {
         /// Read Organization table, column, and additional field definitions from JSON.
         #[arg(long)]
         schema_config: Option<PathBuf>,
+
+        /// Include the database rate-limit table and its typed store binding.
+        #[arg(long)]
+        rate_limit_database: bool,
     },
 }
 
@@ -58,6 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 force,
                 mut plugins,
                 schema_config,
+                rate_limit_database,
             },
     } = Cli::parse();
     if plugins.iter().any(|plugin| plugin == "all") {
@@ -84,7 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         schema_config::SchemaConfig::default()
     };
-    let schema = generate::generate_schema(&plugins, &config)?;
+    let schema = generate::generate_schema(&plugins, &config, rate_limit_database)?;
     if let Some(path) = output {
         if let Some(parent) = path.parent()
             && !parent.as_os_str().is_empty()

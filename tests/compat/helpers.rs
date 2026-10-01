@@ -379,6 +379,7 @@ pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth
             .plugin(MagicLinkPlugin::new())
             .plugin(MultiSessionPlugin::new())
             .plugin(OAuthProxyPlugin::new())
+            .plugin(better_auth::plugins::oauth::OAuthPopupPlugin::new())
             .plugin(OneTapPlugin::new())
             .plugin(OneTimeTokenPlugin::new())
             .plugin(PhoneNumberPlugin::new())

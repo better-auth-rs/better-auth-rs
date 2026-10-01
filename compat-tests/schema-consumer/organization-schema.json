@@ -23,7 +23,7 @@
     "modelName": "app_members",
     "fields": { "organizationId": "workspace_id", "userId": "subject_id", "role": "access_role" },
     "additionalFields": {
-      "organizationId": { "type": "string", "required": true, "fieldName": "workspace_id" },
+      "organizationId": { "type": "string", "required": true, "fieldName": "workspace_id", "references": { "model": "organization", "field": "id" } },
       "badge": { "type": "string", "required": false }
     }
   },

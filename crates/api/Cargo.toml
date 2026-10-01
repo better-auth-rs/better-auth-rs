@@ -65,7 +65,6 @@ indexmap = { version = "2.14.2", features = ["serde"] }
 futures-util = "0.3.34"
 sha1.workspace = true
 hex.workspace = true
-regex.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true }

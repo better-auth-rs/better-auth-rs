@@ -3,7 +3,7 @@ title: Admin
 description: User management, banning, impersonation, and role management for administrators.
 ---
 
-The `AdminPlugin` provides administrative endpoints for user management. Route access is permission-based and follows the TypeScript Better Auth admin plugin behavior. By default, the built-in `admin` role has full admin permissions and `user` has none.
+The `AdminPlugin` provides administrative endpoints for user management. Route access is permission-based and follows the TypeScript Better Auth admin plugin behavior. The built-in `admin` role includes user email updates; impersonating another administrator requires a separate grant or `allow_impersonating_admins`. The built-in `user` role has no administrator permissions.
 
 ## Setup
 
@@ -29,7 +29,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
     .plugin(
         AdminPlugin::new()
             .default_role("user")
-            .admin_roles(vec!["admin".to_string(), "superadmin".to_string()])
+            .admin_roles(vec!["admin".to_string()])
             .admin_user_ids(vec!["bootstrap-admin-id".to_string()])
             .default_ban_reason("No reason".to_string())
             .default_ban_expires_in(60 * 60 * 24)
@@ -42,14 +42,28 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `default_role` | `String` | `"user"` | Default role for new users and role-less permission checks |
-| `admin_roles` | `Vec<String>` | `["admin"]` | Roles treated as admin for target-admin checks |
+| `admin_roles` | `Option<Vec<String>>` | `None` uses `["admin"]` | Explicit administrator roles must exist in the configured role map; an empty list identifies no administrator roles |
 | `admin_user_ids` | `Option<Vec<String>>` | `None` | User IDs that always bypass admin permission checks |
-| `roles` | `HashMap<String, RolePermissions>` | built-in `admin` / `user` when unset | Custom permission definitions that replace the built-in defaults when provided |
+| `roles` | `Option<HashMap<String, RolePermissions>>` | built-in `admin` / `user` when unset | Custom permission definitions replace the defaults, including an explicitly empty map |
 | `default_ban_reason` | `Option<String>` | `None` | Default reason used by `/admin/ban-user` |
 | `default_ban_expires_in` | `Option<i64>` | `None` | Default ban duration in seconds |
 | `impersonation_session_duration` | `Option<i64>` | `None` | Override impersonation session lifetime in seconds |
-| `banned_user_message` | `String` | upstream default message | Message shown when a banned user is blocked |
-| `allow_impersonating_admins` | `bool` | `false` | Whether admin targets may be impersonated |
+| `banned_user_message` | `BannedUserMessage` | upstream default text | Fixed text or an asynchronous callback that receives the stored user |
+| `allow_impersonating_admins` | `bool` | `false` | Allow administrator targets without a `user:impersonate-admins` grant |
+
+The `.roles(map)` and `.admin_roles(roles)` builders accept the map and list directly. Use `None` in an `AdminConfig` literal to retain omission. Custom administrator role names are checked when the plugin initializes.
+
+```rust
+use better_auth::plugins::admin::{AdminPlugin, BannedUserMessage};
+
+let plugin = AdminPlugin::new().banned_user_message(BannedUserMessage::callback(|user| {
+    Box::pin(async move {
+        Ok(format!("Account unavailable: {}", user.email.as_deref().unwrap_or_default()))
+    })
+}));
+```
+
+The callback receives stored application fields, including fields with `returned: false`. Expired bans are cleared before session creation without calling the callback. The login response retains its original user snapshot; subsequent user reads show the cleared ban. A callback error prevents session creation; typed API errors preserve their public status and body, while ordinary errors produce an empty HTTP 500 response and remain errors in native calls.
 
 ## API Endpoints
 
@@ -69,12 +83,34 @@ The Admin plugin exposes 15 endpoints. For full request/response details, see th
 
 `/admin/create-user` creates a credential account only when a non-empty password is provided. Omitting the password creates a passwordless user, matching the upstream TypeScript behavior.
 
+Creating a user with an explicit role also requires `user:set-role`. Supplying `banned`, `banReason`, or `banExpires` during creation or update requires `user:ban`. Updating `email` or `emailVerified` requires `user:set-email`. These checks apply when a field is present, including explicit null or false values. `/admin/update-user` rejects a `password` field; use `/admin/set-user-password` instead.
+
+Trusted server code can provision a user without a session:
+
+```rust
+use better_auth::plugins::admin::CreateAdminUser;
+
+let result = auth.admin()?.create_user(&CreateAdminUser {
+    email: "new-user@example.com".into(),
+    name: "New user".into(),
+    password: None,
+    role: None,
+    data: None,
+}, None).await?;
+```
+
+Passing `None` for headers selects requestless server provisioning. Passing any headers, including an empty map, requires an authenticated session and the corresponding permissions. Creation uses the registered admission policy and database hooks and does not create a session.
+
 ### Ban Management
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/admin/ban-user` | POST | Ban a user (optional reason and duration) |
 | `/admin/unban-user` | POST | Unban a user |
+
+An explicit `banReason: null` or `banExpires: null` clears that field. Updating only `banned: false` preserves the reason and expiration; `/admin/unban-user` clears both. Store callers express these updates through `UpdateUser` using `None` to preserve a field and `Some(None)` to clear it.
+
+An update with `banned: true` revokes the user's sessions after the user update and its after hooks succeed. An after-hook error leaves the completed user update in place and prevents session revocation. Self-banning is rejected.
 
 ### Impersonation
 

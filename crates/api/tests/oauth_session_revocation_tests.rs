@@ -4,19 +4,19 @@ use std::sync::{
 };
 
 use async_trait::async_trait;
-use better_auth_api::OAuthPlugin;
 use better_auth_api::plugins::oauth::encryption::encrypt_token_set;
 use better_auth_api::plugins::oauth::{
     GenericOAuthConfig, GenericOAuthUserInfoHandler, OAuthAccountSubject, OAuthProvider,
     OAuthRefreshTokenHandler, OAuthTokenSet, OAuthUserInfo, OAuthUserInfoHandler,
     OAuthUserInfoRequest, OAuthUserInfoResponse,
 };
+use better_auth_api::{OAuthPlugin, SessionManagementPlugin};
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::session::SessionRead;
 use better_auth_core::store::AuthStore;
 use better_auth_core::utils::cookie_utils::sign_cookie_value;
 use better_auth_core::{
-    AuthConfig, AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResult, BeforeRequestAction,
+    AuthConfig, AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResult,
     CookieCacheConfig, CreateAccount, CreateUser, HttpMethod, UpdateAccount,
 };
 use better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema as TestSchema;
@@ -155,7 +155,7 @@ async fn revoked_session_cache_cannot_read_or_refresh_provider_credentials() {
     let config = Arc::new(
         AuthConfig::new("oauth-revocation-secret-at-least-32-characters").session_cookie_cache(
             CookieCacheConfig {
-                enabled: true,
+                enabled: Some(true),
                 ..Default::default()
             },
         ),
@@ -359,7 +359,7 @@ async fn sign_out_preserves_stored_id_token_and_revokes_session() {
     for non_jwt_token in [false, true] {
         let mut config = AuthConfig::new("oauth-logout-secret-at-least-32-characters");
         config.account.encrypt_oauth_tokens = true;
-        let fixture = fixture(Arc::new(config)).await;
+        let mut fixture = fixture(Arc::new(config)).await;
         let raw_id_token = "header.provider-identity.signature";
         let encrypted = encrypt_token_set(
             &fixture.ctx,
@@ -398,13 +398,22 @@ async fn sign_out_preserves_stored_id_token_and_revokes_session() {
                 ..Default::default()
             },
         );
+        let mut init =
+            AuthInitContext::new(fixture.ctx.config.clone(), fixture.ctx.database.clone());
+        plugin.on_init(&mut init).await.unwrap();
+        fixture.ctx.extensions = init.into_parts().extensions;
         let mut request = request("/sign-out", &fixture.account_id, &fixture.cookie());
         request.body = Some(b"{}".to_vec());
-        let Some(BeforeRequestAction::Respond(response)) =
-            plugin.before_request(&request, &fixture.ctx).await.unwrap()
-        else {
-            panic!("OAuth must handle sign-out before the session plugin");
-        };
+        let mut response = SessionManagementPlugin::new()
+            .on_request(&request, &fixture.ctx)
+            .await
+            .unwrap()
+            .unwrap();
+        fixture
+            .ctx
+            .session_manager()
+            .finish_response(&request, &mut response)
+            .unwrap();
         assert_eq!(response.status, 200);
         let body: Value = serde_json::from_slice(&response.body).unwrap();
         let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();

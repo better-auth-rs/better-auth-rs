@@ -14,6 +14,7 @@ pub(super) fn generate(
         EntityRole::TwoFactor => "TwoFactor",
         EntityRole::Jwk => "Jwk",
         EntityRole::WalletAddress => "WalletAddress",
+        EntityRole::RateLimit => "RateLimitRecord",
         _ => {
             return Err(syn::Error::new_spanned(
                 input,
@@ -22,6 +23,11 @@ pub(super) fn generate(
         }
     };
     let record = format_ident!("{record}");
+    let record = if role == EntityRole::RateLimit {
+        quote!(#core_root::store::#record)
+    } else {
+        quote!(#core_root::#record)
+    };
     let core = registry::core_field_names(role);
     let mut columns = Vec::new();
     let mut assignments = Vec::new();
@@ -53,7 +59,9 @@ pub(super) fn generate(
         if !core.contains(&name.as_str()) {
             continue;
         }
-        let value = if role == EntityRole::ApiKey && name == "start" {
+        let value = if role == EntityRole::RateLimit && name == "count" {
+            quote!(f64::from(self.#ident.to_owned()))
+        } else if role == EntityRole::ApiKey && name == "start" {
             quote!(self.#ident.clone().map(#core_root::ApiKeyStart::from))
         } else if role == EntityRole::ApiKey && matches!(name.as_str(), "created_at" | "updated_at")
         {
@@ -75,7 +83,7 @@ pub(super) fn generate(
     let ident = &input.ident;
     Ok(quote! {
         impl #seaorm_root::SeaOrmPluginModel for #ident {
-            type Record = #core_root::#record;
+            type Record = #record;
             type Entity = Entity;
             type ActiveModel = ActiveModel;
             type Column = Column;
@@ -83,7 +91,7 @@ pub(super) fn generate(
                 match name { #(#columns)* _ => Err(#core_root::AuthError::config(format!("Unknown plugin model column: {name}"))) }
             }
             fn record(&self) -> #core_root::AuthResult<Self::Record> {
-                Ok(#core_root::#record { #(#output)* })
+                Ok(#record { #(#output)* })
             }
             fn apply_fields(active: &mut ActiveModel, fields: #core_root::serde_json::Map<String, #core_root::serde_json::Value>) -> #core_root::AuthResult<()> {
                 for (name, value) in fields {

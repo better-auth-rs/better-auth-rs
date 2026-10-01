@@ -127,7 +127,7 @@ impl OAuthLinkIdTokenFixture {
     pub(super) fn reset(&self) {
         *self.state.lock().unwrap() = State::default();
     }
-    fn hook(&self, name: &str, ctx: &SeaOrmHookContext<'_>) -> AuthResult<()> {
+    fn hook(&self, name: &str, ctx: &SeaOrmHookContext<'_, TestSchema>) -> AuthResult<()> {
         if !ctx
             .request
             .as_ref()
@@ -181,7 +181,7 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
     async fn before_create_account(
         &self,
         account: &mut CreateAccount,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<HookControl> {
         if account.provider_id == "nested-cancel" {
             self.state
@@ -214,39 +214,43 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
     async fn after_create_account(
         &self,
         _: &<TestSchema as AuthSchema>::Account,
-        ctx: &SeaOrmHookContext<'_>,
+        ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<()> {
         self.hook("account.create.after", ctx)
     }
     async fn before_update_account(
         &self,
         _: &str,
-        _: &mut UpdateAccount,
-        ctx: &SeaOrmHookContext<'_>,
-    ) -> AuthResult<HookControl> {
+        _: &UpdateAccount,
+        ctx: &SeaOrmHookContext<'_, TestSchema>,
+    ) -> AuthResult<better_auth::seaorm::DatabaseHookUpdate<UpdateAccount>> {
         self.hook("account.update.before", ctx)?;
-        Ok(self.cancel("account.update.before"))
+        Ok(if self.cancel("account.update.before").is_cancelled() {
+            better_auth::seaorm::DatabaseHookUpdate::Cancel
+        } else {
+            better_auth::seaorm::DatabaseHookUpdate::Continue
+        })
     }
     async fn after_update_account(
         &self,
-        _: &<TestSchema as AuthSchema>::Account,
-        ctx: &SeaOrmHookContext<'_>,
+        _: Option<&<TestSchema as AuthSchema>::Account>,
+        ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<()> {
         self.hook("account.update.after", ctx)
     }
     async fn before_update_user(
         &self,
         _: &str,
-        _: &mut UpdateUser,
-        ctx: &SeaOrmHookContext<'_>,
-    ) -> AuthResult<HookControl> {
+        _: &UpdateUser,
+        ctx: &SeaOrmHookContext<'_, TestSchema>,
+    ) -> AuthResult<better_auth::seaorm::DatabaseHookUpdate<UpdateUser>> {
         self.hook("user.update.before", ctx)?;
-        Ok(HookControl::Continue)
+        Ok(better_auth::seaorm::DatabaseHookUpdate::Continue)
     }
     async fn after_update_user(
         &self,
-        _: &<TestSchema as AuthSchema>::User,
-        ctx: &SeaOrmHookContext<'_>,
+        _: Option<&<TestSchema as AuthSchema>::User>,
+        ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<()> {
         self.hook("user.update.after", ctx)
     }

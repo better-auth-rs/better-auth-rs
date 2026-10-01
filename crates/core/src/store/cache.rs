@@ -13,6 +13,12 @@ pub trait SecondaryStorage: Send + Sync {
     async fn delete(&self, key: &str) -> AuthResult<()>;
     /// Atomically return and delete a value. Verification consumption requires this guarantee.
     async fn get_and_delete(&self, key: &str) -> AuthResult<Option<serde_json::Value>>;
+    /// Atomically increment a counter. Apply the TTL only when the counter does not exist.
+    async fn increment(&self, _key: &str, _ttl_seconds: f64) -> AuthResult<f64> {
+        Err(AuthError::config(
+            "Secondary-storage rate limiting requires SecondaryStorage.increment.",
+        ))
+    }
 }
 
 /// Standalone cache operations; the auth runtime does not install a cache automatically.
@@ -160,6 +166,47 @@ impl CacheAdapter for MemoryCacheAdapter {
 
 #[async_trait]
 impl SecondaryStorage for MemoryCacheAdapter {
+    async fn increment(&self, key: &str, ttl_seconds: f64) -> AuthResult<f64> {
+        let mut data = self
+            .data
+            .lock()
+            .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
+        let now = Utc::now();
+        data.retain(|_, entry| entry.expires_at.is_none_or(|expires| expires > now));
+        if let Some(entry) = data.get_mut(key) {
+            let count = entry
+                .value
+                .parse::<i64>()
+                .map_err(|error| {
+                    AuthError::internal(format!("Invalid secondary counter: {error}"))
+                })?
+                .checked_add(1)
+                .ok_or_else(|| AuthError::internal("Secondary counter overflow"))?;
+            entry.value = count.to_string();
+            return Ok(count as f64);
+        }
+        let duration = std::time::Duration::try_from_secs_f64(ttl_seconds.abs())
+            .map_err(|error| AuthError::validation(format!("Invalid secondary TTL: {error}")))?;
+        let duration = Duration::from_std(duration)
+            .map_err(|error| AuthError::validation(format!("Invalid secondary TTL: {error}")))?;
+        let duration = if ttl_seconds.is_sign_negative() {
+            -duration
+        } else {
+            duration
+        };
+        let expires_at = now
+            .checked_add_signed(duration)
+            .ok_or_else(|| AuthError::validation("Secondary storage TTL is out of range"))?;
+        let _ = data.insert(
+            key.to_owned(),
+            CacheEntry {
+                value: "1".to_owned(),
+                expires_at: Some(expires_at),
+            },
+        );
+        Ok(1.0)
+    }
+
     async fn get_and_delete(&self, key: &str) -> AuthResult<Option<serde_json::Value>> {
         let mut data = self
             .data
@@ -269,6 +316,29 @@ pub mod redis_adapter {
 
     #[async_trait]
     impl SecondaryStorage for RedisAdapter {
+        async fn increment(&self, key: &str, ttl_seconds: f64) -> AuthResult<f64> {
+            let milliseconds = (ttl_seconds * 1000.0).ceil();
+            let milliseconds = if milliseconds.is_finite() {
+                milliseconds.max(0.0)
+            } else {
+                milliseconds
+            };
+            // SET validates the expiration before creating the counter; Lua errors do not roll back writes.
+            let count: i64 = redis::cmd("EVAL")
+                .arg(
+                    "if redis.call('EXISTS', KEYS[1]) == 1 then return redis.call('INCR', KEYS[1]) end\n\
+                     if ARGV[1] == '0' then return 1 end\n\
+                     redis.call('SET', KEYS[1], '1', 'PX', ARGV[1])\n\
+                     return 1",
+                )
+                .arg(1)
+                .arg(key)
+                .arg(milliseconds.to_string())
+                .query_async(&mut self.connection.clone())
+                .await?;
+            Ok(count as f64)
+        }
+
         async fn get_and_delete(&self, key: &str) -> AuthResult<Option<serde_json::Value>> {
             let mut connection = self.connection.clone();
             let value: Option<String> = redis::cmd("GETDEL")
@@ -306,6 +376,95 @@ pub use redis_adapter::RedisAdapter;
 #[cfg(test)]
 mod tests {
     use super::{CacheAdapter, MemoryCacheAdapter, SecondaryStorage};
+
+    #[cfg(feature = "redis-cache")]
+    #[tokio::test]
+    #[ignore = "Requires REDIS_TEST_URL for a disposable Redis 7+ instance"]
+    async fn redis_counters_create_atomically_and_preserve_the_initial_expiration() {
+        use super::RedisAdapter;
+        use redis::AsyncCommands;
+
+        let url = std::env::var("REDIS_TEST_URL").expect("Set REDIS_TEST_URL");
+        let cache = RedisAdapter::new(&url).await.unwrap();
+        let mut connection = redis::Client::open(url)
+            .unwrap()
+            .get_connection_manager()
+            .await
+            .unwrap();
+        let key = format!("rate-limit-regression:{}", uuid::Uuid::new_v4());
+        for ttl in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, f64::MAX] {
+            assert!(cache.increment(&key, ttl).await.is_err());
+            assert!(!connection.exists::<_, bool>(&key).await.unwrap());
+        }
+        for ttl in [0.0, -0.5] {
+            assert_eq!(cache.increment(&key, ttl).await.unwrap(), 1.0);
+            assert!(!connection.exists::<_, bool>(&key).await.unwrap());
+        }
+
+        assert_eq!(cache.increment(&key, 60.5).await.unwrap(), 1.0);
+        let expiration: i64 = redis::cmd("PEXPIRETIME")
+            .arg(&key)
+            .query_async(&mut connection)
+            .await
+            .unwrap();
+        assert!(expiration > 0);
+        let mut increments = tokio::task::JoinSet::new();
+        for _ in 0..16 {
+            let cache = cache.clone();
+            let key = key.clone();
+            increments.spawn(async move { cache.increment(&key, f64::NAN).await.unwrap() as i64 });
+        }
+        let mut counts = Vec::new();
+        while let Some(result) = increments.join_next().await {
+            counts.push(result.unwrap());
+        }
+        counts.sort_unstable();
+        assert_eq!(counts, (2..=17).collect::<Vec<_>>());
+        assert_eq!(
+            redis::cmd("PEXPIRETIME")
+                .arg(&key)
+                .query_async::<i64>(&mut connection)
+                .await
+                .unwrap(),
+            expiration
+        );
+        assert_eq!(connection.get::<_, i64>(&key).await.unwrap(), 17);
+        let _: bool = connection.pexpire(&key, 0).await.unwrap();
+        assert_eq!(cache.increment(&key, 0.5).await.unwrap(), 1.0);
+        assert!(connection.pttl::<_, i64>(&key).await.unwrap() > 0);
+        SecondaryStorage::delete(&cache, &key).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn secondary_counters_are_atomic_and_preserve_the_initial_expiration() {
+        let cache = std::sync::Arc::new(MemoryCacheAdapter::new());
+        SecondaryStorage::set(cache.as_ref(), "counter", "0", Some(60))
+            .await
+            .unwrap();
+        let expires_at = cache.data.lock().unwrap()["counter"].expires_at;
+        let mut increments = tokio::task::JoinSet::new();
+        for _ in 0..16 {
+            let cache = cache.clone();
+            increments
+                .spawn(async move { cache.increment("counter", 3600.0).await.unwrap() as i64 });
+        }
+        let mut counts = Vec::new();
+        while let Some(result) = increments.join_next().await {
+            counts.push(result.unwrap());
+        }
+        counts.sort_unstable();
+        assert_eq!(counts, (1..=16).collect::<Vec<_>>());
+        assert_eq!(cache.data.lock().unwrap()["counter"].expires_at, expires_at);
+        assert_eq!(
+            CacheAdapter::get(cache.as_ref(), "counter").await.unwrap(),
+            Some("16".to_owned())
+        );
+        SecondaryStorage::set(cache.as_ref(), "counter", "16", Some(0))
+            .await
+            .unwrap();
+        assert_eq!(cache.increment("counter", 0.5).await.unwrap(), 1.0);
+        assert_eq!(cache.increment("counter", 0.0).await.unwrap(), 2.0);
+    }
 
     #[tokio::test]
     async fn secondary_storage_uses_optional_ttl_and_shares_the_cache_backend() {

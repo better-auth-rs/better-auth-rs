@@ -128,6 +128,52 @@ pub enum AuthError {
 }
 
 impl AuthError {
+    /// Whether the error is an intentional endpoint rejection, including redirects and server API errors.
+    pub fn is_api_error(&self) -> bool {
+        match self {
+            Self::Response(_)
+            | Self::FieldInput { .. }
+            | Self::Upstream { .. }
+            | Self::BadRequest(_)
+            | Self::InvalidRequest(_)
+            | Self::Validation(_)
+            | Self::InvalidCredentials
+            | Self::Unauthenticated
+            | Self::AuthenticationFailed(_)
+            | Self::SessionNotFound
+            | Self::Forbidden(_)
+            | Self::BannedUser(_)
+            | Self::Unauthorized
+            | Self::UserNotFound
+            | Self::NotFound(_)
+            | Self::Conflict(_)
+            | Self::MethodNotAllowed(_)
+            | Self::PayloadTooLarge(_)
+            | Self::UnprocessableEntity(_)
+            | Self::RateLimited
+            | Self::NotImplemented(_) => true,
+            Self::Config(_)
+            | Self::Database(_)
+            | Self::Serialization(_)
+            | Self::Plugin { .. }
+            | Self::Internal(_)
+            | Self::PasswordHash(_)
+            | Self::Jwt(_) => false,
+            #[cfg(feature = "redis-cache")]
+            Self::Redis(_) => false,
+        }
+    }
+
+    /// Serialize an HTTP endpoint failure without exposing ordinary runtime errors.
+    pub fn to_http_response(self) -> crate::AuthResponse {
+        if self.is_api_error() {
+            self.to_auth_response()
+        } else {
+            tracing::error!(error = %self, "Authentication request failed");
+            crate::AuthResponse::new(500)
+        }
+    }
+
     /// HTTP status code for this error.
     pub fn status_code(&self) -> u16 {
         match self {
@@ -218,21 +264,27 @@ impl AuthError {
     /// `IntoResponse::into_response` when the `axum` feature is enabled.
     pub fn to_auth_response(self) -> crate::types::AuthResponse {
         if let Self::Response(response) = self {
-            return response.0;
+            return response.0.into_api_error();
         }
         if let Self::PasswordHash(error) = self {
             tracing::error!(%error, "Password hashing failed");
             return crate::types::AuthResponse::new(500);
         }
+        let is_api_error = self.is_api_error();
         let (status, code, message) = self.error_payload();
-        crate::types::AuthResponse::json(
+        let response = crate::types::AuthResponse::json(
             status,
             &crate::types::ErrorCodeMessageResponse {
                 code,
                 message: message.clone(),
             },
         )
-        .unwrap_or_else(|_| crate::types::AuthResponse::text(status, &message))
+        .unwrap_or_else(|_| crate::types::AuthResponse::text(status, &message));
+        if is_api_error {
+            response.into_api_error()
+        } else {
+            response
+        }
     }
 
     pub fn bad_request(message: impl Into<String>) -> Self {

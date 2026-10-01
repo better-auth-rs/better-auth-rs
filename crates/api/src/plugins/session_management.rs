@@ -97,10 +97,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for SessionManagementPlugin 
                 Ok(Some(super::session_update::handle(req, ctx).await?))
             }
             (HttpMethod::Post, "/sign-out") => {
-                if let Err(response) = super::json_body::sign_out(req) {
-                    return Ok(Some(response));
-                }
-                Ok(Some(handle_sign_out(req, ctx).await?))
+                Ok(Some(super::oauth::handle_sign_out(req, ctx).await?))
             }
             (HttpMethod::Get, "/list-sessions") if self.config.enable_session_listing => {
                 Ok(Some(self.handle_list_sessions(req, ctx).await?))
@@ -360,7 +357,6 @@ mod tests {
         let mut response = error.to_auth_response();
         ctx.session_manager()
             .finish_response(&req, &mut response)
-            .await
             .unwrap();
         assert_eq!(response.status, 500);
         assert_eq!(
@@ -465,7 +461,7 @@ mod tests {
     #[tokio::test]
     async fn test_sign_out_clears_account_cookie_when_enabled() {
         let config = test_helpers::create_test_config().account(AccountConfig {
-            store_account_cookie: true,
+            store_account_cookie: Some(true),
             ..Default::default()
         });
         let ctx = test_helpers::create_test_context_with_config(config).await;

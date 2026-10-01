@@ -1,6 +1,5 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use better_auth_core::utils::cookie_utils::create_session_cookie;
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
@@ -10,6 +9,9 @@ use rand::distributions::{Alphanumeric, DistString};
 use validator::ValidateEmail;
 
 use crate::plugins::helpers::{SessionIssueError, issue_user_session};
+
+mod callbacks;
+pub use callbacks::{AnonymousCallbackFuture, AnonymousCallbacks};
 
 type FutureResult<T> = Pin<Box<dyn Future<Output = AuthResult<T>> + Send>>;
 type Generator = dyn Fn() -> FutureResult<String> + Send + Sync;
@@ -83,16 +85,25 @@ impl AnonymousPlugin {
         self.on_link_account = Some(Arc::new(move |link| Box::pin(callback(link))));
         self
     }
-    async fn sign_in(
+    async fn sign_in<S: AuthSchema>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<impl AuthSchema>,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
-        if ctx
+        let mut session_request = req.clone();
+        let _ = session_request
+            .query
+            .insert("disableRefresh".into(), "true".into());
+        let previous = ctx
             .session_manager()
-            .resolve(req, better_auth_core::session::SessionRead::Authoritative)
+            .resolve(
+                &session_request,
+                better_auth_core::session::SessionRead::Cached,
+            )
             .await?
-            .data
+            .data;
+        if previous
+            .as_ref()
             .is_some_and(|data| data.user.is_anonymous == Some(true))
         {
             return Err(error(
@@ -121,9 +132,26 @@ impl AnonymousPlugin {
             }
             custom_email
         };
-        let name = match &self.generate_name {
-            Some(generate) => generate(req.clone()).await?,
-            None => String::new(),
+        let body = req
+            .body
+            .as_deref()
+            .filter(|body| !body.is_empty())
+            .map(super::json_body::decode)
+            .transpose()
+            .map_err(AuthError::from)?
+            .unwrap_or(serde_json::Value::Null);
+        let mut endpoint = super::endpoint_context::EndpointContext::new(Some(req), body, ctx);
+        endpoint.session = previous.map(|data| (data.user, data.session));
+        let name = if let Some(generate) = ctx
+            .extensions
+            .get::<Arc<AnonymousCallbacks<S>>>()
+            .and_then(|callbacks| callbacks.name.as_ref())
+        {
+            generate(&endpoint).await?
+        } else if let Some(generate) = &self.generate_name {
+            generate(req.clone()).await?
+        } else {
+            String::new()
         };
         let mut create = CreateUser::new()
             .with_email(email)
@@ -135,14 +163,23 @@ impl AnonymousPlugin {
         create.is_anonymous = Some(true);
         create.email_verified = Some(false);
 
-        let endpoint =
-            super::endpoint_context::EndpointContext::new(Some(req), serde_json::Value::Null, ctx);
         let user = super::user_admission::create_user(create, "anonymous", &endpoint).await?;
         let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
         let issued = issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
             .await
             .map_err(SessionIssueError::into_auth_error)?;
-        Ok(AuthResponse::json(200,&serde_json::json!({"token": issued.session.token(),"user":ctx.user_view(&issued.user)?}))?.with_header("Set-Cookie",create_session_cookie(issued.session.token(),&ctx.config)))
+        let manager = ctx.session_manager();
+        manager
+            .set_session_cookie(
+                req,
+                manager.internal_data(&issued.user, &issued.session).await?,
+                None,
+            )
+            .await?;
+        Ok(AuthResponse::json(
+            200,
+            &serde_json::json!({"token": issued.session.token(),"user":ctx.user_view(&issued.user)?}),
+        )?)
     }
     async fn delete(
         &self,
@@ -194,11 +231,11 @@ impl AnonymousPlugin {
             &serde_json::json!({"success":true}),
         )?)
     }
-    async fn link(
+    async fn link<S: AuthSchema>(
         &self,
         req: &AuthRequest,
         response: &AuthResponse,
-        ctx: &AuthContext<impl AuthSchema>,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<()> {
         if ![
             "/sign-in",
@@ -226,21 +263,19 @@ impl AnonymousPlugin {
         else {
             return Ok(());
         };
-        let Some(token) = better_auth_core::utils::cookie_utils::verify_cookie_value(
-            cookie.value(),
-            ctx.config.signing_secret(),
-        ) else {
+        if cookie.value().split('.').next().is_none_or(str::is_empty) {
             return Ok(());
-        };
-        let Some((session, snapshot)) = ctx.database.get_session_snapshot(&token).await? else {
-            return Ok(());
-        };
-        let Some(user) = ctx.database.get_user_by_id(&session.user_id()).await? else {
-            return Ok(());
-        };
+        }
+        let mut session_request = req.clone();
+        let _ = session_request
+            .query
+            .insert("disableRefresh".into(), "true".into());
         let previous = ctx
             .session_manager()
-            .resolve(req, better_auth_core::session::SessionRead::Authoritative)
+            .resolve(
+                &session_request,
+                better_auth_core::session::SessionRead::Cached,
+            )
             .await?
             .data;
         let previous = match previous.filter(|session| session.user.is_anonymous == Some(true)) {
@@ -256,18 +291,27 @@ impl AnonymousPlugin {
                         .await?
                         .filter(|user| user.is_anonymous() == Some(true))
                     {
-                        ctx.session_manager()
-                            .list_user_session_views(&user_id)
+                        let session = ctx
+                            .database
+                            .get_user_session_snapshots(&user_id)
                             .await?
                             .into_iter()
-                            .find(|session| session.expires_at() > chrono::Utc::now())
-                            .map(|session| {
-                                Ok::<_, AuthError>(better_auth_core::session::SessionData {
-                                    user: ctx.user_view(&user)?,
-                                    session,
-                                })
+                            .find(|(session, _)| session.expires_at() > chrono::Utc::now());
+                        if let Some((session, snapshot)) = session {
+                            Some(better_auth_core::session::SessionData {
+                                user: ctx.internal_user_view(&user)?,
+                                session: match snapshot {
+                                    Some(session) => session,
+                                    None => {
+                                        ctx.session_manager()
+                                            .internal_session_view(&session)
+                                            .await?
+                                    }
+                                },
                             })
-                            .transpose()?
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
@@ -282,25 +326,46 @@ impl AnonymousPlugin {
         if previous.user.is_anonymous != Some(true) {
             return Ok(());
         }
-        if let Some(callback) = &self.on_link_account {
-            let new_session = if let Some(mut data) = snapshot {
-                data.session.filter_returned_fields(&ctx.config.session);
-                data.session
-            } else {
-                ctx.session_view(&session).await?
-            };
-            callback(AnonymousLink {
-                anonymous_user: previous.user.clone(),
-                anonymous_session: previous.session,
-                new_user: ctx.user_view(&user)?,
-                new_session,
-                request: req.clone(),
-            })
-            .await?;
+        let Some(new_session) = req.new_session()? else {
+            if req.path() == "/sign-in/anonymous" {
+                return Err(error(
+                    400,
+                    "ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY",
+                    "Anonymous users cannot sign in again anonymously",
+                ));
+            }
+            return Ok(());
+        };
+        let link = AnonymousLink {
+            anonymous_user: previous.user.clone(),
+            anonymous_session: previous.session.clone(),
+            new_user: new_session.user.clone(),
+            new_session: new_session.session,
+            request: req.clone(),
+        };
+        if let Some(callback) = ctx
+            .extensions
+            .get::<Arc<AnonymousCallbacks<S>>>()
+            .and_then(|callbacks| callbacks.link.as_ref())
+        {
+            let body = req
+                .body
+                .as_deref()
+                .filter(|body| !body.is_empty())
+                .map(super::json_body::decode)
+                .transpose()
+                .map_err(AuthError::from)?
+                .unwrap_or(serde_json::Value::Null);
+            let mut endpoint = super::endpoint_context::EndpointContext::new(Some(req), body, ctx);
+            endpoint.session = Some((previous.user.clone(), previous.session));
+            endpoint.response = Some(response);
+            callback(&link, &endpoint).await?;
+        } else if let Some(callback) = &self.on_link_account {
+            callback(link).await?;
         }
         if !self.disable_delete_anonymous_user
-            && previous.user.id != user.id()
-            && user.is_anonymous() != Some(true)
+            && previous.user.id != new_session.user.id
+            && new_session.user.is_anonymous != Some(true)
         {
             // Upstream keeps a successful sign-in when post-link cleanup fails.
             if let Err(cause) = ctx.database.delete_user(&previous.user.id).await {

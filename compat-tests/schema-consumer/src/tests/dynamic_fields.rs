@@ -110,7 +110,7 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(stored.name, name.as_f64());
+        assert_eq!(stored.name.map(f64::from), name.as_f64());
         let team = auth
             .store()
             .create_team(CreateTeam {

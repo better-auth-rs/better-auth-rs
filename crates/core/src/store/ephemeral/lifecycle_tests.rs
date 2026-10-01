@@ -1,0 +1,292 @@
+use super::*;
+use crate::store::database_hooks::{
+    DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks, SessionUpdate,
+    VerificationUpdate,
+};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+struct UpdateHooks {
+    first: bool,
+    observed: Arc<Mutex<Vec<String>>>,
+}
+
+#[async_trait]
+impl DatabaseHooks<StatelessSchema> for UpdateHooks {
+    async fn before_update_account(
+        &self,
+        data: &UpdateAccount,
+        _: &DatabaseHookContext<'_, StatelessSchema>,
+    ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
+        self.observed
+            .lock()
+            .unwrap()
+            .push(data.password.clone().unwrap_or_default());
+        if data.scope.as_deref() == Some("cancel") {
+            return Ok(DatabaseHookUpdate::Cancel);
+        }
+        Ok(DatabaseHookUpdate::Patch(if self.first {
+            UpdateAccount {
+                password: Some("first-patch".into()),
+                ..Default::default()
+            }
+        } else {
+            UpdateAccount {
+                scope: Some("second-patch".into()),
+                ..Default::default()
+            }
+        }))
+    }
+    async fn after_update_account(
+        &self,
+        row: Option<&AccountView>,
+        _: &DatabaseHookContext<'_, StatelessSchema>,
+    ) -> AuthResult<()> {
+        self.observed.lock().unwrap().push(
+            if row.is_some() {
+                "after-row"
+            } else {
+                "after-null"
+            }
+            .into(),
+        );
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn account_update_hooks_receive_original_input_and_merge_independent_patches() {
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let store = EphemeralStore::default().with_hooks(vec![
+        Arc::new(UpdateHooks {
+            first: true,
+            observed: observed.clone(),
+        }),
+        Arc::new(UpdateHooks {
+            first: false,
+            observed: observed.clone(),
+        }),
+    ]);
+    let account = store
+        .create_account(CreateAccount {
+            user_id: "owner".into(),
+            account_id: "owner".into(),
+            provider_id: "credential".into(),
+            access_token: None,
+            refresh_token: None,
+            id_token: None,
+            access_token_expires_at: None,
+            refresh_token_expires_at: None,
+            scope: None,
+            password: None,
+        })
+        .await
+        .unwrap();
+    let updated = store
+        .update_account(
+            &account.id,
+            UpdateAccount {
+                password: Some("original".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated.password.as_deref(), Some("first-patch"));
+    assert_eq!(updated.scope.as_deref(), Some("second-patch"));
+    assert_eq!(
+        *observed.lock().unwrap(),
+        ["original", "original", "after-row", "after-row"]
+    );
+
+    observed.lock().unwrap().clear();
+    assert!(
+        store
+            .update_account_optional("missing", UpdateAccount::default())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        *observed.lock().unwrap(),
+        ["", "", "after-null", "after-null"]
+    );
+    observed.lock().unwrap().clear();
+    assert!(
+        store
+            .update_account_optional(
+                &account.id,
+                UpdateAccount {
+                    scope: Some("cancel".into()),
+                    ..Default::default()
+                }
+            )
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(*observed.lock().unwrap(), [""]);
+    assert_eq!(
+        store
+            .get_account("credential", "owner")
+            .await
+            .unwrap()
+            .unwrap(),
+        updated
+    );
+}
+
+struct ConsumeHooks {
+    before: Arc<AtomicUsize>,
+    after: Arc<AtomicUsize>,
+}
+
+#[async_trait]
+impl DatabaseHooks<StatelessSchema> for ConsumeHooks {
+    async fn before_delete_verification(
+        &self,
+        value: &VerificationView,
+        context: &DatabaseHookContext<'_, StatelessSchema>,
+    ) -> AuthResult<DatabaseHookControl> {
+        assert_eq!(value.value, "latest");
+        assert!(context.transaction.is_some());
+        let _ = self.before.fetch_add(1, Ordering::SeqCst);
+        tokio::task::yield_now().await;
+        Ok(DatabaseHookControl::Continue)
+    }
+    async fn after_delete_verification(
+        &self,
+        value: &VerificationView,
+        context: &DatabaseHookContext<'_, StatelessSchema>,
+    ) -> AuthResult<()> {
+        assert_eq!(value.value, "latest");
+        assert!(context.transaction.is_none());
+        let _ = self.after.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn concurrent_consume_runs_hooks_once_and_invalidates_older_rows() {
+    let before = Arc::new(AtomicUsize::new(0));
+    let after = Arc::new(AtomicUsize::new(0));
+    let store = EphemeralStore::default().with_hooks(vec![Arc::new(ConsumeHooks {
+        before: before.clone(),
+        after: after.clone(),
+    })]);
+    let old = store
+        .create_verification(CreateVerification {
+            identifier: "once".into(),
+            value: "old".into(),
+            expires_at: Utc::now() + chrono::Duration::minutes(1),
+        })
+        .await
+        .unwrap();
+    store
+        .lock()
+        .unwrap()
+        .verifications
+        .get_mut(&old.id)
+        .unwrap()
+        .created_at -= chrono::Duration::seconds(1);
+    let _ = store
+        .create_verification(CreateVerification {
+            identifier: "once".into(),
+            value: "latest".into(),
+            expires_at: Utc::now() + chrono::Duration::minutes(1),
+        })
+        .await
+        .unwrap();
+    let (first, second) = tokio::join!(
+        store.consume_verification_by_identifier("once"),
+        store.consume_verification_by_identifier("once")
+    );
+    assert_eq!(
+        [first.unwrap(), second.unwrap()]
+            .into_iter()
+            .flatten()
+            .count(),
+        1
+    );
+    assert_eq!(before.load(Ordering::SeqCst), 1);
+    assert_eq!(after.load(Ordering::SeqCst), 1);
+    assert!(
+        store
+            .get_verification_including_expired("once")
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[derive(Default)]
+struct MissingUpdates(Mutex<Vec<&'static str>>);
+
+#[async_trait]
+impl DatabaseHooks<StatelessSchema> for MissingUpdates {
+    async fn after_update_user(
+        &self,
+        row: Option<&UserView>,
+        _: &DatabaseHookContext<'_, StatelessSchema>,
+    ) -> AuthResult<()> {
+        assert!(row.is_none());
+        self.0.lock().unwrap().push("user");
+        Ok(())
+    }
+    async fn before_update_session(
+        &self,
+        _: &SessionUpdate,
+        _: &DatabaseHookContext<'_, StatelessSchema>,
+    ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
+        Ok(DatabaseHookUpdate::Continue)
+    }
+    async fn after_update_session(
+        &self,
+        row: Option<&SessionView>,
+        _: &DatabaseHookContext<'_, StatelessSchema>,
+    ) -> AuthResult<()> {
+        assert!(row.is_none());
+        self.0.lock().unwrap().push("session");
+        Ok(())
+    }
+    async fn before_update_verification(
+        &self,
+        _: &VerificationUpdate,
+        _: &DatabaseHookContext<'_, StatelessSchema>,
+    ) -> AuthResult<DatabaseHookUpdate<VerificationUpdate>> {
+        Ok(DatabaseHookUpdate::Continue)
+    }
+    async fn after_update_verification(
+        &self,
+        row: Option<&VerificationView>,
+        _: &DatabaseHookContext<'_, StatelessSchema>,
+    ) -> AuthResult<()> {
+        assert!(row.is_none());
+        self.0.lock().unwrap().push("verification");
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn missing_update_results_reach_hooks_before_strict_store_errors() {
+    let hooks = Arc::new(MissingUpdates::default());
+    let store = EphemeralStore::default().with_hooks(vec![hooks.clone()]);
+    assert!(matches!(
+        store.update_user("missing", UpdateUser::default()).await,
+        Err(AuthError::UserNotFound)
+    ));
+    assert!(
+        store
+            .update_session_fields("missing", Default::default())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    store
+        .update_verification_by_identifier("missing", Some("value".into()), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        *hooks.0.lock().unwrap(),
+        ["user", "session", "verification"]
+    );
+}

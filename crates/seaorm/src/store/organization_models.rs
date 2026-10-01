@@ -43,6 +43,7 @@ pub(super) fn active<M: SeaOrmOrganizationModel>(
     input: Map<String, Value>,
     config: &UserConfig,
     create: bool,
+    backend: sea_orm::DbBackend,
 ) -> AuthResult<M::ActiveModel> {
     let core = core
         .into_iter()
@@ -54,7 +55,9 @@ pub(super) fn active<M: SeaOrmOrganizationModel>(
             ))
         })
         .collect::<AuthResult<Map<_, _>>>()?;
-    M::active(config.organization_storage_fields(core, input, create)?)
+    let mut active = M::active(config.organization_storage_fields(core, input, create)?)?;
+    crate::reference_id::apply_bindings(&mut active, config, backend, M::column)?;
+    Ok(active)
 }
 
 pub(super) async fn insert<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
@@ -63,7 +66,7 @@ pub(super) async fn insert<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     input: Map<String, Value>,
     config: &UserConfig,
 ) -> AuthResult<M::Record> {
-    active::<M>(core, input, config, true)?
+    active::<M>(core, input, config, true, conn.get_database_backend())?
         .insert(conn)
         .await
         .map_err(super::map_db_err)?
@@ -88,7 +91,7 @@ pub(super) async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     input: Map<String, Value>,
     config: &UserConfig,
 ) -> AuthResult<M::Record> {
-    let active = active::<M>(core, input, config, false)?;
+    let active = active::<M>(core, input, config, false, conn.get_database_backend())?;
     let _ = Entity::<M>::update_many()
         .set(active)
         .filter(M::column("id")?.eq(id))

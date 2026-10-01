@@ -77,7 +77,20 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
 
 `on_http_request(&AuthRequest, &AuthContext<S>) -> AuthResult<Option<AuthResponse>>` runs only for HTTP calls, after rate limiting and before endpoint middleware and validation. Returning a response skips the endpoint and its `before_request` / `after_request` hooks. Native plugin API calls bypass this phase.
 
-`before_request` hooks run for registered endpoints in plugin registration order. `ReplaceBody` replaces the request body and continues the hook chain. `InjectSession` supplies a session for the remaining hooks and route handler. `Respond` ends request handling. `after_request` hooks receive successful and error responses before application response middleware. Unmatched paths and methods return an empty HTTP 404 after `on_http_request`, without endpoint hooks. Check the response status before changing response data.
+`before_request` hooks run for registered endpoints in plugin registration order. `ReplaceBody` replaces the request body and continues the hook chain. `InjectSession` supplies a session for the remaining hooks and route handler. `Respond` skips the endpoint and all after hooks. Unmatched paths and methods return an empty HTTP 404 after `on_http_request`, without endpoint hooks.
+
+| Failure phase | HTTP behavior | Native behavior |
+|---------------|---------------|-----------------|
+| HTTP request hook or rate limiter | Return the original error to the transport | This phase does not run |
+| Before hook | Skip the endpoint and after hooks; serialize API errors; return an empty 500 for ordinary errors | Return the original error |
+| Endpoint | Run after hooks for API errors; stop immediately for ordinary errors | Apply the same hook order and preserve the final error |
+| After hook | Continue later hooks after an API error; stop with an empty 500 after an ordinary error | Apply the same hook order and preserve the final error |
+
+API errors preserve their public body and explicit response headers. `AuthResponse::is_api_error` distinguishes a returned response from a thrown API error with the same status. Use `replace_json` to replace the returned value while preserving the status and headers; this clears the API-error marker. Use `replace_returned` to supply a complete replacement response. Ordinary HTTP failures discard queued headers. Writes completed before an error remain committed unless the endpoint itself owns a transaction.
+
+For native calls, `error.to_auth_response()` exposes `api_error_headers()` and `captured_headers()` separately. The first collection contains the API error's explicit headers. The second contains headers accumulated in endpoint context. A before-hook API error retains only explicit headers in its HTTP response, while native callers can also inspect the queued context headers. Endpoint and after-hook API errors accumulate cookies and later hook headers in dispatch order.
+
+Call `BetterAuth::call_endpoint(method, path, EndpointInput)` from trusted server code to use the registered endpoint and its hooks. `EndpointInput.headers` distinguishes omitted headers from an explicitly empty collection. Native dispatch bypasses HTTP request hooks, rate limiting, media parsing, and origin checks; endpoint authentication and validation still apply.
 
 For user and session creation or deletion, register `SeaOrmHooks` on `SeaOrmStore`. These hooks receive the active database transaction.
 

@@ -120,12 +120,12 @@ fn completed_phase_reference_surface(
     })
     .collect();
 
-    // The pinned TS runtime exposes `/callback/{provider}` publicly, but the
+    // The pinned TS runtime exposes `/callback/:id` publicly, but the
     // generated OpenAPI profile omits it. Treat it as a completed-phase
     // runtime route and assert it explicitly until the structural profile
     // catches up.
     let _ = surface.insert(
-        "/callback/{provider}".to_string(),
+        "/callback/{id}".to_string(),
         HashSet::from(["get".to_string(), "post".to_string()]),
     );
     // The pinned TS runtime exposes `/sign-in/username` and
@@ -385,8 +385,8 @@ async fn test_completed_phase_endpoints_present() {
         ("post", "/revoke-sessions"),
         ("post", "/revoke-other-sessions"),
         ("post", "/sign-in/social"),
-        ("get", "/callback/{provider}"),
-        ("post", "/callback/{provider}"),
+        ("get", "/callback/{id}"),
+        ("post", "/callback/{id}"),
         ("post", "/link-social"),
         ("get", "/list-accounts"),
         ("post", "/unlink-account"),

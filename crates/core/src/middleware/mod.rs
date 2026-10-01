@@ -65,4 +65,8 @@ pub async fn run_after(
 pub use body_limit::{BodyLimitConfig, BodyLimitMiddleware};
 pub use cors::{CorsConfig, CorsMiddleware};
 pub use csrf::{CsrfConfig, CsrfMiddleware};
-pub use rate_limit::{EndpointRateLimit, RateLimitConfig, RateLimitMiddleware};
+pub use rate_limit::{
+    CustomRateLimitRule, EndpointRateLimit, PluginRateLimit, RateLimitConfig, RateLimitDecision,
+    RateLimitMiddleware, RateLimitOverride, RateLimitRuleResolver, RateLimitStorage,
+    RateLimitStorageKind,
+};

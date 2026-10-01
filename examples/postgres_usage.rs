@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHasher};
@@ -19,7 +20,9 @@ use better_auth::seaorm::{
     Database, DatabaseConnection, SeaOrmAccountModel, SeaOrmSessionModel, SeaOrmStore,
     SeaOrmUserModel, SeaOrmVerificationModel,
 };
-use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
+use better_auth::{
+    Argon2PasswordHasher, AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth,
+};
 use chrono::{DateTime, Utc};
 use rand::rngs::OsRng;
 use serde_json::json;
@@ -173,9 +176,9 @@ mod user {
                 display_username: Set(create_user.display_username),
                 two_factor_enabled: Set(false),
                 role: Set(create_user.role),
-                banned: Set(false),
-                ban_reason: Set(None),
-                ban_expires: Set(None),
+                banned: Set(create_user.banned.unwrap_or(false)),
+                ban_reason: Set(create_user.ban_reason),
+                ban_expires: Set(create_user.ban_expires),
                 metadata: Set(create_user.metadata.unwrap_or(json!({}))),
                 created_at: Set(now),
                 updated_at: Set(now),
@@ -214,18 +217,12 @@ mod user {
             }
             if let Some(banned) = update.banned {
                 active.banned = Set(banned);
-                if !banned {
-                    active.ban_reason = Set(None);
-                    active.ban_expires = Set(None);
-                }
             }
-            if update.banned != Some(false) {
-                if let Some(ban_reason) = update.ban_reason {
-                    active.ban_reason = Set(Some(ban_reason));
-                }
-                if let Some(ban_expires) = update.ban_expires {
-                    active.ban_expires = Set(Some(ban_expires));
-                }
+            if let Some(ban_reason) = update.ban_reason {
+                active.ban_reason = Set(ban_reason);
+            }
+            if let Some(ban_expires) = update.ban_expires {
+                active.ban_expires = Set(ban_expires);
             }
             active.updated_at = Set(now);
         }
@@ -306,6 +303,43 @@ mod session {
     }
 
     impl SeaOrmSessionModel for Model {
+        fn apply_update(
+            active: &mut Self::ActiveModel,
+            update: better_auth::seaorm::SessionUpdate,
+        ) -> AuthResult<()> {
+            if let Some(id) = update.id {
+                active.id = Set(Self::parse_id(&id)?);
+            }
+            if let Some(id) = update.user_id {
+                active.user_id = Set(Self::parse_user_id(&id)?);
+            }
+            if let Some(value) = update.token {
+                active.token = Set(value);
+            }
+            if let Some(value) = update.expires_at {
+                active.expires_at = Set(value);
+            }
+            if let Some(value) = update.created_at {
+                active.created_at = Set(value);
+            }
+            if let Some(value) = update.updated_at {
+                active.updated_at = Set(value);
+            }
+            if let Some(value) = update.ip_address {
+                active.ip_address = Set(value);
+            }
+            if let Some(value) = update.user_agent {
+                active.user_agent = Set(value);
+            }
+            if let Some(value) = update.impersonated_by {
+                active.impersonated_by = Set(value);
+            }
+            if let Some(value) = update.active_organization_id {
+                active.active_organization_id = Set(value);
+            }
+            Ok(())
+        }
+
         type Id = i32;
         type UserId = i32;
         type Entity = Entity;
@@ -608,6 +642,31 @@ mod verification {
     }
 
     impl SeaOrmVerificationModel for Model {
+        fn apply_update(
+            active: &mut Self::ActiveModel,
+            update: better_auth::seaorm::VerificationUpdate,
+        ) -> AuthResult<()> {
+            if let Some(id) = update.id {
+                active.id = Set(Self::parse_id(&id)?);
+            }
+            if let Some(value) = update.identifier {
+                active.identifier = Set(value);
+            }
+            if let Some(value) = update.value {
+                active.value = Set(value);
+            }
+            if let Some(value) = update.expires_at {
+                active.expires_at = Set(value);
+            }
+            if let Some(value) = update.created_at {
+                active.created_at = Set(value);
+            }
+            if let Some(value) = update.updated_at {
+                active.updated_at = Set(value);
+            }
+            Ok(())
+        }
+
         type Id = i32;
         type Entity = Entity;
         type ActiveModel = ActiveModel;
@@ -685,7 +744,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let auth = BetterAuth::<AppSchema>::new(config)
         .store(store)
-        .plugin(EmailPasswordPlugin::new().enable_signup(true))
+        .plugin(
+            EmailPasswordPlugin::new()
+                .enable_signup(true)
+                .password_hasher(Arc::new(Argon2PasswordHasher)),
+        )
         .plugin(PasswordManagementPlugin::new())
         .plugin(SessionManagementPlugin::new())
         .plugin(AccountManagementPlugin::new())

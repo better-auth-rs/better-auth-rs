@@ -18,9 +18,12 @@ mod handlers;
 pub(crate) use handlers::validate_redirect_target;
 pub(crate) use signin::sign_in_verified_profile;
 mod logout;
+pub(super) use logout::handle_sign_out;
 mod oidc;
+mod popup;
 mod provider_tokens;
 mod providers;
+pub use popup::{OAUTH_POPUP_COMPLETE_SCRIPT, OAUTH_POPUP_SCRIPT_CSP_HASH, OAuthPopupPlugin};
 mod proxy;
 pub use proxy::{OAuthProxyConfig, OAuthProxyPlugin};
 mod resolved;
@@ -135,28 +138,15 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
             AuthRoute::post("/sign-in/social", "social_sign_in"),
-            AuthRoute::get("/callback/{provider}", "oauth_callback")
+            AuthRoute::get("/callback/{id}", "oauth_callback")
                 .allowed_media_types(&["application/x-www-form-urlencoded", "application/json"]),
-            AuthRoute::post("/callback/{provider}", "oauth_callback_post")
+            AuthRoute::post("/callback/{id}", "oauth_callback_post")
                 .allowed_media_types(&["application/x-www-form-urlencoded", "application/json"]),
             AuthRoute::post("/link-social", "link_social"),
             AuthRoute::post("/get-access-token", "get_access_token"),
             AuthRoute::post("/refresh-token", "refresh_token"),
             AuthRoute::get("/account-info", "account_info"),
         ]
-    }
-
-    async fn before_request(
-        &self,
-        req: &AuthRequest,
-        ctx: &AuthContext<S>,
-    ) -> AuthResult<Option<better_auth_core::BeforeRequestAction>> {
-        if req.method() == &HttpMethod::Post && req.path() == "/sign-out" {
-            return Ok(Some(better_auth_core::BeforeRequestAction::Respond(
-                logout::handle_sign_out(self.resolved_config().await?, req, ctx).await?,
-            )));
-        }
-        Ok(None)
     }
 
     async fn on_request(
@@ -192,7 +182,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
     }
 }
 
-/// Check if the path matches `/callback/{provider}` (with optional query string).
+/// Check if the path matches `/callback/{id}` (with optional query string).
 fn path_matches_callback(path: &str) -> bool {
     let path_without_query = path.split('?').next().unwrap_or(path);
     path_without_query
@@ -200,7 +190,7 @@ fn path_matches_callback(path: &str) -> bool {
         .is_some_and(|provider| !provider.is_empty() && !provider.contains('/'))
 }
 
-/// Extract the provider name from `/callback/{provider}?...`.
+/// Extract the provider name from `/callback/{id}?...`.
 fn extract_provider_from_callback(path: &str) -> String {
     let path_without_query = path.split('?').next().unwrap_or(path);
     path_without_query["/callback/".len()..].to_string()
