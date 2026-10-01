@@ -60,6 +60,8 @@ Custom Organization adapters must return `InvitationOrganization` from `Invitati
 
 Custom adapters must implement `UserStore::get_user_with_accounts` and `AccountStore::get_account_owner` for password and OAuth sign-in. Capture the canonical stored identity before applying output policies. The first method projects the user, then reads the account page with that stored identity under the default limit. The second method reads up to two accounts, projects each account and its persisted owner, and rejects duplicate account identities. `UserAccounts::new` and `AccountOwner::new` require the captured stored user ID and reject projections that change the relationship. An orphaned account has no joined user. OAuth resolves this join before admission callbacks or token updates, so a failed owner read must not refresh tokens.
 
+Custom adapters must also implement `AccountStore::get_credential_account`. This point query matches the stored `userId`, `providerId = "credential"`, and `accountId = userId` before applying account output policies. The query does not use `default_find_many_limit`. Keep ordinary account lists capped; do not implement this method by filtering a list page.
+
 ## Generate an initial schema
 
 Run the CLI with every plugin that your application registers:
@@ -258,6 +260,12 @@ When migrating a bundled or generated model from `Option<Json>` to `Option<Strin
 Team membership storage requires nullable `membership_key` with a unique index. The plugin computes this value as unpadded base64url of SHA-256 over the JSON `[teamId, userId]` tuple. Keep the unique `(team_id, user_id)` index to protect existing rows with a NULL membership key. Use the corresponding mapped column names when your schema renames these fields.
 
 ## Plugin Fields
+
+Passkey `name` and `aaguid`, and API Key `name`, use `SchemaValue<Option<String>>` in runtime records and public views. `Undefined` omits the JSON field; `Typed(None)` emits null; `Typed(Some(value))` emits the string, including an empty string. Their `AuthPasskey` and `AuthApiKey` getters return a reference to this value. Custom implementations must preserve the three states. Read `.typed()?` when application code requires the nullable string. Display transforms may return a string, null, or undefined. Other output types are rejected.
+
+`CreatePasskey` uses the same representation for `name` and `aaguid`. Use `Default::default()` for omission, `None.into()` for explicit null, and `Some(value).into()` for a string. The input callback receives omission separately from null. Memory retains omitted stored fields; SQL nullable columns read back as null. Application-owned SeaORM columns remain `Option<String>`, and `AuthEntity` preserves database null when building the runtime record. No column migration is needed.
+
+API Key creation without a name retains its explicit null default. Database field policies run before fallback-cache population; cache reads preserve the projected omission or null without repeating callbacks. Secondary-only API Key operations continue to bypass database field policies.
 
 `build().await` rejects a plugin when the user or session entity cannot persist its required fields. `AuthEntity` derives this capability list from the model fields.
 

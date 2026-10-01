@@ -27,6 +27,12 @@ pub(super) struct ResolvedGenericOAuth {
 }
 
 impl ResolvedProvider {
+    pub(super) fn uses_pkce(&self) -> bool {
+        self.generic
+            .as_ref()
+            .map_or_else(|| self.config.uses_pkce(), |generic| generic.config.pkce)
+    }
+
     pub(super) fn requires_nonce(&self) -> bool {
         self.generic.as_ref().is_some_and(|generic| {
             generic.verifier.is_some() && !generic.config.disable_id_token_nonce_binding
@@ -218,6 +224,7 @@ async fn resolve_generic(
         config.token_url.as_deref().unwrap_or_default(),
     );
     provider.user_info_url = config.user_info_url.clone();
+    provider.redirect_uri = config.redirect_uri.clone();
     provider.end_session_endpoint = if config.disable_provider_logout {
         None
     } else {

@@ -267,7 +267,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         .store()
         .create_passkey(CreatePasskey {
             user_id: user_id.into(),
-            name: Some("key".into()),
+            name: Some("key".into()).into(),
             credential_id: "credential".into(),
             public_key: "public".into(),
             counter: 3,
@@ -275,7 +275,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
             backed_up: false,
             transports: Some("usb".into()),
             credential: "credential-state".into(),
-            aaguid: None,
+            aaguid: None.into(),
         })
         .await
         .unwrap();

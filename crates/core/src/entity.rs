@@ -235,7 +235,7 @@ pub trait AuthTwoFactor: Clone + Send + Sync + Serialize + std::fmt::Debug + 'st
 /// Trait representing an API key entity.
 pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
-    fn name(&self) -> Option<&str>;
+    fn name(&self) -> &SchemaValue<Option<String>>;
     fn start(&self) -> Option<Cow<'_, crate::ApiKeyStart>>;
     fn prefix(&self) -> Option<&str>;
     fn key_hash(&self) -> &str;
@@ -265,7 +265,7 @@ pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stati
 /// Trait representing a passkey entity.
 pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
-    fn name(&self) -> Option<&str>;
+    fn name(&self) -> &SchemaValue<Option<String>>;
     fn public_key(&self) -> &str;
     fn user_id(&self) -> Cow<'_, str>;
     fn credential_id(&self) -> &str;
@@ -275,7 +275,7 @@ pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
     fn transports(&self) -> Option<&str>;
     fn created_at(&self) -> DateTime<Utc>;
     fn updated_at(&self) -> DateTime<Utc>;
-    fn aaguid(&self) -> Option<&str>;
+    fn aaguid(&self) -> &SchemaValue<Option<String>>;
     fn credential(&self) -> &str;
 }
 

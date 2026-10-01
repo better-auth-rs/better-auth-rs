@@ -68,7 +68,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
     let created = store
         .create_api_key(input(Some("  Desk  "), "ordinary-first"))
         .await?;
-    assert_eq!(created.name.as_deref(), Some("Desk:out"));
+    assert_eq!(created.name.typed().unwrap().as_deref(), Some("Desk:out"));
     assert_eq!(
         *events.lock().unwrap(),
         ["input:\"  Desk  \"", "output:\"Desk\""]
@@ -78,6 +78,8 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             .await?
             .unwrap()
             .name
+            .typed()
+            .unwrap()
             .as_deref(),
         Some("Desk")
     );
@@ -86,12 +88,17 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
     let fallback = store
         .create_api_key(input(None, "ordinary-default"))
         .await?;
-    assert_eq!(fallback.name.as_deref(), Some("Fallback:out"));
+    assert_eq!(
+        fallback.name.typed().unwrap().as_deref(),
+        Some("Fallback:out")
+    );
     assert_eq!(
         raw.get_api_key_by_hash("ordinary-default")
             .await?
             .unwrap()
             .name
+            .typed()
+            .unwrap()
             .as_deref(),
         Some("Fallback")
     );
@@ -104,13 +111,13 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             },
         )
         .await?;
-    assert_eq!(updated.name.as_deref(), Some("Mobile:out"));
+    assert_eq!(updated.name.typed().unwrap().as_deref(), Some("Mobile:out"));
     for found in [
         store.get_api_key_by_id(created.id.typed()?).await?.unwrap(),
         store.get_api_key_by_id_value(&created.id).await?.unwrap(),
         store.get_api_key_by_hash("ordinary-first").await?.unwrap(),
     ] {
-        assert_eq!(found.name.as_deref(), Some("Mobile:out"));
+        assert_eq!(found.name.typed().unwrap().as_deref(), Some("Mobile:out"));
     }
     events.lock().unwrap().clear();
     let list = store
@@ -118,7 +125,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         .await?;
     assert_eq!(
         list.iter()
-            .map(|key| key.name.as_deref())
+            .map(|key| key.name.typed().unwrap().as_deref())
             .collect::<Vec<_>>(),
         [Some("Fallback:out"), Some("Mobile:out")]
     );
@@ -179,20 +186,20 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         assert_eq!(row.key_hash, created.key_hash);
         assert_eq!(row.reference_id, created.reference_id);
         if set {
-            assert_eq!(row.name.as_deref(), Some("Renewed:out"));
+            assert_eq!(row.name.typed().unwrap().as_deref(), Some("Renewed:out"));
             assert_eq!(
                 *events.lock().unwrap(),
                 ["input:\"Renewed\"", "output:\"Renewed\""]
             );
         } else {
-            assert_eq!(row.name.as_deref(), Some("Mobile:out"));
+            assert_eq!(row.name.typed().unwrap().as_deref(), Some("Mobile:out"));
             assert_eq!(*events.lock().unwrap(), ["output:\"Mobile\""]);
         }
         let stored = raw.get_api_key_by_hash("ordinary-first").await?.unwrap();
         assert_eq!(stored.remaining, Some(remaining));
         assert_eq!(stored.request_count, Some(count));
         assert_eq!(
-            stored.name.as_deref(),
+            stored.name.typed().unwrap().as_deref(),
             Some(if set { "Renewed" } else { "Mobile" })
         );
     }
@@ -214,6 +221,8 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             .await?
             .unwrap()
             .name
+            .typed()
+            .unwrap()
             .as_deref(),
         Some("Renewed")
     );
@@ -231,7 +240,10 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         "ordinary API Key output error",
     );
     let stored = raw.get_api_key_by_hash("ordinary-first").await?.unwrap();
-    assert_eq!(stored.name.as_deref(), Some("output-error"));
+    assert_eq!(
+        stored.name.typed().unwrap().as_deref(),
+        Some("output-error")
+    );
     assert_eq!(
         (stored.remaining, stored.request_count),
         (Some(8.0), Some(2.0))
@@ -260,6 +272,8 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             .await?
             .unwrap()
             .name
+            .typed()
+            .unwrap()
             .as_deref(),
         Some("output-error")
     );
@@ -297,11 +311,16 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
             .await?
             .unwrap()
             .name
+            .typed()
+            .unwrap()
             .as_deref(),
         Some("Stored")
     );
     call.reply.send(Ok(Some(json!("Projected")))).unwrap();
-    assert_eq!(pending.await.unwrap()?.name.as_deref(), Some("Projected"));
+    assert_eq!(
+        pending.await.unwrap()?.name.typed().unwrap().as_deref(),
+        Some("Projected")
+    );
     Ok(())
 }
 

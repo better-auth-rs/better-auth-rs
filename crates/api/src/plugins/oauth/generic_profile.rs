@@ -2,7 +2,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::{AuthError, AuthResult};
 use serde_json::{Map, Value};
 
-use super::generic::VerifiedOAuthClaims;
+use super::generic::GenericOAuthProfileContext;
 use super::providers::{OAuthUserInfo, OAuthUserInfoRequest, OAuthUserInfoResponse};
 use super::resolved::ResolvedGenericOAuth;
 use super::types::AccountInfoUser;
@@ -70,17 +70,16 @@ pub(super) async fn fetch_profile(
     };
 
     let raw = if let Some(handler) = &provider.config.get_user_info {
-        if let Some(claims) = &verified_claims {
-            handler
-                .get_user_info_with_verified_claims(
-                    tokens,
-                    VerifiedOAuthClaims::new(claims),
-                    provider.config.user_info_url.as_deref(),
-                )
-                .await?
-        } else {
-            handler.get_user_info(tokens).await?
-        }
+        handler
+            .get_user_info_with_context(
+                tokens,
+                GenericOAuthProfileContext::new(
+                    &provider.config,
+                    expected_nonce,
+                    verified_claims.as_ref(),
+                ),
+            )
+            .await?
     } else {
         default_profile(provider, tokens, verified_claims).await?
     };
@@ -91,14 +90,15 @@ pub(super) async fn fetch_profile(
         Some(mapper) => mapper.map_profile(&raw).await?,
         None => Default::default(),
     };
+    let email = mapped
+        .email
+        .unwrap_or_else(|| Some(string(profile, "email").unwrap_or_default()).into());
+    let _ = super::providers::profile_email(&email)?;
     Ok(ProfileResponse {
         user: AccountInfoUser {
             id: None,
             additional_fields: mapped.additional_fields,
-            email: mapped
-                .email
-                .or_else(|| string(profile, "email"))
-                .unwrap_or_default(),
+            email,
             name: mapped.name.unwrap_or_else(|| string(profile, "name")),
             image: mapped
                 .image

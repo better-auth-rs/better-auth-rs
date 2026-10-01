@@ -552,6 +552,1478 @@
           }
         }
       ]
+    },
+    "vercel": {
+      "authorizationEndpoint": "https://vercel.com/oauth/authorize",
+      "tokenEndpoint": "https://api.vercel.com/login/oauth/token",
+      "userinfoEndpoint": "https://api.vercel.com/login/oauth/userinfo",
+      "subjectField": "sub",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": null
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "read",
+              "write"
+            ]
+          },
+          "requestScopes": [
+            "write",
+            "deploy"
+          ],
+          "scope": "read write write deploy"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "email"
+            ]
+          },
+          "requestScopes": [
+            "profile"
+          ],
+          "scope": "email profile"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "sub": "vercel-owner",
+        "name": "Vercel Owner",
+        "preferred_username": "vercel-person",
+        "email": "vercel-owner@example.test",
+        "picture": "https://images.example.test/vercel.png",
+        "email_verified": true
+      },
+      "defaultUser": {
+        "name": "Vercel Owner",
+        "email": "vercel-owner@example.test",
+        "image": "https://images.example.test/vercel.png",
+        "emailVerified": true
+      },
+      "mapperPatch": {
+        "name": "Mapped Vercel Owner",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Vercel Owner",
+        "email": "vercel-owner@example.test",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Vercel Owner",
+        "email": "vercel-owner@example.test",
+        "image": "https://images.example.test/custom-vercel.png",
+        "emailVerified": true
+      },
+      "normalProfileCases": [
+        {
+          "name": "null name uses preferred username",
+          "profile": {
+            "sub": "vercel-owner",
+            "name": null,
+            "preferred_username": "vercel-person",
+            "email": "vercel-owner@example.test",
+            "picture": "https://images.example.test/vercel.png",
+            "email_verified": true
+          },
+          "user": {
+            "name": "vercel-person",
+            "email": "vercel-owner@example.test",
+            "image": "https://images.example.test/vercel.png",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "empty name stays empty",
+          "profile": {
+            "sub": "vercel-owner",
+            "name": "",
+            "preferred_username": "vercel-person",
+            "email": "vercel-owner@example.test",
+            "picture": "https://images.example.test/vercel.png",
+            "email_verified": true
+          },
+          "user": {
+            "name": "",
+            "email": "vercel-owner@example.test",
+            "image": "https://images.example.test/vercel.png",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "missing name and image retain omission",
+          "profile": {
+            "sub": "vercel-owner",
+            "email": "vercel-owner@example.test"
+          },
+          "user": {
+            "name": "",
+            "email": "vercel-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "null image is retained",
+          "profile": {
+            "sub": "vercel-owner",
+            "name": "Vercel Owner",
+            "preferred_username": "vercel-person",
+            "email": "vercel-owner@example.test",
+            "picture": null,
+            "email_verified": true
+          },
+          "user": {
+            "name": "Vercel Owner",
+            "email": "vercel-owner@example.test",
+            "image": null,
+            "emailVerified": true
+          }
+        }
+      ]
+    },
+    "figma": {
+      "authorizationEndpoint": "https://www.figma.com/oauth",
+      "tokenEndpoint": "https://api.figma.com/v1/oauth/token",
+      "userinfoEndpoint": "https://api.figma.com/v1/me",
+      "subjectField": "id",
+      "tokenAuthentication": "basic",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "current_user:read"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "file_content:read",
+              "current_user:read"
+            ]
+          },
+          "requestScopes": [
+            "file_metadata:read",
+            "file_content:read"
+          ],
+          "scope": "current_user:read file_content:read current_user:read file_metadata:read file_content:read"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "file_content:read"
+            ]
+          },
+          "requestScopes": [
+            "file_metadata:read"
+          ],
+          "scope": "file_content:read file_metadata:read"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "id": "figma-owner",
+        "handle": "Figma Owner",
+        "email": "figma-owner@example.test",
+        "img_url": "https://images.example.test/figma.png"
+      },
+      "defaultUser": {
+        "name": "Figma Owner",
+        "email": "figma-owner@example.test",
+        "image": "https://images.example.test/figma.png",
+        "emailVerified": false
+      },
+      "mapperPatch": {
+        "name": "Mapped Figma Owner",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Figma Owner",
+        "email": "figma-owner@example.test",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Figma Owner",
+        "email": "figma-owner@example.test",
+        "image": "https://images.example.test/custom-figma.png",
+        "emailVerified": false
+      },
+      "normalProfileCases": [
+        {
+          "name": "omitted img_url omits the JSON image field",
+          "profile": {
+            "id": "figma-owner",
+            "handle": "Figma Owner",
+            "email": "figma-owner@example.test"
+          },
+          "user": {
+            "name": "Figma Owner",
+            "email": "figma-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "null img_url stays null",
+          "profile": {
+            "id": "figma-owner",
+            "handle": "Figma Owner",
+            "email": "figma-owner@example.test",
+            "img_url": null
+          },
+          "user": {
+            "name": "Figma Owner",
+            "email": "figma-owner@example.test",
+            "image": null,
+            "emailVerified": false
+          }
+        }
+      ],
+      "tokenContract": {
+        "authorization": "Basic c29jaWFsLWh0dHAtY2xpZW50Om9yZGluYXJ5LWNsaWVudC1zZWNyZXQ=",
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/figma"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "figma-access-token",
+          "refresh_token": "figma-refresh-token",
+          "token_type": "Bearer",
+          "scope": "current_user:read file_content:read"
+        }
+      }
+    },
+    "dropbox": {
+      "authorizationEndpoint": "https://www.dropbox.com/oauth2/authorize",
+      "tokenEndpoint": "https://api.dropboxapi.com/oauth2/token",
+      "userinfoEndpoint": "https://api.dropboxapi.com/2/users/get_current_account",
+      "subjectField": "account_id",
+      "profileMethod": "POST",
+      "tokenAuthentication": "post",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "account_info.read"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "files.metadata.read",
+              "account_info.read"
+            ],
+            "accessType": "offline"
+          },
+          "requestScopes": [
+            "files.content.read",
+            "files.metadata.read"
+          ],
+          "scope": "account_info.read files.metadata.read account_info.read files.content.read files.metadata.read",
+          "tokenAccessType": "offline"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "files.metadata.read"
+            ]
+          },
+          "requestScopes": [
+            "files.content.read"
+          ],
+          "scope": "files.metadata.read files.content.read"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        },
+        {
+          "name": "requestAccessType",
+          "options": {
+            "accessType": "offline"
+          },
+          "additionalParams": {
+            "token_access_type": "online"
+          },
+          "scope": "account_info.read",
+          "tokenAccessType": "online"
+        }
+      ],
+      "profile": {
+        "account_id": "dbid:ordinary-dropbox-owner",
+        "name": {
+          "display_name": "Dropbox Owner"
+        },
+        "email": "dropbox-owner@example.test",
+        "email_verified": true,
+        "profile_photo_url": "https://images.example.test/dropbox.png"
+      },
+      "defaultUser": {
+        "name": "Dropbox Owner",
+        "email": "dropbox-owner@example.test",
+        "image": "https://images.example.test/dropbox.png",
+        "emailVerified": true
+      },
+      "mapperPatch": {
+        "name": "Mapped Dropbox Owner",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Dropbox Owner",
+        "email": "dropbox-owner@example.test",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Dropbox Owner",
+        "email": "dropbox-owner@example.test",
+        "image": "https://images.example.test/custom-dropbox.png",
+        "emailVerified": true
+      },
+      "normalProfileCases": [
+        {
+          "name": "omitted photo and verification preserve defaults",
+          "profile": {
+            "account_id": "dbid:ordinary-dropbox-owner",
+            "name": {
+              "display_name": "Dropbox Owner"
+            },
+            "email": "dropbox-owner@example.test"
+          },
+          "user": {
+            "name": "Dropbox Owner",
+            "email": "dropbox-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "null photo stays null",
+          "profile": {
+            "account_id": "dbid:ordinary-dropbox-owner",
+            "name": {
+              "display_name": "Dropbox Owner"
+            },
+            "email": "dropbox-owner@example.test",
+            "email_verified": false,
+            "profile_photo_url": null
+          },
+          "user": {
+            "name": "Dropbox Owner",
+            "email": "dropbox-owner@example.test",
+            "image": null,
+            "emailVerified": false
+          }
+        }
+      ],
+      "tokenContract": {
+        "authorization": null,
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/dropbox"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "dropbox-access-token",
+          "refresh_token": "dropbox-refresh-token",
+          "token_type": "Bearer",
+          "scope": "ordinary-scope"
+        }
+      }
+    },
+    "kick": {
+      "authorizationEndpoint": "https://id.kick.com/oauth/authorize",
+      "tokenEndpoint": "https://id.kick.com/oauth/token",
+      "userinfoEndpoint": "https://api.kick.com/public/v1/users",
+      "subjectField": "user_id",
+      "tokenAuthentication": "post",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "user:read"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "channel:read",
+              "user:read"
+            ]
+          },
+          "requestScopes": [
+            "user:read",
+            "channel:read"
+          ],
+          "scope": "user:read channel:read user:read user:read channel:read"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "channel:read"
+            ]
+          },
+          "requestScopes": [
+            "user:read"
+          ],
+          "scope": "channel:read user:read"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "user_id": 4102,
+        "name": "Kick Owner",
+        "email": "kick-owner@example.test",
+        "profile_picture": "https://images.example.test/kick.png"
+      },
+      "defaultUser": {
+        "name": "Kick Owner",
+        "email": "kick-owner@example.test",
+        "image": "https://images.example.test/kick.png",
+        "emailVerified": false
+      },
+      "mapperPatch": {
+        "name": "Mapped Kick Owner",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Kick Owner",
+        "email": "kick-owner@example.test",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Kick Owner",
+        "email": "kick-owner@example.test",
+        "image": "https://images.example.test/custom-kick.png",
+        "emailVerified": false
+      },
+      "normalProfileCases": [
+        {
+          "name": "omitted profile_picture omits the JSON image field",
+          "profile": {
+            "user_id": 4102,
+            "name": "Kick Owner",
+            "email": "kick-owner@example.test"
+          },
+          "user": {
+            "name": "Kick Owner",
+            "email": "kick-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "null profile_picture stays null",
+          "profile": {
+            "user_id": 4102,
+            "name": "Kick Owner",
+            "email": "kick-owner@example.test",
+            "profile_picture": null
+          },
+          "user": {
+            "name": "Kick Owner",
+            "email": "kick-owner@example.test",
+            "image": null,
+            "emailVerified": false
+          }
+        }
+      ],
+      "tokenContract": {
+        "authorization": null,
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/kick"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "kick-access-token",
+          "refresh_token": "kick-refresh-token",
+          "token_type": "Bearer",
+          "scope": "user:read channel:read"
+        }
+      }
+    },
+    "cloudflare": {
+      "authorizationEndpoint": "https://dash.cloudflare.com/oauth2/auth",
+      "tokenEndpoint": "https://dash.cloudflare.com/oauth2/token",
+      "userinfoEndpoint": "https://api.cloudflare.com/client/v4/user",
+      "subjectField": "id",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "user-details.read"
+        },
+        {
+          "name": "deduplicated",
+          "options": {
+            "scope": [
+              "user-details.read",
+              "account:read",
+              "account:read"
+            ]
+          },
+          "requestScopes": [
+            "account:read",
+            "user-details.read",
+            "zone:read"
+          ],
+          "scope": "user-details.read account:read zone:read"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "account:read",
+              "account:read"
+            ]
+          },
+          "requestScopes": [
+            "zone:read",
+            "account:read"
+          ],
+          "scope": "account:read zone:read"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "id": "cloudflare-owner",
+        "email": "cloudflare-owner@example.test",
+        "first_name": "Cloudflare",
+        "last_name": "Owner"
+      },
+      "defaultUser": {
+        "name": "Cloudflare Owner",
+        "email": "cloudflare-owner@example.test",
+        "emailVerified": false
+      },
+      "mapperPatch": {
+        "name": "Mapped Cloudflare Owner",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Cloudflare Owner",
+        "email": "cloudflare-owner@example.test",
+        "emailVerified": true,
+        "image": null,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Cloudflare Owner",
+        "email": "cloudflare-owner@example.test",
+        "image": "https://images.example.test/custom-cloudflare.png",
+        "emailVerified": false
+      },
+      "normalProfileCases": [
+        {
+          "name": "first name only",
+          "profile": {
+            "id": "cloudflare-owner",
+            "email": "cloudflare-owner@example.test",
+            "first_name": "Cloudflare",
+            "last_name": null
+          },
+          "user": {
+            "name": "Cloudflare",
+            "email": "cloudflare-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "last name only",
+          "profile": {
+            "id": "cloudflare-owner",
+            "email": "cloudflare-owner@example.test",
+            "first_name": "",
+            "last_name": "Owner"
+          },
+          "user": {
+            "name": "Owner",
+            "email": "cloudflare-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "empty names use email",
+          "profile": {
+            "id": "cloudflare-owner",
+            "email": "cloudflare-owner@example.test",
+            "first_name": null,
+            "last_name": ""
+          },
+          "user": {
+            "name": "cloudflare-owner@example.test",
+            "email": "cloudflare-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "whitespace is retained",
+          "profile": {
+            "id": "cloudflare-owner",
+            "email": "cloudflare-owner@example.test",
+            "first_name": " ",
+            "last_name": null
+          },
+          "user": {
+            "name": " ",
+            "email": "cloudflare-owner@example.test",
+            "emailVerified": false
+          }
+        }
+      ],
+      "tokenAuthCases": [
+        {
+          "name": "confidentialDefault",
+          "options": {
+            "clientSecret": "ordinary-client-secret"
+          },
+          "requests": [
+            {
+              "path": "/oauth2/token",
+              "method": "POST",
+              "authorization": "Basic c29jaWFsLWh0dHAtY2xpZW50Om9yZGluYXJ5LWNsaWVudC1zZWNyZXQ=",
+              "contentType": "application/x-www-form-urlencoded",
+              "body": {
+                "grant_type": "authorization_code",
+                "code": "ordinary-code",
+                "code_verifier": "ordinary-verifier",
+                "redirect_uri": "http://app.example.test/api/auth/callback/cloudflare"
+              }
+            },
+            {
+              "path": "/oauth2/token",
+              "method": "POST",
+              "authorization": "Basic c29jaWFsLWh0dHAtY2xpZW50Om9yZGluYXJ5LWNsaWVudC1zZWNyZXQ=",
+              "contentType": "application/x-www-form-urlencoded",
+              "body": {
+                "grant_type": "refresh_token",
+                "refresh_token": "ordinary-refresh"
+              }
+            }
+          ]
+        },
+        {
+          "name": "confidentialBasic",
+          "options": {
+            "clientSecret": "ordinary-client-secret",
+            "tokenEndpointAuthMethod": "client_secret_basic"
+          },
+          "requests": [
+            {
+              "path": "/oauth2/token",
+              "method": "POST",
+              "authorization": "Basic c29jaWFsLWh0dHAtY2xpZW50Om9yZGluYXJ5LWNsaWVudC1zZWNyZXQ=",
+              "contentType": "application/x-www-form-urlencoded",
+              "body": {
+                "grant_type": "authorization_code",
+                "code": "ordinary-code",
+                "code_verifier": "ordinary-verifier",
+                "redirect_uri": "http://app.example.test/api/auth/callback/cloudflare"
+              }
+            },
+            {
+              "path": "/oauth2/token",
+              "method": "POST",
+              "authorization": "Basic c29jaWFsLWh0dHAtY2xpZW50Om9yZGluYXJ5LWNsaWVudC1zZWNyZXQ=",
+              "contentType": "application/x-www-form-urlencoded",
+              "body": {
+                "grant_type": "refresh_token",
+                "refresh_token": "ordinary-refresh"
+              }
+            }
+          ]
+        },
+        {
+          "name": "confidentialPost",
+          "options": {
+            "clientSecret": "ordinary-client-secret",
+            "tokenEndpointAuthMethod": "client_secret_post"
+          },
+          "requests": [
+            {
+              "path": "/oauth2/token",
+              "method": "POST",
+              "authorization": null,
+              "contentType": "application/x-www-form-urlencoded",
+              "body": {
+                "grant_type": "authorization_code",
+                "code": "ordinary-code",
+                "code_verifier": "ordinary-verifier",
+                "redirect_uri": "http://app.example.test/api/auth/callback/cloudflare",
+                "client_id": "social-http-client",
+                "client_secret": "ordinary-client-secret"
+              }
+            },
+            {
+              "path": "/oauth2/token",
+              "method": "POST",
+              "authorization": null,
+              "contentType": "application/x-www-form-urlencoded",
+              "body": {
+                "grant_type": "refresh_token",
+                "refresh_token": "ordinary-refresh",
+                "client_id": "social-http-client",
+                "client_secret": "ordinary-client-secret"
+              }
+            }
+          ]
+        },
+        {
+          "name": "publicDefault",
+          "options": {},
+          "requests": [
+            {
+              "path": "/oauth2/token",
+              "method": "POST",
+              "authorization": null,
+              "contentType": "application/x-www-form-urlencoded",
+              "body": {
+                "grant_type": "authorization_code",
+                "code": "ordinary-code",
+                "code_verifier": "ordinary-verifier",
+                "redirect_uri": "http://app.example.test/api/auth/callback/cloudflare",
+                "client_id": "social-http-client"
+              }
+            },
+            {
+              "path": "/oauth2/token",
+              "method": "POST",
+              "authorization": null,
+              "contentType": "application/x-www-form-urlencoded",
+              "body": {
+                "grant_type": "refresh_token",
+                "refresh_token": "ordinary-refresh",
+                "client_id": "social-http-client"
+              }
+            }
+          ]
+        },
+        {
+          "name": "publicNone",
+          "options": {
+            "tokenEndpointAuthMethod": "none"
+          },
+          "requests": [
+            {
+              "path": "/oauth2/token",
+              "method": "POST",
+              "authorization": null,
+              "contentType": "application/x-www-form-urlencoded",
+              "body": {
+                "grant_type": "authorization_code",
+                "code": "ordinary-code",
+                "code_verifier": "ordinary-verifier",
+                "redirect_uri": "http://app.example.test/api/auth/callback/cloudflare",
+                "client_id": "social-http-client"
+              }
+            },
+            {
+              "path": "/oauth2/token",
+              "method": "POST",
+              "authorization": null,
+              "contentType": "application/x-www-form-urlencoded",
+              "body": {
+                "grant_type": "refresh_token",
+                "refresh_token": "ordinary-refresh",
+                "client_id": "social-http-client"
+              }
+            }
+          ]
+        }
+      ],
+      "rejectedResponses": [
+        {
+          "response": {
+            "success": false,
+            "result": null,
+            "errors": [
+              {
+                "code": 1000,
+                "message": "Ordinary service error"
+              }
+            ]
+          },
+          "result": null
+        },
+        {
+          "response": {
+            "success": true,
+            "result": null
+          },
+          "result": null
+        }
+      ],
+      "requestParameters": {
+        "options": {
+          "clientId": "social-http-client",
+          "clientSecret": "ordinary-client-secret",
+          "redirectURI": "https://configured.example.test/callback/cloudflare",
+          "authorizationEndpoint": "https://dash.cloudflare.com/oauth2/auth?configured=kept"
+        },
+        "input": {
+          "state": "ordinary-state",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/cloudflare",
+          "loginHint": "owner@example.test",
+          "idTokenNonce": "ordinary-nonce",
+          "additionalParams": {
+            "request_marker": "request-value"
+          }
+        },
+        "authorization": {
+          "configured": "kept",
+          "response_type": "code",
+          "client_id": "social-http-client",
+          "state": "ordinary-state",
+          "scope": "user-details.read",
+          "redirect_uri": "https://configured.example.test/callback/cloudflare",
+          "code_challenge_method": "S256",
+          "code_challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+        },
+        "tokenRequests": [
+          {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+            "redirect_uri": "https://configured.example.test/callback/cloudflare"
+          }
+        ]
+      }
+    },
+    "linkedin": {
+      "authorizationEndpoint": "https://www.linkedin.com/oauth/v2/authorization",
+      "tokenEndpoint": "https://www.linkedin.com/oauth/v2/accessToken",
+      "userinfoEndpoint": "https://api.linkedin.com/v2/userinfo",
+      "subjectField": "sub",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "profile email openid"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "profile",
+              "email"
+            ]
+          },
+          "requestScopes": [
+            "openid",
+            "profile"
+          ],
+          "loginHint": "owner@example.test",
+          "scope": "profile email openid profile email openid profile"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "profile"
+            ]
+          },
+          "requestScopes": [
+            "email"
+          ],
+          "scope": "profile email"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "sub": "linkedin-owner",
+        "name": "LinkedIn Owner",
+        "given_name": "LinkedIn",
+        "family_name": "Owner",
+        "picture": "https://images.example.test/linkedin.png",
+        "locale": {
+          "country": "TW",
+          "language": "zh"
+        },
+        "email": "linkedin-owner@example.test",
+        "email_verified": true
+      },
+      "defaultUser": {
+        "name": "LinkedIn Owner",
+        "email": "linkedin-owner@example.test",
+        "image": "https://images.example.test/linkedin.png",
+        "emailVerified": true
+      },
+      "mapperPatch": {
+        "name": "Mapped LinkedIn Owner",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped LinkedIn Owner",
+        "email": "linkedin-owner@example.test",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom LinkedIn Owner",
+        "email": "linkedin-owner@example.test",
+        "image": "https://images.example.test/custom-linkedin.png",
+        "emailVerified": true
+      },
+      "normalProfileCases": [
+        {
+          "name": "omitted email verification defaults to false",
+          "profile": {
+            "sub": "linkedin-owner",
+            "name": "LinkedIn Owner",
+            "given_name": "LinkedIn",
+            "family_name": "Owner",
+            "picture": "https://images.example.test/linkedin.png",
+            "locale": {
+              "country": "TW",
+              "language": "zh"
+            },
+            "email": "linkedin-owner@example.test"
+          },
+          "user": {
+            "name": "LinkedIn Owner",
+            "email": "linkedin-owner@example.test",
+            "image": "https://images.example.test/linkedin.png",
+            "emailVerified": false
+          }
+        }
+      ],
+      "tokenContract": {
+        "authorization": null,
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/linkedin",
+          "deviceId": "ordinary-device"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "linkedin-access-token",
+          "refresh_token": "linkedin-refresh-token",
+          "token_type": "Bearer",
+          "scope": "profile email openid"
+        }
+      }
+    },
+    "slack": {
+      "authorizationEndpoint": "https://slack.com/openid/connect/authorize",
+      "tokenEndpoint": "https://slack.com/api/openid.connect.token",
+      "userinfoEndpoint": "https://slack.com/api/openid.connect.userInfo",
+      "subjectField": "https://slack.com/user_id",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "openid profile email"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "profile",
+              "email"
+            ]
+          },
+          "requestScopes": [
+            "email",
+            "openid"
+          ],
+          "loginHint": "owner@example.test",
+          "additionalParams": {
+            "request_marker": "request-value"
+          },
+          "scope": "openid profile email email openid profile email"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "profile"
+            ]
+          },
+          "requestScopes": [
+            "email"
+          ],
+          "scope": "email profile"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "ok": true,
+        "sub": "slack-openid-subject",
+        "https://slack.com/user_id": "slack-owner",
+        "https://slack.com/team_id": "slack-team",
+        "email": "slack-owner@example.test",
+        "email_verified": true,
+        "name": "Slack Owner",
+        "picture": "https://images.example.test/slack.png",
+        "https://slack.com/user_image_512": "https://images.example.test/slack-512.png"
+      },
+      "defaultUser": {
+        "name": "Slack Owner",
+        "email": "slack-owner@example.test",
+        "image": "https://images.example.test/slack.png",
+        "emailVerified": true
+      },
+      "mapperPatch": {
+        "name": "Mapped Slack Owner",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Slack Owner",
+        "email": "slack-owner@example.test",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Slack Owner",
+        "email": "slack-owner@example.test",
+        "image": "https://images.example.test/custom-slack.png",
+        "emailVerified": true
+      },
+      "normalProfileCases": [
+        {
+          "name": "empty picture uses the Slack image fallback",
+          "profile": {
+            "ok": true,
+            "sub": "slack-openid-subject",
+            "https://slack.com/user_id": "slack-owner",
+            "https://slack.com/team_id": "slack-team",
+            "email": "slack-owner@example.test",
+            "email_verified": true,
+            "name": "",
+            "picture": "",
+            "https://slack.com/user_image_512": "https://images.example.test/slack-512.png"
+          },
+          "user": {
+            "name": "",
+            "email": "slack-owner@example.test",
+            "image": "https://images.example.test/slack-512.png",
+            "emailVerified": true
+          }
+        }
+      ],
+      "tokenContract": {
+        "authorization": null,
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/slack",
+          "deviceId": "ordinary-device"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "slack-access-token",
+          "refresh_token": "slack-refresh-token",
+          "token_type": "Bearer",
+          "scope": "openid profile email"
+        }
+      }
+    },
+    "naver": {
+      "authorizationEndpoint": "https://nid.naver.com/oauth2.0/authorize",
+      "tokenEndpoint": "https://nid.naver.com/oauth2.0/token",
+      "userinfoEndpoint": "https://openapi.naver.com/v1/nid/me",
+      "subjectField": "id",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "profile email"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "profile",
+              "email"
+            ]
+          },
+          "requestScopes": [
+            "email",
+            "openid"
+          ],
+          "loginHint": "owner@example.test",
+          "additionalParams": {
+            "request_marker": "request-value"
+          },
+          "scope": "profile email profile email email openid"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "profile"
+            ]
+          },
+          "requestScopes": [
+            "email"
+          ],
+          "scope": "profile email"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "resultcode": "00",
+        "message": "success",
+        "response": {
+          "id": "naver-owner",
+          "nickname": "naver-nickname",
+          "name": "Naver Owner",
+          "email": "naver-owner@example.test",
+          "profile_image": "https://images.example.test/naver.png"
+        }
+      },
+      "defaultUser": {
+        "name": "Naver Owner",
+        "email": "naver-owner@example.test",
+        "image": "https://images.example.test/naver.png",
+        "emailVerified": false
+      },
+      "mapperPatch": {
+        "name": "Mapped Naver Owner",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Naver Owner",
+        "email": "naver-owner@example.test",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Naver Owner",
+        "email": "naver-owner@example.test",
+        "image": "https://images.example.test/custom-naver.png",
+        "emailVerified": false
+      },
+      "normalProfileCases": [
+        {
+          "name": "empty name uses nickname",
+          "profile": {
+            "resultcode": "00",
+            "message": "success",
+            "response": {
+              "id": "naver-owner",
+              "nickname": "naver-nickname",
+              "name": "",
+              "email": "naver-owner@example.test",
+              "profile_image": "https://images.example.test/naver.png"
+            }
+          },
+          "user": {
+            "name": "naver-nickname",
+            "email": "naver-owner@example.test",
+            "image": "https://images.example.test/naver.png",
+            "emailVerified": false
+          }
+        }
+      ],
+      "tokenContract": {
+        "authorization": null,
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/naver",
+          "deviceId": "ordinary-device"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "naver-access-token",
+          "refresh_token": "naver-refresh-token",
+          "token_type": "Bearer",
+          "scope": "profile email"
+        }
+      }
+    },
+    "linear": {
+      "authorizationEndpoint": "https://linear.app/oauth/authorize",
+      "tokenEndpoint": "https://api.linear.app/oauth/token",
+      "userinfoEndpoint": "https://api.linear.app/graphql",
+      "profileMethod": "POST",
+      "profileBody": {
+        "query": "query { viewer { id name email avatarUrl active createdAt updatedAt } }"
+      },
+      "subjectField": "id",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "read"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "read",
+              "write"
+            ]
+          },
+          "requestScopes": [
+            "read"
+          ],
+          "loginHint": "owner@example.test",
+          "scope": "read read write read"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "write"
+            ]
+          },
+          "requestScopes": [
+            "read"
+          ],
+          "scope": "write read"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "id": "linear-owner",
+        "name": "Linear Owner",
+        "email": "linear-owner@example.test",
+        "avatarUrl": "https://images.example.test/linear.png",
+        "active": true,
+        "createdAt": "2025-01-01T00:00:00.000Z",
+        "updatedAt": "2025-01-02T00:00:00.000Z"
+      },
+      "defaultUser": {
+        "name": "Linear Owner",
+        "email": "linear-owner@example.test",
+        "image": "https://images.example.test/linear.png",
+        "emailVerified": false
+      },
+      "mapperPatch": {
+        "name": "Mapped Linear Owner",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Linear Owner",
+        "email": "linear-owner@example.test",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Linear Owner",
+        "email": "linear-owner@example.test",
+        "image": "https://images.example.test/custom-linear.png",
+        "emailVerified": false
+      },
+      "normalProfileCases": [
+        {
+          "name": "omitted avatar stays omitted",
+          "profile": {
+            "id": "linear-owner",
+            "name": "Linear Owner",
+            "email": "linear-owner@example.test",
+            "active": true,
+            "createdAt": "2025-01-01T00:00:00.000Z",
+            "updatedAt": "2025-01-02T00:00:00.000Z"
+          },
+          "user": {
+            "name": "Linear Owner",
+            "email": "linear-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "null avatar remains null",
+          "profile": {
+            "id": "linear-owner",
+            "name": "Linear Owner",
+            "email": "linear-owner@example.test",
+            "avatarUrl": null,
+            "active": true,
+            "createdAt": "2025-01-01T00:00:00.000Z",
+            "updatedAt": "2025-01-02T00:00:00.000Z"
+          },
+          "user": {
+            "name": "Linear Owner",
+            "email": "linear-owner@example.test",
+            "image": null,
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "empty name stays empty",
+          "profile": {
+            "id": "linear-owner",
+            "name": "",
+            "email": "linear-owner@example.test",
+            "avatarUrl": "https://images.example.test/linear.png",
+            "active": true,
+            "createdAt": "2025-01-01T00:00:00.000Z",
+            "updatedAt": "2025-01-02T00:00:00.000Z"
+          },
+          "user": {
+            "name": "",
+            "email": "linear-owner@example.test",
+            "image": "https://images.example.test/linear.png",
+            "emailVerified": false
+          }
+        }
+      ],
+      "tokenContract": {
+        "authorization": null,
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/linear",
+          "deviceId": "ordinary-device"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "linear-access-token",
+          "refresh_token": "linear-refresh-token",
+          "token_type": "Bearer",
+          "scope": "read"
+        }
+      },
+      "missingViewerResponses": [
+        null,
+        {},
+        {
+          "data": null
+        },
+        {
+          "data": {}
+        },
+        {
+          "data": {
+            "viewer": null
+          }
+        }
+      ]
     }
   },
   "promptCases": [
@@ -589,6 +2061,52 @@
       "provider": "huggingface",
       "configured": "consent",
       "expected": null
+    },
+    {
+      "provider": "vercel",
+      "configured": "consent",
+      "expected": null
+    },
+    {
+      "provider": "figma",
+      "configured": "consent",
+      "expected": null
+    },
+    {
+      "provider": "dropbox",
+      "configured": "consent",
+      "expected": null
+    },
+    {
+      "provider": "kick",
+      "configured": "consent",
+      "expected": null
+    },
+    {
+      "provider": "cloudflare",
+      "configured": "consent",
+      "expected": null
+    },
+    {
+      "provider": "linkedin",
+      "configured": "consent",
+      "expected": null
+    },
+    {
+      "provider": "slack",
+      "configured": "consent",
+      "expected": null
+    },
+    {
+      "provider": "naver",
+      "configured": "consent",
+      "expected": null
+    },
+    {
+      "provider": "linear",
+      "configured": "consent",
+      "expected": null
     }
-  ]
+  ],
+  "clientSecret": "ordinary-client-secret"
 }

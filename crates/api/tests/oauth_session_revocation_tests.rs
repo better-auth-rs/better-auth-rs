@@ -114,20 +114,20 @@ impl OAuthUserInfoHandler for ProviderCalls {
     async fn get_user_info(
         &self,
         request: OAuthUserInfoRequest,
-    ) -> Result<OAuthUserInfoResponse, String> {
+    ) -> AuthResult<Option<OAuthUserInfoResponse>> {
         assert_eq!(request.access_token.as_deref(), Some("refreshed-access"));
         let _ = self.user_info.fetch_add(1, Ordering::SeqCst);
-        Ok(OAuthUserInfoResponse {
+        Ok(Some(OAuthUserInfoResponse {
             user: OAuthUserInfo {
                 additional_fields: Default::default(),
                 id: "provider-subject".to_string(),
-                email: "operator@example.com".to_string(),
+                email: Some("operator@example.com".to_string()).into(),
                 name: Some("Operator".to_string()),
                 image: None,
                 email_verified: true,
             },
             data: json!({ "sub": "provider-subject", "email": "operator@example.com" }),
-        })
+        }))
     }
 }
 

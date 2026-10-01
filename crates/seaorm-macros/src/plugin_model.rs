@@ -79,6 +79,10 @@ pub(super) fn generate(
             quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
         } else if role == EntityRole::RateLimit && name == "count" {
             quote!(f64::from(self.#ident.to_owned()))
+        } else if role == EntityRole::ApiKey && name == "name"
+            || role == EntityRole::Passkey && matches!(name.as_str(), "name" | "aaguid")
+        {
+            quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
         } else if role == EntityRole::ApiKey && name == "start" {
             quote!(self.#ident.clone().map(#core_root::ApiKeyStart::from))
         } else if role == EntityRole::ApiKey && matches!(name.as_str(), "created_at" | "updated_at")

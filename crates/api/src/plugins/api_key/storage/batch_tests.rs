@@ -322,7 +322,7 @@ async fn exercise_batch<S: AuthSchema>(
     assert_eq!(
         result
             .iter()
-            .map(|key| key.name.as_deref().unwrap())
+            .map(|key| key.name.typed().unwrap().as_deref().unwrap())
             .collect::<Vec<_>>(),
         names.iter().map(String::as_str).collect::<Vec<_>>()
     );

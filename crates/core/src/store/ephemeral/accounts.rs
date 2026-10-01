@@ -167,6 +167,25 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         Ok(owners.into_iter().next())
     }
 
+    async fn get_credential_account(&self, user_id: &str) -> AuthResult<Option<AccountView>> {
+        let fields = self.config.account.field_schema();
+        let user_id = Value::String(user_id.to_owned());
+        let provider = Value::String("credential".to_owned());
+        let record = self
+            .raw("account", "findOne", |state| {
+                Ok(state.accounts.snapshot()?.into_iter().find(|record| {
+                    record.get(fields.record_storage_key("userId")) == Some(&user_id)
+                        && record.get(fields.record_storage_key("providerId")) == Some(&provider)
+                        && record.get(fields.record_storage_key("accountId")) == Some(&user_id)
+                }))
+            })
+            .await?;
+        match record {
+            Some(record) => self.output_account(&record).await.map(Some),
+            None => Ok(None),
+        }
+    }
+
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<AccountView>> {
         let fields = self.config.account.field_schema();
         let records: Vec<_> = self

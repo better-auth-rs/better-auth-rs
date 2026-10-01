@@ -88,11 +88,16 @@ pub(crate) async fn wait_for_health(
     if port == 0 {
         return Err(format!("{} reported an unassigned port", child.label));
     }
+    let client_build_started = tokio::time::Instant::now();
     let client = reqwest::Client::builder()
         .no_proxy()
         .timeout(Duration::from_secs(2))
         .build()
         .map_err(|error| format!("failed to build reqwest client: {error}"))?;
+    let client_build_elapsed = client_build_started.elapsed();
+    let mut health_requests = 0;
+    let mut last_result = None;
+    let mut last_request_elapsed = None;
 
     while tokio::time::Instant::now() < deadline {
         if let Some(status) = child.try_wait() {
@@ -102,20 +107,34 @@ pub(crate) async fn wait_for_health(
             ));
         }
 
-        if client
+        health_requests += 1;
+        let request_started = tokio::time::Instant::now();
+        let healthy = client
             .get(format!("http://127.0.0.1:{port}/__health"))
             .send()
             .await
-            .map(|response| response.status().is_success())
-            .unwrap_or(false)
-        {
+            .map(|response| {
+                let status = response.status();
+                last_result = Some(format!("HTTP {status}"));
+                status.is_success()
+            })
+            .unwrap_or_else(|error| {
+                last_result = Some(format!("request error: {:?}", error.without_url()));
+                false
+            });
+        last_request_elapsed = Some(request_started.elapsed());
+        if healthy {
             return Ok(port);
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
 
     Err(format!(
-        "{} server did not become healthy on port {} within {:?}",
-        child.label, port, timeout
+        "{} server did not become healthy on port {} within {:?}; client_build={client_build_elapsed:?}, requests={health_requests}, last_result={}, last_request_elapsed={last_request_elapsed:?}, elapsed={:?}",
+        child.label,
+        port,
+        timeout,
+        last_result.as_deref().unwrap_or("no request sent"),
+        child.started_at.elapsed()
     ))
 }

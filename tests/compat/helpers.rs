@@ -226,12 +226,12 @@ fn mock_oauth_plugin() -> OAuthPlugin {
         async fn get_user_info(
             &self,
             _request: OAuthUserInfoRequest,
-        ) -> Result<OAuthUserInfoResponse, String> {
-            Ok(OAuthUserInfoResponse {
+        ) -> better_auth::AuthResult<Option<OAuthUserInfoResponse>> {
+            Ok(Some(OAuthUserInfoResponse {
                 user: OAuthUserInfo {
                     additional_fields: Default::default(),
                     id: "mock-account-id".to_string(),
-                    email: "mock@example.com".to_string(),
+                    email: Some("mock@example.com".to_string()).into(),
                     name: Some("Mock OAuth User".to_string()),
                     image: None,
                     email_verified: true,
@@ -243,7 +243,7 @@ fn mock_oauth_plugin() -> OAuthPlugin {
                     "image": null,
                     "emailVerified": true,
                 }),
-            })
+            }))
         }
     }
 
@@ -264,7 +264,7 @@ fn mock_oauth_plugin() -> OAuthPlugin {
             Ok(OAuthUserInfo {
                 additional_fields: Default::default(),
                 id: "mock-account-id".to_string(),
-                email: "mock@example.com".to_string(),
+                email: Some("mock@example.com".to_string()).into(),
                 name: Some("Mock OAuth User".to_string()),
                 image: None,
                 email_verified: true,

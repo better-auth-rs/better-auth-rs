@@ -395,13 +395,13 @@ impl OAuthUserInfoHandler for CompatGoogleUserInfoHandler {
     async fn get_user_info(
         &self,
         _request: OAuthUserInfoRequest,
-    ) -> Result<OAuthUserInfoResponse, String> {
+    ) -> better_auth::AuthResult<Option<OAuthUserInfoResponse>> {
         let profile = self.profile.lock().await.clone();
-        Ok(OAuthUserInfoResponse {
+        Ok(Some(OAuthUserInfoResponse {
             user: OAuthUserInfo {
                 additional_fields: Default::default(),
                 id: profile.sub.clone(),
-                email: profile.email.clone(),
+                email: Some(profile.email.clone()).into(),
                 name: Some(profile.name.clone()),
                 image: if self.preserve_image_null && profile.image_present {
                     Some(profile.image.clone())
@@ -417,7 +417,7 @@ impl OAuthUserInfoHandler for CompatGoogleUserInfoHandler {
                 "picture": profile.image,
                 "email_verified": profile.email_verified,
             }),
-        })
+        }))
     }
 }
 

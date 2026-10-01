@@ -149,17 +149,14 @@ impl GenericOAuthUserInfoHandler for Observer {
     async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Value> {
         panic!("Entra must receive verified claims");
     }
-    async fn get_user_info_with_verified_claims(
+    async fn get_user_info_with_context(
         &self,
         tokens: &OAuthUserInfoRequest,
-        claims: VerifiedOAuthClaims<'_>,
-        endpoint: Option<&str>,
+        context: GenericOAuthProfileContext<'_>,
     ) -> AuthResult<Value> {
-        assert_eq!(claims.as_value()["iss"], ISSUER);
+        assert_eq!(context.verified_claims().unwrap().as_value()["iss"], ISSUER);
         self.calls.lock().unwrap().push("get");
-        self.inner
-            .get_user_info_with_verified_claims(tokens, claims, endpoint)
-            .await
+        self.inner.get_user_info_with_context(tokens, context).await
     }
 }
 

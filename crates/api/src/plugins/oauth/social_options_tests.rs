@@ -164,7 +164,7 @@ impl OAuthProfileMapper for Mapper {
         if !self.partial {
             mapped.name = Some(Some("Mapped".into()));
             mapped.image = Some(None);
-            mapped.email = Some("mapped@example.test".into());
+            mapped.email = Some(Some("mapped@example.test".into()).into());
             mapped.email_verified = Some(false);
         }
         Ok(mapped)
@@ -176,22 +176,22 @@ impl OAuthUserInfoHandler for CustomProfile {
     async fn get_user_info(
         &self,
         _: OAuthUserInfoRequest,
-    ) -> Result<OAuthUserInfoResponse, String> {
+    ) -> AuthResult<Option<OAuthUserInfoResponse>> {
         self.0
             .lock()
-            .map_err(|_| "callback log poisoned")?
+            .map_err(|_| better_auth_core::AuthError::internal("callback log poisoned"))?
             .push("get");
-        Ok(OAuthUserInfoResponse {
+        Ok(Some(OAuthUserInfoResponse {
             user: OAuthUserInfo {
                 id: "custom-subject".into(),
-                email: "custom@example.test".into(),
+                email: Some("custom@example.test".into()).into(),
                 name: Some("Custom".into()),
                 image: Some(Some("https://images.test/custom.png".into())),
                 email_verified: true,
                 additional_fields: [("locale".into(), json!("en"))].into_iter().collect(),
             },
             data: json!({"id":"custom-subject"}),
-        })
+        }))
     }
 }
 
@@ -247,7 +247,8 @@ async fn social_profile_mapping_matches_upstream_and_keeps_subject()
                 },
                 None,
             )
-            .await?;
+            .await?
+            .ok_or("provider returned no profile")?;
             assert_eq!(
                 response.user.id,
                 if mode == "custom" {
@@ -289,9 +290,13 @@ async fn google_stored_account_profile_keeps_access_token_userinfo()
         },
         None,
     )
-    .await?;
+    .await?
+    .ok_or("provider returned no profile")?;
     assert_eq!(response.user.name.as_deref(), Some("Owner"));
-    assert_eq!(response.user.email, "owner@example.test");
+    assert_eq!(
+        response.user.email.typed()?.as_deref(),
+        Some("owner@example.test")
+    );
     assert_eq!(response.user.id, "google-subject");
     Ok(())
 }
@@ -311,12 +316,14 @@ impl OAuthUserInfoHandler for FailingCallbacks {
     async fn get_user_info(
         &self,
         _: OAuthUserInfoRequest,
-    ) -> Result<OAuthUserInfoResponse, String> {
+    ) -> AuthResult<Option<OAuthUserInfoResponse>> {
         self.0
             .lock()
-            .map_err(|_| "callback log poisoned")?
+            .map_err(|_| better_auth_core::AuthError::internal("callback log poisoned"))?
             .push("get");
-        Err("custom user info failed".into())
+        Err(better_auth_core::AuthError::internal(
+            "custom user info failed",
+        ))
     }
 }
 #[tokio::test]

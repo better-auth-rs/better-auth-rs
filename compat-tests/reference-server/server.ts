@@ -97,6 +97,7 @@ function hasOwn(obj: unknown, key: string) {
 
 // Keep this socket bound while fixtures initialize URLs from the assigned port.
 const server = Bun.serve({
+  hostname: "127.0.0.1",
   port: getPort(),
   fetch: () => new Response("Initializing", { status: 503 }),
 });
@@ -218,6 +219,7 @@ const defaultGitHubProfile = (): GitHubProfile => ({
 });
 let githubProfile = defaultGitHubProfile();
 const oauthServer = Bun.serve({
+  hostname: "127.0.0.1",
   port: 0,
   async fetch(request) {
     const url = new URL(request.url);

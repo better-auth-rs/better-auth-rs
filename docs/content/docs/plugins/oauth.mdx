@@ -43,6 +43,16 @@ Better Auth RS includes pre-configured providers with correct URLs and user info
 | Spotify | `OAuthProvider::spotify(client_id, client_secret)` | `user-read-email` |
 | Hugging Face | `OAuthProvider::huggingface(client_id, client_secret)` | `openid`, `profile`, `email` |
 | Polar | `OAuthProvider::polar(client_id, client_secret)` | `openid`, `profile`, `email` |
+| Vercel | `OAuthProvider::vercel(client_id, client_secret)` | None |
+
+| Figma | `OAuthProvider::figma(client_id, client_secret)` | `current_user:read` |
+| Dropbox | `OAuthProvider::dropbox(client_id, client_secret)` | `account_info.read` |
+| Kick | `OAuthProvider::kick(client_id, client_secret)` | `user:read` |
+| Cloudflare | `OAuthProvider::cloudflare(client_id, client_secret)` | `user-details.read` |
+| LinkedIn | `OAuthProvider::linkedin(client_id, client_secret)` | `profile`, `email`, `openid` |
+| Slack | `OAuthProvider::slack(client_id, client_secret)` | `openid`, `profile`, `email` |
+| Naver | `OAuthProvider::naver(client_id, client_secret)` | `profile`, `email` |
+| Linear | `OAuthProvider::linear(client_id, client_secret)` | `read` |
 
 ### Social provider inputs
 
@@ -64,15 +74,75 @@ Register social providers in one `OAuthPlugin` for the verified upstream configu
 
 Set `map_profile_to_user` to an `Arc<dyn OAuthProfileMapper>` to override local profile fields after built-in decoding. Omitted mapper fields preserve the provider value. `Some(None)` clears the name or image, and `additional_fields` adds configured application fields. The mapper cannot change the account subject. A custom `get_user_info` handler takes precedence and skips this mapper. Callback errors propagate through the existing OAuth error path. `map_user_info` remains the base JSON decoder for custom providers; it is distinct from the local-field mapper.
 
-Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. Google, GitHub, Discord, Polar, and custom providers forward the configured `prompt`. GitLab, Spotify, and Hugging Face ignore this option. Omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
+`OAuthUserInfoHandler::get_user_info` returns `AuthResult<Option<OAuthUserInfoResponse>>`. Return `Ok(Some(profile))` for a profile or `Ok(None)` for a missing profile. Both results skip default HTTP lookup and the mapper. Missing profiles retain each endpoint’s existing redirect or `FAILED_TO_GET_USER_INFO` response. Return an application `AuthError` unchanged to preserve its HTTP status, error body, and headers through Social callback, OAuth Proxy, and account-info. Use `AuthError::internal(message)` for an ordinary implementation failure. Construct dynamic API errors with `AuthResponse::json(...)` and convert the response into `AuthError`.
+
+To migrate a handler, use `AuthResult<Option<OAuthUserInfoResponse>>`, wrap successful profiles with `Some`, and wrap former string errors with `AuthError::internal`. `OAuthUserInfo.email` uses `SchemaValue<Option<String>>`: `Undefined` omits email, `Typed(None)` represents null, and `Typed(Some(email))` represents a string. For example, use `email: Some("owner@example.test".to_owned()).into()` for a supplied address. `OAuthProfile.email` adds an outer `Option`: `None` preserves the provider value, while `Some(SchemaValue::Undefined)` removes the field. Social decoders pass missing or null email to the mapper; sign-in and linking still enforce their existing required-email rules afterward. Account-info preserves email presence without changing stored users or accounts. Default Social profiles omit the public `user.id`; custom user-info handlers and active custom decoders retain their supplied ID. The internal account subject is unchanged. Non-string, non-null values remain errors. Generic OAuth retains its existing raw-profile and custom-null error policy. `OAuthRefreshTokenHandler` and `OAuthIdTokenVerifier` retain their signatures and error rules.
+
+Discord prepares `image_url` before invoking the mapper. The default decoder reuses that value for PNG, animated GIF, and default avatars. Display names use `global_name`, then `username`, then an empty string.
+
+Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. Google, GitHub, Discord, Polar, and custom providers forward the configured `prompt`. GitLab, Spotify, Hugging Face, Vercel, Figma, Dropbox, Kick, Cloudflare, LinkedIn, and Linear ignore this option. Omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
+
+Set `redirect_uri` when the provider callback URI differs from the route URI. Authorization and code exchange use the same configured value. Omitted or empty values use the route URI. Register the configured URI with the provider and route the callback to Better Auth; the option does not create another HTTP route.
 
 Google direct ID-token sign-in and authorization-code callbacks map claims returned by the shared Google verifier used by One Tap. The verifier checks the signature, issuer, audience, token age and time claims. A supplied nonce is checked, and the configured `hd` authorization parameter restricts the hosted domain. Direct sign-in verifies once before mapping. Code callbacks and OAuth Proxy verify the token endpoint's ID token before mapping, retaining the existing callback error path. The production verifier uses Google's fixed public-key endpoint.
 
 For direct ID-token sign-in, a configured `verify_id_token` retains its application trust policy: only a successful result permits the default Google profile to parse that token's claims. Code callbacks use the shared Google verifier. A configured `get_user_info` retains precedence over the default profile and mapper. `/account-info` keeps the existing access-token/userinfo lookup, so stored-account reads do not acquire the sign-in token-age limit. Normal signed-flow fixtures cover both sign-in paths and callback precedence; complete provider parity is not claimed.
 
-GitLab and Spotify use authorization-code exchange with PKCE and Bearer userinfo requests. GitLab accepts active, unlocked profiles and selects `name`, then `username`, then an empty name. Spotify selects the first image and defaults `emailVerified` to false. Both retain the shared async profile mapper and custom `get_user_info` precedence. Their constructors do not install an ID-token verifier. For a self-hosted GitLab instance, set the existing `auth_url`, `token_url`, and `user_info_url` fields to the instance endpoints. LinkedIn is not included: its upstream authorization and code exchange omit PKCE, which requires a separate provider protocol policy.
+GitLab and Spotify use authorization-code exchange with PKCE and Bearer userinfo requests. GitLab accepts active, unlocked profiles and selects `name`, then `username`, then an empty name. Spotify selects the first image and defaults `emailVerified` to false. Both retain the shared async profile mapper and custom `get_user_info` precedence. Their constructors do not install an ID-token verifier. For a self-hosted GitLab instance, set the existing `auth_url`, `token_url`, and `user_info_url` fields to the instance endpoints.
 
-Hugging Face and Polar use the same code/PKCE, client-secret-post and Bearer userinfo flow. Hugging Face selects the first nonempty `name` or `preferred_username`; Polar selects the first nonempty `public_name` or `username`. Both use an empty name if neither exists, retain absent versus null images, and default an absent or null `email_verified` to false. Their profile mappers and custom user-info handlers follow the same precedence. Neither constructor installs an ID-token verifier. Railway and Figma are not included; they require provider-specific HTTP Basic token authentication, and Figma also has separate authorization validation and profile-error handling.
+Hugging Face and Polar use the same code/PKCE, client-secret-post and Bearer userinfo flow. Hugging Face selects the first nonempty `name` or `preferred_username`; Polar selects the first nonempty `public_name` or `username`. Both use an empty name if neither exists, retain absent versus null images, and default an absent or null `email_verified` to false. Their profile mappers and custom user-info handlers follow the same precedence. Neither constructor installs an ID-token verifier. Railway remains a separate provider addition.
+
+Figma uses PKCE and HTTP Basic client authentication for code exchange and refresh. Both credentials must be nonempty when authorization starts. The default decoder maps `handle`, `email`, and `img_url`, preserves an omitted or null image, and sets `emailVerified` to false before applying the profile mapper. The shared refresh route retains the stored account scope even when the token endpoint returns a different scope. The constructor does not install an ID-token verifier.
+
+A missing Social profile redirects code callbacks and OAuth Proxy callbacks with `unable_to_get_user_info`. Direct sign-in, direct linking, and `/account-info` return `401 FAILED_TO_GET_USER_INFO`. Default provider HTTP errors produce a missing profile. GitLab inactive or locked profiles and empty Vercel/Figma profiles use the same result. Figma also converts errors from its default HTTP, decoder, and async mapper into a missing profile. Its custom `get_user_info` handler remains outside that conversion.
+
+Other Social mapper errors and all application `get_user_info` errors propagate to the existing HTTP/native error boundary. Ordinary runtime errors produce an empty HTTP 500 response; typed API errors retain their status. A custom `get_user_info` handler returns a profile or an `AuthError`; JavaScript's custom-handler null result has no equivalent in that Rust trait.
+
+GitHub keeps its default HTTP profile lookup separate from application callbacks. An HTTP error from the optional email lookup preserves the available profile, while a transport or decoding error propagates. A successful email list replaces a missing, null, or empty profile email with the primary address or first address. A successful empty list omits email; an unavailable list preserves the original value. An explicitly empty selected address remains empty. The mapper and JSON profile observe this result before public output. Rust requires JSON responses with the documented field types. The upstream fetch helper can retain non-JSON text, so arbitrary text and malformed response shapes are not claimed equivalent. Missing or null email reaches the async mapper. Other missing or wrongly typed required fields can fail in Rust decoding before the mapper runs; arbitrary JavaScript profile shapes are not supported. Generic OAuth retains its existing error mapping. Google verification and stored-account profile boundaries described above remain unchanged.
+
+Vercel uses code exchange with PKCE, client-secret-post, and Bearer userinfo. The constructor adds no default scopes. The profile selects `name`, then `preferred_username`, then an empty name; an explicitly empty name remains empty. Vercel does not provide a refresh method, including when `refresh_access_token` is configured. `/get-access-token` returns the stored token without refreshing it, and `/refresh-token` returns `400 TOKEN_REFRESH_NOT_SUPPORTED` before checking for a stored refresh token.
+
+Dropbox uses PKCE and client-secret-post for code exchange and refresh. Its profile lookup sends a POST request with a Bearer token and no body. The decoder reads `account_id`, `name.display_name`, `email`, `email_verified`, and `profile_photo_url`; omitted and null photos remain distinct. The async mapper and custom user-info handler retain their existing precedence. The constructor does not install an ID-token verifier. Refresh rotates tokens while retaining the stored account scope.
+
+Use the existing authorization parameters to request Dropbox offline access. This represents upstream's `accessType` option; request-level additional parameters can override it.
+
+```rust
+let mut dropbox = OAuthProvider::dropbox("DROPBOX_CLIENT_ID", "DROPBOX_CLIENT_SECRET");
+dropbox.authorization_params.push(("token_access_type".into(), "offline".into()));
+let oauth = OAuthPlugin::new().add_provider("dropbox", dropbox);
+```
+
+Dropbox uses the shared Social profile result: default HTTP errors produce a missing profile, while mapper and custom-handler errors propagate. The shared error contracts cover Figma, Polar, GitHub, and Google; Dropbox-specific error timing remains unverified.
+
+Kick uses PKCE, client-secret-post for code exchange and refresh, and Bearer userinfo. The default decoder and async profile mapper receive the first record in the response’s `data` array. The decoder reads `user_id`, `name`, `email`, and `profile_picture`, preserves absent or null images, and sets `emailVerified` to false before mapping. Custom `get_user_info` retains precedence and skips the HTTP decoder and mapper. The constructor does not install an ID-token verifier.
+
+Cloudflare uses PKCE and reads the Cloudflare API `/user` result rather than its OIDC userinfo endpoint. Default, configured, and request scopes are combined in order and deduplicated. Pass an empty client secret for a public client; its token requests use `none`. A nonempty secret defaults to HTTP Basic. Set `token_endpoint_auth` to `Some(TokenEndpointAuth::ClientSecretPost)`, `Some(TokenEndpointAuth::ClientSecretBasic)`, or `Some(TokenEndpointAuth::None)` to select the configured client method for both code exchange and refresh. Only Cloudflare reads this Social field; other built-in providers retain their fixed methods. Generic OAuth keeps its separate authentication configuration. The broader shared enum also contains other strategies, but Cloudflare acceptance covers only its three documented methods.
+
+```rust
+use better_auth::plugins::oauth::{OAuthProvider, TokenEndpointAuth};
+
+let public_client = OAuthProvider::cloudflare("CLOUDFLARE_CLIENT_ID", "");
+let mut confidential = OAuthProvider::cloudflare("CLOUDFLARE_CLIENT_ID", "CLOUDFLARE_CLIENT_SECRET");
+confidential.token_endpoint_auth = Some(TokenEndpointAuth::ClientSecretPost);
+```
+
+Cloudflare API failure results and missing profiles use the shared missing-profile response. Successful results supply the account subject from `id`; the default name joins nonempty first and last names and falls back to email. The default profile omits image and sets `emailVerified` to false. The async mapper receives the extracted profile, and a custom user-info handler skips the default HTTP lookup and mapper. Custom refresh handlers keep precedence. The constructor does not install an ID-token verifier. Normal local HTTP and SQLite contracts cover all five omitted/explicit client-authentication configurations, mapping, persistence, and refresh. Typed profile fields remain stricter than JavaScript, and provider-specific transport/JSON error timing remains unverified.
+
+Cloudflare ignores request-level login hints, ID-token nonces, extra authorization parameters, and callback device IDs, matching the pinned helper. Configured authorization URL query parameters and callback URI remain effective. Ordinary authorization and token-request contracts cover this distinction.
+
+LinkedIn uses client-secret-post for code exchange and refresh, followed by a GET request with a Bearer token to its userinfo endpoint. Its fixed provider protocol omits PKCE parameters and callback device IDs; Generic OAuth retains its own PKCE setting. Default scopes are `profile`, `email`, and `openid`, followed by configured and request scopes without deduplication. LinkedIn ignores configured `prompt` and forwards login hints and ordinary additional authorization parameters. The decoder reads `sub`, `name`, `email`, `picture`, and `email_verified`, with false as the default verification value. The async mapper receives the original profile, and custom user-info and refresh handlers keep their existing precedence. Ordinary local HTTP and SQLite contracts cover profile mapping, configured callback URIs, persistence, and refresh. The constructor uses the shared state and verification boundaries. The shared profile type preserves omitted and null email before mapping. LinkedIn-specific missing-email mapping and provider-specific error timing remain unverified.
+
+Slack and Naver use code login without PKCE, client-secret-post for both token grants, and GET/Bearer userinfo. Both omit request login hints, ID-token nonces, configured prompts, and callback device IDs. Ordinary additional authorization parameters and configured callback URIs remain effective. Generic OAuth retains its own protocol settings. Slack appends request scopes before configured scopes; Naver appends configured scopes before request scopes. Both preserve duplicates.
+
+Slack reads the subject from `https://slack.com/user_id`, keeps the full profile for the async mapper, and uses `picture` or `https://slack.com/user_image_512` for the image. An empty name becomes an empty string. The decoder requires the declared boolean `email_verified` field. Slack HTTP errors produce a missing profile; the helper does not interpret an `ok` flag. Naver accepts only `resultcode: "00"`, reads user fields from `response`, and passes the full envelope to the async mapper. Its name falls back to `nickname` and then an empty string; `emailVerified` defaults to false. A Naver API failure produces a missing profile before mapping.
+
+Ordinary local HTTP and SQLite contracts cover both providers’ scope order, mapper/custom-handler precedence, callback URIs, persistence, and token refresh. HTTP 503, Naver API failures, mapper errors, and typed application errors are compared with the pinned callback/proxy/account-info behavior. The shared profile type preserves omitted and null email before mapping, and custom user-info handlers can return a missing profile. Rust retains a boolean verification value. Provider-specific missing-email mapping and untested transport/JSON error timing remain separate acceptance boundaries.
+
+
+Linear uses client-secret-post for code exchange and refresh, without PKCE or callback device IDs. Its scopes combine `read`, configured scopes, and request scopes in order without deduplication. Configured `prompt` is ignored; login hints and additional authorization parameters remain effective. Profile lookup sends a POST request with a fixed GraphQL query for `id`, `name`, `email`, `avatarUrl`, `active`, `createdAt`, and `updatedAt`. The decoder, async mapper, and returned profile data receive `data.viewer`. The default profile maps `avatarUrl` to image and sets `emailVerified` to false. Custom user-info and refresh handlers retain precedence. The constructor does not install an ID-token verifier.
+
+Linear HTTP failures and absent or null viewers use the shared missing-profile result. Application mapper and custom-handler errors propagate unchanged. Ordinary localhost contracts cover the query, callback and proxy responses, account-info errors, SQLite persistence, and refresh. Typed fields remain stricter than JavaScript; malformed response shapes and provider-specific transport/JSON error timing are not claimed to match.
+
 
 ## Generic OAuth / OIDC
 
@@ -165,7 +235,7 @@ Use `authorization_url_params` for additional authorization parameters, `token_u
 
 Generic OAuth reads an ID-token profile when it contains `sub` and `email`, then falls back to the userinfo endpoint. `get_user_info` accepts a `GenericOAuthUserInfoHandler` for a custom raw profile. `map_profile_to_user` accepts an `OAuthProfileMapper` to return local user fields independently of account identity.
 
-After OIDC verification, the handler receives `VerifiedOAuthClaims` through `get_user_info_with_verified_claims`, together with the token set and resolved userinfo endpoint. The default method calls the existing `get_user_info` method, so existing handlers need no change. The borrowed claims expose `as_value()` and have no public constructor. A claims-dependent handler may override the new method; its ordinary `get_user_info` method must reject calls without verified claims. The Entra preset follows that contract. Direct ID-token sign-in passes the successful verification result to profile lookup; code callbacks and stored-account reads verify at their existing profile boundary. Each flow validates the received token once before the profile handler and local mapper.
+The runtime calls `GenericOAuthUserInfoHandler::get_user_info_with_context` with the token set and a borrowed `GenericOAuthProfileContext`. The context exposes the resolved `client_id`, the current flow’s expected nonce, the resolved userinfo endpoint, and any completed OIDC verification through read-only getters. The context and `VerifiedOAuthClaims` have no public constructors. The default method calls the existing `get_user_info` method, so existing handlers need no change. The earlier alpha `get_user_info_with_verified_claims` method is replaced by this single context method. Migrate claims-dependent handlers to `context.verified_claims()` and endpoint reads to `context.user_info_url()`. The Entra preset requires verified claims and rejects its token-only entry point. Direct ID-token sign-in passes successful verification to profile lookup; code callbacks and stored-account reads verify at their existing profile boundary. Each OIDC flow validates the received token once before the profile handler and local mapper.
 
 Set `OAuthProfile.additional_fields` to supply configured application user fields. Sign-up and profile updates apply the shared user schema, including input transforms, defaults, and protected-field filtering. OAuth Proxy preserves these mapped fields through its encrypted callback. Raw provider claims remain separate from mapped application fields.
 
@@ -253,7 +323,7 @@ For `POST /unlink-account`, send `{ "accountId": "local-account-id" }`. Access-t
 
 ### PKCE Flow
 
-Authorization-code flows use PKCE (Proof Key for Code Exchange). Generic OAuth enables PKCE by default; set `GenericOAuthConfig.pkce: false` for a provider that does not support it. Direct ID-token sign-in does not perform a code exchange.
+Social authorization-code flows use PKCE (Proof Key for Code Exchange), except for the fixed LinkedIn, Slack, Naver, and Linear protocols. Generic OAuth enables PKCE by default; set `GenericOAuthConfig.pkce: false` for a provider that does not support it. Direct ID-token sign-in does not perform a code exchange.
 
 1. A random `code_verifier` is generated
 2. A `code_challenge` is derived using SHA-256
@@ -284,3 +354,25 @@ OAuth state expires after 10 minutes. `account.store_state_strategy` selects dat
 An invalid state binding preserves the stored state and redirects to its configured error URL. A validated state is consumed before expiry or provider errors are returned. Malformed database state redirects with `internal_server_error`; malformed encrypted cookie state redirects with `state_invalid`.
 
 With `allow_idp_initiated: true`, a callback without state starts a fresh authorization request. The new request establishes state and nonce binding before a session is issued.
+
+
+### LINE Generic OAuth
+
+Use `GenericOAuthConfig::line(client_id, client_secret)` for LINE authorization-code login. Register each channel through the existing provider name:
+
+```rust
+use better_auth::plugins::oauth::{GenericOAuthConfig, OAuthPlugin};
+
+let oauth = OAuthPlugin::new().add_generic_provider(
+    "line-jp",
+    GenericOAuthConfig::line("channel-id", "channel-secret"),
+);
+```
+
+The constructor requests `openid`, `profile`, and `email`. Configure the existing `GenericOAuthConfig` fields before registration to override scopes or other common options. The profile handler reads the resolved client ID at each lookup. The stable account subject is `sub`. The profile contains only `sub`, `name`, `email`, `image` from `picture`, and `emailVerified: false`; the existing profile mapper runs afterward.
+
+LINE Web ID tokens use HS256. The LINE handler posts a received ID token and client ID to LINE’s fixed verification endpoint, then reads the verified response claims. A flow nonce is included when the caller supplied one. Existing OIDC verification results are reused when present. The handler does not decode an unverified JWT. A missing ID token selects the configured userinfo endpoint. Verification, transport, and JSON errors propagate; a failed verification does not select userinfo. Request errors retain their causes without including the request URL.
+
+This differs from Better Auth 1.7.6’s Generic LINE helper, which decodes the ID token in its profile handler: the Rust default adds one verification HTTP round trip. The default constructor retains Generic LINE’s authorization-code scope, with no generated ID-token nonce or direct ID-token login. Stored-account profile reads use the same handler and can therefore fail when LINE rejects a stored token. Complete error, network-timing, and stored-token behavior parity is not claimed.
+
+LINE’s documented userinfo response has no email field. Applications that use an access-token-only profile need their existing profile mapper to supply an application email before signup; the constructor does not invent an email. Ordinary local fixtures cover signed Web-token profiles, nullable and absent fields, access-token userinfo with an explicit application mapper, and request form encoding. The fixtures do not establish live-provider acceptance or native/LIFF token behavior. See LINE’s [ID-token guide](https://developers.line.biz/en/docs/line-login/verify-id-token/) and [API reference](https://developers.line.biz/en/reference/line-login/#verify-id-token).

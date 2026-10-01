@@ -88,7 +88,7 @@ fn merge_preserves_private_changes_and_concurrent_rows_without_resurrecting_dele
 fn merge_keeps_private_passkey_credential_updates() {
     let key = Passkey {
         id: "key".into(),
-        name: None,
+        name: None.into(),
         public_key: "public".into(),
         user_id: "owner".into(),
         credential_id: "credential".into(),
@@ -98,7 +98,7 @@ fn merge_keeps_private_passkey_credential_updates() {
         transports: None,
         created_at: Utc::now().into(),
         updated_at: Utc::now().into(),
-        aaguid: None,
+        aaguid: None.into(),
         credential: "private-before".into(),
     };
     let base = IndexMap::from([("key".into(), key)]);

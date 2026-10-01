@@ -362,10 +362,13 @@ fn make_test_provider(mock_url: &str) -> OAuthProvider {
         Ok(OAuthUserInfo {
             additional_fields: Default::default(),
             id: v["sub"].as_str().unwrap_or("mock-user-id-123").to_string(),
-            email: v["email"]
-                .as_str()
-                .unwrap_or("unknown@example.com")
-                .to_string(),
+            email: Some(
+                v["email"]
+                    .as_str()
+                    .unwrap_or("unknown@example.com")
+                    .to_string(),
+            )
+            .into(),
             name: v["name"].as_str().map(String::from),
             image: None,
             email_verified: true,

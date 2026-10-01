@@ -167,9 +167,9 @@ pub(super) async fn process_oauth_sign_in(
     meta: &better_auth_core::RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> Result<ProcessOAuthUserResult, OAuthSignInError> {
-    if user_info.email.is_empty() {
+    let Some(provider_email) = user_info.email()?.filter(|email| !email.is_empty()) else {
         return Err(OAuthSignInError::Generic("email not found".to_string()));
-    }
+    };
 
     let account_owner = ctx
         .database
@@ -257,7 +257,7 @@ pub(super) async fn process_oauth_sign_in(
             && !user.email_verified()
             && user
                 .email()
-                .is_some_and(|email| email.eq_ignore_ascii_case(&user_info.email))
+                .is_some_and(|email| email.eq_ignore_ascii_case(provider_email))
         {
             user = ctx
                 .database
@@ -293,12 +293,12 @@ pub(super) async fn process_oauth_sign_in(
                             .map(|value| Some(value).into())
                             .unwrap_or_default(),
                         image: user_info.image.clone().map(Into::into).unwrap_or_default(),
-                        email: Some(user_info.email.to_lowercase()),
+                        email: Some(provider_email.to_lowercase()),
                         email_verified: Some(
                             user_info.email_verified
                                 || (user.email_verified()
                                     && user.email().is_some_and(|email| {
-                                        email.eq_ignore_ascii_case(&user_info.email)
+                                        email.eq_ignore_ascii_case(provider_email)
                                     })),
                         ),
                         ..Default::default()
@@ -372,7 +372,7 @@ pub(super) async fn process_oauth_sign_in(
 
     let existing_user = ctx
         .database
-        .get_user_with_accounts(&user_info.email.to_lowercase())
+        .get_user_with_accounts(&provider_email.to_lowercase())
         .await
         .map_err(|error| account_query_error(error, ctx))?;
 
@@ -441,7 +441,7 @@ pub(super) async fn process_oauth_sign_in(
             && !linked_user.email_verified()
             && linked_user
                 .email()
-                .is_some_and(|email| email.eq_ignore_ascii_case(&user_info.email))
+                .is_some_and(|email| email.eq_ignore_ascii_case(provider_email))
         {
             linked_user = ctx
                 .database
@@ -479,12 +479,12 @@ pub(super) async fn process_oauth_sign_in(
                             .map(|value| Some(value).into())
                             .unwrap_or_default(),
                         image: user_info.image.clone().map(Into::into).unwrap_or_default(),
-                        email: Some(user_info.email.to_lowercase()),
+                        email: Some(provider_email.to_lowercase()),
                         email_verified: Some(
                             user_info.email_verified
                                 || (linked_user.email_verified()
                                     && linked_user.email().is_some_and(|email| {
-                                        email.eq_ignore_ascii_case(&user_info.email)
+                                        email.eq_ignore_ascii_case(provider_email)
                                     })),
                         ),
                         ..Default::default()
@@ -537,8 +537,8 @@ pub(super) async fn process_oauth_sign_in(
         }
 
         let mut create_user = CreateUser::new()
-            .with_email(user_info.email.to_lowercase())
-            .with_name(user_info.name.as_deref().unwrap_or(&user_info.email))
+            .with_email(provider_email.to_lowercase())
+            .with_name(user_info.name.as_deref().unwrap_or(provider_email))
             .with_email_verified(user_info.email_verified);
         create_user.image = user_info.image.clone().map(Into::into).unwrap_or_default();
         create_user.additional_fields = ctx
@@ -720,7 +720,13 @@ pub(super) async fn validate_provider_user<S: better_auth_core::AuthSchema>(
 ) -> Result<(), OAuthSignInError> {
     let mut fields = user.additional_fields.clone();
     let _ = fields.insert("id".into(), user_id.into());
-    let _ = fields.insert("email".into(), user.email.to_lowercase().into());
+    if let Some(email) = user.email()? {
+        let _ = fields.insert("email".into(), email.to_lowercase().into());
+    } else if user.email.is_undefined() {
+        let _ = fields.remove("email");
+    } else {
+        let _ = fields.insert("email".into(), serde_json::Value::Null);
+    }
     let _ = fields.insert("emailVerified".into(), user.email_verified.into());
     if let Some(name) = &user.name {
         let _ = fields.insert("name".into(), name.clone().into());

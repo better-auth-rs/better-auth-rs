@@ -641,6 +641,12 @@ pub trait AccountStore<S: AuthSchema>: Send + Sync {
         ))
     }
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<crate::wire::AccountView>>;
+    /// Read the current user's credential account independently of list pagination.
+    /// Match the stored user ID, credential provider, and account ID before output projection.
+    async fn get_credential_account(
+        &self,
+        user_id: &str,
+    ) -> AuthResult<Option<crate::wire::AccountView>>;
     async fn update_account(
         &self,
         id: &str,

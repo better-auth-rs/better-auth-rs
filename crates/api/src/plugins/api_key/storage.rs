@@ -317,7 +317,7 @@ pub(super) async fn create(
                 .filter(|id| !id.is_empty())
                 .unwrap_or_else(|| better_auth_core::id::random_id(None))
                 .into(),
-            name: input.name,
+            name: input.name.into(),
             start: input.start,
             prefix: input.prefix,
             key_hash: input.key_hash,
@@ -352,9 +352,11 @@ pub(super) async fn create(
 }
 
 pub(super) fn apply_update(key: &mut ApiKey, update: UpdateApiKey) {
+    if let Some(name) = update.name {
+        key.name = Some(name).into();
+    }
     macro_rules! optional { ($($field:ident),* $(,)?) => { $(if let Some(value) = update.$field { key.$field = Some(value); })* }; }
     optional!(
-        name,
         remaining,
         rate_limit_time_window,
         rate_limit_max,
@@ -511,7 +513,7 @@ pub(super) async fn list(
                         .iter()
                         .map(better_auth_core::wire::ApiKeyView::from)
                         .collect();
-                    sort_views(&mut views, field, Some(direction));
+                    sort_views(&mut views, field, Some(direction))?;
                     let mut by_id: std::collections::HashMap<_, _> = keys
                         .into_iter()
                         .map(|key| (key.id.as_str().map(str::to_owned), key))
@@ -592,14 +594,36 @@ fn compare_strings(left: Option<&str>, right: Option<&str>) -> std::cmp::Orderin
 }
 
 fn sort_views(
-    views: &mut [better_auth_core::wire::ApiKeyView],
+    views: &mut Vec<better_auth_core::wire::ApiKeyView>,
     sort_by: &str,
     direction: Option<&str>,
-) {
+) -> AuthResult<()> {
+    if sort_by == "name" {
+        let mut named = std::mem::take(views)
+            .into_iter()
+            .map(|view| {
+                let name = if view.name.is_undefined() {
+                    None
+                } else {
+                    view.name.typed()?.clone()
+                };
+                Ok((name, view))
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        named.sort_by(|a, b| {
+            let order = compare_strings(a.0.as_deref(), b.0.as_deref());
+            if direction == Some("desc") {
+                order.reverse()
+            } else {
+                order
+            }
+        });
+        *views = named.into_iter().map(|(_, view)| view).collect();
+        return Ok(());
+    }
     views.sort_by(|a, b| {
         let ordering = match sort_by {
             "id" => compare_strings(a.id.as_str(), b.id.as_str()),
-            "name" => compare_strings(a.name.as_deref(), b.name.as_deref()),
             "start" => a.start.cmp(&b.start),
             "prefix" => compare_strings(a.prefix.as_deref(), b.prefix.as_deref()),
             "referenceId" => compare_strings(Some(&a.reference_id), Some(&b.reference_id)),
@@ -627,6 +651,7 @@ fn sort_views(
             ordering
         }
     });
+    Ok(())
 }
 
 pub(super) fn deduplicate(keys: &mut Vec<ApiKey>) {

@@ -286,7 +286,7 @@ where
         let id = id.typed()?;
         let name = self
             .model_fields
-            .name_for_storage(EntityRole::ApiKey, update.name.take().map(Some), false)
+            .api_key_name_for_storage(update.name.take().map(Some), false)
             .await?;
         let mut active = apply_update_fields::<P::ApiKey>(
             Default::default(),
@@ -333,7 +333,7 @@ where
             None
         } else {
             self.model_fields
-                .name_for_storage(EntityRole::ApiKey, None, false)
+                .api_key_name_for_storage(None, false)
                 .await?
         };
         let operation = write.operation();

@@ -158,19 +158,19 @@ impl OAuthUserInfoHandler for ConfiguredUserInfo {
     async fn get_user_info(
         &self,
         _: OAuthUserInfoRequest,
-    ) -> Result<OAuthUserInfoResponse, String> {
+    ) -> AuthResult<Option<OAuthUserInfoResponse>> {
         self.0.lock().unwrap().push("get");
-        Ok(OAuthUserInfoResponse {
+        Ok(Some(OAuthUserInfoResponse {
             user: OAuthUserInfo {
                 id: "google-normal-subject".into(),
-                email: "google-normal@example.test".into(),
+                email: Some("google-normal@example.test".into()).into(),
                 name: Some("Configured Google User".into()),
                 image: None,
                 email_verified: true,
                 additional_fields: Default::default(),
             },
             data: claims(),
-        })
+        }))
     }
 }
 
@@ -237,6 +237,75 @@ async fn google_configured_verifier_keeps_claims_and_userinfo_priority() {
             } else {
                 "customVerifier"
             }]
+        );
+    }
+}
+
+struct FailingProfile(Arc<Mutex<Vec<&'static str>>>);
+
+#[async_trait]
+impl OAuthProfileMapper for FailingProfile {
+    async fn map_profile(&self, profile: &Value) -> AuthResult<OAuthProfile> {
+        assert_eq!(profile["sub"], "google-normal-subject");
+        self.0.lock().unwrap().push("map");
+        Err(better_auth_core::AuthError::internal(
+            "Ordinary profile mapper failed",
+        ))
+    }
+}
+
+#[async_trait]
+impl OAuthUserInfoHandler for FailingProfile {
+    async fn get_user_info(
+        &self,
+        _: OAuthUserInfoRequest,
+    ) -> AuthResult<Option<OAuthUserInfoResponse>> {
+        self.0.lock().unwrap().push("custom");
+        Err(better_auth_core::AuthError::internal(
+            "Ordinary custom userinfo failed",
+        ))
+    }
+}
+
+#[tokio::test]
+async fn verified_direct_sign_in_preserves_mapper_and_custom_handler_errors() {
+    for custom in [false, true] {
+        let fixture = GoogleFixture::start(claims()).await;
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let callbacks = Arc::new(FailingProfile(calls.clone()));
+        let mut provider = fixture.provider();
+        provider.map_profile_to_user = Some(callbacks.clone());
+        if custom {
+            provider.get_user_info = Some(callbacks);
+        }
+        let plugin = OAuthPlugin::new().add_provider("google", provider);
+        let ctx = test_helpers::create_test_context().await;
+        let error = plugin
+            .on_request(&request(&fixture.token), &ctx)
+            .await
+            .unwrap_err();
+        let expected = if custom {
+            "Ordinary custom userinfo failed"
+        } else {
+            "Ordinary profile mapper failed"
+        };
+        assert!(
+            matches!(&error, better_auth_core::AuthError::Internal(message) if message == expected)
+        );
+        let response = error.to_http_response();
+        assert_eq!(response.status, 500);
+        assert!(response.body.is_empty());
+        assert_eq!(
+            *calls.lock().unwrap(),
+            [if custom { "custom" } else { "map" }]
+        );
+        assert_eq!(*fixture.requests.lock().unwrap(), ["/jwks"]);
+        assert!(
+            ctx.database
+                .get_user_by_email("google-normal@example.test")
+                .await
+                .unwrap()
+                .is_none()
         );
     }
 }

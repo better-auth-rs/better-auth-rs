@@ -287,7 +287,10 @@ async fn valid_access_token(
                 .converted_date()
                 .is_before(Utc::now() + chrono::Duration::seconds(5));
         let mut cookies = Vec::new();
-        let new_tokens = if expired && account.refresh_token.is_truthy()? {
+        let new_tokens = if expired
+            && account.refresh_token.is_truthy()?
+            && provider.config.supports_refresh()
+        {
             let value = decrypt_value(&account.refresh_token, ctx)?;
             let refresh = value
                 .typed()?
@@ -395,6 +398,19 @@ pub(super) async fn handle_refresh_token(
         .resolve(req, session.user_id.typed()?, ctx)
         .await?;
     let provider = provider_for(config, &account)?;
+    if !provider.config.supports_refresh() {
+        return Err(AuthResponse::json(
+            400,
+            &serde_json::json!({
+                "code": "TOKEN_REFRESH_NOT_SUPPORTED",
+                "message": format!(
+                    "Provider {} does not support token refreshing.",
+                    account.provider_id.display_string()?
+                ),
+            }),
+        )?
+        .into());
+    }
     if !account.refresh_token.is_truthy()? {
         return Err(AuthError::bad_request("Refresh token not found"));
     }
@@ -500,10 +516,15 @@ pub(super) async fn handle_account_info(
             })?;
         (info.user, info.data)
     } else {
-        let info = fetch_user_info_from_provider(provider, request, None).await?;
+        let info = fetch_user_info_from_provider(provider, request, None)
+            .await?
+            .ok_or_else(super::social_profile::missing_profile)?;
         (
             AccountInfoUser {
-                id: Some(info.user.id),
+                id: provider
+                    .config
+                    .account_info_includes_id()
+                    .then_some(info.user.id),
                 name: info.user.name,
                 email: info.user.email,
                 image: info.user.image,

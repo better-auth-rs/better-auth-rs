@@ -298,6 +298,34 @@ where
         Ok(owners.into_iter().next())
     }
 
+    async fn get_credential_account(&self, user_id: &str) -> AuthResult<Option<AccountView>> {
+        let stored_user_id =
+            self.parse_id(user_id, <S::Account as SeaOrmAccountModel>::parse_user_id)?;
+        let account = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+            self.config(),
+            "findOne",
+            async {
+                <S::Account as SeaOrmAccountModel>::Entity::find()
+                    .filter(<S::Account as SeaOrmAccountModel>::user_id_column().eq(stored_user_id))
+                    .filter(
+                        <S::Account as SeaOrmAccountModel>::provider_id_column().eq("credential"),
+                    )
+                    .filter(<S::Account as SeaOrmAccountModel>::account_id_column().eq(user_id))
+                    .one(self.connection())
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?;
+        match account {
+            Some(account) => self
+                .output_account(&account, self.connection())
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
+    }
+
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<AccountView>> {
         let user_id = self.parse_id(user_id, <S::Account as SeaOrmAccountModel>::parse_user_id)?;
         match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(

@@ -121,7 +121,8 @@ pub(crate) struct AccountInfoUser {
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    pub email: String,
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    pub email: better_auth_core::SchemaValue<Option<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<Option<String>>,
     #[serde(rename = "emailVerified")]

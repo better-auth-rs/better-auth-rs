@@ -338,18 +338,18 @@ impl better_auth::plugins::oauth::OAuthUserInfoHandler for Provider {
     async fn get_user_info(
         &self,
         _: better_auth::plugins::oauth::OAuthUserInfoRequest,
-    ) -> Result<better_auth::plugins::oauth::OAuthUserInfoResponse, String> {
-        Ok(better_auth::plugins::oauth::OAuthUserInfoResponse {
+    ) -> AuthResult<Option<better_auth::plugins::oauth::OAuthUserInfoResponse>> {
+        Ok(Some(better_auth::plugins::oauth::OAuthUserInfoResponse {
             user: better_auth::plugins::oauth::OAuthUserInfo {
                 id: "alice-google".into(),
-                email: "alice@example.test".into(),
+                email: Some("alice@example.test".into()).into(),
                 name: Some("Alice".into()),
                 email_verified: true,
                 image: None,
                 additional_fields: Default::default(),
             },
             data: json!({"sub":"alice-google","email":"alice@example.test","email_verified":true}),
-        })
+        }))
     }
 }
 

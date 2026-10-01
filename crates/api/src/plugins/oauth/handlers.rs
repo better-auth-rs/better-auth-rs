@@ -249,7 +249,11 @@ pub(super) async fn complete_link_social(
         return Err("unable_to_link_account".to_string().into());
     }
 
-    if !linking.allow_different_emails && !user_info.email.eq_ignore_ascii_case(&link.email) {
+    if !linking.allow_different_emails
+        && !user_info
+            .email()?
+            .is_some_and(|email| email.eq_ignore_ascii_case(&link.email))
+    {
         return Err("email_doesn't_match".to_string().into());
     }
 
@@ -392,12 +396,15 @@ async fn sign_in_with_id_token_core(
         claims,
     )
     .await
-    .map_err(|_| AuthError::Upstream {
-        status: 401,
-        code: "FAILED_TO_GET_USER_INFO",
-        message: "Failed to get user info",
-    })?;
-    if user_info.user.email.is_empty() {
+    .map_err(|error| {
+        if provider.generic.is_some() {
+            super::social_profile::missing_profile()
+        } else {
+            error
+        }
+    })?
+    .ok_or_else(super::social_profile::missing_profile)?;
+    if user_info.user.email()?.is_none_or(str::is_empty) {
         return Err(AuthError::Upstream {
             status: 401,
             code: "USER_EMAIL_NOT_FOUND",
@@ -467,19 +474,22 @@ async fn link_with_id_token_core(
         claims,
     )
     .await
-    .map_err(|_| AuthError::Upstream {
-        status: 401,
-        code: "FAILED_TO_GET_USER_INFO",
-        message: "Failed to get user info",
-    })?;
+    .map_err(|error| {
+        if provider.generic.is_some() {
+            super::social_profile::missing_profile()
+        } else {
+            error
+        }
+    })?
+    .ok_or_else(super::social_profile::missing_profile)?;
 
-    if response.user.email.is_empty() {
+    let Some(provider_email) = response.user.email()?.filter(|email| !email.is_empty()) else {
         return Err(AuthError::Upstream {
             status: 401,
             code: "USER_EMAIL_NOT_FOUND",
             message: "User email not found",
         });
-    }
+    };
 
     if let Some(account) = ctx
         .database
@@ -543,7 +553,7 @@ async fn link_with_id_token_core(
             message: "Account not linked - linking not allowed",
         });
     }
-    if !linking.allow_different_emails && !response.user.email.eq_ignore_ascii_case(current_email) {
+    if !linking.allow_different_emails && !provider_email.eq_ignore_ascii_case(current_email) {
         return Err(AuthError::Upstream {
             status: 401,
             code: "LINKING_DIFFERENT_EMAILS_NOT_ALLOWED",

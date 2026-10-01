@@ -81,7 +81,10 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         let id = created.api_key.id.typed()?;
         let cached_only = mode == "secondary";
         let expected = if cached_only { "  Desk  " } else { "Desk:out" };
-        assert_eq!(created.api_key.name.as_deref(), Some(expected));
+        assert_eq!(
+            created.api_key.name.typed().unwrap().as_deref(),
+            Some(expected)
+        );
         if cached_only {
             assert!(events.lock().unwrap().is_empty());
             assert!(raw.get_api_key_by_id(id).await?.is_none());
@@ -91,7 +94,13 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 ["input:\"  Desk  \"", "output:\"Desk\""]
             );
             assert_eq!(
-                raw.get_api_key_by_id(id).await?.unwrap().name.as_deref(),
+                raw.get_api_key_by_id(id)
+                    .await?
+                    .unwrap()
+                    .name
+                    .typed()
+                    .unwrap()
+                    .as_deref(),
                 Some("Desk")
             );
         }
@@ -137,7 +146,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         } else {
             "Mobile:out"
         };
-        assert_eq!(updated.name.as_deref(), Some(expected));
+        assert_eq!(updated.name.typed().unwrap().as_deref(), Some(expected));
         let expected_events: Vec<String> = match mode {
             "database" => vec![
                 "output:\"Desk\"",

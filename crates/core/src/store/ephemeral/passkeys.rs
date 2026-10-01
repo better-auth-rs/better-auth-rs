@@ -2,25 +2,24 @@ use async_trait::async_trait;
 use chrono::Utc;
 
 use super::EphemeralStore;
-use crate::store::{PasskeyStore, schema::EntityRole};
+use crate::store::PasskeyStore;
 use crate::{AuthError, AuthResult, CreatePasskey, Passkey, UpdatePasskeyAuthentication};
 
 #[async_trait]
 impl PasskeyStore for EphemeralStore {
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
         let now = Utc::now();
-        let name = self
+        let fields = self
             .model_fields
-            .name_for_storage(EntityRole::Passkey, Some(input.name), true)
-            .await?
-            .flatten();
+            .passkey_fields_for_storage(input.name, input.aaguid, true)
+            .await?;
         let mut passkey = Passkey {
             id: self
                 .generated_id("passkey", None, self.lock()?.passkeys.len())?
                 .map(crate::SchemaValue::Typed)
                 .unwrap_or_default(),
             user_id: input.user_id,
-            name,
+            name: fields.name.map(Into::into).unwrap_or_default(),
             credential_id: input.credential_id,
             public_key: input.public_key,
             counter: input.counter,
@@ -28,7 +27,7 @@ impl PasskeyStore for EphemeralStore {
             backed_up: input.backed_up,
             transports: input.transports,
             credential: input.credential,
-            aaguid: input.aaguid,
+            aaguid: fields.aaguid.map(Into::into).unwrap_or_default(),
             created_at: now,
             updated_at: now,
         };
@@ -103,18 +102,16 @@ impl PasskeyStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         update: UpdatePasskeyAuthentication,
     ) -> AuthResult<Passkey> {
-        let name = self
+        let fields = self
             .model_fields
-            .name_for_storage(EntityRole::Passkey, None, false)
+            .passkey_fields_for_storage(Default::default(), Default::default(), false)
             .await?;
         let row = self
             .raw("passkey", "update", |state| {
                 let Some(mut passkey) = state.passkeys.get_mut(id)? else {
                     return Ok(None);
                 };
-                if let Some(name) = name {
-                    passkey.name = name;
-                }
+                fields.apply(&mut passkey);
                 passkey.credential = update.credential;
                 passkey.counter = update.counter;
                 passkey.backed_up = update.backed_up;
@@ -132,18 +129,16 @@ impl PasskeyStore for EphemeralStore {
     }
 
     async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey> {
-        let name = self
+        let fields = self
             .model_fields
-            .name_for_storage(EntityRole::Passkey, Some(Some(name.to_owned())), false)
+            .passkey_fields_for_storage(Some(name.to_owned()).into(), Default::default(), false)
             .await?;
         let row = self
             .raw("passkey", "update", |state| {
                 let Some(mut passkey) = state.passkeys.get_mut(id)? else {
                     return Ok(None);
                 };
-                if let Some(name) = name {
-                    passkey.name = name;
-                }
+                fields.apply(&mut passkey);
                 passkey.updated_at = Utc::now();
                 Ok(Some(passkey.clone()))
             })

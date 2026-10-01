@@ -438,7 +438,7 @@ impl<S: AuthSchema> AuthInitContext<S> {
             .extend(crate::store::schema::EntityRole::User, fields);
     }
 
-    /// Register adapter fields for core models or the ordinary Passkey and API Key name fields.
+    /// Register adapter fields for core models, Passkey name/aaguid, or API Key name.
     /// Other plugin roles and fields return a configuration error.
     pub fn register_model_fields(
         &mut self,

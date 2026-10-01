@@ -30,7 +30,31 @@ pub(super) fn build_authorization_url(
     input: AuthorizationRequest<'_>,
 ) -> AuthResult<String> {
     let generic = provider.generic.as_ref();
+    let input = if generic.is_none() && provider.config.omits_request_hints() {
+        AuthorizationRequest {
+            login_hint: None,
+            nonce: None,
+            additional_params: if provider.config.is_cloudflare() {
+                None
+            } else {
+                input.additional_params
+            },
+            ..input
+        }
+    } else {
+        input
+    };
     let options = generic.map(|generic| &generic.config);
+    if generic.is_none()
+        && provider.config.is_figma()
+        && (provider.config.client_id.is_empty() || provider.config.client_secret.is_empty())
+    {
+        better_auth_core::observability::logger::current().error(
+            "Client Id and Client Secret are required for Figma. Make sure to provide them in the options.",
+            &[],
+        );
+        return Err(AuthError::internal("CLIENT_ID_AND_SECRET_REQUIRED"));
+    }
     if provider.config.auth_url.is_empty() {
         return Err(AuthError::Upstream {
             status: 400,
@@ -89,8 +113,10 @@ pub(super) fn build_authorization_url(
     }
     set(
         "redirect_uri",
-        options
-            .and_then(|options| options.redirect_uri.as_deref())
+        provider
+            .config
+            .redirect_uri
+            .as_deref()
             .filter(|value| !value.is_empty())
             .unwrap_or(input.callback_url),
     );
@@ -117,7 +143,7 @@ pub(super) fn build_authorization_url(
             set(name, value);
         }
     }
-    if options.is_none_or(|options| options.pkce) {
+    if provider.uses_pkce() {
         set("code_challenge_method", "S256");
         set("code_challenge", input.code_challenge);
     }

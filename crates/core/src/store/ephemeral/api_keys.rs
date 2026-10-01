@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, SecondsFormat, Utc};
 
 use super::EphemeralStore;
-use crate::store::{ApiKeyStore, ApiKeyUsageWrite, schema::EntityRole};
+use crate::store::{ApiKeyStore, ApiKeyUsageWrite};
 use crate::{ApiKey, AuthError, AuthResult, CreateApiKey, UpdateApiKey};
 
 fn now() -> String {
@@ -21,9 +21,10 @@ impl ApiKeyStore for EphemeralStore {
         let created_at = now();
         let name = self
             .model_fields
-            .name_for_storage(EntityRole::ApiKey, Some(input.name), true)
+            .api_key_name_for_storage(Some(input.name), true)
             .await?
-            .flatten();
+            .map(Into::into)
+            .unwrap_or_default();
         let mut key = ApiKey {
             id: self
                 .generated_id("apikey", None, self.lock()?.api_keys.len())?
@@ -122,7 +123,28 @@ impl ApiKeyStore for EphemeralStore {
                     .filter(|key| key.reference_id == reference_id)
                     .cloned()
                     .collect();
-                if let Some((field, direction)) = sort.filter(|_| keys.len() > 1) {
+                if let Some(("name", direction)) = sort.filter(|_| keys.len() > 1) {
+                    let mut named = keys
+                        .into_iter()
+                        .map(|key| {
+                            let name = if key.name.is_undefined() {
+                                None
+                            } else {
+                                key.name.typed()?.clone()
+                            };
+                            Ok((name, key))
+                        })
+                        .collect::<AuthResult<Vec<_>>>()?;
+                    named.sort_by(|a, b| {
+                        let order = a.0.cmp(&b.0);
+                        if direction == "desc" {
+                            order.reverse()
+                        } else {
+                            order
+                        }
+                    });
+                    keys = named.into_iter().map(|(_, key)| key).collect();
+                } else if let Some((field, direction)) = sort.filter(|_| keys.len() > 1) {
                     let compare = comparator(field)?;
                     keys.sort_by(|a, b| {
                         let order = compare(a, b);
@@ -172,7 +194,7 @@ impl ApiKeyStore for EphemeralStore {
     ) -> AuthResult<Option<ApiKey>> {
         let name = self
             .model_fields
-            .name_for_storage(EntityRole::ApiKey, update.name.take().map(Some), false)
+            .api_key_name_for_storage(update.name.take().map(Some), false)
             .await?;
         let row = self
             .raw("apikey", "update", |state| {
@@ -180,7 +202,7 @@ impl ApiKeyStore for EphemeralStore {
                     return Ok(None);
                 };
                 if let Some(name) = name {
-                    key.name = name;
+                    key.name = name.into();
                 }
                 macro_rules! optional {
             ($($field:ident),* $(,)?) => {
@@ -233,7 +255,7 @@ impl ApiKeyStore for EphemeralStore {
             None
         } else {
             self.model_fields
-                .name_for_storage(EntityRole::ApiKey, None, false)
+                .api_key_name_for_storage(None, false)
                 .await?
         };
         let row = self
@@ -300,7 +322,7 @@ impl ApiKeyStore for EphemeralStore {
                     }
                 }
                 if let Some(name) = name {
-                    key.name = name;
+                    key.name = name.into();
                 }
                 Ok(Some(key.clone()))
             })
@@ -482,7 +504,6 @@ fn comparator(field: &str) -> AuthResult<fn(&ApiKey, &ApiKey) -> std::cmp::Order
             (Some(a), Some(b)) => a.cmp(b),
             _ => std::cmp::Ordering::Equal,
         },
-        "name" => |a, b| a.name.cmp(&b.name),
         "start" => |a, b| a.start.cmp(&b.start),
         "prefix" => |a, b| a.prefix.cmp(&b.prefix),
         "referenceId" => |a, b| a.reference_id.cmp(&b.reference_id),

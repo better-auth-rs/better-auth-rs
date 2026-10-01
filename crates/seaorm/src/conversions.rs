@@ -79,7 +79,7 @@ impl From<&entities::api_key::Model> for ApiKey {
     fn from(model: &entities::api_key::Model) -> Self {
         Self {
             id: model.id.clone().into(),
-            name: model.name.clone(),
+            name: model.name.clone().into(),
             start: model.start.clone().map(Into::into),
             prefix: model.prefix.clone(),
             key_hash: model.key_hash.clone(),
@@ -108,7 +108,7 @@ impl From<&entities::passkey::Model> for Passkey {
     fn from(model: &entities::passkey::Model) -> Self {
         Self {
             id: model.id.clone().into(),
-            name: model.name.clone(),
+            name: model.name.clone().into(),
             public_key: model.public_key.clone(),
             user_id: model.user_id.clone(),
             credential_id: model.credential_id.clone(),
@@ -118,7 +118,7 @@ impl From<&entities::passkey::Model> for Passkey {
             transports: model.transports.clone(),
             created_at: model.created_at,
             updated_at: model.updated_at,
-            aaguid: model.aaguid.clone(),
+            aaguid: model.aaguid.clone().into(),
             credential: model.credential.clone(),
         }
     }

@@ -1,0 +1,136 @@
+{
+  "config": {
+    "providerId": "line",
+    "authorizationUrl": "https://access.line.me/oauth2/v2.1/authorize",
+    "tokenUrl": "https://api.line.me/oauth2/v2.1/token",
+    "userInfoUrl": "https://api.line.me/oauth2/v2.1/userinfo",
+    "scopes": [
+      "openid",
+      "profile",
+      "email"
+    ]
+  },
+  "results": [
+    {
+      "input": {
+        "name": "token-profile",
+        "claims": {
+          "sub": "ordinary-line-user",
+          "name": "LINE User",
+          "email": "line@example.test",
+          "picture": "https://images.test/line.png",
+          "email_verified": true,
+          "locale": "ja-JP"
+        }
+      },
+      "status": 302,
+      "profile": {
+        "sub": "ordinary-line-user",
+        "name": "LINE User",
+        "email": "line@example.test",
+        "image": "https://images.test/line.png",
+        "emailVerified": false
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "userinfoRequests": 0,
+      "user": {
+        "name": "Mapped LINE User",
+        "email": "line@example.test",
+        "image": "https://images.test/line.png",
+        "emailVerified": false,
+        "accountSubject": "ordinary-line-user"
+      }
+    },
+    {
+      "input": {
+        "name": "nullable-profile",
+        "claims": {
+          "sub": "ordinary-line-user",
+          "name": null,
+          "email": "nullable@example.test",
+          "picture": null
+        }
+      },
+      "status": 302,
+      "profile": {
+        "sub": "ordinary-line-user",
+        "name": null,
+        "email": "nullable@example.test",
+        "image": null,
+        "emailVerified": false
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "userinfoRequests": 0,
+      "user": {
+        "name": "Mapped User",
+        "email": "nullable@example.test",
+        "image": null,
+        "emailVerified": false,
+        "accountSubject": "ordinary-line-user"
+      }
+    },
+    {
+      "input": {
+        "name": "minimal-profile",
+        "claims": {
+          "sub": "ordinary-line-user",
+          "email": "minimal@example.test"
+        }
+      },
+      "status": 302,
+      "profile": {
+        "sub": "ordinary-line-user",
+        "email": "minimal@example.test",
+        "emailVerified": false
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "userinfoRequests": 0,
+      "user": {
+        "name": "Mapped User",
+        "email": "minimal@example.test",
+        "image": null,
+        "emailVerified": false,
+        "accountSubject": "ordinary-line-user"
+      }
+    },
+    {
+      "input": {
+        "name": "userinfo-only",
+        "userinfo": {
+          "sub": "ordinary-line-user",
+          "name": "Userinfo User",
+          "picture": "https://images.test/userinfo.png"
+        },
+        "mappedEmail": "application@example.test"
+      },
+      "status": 302,
+      "profile": {
+        "sub": "ordinary-line-user",
+        "name": "Userinfo User",
+        "image": "https://images.test/userinfo.png",
+        "emailVerified": false
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "userinfoRequests": 1,
+      "user": {
+        "name": "Mapped Userinfo User",
+        "email": "application@example.test",
+        "image": "https://images.test/userinfo.png",
+        "emailVerified": false,
+        "accountSubject": "ordinary-line-user"
+      }
+    }
+  ]
+}

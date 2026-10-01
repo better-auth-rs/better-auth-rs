@@ -26,8 +26,8 @@ impl OAuthUserInfoHandler for UnusedCallbacks {
     async fn get_user_info(
         &self,
         _: OAuthUserInfoRequest,
-    ) -> Result<OAuthUserInfoResponse, String> {
-        Err(self.called())
+    ) -> AuthResult<Option<OAuthUserInfoResponse>> {
+        Err(better_auth_core::AuthError::internal(self.called()))
     }
 }
 #[async_trait]

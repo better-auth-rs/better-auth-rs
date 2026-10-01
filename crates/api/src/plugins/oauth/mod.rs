@@ -17,6 +17,7 @@ mod generic_profile;
 pub(super) mod google;
 mod handlers;
 mod id_token;
+mod line;
 mod microsoft_entra;
 pub(crate) use handlers::validate_redirect_target;
 pub(crate) use signin::sign_in_verified_profile;
@@ -44,9 +45,9 @@ mod google_test_support;
 mod google_tests;
 
 pub use generic::{
-    GenericOAuthConfig, GenericOAuthUserInfoHandler, OAuthAccountSubject, OAuthCodeExchange,
-    OAuthProfile, OAuthProfileMapper, OAuthRefreshParameters, OAuthTokenHandler,
-    RefreshTokenParameters, VerifiedOAuthClaims,
+    GenericOAuthConfig, GenericOAuthProfileContext, GenericOAuthUserInfoHandler,
+    OAuthAccountSubject, OAuthCodeExchange, OAuthProfile, OAuthProfileMapper,
+    OAuthRefreshParameters, OAuthTokenHandler, RefreshTokenParameters, VerifiedOAuthClaims,
 };
 pub use token::{
     ClientAssertion, ClientAssertionContext, TokenEndpointAuth, TokenEndpointRequestContext,

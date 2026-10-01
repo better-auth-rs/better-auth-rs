@@ -234,7 +234,12 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
         };
         let input = CreatePasskey {
             user_id: state.user.id.clone(),
-            name: body.name.clone().filter(|name| !name.is_empty()),
+            name: body
+                .name
+                .clone()
+                .filter(|name| !name.is_empty())
+                .map(|name| Some(name).into())
+                .unwrap_or_default(),
             credential_id,
             public_key: metadata.public_key,
             counter: snapshot.counter,
@@ -242,7 +247,10 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
             backed_up: snapshot.backed_up,
             transports: Some(transports.unwrap_or_default().join(",")),
             credential: snapshot.serialized,
-            aaguid: metadata.aaguid,
+            aaguid: metadata
+                .aaguid
+                .map(|aaguid| Some(aaguid).into())
+                .unwrap_or_default(),
         };
         let registration = Registration {
             ctx: clone_context(ctx),
@@ -333,11 +341,13 @@ impl<S: AuthSchema> Registration<S> {
                 }
                 self.input.user_id = user_id;
             }
-            if self.input.name.is_none() {
+            if self.input.name.is_absent() {
                 self.input.name = result
                     .name
                     .map(|name| super::types::trim_name(&name).to_owned())
-                    .filter(|name| !name.is_empty());
+                    .filter(|name| !name.is_empty())
+                    .map(|name| Some(name).into())
+                    .unwrap_or_default();
             }
         }
         if self.input.user_id.is_empty() {

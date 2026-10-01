@@ -172,12 +172,7 @@ pub async fn get_credential_account<S: better_auth_core::AuthSchema>(
     let Some(user_id) = user_id.as_str() else {
         return Ok(None);
     };
-    Ok(ctx
-        .database
-        .get_user_accounts(user_id)
-        .await?
-        .into_iter()
-        .find(|account| account.provider_id == "credential"))
+    ctx.database.get_credential_account(user_id).await
 }
 
 /// Resolve the user's stored password hash from the credential account.

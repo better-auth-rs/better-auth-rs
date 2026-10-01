@@ -1349,7 +1349,7 @@ async fn check_plugin_operations(
         let row = store
             .create_passkey(better_auth_core::CreatePasskey {
                 user_id: "owner".into(),
-                name: None,
+                name: None.into(),
                 credential_id: "credential".into(),
                 public_key: "public".into(),
                 counter: 0,
@@ -1357,7 +1357,7 @@ async fn check_plugin_operations(
                 backed_up: false,
                 transports: None,
                 credential: "private".into(),
-                aaguid: None,
+                aaguid: None.into(),
             })
             .await?;
         assert_eq!(
@@ -1372,6 +1372,8 @@ async fn check_plugin_operations(
                 .update_passkey_name(row.id.typed()?, "Renamed")
                 .await?
                 .name
+                .typed()
+                .unwrap()
                 .as_deref(),
             Some("Renamed")
         );
@@ -1752,7 +1754,7 @@ async fn check_api_key_list(
     assert_eq!(
         keys?
             .iter()
-            .map(|key| key.name.as_deref())
+            .map(|key| key.name.typed().unwrap().as_deref())
             .collect::<Vec<_>>(),
         [Some("E"), Some("D")]
     );

@@ -511,8 +511,9 @@ impl<T: AuthInvitation> From<&T> for InvitationView {
 pub struct PasskeyView {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(deserialize_with = "crate::types_plugin::deserialize_display_string")]
+    pub name: SchemaValue<Option<String>>,
     #[serde(rename = "credentialID")]
     pub credential_id: String,
     #[serde(rename = "userId")]
@@ -528,15 +529,16 @@ pub struct PasskeyView {
     pub transports: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aaguid: Option<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(deserialize_with = "crate::types_plugin::deserialize_display_string")]
+    pub aaguid: SchemaValue<Option<String>>,
 }
 
 impl<T: AuthPasskey> From<&T> for PasskeyView {
     fn from(pk: &T) -> Self {
         Self {
             id: pk.id().into_owned(),
-            name: pk.name().map(str::to_owned),
+            name: pk.name().clone(),
             credential_id: pk.credential_id().to_owned(),
             user_id: pk.user_id().into_owned(),
             public_key: pk.public_key().to_owned(),
@@ -547,7 +549,7 @@ impl<T: AuthPasskey> From<&T> for PasskeyView {
             created_at: pk
                 .created_at()
                 .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-            aaguid: pk.aaguid().map(str::to_owned),
+            aaguid: pk.aaguid().clone(),
         }
     }
 }
@@ -560,7 +562,9 @@ impl<T: AuthPasskey> From<&T> for PasskeyView {
 pub struct ApiKeyView {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
-    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(deserialize_with = "crate::types_plugin::deserialize_display_string")]
+    pub name: SchemaValue<Option<String>>,
     pub start: Option<crate::ApiKeyStart>,
     pub prefix: Option<String>,
     #[serde(rename = "referenceId")]
@@ -618,7 +622,7 @@ impl<T: AuthApiKey> From<&T> for ApiKeyView {
     fn from(ak: &T) -> Self {
         Self {
             id: ak.id().into_owned(),
-            name: ak.name().map(str::to_owned),
+            name: ak.name().clone(),
             start: ak.start().map(std::borrow::Cow::into_owned),
             prefix: ak.prefix().map(str::to_owned),
             reference_id: ak.reference_id().into_owned(),

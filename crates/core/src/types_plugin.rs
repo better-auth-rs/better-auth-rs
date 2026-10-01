@@ -5,6 +5,12 @@ use std::borrow::Cow;
 
 use crate::entity::{AuthApiKey, AuthPasskey, AuthTwoFactor};
 
+pub(crate) fn deserialize_display_string<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<SchemaValue<Option<String>>, D::Error> {
+    Option::<String>::deserialize(deserializer).map(SchemaValue::Typed)
+}
+
 /// Two-factor authentication response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TwoFactor {
@@ -58,8 +64,9 @@ pub struct UpdateTwoFactor {
 pub struct Passkey {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(deserialize_with = "deserialize_display_string")]
+    pub name: SchemaValue<Option<String>>,
     #[serde(rename = "publicKey")]
     pub public_key: String,
     #[serde(rename = "userId")]
@@ -79,8 +86,9 @@ pub struct Passkey {
     #[serde(rename = "updatedAt")]
     #[serde(serialize_with = "crate::utils::date::serialize")]
     pub updated_at: DateTime<Utc>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aaguid: Option<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(deserialize_with = "deserialize_display_string")]
+    pub aaguid: SchemaValue<Option<String>>,
     #[serde(skip_serializing, skip_deserializing, default)]
     pub credential: String,
 }
@@ -89,7 +97,8 @@ pub struct Passkey {
 #[derive(Debug, Clone)]
 pub struct CreatePasskey {
     pub user_id: String,
-    pub name: Option<String>,
+    /// Omission and explicit null remain distinct during field input transforms.
+    pub name: SchemaValue<Option<String>>,
     pub credential_id: String,
     pub public_key: String,
     pub counter: u64,
@@ -97,7 +106,8 @@ pub struct CreatePasskey {
     pub backed_up: bool,
     pub transports: Option<String>,
     pub credential: String,
-    pub aaguid: Option<String>,
+    /// Omission and explicit null remain distinct during field input transforms.
+    pub aaguid: SchemaValue<Option<String>>,
 }
 
 /// Input for updating a passkey.
@@ -177,7 +187,9 @@ pub struct UpdateDeviceCode {
 pub struct ApiKey {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
-    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(deserialize_with = "deserialize_display_string")]
+    pub name: SchemaValue<Option<String>>,
     pub start: Option<crate::ApiKeyStart>,
     pub prefix: Option<String>,
     /// SHA-256 hash of the key (column name: `key` in SQL)
@@ -313,8 +325,8 @@ impl AuthApiKey for ApiKey {
     fn id(&self) -> SchemaValue<Cow<'_, str>> {
         self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
-    fn name(&self) -> Option<&str> {
-        self.name.as_deref()
+    fn name(&self) -> &SchemaValue<Option<String>> {
+        &self.name
     }
     fn start(&self) -> Option<Cow<'_, crate::ApiKeyStart>> {
         self.start.as_ref().map(Cow::Borrowed)
@@ -382,7 +394,7 @@ impl<T: AuthApiKey> From<&T> for ApiKey {
     fn from(api_key: &T) -> Self {
         Self {
             id: api_key.id().into_owned(),
-            name: api_key.name().map(str::to_owned),
+            name: api_key.name().clone(),
             start: api_key.start().map(Cow::into_owned),
             prefix: api_key.prefix().map(str::to_owned),
             key_hash: api_key.key_hash().to_owned(),
@@ -411,8 +423,8 @@ impl AuthPasskey for Passkey {
     fn id(&self) -> SchemaValue<Cow<'_, str>> {
         self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
-    fn name(&self) -> Option<&str> {
-        self.name.as_deref()
+    fn name(&self) -> &SchemaValue<Option<String>> {
+        &self.name
     }
     fn public_key(&self) -> &str {
         &self.public_key
@@ -441,8 +453,8 @@ impl AuthPasskey for Passkey {
     fn updated_at(&self) -> DateTime<Utc> {
         self.updated_at
     }
-    fn aaguid(&self) -> Option<&str> {
-        self.aaguid.as_deref()
+    fn aaguid(&self) -> &SchemaValue<Option<String>> {
+        &self.aaguid
     }
     fn credential(&self) -> &str {
         &self.credential
@@ -453,7 +465,7 @@ impl<T: AuthPasskey> From<&T> for Passkey {
     fn from(passkey: &T) -> Self {
         Self {
             id: passkey.id().into_owned(),
-            name: passkey.name().map(str::to_owned),
+            name: passkey.name().clone(),
             public_key: passkey.public_key().to_owned(),
             user_id: passkey.user_id().into_owned(),
             credential_id: passkey.credential_id().to_owned(),
@@ -463,7 +475,7 @@ impl<T: AuthPasskey> From<&T> for Passkey {
             transports: passkey.transports().map(str::to_owned),
             created_at: passkey.created_at(),
             updated_at: passkey.updated_at(),
-            aaguid: passkey.aaguid().map(str::to_owned),
+            aaguid: passkey.aaguid().clone(),
             credential: passkey.credential().to_owned(),
         }
     }

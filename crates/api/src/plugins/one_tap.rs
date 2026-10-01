@@ -93,7 +93,7 @@ impl OneTapPlugin {
         let user = OAuthUserInfo {
             additional_fields: Default::default(),
             id: subject.to_owned(),
-            email: email.to_lowercase(),
+            email: Some(email.to_lowercase()).into(),
             email_verified: claim("email_verified").as_bool() == Some(true)
                 || claim("email_verified").as_str() == Some("true"),
             name: Some(claim("name").as_str().unwrap_or_default().to_owned()),

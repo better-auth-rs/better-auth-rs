@@ -44,19 +44,61 @@ impl<'a> VerifiedOAuthClaims<'a> {
     }
 }
 
+/// Borrowed runtime inputs for a Generic OAuth profile lookup.
+pub struct GenericOAuthProfileContext<'a> {
+    client_id: &'a str,
+    expected_nonce: Option<&'a str>,
+    user_info_url: Option<&'a str>,
+    verified_claims: Option<VerifiedOAuthClaims<'a>>,
+}
+
+impl<'a> GenericOAuthProfileContext<'a> {
+    pub(super) fn new(
+        config: &'a GenericOAuthConfig,
+        expected_nonce: Option<&'a str>,
+        verified_claims: Option<&'a Value>,
+    ) -> Self {
+        Self {
+            client_id: &config.client_id,
+            expected_nonce,
+            user_info_url: config.user_info_url.as_deref(),
+            verified_claims: verified_claims.map(VerifiedOAuthClaims::new),
+        }
+    }
+
+    /// Read the client identifier from the resolved provider configuration.
+    pub fn client_id(&self) -> &'a str {
+        self.client_id
+    }
+
+    /// Read the nonce bound to this flow, when the caller supplied one.
+    pub fn expected_nonce(&self) -> Option<&'a str> {
+        self.expected_nonce
+    }
+
+    /// Read the resolved userinfo endpoint.
+    pub fn user_info_url(&self) -> Option<&'a str> {
+        self.user_info_url
+    }
+
+    /// Read claims that passed the configured OIDC signature and claim validation.
+    pub fn verified_claims(&self) -> Option<&VerifiedOAuthClaims<'a>> {
+        self.verified_claims.as_ref()
+    }
+}
+
 /// Fetches the raw profile used for Generic OAuth account recognition.
 #[async_trait]
 pub trait GenericOAuthUserInfoHandler: Send + Sync {
     /// Return a provider profile or reject the authentication attempt.
     async fn get_user_info(&self, tokens: &OAuthUserInfoRequest) -> AuthResult<Value>;
 
-    /// Read verified claims and the resolved userinfo endpoint before mapping a profile.
+    /// Read resolved options and completed verification before mapping a profile.
     /// Existing handlers retain their token-based lookup unless they override this method.
-    async fn get_user_info_with_verified_claims(
+    async fn get_user_info_with_context(
         &self,
         tokens: &OAuthUserInfoRequest,
-        _claims: VerifiedOAuthClaims<'_>,
-        _user_info_url: Option<&str>,
+        _context: GenericOAuthProfileContext<'_>,
     ) -> AuthResult<Value> {
         self.get_user_info(tokens).await
     }
@@ -67,8 +109,8 @@ pub trait GenericOAuthUserInfoHandler: Send + Sync {
 pub struct OAuthProfile {
     /// Application user fields supplied by the profile mapper.
     pub additional_fields: serde_json::Map<String, Value>,
-    /// Override the provider email.
-    pub email: Option<String>,
+    /// Leave the email unchanged with `None`, or override its string/null/undefined value.
+    pub email: Option<better_auth_core::SchemaValue<Option<String>>>,
     /// Override the display name; `Some(None)` clears the provider value.
     pub name: Option<Option<String>>,
     /// Override the profile image; `Some(None)` clears the provider value.

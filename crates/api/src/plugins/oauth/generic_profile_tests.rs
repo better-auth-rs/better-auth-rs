@@ -38,7 +38,7 @@ impl OAuthProfileMapper for MapProfile {
     async fn map_profile(&self, profile: &Value) -> AuthResult<OAuthProfile> {
         assert_eq!(profile["email"], "original@example.com");
         Ok(OAuthProfile {
-            email: Some("mapped@example.com".to_string()),
+            email: Some(Some("mapped@example.com".to_string()).into()),
             name: Some(Some("Mapped name".to_string())),
             email_verified: Some(true),
             ..Default::default()
@@ -71,7 +71,10 @@ async fn id_token_profile_is_preferred_and_mapping_cannot_change_account_subject
         .await
         .unwrap();
     assert_eq!(response.user.id, "immutable-subject");
-    assert_eq!(response.user.email, "mapped@example.com");
+    assert_eq!(
+        response.user.email.typed().unwrap().as_deref(),
+        Some("mapped@example.com")
+    );
     assert_eq!(response.user.name.as_deref(), Some("Mapped name"));
     assert!(response.user.email_verified);
     assert_eq!(
@@ -176,7 +179,10 @@ async fn custom_profile_and_subject_callbacks_receive_original_data() {
         .await
         .unwrap();
     assert_eq!(response.user.id, "tenant:42");
-    assert_eq!(response.user.email, "mapped@example.com");
+    assert_eq!(
+        response.user.email.typed().unwrap().as_deref(),
+        Some("mapped@example.com")
+    );
     assert_eq!(response.data, raw.profile);
     assert_eq!(raw.calls.load(Ordering::SeqCst), 1);
 }
@@ -233,7 +239,10 @@ async fn id_token_without_email_falls_back_to_userinfo_with_access_token() {
         .await
         .unwrap();
     assert_eq!(response.user.id, "userinfo-subject");
-    assert_eq!(response.user.email, "userinfo@example.com");
+    assert_eq!(
+        response.user.email.typed().unwrap().as_deref(),
+        Some("userinfo@example.com")
+    );
     assert!(!response.user.email_verified);
     assert_eq!(
         response.user.image.as_ref().and_then(Option::as_deref),

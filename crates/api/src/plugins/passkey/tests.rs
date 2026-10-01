@@ -40,7 +40,7 @@ async fn test_generate_register_options_sets_cookie_and_uses_query_name() {
     ctx.database
         .create_passkey(CreatePasskey {
             user_id: user.id.typed().unwrap().clone(),
-            name: Some("Existing Key".to_string()),
+            name: Some("Existing Key".to_string()).into(),
             credential_id: credential_id("cred-existing"),
             public_key: "public-key".to_string(),
             counter: 0,
@@ -48,7 +48,7 @@ async fn test_generate_register_options_sets_cookie_and_uses_query_name() {
             backed_up: false,
             transports: Some("usb,nfc".to_string()),
             credential: "invalid-stored-passkey".to_string(),
-            aaguid: Some("00000000-0000-0000-0000-000000000000".to_string()),
+            aaguid: Some("00000000-0000-0000-0000-000000000000".to_string()).into(),
         })
         .await
         .unwrap();
@@ -125,7 +125,7 @@ async fn test_generate_authenticate_options_with_auth_lists_allow_credentials() 
     ctx.database
         .create_passkey(CreatePasskey {
             user_id: user.id.typed().unwrap().clone(),
-            name: Some("Authenticator".to_string()),
+            name: Some("Authenticator".to_string()).into(),
             credential_id: credential_id("cred-auth"),
             public_key: "public-key".to_string(),
             counter: 0,
@@ -133,7 +133,7 @@ async fn test_generate_authenticate_options_with_auth_lists_allow_credentials() 
             backed_up: false,
             transports: Some("internal".to_string()),
             credential: "invalid-stored-passkey".to_string(),
-            aaguid: None,
+            aaguid: None.into(),
         })
         .await
         .unwrap();
@@ -247,7 +247,7 @@ async fn test_list_user_passkeys_matches_upstream_optional_fields() {
     ctx.database
         .create_passkey(CreatePasskey {
             user_id: user.id.typed().unwrap().clone(),
-            name: None,
+            name: None.into(),
             credential_id: credential_id("cred-list"),
             public_key: "public-key".to_string(),
             counter: 0,
@@ -255,7 +255,7 @@ async fn test_list_user_passkeys_matches_upstream_optional_fields() {
             backed_up: false,
             transports: None,
             credential: "invalid-stored-passkey".to_string(),
-            aaguid: Some("00000000-0000-0000-0000-000000000000".to_string()),
+            aaguid: Some("00000000-0000-0000-0000-000000000000".to_string()).into(),
         })
         .await
         .unwrap();
@@ -272,7 +272,7 @@ async fn test_list_user_passkeys_matches_upstream_optional_fields() {
     let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
     assert!(body[0].get("updatedAt").is_none());
     assert_eq!(body[0]["aaguid"], "00000000-0000-0000-0000-000000000000");
-    assert!(body[0].get("name").is_none());
+    assert_eq!(body[0].get("name"), Some(&serde_json::Value::Null));
 }
 
 #[tokio::test]
@@ -297,7 +297,7 @@ async fn test_delete_passkey_non_owner_is_forbidden() {
         .database
         .create_passkey(CreatePasskey {
             user_id: other.id.typed().unwrap().clone(),
-            name: Some("Other Key".to_string()),
+            name: Some("Other Key".to_string()).into(),
             credential_id: credential_id("cred-other-delete"),
             public_key: "public-key".to_string(),
             counter: 0,
@@ -305,7 +305,7 @@ async fn test_delete_passkey_non_owner_is_forbidden() {
             backed_up: false,
             transports: None,
             credential: "invalid-stored-passkey".to_string(),
-            aaguid: None,
+            aaguid: None.into(),
         })
         .await
         .unwrap();
@@ -344,7 +344,7 @@ async fn test_update_passkey_non_owner_uses_ts_error_message() {
         .database
         .create_passkey(CreatePasskey {
             user_id: other.id.typed().unwrap().clone(),
-            name: Some("Other Key".to_string()),
+            name: Some("Other Key".to_string()).into(),
             credential_id: credential_id("cred-other-update"),
             public_key: "public-key".to_string(),
             counter: 0,
@@ -352,7 +352,7 @@ async fn test_update_passkey_non_owner_uses_ts_error_message() {
             backed_up: false,
             transports: None,
             credential: "invalid-stored-passkey".to_string(),
-            aaguid: None,
+            aaguid: None.into(),
         })
         .await
         .unwrap();

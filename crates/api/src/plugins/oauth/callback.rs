@@ -272,8 +272,9 @@ pub(super) async fn handle_callback(
     )
     .await
     {
-        Ok(response) => response,
-        Err(_) => return redirect_on_error("unable_to_get_user_info", None),
+        Ok(Some(response)) => response,
+        Err(error) if provider.generic.is_none() => return Err(error),
+        Ok(None) | Err(_) => return redirect_on_error("unable_to_get_user_info", None),
     };
 
     let callback_body = if req.method() == &better_auth_core::HttpMethod::Post {

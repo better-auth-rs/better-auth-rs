@@ -89,7 +89,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             created_at <= entered_at,
             "creation timestamp must precede the awaited name callback"
         );
-        assert_eq!(name.as_deref(), Some("Desk:out"));
+        assert_eq!(name.typed()?.as_deref(), Some("Desk:out"));
         let model = if role == EntityRole::Passkey {
             "passkey"
         } else {
@@ -109,7 +109,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 .await?
                 .unwrap();
             assert_eq!(stored.created_at, created_at);
-            assert_eq!(stored.name.as_deref(), Some("Desk"));
+            assert_eq!(stored.name.typed().unwrap().as_deref(), Some("Desk"));
         } else {
             let stored = raw.get_api_key_by_hash("ordinary-order").await?.unwrap();
             assert_eq!(
@@ -118,7 +118,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                     .to_utc(),
                 created_at
             );
-            assert_eq!(stored.name.as_deref(), Some("Desk"));
+            assert_eq!(stored.name.typed().unwrap().as_deref(), Some("Desk"));
         }
     }
     Ok(())

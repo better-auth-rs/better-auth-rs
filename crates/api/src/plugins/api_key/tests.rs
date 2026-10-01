@@ -793,7 +793,7 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
         result
             .api_keys
             .iter()
-            .map(|key| key.name.as_deref())
+            .map(|key| key.name.typed().unwrap().as_deref())
             .collect::<Vec<_>>(),
         [Some("D")]
     );
@@ -816,7 +816,7 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
         result
             .api_keys
             .iter()
-            .map(|key| key.name.as_deref())
+            .map(|key| key.name.typed().unwrap().as_deref())
             .collect::<Vec<_>>(),
         [Some("D")]
     );
@@ -837,7 +837,7 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
             result
                 .api_keys
                 .iter()
-                .map(|key| key.name.as_deref())
+                .map(|key| key.name.typed().unwrap().as_deref())
                 .collect::<Vec<_>>(),
             [Some("D")]
         );
@@ -854,7 +854,7 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
         ])
         .zip([Some(0.0), Some(-0.0), Some(1.0), Some(-1.0), None])
     {
-        key.name = name.map(str::to_owned);
+        key.name = name.map(str::to_owned).into();
         key.remaining = remaining;
         storage::put(cache.as_ref(), &key, false).await.unwrap();
     }
@@ -886,7 +886,7 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
             result
                 .api_keys
                 .iter()
-                .map(|key| key.name.as_deref())
+                .map(|key| key.name.typed().unwrap().as_deref())
                 .collect::<Vec<_>>(),
             expected
         );
@@ -925,7 +925,7 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
             result
                 .api_keys
                 .iter()
-                .map(|key| key.name.as_deref())
+                .map(|key| key.name.typed().unwrap().as_deref())
                 .collect::<Vec<_>>(),
             expected
         );

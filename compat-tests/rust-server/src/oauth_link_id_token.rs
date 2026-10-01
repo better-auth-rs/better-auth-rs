@@ -40,23 +40,23 @@ impl OAuthUserInfoHandler for OAuthLinkIdTokenFixture {
     async fn get_user_info(
         &self,
         _: OAuthUserInfoRequest,
-    ) -> Result<OAuthUserInfoResponse, String> {
+    ) -> AuthResult<Option<OAuthUserInfoResponse>> {
         let data = self.state.lock().unwrap().provider.clone();
         let mut additional_fields = data.as_object().cloned().unwrap_or_default();
         for name in ["id", "email", "name", "image", "emailVerified"] {
             additional_fields.remove(name);
         }
-        Ok(OAuthUserInfoResponse {
+        Ok(Some(OAuthUserInfoResponse {
             user: OAuthUserInfo {
                 id: data["id"].as_str().unwrap_or_default().into(),
-                email: data["email"].as_str().unwrap_or_default().into(),
+                email: Some(data["email"].as_str().unwrap_or_default().into()).into(),
                 name: data["name"].as_str().map(str::to_owned),
                 image: data
                     .get("image")
                     .cloned()
                     .map(serde_json::from_value)
                     .transpose()
-                    .map_err(|error| error.to_string())?,
+                    .map_err(|error| better_auth_core::AuthError::internal(error.to_string()))?,
                 email_verified: data["emailVerified"] == true,
                 additional_fields,
             },
@@ -65,7 +65,7 @@ impl OAuthUserInfoHandler for OAuthLinkIdTokenFixture {
                 data["sub"] = data["id"].clone();
                 data
             },
-        })
+        }))
     }
 }
 #[async_trait]

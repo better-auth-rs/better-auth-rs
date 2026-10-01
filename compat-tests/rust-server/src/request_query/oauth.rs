@@ -3,6 +3,7 @@ use better_auth::plugins::oauth::{
     OAuthIdTokenVerifier, OAuthPlugin, OAuthProvider, OAuthUserInfo, OAuthUserInfoHandler,
     OAuthUserInfoRequest, OAuthUserInfoResponse,
 };
+use better_auth_core::AuthResult;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -31,7 +32,7 @@ impl OAuthUserInfoHandler for BodyTrace {
     async fn get_user_info(
         &self,
         request: OAuthUserInfoRequest,
-    ) -> Result<OAuthUserInfoResponse, String> {
+    ) -> AuthResult<Option<OAuthUserInfoResponse>> {
         self.current("oauth.userinfo", None);
         self.1.lock().unwrap().push(json!({
             "kind":"oauth-userinfo", "accessToken":request.access_token,
@@ -42,17 +43,19 @@ impl OAuthUserInfoHandler for BodyTrace {
             "lastName":request.user.as_ref().and_then(|user|user.name.as_ref()).and_then(|name|name.last_name.as_deref()),
             "email":request.user.as_ref().and_then(|user|user.email.as_deref()),
         }));
-        let email = request.access_token.ok_or("Missing fixture access token")?;
-        Ok(OAuthUserInfoResponse {
+        let email = request
+            .access_token
+            .ok_or_else(|| better_auth_core::AuthError::internal("Missing fixture access token"))?;
+        Ok(Some(OAuthUserInfoResponse {
             data: json!({"sub":email}),
             user: OAuthUserInfo {
                 id: email.clone(),
-                email,
+                email: Some(email).into(),
                 name: Some("OAuth schema".into()),
                 email_verified: true,
                 image: None,
                 additional_fields: Default::default(),
             },
-        })
+        }))
     }
 }

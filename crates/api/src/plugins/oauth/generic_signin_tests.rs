@@ -405,7 +405,7 @@ async fn sign_in_preserves_scopes_and_account_cookie_while_explicit_link_merges_
             "generic",
             &super::providers::OAuthUserInfo {
                 id: "stable-subject".into(),
-                email: "owner@example.test".into(),
+                email: Some("owner@example.test".into()).into(),
                 name: None,
                 image: None,
                 email_verified: true,

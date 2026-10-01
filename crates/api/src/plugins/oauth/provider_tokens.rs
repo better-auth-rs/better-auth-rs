@@ -67,17 +67,23 @@ pub(super) async fn validate_authorization_code_via_provider(
     let empty_params = HashMap::new();
     let mut request = TokenRequest::authorization_code(AuthorizationCodeRequest {
         code,
-        redirect_uri: generic
-            .and_then(|generic| generic.redirect_uri.as_deref())
+        redirect_uri: provider
+            .config
+            .redirect_uri
+            .as_deref()
             .filter(|uri| !uri.is_empty())
             .unwrap_or(redirect_uri),
-        code_verifier: if generic.is_some_and(|generic| !generic.pkce) {
-            None
-        } else {
+        code_verifier: if provider.uses_pkce() {
             code_verifier
+        } else {
+            None
         },
         client_key: None,
-        device_id: if generic.is_some() { None } else { device_id },
+        device_id: if generic.is_some() || provider.config.omits_device_id() {
+            None
+        } else {
+            device_id
+        },
         headers: generic
             .map(|generic| &generic.authorization_headers)
             .unwrap_or(&empty_headers),
@@ -116,8 +122,14 @@ fn authentication(
             .unwrap_or(Some(&provider.config.client_secret)),
         token_endpoint: &provider.config.token_url,
         grant_type,
-        token_endpoint_auth: generic.and_then(|generic| generic.token_endpoint_auth.as_ref()),
-        authentication: generic.and_then(|generic| generic.authentication),
+        token_endpoint_auth: generic.map_or_else(
+            || provider.config.token_endpoint_auth(),
+            |generic| generic.token_endpoint_auth.as_ref(),
+        ),
+        authentication: generic.map_or_else(
+            || provider.config.token_authentication(),
+            |generic| generic.authentication,
+        ),
     }
 }
 

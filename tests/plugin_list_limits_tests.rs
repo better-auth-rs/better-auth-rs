@@ -65,7 +65,7 @@ async fn run<S: AuthSchema>(
         let _ = store
             .create_passkey(CreatePasskey {
                 user_id: user.id.typed()?.clone(),
-                name: Some(name.into()),
+                name: Some(name.into()).into(),
                 credential_id: URL_SAFE_NO_PAD.encode(name),
                 public_key: "fixture-public-key".into(),
                 counter: 0,
@@ -73,7 +73,7 @@ async fn run<S: AuthSchema>(
                 backed_up: false,
                 transports: None,
                 credential: "fixture-credential".into(),
-                aaguid: None,
+                aaguid: None.into(),
             })
             .await?;
         let key = store

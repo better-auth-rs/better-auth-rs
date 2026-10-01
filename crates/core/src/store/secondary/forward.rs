@@ -49,6 +49,12 @@ impl<S: AuthSchema> AccountStore<S> for SecondaryStore<S> {
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<crate::wire::AccountView>> {
         self.inner.get_user_accounts(user_id).await
     }
+    async fn get_credential_account(
+        &self,
+        user_id: &str,
+    ) -> AuthResult<Option<crate::wire::AccountView>> {
+        self.inner.get_credential_account(user_id).await
+    }
     async fn update_account(
         &self,
         id: &str,

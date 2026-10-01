@@ -3,6 +3,7 @@
 // Both auth servers use this issuer so the tests exercise the same signed tokens and JWKS.
 const encoder = new TextEncoder();
 const server = Bun.serve({
+  hostname: "127.0.0.1",
   port: Number(process.env.PORT),
   fetch: () => new Response("Initializing", { status: 503 }),
 });

@@ -528,8 +528,9 @@ impl OAuthProxyPlugin {
         )
         .await
         {
-            Ok(info) => info,
-            Err(_) => {
+            Ok(Some(info)) => info,
+            Err(error) if provider.generic.is_none() => return Err(error),
+            Ok(None) | Err(_) => {
                 return Ok(Some(redirect_error(
                     error_url,
                     "unable_to_get_user_info",
@@ -537,9 +538,10 @@ impl OAuthProxyPlugin {
                 )?));
             }
         };
-        if info.user.email.is_empty() {
+        let Some(email) = info.user.email()?.filter(|email| !email.is_empty()) else {
             return Ok(Some(redirect_error(error_url, "email_not_found", None)?));
-        }
+        };
+        let email = email.to_owned();
         let mut callback = parse_url(&state.callback_url)?;
         let final_url = callback
             .query_pairs()
@@ -551,7 +553,7 @@ impl OAuthProxyPlugin {
             user_info: ProfileUser {
                 additional_fields: info.user.additional_fields,
                 id: info.user.id.clone(),
-                email: info.user.email,
+                email,
                 name: info.user.name.unwrap_or_default(),
                 image: info.user.image,
                 email_verified: info.user.email_verified,
@@ -678,7 +680,7 @@ impl OAuthProxyPlugin {
         let user = OAuthUserInfo {
             additional_fields: profile.user_info.additional_fields,
             id: profile.account.account_id,
-            email: profile.user_info.email.to_lowercase(),
+            email: Some(profile.user_info.email.to_lowercase()).into(),
             name: Some(profile.user_info.name),
             image: profile.user_info.image,
             email_verified: profile.user_info.email_verified,

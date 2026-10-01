@@ -1,0 +1,20 @@
+{
+  "version": "1.7.6",
+  "routeURI": "https://app.example.test/api/auth/callback/provider",
+  "cases": [
+    {
+      "name": "omitted",
+      "expected": "https://app.example.test/api/auth/callback/provider"
+    },
+    {
+      "name": "empty",
+      "configured": "",
+      "expected": "https://app.example.test/api/auth/callback/provider"
+    },
+    {
+      "name": "configured",
+      "configured": "https://login.example.test/auth/provider?channel=web",
+      "expected": "https://login.example.test/auth/provider?channel=web"
+    }
+  ]
+}

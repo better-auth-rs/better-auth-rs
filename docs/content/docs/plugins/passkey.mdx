@@ -64,6 +64,12 @@ Send `createSession: true` to `/passkey/verify-registration` to create a session
 
 With the default `require_session: true`, both registration endpoints require a fresh session. The default freshness window is 24 hours. Set `AuthConfig.session.fresh_age` to zero to disable the freshness check.
 
+### Adapter display fields
+
+Custom plugins can register `name` and `aaguid` string policies with `AuthInitContext::register_model_fields(EntityRole::Passkey, UserConfig)`. AAGUID identifies an authenticator model for display. Defaults, `on_update`, and synchronous or awaited input/output transforms use the shared adapter boundary for create, updates, lookups, and lists. A complete patch runs once in schema order, `name` before `aaguid`. Credentials and authentication state retain their existing typed paths.
+
+Both fields remain `Option<String>`; create inputs use null for `None`, and the public Passkey view omits absent values. This interface does not distinguish omitted from explicit null values. Other Passkey fields and replacement types or aliases remain unsupported.
+
 ## How It Works
 
 ### Registration Flow

@@ -43,19 +43,19 @@ impl OAuthUserInfoHandler for Provider {
     async fn get_user_info(
         &self,
         request: OAuthUserInfoRequest,
-    ) -> Result<OAuthUserInfoResponse, String> {
+    ) -> AuthResult<Option<OAuthUserInfoResponse>> {
         let data: Value = serde_json::from_str(request.id_token.as_deref().unwrap()).unwrap();
-        Ok(OAuthUserInfoResponse {
+        Ok(Some(OAuthUserInfoResponse {
             user: OAuthUserInfo {
                 id: data["id"].as_str().unwrap().into(),
-                email: data["email"].as_str().unwrap().into(),
+                email: Some(data["email"].as_str().unwrap().into()).into(),
                 name: data["name"].as_str().map(str::to_owned),
                 image: None,
                 email_verified: false,
                 additional_fields: Default::default(),
             },
             data,
-        })
+        }))
     }
 }
 pub async fn run() -> AuthResult<Value> {

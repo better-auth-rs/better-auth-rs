@@ -5,8 +5,8 @@ use better_auth_core::{AuthError, AuthResult};
 use serde_json::{Map, Value};
 
 use super::{
-    GenericOAuthConfig, GenericOAuthUserInfoHandler, OAuthAccountSubject, OAuthUserInfoRequest,
-    VerifiedOAuthClaims,
+    GenericOAuthConfig, GenericOAuthProfileContext, GenericOAuthUserInfoHandler,
+    OAuthAccountSubject, OAuthUserInfoRequest,
 };
 use crate::plugins::json_body;
 
@@ -52,13 +52,17 @@ impl GenericOAuthUserInfoHandler for EntraProfile {
         ))
     }
 
-    async fn get_user_info_with_verified_claims(
+    async fn get_user_info_with_context(
         &self,
         tokens: &OAuthUserInfoRequest,
-        claims: VerifiedOAuthClaims<'_>,
-        user_info_url: Option<&str>,
+        context: GenericOAuthProfileContext<'_>,
     ) -> AuthResult<Value> {
-        let claims = claims.as_value();
+        let claims = context
+            .verified_claims()
+            .ok_or_else(|| {
+                AuthError::internal("Microsoft Entra ID requires verified ID-token claims")
+            })?
+            .as_value();
         let token_profile = profile(claims, None)?;
         let Some(access_token) = tokens
             .access_token
@@ -67,7 +71,8 @@ impl GenericOAuthUserInfoHandler for EntraProfile {
         else {
             return Ok(token_profile);
         };
-        let endpoint = user_info_url
+        let endpoint = context
+            .user_info_url()
             .ok_or_else(|| AuthError::internal("Missing Microsoft Graph userinfo endpoint"))?;
         let response = reqwest::Client::new()
             .get(endpoint)

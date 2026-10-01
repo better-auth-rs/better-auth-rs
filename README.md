@@ -7,6 +7,8 @@ Authentication for Rust with Axum integration and application-owned SeaORM entit
 
 Configure model IDs and application-owned defaults through [database ID generation](docs/content/docs/concepts/database.mdx#model-ids).
 
+Custom adapters must provide a credential-account point query independent of list pagination; see [adapter configuration](docs/content/docs/concepts/database.mdx#adapter-configuration).
+
 Sessions use signed cookies. Response headers preserve repeated cookie writes in order; explicit expiration removes earlier values and chunks. Enable `SessionConfig.bearer` explicitly for Authorization header authentication; see the [session guide](docs/content/docs/authentication/sessions.mdx) for cache and application field configuration. Use [Custom Session](docs/content/docs/plugins/custom-session.mdx) to transform public session responses with typed application context. Use [Multi Session](docs/content/docs/plugins/multi-session.mdx) to remember and switch between accounts, with adapter-specific session selection.
 
 Use `BetterAuth::stateless(config)` without an application schema or database. Encrypted session and OAuth cookies survive adapter restart; process-local users and plugin records do not. See [stateless sessions](docs/content/docs/authentication/sessions.mdx#stateless-sessions) for storage defaults, hooks, and revocation behavior.
@@ -14,6 +16,10 @@ Use `BetterAuth::stateless(config)` without an application schema or database. E
 Configure application user fields with `AuthConfig.user.fields_mut()` and matching application-owned entity columns. See [user fields](docs/content/docs/concepts/users-accounts.mdx) for input validation, defaults, transforms, public visibility, and synchronous batch projection.
 
 User record updates preserve raw `name` and `image` values through `SchemaValue`; see [database integration](docs/content/docs/concepts/database.mdx#existing-databases) for physical column contracts and the SQLite parameter-binding safety boundary.
+
+Passkey `name`/`aaguid` and API Key `name` preserve omitted and null display values through `SchemaValue<Option<String>>`; see [plugin fields](docs/content/docs/concepts/database.mdx#plugin-fields).
+
+Configure LINE code login with `GenericOAuthConfig::line` and read resolved provider inputs through `GenericOAuthProfileContext`; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx) for the alpha callback migration and verification boundary. Social profile callbacks preserve application errors; the guide describes provider-specific missing-profile responses.
 
 Use [OAuth Popup](docs/content/docs/plugins/oauth-popup.mdx) to return OAuth sign-in results to a trusted popup opener. Enable [OpenAPI](docs/content/docs/reference/openapi.mdx) for the configured runtime schema and Scalar reference page.
 
@@ -115,7 +121,11 @@ Optional configuration fields use `Option` to distinguish omission from an expli
 
 Google sign-in maps verified ID-token claims through the shared Google verifier used by One Tap. See [Google profile behavior](docs/content/docs/plugins/oauth.mdx#social-provider-inputs) for custom callbacks and account-info behavior.
 
-GitLab, Spotify, Hugging Face and Polar constructors provide their default scopes and HTTP profile mapping. See [built-in providers](docs/content/docs/plugins/oauth.mdx#built-in-providers) for supported constructors and configuration.
+GitLab, Spotify, Hugging Face, Polar, Vercel, Figma, Dropbox, Kick, Cloudflare, LinkedIn, Slack, Naver, and Linear constructors provide their default scopes and HTTP profile mapping. See [built-in providers](docs/content/docs/plugins/oauth.mdx#built-in-providers) for supported constructors and configuration.
+
+Set `OAuthProvider::redirect_uri` to use a configured provider callback URI for both authorization and code exchange.
+
+Custom `OAuthUserInfoHandler` implementations return `AuthResult<Option<OAuthUserInfoResponse>>` to distinguish a missing profile from an application error. Profile email and mapper overrides preserve missing, null, and string values, including GitHub email-list fallback; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx).
 
 ## Documentation and development
 

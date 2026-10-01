@@ -1,6 +1,6 @@
 use crate::store::schema::EntityRole;
 use crate::user_fields::{AdapterRecord, UserConfig, UserFieldType};
-use crate::{ApiKey, AuthConfig, AuthError, AuthResult, Passkey};
+use crate::{ApiKey, AuthConfig, AuthError, AuthResult, Passkey, SchemaValue};
 use indexmap::IndexMap;
 use serde_json::{Map, Value};
 use std::sync::LazyLock;
@@ -8,6 +8,35 @@ use std::sync::LazyLock;
 /// Plugin field policies consumed by the selected adapter during auth initialization.
 #[derive(Clone, Default)]
 pub struct ModelFields(IndexMap<EntityRole, UserConfig>);
+
+type StringFields<'a, const N: usize> = [(&'static str, &'a mut SchemaValue<Option<String>>); N];
+
+pub(crate) struct PasskeyFieldPatch {
+    pub name: Option<Option<String>>,
+    pub aaguid: Option<Option<String>>,
+}
+
+impl PasskeyFieldPatch {
+    pub(crate) fn apply(self, row: &mut Passkey) {
+        if let Some(name) = self.name {
+            row.name = name.into();
+        }
+        if let Some(aaguid) = self.aaguid {
+            row.aaguid = aaguid.into();
+        }
+    }
+}
+
+fn optional_string(
+    fields: &mut Map<String, Value>,
+    name: &str,
+) -> AuthResult<Option<Option<String>>> {
+    fields
+        .remove(name)
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(Into::into)
+}
 
 impl ModelFields {
     pub(crate) fn register(&mut self, role: EntityRole, fields: UserConfig) -> AuthResult<()> {
@@ -18,16 +47,16 @@ impl ModelFields {
             | EntityRole::Verification => {}
             EntityRole::Passkey | EntityRole::ApiKey => {
                 for (name, field) in fields.fields() {
-                    if name != "name"
+                    if !(name == "name" || role == EntityRole::Passkey && name == "aaguid")
                         || !matches!(field.field_type, UserFieldType::String)
                         || field.references.is_some()
                         || field
                             .field_name
                             .as_deref()
-                            .is_some_and(|name| name != "name")
+                            .is_some_and(|alias| alias != name)
                     {
                         return Err(AuthError::config(format!(
-                            "{role:?} field registration supports only the ordinary string field name without reference or field-name replacement",
+                            "{role:?} field registration supports only name (and aaguid for Passkey) as ordinary strings without reference or field-name replacement",
                         )));
                     }
                 }
@@ -39,6 +68,14 @@ impl ModelFields {
             }
         }
         self.extend(role, fields);
+        if role == EntityRole::Passkey
+            && let Some(fields) = self.0.get_mut(&role)
+        {
+            // Replacing an upstream field policy retains the field's schema position.
+            fields
+                .fields_mut()
+                .sort_by(|left, _, right, _| (left != "name").cmp(&(right != "name")));
+        }
         Ok(())
     }
 
@@ -86,12 +123,11 @@ impl ModelFields {
         (adapter, endpoint, self)
     }
 
-    /// Prepare an optional name patch for the supported Passkey or API Key model.
+    /// Prepare an optional API Key name patch.
     /// `None` omits the supplied name; defaults or `on_update` may still supply it.
     /// `Some(None)` supplies a null value.
-    pub async fn name_for_storage(
+    pub async fn api_key_name_for_storage(
         &self,
-        role: EntityRole,
         name: Option<Option<String>>,
         create: bool,
     ) -> AuthResult<Option<Option<String>>> {
@@ -104,32 +140,54 @@ impl ModelFields {
                 )
             })
             .collect();
-        self.fields(role)
+        let mut fields = self
+            .fields(EntityRole::ApiKey)
             .organization_storage_fields(core, Map::new(), create)
-            .await?
-            .remove("name")
-            .map(serde_json::from_value)
-            .transpose()
-            .map_err(Into::into)
+            .await?;
+        optional_string(&mut fields, "name")
     }
 
-    /// Project passkey names together while retaining the other typed record fields.
+    pub(crate) async fn passkey_fields_for_storage(
+        &self,
+        name: SchemaValue<Option<String>>,
+        aaguid: SchemaValue<Option<String>>,
+        create: bool,
+    ) -> AuthResult<PasskeyFieldPatch> {
+        let mut core = Map::new();
+        for (name, value) in [("name", name), ("aaguid", aaguid)] {
+            if let Some(value) = value.json()? {
+                let _ = core.insert(name.into(), value);
+            }
+        }
+        let mut fields = self
+            .fields(EntityRole::Passkey)
+            .organization_storage_fields(core, Map::new(), create)
+            .await?;
+        Ok(PasskeyFieldPatch {
+            name: optional_string(&mut fields, "name")?,
+            aaguid: optional_string(&mut fields, "aaguid")?,
+        })
+    }
+
+    /// Project passkey display fields together while retaining the other typed record fields.
     pub async fn project_passkeys(&self, rows: Vec<Passkey>) -> AuthResult<Vec<Passkey>> {
-        self.project_names(EntityRole::Passkey, rows, |row| &mut row.name)
-            .await
+        self.project_strings(EntityRole::Passkey, rows, |row| {
+            [("name", &mut row.name), ("aaguid", &mut row.aaguid)]
+        })
+        .await
     }
 
     /// Project API Key names together while retaining credentials, owners, and counters.
     pub async fn project_api_keys(&self, rows: Vec<ApiKey>) -> AuthResult<Vec<ApiKey>> {
-        self.project_names(EntityRole::ApiKey, rows, |row| &mut row.name)
+        self.project_strings(EntityRole::ApiKey, rows, |row| [("name", &mut row.name)])
             .await
     }
 
-    async fn project_names<T: Send>(
+    async fn project_strings<T: Send, const N: usize>(
         &self,
         role: EntityRole,
         mut rows: Vec<T>,
-        name: impl Fn(&mut T) -> &mut Option<String> + Send + Sync,
+        columns: fn(&mut T) -> StringFields<'_, N>,
     ) -> AuthResult<Vec<T>> {
         let fields = self.fields(role);
         if fields.fields().is_empty() {
@@ -138,25 +196,31 @@ impl ModelFields {
         let records = rows
             .iter_mut()
             .map(|row| {
-                AdapterRecord::new(
-                    Map::new(),
-                    Map::from_iter([(
-                        "name".into(),
-                        name(row).clone().map(Value::String).unwrap_or(Value::Null),
-                    )]),
-                )
+                let mut core = Map::new();
+                for (name, value) in columns(row) {
+                    if let Some(value) = value.json()? {
+                        let _ = core.insert(name.into(), value);
+                    }
+                }
+                Ok(AdapterRecord::new(Map::new(), core))
             })
-            .collect();
+            .collect::<AuthResult<Vec<_>>>()?;
         let output = fields.project_adapter_records(records, true, true).await?;
         for (row, mut output) in rows.iter_mut().zip(output) {
-            *name(row) = output
-                .shift_remove("name")
-                .map(|value| value.json())
-                .transpose()?
-                .flatten()
-                .map(serde_json::from_value)
-                .transpose()?
-                .flatten();
+            for (name, value) in columns(row)
+                .into_iter()
+                .filter(|(name, _)| fields.fields().contains_key(*name))
+            {
+                *value = output
+                    .shift_remove(name)
+                    .map(|value| value.json())
+                    .transpose()?
+                    .flatten()
+                    .map(serde_json::from_value)
+                    .transpose()?
+                    .map(SchemaValue::Typed)
+                    .unwrap_or_default();
+            }
         }
         Ok(rows)
     }

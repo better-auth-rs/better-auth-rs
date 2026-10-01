@@ -20,6 +20,8 @@ use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, oneshot};
 
+#[path = "plugin_model_fields_tests/aaguid.rs"]
+mod aaguid;
 #[path = "plugin_model_fields_tests/api_key.rs"]
 mod api_key;
 #[path = "plugin_model_fields_tests/api_key_cache.rs"]
@@ -30,6 +32,11 @@ mod create_order;
 
 #[path = "plugin_model_fields_tests/core.rs"]
 mod core;
+
+#[path = "plugin_model_fields_tests/presence.rs"]
+mod presence;
+#[path = "plugin_model_fields_tests/presence_cache.rs"]
+mod presence_cache;
 
 #[derive(Clone)]
 struct Fields(Vec<(EntityRole, UserConfig)>);
@@ -88,7 +95,7 @@ fn memory() -> Arc<dyn AuthStore<StatelessSchema>> {
 fn input(owner: &str, name: &str) -> CreatePasskey {
     CreatePasskey {
         user_id: owner.into(),
-        name: Some(name.into()),
+        name: Some(name.into()).into(),
         credential_id: format!("credential:{name}"),
         public_key: "ordinary-public-key".into(),
         counter: 0,
@@ -96,7 +103,7 @@ fn input(owner: &str, name: &str) -> CreatePasskey {
         backed_up: false,
         transports: None,
         credential: "ordinary-private-record".into(),
-        aaguid: None,
+        aaguid: None.into(),
     }
 }
 
@@ -157,7 +164,7 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         .store()
         .create_passkey(input(&owner, "  Desk  "))
         .await?;
-    assert_eq!(created.name.as_deref(), Some("Desk:out"));
+    assert_eq!(created.name.typed().unwrap().as_deref(), Some("Desk:out"));
     assert_eq!(created.credential, "ordinary-private-record");
     assert_eq!(
         *events.lock().unwrap(),
@@ -165,17 +172,25 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
     );
     let id = created.id.typed()?;
     assert_eq!(
-        raw.get_passkey_by_id(id).await?.unwrap().name.as_deref(),
+        raw.get_passkey_by_id(id)
+            .await?
+            .unwrap()
+            .name
+            .typed()
+            .unwrap()
+            .as_deref(),
         Some("Desk")
     );
     let updated = auth.store().update_passkey_name(id, "  Mobile  ").await?;
-    assert_eq!(updated.name.as_deref(), Some("Mobile:out"));
+    assert_eq!(updated.name.typed().unwrap().as_deref(), Some("Mobile:out"));
     assert_eq!(
         auth.store()
             .get_passkey_by_id(id)
             .await?
             .unwrap()
             .name
+            .typed()
+            .unwrap()
             .as_deref(),
         Some("Mobile:out")
     );
@@ -185,6 +200,8 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
             .await?
             .unwrap()
             .name
+            .typed()
+            .unwrap()
             .as_deref(),
         Some("Mobile:out")
     );
@@ -200,9 +217,18 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
             },
         )
         .await?;
-    assert_eq!(renewed.name.as_deref(), Some("Renewed:out"));
     assert_eq!(
-        raw.get_passkey_by_id(id).await?.unwrap().name.as_deref(),
+        renewed.name.typed().unwrap().as_deref(),
+        Some("Renewed:out")
+    );
+    assert_eq!(
+        raw.get_passkey_by_id(id)
+            .await?
+            .unwrap()
+            .name
+            .typed()
+            .unwrap()
+            .as_deref(),
         Some("Renewed")
     );
     let _ = auth
@@ -216,12 +242,23 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         .map(|row| {
             format!(
                 "output:{}",
-                json!(row.name.as_ref().unwrap().strip_suffix(":out").unwrap())
+                json!(
+                    row.name
+                        .typed()
+                        .unwrap()
+                        .as_ref()
+                        .unwrap()
+                        .strip_suffix(":out")
+                        .unwrap()
+                )
             )
         })
         .collect();
     assert_eq!(*events.lock().unwrap(), expected_events);
-    let mut names: Vec<_> = listed.iter().map(|row| row.name.clone().unwrap()).collect();
+    let mut names: Vec<_> = listed
+        .iter()
+        .map(|row| row.name.typed().unwrap().clone().unwrap())
+        .collect();
     names.sort();
     assert_eq!(names, ["Renewed:out", "Travel:out"]);
     assert!(
@@ -243,7 +280,7 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
                 let row = tx
                     .create_passkey(input(&rollback_owner, " Rollback "))
                     .await?;
-                assert_eq!(row.name.as_deref(), Some("Rollback:out"));
+                assert_eq!(row.name.typed().unwrap().as_deref(), Some("Rollback:out"));
                 Err(AuthError::internal("ordinary transaction rollback"))
             })
         })
@@ -275,7 +312,13 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         "ordinary input error",
     );
     assert_eq!(
-        raw.get_passkey_by_id(id).await?.unwrap().name.as_deref(),
+        raw.get_passkey_by_id(id)
+            .await?
+            .unwrap()
+            .name
+            .typed()
+            .unwrap()
+            .as_deref(),
         Some("Renewed")
     );
     original_error(
@@ -290,6 +333,8 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
             .await?
             .unwrap()
             .name
+            .typed()
+            .unwrap()
             .as_deref(),
         Some("output-error")
     );
@@ -355,11 +400,16 @@ async fn async_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult
             .await?
             .unwrap()
             .name
+            .typed()
+            .unwrap()
             .as_deref(),
         Some("Stored")
     );
     call.reply.send(Ok(Some(json!("Projected")))).unwrap();
-    assert_eq!(pending.await.unwrap()?.name.as_deref(), Some("Projected"));
+    assert_eq!(
+        pending.await.unwrap()?.name.typed().unwrap().as_deref(),
+        Some("Projected")
+    );
     Ok(())
 }
 

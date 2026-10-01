@@ -217,8 +217,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let counter = i64::try_from(input.counter)
             .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
 
-        let fields = Map::from_iter([
-            ("name".to_owned(), json!(input.name)),
+        let mut fields = Map::from_iter([
             ("public_key".to_owned(), json!(input.public_key)),
             ("user_id".to_owned(), json!(input.user_id)),
             ("credential_id".to_owned(), json!(input.credential_id)),
@@ -227,10 +226,14 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             ("backed_up".to_owned(), json!(input.backed_up)),
             ("transports".to_owned(), json!(input.transports)),
             ("credential".to_owned(), json!(input.credential)),
-            ("aaguid".to_owned(), json!(input.aaguid)),
             ("created_at".to_owned(), json!(Utc::now())),
             ("updated_at".to_owned(), json!(Utc::now())),
         ]);
+        for (name, value) in [("name", input.name), ("aaguid", input.aaguid)] {
+            if let Some(value) = value.json()? {
+                let _ = fields.insert(name.into(), value);
+            }
+        }
         let fields = self
             .model_fields
             .fields(EntityRole::Passkey)
