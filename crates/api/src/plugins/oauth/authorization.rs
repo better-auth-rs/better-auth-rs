@@ -38,15 +38,17 @@ pub(super) fn build_authorization_url(
             message: "Invalid OAuth configuration",
         });
     }
-    let mut scopes: Vec<&str> = input
-        .scopes
-        .unwrap_or_default()
-        .iter()
-        .map(String::as_str)
-        .collect();
-    if generic.is_some() || input.scopes.is_none() {
-        scopes.extend(provider.config.scopes.iter().map(String::as_str));
-    }
+    let mut scopes = if generic.is_some() {
+        input
+            .scopes
+            .unwrap_or_default()
+            .iter()
+            .chain(provider.config.scopes.as_deref().unwrap_or_default())
+            .map(String::as_str)
+            .collect()
+    } else {
+        provider.config.social_scopes(input.scopes)
+    };
     if generic.is_some_and(|generic| generic.is_oidc) && !scopes.contains(&"openid") {
         scopes.insert(0, "openid");
     }
@@ -97,7 +99,10 @@ pub(super) fn build_authorization_url(
         ("nonce", input.nonce),
         (
             "prompt",
-            options.and_then(|options| options.prompt.as_deref()),
+            options.map_or_else(
+                || provider.config.social_prompt(),
+                |options| options.prompt.as_deref(),
+            ),
         ),
         (
             "access_type",

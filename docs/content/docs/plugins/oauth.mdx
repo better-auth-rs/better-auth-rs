@@ -36,9 +36,35 @@ Better Auth RS includes pre-configured providers with correct URLs and user info
 
 | Provider | Constructor | Default Scopes |
 |----------|------------|----------------|
-| Google | `OAuthProvider::google(client_id, client_secret)` | `openid`, `email`, `profile` |
+| Google | `OAuthProvider::google(client_id, client_secret)` | `email`, `profile`, `openid` |
 | GitHub | `OAuthProvider::github(client_id, client_secret)` | `read:user`, `user:email` |
 | Discord | `OAuthProvider::discord(client_id, client_secret)` | `identify`, `email` |
+
+### Social provider inputs
+
+Construct social providers with the built-in constructors or `OAuthProvider::custom(client_id, client_secret, auth_url, token_url)`. Direct struct literals are replaced by these constructors because built-in defaults remain private runtime state. The custom constructor requires an explicit profile decoder or `get_user_info` handler. Generic OAuth continues to use `GenericOAuthConfig`.
+
+```rust
+let mut google = OAuthProvider::google("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET");
+google.scopes = Some(vec!["calendar.readonly".into()]);
+google.prompt = Some("consent".into());
+google.disable_implicit_sign_up = Some(true);
+let oauth = OAuthPlugin::new().add_provider("google", google);
+```
+
+Social `scopes`, `disable_implicit_sign_up`, and `disable_sign_up` retain omission through `Option`. Omitted sign-up switches resolve to false. Built-in providers add their default scopes, configured scopes, and request scopes; Discord places request scopes before configured scopes. Explicit empty lists retain the defaults. Set `disable_default_scope = true` to request only the configured and request scopes. To migrate an old complete scope override, wrap the list in `Some` and enable `disable_default_scope`. Custom social providers retain request-scope replacement semantics. Generic OAuth options keep their existing types and merge behavior.
+
+`OAuthConfig.providers` uses an insertion-ordered map. `add_provider` preserves registration order, and replacing a name keeps its position. A custom provider map can be built with `[(name, provider)].into_iter().collect()`.
+
+Register social providers in one `OAuthPlugin` for the verified upstream configuration mapping. The same plugin may contain Generic OAuth providers. Multiple `OAuthPlugin` instances keep separate runtime configurations and have no unique upstream provider-map equivalent.
+
+Set `map_profile_to_user` to an `Arc<dyn OAuthProfileMapper>` to override local profile fields after built-in decoding. Omitted mapper fields preserve the provider value. `Some(None)` clears the name or image, and `additional_fields` adds configured application fields. The mapper cannot change the account subject. A custom `get_user_info` handler takes precedence and skips this mapper. Callback errors propagate through the existing OAuth error path. `map_user_info` remains the base JSON decoder for custom providers; it is distinct from the local-field mapper.
+
+Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. `prompt` controls the provider prompt; omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
+
+Google direct ID-token sign-in and authorization-code callbacks map claims returned by the shared Google verifier used by One Tap. The verifier checks the signature, issuer, audience, token age and time claims. A supplied nonce is checked, and the configured `hd` authorization parameter restricts the hosted domain. Direct sign-in verifies once before mapping. Code callbacks and OAuth Proxy verify the token endpoint's ID token before mapping, retaining the existing callback error path. The production verifier uses Google's fixed public-key endpoint.
+
+For direct ID-token sign-in, a configured `verify_id_token` retains its application trust policy: only a successful result permits the default Google profile to parse that token's claims. Code callbacks use the shared Google verifier. A configured `get_user_info` retains precedence over the default profile and mapper. `/account-info` keeps the existing access-token/userinfo lookup, so stored-account reads do not acquire the sign-in token-age limit. Normal signed-flow fixtures cover both sign-in paths and callback precedence; complete provider parity is not claimed.
 
 ## Generic OAuth / OIDC
 
@@ -59,6 +85,14 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
     }))
     .build()
     .await?;
+```
+
+`GenericOAuthConfig::auth0(client_id, client_secret, domain)`, `::keycloak(client_id, client_secret, issuer)`, and `::okta(client_id, client_secret, issuer)` configure discovery and the default `openid`, `profile`, and `email` scopes. The Auth0 constructor returns `AuthResult` because the domain must parse as a URL. Auth0 forces HTTPS and uses the parsed host and port; Keycloak and Okta remove one trailing slash from the issuer. Change the returned configuration fields to customize scopes, token authentication, redirects, logout, PKCE, and sign-up policy. These constructors use the same discovery and verification path as explicit Generic OAuth configuration.
+
+```rust
+let mut provider = GenericOAuthConfig::auth0("client-id", "client-secret", "tenant.example.com")?;
+provider.require_id_token_verification = true;
+let oauth = OAuthPlugin::new().add_generic_provider("auth0", provider);
 ```
 
 Use the same client routes as built-in providers:

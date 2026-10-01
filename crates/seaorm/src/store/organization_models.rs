@@ -13,33 +13,7 @@ pub(super) fn values<const N: usize>(fields: [(&str, Value); N]) -> Map<String, 
         .collect()
 }
 
-pub(super) fn configure_json_fields<M: SeaOrmOrganizationModel>(
-    config: &mut UserConfig,
-    backend: sea_orm::DbBackend,
-) -> AuthResult<()> {
-    let native_json = config
-        .additional_fields
-        .iter()
-        .filter(|(name, _)| name.as_str() != "id")
-        .map(|(name, field)| {
-            let name = field.field_name.as_deref().unwrap_or(name);
-            let column = M::column(name)?;
-            Ok((
-                name.to_owned(),
-                matches!(
-                    column.def().get_column_type(),
-                    sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
-                ),
-            ))
-        })
-        .collect::<AuthResult<std::collections::BTreeMap<_, _>>>()?;
-    super::json_fields::configure_json_fields(config, backend, |name| {
-        native_json.get(name) == Some(&true)
-    });
-    Ok(())
-}
-
-pub(super) fn active<M: SeaOrmOrganizationModel>(
+pub(super) async fn active<M: SeaOrmOrganizationModel>(
     core: Map<String, Value>,
     input: Map<String, Value>,
     config: &UserConfig,
@@ -57,7 +31,27 @@ pub(super) fn active<M: SeaOrmOrganizationModel>(
             ))
         })
         .collect::<AuthResult<Map<_, _>>>()?;
-    let mut fields = config.organization_storage_fields(core, input, create)?;
+    let mut fields = config
+        .organization_storage_fields(core, input, create)
+        .await?;
+    for (name, field) in config.fields() {
+        if name == "id" {
+            continue;
+        }
+        let storage_name = field.field_name.as_deref().unwrap_or(name);
+        if let Some(value) = fields.get_mut(storage_name) {
+            let column = M::column(storage_name)?;
+            let native_json = matches!(
+                column.def().get_column_type(),
+                sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
+            );
+            *value = field.adapter_input(
+                std::mem::take(value),
+                backend == sea_orm::DbBackend::Postgres,
+                native_json,
+            );
+        }
+    }
     crate::reference_id::prepare_fields(
         &mut fields,
         policy,
@@ -84,11 +78,16 @@ pub(super) async fn insert<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
         true,
         conn.get_database_backend(),
         policy,
-    )?
+    )
+    .await?
     .insert(conn)
     .await
     .map_err(super::map_db_err)?
-    .record(config)
+    .record(
+        config,
+        conn.get_database_backend() == sea_orm::DbBackend::Postgres,
+    )
+    .await
 }
 
 pub(super) async fn find<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
@@ -118,7 +117,8 @@ pub(super) async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
         false,
         conn.get_database_backend(),
         policy,
-    )?;
+    )
+    .await?;
     let _ = Entity::<M>::update_many()
         .set(active)
         .filter(M::column("id")?.eq_id(id, policy)?)
@@ -128,14 +128,19 @@ pub(super) async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     find::<M, _>(conn, id, policy)
         .await?
         .ok_or_else(|| better_auth_core::AuthError::not_found("Organization record not found"))?
-        .record(config)
+        .record(
+            config,
+            conn.get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await
 }
 
-pub(super) fn project<M: SeaOrmOrganizationModel>(
+pub(super) async fn project<M: SeaOrmOrganizationModel>(
     rows: Vec<M>,
     config: &UserConfig,
+    supports_native_json: bool,
 ) -> AuthResult<Vec<M::Record>> {
-    rows.iter().map(|row| row.record(config)).collect()
+    M::records(&rows, config, supports_native_json).await
 }
 
 /// Resolve every configured field before accepting writes through this model.
@@ -143,7 +148,7 @@ pub(super) fn validate_fields<M: SeaOrmOrganizationModel>(
     entity: &str,
     fields: &UserConfig,
 ) -> AuthResult<()> {
-    for (name, field) in &fields.additional_fields {
+    for (name, field) in fields.fields() {
         if name == "id" {
             continue;
         }

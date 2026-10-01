@@ -25,6 +25,10 @@ where
     S::Session: SeaOrmSessionModel,
     S::Verification: SeaOrmVerificationModel,
 {
+    fn adapter_id(&self) -> &'static str {
+        "seaorm"
+    }
+
     fn database_hook_metadata(
         &self,
     ) -> Vec<better_auth_core::observability::database::DatabaseHookMetadata> {

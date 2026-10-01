@@ -1,4 +1,4 @@
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::{
     AuthConfig, BetterAuth, SchemaValue,
     config::{UserFieldConfig, UserFieldType},
@@ -17,15 +17,18 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
     let database = Database::connect("sqlite::memory:").await.unwrap();
     generated::create_auth_tables(&database).await.unwrap();
     let mut organization = OrganizationConfig::default();
-    organization.schema.organization.additional_fields.extend([
+    organization.schema.organization.fields_mut().extend([
         (
             "name".into(),
             UserFieldConfig {
                 field_type: UserFieldType::Number,
                 required: Some(false),
-                output_transform: Some(UserFieldTransform::new(|value| {
-                    Ok(value.filter(|value| value.as_f64() != Some(99.0)))
-                })),
+                transform: Some(FieldTransforms {
+                    output: Some(UserFieldTransform::new(|value| {
+                        Ok(value.filter(|value| value.as_f64() != Some(99.0)))
+                    })),
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
         ),
@@ -48,10 +51,13 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
         (
             "createdAt".into(),
             UserFieldConfig {
-                input: false,
-                input_transform: Some(UserFieldTransform::new(|_| {
-                    Ok(Some(json!("2000-01-02T03:04:05+02:00")))
-                })),
+                input: Some(false),
+                transform: Some(FieldTransforms {
+                    input: Some(UserFieldTransform::new(|_| {
+                        Ok(Some(json!("2000-01-02T03:04:05+02:00")))
+                    })),
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
         ),
@@ -64,7 +70,7 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
             },
         ),
     ]);
-    organization.schema.team.additional_fields.insert(
+    organization.schema.team.fields_mut().insert(
         "name".into(),
         UserFieldConfig {
             field_type: UserFieldType::Json,

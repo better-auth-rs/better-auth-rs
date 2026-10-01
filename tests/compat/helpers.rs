@@ -247,40 +247,34 @@ fn mock_oauth_plugin() -> OAuthPlugin {
         }
     }
 
-    OAuthPlugin::new().add_provider(
-        "mock",
-        OAuthProvider {
-            client_id: "mock-client-id".to_string(),
-            client_secret: "mock-client-secret".to_string(),
-            auth_url: format!("{MOCK_OAUTH_BASE_URL}/__test/oauth/authorize"),
-            token_url: format!("{MOCK_OAUTH_BASE_URL}/__test/oauth/token"),
-            user_info_url: Some(format!("{MOCK_OAUTH_BASE_URL}/__test/oauth/userinfo")),
-            end_session_endpoint: None,
-            post_logout_redirect_uri: None,
-            scopes: vec![
-                "openid".to_string(),
-                "email".to_string(),
-                "profile".to_string(),
-            ],
-            authorization_params: Vec::new(),
-            map_user_info: Some(|_value| {
-                Ok(OAuthUserInfo {
-                    additional_fields: Default::default(),
-                    id: "mock-account-id".to_string(),
-                    email: "mock@example.com".to_string(),
-                    name: Some("Mock OAuth User".to_string()),
-                    image: None,
-                    email_verified: true,
-                })
-            }),
-            get_user_info: Some(Arc::new(MockUserInfoHandler)),
-            refresh_access_token: None,
-            verify_id_token: None,
-            disable_implicit_sign_up: false,
-            disable_sign_up: false,
-            override_user_info_on_sign_in: false,
-        },
-    )
+    OAuthPlugin::new().add_provider("mock", {
+        let mut provider = OAuthProvider::custom(
+            "mock-client-id",
+            "mock-client-secret",
+            &format!("{MOCK_OAUTH_BASE_URL}/__test/oauth/authorize"),
+            &format!("{MOCK_OAUTH_BASE_URL}/__test/oauth/token"),
+        );
+        provider.user_info_url = Some(format!("{MOCK_OAUTH_BASE_URL}/__test/oauth/userinfo"));
+        provider.scopes = Some(vec![
+            "openid".to_string(),
+            "email".to_string(),
+            "profile".to_string(),
+        ]);
+        provider.map_user_info = Some(|_value| {
+            Ok(OAuthUserInfo {
+                additional_fields: Default::default(),
+                id: "mock-account-id".to_string(),
+                email: "mock@example.com".to_string(),
+                name: Some("Mock OAuth User".to_string()),
+                image: None,
+                email_verified: true,
+            })
+        });
+        provider.get_user_info = Some(Arc::new(MockUserInfoHandler));
+        provider.disable_implicit_sign_up = Some(false);
+        provider.disable_sign_up = Some(false);
+        provider
+    })
 }
 
 async fn test_database() -> DatabaseConnection {

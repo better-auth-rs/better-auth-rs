@@ -434,9 +434,9 @@ impl<S: AuthSchema> AuthInitContext<S> {
 
     /// Register user schema fields in plugin registration order.
     pub fn register_user_fields(&mut self, fields: crate::user_fields::UserConfig) {
-        self.plugin_user_fields
-            .additional_fields
-            .extend(fields.additional_fields);
+        if let Some(fields) = fields.additional_fields {
+            self.plugin_user_fields.fields_mut().extend(fields);
+        }
     }
 
     /// Register a database hook before application-owned adapter hooks.

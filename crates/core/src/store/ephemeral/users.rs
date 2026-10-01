@@ -36,7 +36,7 @@ impl EphemeralStore {
             .map(|user| {
                 let mut input = std::mem::take(&mut user.additional_fields);
                 for (name, value) in [("name", &user.name), ("image", &user.image)] {
-                    if let Some(config) = self.config.user.additional_fields.get(name)
+                    if let Some(config) = self.config.user.fields().get(name)
                         && let Some(raw) = value.json()?
                     {
                         let _ =
@@ -48,10 +48,10 @@ impl EphemeralStore {
             .collect::<AuthResult<Vec<_>>>()?;
         let fields = self.config.user.output_fields_many(&storage).await?;
         for (user, mut fields) in users.iter_mut().zip(fields) {
-            if self.config.user.additional_fields.contains_key("name") {
+            if self.config.user.fields().contains_key("name") {
                 user.name = crate::SchemaValue::from_json(fields.remove("name"));
             }
-            if self.config.user.additional_fields.contains_key("image") {
+            if self.config.user.fields().contains_key("image") {
                 user.image = crate::SchemaValue::from_json(fields.remove("image"));
             }
             user.additional_fields = fields;
@@ -93,7 +93,7 @@ impl EphemeralStore {
         let fields = update.take_user_field_input(&self.config.user)?;
         update.additional_fields = self.config.user.storage_fields(fields, false).await?;
         for (name, target) in [("name", &mut update.name), ("image", &mut update.image)] {
-            if let Some(field) = self.config.user.additional_fields.get(name) {
+            if let Some(field) = self.config.user.fields().get(name) {
                 *target = crate::SchemaValue::from_json(
                     update
                         .additional_fields
@@ -272,7 +272,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             ("name", &mut create_user.name),
             ("image", &mut create_user.image),
         ] {
-            if let Some(field) = self.config.user.additional_fields.get(name) {
+            if let Some(field) = self.config.user.fields().get(name) {
                 *target = crate::SchemaValue::from_json(
                     fields.remove(field.field_name.as_deref().unwrap_or(name)),
                 );

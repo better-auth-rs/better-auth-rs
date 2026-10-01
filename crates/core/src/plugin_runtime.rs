@@ -62,10 +62,12 @@ pub fn resolve_user_fields(
     plugins: UserConfig,
 ) -> (UserConfig, UserConfig) {
     let mut adapter = plugins.clone();
-    adapter
-        .additional_fields
-        .extend(application.additional_fields.clone());
+    if let Some(fields) = &application.additional_fields {
+        adapter.fields_mut().extend(fields.clone());
+    }
     let mut endpoint = application.clone();
-    endpoint.additional_fields.extend(plugins.additional_fields);
+    if let Some(fields) = plugins.additional_fields {
+        endpoint.fields_mut().extend(fields);
+    }
     (adapter, endpoint)
 }

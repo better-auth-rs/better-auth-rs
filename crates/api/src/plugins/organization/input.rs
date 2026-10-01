@@ -78,9 +78,9 @@ pub(super) fn fields(
 ) -> AuthResult<Map<String, Value>> {
     let mut names = indexmap::IndexSet::new();
     let configured = schema
-        .additional_fields
+        .fields()
         .iter()
-        .filter(|(_, field)| field.input)
+        .filter(|(_, field)| field.input())
         .map(|(name, _)| name.as_str());
     if base_wins {
         names.extend(configured);
@@ -92,10 +92,7 @@ pub(super) fn fields(
     let mut output = Map::new();
     for name in names {
         let builtin = base.iter().find(|(key, _, _)| *key == name);
-        let field = schema
-            .additional_fields
-            .get(name)
-            .filter(|field| field.input);
+        let field = schema.fields().get(name).filter(|field| field.input());
         let location = format!("{prefix}.{name}");
         if let Some(field) = field.filter(|_| !base_wins || builtin.is_none()) {
             match field.validate_organization_input(body.get(name), &location, partial) {

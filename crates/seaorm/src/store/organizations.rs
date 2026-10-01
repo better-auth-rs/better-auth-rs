@@ -48,11 +48,16 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             true,
             self.connection().get_database_backend(),
             self.config().advanced.database.generate_id(),
-        )?
+        )
+        .await?
         .insert(self.connection())
         .await
         .map_err(map_db_err)?
-        .record(&config)
+        .record(
+            &config,
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await
     }
     async fn delete_organization_records(&self, id: &str) -> AuthResult<()> {
         let _ = Entity::<O::Member>::delete_many()
@@ -83,7 +88,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
     }
 
     fn configure_organization_fields(&self, fields: OrganizationFields) -> AuthResult<()> {
-        let mut fields = fields.into_storage();
+        let fields = fields.into_storage();
         models::validate_fields::<O::Organization>("organization", &fields.organization)?;
         models::validate_fields::<O::Member>("member", &fields.member)?;
         models::validate_fields::<O::Invitation>("invitation", &fields.invitation)?;
@@ -91,15 +96,6 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         models::validate_fields::<O::OrganizationRole>(
             "organizationRole",
             &fields.organization_role,
-        )?;
-        let backend = self.connection().get_database_backend();
-        models::configure_json_fields::<O::Organization>(&mut fields.organization, backend)?;
-        models::configure_json_fields::<O::Member>(&mut fields.member, backend)?;
-        models::configure_json_fields::<O::Invitation>(&mut fields.invitation, backend)?;
-        models::configure_json_fields::<O::Team>(&mut fields.team, backend)?;
-        models::configure_json_fields::<O::OrganizationRole>(
-            &mut fields.organization_role,
-            backend,
         )?;
         *self
             .organization_fields
@@ -125,7 +121,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
                 let _ = core.insert(name.into(), value);
             }
         }
-        let native_metadata = !config.additional_fields.contains_key("metadata")
+        let native_metadata = !config.fields().contains_key("metadata")
             && matches!(
                 O::Organization::column("metadata")?.def().get_column_type(),
                 sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
@@ -143,7 +139,8 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             true,
             self.connection().get_database_backend(),
             self.config().advanced.database.generate_id(),
-        )?;
+        )
+        .await?;
         // Native JSON retains SQL NULL separately from a stored JSON null value.
         let metadata = match org.metadata {
             better_auth_core::SchemaValue::Typed(value) => value,
@@ -161,19 +158,31 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             .insert(self.connection())
             .await
             .map_err(map_db_err)?
-            .record(&config)
+            .record(
+                &config,
+                self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            )
+            .await
     }
 
     async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>> {
         let config = self.organization_fields()?.organization;
-        models::find::<O::Organization, _>(
+        let row = models::find::<O::Organization, _>(
             self.connection(),
             id,
             self.config().advanced.database.generate_id(),
         )
-        .await?
-        .map(|row| row.record(&config))
-        .transpose()
+        .await?;
+        match row {
+            Some(row) => row
+                .record(
+                    &config,
+                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
 
     async fn get_organization_by_id_value(
@@ -195,13 +204,21 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         let config = self.organization_fields()?.organization;
         let column = O::Organization::column("slug")?;
         let filter = super::value_filter::equals(column, slug);
-        Entity::<O::Organization>::find()
+        let row = Entity::<O::Organization>::find()
             .filter(filter)
             .one(self.connection())
             .await
-            .map_err(map_db_err)?
-            .map(|row| row.record(&config))
-            .transpose()
+            .map_err(map_db_err)?;
+        match row {
+            Some(row) => row
+                .record(
+                    &config,
+                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
 
     async fn list_organizations_by_ids(&self, ids: &[String]) -> AuthResult<Vec<Organization>> {
@@ -216,7 +233,9 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
                 .await
                 .map_err(map_db_err)?,
             &config,
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
         )
+        .await
     }
 
     async fn update_organization(
@@ -237,7 +256,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
                 let _ = core.insert(name.into(), value);
             }
         }
-        let native_metadata = !config.additional_fields.contains_key("metadata")
+        let native_metadata = !config.fields().contains_key("metadata")
             && matches!(
                 O::Organization::column("metadata")?.def().get_column_type(),
                 sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
@@ -257,7 +276,8 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             false,
             self.connection().get_database_backend(),
             self.config().advanced.database.generate_id(),
-        )?;
+        )
+        .await?;
         if native_metadata && let Some(metadata) = update.metadata {
             active.set(
                 O::Organization::column("metadata")?,
@@ -321,7 +341,12 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             .all(self.connection())
             .await
             .map_err(map_db_err)?;
-        let _ = models::project::<O::Member>(rows.clone(), &config.member)?;
+        let _ = models::project::<O::Member>(
+            rows.clone(),
+            &config.member,
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await?;
         let mut organizations = Vec::with_capacity(rows.len());
         for member in rows {
             if let Some(row) = Entity::<O::Organization>::find()
@@ -333,7 +358,13 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
                 .await
                 .map_err(map_db_err)?
             {
-                organizations.push(row.record(&config.organization)?);
+                organizations.push(
+                    row.record(
+                        &config.organization,
+                        self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                    )
+                    .await?,
+                );
             }
         }
         Ok(organizations)
@@ -353,7 +384,7 @@ impl<
         db: &C,
         id: &serde_json::Value,
     ) -> AuthResult<Option<Organization>> {
-        Entity::<O::Organization>::find()
+        let row = Entity::<O::Organization>::find()
             .filter(super::value_filter::equals_id(
                 O::Organization::column("id")?,
                 id,
@@ -361,8 +392,16 @@ impl<
             )?)
             .one(db)
             .await
-            .map_err(map_db_err)?
-            .map(|row| row.record(&self.organization_fields()?.organization))
-            .transpose()
+            .map_err(map_db_err)?;
+        match row {
+            Some(row) => row
+                .record(
+                    &self.organization_fields()?.organization,
+                    db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
 }

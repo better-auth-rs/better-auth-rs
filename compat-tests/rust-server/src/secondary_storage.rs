@@ -189,13 +189,13 @@ impl SecondaryFixture {
         };
         config
             .session
-            .additional_fields
+            .fields_mut()
             .insert("deviceLabel".into(), Default::default());
-        config.session.additional_fields.insert(
+        config.session.fields_mut().insert(
             "internalNote".into(),
             better_auth::config::SessionFieldConfig {
-                input: false,
-                returned: false,
+                input: Some(false),
+                returned: Some(false),
                 ..Default::default()
             },
         );

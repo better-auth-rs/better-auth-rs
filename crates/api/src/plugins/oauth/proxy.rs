@@ -511,7 +511,7 @@ impl OAuthProxyPlugin {
             Ok(tokens) => tokens,
             Err(_) => return Ok(Some(redirect_error(error_url, "invalid_code", None)?)),
         };
-        let info = match handlers::fetch_user_info_from_provider(
+        let info = match handlers::fetch_user_info_for_code(
             provider,
             OAuthUserInfoRequest {
                 access_token: tokens.access_token.clone(),
@@ -573,8 +573,8 @@ impl OAuthProxyPlugin {
             new_user_url: state.new_user_url,
             error_url: state.error_url,
             disable_sign_up: Some(
-                provider.config.disable_sign_up
-                    || provider.config.disable_implicit_sign_up
+                provider.config.disable_sign_up()
+                    || provider.config.disable_implicit_sign_up()
                         && !state.request_sign_up.unwrap_or(false),
             ),
             timestamp: Utc::now().timestamp_millis() as f64,

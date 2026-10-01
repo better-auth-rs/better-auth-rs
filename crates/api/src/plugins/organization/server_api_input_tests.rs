@@ -46,14 +46,14 @@ async fn add_member_validates_fields_before_queries_and_limit_callbacks() {
         membership_limit_callback: Some(calls.clone()),
         ..Default::default()
     };
-    config.schema.member.additional_fields.insert(
+    config.schema.member.fields_mut().insert(
         "role".into(),
         UserFieldConfig {
             required: Some(true),
             ..Default::default()
         },
     );
-    config.schema.member.additional_fields.insert(
+    config.schema.member.fields_mut().insert(
         "label".into(),
         UserFieldConfig {
             required: Some(true),

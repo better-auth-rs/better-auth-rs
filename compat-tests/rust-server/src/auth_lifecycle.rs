@@ -52,11 +52,11 @@ impl AuthLifecycleFixture {
             ("department", true, "ops"),
             ("secretNote", false, "internal"),
         ] {
-            config.user.additional_fields.insert(
+            config.user.fields_mut().insert(
                 name.into(),
                 UserFieldConfig {
                     required: Some(false),
-                    returned,
+                    returned: Some(returned),
                     default_value: Some(json!(value)),
                     ..Default::default()
                 },

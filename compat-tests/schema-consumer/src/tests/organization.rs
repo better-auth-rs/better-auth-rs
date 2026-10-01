@@ -52,23 +52,25 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
         )])),
         ..Default::default()
     };
-    organization.schema.organization.additional_fields = [
-        ("label", UserFieldType::String),
-        (
-            "category",
-            UserFieldType::Enum(vec!["small".into(), "large".into()]),
-        ),
-        ("joinedAt", UserFieldType::Date),
-        ("tags", UserFieldType::StringArray),
-        ("scores", UserFieldType::NumberArray),
-        ("payload", UserFieldType::Json),
-        ("enabled", UserFieldType::Boolean),
-        ("score", UserFieldType::Number),
-    ]
-    .into_iter()
-    .map(|(name, field_type)| (name.to_owned(), optional(field_type)))
-    .collect();
-    organization.schema.organization.additional_fields.insert(
+    organization.schema.organization.additional_fields = Some(
+        [
+            ("label", UserFieldType::String),
+            (
+                "category",
+                UserFieldType::Enum(vec!["small".into(), "large".into()]),
+            ),
+            ("joinedAt", UserFieldType::Date),
+            ("tags", UserFieldType::StringArray),
+            ("scores", UserFieldType::NumberArray),
+            ("payload", UserFieldType::Json),
+            ("enabled", UserFieldType::Boolean),
+            ("score", UserFieldType::Number),
+        ]
+        .into_iter()
+        .map(|(name, field_type)| (name.to_owned(), optional(field_type)))
+        .collect(),
+    );
+    organization.schema.organization.fields_mut().insert(
         "name".to_owned(),
         UserFieldConfig {
             field_name: Some("organization_name".to_owned()),
@@ -76,7 +78,7 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
             ..Default::default()
         },
     );
-    organization.schema.organization.additional_fields.insert(
+    organization.schema.organization.fields_mut().insert(
         "logo".to_owned(),
         UserFieldConfig {
             field_name: Some("logo_url".to_owned()),
@@ -86,18 +88,18 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
     organization
         .schema
         .organization
-        .additional_fields
+        .fields_mut()
         .get_mut("label")
         .unwrap()
         .field_name = Some("stored_label".to_owned());
     organization
         .schema
         .organization
-        .additional_fields
+        .fields_mut()
         .get_mut("joinedAt")
         .unwrap()
         .default_value = Some(json!("2026-01-02T03:04:05.000Z"));
-    organization.schema.member.additional_fields.insert(
+    organization.schema.member.fields_mut().insert(
         "badge".to_owned(),
         UserFieldConfig {
             default_value: Some(json!("founder")),
@@ -107,17 +109,17 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
     organization
         .schema
         .invitation
-        .additional_fields
+        .fields_mut()
         .insert("note".to_owned(), optional(UserFieldType::String));
     organization
         .schema
         .team
-        .additional_fields
+        .fields_mut()
         .insert("region".to_owned(), optional(UserFieldType::String));
     organization
         .schema
         .organization_role
-        .additional_fields
+        .fields_mut()
         .insert("description".to_owned(), optional(UserFieldType::String));
     let mut config = AuthConfig::new("organization-consumer-secret-at-least-32-characters")
         .base_url("http://localhost:3000");

@@ -406,6 +406,23 @@ async fn concurrent_otp_requests_create_only_one_session_and_invalidate_older_co
     let mut send_request = req.clone();
     send_request.path = "/two-factor/send-otp".into();
     let _ = send_otp_core(&send_request, &config, &ctx).await.unwrap();
+    let identifier = read_signed_cookie(&req, TWO_FACTOR_COOKIE_SUFFIX, &ctx)
+        .unwrap()
+        .unwrap();
+    // The adapter sorts by createdAt; two sends can share one millisecond.
+    assert!(
+        ctx.database
+            .update_verification(
+                &otp_verification_identifier(&identifier),
+                better_auth_core::store::database_hooks::VerificationUpdate {
+                    created_at: (Utc::now() - Duration::minutes(1)).into(),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap()
+            .is_some()
+    );
     let _ = send_otp_core(&send_request, &config, &ctx).await.unwrap();
     let code = outbox.0.lock().unwrap()[1].clone();
     let body = VerifyOtpRequest {
@@ -431,9 +448,6 @@ async fn concurrent_otp_requests_create_only_one_session_and_invalidate_older_co
             .len(),
         before + 1
     );
-    let identifier = read_signed_cookie(&req, TWO_FACTOR_COOKIE_SUFFIX, &ctx)
-        .unwrap()
-        .unwrap();
     assert!(
         ctx.database
             .consume_verification_by_identifier(&otp_verification_identifier(&identifier))

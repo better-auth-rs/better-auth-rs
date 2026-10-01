@@ -1,3 +1,5 @@
+mod fields;
+
 use better_auth_core::config::{CookieCacheStrategy, SameSite};
 use better_auth_core::middleware::{RateLimitConfig, RateLimitStorageKind};
 use better_auth_core::observability::database::{DatabaseHook, DatabaseHookMetadata};
@@ -7,6 +9,8 @@ use serde::Serialize;
 use serde_json::{Map, Value, json};
 
 pub(super) struct InitOptions<'a> {
+    pub database: bool,
+    pub adapter: &'static str,
     pub before: bool,
     pub after: bool,
     pub secondary: bool,
@@ -52,6 +56,17 @@ pub(super) fn init_payload<S: AuthSchema>(
         "enabled",
         plugin_options.change_email_enabled,
     )?;
+    let mut user = Map::from_iter([("changeEmail".into(), json!(change_email))]);
+    option(
+        &mut user,
+        "additionalFields",
+        config
+            .user
+            .additional_fields
+            .as_ref()
+            .map(fields::configuration)
+            .transpose()?,
+    )?;
     let mut logger = Map::from_iter([("log".into(), json!(config.logger.log.is_some()))]);
     option(&mut logger, "disabled", config.logger.disabled)?;
     option(
@@ -75,6 +90,16 @@ pub(super) fn init_payload<S: AuthSchema>(
         )?;
     }
     let mut session = Map::from_iter([("cookieCache".into(), json!(cache))]);
+    option(
+        &mut session,
+        "additionalFields",
+        config
+            .session
+            .additional_fields
+            .as_ref()
+            .map(fields::configuration)
+            .transpose()?,
+    )?;
     option(
         &mut session,
         "expiresIn",
@@ -299,6 +324,19 @@ pub(super) fn init_payload<S: AuthSchema>(
 
     let mut config_options = Map::from_iter([
         (
+            "database".into(),
+            json!(if options.database {
+                "adapter"
+            } else {
+                "unknown"
+            }),
+        ),
+        ("adapter".into(), json!(options.adapter)),
+        (
+            "socialProviders".into(),
+            json!(plugin_options.social_providers),
+        ),
+        (
             "emailVerification".into(),
             json!(plugin_options.email_verification),
         ),
@@ -306,7 +344,7 @@ pub(super) fn init_payload<S: AuthSchema>(
             "emailAndPassword".into(),
             json!(plugin_options.email_and_password),
         ),
-        ("user".into(), json!({"changeEmail":change_email})),
+        ("user".into(), json!(user)),
         (
             "plugins".into(),
             json!(

@@ -10,7 +10,6 @@ mod id_filter;
 mod identity_schema;
 mod instrumentation;
 mod invitations;
-mod json_fields;
 mod jwks;
 mod members;
 mod migrator;

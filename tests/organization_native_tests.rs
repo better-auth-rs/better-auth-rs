@@ -12,7 +12,7 @@
 mod models;
 
 use async_trait::async_trait;
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::plugins::{
     endpoint_context::EndpointContext,
     organization::{OrganizationConfig, OrganizationPlugin, hooks::*},
@@ -218,7 +218,7 @@ fn options(state: &Arc<State>) -> OrganizationConfig {
         options.teams.maximum_members_per_team_callback = Some(state.clone());
     }
     if state.mode == "org-number" {
-        let _ = options.schema.member.additional_fields.insert(
+        let _ = options.schema.member.fields_mut().insert(
             "organizationId".into(),
             UserFieldConfig {
                 field_type: better_auth_core::user_fields::UserFieldType::Number,
@@ -227,25 +227,27 @@ fn options(state: &Arc<State>) -> OrganizationConfig {
             },
         );
     }
-    options.schema.member.additional_fields.extend([
+    options.schema.member.fields_mut().extend([
         (
             "label".into(),
             UserFieldConfig {
                 required: Some(false),
                 field_name: Some("storedLabel".into()),
                 default_value: Some(json!("default")),
-                input_transform: Some(UserFieldTransform::new(|value| {
-                    Ok(Some(json!(format!(
-                        "{}:in",
-                        value.unwrap().as_str().unwrap()
-                    ))))
-                })),
-                output_transform: Some(UserFieldTransform::new(|value| {
-                    Ok(Some(json!(format!(
-                        "{}:out",
-                        value.unwrap().as_str().unwrap()
-                    ))))
-                })),
+                transform: Some(FieldTransforms {
+                    input: Some(UserFieldTransform::new(|value| {
+                        Ok(Some(json!(format!(
+                            "{}:in",
+                            value.unwrap().as_str().unwrap()
+                        ))))
+                    })),
+                    output: Some(UserFieldTransform::new(|value| {
+                        Ok(Some(json!(format!(
+                            "{}:out",
+                            value.unwrap().as_str().unwrap()
+                        ))))
+                    })),
+                }),
                 ..Default::default()
             },
         ),
@@ -253,15 +255,15 @@ fn options(state: &Arc<State>) -> OrganizationConfig {
             "secret".into(),
             UserFieldConfig {
                 required: Some(false),
-                input: false,
-                returned: false,
+                input: Some(false),
+                returned: Some(false),
                 default_value: Some(json!("hidden")),
                 ..Default::default()
             },
         ),
     ]);
     if state.mode == "override" {
-        let _ = options.schema.member.additional_fields.insert(
+        let _ = options.schema.member.fields_mut().insert(
             "role".into(),
             UserFieldConfig {
                 required: Some(true),
@@ -428,7 +430,7 @@ async fn organization_native_dispatch_matches_memory_and_sqlite_upstream_contrac
                 options
                     .schema
                     .member
-                    .additional_fields
+                    .fields_mut()
                     .get_mut("label")
                     .unwrap()
                     .field_name = None;
@@ -517,15 +519,18 @@ async fn deletion_projection_failure<S: AuthSchema>(
     let reject = Arc::new(AtomicBool::new(false));
     let transform_reject = reject.clone();
     let mut fields = better_auth_core::organization_fields::OrganizationFields::default();
-    let _ = fields.team.additional_fields.insert(
+    let _ = fields.team.fields_mut().insert(
         "name".into(),
         UserFieldConfig {
-            output_transform: Some(UserFieldTransform::new(move |value| {
-                if transform_reject.load(Ordering::SeqCst) {
-                    return Err(AuthError::internal("team projection rejected"));
-                }
-                Ok(value)
-            })),
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(move |value| {
+                    if transform_reject.load(Ordering::SeqCst) {
+                        return Err(AuthError::internal("team projection rejected"));
+                    }
+                    Ok(value)
+                })),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     );

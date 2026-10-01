@@ -42,8 +42,11 @@ An OAuth provider configuration includes:
 | `auth_url` | The provider's authorization endpoint |
 | `token_url` | The provider's token exchange endpoint |
 | `user_info_url` | The provider's user info API endpoint |
-| `scopes` | Default scopes to request |
-| `map_user_info` | Function to transform provider-specific JSON into `OAuthUserInfo` |
+| `scopes` | Optional additional scopes for built-in social providers |
+| `map_user_info` | Base JSON decoder for a custom social provider |
+| `map_profile_to_user` | Local-field mapper that preserves the provider account subject |
+| `disable_default_scope` | Exclude built-in scopes from authorization requests |
+| `disable_id_token_sign_in` | Reject direct ID-token sign-in and linking |
 
 ### Tokens
 

@@ -37,7 +37,7 @@ pub(super) async fn handle(
     }
     let mut schema = ctx.config.session.field_schema();
     schema
-        .additional_fields
+        .fields_mut()
         .retain(|name, _| !protected_fields.contains(&name.as_str()));
     let fields = schema.parse_input(&body, false)?;
     if fields.is_empty() {

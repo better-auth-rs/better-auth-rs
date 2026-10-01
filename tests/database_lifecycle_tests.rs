@@ -4,7 +4,7 @@
     reason = "Regression fixtures stop on unexpected setup or assertion failures"
 )]
 
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -145,20 +145,24 @@ async fn sqlite_and_ephemeral_delete_hooks_receive_one_transformed_hidden_snapsh
         let reject = Arc::new(AtomicBool::new(false));
         let rejected = reject.clone();
         let mut config = AuthConfig::default();
-        let _ = config.session.additional_fields.insert(
+        let _ = config.session.fields_mut().insert(
             "label".into(),
             UserFieldConfig {
                 required: Some(false),
-                returned: false,
+                returned: Some(false),
                 field_name: Some("deviceLabel".into()),
                 default_value: Some(serde_json::json!("raw")),
-                output_transform: Some(UserFieldTransform::new(move |value| {
-                    if rejected.load(Ordering::SeqCst) {
-                        return Err(AuthError::internal("snapshot rejected"));
-                    }
-                    Ok(value
-                        .map(|value| serde_json::json!(format!("{}:out", value.as_str().unwrap()))))
-                })),
+                transform: Some(FieldTransforms {
+                    output: Some(UserFieldTransform::new(move |value| {
+                        if rejected.load(Ordering::SeqCst) {
+                            return Err(AuthError::internal("snapshot rejected"));
+                        }
+                        Ok(value.map(|value| {
+                            serde_json::json!(format!("{}:out", value.as_str().unwrap()))
+                        }))
+                    })),
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
         );
@@ -538,16 +542,19 @@ async fn ephemeral_delete_snapshot_projection_error_does_not_cancel_the_batch_wr
     let reject = Arc::new(AtomicBool::new(false));
     let rejection = reject.clone();
     let mut config = AuthConfig::default();
-    let _ = config.session.additional_fields.insert(
+    let _ = config.session.fields_mut().insert(
         "marker".into(),
         UserFieldConfig {
             required: Some(false),
-            output_transform: Some(UserFieldTransform::new(move |value| {
-                if rejection.load(Ordering::SeqCst) {
-                    return Err(AuthError::internal("snapshot rejected"));
-                }
-                Ok(value)
-            })),
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(move |value| {
+                    if rejection.load(Ordering::SeqCst) {
+                        return Err(AuthError::internal("snapshot rejected"));
+                    }
+                    Ok(value)
+                })),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     );

@@ -1,5 +1,5 @@
 //! Username login with endpoint, database-hook and adapter policies.
-use better_auth_core::user_fields::UserFieldTransform;
+use better_auth_core::user_fields::{FieldTransforms, UserFieldTransform};
 
 use std::sync::Arc;
 
@@ -36,33 +36,39 @@ impl UsernamePlugin {
     fn fields(&self) -> UserConfig {
         let mut fields = UserConfig::default();
         let config = self.config.clone();
-        let _ = fields.additional_fields.insert(
+        let _ = fields.fields_mut().insert(
             "username".into(),
             UserFieldConfig {
                 required: Some(false),
                 field_name: config.username_field_name.clone(),
-                input_transform: Some(UserFieldTransform::new(move |value| match value {
-                    Some(Value::String(value)) => {
-                        config.normalize(&value).map(|value| Some(value.into()))
-                    }
-                    value => Ok(value),
-                })),
+                transform: Some(FieldTransforms {
+                    input: Some(UserFieldTransform::new(move |value| match value {
+                        Some(Value::String(value)) => {
+                            config.normalize(&value).map(|value| Some(value.into()))
+                        }
+                        value => Ok(value),
+                    })),
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
         );
         if self.config.display_username {
             let config = self.config.clone();
-            let _ = fields.additional_fields.insert(
+            let _ = fields.fields_mut().insert(
                 "displayUsername".into(),
                 UserFieldConfig {
                     required: Some(false),
                     field_name: config.display_username_field_name.clone(),
-                    input_transform: Some(UserFieldTransform::new(move |value| match value {
-                        Some(Value::String(value)) => config
-                            .normalize_display(&value)
-                            .map(|value| Some(value.into())),
-                        value => Ok(value),
-                    })),
+                    transform: Some(FieldTransforms {
+                        input: Some(UserFieldTransform::new(move |value| match value {
+                            Some(Value::String(value)) => config
+                                .normalize_display(&value)
+                                .map(|value| Some(value.into())),
+                            value => Ok(value),
+                        })),
+                        ..Default::default()
+                    }),
                     ..Default::default()
                 },
             );

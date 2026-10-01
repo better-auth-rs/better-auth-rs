@@ -211,6 +211,8 @@ impl<S: AuthSchema> AuthBuilder<S> {
                 &config,
                 &self.plugins,
                 super::telemetry::InitOptions {
+                    database: capabilities.database,
+                    adapter: store.adapter_id(),
                     before: self.hooks.before.is_some(),
                     after: self.hooks.after.is_some(),
                     secondary: init_context.secondary_storage.is_some(),

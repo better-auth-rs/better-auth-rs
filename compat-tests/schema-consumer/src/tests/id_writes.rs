@@ -1,5 +1,5 @@
 use super::*;
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::{
     __private_core::{
         CreateApiKey, CreateDeviceCode, Member, UpdateDeviceCode, UpdateTeam,
@@ -136,7 +136,7 @@ pub(super) async fn reference_writes<
     let observed = transforms.clone();
     let transformed_owner = alias.clone();
     let mut fields = OrganizationFields::default();
-    fields.member.additional_fields.insert(
+    fields.member.fields_mut().insert(
         "sponsor".into(),
         UserFieldConfig {
             required: Some(false),
@@ -145,18 +145,21 @@ pub(super) async fn reference_writes<
                 model: "user".into(),
                 field: "id".into(),
             }),
-            input_transform: Some(UserFieldTransform::new(move |value| {
-                if value == Some(json!("@owner")) {
-                    observed.fetch_add(1, Ordering::SeqCst);
-                    Ok(Some(json!(transformed_owner)))
-                } else {
-                    Ok(value)
-                }
-            })),
+            transform: Some(FieldTransforms {
+                input: Some(UserFieldTransform::new(move |value| {
+                    if value == Some(json!("@owner")) {
+                        observed.fetch_add(1, Ordering::SeqCst);
+                        Ok(Some(json!(transformed_owner)))
+                    } else {
+                        Ok(value)
+                    }
+                })),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     );
-    fields.member.additional_fields.insert(
+    fields.member.fields_mut().insert(
         "externalId".into(),
         UserFieldConfig {
             required: Some(false),
@@ -182,7 +185,7 @@ pub(super) async fn reference_writes<
     missing.user_id = Default::default();
     assert!(store.create_member(missing).await.is_err());
     if serial {
-        fields.member.additional_fields.insert(
+        fields.member.fields_mut().insert(
             "userId".into(),
             UserFieldConfig {
                 field_name: Some("user_id".into()),

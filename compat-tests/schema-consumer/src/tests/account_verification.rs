@@ -1,4 +1,4 @@
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use std::sync::Arc;
 
 use better_auth::{
@@ -22,12 +22,14 @@ fn label(column: &str) -> UserFieldConfig {
         field_name: Some(column.into()),
         default_value: Some(json!("default")),
         on_update: Some(Arc::new(|| json!("updated"))),
-        input_transform: Some(UserFieldTransform::new(|value| {
-            Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
-        })),
-        output_transform: Some(UserFieldTransform::new(|value| {
-            Ok(value.map(|value| json!({"stored": value})))
-        })),
+        transform: Some(FieldTransforms {
+            input: Some(UserFieldTransform::new(|value| {
+                Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
+            })),
+            output: Some(UserFieldTransform::new(|value| {
+                Ok(value.map(|value| json!({"stored": value})))
+            })),
+        }),
         ..Default::default()
     }
 }
@@ -37,12 +39,14 @@ fn number(column: &str, required: bool) -> UserFieldConfig {
         field_type: UserFieldType::Number,
         field_name: Some(column.into()),
         required: Some(required),
-        input_transform: Some(UserFieldTransform::new(|value| {
-            Ok(value.map(|value| json!(value.as_f64().unwrap() + 0.5)))
-        })),
-        output_transform: Some(UserFieldTransform::new(|value| {
-            Ok(value.map(|value| json!({"number": value})))
-        })),
+        transform: Some(FieldTransforms {
+            input: Some(UserFieldTransform::new(|value| {
+                Ok(value.map(|value| json!(value.as_f64().unwrap() + 0.5)))
+            })),
+            output: Some(UserFieldTransform::new(|value| {
+                Ok(value.map(|value| json!({"number": value})))
+            })),
+        }),
         ..Default::default()
     }
 }

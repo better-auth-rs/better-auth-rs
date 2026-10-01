@@ -3,7 +3,7 @@
     reason = "test setup intentionally discards created records"
 )]
 use super::{SeaOrmStore, bundled_schema::BundledSchema, migrator::run_migrations};
-use better_auth_core::user_fields::UserFieldTransform;
+use better_auth_core::user_fields::{FieldTransforms, UserFieldTransform};
 use better_auth_core::{
     AuthConfig, CreateInvitation, CreateMember, CreateOrganization, CreateOrganizationRole,
     CreateTeam, CreateUser, UpdateOrganizationRole,
@@ -50,40 +50,58 @@ async fn store() -> SeaOrmStore<BundledSchema> {
 
 #[tokio::test]
 async fn json_policies_keep_native_model_values_and_transform_each_read_once() {
+    for asynchronous in [false, true] {
+        check_json_policies(asynchronous).await;
+    }
+}
+
+async fn check_json_policies(asynchronous: bool) {
     use better_auth_core::{
         organization_fields::OrganizationFields,
         user_fields::{UserFieldConfig, UserFieldType},
     };
     use sea_orm::EntityTrait;
     use serde_json::{Value, json};
+    let input = |value: Option<Value>| {
+        value
+            .map(|value| {
+                let value: Value = match value {
+                    Value::String(value) => serde_json::from_str(&value)?,
+                    value => value,
+                };
+                serde_json::from_str(&value.to_string().replace("source", "stored"))
+                    .map_err(Into::into)
+            })
+            .transpose()
+    };
+    let output = |value: Option<Value>| {
+        Ok(value.map(|value| {
+            json!(
+                value
+                    .as_str()
+                    .expect("SQLite JSON callbacks receive text")
+                    .replace("stored", "visible")
+            )
+        }))
+    };
     let store = store().await;
     let mut fields = OrganizationFields::default();
-    fields.organization_role.additional_fields.insert(
+    fields.organization_role.fields_mut().insert(
         "permission".into(),
         UserFieldConfig {
             field_type: UserFieldType::Json,
-            input_transform: Some(UserFieldTransform::new(|value| {
-                value
-                    .map(|value| {
-                        let value: Value = match value {
-                            Value::String(value) => serde_json::from_str(&value)?,
-                            value => value,
-                        };
-                        serde_json::from_str(&value.to_string().replace("source", "stored"))
-                            .map_err(Into::into)
-                    })
-                    .transpose()
-            })),
-            output_transform: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| {
-                    json!(
-                        value
-                            .as_str()
-                            .expect("SQLite JSON callbacks receive text")
-                            .replace("stored", "visible")
-                    )
-                }))
-            })),
+            transform: Some(FieldTransforms {
+                input: Some(if asynchronous {
+                    UserFieldTransform::new_async(move |value| async move { input(value) })
+                } else {
+                    UserFieldTransform::new(input)
+                }),
+                output: Some(if asynchronous {
+                    UserFieldTransform::new_async(move |value| async move { output(value) })
+                } else {
+                    UserFieldTransform::new(output)
+                }),
+            }),
             ..Default::default()
         },
     );
@@ -144,6 +162,125 @@ async fn json_policies_keep_native_model_values_and_transform_each_read_once() {
             .unwrap()
             .permission,
         updated.permission
+    );
+}
+
+#[tokio::test]
+async fn team_list_starts_async_output_for_every_row_and_keeps_query_order() {
+    use better_auth_core::{
+        AuthResult, organization_fields::OrganizationFields, user_fields::UserFieldConfig,
+    };
+    use serde_json::{Value, json};
+    use tokio::sync::{mpsc, oneshot};
+
+    let store = store().await;
+    for name in ["first", "second"] {
+        store
+            .create_team(CreateTeam {
+                name: name.into(),
+                organization_id: "org-a".into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+    }
+    let expected = store.list_organization_teams("org-a").await.unwrap();
+    let (sender, mut receiver) =
+        mpsc::unbounded_channel::<(Option<Value>, oneshot::Sender<AuthResult<Option<Value>>>)>();
+    let mut fields = OrganizationFields::default();
+    fields.team.fields_mut().insert(
+        "name".into(),
+        UserFieldConfig {
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new_async(move |value| {
+                    let sender = sender.clone();
+                    async move {
+                        let (answer, result) = oneshot::channel();
+                        sender.send((value, answer)).unwrap();
+                        result.await.unwrap()
+                    }
+                })),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    store.configure_organization_fields(fields).unwrap();
+    let controller = async {
+        let (first, first_reply) = receiver.recv().await.unwrap();
+        let (second, second_reply) = receiver.recv().await.unwrap();
+        assert_eq!(first, expected[0].name.json().unwrap());
+        assert_eq!(second, expected[1].name.json().unwrap());
+        second_reply.send(Ok(Some(json!("second result")))).unwrap();
+        first_reply.send(Ok(Some(json!("first result")))).unwrap();
+    };
+    let (rows, ()) = tokio::join!(store.list_organization_teams("org-a"), controller);
+    let rows = rows.unwrap();
+    assert_eq!(
+        rows.iter().map(|row| &row.id).collect::<Vec<_>>(),
+        expected.iter().map(|row| &row.id).collect::<Vec<_>>()
+    );
+    assert_eq!(rows[0].name, "first result");
+    assert_eq!(rows[1].name, "second result");
+}
+
+#[tokio::test]
+async fn async_capacity_output_failure_rolls_back_the_seat_and_membership() {
+    use better_auth_core::{
+        AuthError,
+        organization_fields::OrganizationFields,
+        user_fields::{UserFieldConfig, UserFieldType},
+    };
+    use serde_json::json;
+
+    let store = store().await;
+    let team = store
+        .create_team(CreateTeam {
+            name: "team".into(),
+            organization_id: "org-a".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let mut fields = OrganizationFields::default();
+    fields.team.fields_mut().insert(
+        "memberCount".into(),
+        UserFieldConfig {
+            field_type: UserFieldType::Number,
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new_async(|value| async move {
+                    assert_eq!(value, Some(json!(1)));
+                    Err(AuthError::bad_request("capacity output failed"))
+                })),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    store.configure_organization_fields(fields).unwrap();
+    let error = store
+        .add_team_member(&team.id, "user-a", Some(1))
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("capacity output failed"));
+    store
+        .configure_organization_fields(OrganizationFields::default())
+        .unwrap();
+    assert_eq!(
+        store
+            .count_team_members(team.id.typed().unwrap())
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        store
+            .get_team(team.id.typed().unwrap())
+            .await
+            .unwrap()
+            .unwrap()
+            .additional_fields["memberCount"],
+        json!(0)
     );
 }
 

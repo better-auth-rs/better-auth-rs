@@ -1,6 +1,6 @@
 use super::*;
 use better_auth::config::IdGeneration;
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth_core::CreateAccount;
 use better_auth_core::UpdateAccount;
 use better_auth_core::store::{AuthTransaction, transaction};
@@ -282,17 +282,20 @@ async fn verify_serial_coercion(database: DatabaseConnection) -> TestResult {
                 model: "user".into(),
                 field: "id".into(),
             }),
-            input_transform: Some(UserFieldTransform::new(move |value| {
-                observed
-                    .lock()
-                    .expect("reference observations")
-                    .push(value.clone());
-                Ok(if value.as_ref() == Some(&json!("alias")) {
-                    Some(json!("0x10"))
-                } else {
-                    value
-                })
-            })),
+            transform: Some(FieldTransforms {
+                input: Some(UserFieldTransform::new(move |value| {
+                    observed
+                        .lock()
+                        .expect("reference observations")
+                        .push(value.clone());
+                    Ok(if value.as_ref() == Some(&json!("alias")) {
+                        Some(json!("0x10"))
+                    } else {
+                        value
+                    })
+                })),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     );
@@ -458,7 +461,9 @@ async fn verify_uuid_defaults(database: DatabaseConnection) -> TestResult {
             .store()
             .create_user(CreateUser {
                 id: Some(value.clone()),
-                ..CreateUser::new().with_email(format!("uuid-{index}@ids.test"))
+                ..CreateUser::new()
+                    .with_name(format!("UUID User {index}"))
+                    .with_email(format!("uuid-{index}@ids.test"))
             })
             .await?;
         if index == 0 {

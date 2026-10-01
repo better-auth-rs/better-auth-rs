@@ -262,13 +262,14 @@ fn runtime_fields(output_calls: Arc<AtomicUsize>) -> OrganizationConfig {
             };
             if name == "transformedOwner" {
                 let calls = output_calls.clone();
-                field.output_transform = Some(UserFieldTransform::new(move |value| {
-                    calls.fetch_add(1, Ordering::SeqCst);
-                    assert_eq!(value, Some(json!("12.5")));
-                    Ok(Some(json!({"original":value})))
-                }));
+                field.transform.get_or_insert_default().output =
+                    Some(UserFieldTransform::new(move |value| {
+                        calls.fetch_add(1, Ordering::SeqCst);
+                        assert_eq!(value, Some(json!("12.5")));
+                        Ok(Some(json!({"original":value})))
+                    }));
             }
-            fields.additional_fields.insert(name.clone(), field);
+            fields.fields_mut().insert(name.clone(), field);
         }
     }
     config

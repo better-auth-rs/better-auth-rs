@@ -57,7 +57,7 @@ impl ResolvedOAuthConfig {
                 (
                     name.clone(),
                     ResolvedProvider {
-                        config: config.clone(),
+                        config: config.resolve(),
                         generic: None,
                     },
                 )
@@ -211,32 +211,29 @@ async fn resolve_generic(
         }
         _ => {}
     }
-    let provider = OAuthProvider {
-        client_id: config.client_id.clone(),
-        client_secret: config.client_secret.clone().unwrap_or_default(),
-        auth_url: config.authorization_url.clone().unwrap_or_default(),
-        token_url: config.token_url.clone().unwrap_or_default(),
-        user_info_url: config.user_info_url.clone(),
-        end_session_endpoint: if config.disable_provider_logout {
-            None
-        } else {
-            config.end_session_endpoint.clone()
-        },
-        post_logout_redirect_uri: config.post_logout_redirect_uri.clone(),
-        scopes: config.scopes.clone(),
-        authorization_params: config
-            .authorization_url_params
-            .clone()
-            .into_iter()
-            .collect(),
-        map_user_info: None,
-        get_user_info: None,
-        refresh_access_token: None,
-        verify_id_token: None,
-        disable_implicit_sign_up: config.disable_implicit_sign_up,
-        disable_sign_up: config.disable_sign_up,
-        override_user_info_on_sign_in: config.override_user_info,
+    let mut provider = OAuthProvider::custom(
+        &config.client_id,
+        config.client_secret.as_deref().unwrap_or_default(),
+        config.authorization_url.as_deref().unwrap_or_default(),
+        config.token_url.as_deref().unwrap_or_default(),
+    );
+    provider.user_info_url = config.user_info_url.clone();
+    provider.end_session_endpoint = if config.disable_provider_logout {
+        None
+    } else {
+        config.end_session_endpoint.clone()
     };
+    provider.post_logout_redirect_uri = config.post_logout_redirect_uri.clone();
+    provider.scopes = Some(config.scopes.clone());
+    provider.authorization_params = config
+        .authorization_url_params
+        .clone()
+        .into_iter()
+        .collect();
+    provider.disable_implicit_sign_up = Some(config.disable_implicit_sign_up);
+    provider.disable_sign_up = Some(config.disable_sign_up);
+    provider.override_user_info_on_sign_in = config.override_user_info;
+
     Ok(Some(ResolvedProvider {
         config: provider,
         generic: Some(ResolvedGenericOAuth {

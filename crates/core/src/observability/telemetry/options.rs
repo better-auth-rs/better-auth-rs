@@ -4,6 +4,7 @@ use serde::Serialize;
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginTelemetry {
+    pub social_providers: Vec<SocialProviderTelemetry>,
     pub email_verification: EmailVerificationTelemetry,
     pub email_and_password: EmailPasswordTelemetry,
     #[serde(skip)]
@@ -51,4 +52,26 @@ pub struct EmailPasswordTelemetry {
 pub struct PasswordTelemetry {
     pub hash: bool,
     pub verify: bool,
+}
+
+/// Configured social-provider inputs; callback bodies and credentials are excluded.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SocialProviderTelemetry {
+    pub id: String,
+    pub map_profile_to_user: bool,
+    pub disable_default_scope: bool,
+    pub disable_id_token_sign_in: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disable_implicit_sign_up: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disable_sign_up: Option<bool>,
+    pub get_user_info: bool,
+    pub override_user_info_on_sign_in: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    pub verify_id_token: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<Vec<String>>,
+    pub refresh_access_token: bool,
 }

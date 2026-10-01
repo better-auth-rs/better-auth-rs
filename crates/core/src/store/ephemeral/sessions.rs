@@ -2,9 +2,8 @@ use super::hooks::CommittedWrite;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, SessionUpdate};
 #[cfg(test)]
-use crate::user_fields::UserFieldTransform;
-use better_auth_schema_registry::EntityRole;
-use serde_json::{Map, json};
+use crate::user_fields::{FieldTransforms, UserFieldTransform};
+use serde_json::Map;
 
 impl EphemeralStore {
     pub(super) async fn output_session(&self, session: SessionView) -> AuthResult<SessionView> {
@@ -26,7 +25,7 @@ impl EphemeralStore {
             .collect();
         crate::user_fields::project_fields(
             &mut rows,
-            &self.session_config.additional_fields,
+            self.session_config.fields(),
             |(session, storage), name, field| {
                 Box::pin(async move {
                     let value = storage
@@ -70,220 +69,14 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         teams_enabled: bool,
         maximum: crate::store::TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
-        let invitation_snapshot = {
-            let state = self.lock()?;
-            let mut invitation = state
-                .invitations
-                .get_mut(invitation_id)?
-                .filter(|invitation| invitation.is_pending())
-                .ok_or_else(|| AuthError::bad_request("Invitation not found"))?;
-            *invitation = self.store_record(
-                EntityRole::Invitation,
-                invitation.clone(),
-                Some(
-                    [("status".into(), json!(InvitationStatus::Accepted))]
-                        .into_iter()
-                        .collect(),
-                ),
-                Map::new(),
-            )?;
-            invitation.clone()
-        };
-        let accepted = self.output_invitation(invitation_snapshot.clone())?;
-        let result = async {
-            let mut limits = std::collections::HashMap::new();
-            for team_id in invitation_snapshot
-                .team_id
-                .typed()?
-                .as_deref()
-                .filter(|_| teams_enabled)
-                .unwrap_or("")
-                .split(',')
-                .filter(|id| !id.is_empty())
-            {
-                {
-                    let state = self.lock()?;
-                    if !state.teams.get(team_id)?.is_some_and(|team| {
-                        team.organization_id == invitation_snapshot.organization_id
-                    }) {
-                        return Err(AuthError::bad_request("Team not found"));
-                    }
-                }
-                let limit = maximum.maximum(team_id).await?;
-                {
-                    let state = self.lock()?;
-                    let members = state.team_members.snapshot()?;
-                    if !members
-                        .iter()
-                        .any(|member| member.team_id == team_id && member.user_id == user_id)
-                        && limit.is_some_and(|limit| {
-                            members
-                                .iter()
-                                .filter(|member| member.team_id == team_id)
-                                .count()
-                                >= limit
-                        })
-                    {
-                        return Err(AuthError::forbidden("Team member limit reached"));
-                    }
-                }
-                let _ = limits.insert(team_id.to_owned(), limit);
-            }
-            let mut state = self.lock()?;
-            let invitation = state
-                .invitations
-                .get(invitation_id)?
-                .filter(|invitation| invitation.status == InvitationStatus::Accepted)
-                .ok_or_else(|| AuthError::bad_request("Invitation not found"))?;
-            let team_ids: Vec<_> = invitation
-                .team_id
-                .typed()?
-                .as_deref()
-                .filter(|_| teams_enabled)
-                .unwrap_or("")
-                .split(',')
-                .filter(|id| !id.is_empty())
-                .collect();
-            let session = session_token
-                .map(|token| {
-                    state
-                        .sessions
-                        .find(|row| row.token == token)?
-                        .ok_or(AuthError::SessionNotFound)
-                })
-                .transpose()?;
-            if state.members.snapshot()?.iter().any(|member| {
-                member.organization_id == invitation.organization_id && member.user_id == user_id
-            }) {
-                return Err(AuthError::bad_request("User is already a member"));
-            }
-            let mut reserved_teams = HashMap::new();
-            for team_id in &team_ids {
-                let team = state
-                    .teams
-                    .get(*team_id)?
-                    .filter(|team| team.organization_id == invitation.organization_id)
-                    .ok_or_else(|| AuthError::bad_request("Team not found"))?;
-                if !state
-                    .team_members
-                    .snapshot()?
-                    .iter()
-                    .any(|member| member.team_id == *team_id && member.user_id == user_id)
-                    && !reserved_teams.contains_key(*team_id)
-                {
-                    let actual = state
-                        .team_members
-                        .snapshot()?
-                        .iter()
-                        .filter(|member| member.team_id == *team_id)
-                        .count();
-                    let (team, reserved) = self.reserve_team_seat(
-                        team.clone(),
-                        actual,
-                        *limits.get(*team_id).ok_or_else(|| {
-                            AuthError::internal("Invitation teams changed while resolving capacity")
-                        })?,
-                    )?;
-                    if !reserved {
-                        return Err(AuthError::forbidden("Team member limit reached"));
-                    }
-                    let _ = reserved_teams.insert((*team_id).to_owned(), team);
-                }
-            }
-            let organization_id = invitation.organization_id.typed()?.clone();
-            let member = Member {
-                additional_fields: Default::default(),
-                id: self
-                    .generated_id("member", None, state.members.len())?
-                    .map(crate::SchemaValue::Typed)
-                    .unwrap_or_default(),
-                organization_id: invitation.organization_id.clone(),
-                user_id: (user_id.to_owned()).into(),
-                role: invitation.role,
-                created_at: (Utc::now()).into(),
-            };
-            let member: Member = self.store_record(EntityRole::Member, member, None, Map::new())?;
-            let member_output = self.output_member(member.clone())?;
-            for team_id in &team_ids {
-                if !state
-                    .team_members
-                    .snapshot()?
-                    .iter()
-                    .any(|member| member.team_id == *team_id && member.user_id == user_id)
-                {
-                    let id = self
-                        .generated_id("teamMember", None, state.team_members.len())?
-                        .map(crate::SchemaValue::Typed)
-                        .unwrap_or_default();
-                    state.team_members.push(crate::TeamMember {
-                        id,
-                        team_id: (*team_id).to_owned().into(),
-                        user_id: user_id.to_owned(),
-                        created_at: Utc::now(),
-                    });
-                }
-            }
-            for (id, team) in reserved_teams {
-                let _ = state.teams.replace(&id, team)?;
-            }
-            state.members.push(member.clone());
-            let Some(mut session) = session else {
-                return Ok((member_output, None));
-            };
-            let cookie_session = if let [team_id] = team_ids.as_slice() {
-                session.active_team_id = Some((*team_id).to_owned());
-                if let Some(fields) = &mut session.visible_fields {
-                    let _ = fields.insert("activeTeamId".into());
-                }
-                session.updated_at = Utc::now();
-                Some(session.clone())
-            } else {
-                None
-            };
-            session.active_organization_id = Some(organization_id);
-            if let Some(fields) = &mut session.visible_fields {
-                let _ = fields.insert("activeOrganizationId".into());
-            }
-            session.updated_at = Utc::now();
-            let mut stored = state
-                .sessions
-                .find_mut(|row| row.token == session.token)?
-                .ok_or(AuthError::SessionNotFound)?;
-            *stored = session;
-            Ok((member_output, cookie_session))
-        }
-        .await;
-        match result {
-            Ok((member, session)) => Ok((member, accepted, session)),
-            Err(error) => {
-                let restored = {
-                    let state = self.lock()?;
-                    if let Some(mut invitation) = state
-                        .invitations
-                        .get_mut(invitation_id)?
-                        .filter(|invitation| invitation.status == InvitationStatus::Accepted)
-                    {
-                        *invitation = self.store_record(
-                            EntityRole::Invitation,
-                            invitation.clone(),
-                            Some(
-                                [("status".into(), json!(InvitationStatus::Pending))]
-                                    .into_iter()
-                                    .collect(),
-                            ),
-                            Map::new(),
-                        )?;
-                        Some(invitation.clone())
-                    } else {
-                        None
-                    }
-                };
-                if let Some(restored) = restored {
-                    let _ = self.output_invitation(restored)?;
-                }
-                Err(error)
-            }
-        }
+        self.accept_invitation(
+            invitation_id,
+            user_id,
+            session_token,
+            teams_enabled,
+            maximum,
+        )
+        .await
     }
 
     async fn before_create_runtime_session(&self, input: &mut CreateSession) -> AuthResult<()> {
@@ -625,23 +418,25 @@ async fn invitation_fields_update_atomically_with_team_membership() {
     let rejection = reject.clone();
     let field = UserFieldConfig {
         required: Some(false),
-        returned: false,
+        returned: Some(false),
         field_name: Some("stored_marker".into()),
         default_value: Some(json!("created")),
         on_update: Some(Arc::new(|| json!("updated"))),
-        input_transform: Some(UserFieldTransform::new(move |value| {
-            if rejection.load(Ordering::SeqCst) && value == Some(json!("updated")) {
-                return Err(AuthError::bad_request("transform failed"));
-            }
-            Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
-        })),
-        output_transform: Some(UserFieldTransform::new(|value| {
-            Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
-        })),
+        transform: Some(FieldTransforms {
+            input: Some(UserFieldTransform::new(move |value| {
+                if rejection.load(Ordering::SeqCst) && value == Some(json!("updated")) {
+                    return Err(AuthError::bad_request("transform failed"));
+                }
+                Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
+            })),
+            output: Some(UserFieldTransform::new(|value| {
+                Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
+            })),
+        }),
         ..Default::default()
     };
     let schema = UserConfig {
-        additional_fields: [("marker".into(), field)].into(),
+        additional_fields: Some([("marker".into(), field)].into()),
     };
     let store = EphemeralStore::new(test_config());
     store

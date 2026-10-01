@@ -203,3 +203,49 @@ impl Default for GenericOAuthConfig {
         }
     }
 }
+
+impl GenericOAuthConfig {
+    /// Configure Auth0 discovery from a domain or URL and the default OIDC scopes.
+    pub fn auth0(client_id: &str, client_secret: &str, domain: &str) -> AuthResult<Self> {
+        let address = if domain.starts_with("http://") || domain.starts_with("https://") {
+            domain.to_owned()
+        } else {
+            format!("https://{domain}")
+        };
+        let url = url::Url::parse(&address)
+            .map_err(|error| better_auth_core::AuthError::config(error.to_string()))?;
+        let host = &url[url::Position::BeforeHost..url::Position::AfterPort];
+        Ok(Self::discovery_preset(
+            client_id,
+            client_secret,
+            format!("https://{host}/.well-known/openid-configuration"),
+        ))
+    }
+
+    /// Configure Keycloak discovery from the realm issuer and default OIDC scopes.
+    pub fn keycloak(client_id: &str, client_secret: &str, issuer: &str) -> Self {
+        Self::discovery_preset(
+            client_id,
+            client_secret,
+            format!(
+                "{}/.well-known/openid-configuration",
+                issuer.strip_suffix('/').unwrap_or(issuer)
+            ),
+        )
+    }
+
+    /// Configure Okta discovery from the issuer and default OIDC scopes.
+    pub fn okta(client_id: &str, client_secret: &str, issuer: &str) -> Self {
+        Self::keycloak(client_id, client_secret, issuer)
+    }
+
+    fn discovery_preset(client_id: &str, client_secret: &str, discovery_url: String) -> Self {
+        Self {
+            client_id: client_id.into(),
+            client_secret: Some(client_secret.into()),
+            discovery_url: Some(discovery_url),
+            scopes: vec!["openid".into(), "profile".into(), "email".into()],
+            ..Default::default()
+        }
+    }
+}

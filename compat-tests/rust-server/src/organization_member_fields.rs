@@ -1,4 +1,4 @@
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::config::{UserFieldConfig, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
 use better_auth::plugins::organization::hooks::{
@@ -66,18 +66,21 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
     let json = UserFieldConfig {
         field_type: UserFieldType::Json,
         required: Some(false),
-        input_transform: Some(UserFieldTransform::new(|value| {
-            Ok(value.map(|value| {
-                if value.is_string() {
-                    serde_json::json!(value.to_string())
-                } else {
-                    value
-                }
-            }))
-        })),
+        transform: Some(FieldTransforms {
+            input: Some(UserFieldTransform::new(|value| {
+                Ok(value.map(|value| {
+                    if value.is_string() {
+                        serde_json::json!(value.to_string())
+                    } else {
+                        value
+                    }
+                }))
+            })),
+            ..Default::default()
+        }),
         ..Default::default()
     };
-    config.schema.member.additional_fields.extend([
+    config.schema.member.fields_mut().extend([
         (
             "role".into(),
             UserFieldConfig {
@@ -89,7 +92,7 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
         ("userId".into(), unconstrained.clone()),
         ("teamId".into(), unconstrained.clone()),
     ]);
-    config.schema.invitation.additional_fields.extend([
+    config.schema.invitation.fields_mut().extend([
         ("email".into(), json.clone()),
         ("role".into(), json),
         ("organizationId".into(), unconstrained.clone()),
@@ -125,15 +128,15 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
             "hookState".into(),
             UserFieldConfig {
                 field_type: UserFieldType::Json,
-                input: false,
+                input: Some(false),
                 required: Some(false),
                 ..Default::default()
             },
         ),
     ]);
     for fields in [
-        &mut config.schema.member.additional_fields,
-        &mut config.schema.invitation.additional_fields,
+        config.schema.member.fields_mut(),
+        config.schema.invitation.fields_mut(),
     ] {
         fields.extend([
             (
@@ -157,7 +160,7 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
         let _ = config
             .schema
             .invitation
-            .additional_fields
+            .fields_mut()
             .insert("teamId".into(), unconstrained);
     }
 }

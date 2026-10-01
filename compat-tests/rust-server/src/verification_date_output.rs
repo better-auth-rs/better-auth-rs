@@ -1,4 +1,4 @@
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -108,16 +108,19 @@ async fn run(input: Input) -> AuthResult<Value> {
         UserFieldConfig {
             field_type: UserFieldType::Date,
             required: Some(true),
-            output_transform: Some(UserFieldTransform::new(move |_| {
-                output_events.lock().unwrap().push("output");
-                Ok(match input.kind {
-                    Kind::Number => Some(json!(4_102_444_800_000_i64)),
-                    Kind::Null => Some(Value::Null),
-                    Kind::Undefined => None,
-                    Kind::Object => Some(json!({"unknown": true})),
-                    Kind::InvalidDate => Some(json!("invalid-date")),
-                })
-            })),
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(move |_| {
+                    output_events.lock().unwrap().push("output");
+                    Ok(match input.kind {
+                        Kind::Number => Some(json!(4_102_444_800_000_i64)),
+                        Kind::Null => Some(Value::Null),
+                        Kind::Undefined => None,
+                        Kind::Object => Some(json!({"unknown": true})),
+                        Kind::InvalidDate => Some(json!("invalid-date")),
+                    })
+                })),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     );

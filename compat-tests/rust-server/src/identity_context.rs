@@ -136,18 +136,18 @@ async fn build(base: &str, input: &Value, events: Arc<Mutex<Vec<Value>>>) -> Aut
         enabled: Some(false),
         ..Default::default()
     });
-    config.user.additional_fields.insert(
+    config.user.fields_mut().insert(
         "secretNote".into(),
         better_auth_core::config::UserFieldConfig {
-            returned: false,
+            returned: Some(false),
             default_value: Some(json!("issued-secret")),
             ..Default::default()
         },
     );
-    config.session.additional_fields.insert(
+    config.session.fields_mut().insert(
         "secretSession".into(),
         better_auth_core::config::UserFieldConfig {
-            returned: false,
+            returned: Some(false),
             default_value: Some(json!("hidden-session")),
             ..Default::default()
         },

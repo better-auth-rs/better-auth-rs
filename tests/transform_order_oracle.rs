@@ -1,6 +1,6 @@
 #![cfg(feature = "seaorm2")]
 
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateUser, store::EphemeralStore,
     types::ListUsersParams, user_fields::UserFieldConfig,
@@ -65,20 +65,22 @@ async fn ordinary_output_transform_matches_upstream() -> AuthResult<()> {
         let mut config = AuthConfig::default();
         for name in ["name", "image"] {
             let trace = trace.clone();
-            let _ = config.user.additional_fields.insert(
+            let _ = config.user.fields_mut().insert(
                 name.into(),
                 UserFieldConfig {
-                    output_transform: Some(UserFieldTransform::new(move |value| {
-                        let raw = value
-                            .as_ref()
-                            .and_then(Value::as_str)
-                            .ok_or_else(|| AuthError::internal("Oracle field must be a string"))?;
-                        let mut trace = trace
-                            .lock()
-                            .map_err(|_| AuthError::internal("Oracle trace mutex was poisoned"))?;
-                        trace.push(format!("{name}:{raw}"));
-                        Ok(Some(json!(format!("{raw}:{}", trace.len()))))
-                    })),
+                    transform: Some(FieldTransforms {
+                        output: Some(UserFieldTransform::new(move |value| {
+                            let raw = value.as_ref().and_then(Value::as_str).ok_or_else(|| {
+                                AuthError::internal("Oracle field must be a string")
+                            })?;
+                            let mut trace = trace.lock().map_err(|_| {
+                                AuthError::internal("Oracle trace mutex was poisoned")
+                            })?;
+                            trace.push(format!("{name}:{raw}"));
+                            Ok(Some(json!(format!("{raw}:{}", trace.len()))))
+                        })),
+                        ..Default::default()
+                    }),
                     ..Default::default()
                 },
             );

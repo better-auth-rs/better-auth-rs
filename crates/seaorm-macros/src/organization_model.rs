@@ -108,7 +108,7 @@ pub(super) fn generate(
             if matches!(name.as_str(), "created_at" | "updated_at" | "expires_at") {
                 output_values.push(quote! {
                     let value = projected.remove(#public_name);
-                    let #ident = if fields.additional_fields.get(#public_name).is_some_and(|field| !matches!(field.field_type, #core_root::user_fields::UserFieldType::Date)) {
+                    let #ident = if fields.fields().get(#public_name).is_some_and(|field| !matches!(field.field_type, #core_root::user_fields::UserFieldType::Date)) {
                         value.map(#core_root::SchemaValue::Dynamic).unwrap_or_default()
                     } else {
                         #core_root::SchemaValue::from_json(value)
@@ -137,7 +137,7 @@ pub(super) fn generate(
                 };
                 output_values.push(quote! {
                     let value = projected.remove(#public_name);
-                    let #ident = if fields.additional_fields.contains_key(#public_name) {
+                    let #ident = if fields.fields().contains_key(#public_name) {
                         value.map(#core_root::SchemaValue::Dynamic).unwrap_or_default()
                     } else {
                         #unconfigured
@@ -145,7 +145,7 @@ pub(super) fn generate(
                 });
             } else {
                 let reference = reference.then(|| quote! {
-                    if !fields.additional_fields.contains_key(#public_name) {
+                    if !fields.fields().contains_key(#public_name) {
                         if let Some(value) = value.as_mut().filter(|value| !value.is_null()) {
                             *value = #core_root::serde_json::Value::String(#core_root::SchemaValue::<String>::from_json(Some(value.clone())).display_string()?);
                         }
@@ -168,10 +168,9 @@ pub(super) fn generate(
     } else {
         quote!(additional_fields: projected,)
     };
-    let projection = if role == EntityRole::TeamMember {
+    let record_fields = if role == EntityRole::TeamMember {
         quote! {
-            let mut projected = #core_root::serde_json::Map::new();
-            #(#output_values)*
+            Ok(#core_root::user_fields::AdapterRecord::new(Default::default(), Default::default()))
         }
     } else {
         quote! {
@@ -179,7 +178,7 @@ pub(super) fn generate(
             let model = model.as_object().ok_or_else(|| #core_root::AuthError::config("Organization models must serialize as objects"))?;
             let core = #core_root::serde_json::Map::from_iter([#(#core_values),*]);
             let mut storage = #core_root::serde_json::Map::new();
-            for (name, field) in &fields.additional_fields {
+            for (name, field) in fields.fields() {
                 if name == "id" { continue; }
                 let storage_name = field.field_name.as_deref().unwrap_or(name);
                 let column = Self::column(storage_name)?;
@@ -195,8 +194,7 @@ pub(super) fn generate(
                     let _ = storage.insert(storage_name.to_owned(), value.clone());
                 }
             }
-            let mut projected = fields.organization_output_fields(core, &storage)?;
-            #(#output_values)*
+            Ok(#core_root::user_fields::AdapterRecord::new(core, storage))
         }
     };
     Ok(quote! {
@@ -214,8 +212,11 @@ pub(super) fn generate(
             fn core_field_name(column: &Column) -> Option<&'static str> {
                 match column { #(#core_names)* }
             }
-            fn record(&self, fields: &#core_root::user_fields::UserConfig) -> #core_root::AuthResult<Self::Record> {
-                #projection
+            fn record_fields(&self, fields: &#core_root::user_fields::UserConfig) -> #core_root::AuthResult<#core_root::user_fields::AdapterRecord> {
+                #record_fields
+            }
+            fn record_from_fields(&self, fields: &#core_root::user_fields::UserConfig, mut projected: #core_root::serde_json::Map<String, #core_root::serde_json::Value>) -> #core_root::AuthResult<Self::Record> {
+                #(#output_values)*
                 Ok(#core_root::#record { #(#output,)* #extras })
             }
             fn is_id_reference(column: &Column) -> bool {

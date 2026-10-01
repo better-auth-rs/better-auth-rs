@@ -1,0 +1,373 @@
+{
+  "initialization": {
+    "omitted": {
+      "socialProviders": [],
+      "plugins": []
+    },
+    "empty": {
+      "socialProviders": [],
+      "plugins": []
+    },
+    "google": {
+      "socialProviders": [
+        {
+          "id": "google",
+          "mapProfileToUser": false,
+          "disableDefaultScope": false,
+          "disableIdTokenSignIn": false,
+          "getUserInfo": false,
+          "overrideUserInfoOnSignIn": false,
+          "verifyIdToken": false,
+          "refreshAccessToken": false
+        }
+      ],
+      "plugins": []
+    },
+    "github": {
+      "socialProviders": [
+        {
+          "id": "github",
+          "mapProfileToUser": false,
+          "disableDefaultScope": false,
+          "disableIdTokenSignIn": false,
+          "getUserInfo": false,
+          "overrideUserInfoOnSignIn": false,
+          "verifyIdToken": false,
+          "refreshAccessToken": false
+        }
+      ],
+      "plugins": []
+    },
+    "discord": {
+      "socialProviders": [
+        {
+          "id": "discord",
+          "mapProfileToUser": false,
+          "disableDefaultScope": false,
+          "disableIdTokenSignIn": false,
+          "getUserInfo": false,
+          "overrideUserInfoOnSignIn": false,
+          "verifyIdToken": false,
+          "refreshAccessToken": false
+        }
+      ],
+      "plugins": []
+    },
+    "ordered": {
+      "socialProviders": [
+        {
+          "id": "discord",
+          "mapProfileToUser": false,
+          "disableDefaultScope": false,
+          "disableIdTokenSignIn": false,
+          "getUserInfo": false,
+          "overrideUserInfoOnSignIn": false,
+          "verifyIdToken": false,
+          "refreshAccessToken": false
+        },
+        {
+          "id": "google",
+          "mapProfileToUser": false,
+          "disableDefaultScope": false,
+          "disableIdTokenSignIn": false,
+          "getUserInfo": false,
+          "overrideUserInfoOnSignIn": false,
+          "verifyIdToken": false,
+          "refreshAccessToken": false
+        },
+        {
+          "id": "github",
+          "mapProfileToUser": false,
+          "disableDefaultScope": false,
+          "disableIdTokenSignIn": false,
+          "getUserInfo": false,
+          "overrideUserInfoOnSignIn": false,
+          "verifyIdToken": false,
+          "refreshAccessToken": false
+        }
+      ],
+      "plugins": []
+    },
+    "overwritten": {
+      "socialProviders": [
+        {
+          "id": "google",
+          "mapProfileToUser": false,
+          "disableDefaultScope": false,
+          "disableIdTokenSignIn": false,
+          "getUserInfo": false,
+          "overrideUserInfoOnSignIn": false,
+          "prompt": "consent",
+          "verifyIdToken": false,
+          "refreshAccessToken": false
+        },
+        {
+          "id": "github",
+          "mapProfileToUser": false,
+          "disableDefaultScope": false,
+          "disableIdTokenSignIn": false,
+          "getUserInfo": false,
+          "overrideUserInfoOnSignIn": false,
+          "verifyIdToken": false,
+          "refreshAccessToken": false
+        }
+      ],
+      "plugins": []
+    },
+    "explicitDefaults": {
+      "socialProviders": [
+        {
+          "id": "google",
+          "mapProfileToUser": false,
+          "disableDefaultScope": false,
+          "disableIdTokenSignIn": false,
+          "disableImplicitSignUp": false,
+          "disableSignUp": false,
+          "getUserInfo": false,
+          "overrideUserInfoOnSignIn": false,
+          "prompt": "",
+          "verifyIdToken": false,
+          "scope": [],
+          "refreshAccessToken": false
+        }
+      ],
+      "plugins": []
+    },
+    "configured": {
+      "socialProviders": [
+        {
+          "id": "google",
+          "mapProfileToUser": true,
+          "disableDefaultScope": true,
+          "disableIdTokenSignIn": true,
+          "disableImplicitSignUp": true,
+          "disableSignUp": true,
+          "getUserInfo": true,
+          "overrideUserInfoOnSignIn": true,
+          "prompt": "consent",
+          "verifyIdToken": true,
+          "scope": [
+            "calendar",
+            "email"
+          ],
+          "refreshAccessToken": true
+        }
+      ],
+      "plugins": []
+    },
+    "genericOnly": {
+      "socialProviders": [],
+      "plugins": [
+        "generic-oauth"
+      ]
+    },
+    "mixed": {
+      "socialProviders": [
+        {
+          "id": "github",
+          "mapProfileToUser": false,
+          "disableDefaultScope": false,
+          "disableIdTokenSignIn": false,
+          "getUserInfo": false,
+          "overrideUserInfoOnSignIn": false,
+          "verifyIdToken": false,
+          "refreshAccessToken": false
+        }
+      ],
+      "plugins": [
+        "generic-oauth"
+      ]
+    }
+  },
+  "authorization": {
+    "google-defaults": {
+      "scope": "email profile openid",
+      "prompt": null
+    },
+    "google-empty": {
+      "scope": "email profile openid",
+      "prompt": null
+    },
+    "google-merged": {
+      "scope": "email profile openid configured shared request shared",
+      "prompt": "consent"
+    },
+    "google-noDefaults": {
+      "scope": "configured request",
+      "prompt": null
+    },
+    "google-noScopes": {
+      "scope": null,
+      "prompt": null
+    },
+    "github-defaults": {
+      "scope": "read:user user:email",
+      "prompt": null
+    },
+    "github-empty": {
+      "scope": "read:user user:email",
+      "prompt": null
+    },
+    "github-merged": {
+      "scope": "read:user user:email configured shared request shared",
+      "prompt": "consent"
+    },
+    "github-noDefaults": {
+      "scope": "configured request",
+      "prompt": null
+    },
+    "github-noScopes": {
+      "scope": null,
+      "prompt": null
+    },
+    "discord-defaults": {
+      "scope": "identify email",
+      "prompt": "none"
+    },
+    "discord-empty": {
+      "scope": "identify email",
+      "prompt": "none"
+    },
+    "discord-merged": {
+      "scope": "identify email request shared configured shared",
+      "prompt": "consent"
+    },
+    "discord-noDefaults": {
+      "scope": "request configured",
+      "prompt": "none"
+    },
+    "discord-noScopes": {
+      "scope": null,
+      "prompt": "none"
+    }
+  },
+  "profiles": {
+    "google-mapped": {
+      "user": {
+        "name": "Mapped",
+        "email": "mapped@example.test",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "calls": [
+        "map"
+      ]
+    },
+    "google-partial": {
+      "user": {
+        "name": "Owner",
+        "email": "owner@example.test",
+        "image": "https://images.test/owner.png",
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "calls": [
+        "map"
+      ]
+    },
+    "google-custom": {
+      "user": {
+        "name": "Custom",
+        "image": "https://images.test/custom.png",
+        "email": "custom@example.test",
+        "emailVerified": true,
+        "locale": "en"
+      },
+      "calls": [
+        "get"
+      ]
+    },
+    "github-mapped": {
+      "user": {
+        "name": "Mapped",
+        "email": "mapped@example.test",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "calls": [
+        "map"
+      ]
+    },
+    "github-partial": {
+      "user": {
+        "name": "Owner",
+        "email": "owner@example.test",
+        "image": "https://images.test/owner.png",
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "calls": [
+        "map"
+      ]
+    },
+    "github-custom": {
+      "user": {
+        "name": "Custom",
+        "image": "https://images.test/custom.png",
+        "email": "custom@example.test",
+        "emailVerified": true,
+        "locale": "en"
+      },
+      "calls": [
+        "get"
+      ]
+    },
+    "discord-mapped": {
+      "user": {
+        "name": "Mapped",
+        "email": "mapped@example.test",
+        "emailVerified": false,
+        "image": null,
+        "locale": "zh-TW"
+      },
+      "calls": [
+        "map"
+      ]
+    },
+    "discord-partial": {
+      "user": {
+        "name": "Owner",
+        "email": "owner@example.test",
+        "emailVerified": true,
+        "image": "https://cdn.discordapp.com/avatars/123456789/portrait.png",
+        "locale": "zh-TW"
+      },
+      "calls": [
+        "map"
+      ]
+    },
+    "discord-custom": {
+      "user": {
+        "name": "Custom",
+        "image": "https://images.test/custom.png",
+        "email": "custom@example.test",
+        "emailVerified": true,
+        "locale": "en"
+      },
+      "calls": [
+        "get"
+      ]
+    }
+  },
+  "idTokenDisabled": {
+    "status": 404,
+    "code": "ID_TOKEN_NOT_SUPPORTED",
+    "calls": []
+  },
+  "errors": {
+    "mapper": {
+      "message": "profile mapper failed",
+      "calls": [
+        "map"
+      ]
+    },
+    "custom": {
+      "message": "custom user info failed",
+      "calls": [
+        "get"
+      ]
+    }
+  }
+}

@@ -57,14 +57,22 @@ impl<
     }
     async fn get_team(&self, id: &str) -> AuthResult<Option<Team>> {
         let config = self.organization_fields()?.team;
-        models::find::<O::Team, _>(
+        let row = models::find::<O::Team, _>(
             self.connection(),
             id,
             self.config().advanced.database.generate_id(),
         )
-        .await?
-        .map(|row| row.record(&config))
-        .transpose()
+        .await?;
+        match row {
+            Some(row) => row
+                .record(
+                    &config,
+                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
     async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<Team>> {
         self.get_team_value_with_connection(self.connection(), id)
@@ -75,7 +83,7 @@ impl<
         let mut core = Default::default();
         if let Some(updated_at) = update.updated_at {
             core = values([("updated_at", json!(updated_at))]);
-        } else if !config.additional_fields.contains_key("updatedAt") {
+        } else if !config.fields().contains_key("updatedAt") {
             core = values([("updated_at", json!(Utc::now()))]);
         }
         for (name, value) in [
@@ -103,7 +111,11 @@ impl<
             models::find::<O::Team, _>(&tx, id, self.config().advanced.database.generate_id())
                 .await?
                 .ok_or_else(|| AuthError::not_found("Team not found"))?
-                .record(&Default::default())?;
+                .record(
+                    &Default::default(),
+                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await?;
         let _ = Entity::<O::TeamMember>::delete_many()
             .filter(
                 O::TeamMember::column("team_id")?
@@ -130,7 +142,12 @@ impl<
             .await
             .map_err(map_db_err)?;
         // Upstream projects every pending row before filtering expiration or updating team IDs.
-        let pending = models::project::<O::Invitation>(pending, &config)?;
+        let pending = models::project::<O::Invitation>(
+            pending,
+            &config,
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await?;
         for row in pending {
             if *row.expires_at.typed()? <= Utc::now() {
                 continue;
@@ -168,7 +185,12 @@ impl<
             .all(self.connection())
             .await
             .map_err(map_db_err)?;
-        models::project::<O::Team>(rows, &self.organization_fields()?.team)
+        models::project::<O::Team>(
+            rows,
+            &self.organization_fields()?.team,
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await
     }
     async fn count_organization_teams(&self, organization_id: &str) -> AuthResult<u64> {
         Entity::<O::Team>::find()
@@ -202,7 +224,13 @@ impl<
                 .await
                 .map_err(map_db_err)?
             {
-                teams.push(row.record(&config)?);
+                teams.push(
+                    row.record(
+                        &config,
+                        self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                    )
+                    .await?,
+                );
             }
         }
         Ok(teams)
@@ -212,7 +240,7 @@ impl<
         team_id: &str,
         user_id: &str,
     ) -> AuthResult<Option<TeamMember>> {
-        Entity::<O::TeamMember>::find()
+        let row = Entity::<O::TeamMember>::find()
             .filter(
                 O::TeamMember::column("team_id")?
                     .eq_id(team_id, self.config().advanced.database.generate_id())?,
@@ -223,9 +251,17 @@ impl<
             )
             .one(self.connection())
             .await
-            .map_err(map_db_err)?
-            .map(|row| row.record(&Default::default()))
-            .transpose()
+            .map_err(map_db_err)?;
+        match row {
+            Some(row) => row
+                .record(
+                    &Default::default(),
+                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
     async fn list_team_members(&self, team_id: &str) -> AuthResult<Vec<TeamMember>> {
         let rows = Entity::<O::TeamMember>::find()
@@ -240,7 +276,12 @@ impl<
             .all(self.connection())
             .await
             .map_err(map_db_err)?;
-        models::project::<O::TeamMember>(rows, &Default::default())
+        models::project::<O::TeamMember>(
+            rows,
+            &Default::default(),
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await
     }
     async fn count_team_members(&self, team_id: &str) -> AuthResult<u64> {
         Entity::<O::TeamMember>::find()
@@ -316,7 +357,7 @@ impl<
         id: &serde_json::Value,
     ) -> AuthResult<Option<Team>> {
         let config = self.organization_fields()?.team;
-        Entity::<O::Team>::find()
+        let row = Entity::<O::Team>::find()
             .filter(super::value_filter::equals_id(
                 O::Team::column("id")?,
                 id,
@@ -324,9 +365,17 @@ impl<
             )?)
             .one(db)
             .await
-            .map_err(map_db_err)?
-            .map(|row| row.record(&config))
-            .transpose()
+            .map_err(map_db_err)?;
+        match row {
+            Some(row) => row
+                .record(
+                    &config,
+                    db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
 
     pub(super) async fn add_team_member_with_connection<C: sea_orm::ConnectionTrait>(
@@ -366,7 +415,14 @@ impl<
             .await
             .map_err(map_db_err)?
         {
-            return Ok(Some(member.record(&Default::default())?));
+            return Ok(Some(
+                member
+                    .record(
+                        &Default::default(),
+                        db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                    )
+                    .await?,
+            ));
         }
         let count = Entity::<O::TeamMember>::find()
             .filter(

@@ -1,15 +1,18 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use indexmap::IndexMap;
 use serde::Deserialize;
-use serde::de::DeserializeOwned;
 use serde_json::Value;
-use std::collections::HashMap;
+
+mod defaults;
+use super::OAuthProfileMapper;
+use defaults::ProviderKind;
 use std::sync::Arc;
 
 /// Configuration for the OAuth plugin, containing all registered providers.
 #[derive(Clone, Default)]
 pub struct OAuthConfig {
-    pub providers: HashMap<String, OAuthProvider>,
+    pub providers: IndexMap<String, OAuthProvider>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -88,146 +91,10 @@ pub trait OAuthIdTokenVerifier: Send + Sync {
     async fn verify_id_token(&self, token: &str, nonce: Option<&str>) -> Result<bool, String>;
 }
 
-#[derive(Debug, Deserialize)]
-struct GitHubEmailAddress {
-    email: String,
-    #[serde(default)]
-    primary: bool,
-    #[serde(default)]
-    verified: bool,
-}
-
-#[derive(Clone)]
-struct GitHubUserInfoHandler {
-    user_url: String,
-    emails_url: String,
-}
-
-impl GitHubUserInfoHandler {
-    fn new(user_url: String, emails_url: String) -> Self {
-        Self {
-            user_url,
-            emails_url,
-        }
-    }
-
-    async fn fetch_json<T: DeserializeOwned>(
-        &self,
-        client: &reqwest::Client,
-        url: &str,
-        access_token: &str,
-    ) -> Result<T, String> {
-        let response = client
-            .get(url)
-            .bearer_auth(access_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "better-auth")
-            .send()
-            .await
-            .map_err(|error| format!("Failed to fetch GitHub user info: {error}"))?;
-
-        if !response.status().is_success() {
-            let body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(format!("GitHub user info request failed: {body}"));
-        }
-
-        response
-            .json()
-            .await
-            .map_err(|error| format!("Failed to parse GitHub user info: {error}"))
-    }
-}
-
-#[async_trait]
-impl OAuthUserInfoHandler for GitHubUserInfoHandler {
-    async fn get_user_info(
-        &self,
-        request: OAuthUserInfoRequest,
-    ) -> Result<OAuthUserInfoResponse, String> {
-        let access_token = request
-            .access_token
-            .as_deref()
-            .ok_or("Missing access token for user-info lookup")?;
-
-        let client = reqwest::Client::new();
-        let mut profile: Value = self
-            .fetch_json(&client, &self.user_url, access_token)
-            .await?;
-        let emails = self
-            .fetch_json::<Vec<GitHubEmailAddress>>(&client, &self.emails_url, access_token)
-            .await
-            .unwrap_or_default();
-
-        let resolved_email = profile
-            .get("email")
-            .and_then(Value::as_str)
-            .map(String::from)
-            .or_else(|| {
-                emails
-                    .iter()
-                    .find(|record| record.primary)
-                    .or_else(|| emails.first())
-                    .map(|record| record.email.clone())
-            })
-            .unwrap_or_default();
-
-        if let Some(profile_object) = profile.as_object_mut()
-            && profile_object
-                .get("email")
-                .and_then(Value::as_str)
-                .is_none()
-            && !resolved_email.is_empty()
-        {
-            let _ =
-                profile_object.insert("email".to_string(), Value::String(resolved_email.clone()));
-        }
-
-        let email_verified = emails
-            .iter()
-            .find(|record| record.email == resolved_email)
-            .map(|record| record.verified)
-            .unwrap_or(false);
-
-        let id = profile
-            .get("id")
-            .and_then(|value| value.as_i64().map(|value| value.to_string()))
-            .or_else(|| profile.get("id").and_then(Value::as_str).map(String::from))
-            .ok_or("missing id")?;
-
-        let login = profile
-            .get("login")
-            .and_then(Value::as_str)
-            .map(String::from);
-
-        Ok(OAuthUserInfoResponse {
-            user: OAuthUserInfo {
-                additional_fields: Default::default(),
-                id,
-                email: resolved_email,
-                name: profile
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .map(String::from)
-                    .or(login),
-                image: profile
-                    .get("avatar_url")
-                    .cloned()
-                    .map(serde_json::from_value)
-                    .transpose()
-                    .map_err(|error| format!("Invalid GitHub avatar: {error}"))?,
-                email_verified,
-            },
-            data: profile,
-        })
-    }
-}
-
-/// Configuration for a single OAuth provider.
+/// Input options for a social OAuth provider. Constructors retain omitted options.
 #[derive(Clone)]
 pub struct OAuthProvider {
+    kind: ProviderKind,
     pub client_id: String,
     pub client_secret: String,
     pub auth_url: String,
@@ -237,68 +104,73 @@ pub struct OAuthProvider {
     pub end_session_endpoint: Option<String>,
     /// Default redirect after provider logout; a request callback overrides it.
     pub post_logout_redirect_uri: Option<String>,
-    pub scopes: Vec<String>,
+    /// Additional scopes for built-in providers; omission preserves their defaults.
+    pub scopes: Option<Vec<String>>,
+    /// Exclude the built-in provider scopes from authorization requests.
+    pub disable_default_scope: bool,
+    /// Reject direct ID-token sign-in and linking before invoking the verifier.
+    pub disable_id_token_sign_in: bool,
+    /// Provider authentication prompt; omission preserves the provider default.
+    pub prompt: Option<String>,
     pub authorization_params: Vec<(String, String)>,
+    /// Replace the base JSON decoder for a custom provider.
     pub map_user_info: Option<fn(Value) -> Result<OAuthUserInfo, String>>,
+    /// Map local fields after built-in profile decoding without changing account identity.
+    pub map_profile_to_user: Option<Arc<dyn OAuthProfileMapper>>,
     pub get_user_info: Option<Arc<dyn OAuthUserInfoHandler>>,
     pub refresh_access_token: Option<Arc<dyn OAuthRefreshTokenHandler>>,
     pub verify_id_token: Option<Arc<dyn OAuthIdTokenVerifier>>,
-    pub disable_implicit_sign_up: bool,
-    pub disable_sign_up: bool,
+    pub disable_implicit_sign_up: Option<bool>,
+    pub disable_sign_up: Option<bool>,
     pub override_user_info_on_sign_in: bool,
 }
 
 impl OAuthProvider {
-    pub fn google(client_id: &str, client_secret: &str) -> Self {
+    /// Configure a custom social provider with explicit endpoints and profile handling.
+    pub fn custom(client_id: &str, client_secret: &str, auth_url: &str, token_url: &str) -> Self {
         Self {
-            client_id: client_id.to_string(),
-            client_secret: client_secret.to_string(),
-            auth_url: "https://accounts.google.com/o/oauth2/v2/auth".to_string(),
-            token_url: "https://oauth2.googleapis.com/token".to_string(),
-            user_info_url: Some("https://www.googleapis.com/oauth2/v3/userinfo".to_string()),
+            kind: ProviderKind::Custom,
+            client_id: client_id.into(),
+            client_secret: client_secret.into(),
+            auth_url: auth_url.into(),
+            token_url: token_url.into(),
+            user_info_url: None,
             end_session_endpoint: None,
             post_logout_redirect_uri: None,
-            scopes: vec![
-                "email".to_string(),
-                "profile".to_string(),
-                "openid".to_string(),
-            ],
-            authorization_params: vec![("include_granted_scopes".to_string(), "true".to_string())],
-            map_user_info: Some(|v| {
-                Ok(OAuthUserInfo {
-                    additional_fields: Default::default(),
-                    id: v
-                        .get("sub")
-                        .and_then(|v| v.as_str())
-                        .ok_or("missing sub")?
-                        .to_string(),
-                    email: v
-                        .get("email")
-                        .and_then(|v| v.as_str())
-                        .ok_or("missing email")?
-                        .to_string(),
-                    name: v.get("name").and_then(|v| v.as_str()).map(String::from),
-                    image: v
-                        .get("picture")
-                        .cloned()
-                        .map(serde_json::from_value)
-                        .transpose()
-                        .map_err(|error| format!("Invalid Google picture: {error}"))?,
-                    email_verified: v
-                        .get("email_verified")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false),
-                })
-            }),
+            scopes: None,
+            disable_default_scope: false,
+            disable_id_token_sign_in: false,
+            prompt: None,
+            authorization_params: Vec::new(),
+            map_user_info: None,
+            map_profile_to_user: None,
             get_user_info: None,
             refresh_access_token: None,
             verify_id_token: None,
-            disable_implicit_sign_up: false,
-            disable_sign_up: false,
+            disable_implicit_sign_up: None,
+            disable_sign_up: None,
             override_user_info_on_sign_in: false,
         }
     }
 
+    /// Configure Google with its built-in endpoints and profile decoder.
+    pub fn google(client_id: &str, client_secret: &str) -> Self {
+        Self {
+            kind: ProviderKind::Google {
+                jwks_url: super::google::JWKS_URL.to_owned(),
+            },
+            user_info_url: Some("https://www.googleapis.com/oauth2/v3/userinfo".into()),
+            authorization_params: vec![("include_granted_scopes".into(), "true".into())],
+            ..Self::custom(
+                client_id,
+                client_secret,
+                "https://accounts.google.com/o/oauth2/v2/auth",
+                "https://oauth2.googleapis.com/token",
+            )
+        }
+    }
+
+    /// Configure GitHub with its built-in profile and email lookup.
     pub fn github(client_id: &str, client_secret: &str) -> Self {
         Self::github_with_endpoints(
             client_id,
@@ -310,10 +182,7 @@ impl OAuthProvider {
         )
     }
 
-    /// Construct a GitHub provider using custom endpoints.
-    ///
-    /// This keeps the built-in GitHub semantics while allowing local test
-    /// harnesses or GitHub Enterprise-style deployments to override the URLs.
+    /// Configure GitHub with custom endpoints while retaining GitHub profile semantics.
     pub fn github_with_endpoints(
         client_id: &str,
         client_secret: &str,
@@ -323,70 +192,98 @@ impl OAuthProvider {
         user_emails_url: &str,
     ) -> Self {
         Self {
-            client_id: client_id.to_string(),
-            client_secret: client_secret.to_string(),
-            auth_url: auth_url.to_string(),
-            token_url: token_url.to_string(),
-            user_info_url: Some(user_info_url.to_string()),
-            end_session_endpoint: None,
-            post_logout_redirect_uri: None,
-            scopes: vec!["read:user".to_string(), "user:email".to_string()],
-            authorization_params: Vec::new(),
-            map_user_info: None,
-            get_user_info: Some(Arc::new(GitHubUserInfoHandler::new(
-                user_info_url.to_string(),
-                user_emails_url.to_string(),
-            ))),
-            refresh_access_token: None,
-            verify_id_token: None,
-            disable_implicit_sign_up: false,
-            disable_sign_up: false,
-            override_user_info_on_sign_in: false,
+            kind: ProviderKind::GitHub {
+                user_url: user_info_url.into(),
+                emails_url: user_emails_url.into(),
+            },
+            user_info_url: Some(user_info_url.into()),
+            ..Self::custom(client_id, client_secret, auth_url, token_url)
         }
     }
 
+    /// Configure Discord with its built-in endpoints and profile decoder.
     pub fn discord(client_id: &str, client_secret: &str) -> Self {
         Self {
-            client_id: client_id.to_string(),
-            client_secret: client_secret.to_string(),
-            auth_url: "https://discord.com/api/oauth2/authorize".to_string(),
-            token_url: "https://discord.com/api/oauth2/token".to_string(),
-            user_info_url: Some("https://discord.com/api/users/@me".to_string()),
-            end_session_endpoint: None,
-            post_logout_redirect_uri: None,
-            scopes: vec!["identify".to_string(), "email".to_string()],
-            authorization_params: Vec::new(),
-            map_user_info: Some(|v| {
-                Ok(OAuthUserInfo {
-                    additional_fields: Default::default(),
-                    id: v
-                        .get("id")
-                        .and_then(|v| v.as_str())
-                        .ok_or("missing id")?
-                        .to_string(),
-                    email: v
-                        .get("email")
-                        .and_then(|v| v.as_str())
-                        .ok_or("missing email")?
-                        .to_string(),
-                    name: v.get("username").and_then(|v| v.as_str()).map(String::from),
-                    image: v.get("avatar").and_then(|v| v.as_str()).map(|a| {
-                        Some(format!(
-                            "https://cdn.discordapp.com/avatars/{}/{}.png",
-                            v.get("id").and_then(|v| v.as_str()).unwrap_or(""),
-                            a
-                        ))
-                    }),
-                    email_verified: v.get("verified").and_then(|v| v.as_bool()).unwrap_or(false),
-                })
-            }),
-            get_user_info: None,
-            refresh_access_token: None,
-            verify_id_token: None,
-            disable_implicit_sign_up: false,
-            disable_sign_up: false,
-            override_user_info_on_sign_in: false,
+            kind: ProviderKind::Discord,
+            user_info_url: Some("https://discord.com/api/users/@me".into()),
+            ..Self::custom(
+                client_id,
+                client_secret,
+                "https://discord.com/api/oauth2/authorize",
+                "https://discord.com/api/oauth2/token",
+            )
         }
+    }
+
+    /// Return the effective implicit sign-up policy.
+    pub fn disable_implicit_sign_up(&self) -> bool {
+        self.disable_implicit_sign_up.unwrap_or(false)
+    }
+
+    /// Return the effective sign-up policy.
+    pub fn disable_sign_up(&self) -> bool {
+        self.disable_sign_up.unwrap_or(false)
+    }
+
+    pub(super) fn google_jwks_url(&self) -> Option<&str> {
+        match &self.kind {
+            ProviderKind::Google { jwks_url } => Some(jwks_url),
+            _ => None,
+        }
+    }
+
+    pub(super) fn google_hosted_domain(&self) -> Option<&str> {
+        self.authorization_params
+            .iter()
+            .find(|(name, _)| name == "hd")
+            .map(|(_, value)| value.as_str())
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_google_jwks_url(&mut self, url: String) {
+        self.kind = ProviderKind::Google { jwks_url: url };
+    }
+
+    pub(super) fn resolve(&self) -> Self {
+        let mut provider = self.clone();
+        if provider.get_user_info.is_some() {
+            // Upstream custom user-info handlers return before profile mapping.
+            provider.map_profile_to_user = None;
+        } else {
+            self.kind.apply(&mut provider);
+        }
+        provider
+    }
+
+    pub(super) fn social_scopes<'a>(&'a self, request: Option<&'a [String]>) -> Vec<&'a str> {
+        let configured = self.scopes.as_deref().unwrap_or_default();
+        if matches!(self.kind, ProviderKind::Custom) {
+            return request
+                .unwrap_or(configured)
+                .iter()
+                .map(String::as_str)
+                .collect();
+        }
+        let mut scopes = if self.disable_default_scope {
+            Vec::new()
+        } else {
+            self.kind.scopes().to_vec()
+        };
+        let request = request.unwrap_or_default();
+        let (first, second) = if matches!(self.kind, ProviderKind::Discord) {
+            (request, configured)
+        } else {
+            (configured, request)
+        };
+        scopes.extend(first.iter().chain(second).map(String::as_str));
+        scopes
+    }
+
+    pub(super) fn social_prompt(&self) -> Option<&str> {
+        self.prompt
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .or_else(|| matches!(self.kind, ProviderKind::Discord).then_some("none"))
     }
 }
 
@@ -470,11 +367,11 @@ mod tests {
     // Upstream source: packages/core/src/social-providers/github.ts :: github().createAuthorizationURL default scope list.
     #[test]
     fn github_provider_uses_ts_default_scopes() {
-        let provider = OAuthProvider::github("github-client-id", "github-client-secret");
+        let provider = OAuthProvider::github("github-client-id", "github-client-secret").resolve();
 
         assert_eq!(
-            provider.scopes,
-            vec!["read:user".to_string(), "user:email".to_string()]
+            provider.social_scopes(None),
+            vec!["read:user", "user:email"]
         );
         assert!(provider.get_user_info.is_some());
         assert!(provider.map_user_info.is_none());
@@ -515,7 +412,8 @@ mod tests {
             "https://github.com/login/oauth/access_token",
             &user_url,
             &emails_url,
-        );
+        )
+        .resolve();
         let handler = provider.get_user_info.as_ref().unwrap();
 
         let response = handler
@@ -583,7 +481,8 @@ mod tests {
             "https://github.com/login/oauth/access_token",
             &user_url,
             &emails_url,
-        );
+        )
+        .resolve();
         let handler = provider.get_user_info.as_ref().unwrap();
 
         let response = handler

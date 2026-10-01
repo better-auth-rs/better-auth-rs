@@ -1,4 +1,4 @@
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::{
     AuthConfig, AuthSchema, BetterAuth,
     config::{UserFieldConfig, UserFieldReference, UserFieldType},
@@ -93,23 +93,26 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
             field: "id".into(),
         }),
         default_value: Some(json!(1)),
-        output_transform: Some(UserFieldTransform::new(move |value| {
-            count.fetch_add(1, Ordering::SeqCst);
-            assert!(value.as_ref().unwrap().is_string());
-            Ok(value)
-        })),
+        transform: Some(FieldTransforms {
+            output: Some(UserFieldTransform::new(move |value| {
+                count.fetch_add(1, Ordering::SeqCst);
+                assert!(value.as_ref().unwrap().is_string());
+                Ok(value)
+            })),
+            ..Default::default()
+        }),
         ..Default::default()
     };
     let mut config = AuthConfig::new("reference-fields-consumer-secret-at-least-32-chars");
     config
         .user
-        .additional_fields
+        .fields_mut()
         .insert("owner".into(), field.clone());
     let mut session_field = field;
     session_field.on_update = Some(Arc::new(|| json!(-0.0)));
     config
         .session
-        .additional_fields
+        .fields_mut()
         .insert("owner".into(), session_field);
     let auth = BetterAuth::<AppSchema>::new(config.clone())
         .store(SeaOrmStore::<AppSchema>::new(

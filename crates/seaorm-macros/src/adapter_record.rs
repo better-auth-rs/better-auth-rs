@@ -101,7 +101,7 @@ pub(super) fn generate(
     let id_type = identity::field_type(fields, "id")?;
     let reference_output = (role == EntityRole::Account).then(|| {
         quote! {
-            if !config.additional_fields.contains_key("userId") {
+            if !config.fields().contains_key("userId") {
                 if let Some(id) = logical.remove("userId") {
                     let id = #core::SchemaValue::<String>::from_json(Some(id)).display_string()?;
                     let _ = logical.insert("userId".into(), #core::serde_json::Value::String(id));
@@ -164,7 +164,7 @@ pub(super) fn generate(
                 }
                 #reference_output
                 let mut storage = #core::serde_json::Map::new();
-                for (name, field) in &config.additional_fields {
+                for (name, field) in config.fields() {
                     if name == "id" { continue; }
                     let name = field.field_name.as_deref().unwrap_or(name);
                     let value = match Self::field_column(name)? { #(#values)* };

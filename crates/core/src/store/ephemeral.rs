@@ -29,10 +29,14 @@ mod api_keys;
 mod device_codes;
 mod fields;
 mod hooks;
+mod invitation_accept;
 mod jwks;
 #[cfg(test)]
 mod lifecycle_tests;
+mod member_delete;
 mod organization;
+#[cfg(test)]
+mod organization_async_tests;
 mod passkeys;
 mod rate_limits;
 mod rows;
@@ -40,6 +44,7 @@ mod runtime;
 mod session_hooks;
 mod sessions;
 mod state;
+mod team_capacity;
 mod teams;
 mod transactions;
 mod two_factor;
@@ -100,6 +105,15 @@ impl EphemeralStore {
             .database
             .generate_id()
             .adapter_id(model, supplied, false)
+    }
+
+    fn assign_insert_serial_id(&self, id: &mut crate::SchemaValue<String>, row_count: usize) {
+        if matches!(
+            self.config.advanced.database.generate_id(),
+            crate::id::IdGeneration::Serial
+        ) {
+            *id = (row_count + 1).to_string().into();
+        }
     }
 
     /// Construct an empty adapter. Restarting the process discards all records.
@@ -166,30 +180,45 @@ impl EphemeralStore {
         Ok(lock)
     }
 
-    fn output_organization(&self, value: Organization) -> AuthResult<Organization> {
-        let metadata = value.metadata.clone();
-        let mut output: Organization =
-            self.output_record(better_auth_schema_registry::EntityRole::Organization, value)?;
+    async fn output_organization(&self, value: Organization) -> AuthResult<Organization> {
+        Ok(self.output_organizations(vec![value]).await?.remove(0))
+    }
+    async fn output_organizations(
+        &self,
+        values: Vec<Organization>,
+    ) -> AuthResult<Vec<Organization>> {
+        let metadata: Vec<_> = values.iter().map(|value| value.metadata.clone()).collect();
+        let mut output: Vec<Organization> = self
+            .output_records(
+                better_auth_schema_registry::EntityRole::Organization,
+                values,
+            )
+            .await?;
         if !self
             .organization_fields()?
             .organization
-            .additional_fields
+            .fields()
             .contains_key("metadata")
         {
-            output.metadata = metadata;
+            for (output, metadata) in output.iter_mut().zip(metadata) {
+                output.metadata = metadata;
+            }
         }
         Ok(output)
     }
-    fn output_member(&self, value: Member) -> AuthResult<Member> {
+    async fn output_member(&self, value: Member) -> AuthResult<Member> {
         self.output_record(better_auth_schema_registry::EntityRole::Member, value)
+            .await
     }
-    fn output_invitation(&self, value: Invitation) -> AuthResult<Invitation> {
+    async fn output_invitation(&self, value: Invitation) -> AuthResult<Invitation> {
         self.output_record(better_auth_schema_registry::EntityRole::Invitation, value)
+            .await
     }
-    fn output_team(&self, value: crate::Team) -> AuthResult<crate::Team> {
+    async fn output_team(&self, value: crate::Team) -> AuthResult<crate::Team> {
         self.output_record(better_auth_schema_registry::EntityRole::Team, value)
+            .await
     }
-    fn output_organization_role(
+    async fn output_organization_role(
         &self,
         value: crate::OrganizationRole,
     ) -> AuthResult<crate::OrganizationRole> {
@@ -197,6 +226,7 @@ impl EphemeralStore {
             better_auth_schema_registry::EntityRole::OrganizationRole,
             value,
         )
+        .await
     }
 }
 

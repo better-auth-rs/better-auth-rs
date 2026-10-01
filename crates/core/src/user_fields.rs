@@ -3,7 +3,7 @@
 use crate::{AuthError, AuthResult};
 use indexmap::IndexMap;
 use serde_json::{Map, Value};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 mod adapter;
 mod batch;
 pub(crate) use batch::project_fields;
@@ -49,17 +49,27 @@ pub enum UserFieldType {
     Enum(Vec<String>),
 }
 
+/// Input and output callbacks configured for an application field.
+#[derive(Clone, Default)]
+pub struct FieldTransforms {
+    /// Transform input at public parsing and storage boundaries.
+    /// Public parsing requires a synchronous callback; adapters can await async callbacks.
+    pub input: Option<UserFieldTransform>,
+    /// Transform stored values at adapter output boundaries.
+    pub output: Option<UserFieldTransform>,
+}
+
 /// Schema for an application-owned user field.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct UserFieldConfig {
     /// Storage type; route validation is supplied separately by `validator`.
     pub field_type: UserFieldType,
     /// User input requires `Some(true)`; organization input requires any value except `Some(false)`.
     pub required: Option<bool>,
-    /// Permit public client input.
-    pub input: bool,
-    /// Include the field in public user views.
-    pub returned: bool,
+    /// Permit public client input. Omission defaults to true.
+    pub input: Option<bool>,
+    /// Include the field in public user views. Omission defaults to true.
+    pub returned: Option<bool>,
     /// Serialized application model field name.
     pub field_name: Option<String>,
     /// Foreign-key metadata. References to `id` use the adapter's ID output conversion.
@@ -72,12 +82,8 @@ pub struct UserFieldConfig {
     pub on_update: Option<Arc<dyn Fn() -> Value + Send + Sync>>,
     /// Validate public input before persistence; takes precedence over the route input transform.
     pub validator: Option<UserFieldValidator>,
-    /// Transform input at public parsing and storage boundaries.
-    /// Public parsing requires a synchronous callback; core adapters can await async callbacks.
-    pub input_transform: Option<UserFieldTransform>,
-    /// Transform a stored value when constructing a view.
-    /// Core adapters await async callbacks; Organization policies require synchronous callbacks.
-    pub output_transform: Option<UserFieldTransform>,
+    /// Field callbacks. `None` preserves omission; `Some(Default::default())` is an empty container.
+    pub transform: Option<FieldTransforms>,
 }
 
 impl std::fmt::Debug for UserFieldConfig {
@@ -93,33 +99,38 @@ impl std::fmt::Debug for UserFieldConfig {
     }
 }
 
-impl Default for UserFieldConfig {
-    fn default() -> Self {
-        Self {
-            field_type: UserFieldType::String,
-            required: None,
-            input: true,
-            returned: true,
-            field_name: None,
-            references: None,
-            default_value: None,
-            default_value_fn: None,
-            on_update: None,
-            validator: None,
-            input_transform: None,
-            output_transform: None,
-        }
-    }
-}
-
 /// Application user schema.
 #[derive(Clone, Default)]
 pub struct UserConfig {
-    /// Public field names and their storage/input/output policies.
-    pub additional_fields: IndexMap<String, UserFieldConfig>,
+    /// Public field policies. `None` preserves omission; `Some(IndexMap::new())` is explicitly empty.
+    pub additional_fields: Option<IndexMap<String, UserFieldConfig>>,
 }
 
 impl UserFieldConfig {
+    /// Whether the public input boundary permits this field; defaults to true.
+    pub fn input(&self) -> bool {
+        self.input.unwrap_or(true)
+    }
+
+    /// Whether public views include this field; defaults to true.
+    pub fn returned(&self) -> bool {
+        self.returned.unwrap_or(true)
+    }
+
+    /// Configured input callback, without invoking the callback.
+    pub fn input_transform(&self) -> Option<&UserFieldTransform> {
+        self.transform
+            .as_ref()
+            .and_then(|transform| transform.input.as_ref())
+    }
+
+    /// Configured output callback, without invoking the callback.
+    pub fn output_transform(&self) -> Option<&UserFieldTransform> {
+        self.transform
+            .as_ref()
+            .and_then(|transform| transform.output.as_ref())
+    }
+
     pub(crate) fn normalize_date(&self, value: &mut Value) -> AuthResult<()> {
         if matches!(self.field_type, UserFieldType::Date) && value.is_string() {
             let date: chrono::DateTime<chrono::Utc> = serde_json::from_value(value.clone())?;
@@ -147,7 +158,24 @@ pub fn is_truthy(value: &Value) -> bool {
     }
 }
 
+pub(crate) fn fields_or_empty(
+    fields: &Option<IndexMap<String, UserFieldConfig>>,
+) -> &IndexMap<String, UserFieldConfig> {
+    static EMPTY: LazyLock<IndexMap<String, UserFieldConfig>> = LazyLock::new(IndexMap::new);
+    fields.as_ref().unwrap_or(&EMPTY)
+}
+
 impl UserConfig {
+    /// Runtime fields. An omitted map has no fields.
+    pub fn fields(&self) -> &IndexMap<String, UserFieldConfig> {
+        fields_or_empty(&self.additional_fields)
+    }
+
+    /// Configure fields, creating an explicitly present map when omitted.
+    pub fn fields_mut(&mut self) -> &mut IndexMap<String, UserFieldConfig> {
+        self.additional_fields.get_or_insert_default()
+    }
+
     /// Parse public input. Updates omit missing fields and never apply creation defaults.
     pub fn parse_input(
         &self,
@@ -155,9 +183,9 @@ impl UserConfig {
         create: bool,
     ) -> AuthResult<Map<String, Value>> {
         let mut parsed = Map::new();
-        for (name, field) in &self.additional_fields {
+        for (name, field) in self.fields() {
             let value = if let Some(value) = input.get(name) {
-                if !field.input {
+                if !field.input() {
                     if create && let Some(default) = field.default_value() {
                         let _ = parsed.insert(name.clone(), default);
                         continue;
@@ -177,7 +205,7 @@ impl UserConfig {
                             message: error.to_string(),
                         })?,
                     )
-                } else if let Some(transform) = &field.input_transform {
+                } else if let Some(transform) = field.input_transform() {
                     transform.call_sync(Some(value.clone()))?
                 } else {
                     Some(value.clone())
@@ -211,11 +239,7 @@ impl UserConfig {
     ) -> AuthResult<Map<String, Value>> {
         let allowed = profile
             .iter()
-            .filter(|(name, _)| {
-                self.additional_fields
-                    .get(*name)
-                    .is_some_and(|field| field.input)
-            })
+            .filter(|(name, _)| self.fields().get(*name).is_some_and(|field| field.input()))
             .map(|(name, value)| (name.clone(), value.clone()))
             .collect();
         self.parse_input(&allowed, create)
@@ -237,39 +261,15 @@ impl UserConfig {
         preserve_id: bool,
     ) -> AuthResult<Map<String, Value>> {
         let mut output = Map::new();
-        for (name, field) in &self.additional_fields {
+        for (name, field) in self.fields() {
             if preserve_id && name == "id" {
                 continue;
             }
             let Some(mut value) = field.storage_value(input.get(name), create)? else {
                 continue;
             };
-            if let Some(transform) = &field.input_transform {
+            if let Some(transform) = field.input_transform() {
                 value = transform.call(value).await?;
-            }
-            if let Some(value) = value {
-                let _ = output.insert(field.field_name.as_ref().unwrap_or(name).clone(), value);
-            }
-        }
-        Ok(output)
-    }
-
-    fn storage_fields_inner(
-        &self,
-        input: Map<String, Value>,
-        create: bool,
-        preserve_id: bool,
-    ) -> AuthResult<Map<String, Value>> {
-        let mut output = Map::new();
-        for (name, field) in &self.additional_fields {
-            if preserve_id && name == "id" {
-                continue;
-            }
-            let Some(mut value) = field.storage_value(input.get(name), create)? else {
-                continue;
-            };
-            if let Some(transform) = &field.input_transform {
-                value = transform.call_sync(value)?;
             }
             if let Some(value) = value {
                 let _ = output.insert(field.field_name.as_ref().unwrap_or(name).clone(), value);
@@ -293,7 +293,7 @@ impl UserFieldConfig {
                 self.on_update.as_ref().map(|update| update())
             }
         });
-        if value.is_none() && (!create || self.input_transform.is_none()) {
+        if value.is_none() && (!create || self.input_transform().is_none()) {
             return Ok(None);
         }
         if create

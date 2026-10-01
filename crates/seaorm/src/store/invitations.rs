@@ -64,14 +64,22 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
     }
     async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
         let config = self.organization_fields()?.invitation;
-        models::find::<O::Invitation, _>(
+        let row = models::find::<O::Invitation, _>(
             self.connection(),
             id,
             self.config().advanced.database.generate_id(),
         )
-        .await?
-        .map(|row| row.record(&config))
-        .transpose()
+        .await?;
+        match row {
+            Some(row) => row
+                .record(
+                    &config,
+                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
     async fn get_pending_invitation(
         &self,
@@ -79,7 +87,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         email: &str,
     ) -> AuthResult<Option<Invitation>> {
         let config = self.organization_fields()?.invitation;
-        Entity::<O::Invitation>::find()
+        let row = Entity::<O::Invitation>::find()
             .filter(O::Invitation::column("organization_id")?.eq_id(
                 organization_id,
                 self.config().advanced.database.generate_id(),
@@ -89,9 +97,17 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             .filter(O::Invitation::column("expires_at")?.gt(Utc::now()))
             .one(self.connection())
             .await
-            .map_err(map_db_err)?
-            .map(|row| row.record(&config))
-            .transpose()
+            .map_err(map_db_err)?;
+        match row {
+            Some(row) => row
+                .record(
+                    &config,
+                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
     async fn update_invitation_status(
         &self,
@@ -139,7 +155,12 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             .all(self.connection())
             .await
             .map_err(map_db_err)?;
-        models::project::<O::Invitation>(rows, &self.organization_fields()?.invitation)
+        models::project::<O::Invitation>(
+            rows,
+            &self.organization_fields()?.invitation,
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await
     }
     async fn count_pending_organization_invitations(
         &self,
@@ -171,7 +192,12 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             .all(self.connection())
             .await
             .map_err(map_db_err)?;
-        let invitations = models::project::<O::Invitation>(rows.clone(), &fields.invitation)?;
+        let invitations = models::project::<O::Invitation>(
+            rows.clone(),
+            &fields.invitation,
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await?;
         let mut result = Vec::with_capacity(rows.len());
         for (row, invitation) in rows.into_iter().zip(invitations) {
             let organization = Entity::<O::Organization>::find()
@@ -180,9 +206,17 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
                 )
                 .one(self.connection())
                 .await
-                .map_err(map_db_err)?
-                .map(|row| row.record(&fields.organization))
-                .transpose()?;
+                .map_err(map_db_err)?;
+            let organization = match organization {
+                Some(row) => Some(
+                    row.record(
+                        &fields.organization,
+                        self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                    )
+                    .await?,
+                ),
+                None => None,
+            };
             result.push(better_auth_core::store::InvitationOrganization {
                 invitation,
                 organization,

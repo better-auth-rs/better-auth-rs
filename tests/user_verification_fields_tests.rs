@@ -1,6 +1,6 @@
 #![cfg(feature = "seaorm2")]
 
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth_core::{
     AuthConfig, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateSession, CreateUser,
     UpdateUser, UserView,
@@ -204,18 +204,21 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
     let observed = inputs.clone();
     let mut config = AuthConfig::default();
     config.advanced.database.generate_id = Some(IdGeneration::Serial);
-    let _ = config.user.additional_fields.insert(
+    let _ = config.user.fields_mut().insert(
         "name".into(),
         UserFieldConfig {
             field_name: Some("storedName".into()),
-            input_transform: Some(UserFieldTransform::new(move |value| {
-                let _ = observed.fetch_add(1, Ordering::SeqCst);
-                Ok(value.map(|value| json!({"stored":value})))
-            })),
+            transform: Some(FieldTransforms {
+                input: Some(UserFieldTransform::new(move |value| {
+                    let _ = observed.fetch_add(1, Ordering::SeqCst);
+                    Ok(value.map(|value| json!({"stored":value})))
+                })),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     );
-    let _ = config.user.additional_fields.insert(
+    let _ = config.user.fields_mut().insert(
         "sponsor".into(),
         UserFieldConfig {
             field_name: Some("storedSponsor".into()),
@@ -223,12 +226,15 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
                 model: "user".into(),
                 field: "id".into(),
             }),
-            input_transform: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| {
-                    assert_eq!(value, json!("sponsor"));
-                    json!("1.6e1")
-                }))
-            })),
+            transform: Some(FieldTransforms {
+                input: Some(UserFieldTransform::new(|value| {
+                    Ok(value.map(|value| {
+                        assert_eq!(value, json!("sponsor"));
+                        json!("1.6e1")
+                    }))
+                })),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     );

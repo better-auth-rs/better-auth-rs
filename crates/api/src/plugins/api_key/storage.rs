@@ -1,16 +1,22 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock, Weak};
 
 use better_auth_core::store::SecondaryStorage;
 use better_auth_core::{ApiKey, AuthContext, AuthError, AuthResult, CreateApiKey, UpdateApiKey};
 use chrono::{DateTime, SecondsFormat, Utc};
+use futures_util::{StreamExt, TryFutureExt, future, stream};
 use serde_json::Value;
 use tokio::sync::Mutex;
 
 use super::ApiKeyConfig;
 
+const STORAGE_CONCURRENCY: usize = 10;
+
 mod usage;
 pub(super) use usage::consume;
+#[cfg(test)]
+mod batch_tests;
 
 /// Persistence used by an API Key configuration.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -174,16 +180,31 @@ pub(super) async fn put(
     key: &ApiKey,
     fallback: bool,
 ) -> AuthResult<()> {
+    put_with_failure_flag(storage, key, fallback, None).await
+}
+
+async fn put_with_failure_flag(
+    storage: &dyn SecondaryStorage,
+    key: &ApiKey,
+    fallback: bool,
+    failed: Option<&AtomicBool>,
+) -> AuthResult<()> {
     let value = serialize(key)?;
     let ttl = ttl(key)?;
     let hashed = format!("api-key:{}", key.key_hash);
     let id = format!("api-key:by-id:{}", key.id.display_string()?);
     let reference = format!("api-key:by-ref:{}", key.reference_id);
     if fallback {
+        // Stop a list refill when an IO fails, even while another write for this key is pending.
+        let stop_batch = |_: &AuthError| {
+            if let Some(failed) = failed {
+                failed.store(true, Ordering::Relaxed);
+            }
+        };
         let (hashed, id, reference) = tokio::join!(
-            storage.set(&hashed, &value, ttl),
-            storage.set(&id, &value, ttl),
-            storage.delete(&reference)
+            storage.set(&hashed, &value, ttl).inspect_err(stop_batch),
+            storage.set(&id, &value, ttl).inspect_err(stop_batch),
+            storage.delete(&reference).inspect_err(stop_batch)
         );
         hashed?;
         id?;
@@ -456,17 +477,35 @@ pub(super) async fn list(
         if let Some(storage) = storage {
             let ids = reference_ids(storage.get(&format!("api-key:by-ref:{reference}")).await?);
             if !ids.is_empty() || !config.fallback_to_database {
-                let mut keys = Vec::new();
-                for id in ids {
-                    if let Some(key) = cached(
-                        storage.as_ref(),
-                        &format!("api-key:by-id:{}", id.display_string()?),
-                    )
-                    .await?
-                    {
-                        keys.push(key);
-                    }
-                }
+                let failed = AtomicBool::new(false);
+                let mut results = stream::iter(ids.into_iter().enumerate())
+                    .take_while(|_| future::ready(!failed.load(Ordering::Relaxed)))
+                    .map(|(index, id)| {
+                        let failed = &failed;
+                        async move {
+                            let result = async {
+                                cached(
+                                    storage.as_ref(),
+                                    &format!("api-key:by-id:{}", id.display_string()?),
+                                )
+                                .await
+                            }
+                            .await;
+                            if result.is_err() {
+                                failed.store(true, Ordering::Relaxed);
+                            }
+                            result.map(|key| (index, key))
+                        }
+                    })
+                    .buffer_unordered(STORAGE_CONCURRENCY)
+                    // Keep started callbacks in this request's scope. Unlike a JS promise,
+                    // the Rust result waits for these peers before returning the first error.
+                    .collect::<Vec<_>>()
+                    .await
+                    .into_iter()
+                    .collect::<AuthResult<Vec<_>>>()?;
+                results.sort_unstable_by_key(|(index, _)| *index);
+                let mut keys: Vec<_> = results.into_iter().filter_map(|(_, key)| key).collect();
                 if let Some((field, direction)) = sort {
                     let mut views: Vec<_> = keys
                         .iter()
@@ -493,7 +532,7 @@ pub(super) async fn list(
         ctx.database.find_api_keys_by_reference(reference, sort),
         ctx.database.count_api_keys_by_reference(reference),
     );
-    let keys = keys?;
+    let mut keys = keys?;
     // The public endpoint recomputes total from these rows, but upstream still
     // performs the adapter count and propagates a failure from that operation.
     let _ = total?;
@@ -501,9 +540,27 @@ pub(super) async fn list(
         && !keys.is_empty()
         && let Some(storage) = storage
     {
-        for key in &keys {
-            put(storage.as_ref(), key, true).await?;
-        }
+        let failed = AtomicBool::new(false);
+        let mut results = stream::iter(keys.into_iter().enumerate())
+            .take_while(|_| future::ready(!failed.load(Ordering::Relaxed)))
+            .map(|(index, key)| {
+                let failed = &failed;
+                async move {
+                    let result =
+                        put_with_failure_flag(storage.as_ref(), &key, true, Some(failed)).await;
+                    if result.is_err() {
+                        failed.store(true, Ordering::Relaxed);
+                    }
+                    result.map(|()| (index, key))
+                }
+            })
+            .buffer_unordered(STORAGE_CONCURRENCY)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<AuthResult<Vec<_>>>()?;
+        results.sort_unstable_by_key(|(index, _)| *index);
+        keys = results.into_iter().map(|(_, key)| key).collect();
         let ids: Vec<_> = keys.iter().map(|key| &key.id).collect();
         storage
             .set(

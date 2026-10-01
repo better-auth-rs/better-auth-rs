@@ -15,7 +15,11 @@ With verification database storage and secondary storage enabled, creation write
 
 Pure secondary verification storage keeps the raw hook input. It does not generate an adapter ID or execute adapter defaults, input transforms, output transforms, or returned-field filtering. A cache miss during an update returns the supplied partial patch without creating a cache record.
 
-`returned: false` filters account-list output. Internal account reads and trusted database hooks retain these fields. The account-list endpoint always excludes credential fields. `AccountView` serialization also excludes `password`, including account cookie serialization; trusted code can use `internal_fields()` when it needs the password.
+`returned: Some(false)` filters account-list output. Internal account reads and trusted database hooks retain these fields. The account-list endpoint always excludes credential fields. `AccountView` serialization also excludes `password`, including account cookie serialization; trusted code can use `internal_fields()` when it needs the password.
+
+Account field projection within owner reads shares the list output scheduler. Synchronous callbacks run by field across the selected rows. Async callbacks advance each row independently; its owner lookup starts after that row's account projection succeeds. Queries retain the stored owner ID, and `AccountOwner::new` validates the relationship after projection. A failed row skips its owner lookup. Other started rows finish before Rust returns the first observed original error, which can be later than JavaScript `Promise.all` rejection.
+
+Custom adapters can use `UserConfig::project_records_then` for storage maps or `project_adapter_records_then` for extracted `AdapterRecord` values. The completion receives the original row index and projected fields. Keep association data captured from storage separate from those fields. Both methods preserve the original result order. Existing list projection methods use the same scheduler without an additional completion operation.
 
 ## Application Models and Runtime Views
 

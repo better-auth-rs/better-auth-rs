@@ -102,25 +102,25 @@ async fn check_session_fields(alias: &str, secondary: Option<bool>) {
         .unwrap();
     let mut config = AuthConfig::new("session-fields-test-secret-at-least-32-chars")
         .base_url("http://localhost:3000");
-    let _ = config.session.additional_fields.insert(
+    let _ = config.session.fields_mut().insert(
         "label".into(),
         SessionFieldConfig {
             field_name: Some(alias.into()),
             ..Default::default()
         },
     );
-    let _ = config.session.additional_fields.insert(
+    let _ = config.session.fields_mut().insert(
         "internalNote".into(),
         SessionFieldConfig {
             field_name: Some("internalNote".into()),
-            input: false,
-            returned: false,
+            input: Some(false),
+            returned: Some(false),
             ..Default::default()
         },
     );
     let _ = config
         .session
-        .additional_fields
+        .fields_mut()
         .insert("deviceColor".into(), SessionFieldConfig::default());
     config.session.store_session_in_database = Some(secondary.unwrap_or(true));
     let cache = Arc::new(MemoryCacheAdapter::new());

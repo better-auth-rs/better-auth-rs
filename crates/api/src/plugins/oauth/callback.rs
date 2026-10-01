@@ -5,7 +5,7 @@ use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthRe
 
 use super::handlers::{
     FlowStartRequest, attach_cookie_state_payload, attach_state_cookie, auth_base_url,
-    complete_link_social, create_account_cookie_headers, fetch_user_info_from_provider,
+    complete_link_social, create_account_cookie_headers, fetch_user_info_for_code,
     initiate_oauth_flow_core, parse_callback_user_payload, redirect_response,
 };
 use super::provider_tokens::validate_authorization_code_via_provider;
@@ -255,7 +255,7 @@ pub(super) async fn handle_callback(
         Err(_) => return redirect_on_error("invalid_code", None),
     };
 
-    let user_info = match fetch_user_info_from_provider(
+    let user_info = match fetch_user_info_for_code(
         provider,
         OAuthUserInfoRequest {
             token_type: tokens.token_type.clone(),
@@ -306,9 +306,9 @@ pub(super) async fn handle_callback(
             .with_appended_header("Set-Cookie", clear_state_cookie));
     }
 
-    let disable_sign_up = provider.config.disable_implicit_sign_up
+    let disable_sign_up = provider.config.disable_implicit_sign_up()
         && !payload.request_sign_up.unwrap_or(false)
-        || provider.config.disable_sign_up;
+        || provider.config.disable_sign_up();
     let outcome = match process_oauth_sign_in(
         provider_name,
         provider,

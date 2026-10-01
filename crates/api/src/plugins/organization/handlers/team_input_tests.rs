@@ -81,7 +81,7 @@ async fn invalid_team_input_precedes_policies_and_preserves_null_errors() {
         hooks: Some(callbacks.clone()),
         ..Default::default()
     };
-    config.schema.team.additional_fields.insert(
+    config.schema.team.fields_mut().insert(
         "label".into(),
         UserFieldConfig {
             required: Some(true),
@@ -139,11 +139,11 @@ async fn invalid_team_input_precedes_policies_and_preserves_null_errors() {
     };
     for name_policy in [None, Some(true), Some(false)] {
         if let Some(input) = name_policy {
-            config.schema.team.additional_fields.insert(
+            config.schema.team.fields_mut().insert(
                 "name".into(),
                 UserFieldConfig {
                     required: Some(true),
-                    input,
+                    input: Some(input),
                     ..Default::default()
                 },
             );

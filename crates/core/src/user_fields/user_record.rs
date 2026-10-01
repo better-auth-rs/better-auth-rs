@@ -23,7 +23,7 @@ fn prepare(
         ("username", username),
         ("displayUsername", display_username),
     ] {
-        if config.additional_fields.contains_key(name)
+        if config.fields().contains_key(name)
             && let Some(value) = take_field(fields, name)?
         {
             *target = Some(value);
@@ -36,7 +36,7 @@ impl CreateUser {
     /// Bind configured fields from trusted adapter input before database hooks inspect the record.
     pub fn prepare_user_fields(&mut self, config: &UserConfig) -> AuthResult<()> {
         for (name, target) in [("name", &mut self.name), ("image", &mut self.image)] {
-            if config.additional_fields.contains_key(name)
+            if config.fields().contains_key(name)
                 && let Some(value) = self.additional_fields.remove(name)
             {
                 *target = crate::SchemaValue::from_json(Some(value));
@@ -75,14 +75,14 @@ impl CreateUser {
             ("username", &mut self.username),
             ("displayUsername", &mut self.display_username),
         ] {
-            if config.additional_fields.contains_key(name)
+            if config.fields().contains_key(name)
                 && let Some(value) = value.take()
             {
                 let _ = fields.insert(name.into(), value.map(Value::String).unwrap_or(Value::Null));
             }
         }
         for (name, value) in [("name", &mut self.name), ("image", &mut self.image)] {
-            if config.additional_fields.contains_key(name)
+            if config.fields().contains_key(name)
                 && let Some(raw) = std::mem::take(value).json()?
             {
                 let _ = fields.insert(name.into(), raw);
@@ -96,7 +96,7 @@ impl UpdateUser {
     /// Bind configured fields from a trusted patch before merging database hook results.
     pub fn prepare_user_fields(&mut self, config: &UserConfig) -> AuthResult<()> {
         for (name, target) in [("name", &mut self.name), ("image", &mut self.image)] {
-            if config.additional_fields.contains_key(name)
+            if config.fields().contains_key(name)
                 && let Some(value) = self.additional_fields.remove(name)
             {
                 *target = crate::SchemaValue::from_json(Some(value));
@@ -135,14 +135,14 @@ impl UpdateUser {
             ("username", &mut self.username),
             ("displayUsername", &mut self.display_username),
         ] {
-            if config.additional_fields.contains_key(name)
+            if config.fields().contains_key(name)
                 && let Some(value) = value.take()
             {
                 let _ = fields.insert(name.into(), value.map(Value::String).unwrap_or(Value::Null));
             }
         }
         for (name, value) in [("name", &mut self.name), ("image", &mut self.image)] {
-            if config.additional_fields.contains_key(name)
+            if config.fields().contains_key(name)
                 && let Some(raw) = std::mem::take(value).json()?
             {
                 let _ = fields.insert(name.into(), raw);
@@ -160,7 +160,7 @@ impl UserConfig {
         fields: &Map<String, Value>,
         name: &str,
     ) -> AuthResult<Option<Option<String>>> {
-        let Some(config) = self.additional_fields.get(name) else {
+        let Some(config) = self.fields().get(name) else {
             return Ok(None);
         };
         fields

@@ -1,4 +1,4 @@
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 mod account;
 mod verification;
 
@@ -280,36 +280,38 @@ fn policy(model: &'static str, state: &Shared) -> [(String, UserFieldConfig); 3]
                     event(&updates, format!("{model}.onUpdate"), json!("<undefined>")).unwrap();
                     json!("updated")
                 })),
-                input_transform: Some(UserFieldTransform::new(move |value| {
-                    event(
-                        &input,
-                        format!("{model}.input"),
-                        value.clone().unwrap_or(json!("<undefined>")),
-                    )?;
-                    let value = value.unwrap_or(json!("undefined"));
-                    Ok(Some(json!(format!(
-                        "{}:in",
-                        value
-                            .as_str()
-                            .map(str::to_owned)
-                            .unwrap_or_else(|| value.to_string())
-                    ))))
-                })),
-                output_transform: Some(UserFieldTransform::new(move |value| {
-                    event(
-                        &output,
-                        format!("{model}.output"),
-                        value.clone().unwrap_or(json!("<undefined>")),
-                    )?;
-                    let value = value.unwrap_or(json!("undefined"));
-                    Ok(Some(json!(format!(
-                        "{}:out",
-                        value
-                            .as_str()
-                            .map(str::to_owned)
-                            .unwrap_or_else(|| value.to_string())
-                    ))))
-                })),
+                transform: Some(FieldTransforms {
+                    input: Some(UserFieldTransform::new(move |value| {
+                        event(
+                            &input,
+                            format!("{model}.input"),
+                            value.clone().unwrap_or(json!("<undefined>")),
+                        )?;
+                        let value = value.unwrap_or(json!("undefined"));
+                        Ok(Some(json!(format!(
+                            "{}:in",
+                            value
+                                .as_str()
+                                .map(str::to_owned)
+                                .unwrap_or_else(|| value.to_string())
+                        ))))
+                    })),
+                    output: Some(UserFieldTransform::new(move |value| {
+                        event(
+                            &output,
+                            format!("{model}.output"),
+                            value.clone().unwrap_or(json!("<undefined>")),
+                        )?;
+                        let value = value.unwrap_or(json!("undefined"));
+                        Ok(Some(json!(format!(
+                            "{}:out",
+                            value
+                                .as_str()
+                                .map(str::to_owned)
+                                .unwrap_or_else(|| value.to_string())
+                        ))))
+                    })),
+                }),
                 ..Default::default()
             },
         ),
@@ -317,7 +319,7 @@ fn policy(model: &'static str, state: &Shared) -> [(String, UserFieldConfig); 3]
             "hidden".into(),
             UserFieldConfig {
                 required: Some(false),
-                returned: false,
+                returned: Some(false),
                 default_value: Some(json!("secret")),
                 ..Default::default()
             },
@@ -326,7 +328,7 @@ fn policy(model: &'static str, state: &Shared) -> [(String, UserFieldConfig); 3]
             "protected".into(),
             UserFieldConfig {
                 required: Some(false),
-                input: false,
+                input: Some(false),
                 default_value: Some(json!("server")),
                 ..Default::default()
             },

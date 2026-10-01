@@ -30,10 +30,10 @@ impl<S: AuthSchema> SecondaryStore<S> {
         session: &crate::wire::SessionView,
     ) -> AuthResult<Map<String, Value>> {
         let mut config = self.config.session.clone();
-        for field in config.additional_fields.values_mut() {
-            field.returned = true;
+        for field in config.fields_mut().values_mut() {
+            field.returned = Some(true);
             if !self.database_sessions() {
-                field.output_transform = None;
+                field.transform.get_or_insert_default().output = None;
             }
         }
         let mut view = SessionView::with_fields_for_adapter(
@@ -63,19 +63,14 @@ impl<S: AuthSchema> SecondaryStore<S> {
             for name in self
                 .config
                 .session
-                .additional_fields
+                .fields()
                 .keys()
                 .map(String::as_str)
                 .chain(["impersonatedBy", "activeOrganizationId", "activeTeamId"])
             {
-                let has_default =
-                    self.config
-                        .session
-                        .additional_fields
-                        .get(name)
-                        .is_some_and(|field| {
-                            field.default_value.is_some() || field.default_value_fn.is_some()
-                        });
+                let has_default = self.config.session.fields().get(name).is_some_and(|field| {
+                    field.default_value.is_some() || field.default_value_fn.is_some()
+                });
                 if !has_default && fields.get(name).is_some_and(Value::is_null) {
                     let _ = fields.remove(name);
                 }

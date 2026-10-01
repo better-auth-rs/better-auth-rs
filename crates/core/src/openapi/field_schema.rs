@@ -29,7 +29,7 @@ pub(super) fn component_property(field: &UserFieldConfig) -> Value {
     {
         let _ = schema.insert("default".into(), default.clone());
     }
-    if !field.input {
+    if !field.input() {
         let _ = schema.insert("readOnly".into(), Value::Bool(true));
     }
     Value::Object(schema)

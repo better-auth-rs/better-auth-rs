@@ -38,7 +38,7 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
         self.store.add_team_member(team_id, user_id, maximum).await
     }
     async fn delete_member(&self, id: &str) -> AuthResult<()> {
-        self.store.delete_member_subject(id, None)
+        self.store.delete_member_subject(id, None).await
     }
     async fn delete_member_for_user(
         &self,
@@ -48,6 +48,7 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
     ) -> AuthResult<()> {
         self.store
             .delete_member_subject(id, Some((organization_id, user_id)))
+            .await
     }
     fn clone_handle(&self) -> Arc<dyn AuthTransaction<StatelessSchema>> {
         Arc::new(Self {

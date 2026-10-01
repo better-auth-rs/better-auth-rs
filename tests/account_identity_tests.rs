@@ -1,6 +1,6 @@
 #![cfg(feature = "seaorm2")]
 
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -81,18 +81,23 @@ async fn duplicate_identities_are_rejected_after_two_projections_independently_o
             let _ = config.account.additional_fields.insert(
                 "accessToken".into(),
                 UserFieldConfig {
-                    output_transform: Some(UserFieldTransform::new(move |value| {
-                        let _ = calls.fetch_add(1, Ordering::SeqCst);
-                        let mode = should_fail.load(Ordering::SeqCst);
-                        let token = value.as_ref().and_then(serde_json::Value::as_str);
-                        if mode == 1 || (mode == 2 && token == Some("second")) {
-                            let token = token.ok_or_else(|| {
-                                AuthError::internal("stored token must be a string")
-                            })?;
-                            return Err(AuthError::internal(format!("{token} projection failed")));
-                        }
-                        Ok(value)
-                    })),
+                    transform: Some(FieldTransforms {
+                        output: Some(UserFieldTransform::new(move |value| {
+                            let _ = calls.fetch_add(1, Ordering::SeqCst);
+                            let mode = should_fail.load(Ordering::SeqCst);
+                            let token = value.as_ref().and_then(serde_json::Value::as_str);
+                            if mode == 1 || (mode == 2 && token == Some("second")) {
+                                let token = token.ok_or_else(|| {
+                                    AuthError::internal("stored token must be a string")
+                                })?;
+                                return Err(AuthError::internal(format!(
+                                    "{token} projection failed"
+                                )));
+                            }
+                            Ok(value)
+                        })),
+                        ..Default::default()
+                    }),
                     ..Default::default()
                 },
             );

@@ -153,7 +153,7 @@ impl OpenApiPluginMetadata {
     pub fn model(mut self, name: impl Into<String>, fields: &UserConfig) -> Self {
         let name = name.into();
         let target = self.models.entry(name.clone()).or_default();
-        for (key, config) in &fields.additional_fields {
+        for (key, config) in fields.fields() {
             let _ = target.insert(key.clone(), project_field(key, config, name == "user"));
         }
         self
@@ -198,11 +198,11 @@ pub(super) fn project_field(
     Field {
         key: key.to_owned(),
         property: super::field_schema::component_property(field),
-        required: field.required == Some(true) && field.returned,
+        required: field.required == Some(true) && field.returned(),
         condition: None,
-        input_property: (user && field.input).then(|| super::field_schema::input_property(field)),
+        input_property: (user && field.input()).then(|| super::field_schema::input_property(field)),
         input_required: user
-            && field.input
+            && field.input()
             && field.required == Some(true)
             && field.default_value.is_none()
             && field.default_value_fn.is_none(),

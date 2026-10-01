@@ -361,7 +361,7 @@ pub async fn router(profile: &str, base_url: &str) -> AuthResult<Router> {
             .base_url(base_url);
     config.session.store_session_in_database = Some(stores_sessions);
     config.session.preserve_session_in_database = Some(preserve);
-    let _ = config.session.additional_fields.insert(
+    let _ = config.session.fields_mut().insert(
         "label".into(),
         better_auth::config::UserFieldConfig {
             required: Some(false),

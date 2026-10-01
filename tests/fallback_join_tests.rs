@@ -1,6 +1,6 @@
 #![cfg(feature = "seaorm2")]
 
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -39,26 +39,29 @@ fn config(limit: Option<f64>, events: &Events, reject_user: &Arc<AtomicBool>) ->
         let reject = reject_user.clone();
         let field = UserFieldConfig {
             required: Some(false),
-            output_transform: Some(UserFieldTransform::new(move |value| {
-                let value_text = value
-                    .as_ref()
-                    .and_then(Value::as_str)
-                    .unwrap_or("undefined");
-                events
-                    .lock()
-                    .map_err(|error| AuthError::internal(error.to_string()))?
-                    .push(format!("{kind}:{value_text}"));
-                if kind == "user" && reject.load(Ordering::SeqCst) {
-                    return Err(AuthError::internal("user projection rejected"));
-                }
-                Ok(value)
-            })),
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(move |value| {
+                    let value_text = value
+                        .as_ref()
+                        .and_then(Value::as_str)
+                        .unwrap_or("undefined");
+                    events
+                        .lock()
+                        .map_err(|error| AuthError::internal(error.to_string()))?
+                        .push(format!("{kind}:{value_text}"));
+                    if kind == "user" && reject.load(Ordering::SeqCst) {
+                        return Err(AuthError::internal("user projection rejected"));
+                    }
+                    Ok(value)
+                })),
+                ..Default::default()
+            }),
             ..Default::default()
         };
         let fields = match kind {
-            "user" => &mut config.user.additional_fields,
+            "user" => config.user.fields_mut(),
             "account" => &mut config.account.additional_fields,
-            _ => &mut config.session.additional_fields,
+            _ => config.session.fields_mut(),
         };
         let _ = fields.insert(name.into(), field);
     }
@@ -247,23 +250,30 @@ async fn ephemeral_session_projection_preserves_core_aliases_and_stored_override
 {
     use better_auth_core::store::{SessionStore, UserStore};
     let mut config = AuthConfig::default();
-    let _ = config.session.additional_fields.insert(
+    let _ = config.session.fields_mut().insert(
         "userAgent".into(),
         UserFieldConfig {
             field_name: Some("user_agent".into()),
-            output_transform: Some(UserFieldTransform::new(|value| {
-                Ok(Some(json!({"observed":value})))
-            })),
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(|value| {
+                    Ok(Some(json!({"observed":value})))
+                })),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     );
-    let _ = config.session.additional_fields.insert(
+    let _ = config.session.fields_mut().insert(
         "label".into(),
         UserFieldConfig {
             field_name: Some("stored_label".into()),
-            output_transform: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap_or_default()))))
-            })),
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(|value| {
+                    Ok(value
+                        .map(|value| json!(format!("{}:out", value.as_str().unwrap_or_default()))))
+                })),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     );
@@ -436,22 +446,23 @@ async fn oauth_owner_projection_failure_precedes_token_write() -> AuthResult<()>
                     .additional_fields
                     .get_mut("accessToken")
                     .ok_or_else(|| AuthError::internal("field missing"))?;
-                field.output_transform = Some(UserFieldTransform::new(move |value| {
-                    captured_events
-                        .lock()
-                        .map_err(|error| AuthError::internal(error.to_string()))?
-                        .push(format!(
-                            "account:{}",
-                            value
-                                .as_ref()
-                                .and_then(Value::as_str)
-                                .unwrap_or("undefined")
-                        ));
-                    if captured_reject.load(Ordering::SeqCst) {
-                        return Err(AuthError::internal("account projection rejected"));
-                    }
-                    Ok(value)
-                }));
+                field.transform.get_or_insert_default().output =
+                    Some(UserFieldTransform::new(move |value| {
+                        captured_events
+                            .lock()
+                            .map_err(|error| AuthError::internal(error.to_string()))?
+                            .push(format!(
+                                "account:{}",
+                                value
+                                    .as_ref()
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("undefined")
+                            ));
+                        if captured_reject.load(Ordering::SeqCst) {
+                            return Err(AuthError::internal("account projection rejected"));
+                        }
+                        Ok(value)
+                    }));
             }
             if sqlite {
                 let database = Database::connect("sqlite::memory:")

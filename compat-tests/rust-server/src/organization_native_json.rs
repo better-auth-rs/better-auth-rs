@@ -1,4 +1,4 @@
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::config::{UserConfig, UserFieldConfig, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
 use serde_json::{Value, json};
@@ -18,38 +18,9 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
     config.teams.default_team = false;
     config.hooks = Some(Arc::new(JsonHooks));
     config.schema.organization = UserConfig {
-        additional_fields: [(
-            "metadata".into(),
-            UserFieldConfig {
-                field_type: if json_type {
-                    UserFieldType::Json
-                } else {
-                    UserFieldType::String
-                },
-                required: Some(false),
-                default_value: Some(json!(r#"{"source":"default"}"#)),
-                input_transform: Some(replace("source", "stored")),
-                output_transform: Some(UserFieldTransform::new(move |value| {
-                    if json_type
-                        && value
-                            .as_ref()
-                            .is_some_and(|value| !value.is_null() && !value.is_string())
-                    {
-                        return Err(better_auth::AuthError::internal(
-                            "JSON output callback requires stored text",
-                        ));
-                    }
-                    replace("stored", "visible").call_sync(value)
-                })),
-                ..Default::default()
-            },
-        )]
-        .into(),
-    };
-    config.schema.organization_role = UserConfig {
-        additional_fields: [
-            (
-                "permission".into(),
+        additional_fields: Some(
+            [(
+                "metadata".into(),
                 UserFieldConfig {
                     field_type: if json_type {
                         UserFieldType::Json
@@ -57,36 +28,73 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
                         UserFieldType::String
                     },
                     required: Some(false),
-                    input_transform: Some(replace("create", "delete")),
-                    output_transform: Some(replace("delete", "update")),
-                    on_update: Some(Arc::new(|| json!(r#"{"member":["create"]}"#))),
+                    default_value: Some(json!(r#"{"source":"default"}"#)),
+                    transform: Some(FieldTransforms {
+                        input: Some(replace("source", "stored")),
+                        output: Some(UserFieldTransform::new(move |value| {
+                            if json_type
+                                && value
+                                    .as_ref()
+                                    .is_some_and(|value| !value.is_null() && !value.is_string())
+                            {
+                                return Err(better_auth::AuthError::internal(
+                                    "JSON output callback requires stored text",
+                                ));
+                            }
+                            replace("stored", "visible").call_sync(value)
+                        })),
+                    }),
                     ..Default::default()
                 },
-            ),
-            (
-                "role".into(),
-                UserFieldConfig {
-                    required: Some(false),
-                    ..Default::default()
-                },
-            ),
-            (
-                "organizationId".into(),
-                UserFieldConfig {
-                    required: Some(false),
-                    ..Default::default()
-                },
-            ),
-            (
-                "id".into(),
-                UserFieldConfig {
-                    required: Some(false),
-                    field_name: Some("ignored_id".into()),
-                    ..Default::default()
-                },
-            ),
-        ]
-        .into(),
+            )]
+            .into(),
+        ),
+    };
+    config.schema.organization_role = UserConfig {
+        additional_fields: Some(
+            [
+                (
+                    "permission".into(),
+                    UserFieldConfig {
+                        field_type: if json_type {
+                            UserFieldType::Json
+                        } else {
+                            UserFieldType::String
+                        },
+                        required: Some(false),
+                        transform: Some(FieldTransforms {
+                            input: Some(replace("create", "delete")),
+                            output: Some(replace("delete", "update")),
+                        }),
+                        on_update: Some(Arc::new(|| json!(r#"{"member":["create"]}"#))),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "role".into(),
+                    UserFieldConfig {
+                        required: Some(false),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "organizationId".into(),
+                    UserFieldConfig {
+                        required: Some(false),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "id".into(),
+                    UserFieldConfig {
+                        required: Some(false),
+                        field_name: Some("ignored_id".into()),
+                        ..Default::default()
+                    },
+                ),
+            ]
+            .into(),
+        ),
     };
 }
 

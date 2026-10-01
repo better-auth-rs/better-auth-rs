@@ -1,4 +1,4 @@
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::config::{UserConfig, UserFieldConfig, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
 use better_auth_seaorm::sea_orm::{
@@ -20,83 +20,87 @@ fn suffix(value: Option<Value>, suffix: &str) -> better_auth::AuthResult<Option<
 
 fn fields() -> UserConfig {
     UserConfig {
-        additional_fields: [
-            (
-                "label".into(),
-                UserFieldConfig {
-                    required: Some(false),
-                    field_name: Some("storedLabel".into()),
-                    default_value: Some(json!("guest")),
-                    input_transform: Some(UserFieldTransform::new(|value| suffix(value, "in"))),
-                    output_transform: Some(UserFieldTransform::new(|value| suffix(value, "out"))),
-                    ..Default::default()
-                },
-            ),
-            (
-                "secret".into(),
-                UserFieldConfig {
-                    required: Some(false),
-                    returned: false,
-                    default_value: Some(json!("hidden")),
-                    ..Default::default()
-                },
-            ),
-            (
-                "protected".into(),
-                UserFieldConfig {
-                    required: Some(false),
-                    input: false,
-                    default_value: Some(json!("server")),
-                    ..Default::default()
-                },
-            ),
-            (
-                "marker".into(),
-                UserFieldConfig {
-                    required: Some(false),
-                    default_value: Some(json!("created")),
-                    on_update: Some(Arc::new(|| json!("updated"))),
-                    ..Default::default()
-                },
-            ),
-            (
-                "score".into(),
-                UserFieldConfig {
-                    field_type: UserFieldType::Number,
-                    required: Some(false),
-                    default_value: Some(json!(1)),
-                    validator: Some(Arc::new(|value| {
-                        if value.as_f64().is_some_and(|value| value >= 0.0) {
-                            Ok(value)
-                        } else {
-                            Err(better_auth::AuthError::bad_request(
-                                "score must be nonnegative",
-                            ))
-                        }
-                    })),
-                    ..Default::default()
-                },
-            ),
-            (
-                "tags".into(),
-                UserFieldConfig {
-                    field_type: UserFieldType::StringArray,
-                    required: Some(false),
-                    default_value: Some(json!(["starter"])),
-                    ..Default::default()
-                },
-            ),
-            (
-                "payload".into(),
-                UserFieldConfig {
-                    field_type: UserFieldType::Json,
-                    required: Some(false),
-                    default_value: Some(json!({"theme":"system"})),
-                    ..Default::default()
-                },
-            ),
-        ]
-        .into(),
+        additional_fields: Some(
+            [
+                (
+                    "label".into(),
+                    UserFieldConfig {
+                        required: Some(false),
+                        field_name: Some("storedLabel".into()),
+                        default_value: Some(json!("guest")),
+                        transform: Some(FieldTransforms {
+                            input: Some(UserFieldTransform::new(|value| suffix(value, "in"))),
+                            output: Some(UserFieldTransform::new(|value| suffix(value, "out"))),
+                        }),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "secret".into(),
+                    UserFieldConfig {
+                        required: Some(false),
+                        returned: Some(false),
+                        default_value: Some(json!("hidden")),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "protected".into(),
+                    UserFieldConfig {
+                        required: Some(false),
+                        input: Some(false),
+                        default_value: Some(json!("server")),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "marker".into(),
+                    UserFieldConfig {
+                        required: Some(false),
+                        default_value: Some(json!("created")),
+                        on_update: Some(Arc::new(|| json!("updated"))),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "score".into(),
+                    UserFieldConfig {
+                        field_type: UserFieldType::Number,
+                        required: Some(false),
+                        default_value: Some(json!(1)),
+                        validator: Some(Arc::new(|value| {
+                            if value.as_f64().is_some_and(|value| value >= 0.0) {
+                                Ok(value)
+                            } else {
+                                Err(better_auth::AuthError::bad_request(
+                                    "score must be nonnegative",
+                                ))
+                            }
+                        })),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "tags".into(),
+                    UserFieldConfig {
+                        field_type: UserFieldType::StringArray,
+                        required: Some(false),
+                        default_value: Some(json!(["starter"])),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "payload".into(),
+                    UserFieldConfig {
+                        field_type: UserFieldType::Json,
+                        required: Some(false),
+                        default_value: Some(json!({"theme":"system"})),
+                        ..Default::default()
+                    },
+                ),
+            ]
+            .into(),
+        ),
     }
 }
 
@@ -107,14 +111,14 @@ pub fn configure(config: &mut OrganizationConfig) {
     config
         .schema
         .member
-        .additional_fields
+        .fields_mut()
         .get_mut("label")
         .expect("the shared field configuration includes label")
         .field_name = Some("stored_label".into());
     config.schema.invitation = fields();
     config.schema.team = fields();
     config.schema.organization_role = fields();
-    config.schema.organization.additional_fields.extend([
+    config.schema.organization.fields_mut().extend([
         (
             "requiredTag".into(),
             UserFieldConfig {
@@ -143,7 +147,7 @@ pub fn configure(config: &mut OrganizationConfig) {
             },
         ),
     ]);
-    let _ = config.schema.organization_role.additional_fields.insert(
+    let _ = config.schema.organization_role.fields_mut().insert(
         "roleRequired".into(),
         UserFieldConfig {
             required: Some(true),

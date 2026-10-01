@@ -1,5 +1,5 @@
 use super::{Capture, config};
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::{AuthError, AuthResult};
 use better_auth_core::{
     AuthConfig, AuthSchema, CreateUser, ListUsersParams,
@@ -25,17 +25,20 @@ impl Projection {
         let (should_fail, counter) = (fail.clone(), calls.clone());
         let mut options = config();
         options.experimental.instrumentation.enabled = true;
-        let _ = options.user.additional_fields.insert(
+        let _ = options.user.fields_mut().insert(
             "note".into(),
             UserFieldConfig {
                 required: Some(false),
-                output_transform: Some(UserFieldTransform::new(move |value| {
-                    let _ = counter.fetch_add(1, Ordering::SeqCst);
-                    if should_fail.load(Ordering::SeqCst) {
-                        return Err(AuthError::internal("list projection failed"));
-                    }
-                    Ok(value)
-                })),
+                transform: Some(FieldTransforms {
+                    output: Some(UserFieldTransform::new(move |value| {
+                        let _ = counter.fetch_add(1, Ordering::SeqCst);
+                        if should_fail.load(Ordering::SeqCst) {
+                            return Err(AuthError::internal("list projection failed"));
+                        }
+                        Ok(value)
+                    })),
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
         );

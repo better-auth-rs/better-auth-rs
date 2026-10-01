@@ -1,6 +1,6 @@
 #![cfg(feature = "seaorm2")]
 
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth_core::store::UserStore;
 use better_auth_core::{
     AuthConfig, AuthResult, AuthSchema, AuthStore, CreateUser, UpdateUser, UserView,
@@ -215,18 +215,20 @@ async fn mapped_json_columns_preserve_raw_values_and_apply_each_storage_transfor
     let mut config = AuthConfig::default();
     let input_count = inputs.clone();
     let output_count = outputs.clone();
-    let _ = config.user.additional_fields.insert(
+    let _ = config.user.fields_mut().insert(
         "name".into(),
         UserFieldConfig {
             field_name: Some("storedName".into()),
-            input_transform: Some(UserFieldTransform::new(move |value| {
-                let _ = input_count.fetch_add(1, Ordering::SeqCst);
-                Ok(value.map(|value| json!({"stored":value})))
-            })),
-            output_transform: Some(UserFieldTransform::new(move |value| {
-                let _ = output_count.fetch_add(1, Ordering::SeqCst);
-                Ok(value.map(|value| json!({"shown":value})))
-            })),
+            transform: Some(FieldTransforms {
+                input: Some(UserFieldTransform::new(move |value| {
+                    let _ = input_count.fetch_add(1, Ordering::SeqCst);
+                    Ok(value.map(|value| json!({"stored":value})))
+                })),
+                output: Some(UserFieldTransform::new(move |value| {
+                    let _ = output_count.fetch_add(1, Ordering::SeqCst);
+                    Ok(value.map(|value| json!({"shown":value})))
+                })),
+            }),
             ..Default::default()
         },
     );

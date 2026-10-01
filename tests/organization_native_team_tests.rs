@@ -8,7 +8,7 @@
 mod models;
 
 use async_trait::async_trait;
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::plugins::organization::{
     OrganizationConfig, OrganizationPlugin, hooks::*, types::OrganizationResponse,
 };
@@ -154,23 +154,25 @@ fn options(state: &Arc<State>, sqlite: bool) -> OrganizationConfig {
         ..Default::default()
     };
     options.teams.enabled = true;
-    let _ = options.schema.team.additional_fields.insert(
+    let _ = options.schema.team.fields_mut().insert(
         "label".into(),
         UserFieldConfig {
             required: Some(false),
             field_name: sqlite.then(|| "storedLabel".into()),
-            input_transform: Some(UserFieldTransform::new(|value| {
-                let value = value
-                    .and_then(|value| value.as_str().map(str::to_owned))
-                    .ok_or_else(|| AuthError::internal("Expected label input"))?;
-                Ok(Some(json!(format!("{value}:in"))))
-            })),
-            output_transform: Some(UserFieldTransform::new(|value| {
-                let value = value
-                    .and_then(|value| value.as_str().map(str::to_owned))
-                    .ok_or_else(|| AuthError::internal("Expected label output"))?;
-                Ok(Some(json!(format!("{value}:out"))))
-            })),
+            transform: Some(FieldTransforms {
+                input: Some(UserFieldTransform::new(|value| {
+                    let value = value
+                        .and_then(|value| value.as_str().map(str::to_owned))
+                        .ok_or_else(|| AuthError::internal("Expected label input"))?;
+                    Ok(Some(json!(format!("{value}:in"))))
+                })),
+                output: Some(UserFieldTransform::new(|value| {
+                    let value = value
+                        .and_then(|value| value.as_str().map(str::to_owned))
+                        .ok_or_else(|| AuthError::internal("Expected label output"))?;
+                    Ok(Some(json!(format!("{value}:out"))))
+                })),
+            }),
             ..Default::default()
         },
     );

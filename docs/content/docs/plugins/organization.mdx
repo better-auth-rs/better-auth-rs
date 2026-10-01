@@ -83,11 +83,11 @@ use better_auth::config::{UserConfig, UserFieldConfig};
 let config = OrganizationConfig {
     schema: OrganizationFields {
         organization: UserConfig {
-            additional_fields: [("department".to_owned(), UserFieldConfig {
+            additional_fields: Some([("department".to_owned(), UserFieldConfig {
                 required: Some(false),
                 default_value: Some(serde_json::json!("general")),
                 ..Default::default()
-            })].into(),
+            })].into()),
         },
         ..Default::default()
     },
@@ -96,13 +96,17 @@ let config = OrganizationConfig {
 let plugin = OrganizationPlugin::with_config(config);
 ```
 
-Organization field validation follows the pinned upstream schema. `required: None` and `Some(true)` require a field during creation; `Some(false)` permits omission and null. A default does not make a required HTTP field optional. Updates permit omission. `input: false` excludes a field from the additional input schema; an existing base route field remains accepted. Field definitions retain insertion order. Validation reports every issue in the final route schema order, with replacements retaining the base field position. Organization routes validate declared types but do not invoke `validator`; the adapter applies `input_transform` once. HTTP date strings do not satisfy a date field, while typed storage defaults can supply dates. Enum fields retain upstream's unrestricted Organization input behavior.
+Organization field validation follows the pinned upstream schema. `required: None` and `Some(true)` require a field during creation; `Some(false)` permits omission and null. A default does not make a required HTTP field optional. Updates permit omission. `input: Some(false)` excludes a field from the additional input schema; an existing base route field remains accepted. Field definitions retain insertion order. Validation reports every issue in the final route schema order, with replacements retaining the base field position. Organization routes validate declared types but do not invoke `validator`; the adapter applies `transform.input` once. HTTP date strings do not satisfy a date field, while typed storage defaults can supply dates. Enum fields retain upstream's unrestricted Organization input behavior.
 
 Member creation and invitation creation let additional field schemas replace base input validation. `AddMemberInput` retains replacement values through `SchemaValue`; member roles can remain numbers, objects, null, or omitted values, while arrays use upstream string joining. Invitation creation still calls string operations on email and role after validation. Incompatible replacement values produce the upstream empty `500` response before persistence. Invitation request fields can replace status, creation time, expiration time, and inviter defaults; the before-create hook observes the authenticated inviter. Upstream field definitions replace attributes as a whole, so a TypeScript configuration that overrides a reference field must retain its `references` attribute when joins need that relationship. Rust applications express those relationships in their storage models.
 
 Invitation team checks run only when teams are enabled and the supplied `teamId` is truthy. The before-create hook retains replacement values in `team_ids: SchemaValue<Vec<String>>`; `team_id: SchemaValue<String>` is the informational first-team alias. The adapter joins destination arrays after the hook, matching upstream coercion and runtime errors.
 
-Adapter writes apply creation defaults and `on_update`, including implicit owner/default-team creation, invitation acceptance, and pending-invitation changes during team deletion. Adapter reads apply `output_transform` and `field_name` mapping once. Organization and team responses hide `returned: false` fields. Member, invitation, and dynamic-role responses retain those fields; full-organization responses hide them in their nested lists. Hooks receive the same entity visibility as the corresponding upstream adapter operation.
+Adapter writes apply creation defaults and `on_update`, including implicit owner/default-team creation, invitation acceptance, and pending-invitation changes during team deletion. Adapter reads apply `transform.output` and `field_name` mapping once. Organization and team responses hide `returned: Some(false)` fields. Member, invitation, and dynamic-role responses retain those fields; full-organization responses hide them in their nested lists. Hooks receive the same entity visibility as the corresponding upstream adapter operation.
+
+Use `UserFieldTransform::new_async` for awaited Organization input and output callbacks. Each row retains field order; asynchronous list projections can complete out of order while results retain query order. An input error prevents the write. An ordinary output error follows the write and leaves the stored row. Compound team and invitation operations retain their transaction and compensation boundaries.
+
+The Memory adapter releases its state lock before awaiting field callbacks. Compound operations prepare field deltas, then check the latest membership, invitation state, capacity, and staged Serial allocation before publishing. A full team retains the existing capacity rejection. Another concurrent change that invalidates a prepared calculation returns `AuthError::Conflict`; callbacks are not replayed and completed output projections remain intact. Unrelated row updates remain intact. This explicit conflict is a Rust concurrency boundary, not an exact reproduction of JavaScript scheduling. Mutation guards retain accurate counts even when list queries have a default limit.
 
 Dynamic-role creation accepts an optional outer `additionalFields` object. When supplied, that object uses the configured creation requirements. Upstream initializes the role update schema eagerly, which makes adapter role fields optional from initialization; the creation endpoint retains its original validation schema. Role updates return the old record merged with raw request fields, while subsequent reads expose the persisted transforms and `on_update` values. Invitation resend similarly returns the old record with the new expiration time, while storing `on_update` values.
 

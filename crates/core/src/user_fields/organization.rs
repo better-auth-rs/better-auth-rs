@@ -1,36 +1,24 @@
 use super::{UserConfig, UserFieldConfig, UserFieldType};
 #[cfg(test)]
-use crate::user_fields::UserFieldTransform;
+use crate::user_fields::{FieldTransforms, UserFieldTransform};
 use crate::{AuthError, AuthResult};
 use serde_json::{Map, Value};
 
 impl UserConfig {
     /// Apply configured policies once to logical core fields and application fields.
     /// The adapter owns `id`; custom field attributes cannot replace its policy.
-    pub fn organization_storage_fields(
+    pub async fn organization_storage_fields(
         &self,
         core: Map<String, Value>,
         extras: Map<String, Value>,
         create: bool,
     ) -> AuthResult<Map<String, Value>> {
         let mut output = core.clone();
-        output.retain(|name, _| name == "id" || !self.additional_fields.contains_key(name));
+        output.retain(|name, _| name == "id" || !self.fields().contains_key(name));
         let mut input = extras;
         input.extend(core);
-        output.extend(self.storage_fields_inner(input, create, true)?);
+        output.extend(self.storage_fields_async(input, create, true).await?);
         Ok(output)
-    }
-
-    /// Merge transformed storage fields into the public logical core fields.
-    pub fn organization_output_fields(
-        &self,
-        mut core: Map<String, Value>,
-        storage: &Map<String, Value>,
-    ) -> AuthResult<Map<String, Value>> {
-        let transformed = self.output_fields_inner(storage, true)?;
-        core.retain(|name, _| name == "id" || !self.additional_fields.contains_key(name));
-        core.extend(transformed);
-        Ok(core)
     }
 
     /// Validate Organization route fields without applying adapter defaults or transforms.
@@ -42,7 +30,7 @@ impl UserConfig {
     ) -> AuthResult<Map<String, Value>> {
         let mut parsed = Map::new();
         let mut errors = Vec::new();
-        for (name, field) in &self.additional_fields {
+        for (name, field) in self.fields() {
             match field.validate_organization_input(
                 input.get(name),
                 &format!("{prefix}.{name}"),
@@ -89,7 +77,7 @@ impl UserConfig {
             .collect();
         super::batch::project_fields(
             &mut rows,
-            &self.additional_fields,
+            self.fields(),
             |(storage, output), name, field| {
                 Box::pin(async move {
                     let value = storage
@@ -108,46 +96,9 @@ impl UserConfig {
         Ok(rows.into_iter().map(|(_, output)| output).collect())
     }
 
-    fn output_fields_inner(
-        &self,
-        storage: &Map<String, Value>,
-        preserve_id: bool,
-    ) -> AuthResult<Map<String, Value>> {
-        // Projection preserves the one input row.
-        Ok(self
-            .output_fields_batch(std::iter::once(storage), preserve_id)?
-            .remove(0))
-    }
-
-    fn output_fields_batch<'a>(
-        &self,
-        storage: impl Iterator<Item = &'a Map<String, Value>>,
-        preserve_id: bool,
-    ) -> AuthResult<Vec<Map<String, Value>>> {
-        let mut rows: Vec<_> = storage.map(|storage| (storage, Map::new())).collect();
-        super::batch::project_fields_sync(
-            &mut rows,
-            &self.additional_fields,
-            |(storage, output), name, field| {
-                if preserve_id && name == "id" {
-                    return Ok(());
-                }
-                let value = storage
-                    .get(field.field_name.as_deref().unwrap_or(name))
-                    .cloned();
-                assign_output(output, name, field, field.adapter_output_sync(value, true)?)
-            },
-        )?;
-        Ok(rows.into_iter().map(|(_, output)| output).collect())
-    }
-
     /// Apply only `returned` flags to fields already projected by the adapter.
     pub fn filter_returned_fields(&self, fields: &mut Map<String, Value>) {
-        fields.retain(|name, _| {
-            self.additional_fields
-                .get(name)
-                .is_none_or(|field| field.returned)
-        });
+        fields.retain(|name, _| self.fields().get(name).is_none_or(|field| field.returned()));
     }
 }
 
@@ -159,7 +110,7 @@ impl UserFieldConfig {
         location: &str,
         partial: bool,
     ) -> AuthResult<Option<Value>> {
-        if !self.input || value.is_none() && (partial || self.required == Some(false)) {
+        if !self.input() || value.is_none() && (partial || self.required == Some(false)) {
             return Ok(None);
         }
         if value == Some(&Value::Null) && self.required == Some(false) {
@@ -249,36 +200,45 @@ mod tests {
     #[tokio::test]
     async fn organization_validation_keeps_route_and_adapter_policies_separate() {
         let schema = UserConfig {
-            additional_fields: [
-                (
-                    "implicit".into(),
-                    UserFieldConfig {
-                        default_value: Some(json!("default")),
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "label".into(),
-                    UserFieldConfig {
-                        required: Some(false),
-                        field_name: Some("stored_label".into()),
-                        validator: Some(Arc::new(|_| Err(AuthError::bad_request("must not run")))),
-                        input_transform: Some(UserFieldTransform::new(|value| {
-                            Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
-                        })),
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "protected".into(),
-                    UserFieldConfig {
-                        input: false,
-                        default_value: Some(json!("server")),
-                        ..Default::default()
-                    },
-                ),
-            ]
-            .into(),
+            additional_fields: Some(
+                [
+                    (
+                        "implicit".into(),
+                        UserFieldConfig {
+                            default_value: Some(json!("default")),
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        "label".into(),
+                        UserFieldConfig {
+                            required: Some(false),
+                            field_name: Some("stored_label".into()),
+                            validator: Some(Arc::new(|_| {
+                                Err(AuthError::bad_request("must not run"))
+                            })),
+                            transform: Some(FieldTransforms {
+                                input: Some(UserFieldTransform::new(|value| {
+                                    Ok(value.map(|value| {
+                                        json!(format!("{}:in", value.as_str().unwrap()))
+                                    }))
+                                })),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        "protected".into(),
+                        UserFieldConfig {
+                            input: Some(false),
+                            default_value: Some(json!("server")),
+                            ..Default::default()
+                        },
+                    ),
+                ]
+                .into(),
+            ),
         };
         let error = schema
             .parse_organization_input(&Map::new(), "body", false)
@@ -319,38 +279,40 @@ mod tests {
     #[test]
     fn organization_partial_fields_keep_nullable_and_array_contracts() {
         let schema = UserConfig {
-            additional_fields: [
-                (
-                    "required".into(),
-                    UserFieldConfig {
-                        required: Some(true),
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "optional".into(),
-                    UserFieldConfig {
-                        required: Some(false),
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "tags".into(),
-                    UserFieldConfig {
-                        required: Some(false),
-                        field_type: UserFieldType::StringArray,
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "category".into(),
-                    UserFieldConfig {
-                        field_type: UserFieldType::Enum(vec!["basic".into()]),
-                        ..Default::default()
-                    },
-                ),
-            ]
-            .into(),
+            additional_fields: Some(
+                [
+                    (
+                        "required".into(),
+                        UserFieldConfig {
+                            required: Some(true),
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        "optional".into(),
+                        UserFieldConfig {
+                            required: Some(false),
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        "tags".into(),
+                        UserFieldConfig {
+                            required: Some(false),
+                            field_type: UserFieldType::StringArray,
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        "category".into(),
+                        UserFieldConfig {
+                            field_type: UserFieldType::Enum(vec!["basic".into()]),
+                            ..Default::default()
+                        },
+                    ),
+                ]
+                .into(),
+            ),
         };
         let valid = json!({"optional":null,"category":"unlisted"});
         assert_eq!(
@@ -370,7 +332,7 @@ mod tests {
     }
 }
 
-fn assign_output(
+pub(super) fn assign_output(
     output: &mut Map<String, Value>,
     name: &str,
     field: &UserFieldConfig,

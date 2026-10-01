@@ -183,16 +183,16 @@ Use `OptionalSession<AppAuthSchema>` for routes that should work for both authen
 
 ## Application Session Fields
 
-`POST /update-session` updates configured application fields on the authenticated session. HTTP and native endpoints require an object body and validate the body before checking the session. Unknown fields and built-in credentials are not writable. An empty update returns 400. Fields with `input: false` reject truthy input; `returned: false` excludes a field from session responses.
+`POST /update-session` updates configured application fields on the authenticated session. HTTP and native endpoints require an object body and validate the body before checking the session. Unknown fields and built-in credentials are not writable. An empty update returns 400. Fields with `input: Some(false)` reject truthy input; `returned: Some(false)` excludes a field from session responses.
 
 The request body must be a JSON object with `Content-Type: application/json`. Body validation runs before session authentication. A body with a missing or unsupported media type returns 415.
 
-Add columns to the application-owned session entity and migrate the database before configuring those fields. `AuthEntity` generates the storage mapping. `SessionFieldConfig` is an alias of `UserFieldConfig`; session fields support constant defaults, default factories, validators, input/output transforms, and `on_update`.
+Add columns to the application-owned session entity and migrate the database before configuring those fields. `AuthEntity` generates the storage mapping. `AuthConfig.session.fields_mut()` configures the optional field map. `None` and `Some(IndexMap::new())` retain distinct configuration presence. `SessionFieldConfig` is an alias of `UserFieldConfig`; session fields support constant defaults, default factories, validators, input/output transforms, and `on_update`.
 
 ```rust
 use better_auth::config::SessionFieldConfig;
 
-config.session.additional_fields.insert("label".into(), SessionFieldConfig {
+config.session.fields_mut().insert("label".into(), SessionFieldConfig {
     field_name: Some("display_label".into()),
     ..Default::default()
 });

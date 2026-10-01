@@ -23,8 +23,8 @@ impl UserFieldTransform {
         Self(Callback::Sync(Arc::new(callback)))
     }
 
-    /// Await a callback at core User, Account, Session, and Verification adapter boundaries.
-    /// Synchronous public-input parsing and Organization policies reject async callbacks.
+    /// Await a callback at core and Organization adapter boundaries.
+    /// Synchronous public-input parsing rejects async callbacks.
     pub fn new_async<F, Fut>(callback: F) -> Self
     where
         F: Fn(Option<Value>) -> Fut + Send + Sync + 'static,
@@ -49,7 +49,7 @@ impl UserFieldTransform {
         match &self.0 {
             Callback::Sync(callback) => callback(value),
             Callback::Async(_) => Err(AuthError::config(
-                "Async field transforms require a core adapter boundary; public-input parsing and Organization policies are synchronous",
+                "Async field transforms require an adapter boundary; public-input parsing is synchronous",
             )),
         }
     }

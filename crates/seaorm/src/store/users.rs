@@ -150,7 +150,7 @@ where
         let mut name = std::mem::take(&mut create_user.name);
         let mut image = std::mem::take(&mut create_user.image);
         for (key, target) in [("name", &mut name), ("image", &mut image)] {
-            if let Some(field) = self.config().user.additional_fields.get(key) {
+            if let Some(field) = self.config().user.fields().get(key) {
                 *target = better_auth_core::SchemaValue::from_json(
                     fields.remove(field.field_name.as_deref().unwrap_or(key)),
                 );
@@ -307,7 +307,7 @@ where
         let mut name = std::mem::take(&mut update.name);
         let mut image = std::mem::take(&mut update.image);
         for (key, target) in [("name", &mut name), ("image", &mut image)] {
-            if let Some(field) = self.config().user.additional_fields.get(key) {
+            if let Some(field) = self.config().user.fields().get(key) {
                 *target = better_auth_core::SchemaValue::from_json(
                     fields.remove(field.field_name.as_deref().unwrap_or(key)),
                 );

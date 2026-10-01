@@ -37,10 +37,10 @@ impl AdminOptionsFixture {
         if !profile.starts_with("admin-") {
             return;
         }
-        config.user.additional_fields.insert(
+        config.user.fields_mut().insert(
             "secretNote".into(),
             better_auth::config::UserFieldConfig {
-                returned: false,
+                returned: Some(false),
                 default_value: Some(json!("admin-hidden")),
                 ..Default::default()
             },

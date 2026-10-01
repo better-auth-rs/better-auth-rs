@@ -86,8 +86,8 @@ impl OpenApiBuilder {
     pub fn user_input(self, fields: UserConfig) -> Self {
         let mut properties = Map::new();
         let mut required = Vec::new();
-        for (name, field) in &fields.additional_fields {
-            if !field.input {
+        for (name, field) in fields.fields() {
+            if !field.input() {
                 continue;
             }
             let _ = properties.insert(name.clone(), super::field_schema::input_property(field));
@@ -114,9 +114,9 @@ impl OpenApiBuilder {
     pub fn model(self, logical_name: &str, fields: &UserConfig) -> Self {
         let mut properties = Map::new();
         let mut required = Vec::new();
-        for (name, field) in &fields.additional_fields {
+        for (name, field) in fields.fields() {
             let _ = properties.insert(name.clone(), super::field_schema::component_property(field));
-            if field.required == Some(true) && field.returned && !required.contains(name) {
+            if field.required == Some(true) && field.returned() && !required.contains(name) {
                 required.push(name.clone());
             }
         }

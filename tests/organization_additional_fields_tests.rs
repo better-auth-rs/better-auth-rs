@@ -247,7 +247,7 @@ async fn organization_field_configuration_accepts_replacement_policies_and_rejec
             "organizationRole" => &mut options.schema.organization_role,
             _ => unreachable!(),
         };
-        let _ = fields.additional_fields.insert(
+        let _ = fields.fields_mut().insert(
             name.into(),
             UserFieldConfig {
                 field_name: storage.map(str::to_owned),

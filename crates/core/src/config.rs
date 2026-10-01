@@ -15,8 +15,8 @@ mod verification;
 use crate::email::EmailProvider;
 use crate::error::AuthError;
 pub use crate::user_fields::{
-    UserConfig, UserFieldConfig, UserFieldReference, UserFieldTransform, UserFieldType,
-    UserFieldValidator,
+    FieldTransforms, UserConfig, UserFieldConfig, UserFieldReference, UserFieldTransform,
+    UserFieldType, UserFieldValidator,
 };
 use chrono::Duration;
 pub use cookie_cache::{CookieCacheVersion, CookieCacheVersionCallback};
@@ -220,13 +220,24 @@ pub struct SessionConfig {
     pub bearer: Option<BearerConfig>,
 
     /// Application session fields accepted by `/update-session` and included in session responses.
-    pub additional_fields: indexmap::IndexMap<String, SessionFieldConfig>,
+    /// `None` preserves omission; an explicitly empty map remains configured.
+    pub additional_fields: Option<indexmap::IndexMap<String, SessionFieldConfig>>,
 }
 
 /// Session fields use the same validation, defaults, transforms, and visibility as user fields.
 pub type SessionFieldConfig = UserFieldConfig;
 
 impl SessionConfig {
+    /// Runtime fields. An omitted map has no fields.
+    pub fn fields(&self) -> &indexmap::IndexMap<String, SessionFieldConfig> {
+        crate::user_fields::fields_or_empty(&self.additional_fields)
+    }
+
+    /// Configure fields, creating an explicitly present map when omitted.
+    pub fn fields_mut(&mut self) -> &mut indexmap::IndexMap<String, SessionFieldConfig> {
+        self.additional_fields.get_or_insert_default()
+    }
+
     pub fn field_schema(&self) -> UserConfig {
         UserConfig {
             additional_fields: self.additional_fields.clone(),
@@ -235,7 +246,7 @@ impl SessionConfig {
 
     /// Evaluate creation defaults without validating or transforming session input.
     pub fn default_fields(&self) -> serde_json::Map<String, serde_json::Value> {
-        self.additional_fields
+        self.fields()
             .iter()
             .filter_map(|(name, field)| field.default_value().map(|value| (name.clone(), value)))
             .collect()

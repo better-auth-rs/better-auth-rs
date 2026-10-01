@@ -20,7 +20,7 @@ async fn shared_store_keeps_each_route_schema_bound_to_its_auth_instance() {
         field_type: UserFieldType,
     ) -> BetterAuth<StatelessSchema> {
         let mut plugin = OrganizationConfig::default();
-        let _ = plugin.schema.organization.additional_fields.insert(
+        let _ = plugin.schema.organization.fields_mut().insert(
             "name".into(),
             UserFieldConfig {
                 field_type,

@@ -40,8 +40,17 @@ mod trusted;
 #[path = "telemetry_options/plugins.rs"]
 mod plugins;
 
+#[path = "telemetry_options/social.rs"]
+mod social;
+
 #[path = "telemetry_options/cache.rs"]
 mod cache;
+
+#[path = "telemetry_options/storage.rs"]
+mod storage;
+
+#[path = "telemetry_options/fields.rs"]
+mod fields;
 
 #[derive(Default)]
 struct Reports(Mutex<Vec<Value>>);

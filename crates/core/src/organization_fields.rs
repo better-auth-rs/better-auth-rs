@@ -75,7 +75,7 @@ pub struct OrganizationFields {
 impl OrganizationFields {
     /// Apply the upstream eager partial schema for dynamic-role storage.
     pub fn into_storage(mut self) -> Self {
-        for field in self.organization_role.additional_fields.values_mut() {
+        for field in self.organization_role.fields_mut().values_mut() {
             field.required = Some(false);
         }
         self
@@ -91,6 +91,6 @@ impl OrganizationFields {
             &self.organization_role,
         ]
         .iter()
-        .all(|schema| schema.additional_fields.is_empty())
+        .all(|schema| schema.fields().is_empty())
     }
 }

@@ -350,36 +350,30 @@ async fn handle_mock_connection(stream: tokio::net::TcpStream, email: &str) {
 }
 
 fn make_test_provider(mock_url: &str) -> OAuthProvider {
-    OAuthProvider {
-        client_id: "client".to_string(),
-        client_secret: "secret".to_string(),
-        auth_url: format!("{}/auth", mock_url),
-        token_url: format!("{}/token", mock_url),
-        user_info_url: Some(format!("{}/userinfo", mock_url)),
-        end_session_endpoint: None,
-        post_logout_redirect_uri: None,
-        scopes: vec!["email".to_string()],
-        authorization_params: Vec::new(),
-        map_user_info: Some(|v| {
-            Ok(OAuthUserInfo {
-                additional_fields: Default::default(),
-                id: v["sub"].as_str().unwrap_or("mock-user-id-123").to_string(),
-                email: v["email"]
-                    .as_str()
-                    .unwrap_or("unknown@example.com")
-                    .to_string(),
-                name: v["name"].as_str().map(String::from),
-                image: None,
-                email_verified: true,
-            })
-        }),
-        get_user_info: None,
-        refresh_access_token: None,
-        verify_id_token: None,
-        disable_implicit_sign_up: false,
-        disable_sign_up: false,
-        override_user_info_on_sign_in: false,
-    }
+    let mut provider = OAuthProvider::custom(
+        "client",
+        "secret",
+        &format!("{}/auth", mock_url),
+        &format!("{}/token", mock_url),
+    );
+    provider.user_info_url = Some(format!("{}/userinfo", mock_url));
+    provider.scopes = Some(vec!["email".to_string()]);
+    provider.map_user_info = Some(|v| {
+        Ok(OAuthUserInfo {
+            additional_fields: Default::default(),
+            id: v["sub"].as_str().unwrap_or("mock-user-id-123").to_string(),
+            email: v["email"]
+                .as_str()
+                .unwrap_or("unknown@example.com")
+                .to_string(),
+            name: v["name"].as_str().map(String::from),
+            image: None,
+            email_verified: true,
+        })
+    });
+    provider.disable_implicit_sign_up = Some(false);
+    provider.disable_sign_up = Some(false);
+    provider
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -455,27 +449,9 @@ async fn test_encrypt_oauth_tokens_stored_encrypted_in_db() {
 
     let mut oauth_config = OAuthConfig::default();
     let provider = make_test_provider("http://localhost:65535");
-    oauth_config.providers.insert(
-        "google".to_string(),
-        OAuthProvider {
-            client_id: provider.client_id,
-            client_secret: provider.client_secret,
-            auth_url: provider.auth_url,
-            token_url: provider.token_url,
-            user_info_url: provider.user_info_url,
-            end_session_endpoint: provider.end_session_endpoint,
-            post_logout_redirect_uri: provider.post_logout_redirect_uri,
-            scopes: provider.scopes,
-            authorization_params: provider.authorization_params,
-            map_user_info: provider.map_user_info,
-            get_user_info: provider.get_user_info,
-            refresh_access_token: provider.refresh_access_token,
-            verify_id_token: provider.verify_id_token,
-            disable_implicit_sign_up: provider.disable_implicit_sign_up,
-            disable_sign_up: provider.disable_sign_up,
-            override_user_info_on_sign_in: provider.override_user_info_on_sign_in,
-        },
-    );
+    oauth_config
+        .providers
+        .insert("google".to_string(), provider);
     let oauth_plugin = OAuthPlugin::with_config(oauth_config);
     let result = oauth_plugin.on_request(&req, &ctx).await;
 
@@ -1424,27 +1400,20 @@ async fn test_link_social_returns_redirect_url_with_state() {
     .await;
 
     let mut oauth_config = OAuthConfig::default();
-    oauth_config.providers.insert(
-        "github".to_string(),
-        OAuthProvider {
-            client_id: "client".to_string(),
-            client_secret: "secret".to_string(),
-            auth_url: "https://github.com/login/oauth/authorize".to_string(),
-            token_url: "https://github.com/login/oauth/access_token".to_string(),
-            user_info_url: Some("https://api.github.com/user".to_string()),
-            end_session_endpoint: None,
-            post_logout_redirect_uri: None,
-            scopes: vec!["user:email".to_string()],
-            authorization_params: Vec::new(),
-            map_user_info: Some(|_| unreachable!()),
-            get_user_info: None,
-            refresh_access_token: None,
-            verify_id_token: None,
-            disable_implicit_sign_up: false,
-            disable_sign_up: false,
-            override_user_info_on_sign_in: false,
-        },
-    );
+    oauth_config.providers.insert("github".to_string(), {
+        let mut provider = OAuthProvider::custom(
+            "client",
+            "secret",
+            "https://github.com/login/oauth/authorize",
+            "https://github.com/login/oauth/access_token",
+        );
+        provider.user_info_url = Some("https://api.github.com/user".to_string());
+        provider.scopes = Some(vec!["user:email".to_string()]);
+        provider.map_user_info = Some(|_| unreachable!());
+        provider.disable_implicit_sign_up = Some(false);
+        provider.disable_sign_up = Some(false);
+        provider
+    });
 
     let ctx = AuthContext::new(config.clone(), db.clone())
         .initialize_request_context()

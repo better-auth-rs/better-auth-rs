@@ -222,7 +222,7 @@ use better_auth::config::{UserFieldConfig, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
 
 let mut organization = OrganizationConfig::default();
-organization.schema.organization.additional_fields.insert(
+organization.schema.organization.fields_mut().insert(
     "label".into(),
     UserFieldConfig {
         field_name: Some("stored_label".into()),
@@ -230,7 +230,7 @@ organization.schema.organization.additional_fields.insert(
         ..Default::default()
     },
 );
-organization.schema.organization.additional_fields.insert(
+organization.schema.organization.fields_mut().insert(
     "tags".into(),
     UserFieldConfig {
         field_type: UserFieldType::StringArray,
@@ -248,6 +248,8 @@ let store = SeaOrmStore::<AppAuthSchema>::new(config.clone(), database)
 ```
 
 For existing entities, derive `AuthEntity` with role `organization`, `member`, `invitation`, `team`, `team_member`, or `organization_role`. Bind the models with `better_auth::seaorm::OrganizationModels<Organization, Member, Invitation, Team, TeamMember, OrganizationRole>`, or implement `SeaOrmOrganizationSchema`. The organization schema is independent of the four core `AuthSchema` model bindings.
+
+`SeaOrmOrganizationModel` separates stored field extraction (`record_fields`) from projected record decoding (`record_from_fields`). Its shared `record` and `records` methods await configured output transforms and accept the adapter's native JSON capability. `AuthEntity` derives both pure methods. Manual model implementations must expose the same canonical and storage aliases, preserve unconfigured typed JSON values, and decode the projected fields without invoking transforms again. Input transforms run once before JSON and reference binding.
 
 Organization `metadata` uses nullable text storage by default, matching the upstream String field. Absent metadata uses SQL NULL. Organization create and update operations encode JSON before storage; their responses decode that text. Raw adapter operations, including test utilities, preserve text without JSON parsing. The text `null` is distinct from SQL NULL.
 

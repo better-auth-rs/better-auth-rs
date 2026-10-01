@@ -14,7 +14,9 @@ mod callback;
 pub mod encryption;
 mod generic;
 mod generic_profile;
+pub(super) mod google;
 mod handlers;
+mod id_token;
 pub(crate) use handlers::validate_redirect_target;
 pub(crate) use signin::sign_in_verified_profile;
 mod logout;
@@ -29,10 +31,16 @@ pub use proxy::{OAuthProxyConfig, OAuthProxyPlugin};
 mod request;
 mod resolved;
 mod signin;
+mod social_profile;
 mod state;
 mod state_json;
 mod token;
 mod types;
+
+#[cfg(test)]
+mod google_test_support;
+#[cfg(test)]
+mod google_tests;
 
 pub use generic::{
     GenericOAuthConfig, GenericOAuthUserInfoHandler, OAuthAccountSubject, OAuthCodeExchange,
@@ -135,6 +143,31 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
         (!self.generic.is_empty()).then_some("generic-oauth")
     }
 
+    fn telemetry(&self, options: &mut better_auth_core::observability::telemetry::PluginTelemetry) {
+        use better_auth_core::observability::telemetry::SocialProviderTelemetry;
+        options
+            .social_providers
+            .extend(
+                self.config
+                    .providers
+                    .iter()
+                    .map(|(id, provider)| SocialProviderTelemetry {
+                        id: id.clone(),
+                        map_profile_to_user: provider.map_profile_to_user.is_some(),
+                        disable_default_scope: provider.disable_default_scope,
+                        disable_id_token_sign_in: provider.disable_id_token_sign_in,
+                        disable_implicit_sign_up: provider.disable_implicit_sign_up,
+                        disable_sign_up: provider.disable_sign_up,
+                        get_user_info: provider.get_user_info.is_some(),
+                        override_user_info_on_sign_in: provider.override_user_info_on_sign_in,
+                        prompt: provider.prompt.clone(),
+                        verify_id_token: provider.verify_id_token.is_some(),
+                        scope: provider.scopes.clone(),
+                        refresh_access_token: provider.refresh_access_token.is_some(),
+                    }),
+            );
+    }
+
     async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
         ctx.extensions.insert(self.config.clone());
         ctx.extensions.insert(self.resolved_config().await?.clone());
@@ -215,3 +248,6 @@ mod generic_signin_tests;
 
 #[cfg(test)]
 mod readiness_tests;
+
+#[cfg(test)]
+mod social_options_tests;

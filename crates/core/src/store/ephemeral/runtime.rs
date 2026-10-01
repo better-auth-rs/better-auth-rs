@@ -2,6 +2,10 @@ use super::*;
 use crate::store::{AuthStore, RuntimeStore};
 
 impl RuntimeStore<StatelessSchema> for EphemeralStore {
+    fn adapter_id(&self) -> &'static str {
+        "memory"
+    }
+
     fn database_hook_metadata(&self) -> Vec<crate::observability::database::DatabaseHookMetadata> {
         self.hooks.iter().map(|hook| hook.hook_metadata()).collect()
     }

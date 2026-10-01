@@ -56,7 +56,7 @@ impl OpenApiRegistry {
             );
         }
         let mut input_fields: ModelFields = endpoint_user_fields
-            .additional_fields
+            .fields()
             .iter()
             .map(|(key, field)| (key.clone(), project_field(key, field, true)))
             .collect();
@@ -91,13 +91,13 @@ impl OpenApiRegistry {
                 }
             }
         }
-        for (key, field) in &adapter_config.user.additional_fields {
+        for (key, field) in adapter_config.user.fields() {
             let _ = models
                 .entry("user".into())
                 .or_default()
                 .insert(key.clone(), project_field(key, field, true));
         }
-        for (key, field) in &adapter_config.session.additional_fields {
+        for (key, field) in adapter_config.session.fields() {
             let _ = models
                 .entry("session".into())
                 .or_default()

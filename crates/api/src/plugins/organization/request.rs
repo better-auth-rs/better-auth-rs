@@ -35,7 +35,7 @@ pub(super) fn read<T: Clone + Send + Sync + 'static>(
 pub(super) fn prepared_schema(path: &str, schema: &OrganizationFields) -> OrganizationFields {
     let mut schema = schema.clone();
     if path == "/organization/update-role" {
-        for field in schema.organization_role.additional_fields.values_mut() {
+        for field in schema.organization_role.fields_mut().values_mut() {
             field.required = Some(false);
         }
     }
@@ -346,9 +346,9 @@ pub(super) fn validate(
         "/organization/update-role" => {
             if schema
                 .organization_role
-                .additional_fields
+                .fields()
                 .get("permission")
-                .is_some_and(|field| field.input)
+                .is_some_and(|field| field.input())
                 && let Some(data) = output.get_mut("data").and_then(Value::as_object_mut)
             {
                 let _ = data.remove("permission");

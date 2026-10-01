@@ -1,0 +1,22 @@
+{
+  "stateless-primary": {
+    "database": "unknown",
+    "adapter": "memory",
+    "secondaryStorage": false
+  },
+  "stateless-secondary": {
+    "database": "unknown",
+    "adapter": "memory",
+    "secondaryStorage": true
+  },
+  "database-primary": {
+    "database": "adapter",
+    "adapter": "memory",
+    "secondaryStorage": false
+  },
+  "database-secondary": {
+    "database": "adapter",
+    "adapter": "memory",
+    "secondaryStorage": true
+  }
+}

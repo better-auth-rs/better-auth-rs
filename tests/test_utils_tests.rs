@@ -81,7 +81,7 @@ fn config(calls: Arc<Mutex<Vec<String>>>) -> AuthConfig {
             },
         },
     );
-    let _ = config.session.additional_fields.insert(
+    let _ = config.session.fields_mut().insert(
         "label".into(),
         UserFieldConfig {
             field_type: UserFieldType::String,

@@ -619,7 +619,7 @@ mod account {
             fields: &better_auth::config::UserConfig,
         ) -> AuthResult<better_auth_core::user_fields::AdapterRecord> {
             let mut storage = serde_json::Map::new();
-            for (logical, field) in &fields.additional_fields {
+            for (logical, field) in fields.fields() {
                 if logical == "id" {
                     continue;
                 }
@@ -784,7 +784,7 @@ mod verification {
             fields: &better_auth::config::UserConfig,
         ) -> AuthResult<better_auth_core::user_fields::AdapterRecord> {
             let mut storage = serde_json::Map::new();
-            for (logical, field) in &fields.additional_fields {
+            for (logical, field) in fields.fields() {
                 if logical == "id" {
                     continue;
                 }

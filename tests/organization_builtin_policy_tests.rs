@@ -17,7 +17,7 @@ use better_auth::__private_core::{
         CreateUser, UpdateOrganization, UpdateOrganizationRole, UpdateTeam,
     },
 };
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::seaorm::{Database, SeaOrmStore, sea_orm::EntityTrait};
 use better_auth::{
     AuthConfig,
@@ -35,12 +35,14 @@ type Store = SeaOrmStore<BundledSchema, fixture::models::Models>;
 fn text_policy() -> UserFieldConfig {
     UserFieldConfig {
         required: Some(true),
-        input_transform: Some(UserFieldTransform::new(|value| {
-            Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
-        })),
-        output_transform: Some(UserFieldTransform::new(|value| {
-            Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
-        })),
+        transform: Some(FieldTransforms {
+            input: Some(UserFieldTransform::new(|value| {
+                Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
+            })),
+            output: Some(UserFieldTransform::new(|value| {
+                Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
+            })),
+        }),
         ..Default::default()
     }
 }
@@ -73,14 +75,14 @@ async fn store(config: OrganizationConfig) -> Store {
 async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings() {
     let mut config = OrganizationConfig::default();
     fixture::configure(&mut config);
-    let _ = config.schema.organization.additional_fields.insert(
+    let _ = config.schema.organization.fields_mut().insert(
         "name".into(),
         UserFieldConfig {
             field_name: Some("name".into()),
             ..text_policy()
         },
     );
-    let _ = config.schema.organization.additional_fields.insert(
+    let _ = config.schema.organization.fields_mut().insert(
         "logo".into(),
         UserFieldConfig {
             required: Some(false),
@@ -91,22 +93,22 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     let _ = config
         .schema
         .member
-        .additional_fields
+        .fields_mut()
         .insert("role".into(), text_policy());
     let _ = config
         .schema
         .invitation
-        .additional_fields
+        .fields_mut()
         .insert("role".into(), text_policy());
     let _ = config
         .schema
         .team
-        .additional_fields
+        .fields_mut()
         .insert("name".into(), text_policy());
     let _ = config
         .schema
         .organization_role
-        .additional_fields
+        .fields_mut()
         .insert("role".into(), text_policy());
     let timestamp = UserFieldConfig {
         field_type: UserFieldType::Date,
@@ -118,28 +120,30 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     let _ = config
         .schema
         .team
-        .additional_fields
+        .fields_mut()
         .insert("updatedAt".into(), timestamp.clone());
     let _ = config
         .schema
         .organization_role
-        .additional_fields
+        .fields_mut()
         .insert("updatedAt".into(), timestamp);
-    let _ = config.schema.organization.additional_fields.insert(
+    let _ = config.schema.organization.fields_mut().insert(
         "id".into(),
         UserFieldConfig {
             field_name: Some("ignored_id_mapping".into()),
             default_value: Some(json!("ignored-id-default")),
-            input_transform: Some(UserFieldTransform::new(|_| {
-                Err(better_auth::AuthError::config(
-                    "id input policy must not run",
-                ))
-            })),
-            output_transform: Some(UserFieldTransform::new(|_| {
-                Err(better_auth::AuthError::config(
-                    "id output policy must not run",
-                ))
-            })),
+            transform: Some(FieldTransforms {
+                input: Some(UserFieldTransform::new(|_| {
+                    Err(better_auth::AuthError::config(
+                        "id input policy must not run",
+                    ))
+                })),
+                output: Some(UserFieldTransform::new(|_| {
+                    Err(better_auth::AuthError::config(
+                        "id output policy must not run",
+                    ))
+                })),
+            }),
             ..Default::default()
         },
     );
@@ -269,7 +273,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     config
         .schema
         .team
-        .additional_fields
+        .fields_mut()
         .get_mut("updatedAt")
         .unwrap()
         .on_update = Some(Arc::new(move || json!(date)));
@@ -292,7 +296,7 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
     let store = store(config.clone()).await;
     for (name, target) in [("name", "slug"), ("name", "storedLabel"), ("extra", "name")] {
         let mut invalid = config.clone();
-        let _ = invalid.schema.organization.additional_fields.insert(
+        let _ = invalid.schema.organization.fields_mut().insert(
             name.into(),
             UserFieldConfig {
                 required: Some(true),
@@ -308,11 +312,14 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
             "{error}"
         );
     }
-    let _ = config.schema.organization.additional_fields.insert(
+    let _ = config.schema.organization.fields_mut().insert(
         "name".into(),
         UserFieldConfig {
             required: Some(true),
-            output_transform: Some(UserFieldTransform::new(|_| Ok(Some(json!(12))))),
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(|_| Ok(Some(json!(12))))),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     );
@@ -325,11 +332,7 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
         .unwrap();
     assert_eq!(organization.name.json().unwrap(), Some(json!(12)));
     assert_eq!(serde_json::to_value(&organization).unwrap()["name"], 12);
-    let _ = config
-        .schema
-        .organization
-        .additional_fields
-        .shift_remove("name");
+    let _ = config.schema.organization.fields_mut().shift_remove("name");
     store
         .configure_organization_fields(config.schema.clone())
         .unwrap();
@@ -339,11 +342,14 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
         .unwrap()
         .unwrap();
     assert_eq!(organization.name, "Saved");
-    let _ = config.schema.organization.additional_fields.insert(
+    let _ = config.schema.organization.fields_mut().insert(
         "logo".into(),
         UserFieldConfig {
             required: Some(false),
-            output_transform: Some(UserFieldTransform::new(|_| Ok(None))),
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(|_| Ok(None))),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     );
@@ -362,16 +368,15 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
             .get("logo")
             .is_none()
     );
-    let _ = config
-        .schema
-        .organization
-        .additional_fields
-        .shift_remove("logo");
-    let _ = config.schema.invitation.additional_fields.insert(
+    let _ = config.schema.organization.fields_mut().shift_remove("logo");
+    let _ = config.schema.invitation.fields_mut().insert(
         "status".into(),
         UserFieldConfig {
             required: Some(true),
-            output_transform: Some(UserFieldTransform::new(|_| Ok(Some(json!("unrecognized"))))),
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(|_| Ok(Some(json!("unrecognized"))))),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     );
@@ -409,20 +414,22 @@ async fn team_capacity_uses_the_transformed_durable_counter() {
     let observed = inputs.clone();
     let mut config = OrganizationConfig::default();
     fixture::configure(&mut config);
-    let _ = config.schema.team.additional_fields.insert(
+    let _ = config.schema.team.fields_mut().insert(
         "memberCount".into(),
         UserFieldConfig {
             field_type: UserFieldType::Number,
             required: Some(false),
             default_value: Some(json!(17)),
-            input_transform: Some(UserFieldTransform::new(move |value| {
-                let _ = observed.fetch_add(1, Ordering::SeqCst);
-                assert_eq!(value, Some(json!(0)));
-                Ok(Some(json!(2)))
-            })),
-            output_transform: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| json!(value.as_i64().unwrap() + 10)))
-            })),
+            transform: Some(FieldTransforms {
+                input: Some(UserFieldTransform::new(move |value| {
+                    let _ = observed.fetch_add(1, Ordering::SeqCst);
+                    assert_eq!(value, Some(json!(0)));
+                    Ok(Some(json!(2)))
+                })),
+                output: Some(UserFieldTransform::new(|value| {
+                    Ok(value.map(|value| json!(value.as_i64().unwrap() + 10)))
+                })),
+            }),
             ..Default::default()
         },
     );

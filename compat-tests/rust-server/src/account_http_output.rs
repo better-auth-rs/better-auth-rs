@@ -1,6 +1,6 @@
-use better_auth::config::UserFieldTransform;
 use async_trait::async_trait;
 use axum::{Json, Router, routing::post};
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::plugins::{
     account_management::AccountManagementPlugin,
     oauth::{OAuthPlugin, OAuthProvider, OAuthRefreshTokenHandler, OAuthTokenSet},
@@ -52,18 +52,21 @@ async fn run(input: Input) -> AuthResult<Value> {
             name.into(),
             UserFieldConfig {
                 required: Some(false),
-                returned: name != "scope" || input.operation != "list-accounts",
+                returned: Some(name != "scope" || input.operation != "list-accounts"),
                 on_update: (name == "scope")
                     .then(|| Arc::new(|| json!("after")) as Arc<dyn Fn() -> Value + Send + Sync>),
-                output_transform: Some(UserFieldTransform::new(|value| {
-                    Ok(value.map(|value| {
-                        if value.is_null() {
-                            value
-                        } else {
-                            json!(format!("{}:out", value.as_str().unwrap()))
-                        }
-                    }))
-                })),
+                transform: Some(FieldTransforms {
+                    output: Some(UserFieldTransform::new(|value| {
+                        Ok(value.map(|value| {
+                            if value.is_null() {
+                                value
+                            } else {
+                                json!(format!("{}:out", value.as_str().unwrap()))
+                            }
+                        }))
+                    })),
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
         );

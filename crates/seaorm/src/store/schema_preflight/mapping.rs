@@ -51,7 +51,7 @@ fn columns<C: ColumnTrait>(
             names.push(name);
         }
     }
-    for (name, field) in &policies.additional_fields {
+    for (name, field) in policies.fields() {
         if name == "id" {
             continue;
         }
@@ -124,7 +124,7 @@ where
         ));
     }
     let fields = UserConfig {
-        additional_fields: config.account.additional_fields.clone(),
+        additional_fields: Some(config.account.additional_fields.clone()),
     };
     expected.push(model::<<S::Account as SeaOrmAccountModel>::Entity>(
         columns(
@@ -137,7 +137,7 @@ where
     ));
     if settings.database_verifications() {
         let fields = UserConfig {
-            additional_fields: config.verification.additional_fields.clone(),
+            additional_fields: Some(config.verification.additional_fields.clone()),
         };
         expected.push(
             model::<<S::Verification as SeaOrmVerificationModel>::Entity>(columns(

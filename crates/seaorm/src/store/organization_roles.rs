@@ -23,7 +23,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         mut input: CreateOrganizationRole,
     ) -> AuthResult<OrganizationRole> {
         let config = self.organization_fields()?.organization_role;
-        let permission = if config.additional_fields.contains_key("permission") {
+        let permission = if config.fields().contains_key("permission") {
             json!(input.permission.to_string())
         } else {
             input.permission
@@ -60,14 +60,22 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
     }
     async fn get_organization_role(&self, id: &str) -> AuthResult<Option<OrganizationRole>> {
         let config = self.organization_fields()?.organization_role;
-        models::find::<O::OrganizationRole, _>(
+        let row = models::find::<O::OrganizationRole, _>(
             self.connection(),
             id,
             self.config().advanced.database.generate_id(),
         )
-        .await?
-        .map(|row| row.record(&config))
-        .transpose()
+        .await?;
+        match row {
+            Some(row) => row
+                .record(
+                    &config,
+                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
     async fn list_organization_roles(
         &self,
@@ -85,7 +93,12 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             .all(self.connection())
             .await
             .map_err(map_db_err)?;
-        models::project::<O::OrganizationRole>(rows, &self.organization_fields()?.organization_role)
+        models::project::<O::OrganizationRole>(
+            rows,
+            &self.organization_fields()?.organization_role,
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await
     }
     async fn query_organization_roles(
         &self,
@@ -105,7 +118,12 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             .all(self.connection())
             .await
             .map_err(map_db_err)?;
-        models::project::<O::OrganizationRole>(rows, &self.organization_fields()?.organization_role)
+        models::project::<O::OrganizationRole>(
+            rows,
+            &self.organization_fields()?.organization_role,
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await
     }
     async fn find_organization_role(
         &self,
@@ -118,7 +136,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
                 .eq_id(id, self.config().advanced.database.generate_id())?,
             OrganizationRoleKey::Name(name) => O::OrganizationRole::column("role")?.eq(name),
         };
-        Entity::<O::OrganizationRole>::find()
+        let row = Entity::<O::OrganizationRole>::find()
             .filter(O::OrganizationRole::column("organization_id")?.eq_id(
                 organization_id,
                 self.config().advanced.database.generate_id(),
@@ -126,9 +144,17 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             .filter(condition)
             .one(self.connection())
             .await
-            .map_err(map_db_err)?
-            .map(|row| row.record(&self.organization_fields()?.organization_role))
-            .transpose()
+            .map_err(map_db_err)?;
+        match row {
+            Some(row) => row
+                .record(
+                    &self.organization_fields()?.organization_role,
+                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
     async fn count_organization_roles(&self, organization_id: &str) -> AuthResult<u64> {
         Entity::<O::OrganizationRole>::find()
@@ -147,14 +173,14 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
     ) -> AuthResult<OrganizationRole> {
         let config = self.organization_fields()?.organization_role;
         let mut core = Default::default();
-        if !config.additional_fields.contains_key("updatedAt") {
+        if !config.fields().contains_key("updatedAt") {
             core = values([("updatedAt", json!(Utc::now()))]);
         }
         if let Some(role) = input.role {
             let _ = core.insert("role".into(), json!(role));
         }
         if let Some(permission) = input.permission {
-            let value = if config.additional_fields.contains_key("permission") {
+            let value = if config.fields().contains_key("permission") {
                 json!(permission.to_string())
             } else {
                 permission
@@ -178,7 +204,8 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             false,
             self.connection().get_database_backend(),
             self.config().advanced.database.generate_id(),
-        )?;
+        )
+        .await?;
         let _ = Entity::<O::OrganizationRole>::update_many()
             .set(active)
             .filter(
@@ -195,7 +222,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         )
         .await?
         .ok_or_else(|| better_auth_core::AuthError::not_found("Role not found"))?
-        .record(&config)
+        .record(
+            &config,
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {
         let _ = Entity::<O::OrganizationRole>::delete_many()

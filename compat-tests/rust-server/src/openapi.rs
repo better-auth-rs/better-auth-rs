@@ -117,39 +117,41 @@ impl<S: AuthSchema> AuthPlugin<S> for DocsProbe {
 
     fn openapi(&self) -> AuthResult<OpenApiPluginMetadata> {
         let fields = UserConfig {
-            additional_fields: [
-                (
-                    "title".into(),
-                    UserFieldConfig {
-                        required: Some(true),
-                        input: false,
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "hidden".into(),
-                    UserFieldConfig {
-                        required: Some(true),
-                        returned: false,
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "payload".into(),
-                    UserFieldConfig {
-                        field_type: UserFieldType::Json,
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "category".into(),
-                    UserFieldConfig {
-                        field_type: UserFieldType::Enum(vec!["staff".into(), "guest".into()]),
-                        ..Default::default()
-                    },
-                ),
-            ]
-            .into(),
+            additional_fields: Some(
+                [
+                    (
+                        "title".into(),
+                        UserFieldConfig {
+                            required: Some(true),
+                            input: Some(false),
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        "hidden".into(),
+                        UserFieldConfig {
+                            required: Some(true),
+                            returned: Some(false),
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        "payload".into(),
+                        UserFieldConfig {
+                            field_type: UserFieldType::Json,
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        "category".into(),
+                        UserFieldConfig {
+                            field_type: UserFieldType::Enum(vec!["staff".into(), "guest".into()]),
+                            ..Default::default()
+                        },
+                    ),
+                ]
+                .into(),
+            ),
         };
         Ok(
             OpenApiPluginMetadata::from_routes(
@@ -253,7 +255,7 @@ async fn run(input: Input) -> AuthResult<Value> {
     };
     if metadata {
         let counter = defaults.clone();
-        config.user.additional_fields = [
+        config.user.additional_fields = Some([
             (
                 "requiredTag".into(),
                 UserFieldConfig {
@@ -265,8 +267,8 @@ async fn run(input: Input) -> AuthResult<Value> {
                 "hidden".into(),
                 UserFieldConfig {
                     required: Some(true),
-                    input: false,
-                    returned: false,
+                    input: Some(false),
+                    returned: Some(false),
                     ..Default::default()
                 },
             ),
@@ -312,27 +314,31 @@ async fn run(input: Input) -> AuthResult<Value> {
                 },
             ),
         ]
-        .into();
+        .into());
     }
     if models {
-        config.user.additional_fields = [(
-            "username".into(),
-            UserFieldConfig {
-                required: Some(true),
-                default_value: Some(json!("app-username")),
-                ..Default::default()
-            },
-        )]
-        .into();
-        config.session.additional_fields = [(
-            "tenantLabel".into(),
-            UserFieldConfig {
-                required: Some(true),
-                default_value: Some(json!("session")),
-                ..Default::default()
-            },
-        )]
-        .into();
+        config.user.additional_fields = Some(
+            [(
+                "username".into(),
+                UserFieldConfig {
+                    required: Some(true),
+                    default_value: Some(json!("app-username")),
+                    ..Default::default()
+                },
+            )]
+            .into(),
+        );
+        config.session.additional_fields = Some(
+            [(
+                "tenantLabel".into(),
+                UserFieldConfig {
+                    required: Some(true),
+                    default_value: Some(json!("session")),
+                    ..Default::default()
+                },
+            )]
+            .into(),
+        );
     }
     config.verification.store_in_database = input.profile == "models-secondary-database";
     let mut rate_limit = RateLimitConfig::new().enabled(false);
@@ -347,83 +353,93 @@ async fn run(input: Input) -> AuthResult<Value> {
         let counter = defaults.clone();
         let schema = OrganizationFields {
             organization: UserConfig {
-                additional_fields: [
-                    (
-                        "label".into(),
-                        UserFieldConfig {
-                            required: Some(true),
-                            default_value: Some(json!("org-default")),
-                            ..Default::default()
-                        },
-                    ),
-                    (
-                        "optionalTag".into(),
+                additional_fields: Some(
+                    [
+                        (
+                            "label".into(),
+                            UserFieldConfig {
+                                required: Some(true),
+                                default_value: Some(json!("org-default")),
+                                ..Default::default()
+                            },
+                        ),
+                        (
+                            "optionalTag".into(),
+                            UserFieldConfig {
+                                required: Some(false),
+                                ..Default::default()
+                            },
+                        ),
+                        (
+                            "hidden".into(),
+                            UserFieldConfig {
+                                input: Some(false),
+                                returned: Some(false),
+                                ..Default::default()
+                            },
+                        ),
+                        (
+                            "factory".into(),
+                            UserFieldConfig {
+                                default_value_fn: Some(Arc::new(move || {
+                                    let _ = counter.fetch_add(1, Ordering::SeqCst);
+                                    json!("factory")
+                                })),
+                                ..Default::default()
+                            },
+                        ),
+                    ]
+                    .into(),
+                ),
+            },
+            member: UserConfig {
+                additional_fields: Some(
+                    [(
+                        "badge".into(),
                         UserFieldConfig {
                             required: Some(false),
                             ..Default::default()
                         },
-                    ),
-                    (
-                        "hidden".into(),
-                        UserFieldConfig {
-                            input: false,
-                            returned: false,
-                            ..Default::default()
-                        },
-                    ),
-                    (
-                        "factory".into(),
-                        UserFieldConfig {
-                            default_value_fn: Some(Arc::new(move || {
-                                let _ = counter.fetch_add(1, Ordering::SeqCst);
-                                json!("factory")
-                            })),
-                            ..Default::default()
-                        },
-                    ),
-                ]
-                .into(),
-            },
-            member: UserConfig {
-                additional_fields: [(
-                    "badge".into(),
-                    UserFieldConfig {
-                        required: Some(false),
-                        ..Default::default()
-                    },
-                )]
-                .into(),
+                    )]
+                    .into(),
+                ),
             },
             invitation: UserConfig {
-                additional_fields: [(
-                    "comment".into(),
-                    UserFieldConfig {
-                        required: Some(false),
-                        ..Default::default()
-                    },
-                )]
-                .into(),
+                additional_fields: Some(
+                    [(
+                        "comment".into(),
+                        UserFieldConfig {
+                            required: Some(false),
+                            ..Default::default()
+                        },
+                    )]
+                    .into(),
+                ),
             },
             team: UserConfig {
-                additional_fields: [(
-                    "teamTag".into(),
-                    UserFieldConfig {
-                        required: Some(true),
-                        ..Default::default()
-                    },
-                )]
-                .into(),
+                additional_fields: Some(
+                    [(
+                        "teamTag".into(),
+                        UserFieldConfig {
+                            required: Some(true),
+                            ..Default::default()
+                        },
+                    )]
+                    .into(),
+                ),
             },
             organization_role: UserConfig {
-                additional_fields: [(
-                    "roleTag".into(),
-                    UserFieldConfig {
-                        required: Some(true),
-                        default_value: Some(json!("role-default")),
-                        ..Default::default()
-                    },
-                )]
-                .into(),
+                additional_fields: Some(
+                    [(
+                        "roleTag".into(),
+                        UserFieldConfig {
+                            required: Some(true),
+                            default_value: Some(json!("role-default")),
+                            ..Default::default()
+                        },
+                    )]
+                    .into(),
+                ),
             },
         };
         let organization = OrganizationPlugin::with_config(OrganizationConfig {

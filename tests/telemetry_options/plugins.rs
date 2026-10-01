@@ -20,7 +20,7 @@ impl AuthPlugin<S> for NamedPlugin {
     }
 }
 
-fn generic() -> GenericOAuthConfig {
+pub(super) fn generic() -> GenericOAuthConfig {
     GenericOAuthConfig {
         client_id: "telemetry-client".into(),
         client_secret: Some("telemetry-client-secret".into()),

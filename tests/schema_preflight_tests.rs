@@ -438,7 +438,7 @@ async fn physical_aliases_and_field_policies_do_not_hide_unconfigured_required_c
     let mut settings = config();
     let factories = Arc::new(AtomicUsize::new(0));
     let calls = factories.clone();
-    let _ = settings.user.additional_fields.insert(
+    let _ = settings.user.fields_mut().insert(
         "label".into(),
         better_auth_core::user_fields::UserFieldConfig {
             field_name: Some("storedLabel".into()),

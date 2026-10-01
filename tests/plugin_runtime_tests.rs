@@ -1,4 +1,4 @@
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -43,14 +43,18 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
     ) -> BetterAuth<StatelessSchema> {
         let mut config =
             AuthConfig::new("plugin-runtime-secret-with-at-least-32-characters").base_url(host);
-        let _ = config.user.additional_fields.insert(
+        let _ = config.user.fields_mut().insert(
             "lastLoginMethod".into(),
             UserFieldConfig {
                 field_name: Some(field.into()),
-                output_transform: Some(UserFieldTransform::new(|value| {
-                    Ok(value
-                        .map(|value| serde_json::json!(format!("{}:out", value.as_str().unwrap()))))
-                })),
+                transform: Some(FieldTransforms {
+                    output: Some(UserFieldTransform::new(|value| {
+                        Ok(value.map(|value| {
+                            serde_json::json!(format!("{}:out", value.as_str().unwrap()))
+                        }))
+                    })),
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
         );

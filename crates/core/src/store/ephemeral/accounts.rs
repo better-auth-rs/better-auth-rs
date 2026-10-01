@@ -134,29 +134,30 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
     ) -> AuthResult<Option<crate::store::AccountOwner>> {
         let fields = self.config.account.field_schema();
         let records = self.account_records(provider, account_id).await?;
-        let projected = futures_util::future::join_all(
-            records.iter().map(|record| self.output_account(record)),
-        )
-        .await;
-        let owners = futures_util::future::join_all(records.iter().zip(projected).map(
-            |(record, account)| {
-                let fields = &fields;
+        let owner_ids: Vec<_> = records
+            .iter()
+            .map(|record| record.get(fields.record_storage_key("userId")).cloned())
+            .collect();
+        let owners = fields
+            .project_records_then(&records, true, true, |index, output| {
+                let owner_ids = &owner_ids;
                 async move {
-                    let account = account?;
-                    let stored_owner_id = crate::SchemaValue::from_json(
-                        record.get(fields.record_storage_key("userId")).cloned(),
-                    );
-                    let user = match record.get(fields.record_storage_key("userId")) {
+                    let owner_id = owner_ids.get(index).ok_or_else(|| {
+                        AuthError::internal("Account projection lost its stored owner index")
+                    })?;
+                    let stored_owner_id = crate::SchemaValue::from_json(owner_id.clone());
+                    let user = match owner_id {
                         Some(id) if !id.is_null() => self.get_user_by_id_value(id).await?,
                         _ => None,
                     };
-                    crate::store::AccountOwner::new(account, user, &stored_owner_id)
+                    crate::store::AccountOwner::new(
+                        AccountView::from_adapter_fields(output),
+                        user,
+                        &stored_owner_id,
+                    )
                 }
-            },
-        ))
-        .await
-        .into_iter()
-        .collect::<AuthResult<Vec<_>>>()?;
+            })
+            .await?;
         if owners.len() > 1 {
             return Err(AuthError::internal(format!(
                 "Multiple accounts match the same accountId for provider {}. Resolve duplicate account identities before continuing.",

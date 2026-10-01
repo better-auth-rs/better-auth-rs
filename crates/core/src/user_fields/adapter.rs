@@ -25,7 +25,7 @@ impl UserConfig {
         bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<Map<String, Value>> {
         let mut fields = self.storage_fields(input, create).await?;
-        for (name, field) in &self.additional_fields {
+        for (name, field) in self.fields() {
             let storage_name = field.field_name.as_ref().unwrap_or(name);
             if let Some(value) = fields.get_mut(storage_name) {
                 *value = bind(storage_name, field, value.take())?;
@@ -79,22 +79,8 @@ impl UserFieldConfig {
         supports_native_json: bool,
     ) -> AuthResult<Option<Value>> {
         let mut value = self.prepare_output(value, supports_native_json);
-        if let Some(transform) = &self.output_transform {
+        if let Some(transform) = self.output_transform() {
             value = transform.call(value).await?;
-        }
-        self.finish_output(value, supports_native_json)
-    }
-
-    /// Project a value at the synchronous Organization boundary.
-    /// Async callbacks fail explicitly before application work starts.
-    pub fn adapter_output_sync(
-        &self,
-        value: Option<Value>,
-        supports_native_json: bool,
-    ) -> AuthResult<Option<Value>> {
-        let mut value = self.prepare_output(value, supports_native_json);
-        if let Some(transform) = &self.output_transform {
-            value = transform.call_sync(value)?;
         }
         self.finish_output(value, supports_native_json)
     }

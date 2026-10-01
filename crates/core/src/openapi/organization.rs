@@ -105,7 +105,7 @@ impl OpenApiPluginMetadata {
         }
         if self.models.contains_key("organizationRole") {
             let mut role = fields.organization_role.clone();
-            for field in role.additional_fields.values_mut() {
+            for field in role.fields_mut().values_mut() {
                 field.required = Some(false);
             }
             self = self.model("organizationRole", &role);
@@ -139,9 +139,9 @@ fn overlay(
         })
         .collect();
     let additional: indexmap::IndexMap<String, (Value, bool)> = fields
-        .additional_fields
+        .fields()
         .iter()
-        .filter(|(_, field)| field.input)
+        .filter(|(_, field)| field.input())
         .map(|(key, field)| {
             let optional = force_optional || field.required == Some(false);
             let mut property = match &field.field_type {

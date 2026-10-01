@@ -1,6 +1,9 @@
 //! Typed model bindings for Organization plugin persistence.
 
-use better_auth_core::{AuthResult, user_fields::UserConfig};
+use better_auth_core::{
+    AuthResult,
+    user_fields::{AdapterRecord, UserConfig},
+};
 use sea_orm::{
     ActiveModelBehavior, ActiveModelTrait, ColumnTrait, EntityTrait, FromQueryResult,
     IntoActiveModel,
@@ -27,8 +30,48 @@ pub trait SeaOrmOrganizationModel:
     fn is_core_column(column: &Self::Column) -> bool;
     /// Return the canonical public name of a built-in column.
     fn core_field_name(column: &Self::Column) -> Option<&'static str>;
-    /// Read built-in fields with their public wire names.
-    fn record(&self, fields: &UserConfig) -> AuthResult<Self::Record>;
+    /// Extract logical core fields and stored application fields before projection.
+    fn record_fields(&self, fields: &UserConfig) -> AuthResult<AdapterRecord>;
+    /// Decode projected fields while retaining typed model values for unconfigured fields.
+    fn record_from_fields(
+        &self,
+        fields: &UserConfig,
+        projected: Map<String, Value>,
+    ) -> AuthResult<Self::Record>;
+    /// Project one stored model with the same policy ordering as a batch.
+    fn record(
+        &self,
+        fields: &UserConfig,
+        supports_native_json: bool,
+    ) -> impl Future<Output = AuthResult<Self::Record>> + Send {
+        async move {
+            Ok(
+                Self::records(std::slice::from_ref(self), fields, supports_native_json)
+                    .await?
+                    .remove(0),
+            )
+        }
+    }
+    /// Project a batch before decoding records, preserving callback and result order.
+    fn records(
+        rows: &[Self],
+        fields: &UserConfig,
+        supports_native_json: bool,
+    ) -> impl Future<Output = AuthResult<Vec<Self::Record>>> + Send {
+        async move {
+            let records = rows
+                .iter()
+                .map(|row| row.record_fields(fields))
+                .collect::<AuthResult<Vec<_>>>()?;
+            let projected = fields
+                .organization_output_records(records, supports_native_json)
+                .await?;
+            rows.iter()
+                .zip(projected)
+                .map(|(row, projected)| row.record_from_fields(fields, projected))
+                .collect()
+        }
+    }
     /// Return whether the column references another model ID.
     fn is_id_reference(column: &Self::Column) -> bool;
     /// Assign typed fields in an insert or update.

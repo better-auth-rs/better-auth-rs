@@ -53,18 +53,18 @@ impl CookieVersionFixture {
             }),
             ..Default::default()
         });
-        config.user.additional_fields.insert(
+        config.user.fields_mut().insert(
             "secretNote".into(),
             UserFieldConfig {
-                returned: false,
+                returned: Some(false),
                 default_value: Some(json!("user-secret")),
                 ..Default::default()
             },
         );
-        config.session.additional_fields.insert(
+        config.session.fields_mut().insert(
             "internalNote".into(),
             UserFieldConfig {
-                returned: false,
+                returned: Some(false),
                 default_value: Some(json!("session-secret")),
                 ..Default::default()
             },

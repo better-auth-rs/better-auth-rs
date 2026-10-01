@@ -1,0 +1,142 @@
+[
+  {
+    "provider": "auth0",
+    "address": "tenant.example.test",
+    "expected": {
+      "discoveryUrl": "https://tenant.example.test/.well-known/openid-configuration",
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    }
+  },
+  {
+    "provider": "auth0",
+    "address": "http://tenant.example.test:8080/path?query=yes",
+    "expected": {
+      "discoveryUrl": "https://tenant.example.test:8080/.well-known/openid-configuration",
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    }
+  },
+  {
+    "provider": "auth0",
+    "address": "https://tenant.example.test:443/",
+    "expected": {
+      "discoveryUrl": "https://tenant.example.test/.well-known/openid-configuration",
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    }
+  },
+  {
+    "provider": "auth0",
+    "address": "https://[::1]:8443/path",
+    "expected": {
+      "discoveryUrl": "https://[::1]:8443/.well-known/openid-configuration",
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    }
+  },
+  {
+    "provider": "auth0",
+    "address": "https://tenant.example.test",
+    "overrideScopes": [],
+    "expected": {
+      "discoveryUrl": "https://tenant.example.test/.well-known/openid-configuration",
+      "scopes": []
+    }
+  },
+  {
+    "provider": "auth0",
+    "address": "http://",
+    "expected": null
+  },
+  {
+    "provider": "auth0",
+    "address": "bad host",
+    "expected": null
+  },
+  {
+    "provider": "keycloak",
+    "address": "https://identity.example.test/realms/app",
+    "expected": {
+      "discoveryUrl": "https://identity.example.test/realms/app/.well-known/openid-configuration",
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    }
+  },
+  {
+    "provider": "keycloak",
+    "address": "https://identity.example.test/realms/app/",
+    "expected": {
+      "discoveryUrl": "https://identity.example.test/realms/app/.well-known/openid-configuration",
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    }
+  },
+  {
+    "provider": "keycloak",
+    "address": "https://identity.example.test/realms/app//",
+    "expected": {
+      "discoveryUrl": "https://identity.example.test/realms/app//.well-known/openid-configuration",
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    }
+  },
+  {
+    "provider": "okta",
+    "address": "https://identity.example.test/oauth2/default",
+    "expected": {
+      "discoveryUrl": "https://identity.example.test/oauth2/default/.well-known/openid-configuration",
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    }
+  },
+  {
+    "provider": "okta",
+    "address": "https://identity.example.test/oauth2/default/",
+    "expected": {
+      "discoveryUrl": "https://identity.example.test/oauth2/default/.well-known/openid-configuration",
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    }
+  },
+  {
+    "provider": "okta",
+    "address": "https://identity.example.test/oauth2/default//",
+    "overrideScopes": [
+      "profile"
+    ],
+    "expected": {
+      "discoveryUrl": "https://identity.example.test/oauth2/default//.well-known/openid-configuration",
+      "scopes": [
+        "profile"
+      ]
+    }
+  }
+]

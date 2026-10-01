@@ -92,18 +92,18 @@ impl OAuthLinkIdTokenFixture {
         config.account.account_linking.update_user_info_on_link = Some(true);
         config.account.account_linking.trusted_providers = Some(Default::default());
         config.account.account_linking.allow_different_emails = false;
-        config.user.additional_fields.insert(
+        config.user.fields_mut().insert(
             "department".into(),
             better_auth::config::UserFieldConfig {
                 required: Some(false),
                 ..Default::default()
             },
         );
-        config.user.additional_fields.insert(
+        config.user.fields_mut().insert(
             "internalCode".into(),
             better_auth::config::UserFieldConfig {
                 required: Some(false),
-                input: false,
+                input: Some(false),
                 default_value: Some(json!("protected")),
                 ..Default::default()
             },

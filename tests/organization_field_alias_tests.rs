@@ -29,7 +29,7 @@ async fn field_names_accept_rust_and_serde_aliases_without_losing_or_repeating_t
         options
             .schema
             .organization
-            .additional_fields
+            .fields_mut()
             .get_mut("label")
             .unwrap()
             .field_name = Some(field_name.into());

@@ -5,8 +5,8 @@ pub use better_auth_core::config::{
     Argon2Config, BearerConfig, CookieAttributes, CookieCacheConfig, CookieCacheRefresh,
     CookieCacheStrategy, CookieCacheVersion, CookieCacheVersionCallback, CookieOverride,
     CrossSubDomainConfig, ErrorPageColors, ErrorPageCustomization, ErrorPageFont, ErrorPageSize,
-    IpAddressConfig, JwtConfig, OAuthStateStrategy, PasswordConfig, SameSite, SecretKey,
-    SessionConfig, SessionFieldConfig, UserConfig, UserFieldConfig, UserFieldReference,
+    FieldTransforms, IpAddressConfig, JwtConfig, OAuthStateStrategy, PasswordConfig, SameSite,
+    SecretKey, SessionConfig, SessionFieldConfig, UserConfig, UserFieldConfig, UserFieldReference,
     UserFieldTransform, UserFieldType, UserFieldValidator, VersionedSecret, core_paths,
     extract_origin,
 };

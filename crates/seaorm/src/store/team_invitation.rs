@@ -62,7 +62,8 @@ where
             false,
             self.connection().get_database_backend(),
             self.config().advanced.database.generate_id(),
-        )?;
+        )
+        .await?;
         let tx = self.connection().begin().await.map_err(map_db_err)?;
         let changed = Entity::<O::Invitation>::update_many()
             .set(active)
@@ -82,7 +83,16 @@ where
         };
         tx.commit().await.map_err(map_db_err)?;
         // Output transforms run after the claim is committed, before the member transaction starts.
-        row.map(|row| row.record(&config)).transpose()
+        match row {
+            Some(row) => row
+                .record(
+                    &config,
+                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
 
     async fn accept_claimed_invitation(

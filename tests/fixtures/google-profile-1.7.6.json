@@ -1,0 +1,44 @@
+{
+  "direct": {
+    "name": "Mapped Google User",
+    "image": "https://images.test/verified.png",
+    "email": "google-normal@example.test",
+    "emailVerified": true,
+    "calls": [
+      "map"
+    ],
+    "accountSubject": "google-normal-subject"
+  },
+  "code": {
+    "name": "Mapped Google User",
+    "image": "https://images.test/verified.png",
+    "email": "google-normal@example.test",
+    "emailVerified": true,
+    "calls": [
+      "map"
+    ],
+    "accountSubject": "google-normal-subject"
+  },
+  "customVerifier": {
+    "name": "Mapped Google User",
+    "image": "https://images.test/verified.png",
+    "email": "google-normal@example.test",
+    "emailVerified": true,
+    "calls": [
+      "verify",
+      "map"
+    ],
+    "accountSubject": "google-normal-subject"
+  },
+  "customUserInfo": {
+    "name": "Configured Google User",
+    "image": null,
+    "email": "google-normal@example.test",
+    "emailVerified": true,
+    "calls": [
+      "verify",
+      "get"
+    ],
+    "accountSubject": "google-normal-subject"
+  }
+}

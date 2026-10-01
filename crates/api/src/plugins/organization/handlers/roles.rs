@@ -504,16 +504,16 @@ pub async fn handle_role_request(
                 .ok_or_else(|| AuthError::internal("Validated role data is missing"))?;
             let schema = &config.schema.organization_role;
             let overrides_permission = schema
-                .additional_fields
+                .fields()
                 .get("permission")
-                .is_some_and(|field| field.input);
+                .is_some_and(|field| field.input());
             let mut fields: serde_json::Map<String, serde_json::Value> = raw_data
                 .iter()
                 .filter(|(name, _)| {
                     schema
-                        .additional_fields
+                        .fields()
                         .get(*name)
-                        .is_some_and(|field| field.input)
+                        .is_some_and(|field| field.input())
                 })
                 .map(|(name, value)| (name.clone(), value.clone()))
                 .collect();

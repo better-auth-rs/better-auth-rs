@@ -5,7 +5,7 @@ use better_auth_core::{
     CreateUser, CreateVerification, SchemaValue, UpdateUser, UserView,
     store::EphemeralStore,
     types::ListUsersParams,
-    user_fields::{UserConfig, UserFieldConfig, UserFieldTransform},
+    user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform},
 };
 use better_auth_seaorm::{
     SeaOrmStore,
@@ -111,8 +111,10 @@ async fn drive<T>(
 
 fn field(gate: &Gate, input: &'static str, output: &'static str) -> UserFieldConfig {
     UserFieldConfig {
-        input_transform: Some(gate.callback(input)),
-        output_transform: Some(gate.callback(output)),
+        transform: Some(FieldTransforms {
+            input: Some(gate.callback(input)),
+            output: Some(gate.callback(output)),
+        }),
         ..Default::default()
     }
 }
@@ -121,13 +123,13 @@ fn write_config(gate: &Gate) -> AuthConfig {
     let mut config = AuthConfig::default();
     let _ = config
         .user
-        .additional_fields
+        .fields_mut()
         .insert("name".into(), field(gate, "user.input", "user.output"));
     let _ = config.account.additional_fields.insert(
         "scope".into(),
         field(gate, "account.input", "account.output"),
     );
-    let _ = config.session.additional_fields.insert(
+    let _ = config.session.fields_mut().insert(
         "userAgent".into(),
         field(gate, "session.input", "session.output"),
     );
@@ -299,10 +301,13 @@ async fn check_writes<S: AuthSchema>(store: &impl AuthStore<S>, gate: &Gate) -> 
 fn batch_config(gate: &Gate) -> AuthConfig {
     let mut config = AuthConfig::default();
     for name in ["name", "image"] {
-        let _ = config.user.additional_fields.insert(
+        let _ = config.user.fields_mut().insert(
             name.into(),
             UserFieldConfig {
-                output_transform: Some(gate.callback(name)),
+                transform: Some(FieldTransforms {
+                    output: Some(gate.callback(name)),
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
         );
@@ -414,34 +419,49 @@ async fn core_async_batches_match_the_upstream_success_fixture() -> AuthResult<(
     clippy::panic_in_result_fn,
     reason = "Assertions report callback contract mismatches; Result propagates fixture setup errors"
 )]
-async fn synchronous_input_and_organization_boundaries_reject_async_callbacks() -> AuthResult<()> {
+async fn synchronous_input_rejects_async_callbacks_while_organization_adapters_await()
+-> AuthResult<()> {
     let callback = UserFieldTransform::new_async(|value| async move { Ok(value) });
     let mut config = UserConfig {
-        additional_fields: [(
-            "label".into(),
-            UserFieldConfig {
-                input_transform: Some(callback.clone()),
-                output_transform: Some(callback),
-                ..Default::default()
-            },
-        )]
-        .into(),
+        additional_fields: Some(
+            [(
+                "label".into(),
+                UserFieldConfig {
+                    transform: Some(FieldTransforms {
+                        input: Some(callback.clone()),
+                        output: Some(callback),
+                    }),
+                    ..Default::default()
+                },
+            )]
+            .into(),
+        ),
     };
     let input = serde_json::from_value(json!({"label":"normal"}))?;
     assert!(matches!(
         config.parse_input(&input, true),
         Err(AuthError::Config(_))
     ));
-    assert!(matches!(
-        config.organization_storage_fields(Default::default(), input.clone(), true),
-        Err(AuthError::Config(_))
-    ));
-    assert!(matches!(
-        config.organization_output_fields(Default::default(), &input),
-        Err(AuthError::Config(_))
-    ));
+    assert_eq!(
+        config
+            .organization_storage_fields(Default::default(), input.clone(), true)
+            .await?,
+        input
+    );
+    assert_eq!(
+        config
+            .organization_output_records(
+                vec![better_auth_core::user_fields::AdapterRecord::new(
+                    Default::default(),
+                    input.clone()
+                )],
+                true
+            )
+            .await?,
+        vec![input.clone()]
+    );
     config
-        .additional_fields
+        .fields_mut()
         .get_mut("label")
         .ok_or_else(|| AuthError::internal("Fixture field missing"))?
         .validator = Some(Arc::new(Ok));

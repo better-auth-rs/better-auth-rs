@@ -138,7 +138,7 @@ async fn failed_acceptance_compensates_invitation_updates_without_committing_mem
         options
             .schema
             .invitation
-            .additional_fields
+            .fields_mut()
             .get_mut("marker")
             .unwrap()
             .on_update = Some(Arc::new(move || {
@@ -151,10 +151,12 @@ async fn failed_acceptance_compensates_invitation_updates_without_committing_mem
             options
                 .schema
                 .member
-                .additional_fields
+                .fields_mut()
                 .get_mut("label")
                 .unwrap()
-                .output_transform = Some(UserFieldTransform::new(|_| {
+                .transform
+                .get_or_insert_default()
+                .output = Some(UserFieldTransform::new(|_| {
                 Err(AuthError::bad_request("member output failed"))
             }));
         }
@@ -230,7 +232,7 @@ async fn claim_output_and_compensation_errors_preserve_the_upstream_failure_stag
         let marker = options
             .schema
             .invitation
-            .additional_fields
+            .fields_mut()
             .get_mut("marker")
             .unwrap();
         marker.on_update = Some(Arc::new(move || {
@@ -240,21 +242,23 @@ async fn claim_output_and_compensation_errors_preserve_the_upstream_failure_stag
             ))
         }));
         if claim_output_failure {
-            marker.output_transform = Some(UserFieldTransform::new(|value| {
-                if value == Some(json!("updated-1")) {
-                    Err(AuthError::bad_request("claim output failed"))
-                } else {
-                    Ok(value)
-                }
-            }));
+            marker.transform.get_or_insert_default().output =
+                Some(UserFieldTransform::new(|value| {
+                    if value == Some(json!("updated-1")) {
+                        Err(AuthError::bad_request("claim output failed"))
+                    } else {
+                        Ok(value)
+                    }
+                }));
         } else {
-            marker.input_transform = Some(UserFieldTransform::new(|value| {
-                if value == Some(json!("updated-2")) {
-                    Err(AuthError::bad_request("compensation failed"))
-                } else {
-                    Ok(value)
-                }
-            }));
+            marker.transform.get_or_insert_default().input =
+                Some(UserFieldTransform::new(|value| {
+                    if value == Some(json!("updated-2")) {
+                        Err(AuthError::bad_request("compensation failed"))
+                    } else {
+                        Ok(value)
+                    }
+                }));
         }
         let store = store(options.clone()).await;
         let team = team(&store).await;
@@ -295,10 +299,12 @@ async fn claim_output_and_compensation_errors_preserve_the_upstream_failure_stag
         options
             .schema
             .invitation
-            .additional_fields
+            .fields_mut()
             .get_mut("marker")
             .unwrap()
-            .output_transform = None;
+            .transform
+            .get_or_insert_default()
+            .output = None;
         store.configure_organization_fields(options.schema).unwrap();
         let invitation = store.get_invitation_by_id(&id).await.unwrap().unwrap();
         assert_eq!(invitation.status, InvitationStatus::Accepted);
@@ -353,7 +359,7 @@ async fn team_deletion_rolls_back_read_and_update_output_errors() {
         let marker = config
             .schema
             .invitation
-            .additional_fields
+            .fields_mut()
             .get_mut("marker")
             .unwrap();
         marker.on_update = Some(Arc::new(move || {
@@ -362,7 +368,7 @@ async fn team_deletion_rolls_back_read_and_update_output_errors() {
                 count.fetch_add(1, Ordering::SeqCst) + 1
             ))
         }));
-        marker.output_transform = Some(UserFieldTransform::new(|value| {
+        marker.transform.get_or_insert_default().output = Some(UserFieldTransform::new(|value| {
             if value == Some(json!("read-fail")) || value == Some(json!("updated-2")) {
                 Err(AuthError::bad_request("invitation output failed"))
             } else {

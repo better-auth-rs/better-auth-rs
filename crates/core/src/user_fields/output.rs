@@ -52,8 +52,8 @@ impl UserView {
                 let _ = output.insert((*name).into(), value);
             }
         }
-        for (name, field) in &config.additional_fields {
-            if !field.returned {
+        for (name, field) in config.fields() {
+            if !field.returned() {
                 let _ = output.remove(name);
                 continue;
             }
@@ -72,8 +72,8 @@ impl UserView {
     /// Apply current `returned` restrictions to cached fields without repeating adapter transforms.
     /// Upstream keeps fields from disabled plugins until the cache expires or its version changes.
     pub(crate) fn filter_cached_fields(&mut self, config: &super::UserConfig) {
-        for (name, field) in &config.additional_fields {
-            if field.returned {
+        for (name, field) in config.fields() {
+            if field.returned() {
                 continue;
             }
             if let Some(fields) = &mut self.visible_fields {
@@ -87,9 +87,9 @@ impl UserView {
         }
         self.additional_fields.retain(|name, _| {
             config
-                .additional_fields
+                .fields()
                 .get(name)
-                .is_none_or(|field| field.returned)
+                .is_none_or(|field| field.returned())
         });
     }
 
@@ -207,18 +207,17 @@ impl UserView {
                         .collect(),
                 );
                 view.additional_fields.clear();
-                let model =
-                    if !config.additional_fields.is_empty() && user.projected_fields().is_none() {
-                        Some(serde_json::to_value(user)?)
-                    } else {
-                        None
-                    };
+                let model = if !config.fields().is_empty() && user.projected_fields().is_none() {
+                    Some(serde_json::to_value(user)?)
+                } else {
+                    None
+                };
                 Ok((user, view, model))
             })
             .collect::<AuthResult<Vec<_>>>()?;
         super::batch::project_fields(
             &mut rows,
-            &config.additional_fields,
+            config.fields(),
             |(user, view, model), name, field| {
                 Box::pin(async move {
                     let value = if let Some(projected) = user.projected_fields() {
@@ -243,13 +242,13 @@ impl UserView {
                     };
                     if name == "username" || name == "displayUsername" {
                         if let Some(fields) = &mut view.visible_fields {
-                            if value.is_some() && (!public || field.returned) {
+                            if value.is_some() && (!public || field.returned()) {
                                 let _ = fields.insert(name.to_owned());
                             } else {
                                 let _ = fields.remove(name);
                             }
                         }
-                        let typed = if !public || field.returned {
+                        let typed = if !public || field.returned() {
                             value
                                 .as_ref()
                                 .map(|value| serde_json::from_value(value.clone()))
@@ -272,7 +271,7 @@ impl UserView {
                         };
                         *target = crate::SchemaValue::from_json(value);
                         if public
-                            && !field.returned
+                            && !field.returned()
                             && let Some(fields) = &mut view.visible_fields
                         {
                             let _ = fields.remove(name);
@@ -283,7 +282,7 @@ impl UserView {
                         if !field.references_id() {
                             field.normalize_date(&mut value)?;
                         }
-                        if !public || field.returned {
+                        if !public || field.returned() {
                             let _ = view.additional_fields.insert(name.to_owned(), value);
                         }
                     }

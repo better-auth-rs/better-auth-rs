@@ -25,7 +25,7 @@ fn member_expression(
     backend: DatabaseBackend,
 ) -> SimpleExpr {
     if backend == DatabaseBackend::Sqlite
-        && config.additional_fields.get(field).is_some_and(|field| {
+        && config.fields().get(field).is_some_and(|field| {
             matches!(
                 field.field_type,
                 better_auth_core::user_fields::UserFieldType::Json
@@ -54,7 +54,7 @@ fn member_column<M: SeaOrmOrganizationModel>(
     };
     M::column(
         config
-            .additional_fields
+            .fields()
             .get(field)
             .and_then(|field| field.field_name.as_deref())
             .unwrap_or(name),
@@ -82,7 +82,7 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
         M::core_field_name(&column),
         Some("id" | "organizationId" | "userId")
     ) || config
-        .additional_fields
+        .fields()
         .get(field)
         .is_some_and(|field| field.references_id());
     let id_column = (id_field
@@ -94,10 +94,7 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
         ))
     .then_some(column);
     let column = member_expression(column, field, config, backend);
-    let field_type = config
-        .additional_fields
-        .get(field)
-        .map(|field| &field.field_type);
+    let field_type = config.fields().get(field).map(|field| &field.field_type);
     let convert = |value: &Value, number_strings: bool| -> AuthResult<sea_orm::Value> {
         if let (Value::String(value), Some(column)) = (value, id_column) {
             return column.id_value(value, policy);
@@ -248,11 +245,16 @@ where
             true,
             self.connection().get_database_backend(),
             self.config().advanced.database.generate_id(),
-        )?
+        )
+        .await?
         .insert(self.connection())
         .await
         .map_err(map_db_err)?
-        .record(&config)
+        .record(
+            &config,
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await
     }
 
     async fn create_member(&self, member: CreateMember) -> AuthResult<Member> {
@@ -261,7 +263,7 @@ where
     }
 
     async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>> {
-        Entity::<O::Member>::find()
+        let row = Entity::<O::Member>::find()
             .filter(O::Member::column("organization_id")?.eq_id(
                 organization_id,
                 self.config().advanced.database.generate_id(),
@@ -272,9 +274,17 @@ where
             )
             .one(self.connection())
             .await
-            .map_err(map_db_err)?
-            .map(|row| row.record(&self.organization_fields()?.member))
-            .transpose()
+            .map_err(map_db_err)?;
+        match row {
+            Some(row) => row
+                .record(
+                    &self.organization_fields()?.member,
+                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
 
     async fn get_member_value(
@@ -287,16 +297,24 @@ where
     }
 
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
-        Entity::<O::Member>::find()
+        let row = Entity::<O::Member>::find()
             .filter(
                 O::Member::column("id")?
                     .eq_id(id, self.config().advanced.database.generate_id())?,
             )
             .one(self.connection())
             .await
-            .map_err(map_db_err)?
-            .map(|row| row.record(&self.organization_fields()?.member))
-            .transpose()
+            .map_err(map_db_err)?;
+        match row {
+            Some(row) => row
+                .record(
+                    &self.organization_fields()?.member,
+                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
 
     async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member> {
@@ -333,7 +351,7 @@ where
     }
 
     async fn list_organization_members(&self, organization_id: &str) -> AuthResult<Vec<Member>> {
-        Entity::<O::Member>::find()
+        let rows = Entity::<O::Member>::find()
             .filter(O::Member::column("organization_id")?.eq_id(
                 organization_id,
                 self.config().advanced.database.generate_id(),
@@ -341,10 +359,13 @@ where
             .order_by_asc(O::Member::column("created_at")?)
             .all(self.connection())
             .await
-            .map_err(map_db_err)
-            .and_then(|rows| {
-                models::project::<O::Member>(rows, &self.organization_fields()?.member)
-            })
+            .map_err(map_db_err)?;
+        models::project::<O::Member>(
+            rows,
+            &self.organization_fields()?.member,
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await
     }
 
     async fn query_organization_members(
@@ -392,18 +413,18 @@ where
             query = query.limit(limit);
         }
 
-        query
-            .all(self.connection())
-            .await
-            .map_err(map_db_err)
-            .and_then(|rows| {
-                let skip = std::cmp::min(unbounded_offset, rows.len() as u64) as usize;
-                let rows = rows.into_iter().skip(skip).collect();
-                Ok((
-                    models::project::<O::Member>(rows, &self.organization_fields()?.member)?,
-                    total,
-                ))
-            })
+        let rows = query.all(self.connection()).await.map_err(map_db_err)?;
+        let skip = std::cmp::min(unbounded_offset, rows.len() as u64) as usize;
+        let rows = rows.into_iter().skip(skip).collect();
+        Ok((
+            models::project::<O::Member>(
+                rows,
+                &self.organization_fields()?.member,
+                self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            )
+            .await?,
+            total,
+        ))
     }
 
     async fn count_organization_members(&self, organization_id: &str) -> AuthResult<i64> {
@@ -578,7 +599,7 @@ impl<
         organization_id: &serde_json::Value,
         user_id: &serde_json::Value,
     ) -> AuthResult<Option<Member>> {
-        Entity::<O::Member>::find()
+        let row = Entity::<O::Member>::find()
             .filter(super::value_filter::equals_id(
                 O::Member::column("organization_id")?,
                 organization_id,
@@ -591,9 +612,17 @@ impl<
             )?)
             .one(db)
             .await
-            .map_err(map_db_err)?
-            .map(|row| row.record(&self.organization_fields()?.member))
-            .transpose()
+            .map_err(map_db_err)?;
+        match row {
+            Some(row) => row
+                .record(
+                    &self.organization_fields()?.member,
+                    db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                )
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
 
     pub(super) async fn count_organization_members_with_connection<C: sea_orm::ConnectionTrait>(
@@ -629,7 +658,12 @@ impl<
         else {
             return Ok(());
         };
-        let member = member.record(&self.organization_fields()?.member)?;
+        let member = member
+            .record(
+                &self.organization_fields()?.member,
+                db.get_database_backend() == sea_orm::DbBackend::Postgres,
+            )
+            .await?;
         self.delete_member_for_user_with_connection(
             db,
             member_id,
@@ -665,10 +699,13 @@ impl<
             )?)
             .all(db)
             .await
-            .map_err(map_db_err)?
-            .into_iter()
-            .map(|team| team.record(&self.organization_fields()?.team))
-            .collect::<AuthResult<Vec<_>>>()?;
+            .map_err(map_db_err)?;
+        let teams = models::project::<O::Team>(
+            teams,
+            &self.organization_fields()?.team,
+            db.get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+        .await?;
         for team in teams {
             let _ = Entity::<O::Team>::update_many()
                 .col_expr(

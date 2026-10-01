@@ -15,9 +15,10 @@ use super::encryption::encrypt_token_set;
 pub(super) use super::provider_tokens::refresh_tokens_via_provider;
 use super::providers::{
     OAuthCallbackUserName, OAuthCallbackUserPayload, OAuthTokenSet, OAuthUserInfo,
-    OAuthUserInfoRequest, OAuthUserInfoResponse,
+    OAuthUserInfoRequest,
 };
 use super::resolved::{ResolvedOAuthConfig as OAuthConfig, ResolvedProvider};
+pub(super) use super::social_profile::{fetch_user_info_for_code, fetch_user_info_from_provider};
 use super::state::{
     AccountCookiePayload, OAuthStateLink, OAuthStatePayload, account_cookie_name,
     create_account_cookie_value, create_cookie_state_value, create_database_state_cookie_value,
@@ -45,69 +46,6 @@ fn generate_pkce() -> (String, String) {
     hasher.update(verifier.as_bytes());
     let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(hasher.finalize());
     (verifier, challenge)
-}
-
-pub(super) async fn fetch_user_info_from_provider(
-    provider: &ResolvedProvider,
-    request: OAuthUserInfoRequest,
-    expected_nonce: Option<&str>,
-) -> AuthResult<OAuthUserInfoResponse> {
-    if let Some(generic) = &provider.generic {
-        return super::generic_profile::fetch_user_info(generic, &request, expected_nonce).await;
-    }
-    if let Some(handler) = &provider.config.get_user_info {
-        return handler
-            .get_user_info(request)
-            .await
-            .map_err(AuthError::internal);
-    }
-
-    let user_info_url = provider
-        .config
-        .user_info_url
-        .as_deref()
-        .ok_or_else(|| AuthError::internal("Missing user_info_url for provider"))?;
-    let access_token = request
-        .access_token
-        .as_deref()
-        .ok_or_else(|| AuthError::internal("Missing access token for user-info lookup"))?;
-    let mapper = provider
-        .config
-        .map_user_info
-        .ok_or_else(|| AuthError::internal("Missing user-info mapper for provider"))?;
-
-    let client = reqwest::Client::new();
-    let user_info_resp = client
-        .get(user_info_url)
-        .bearer_auth(access_token)
-        .header("Accept", "application/json")
-        .send()
-        .await
-        .map_err(|e| AuthError::internal(format!("Failed to fetch user info: {}", e)))?;
-
-    if !user_info_resp.status().is_success() {
-        let error_body = user_info_resp
-            .text()
-            .await
-            .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(AuthError::internal(format!(
-            "User info request failed: {}",
-            error_body
-        )));
-    }
-
-    let user_info_json: serde_json::Value = user_info_resp
-        .json()
-        .await
-        .map_err(|e| AuthError::internal(format!("Failed to parse user info: {}", e)))?;
-
-    let user = mapper(user_info_json.clone())
-        .map_err(|e| AuthError::internal(format!("Failed to map user info: {}", e)))?;
-
-    Ok(OAuthUserInfoResponse {
-        user,
-        data: user_info_json,
-    })
 }
 
 pub(super) fn parse_callback_user_payload(
@@ -430,42 +368,6 @@ pub(super) async fn complete_link_social(
     Ok(())
 }
 
-async fn verify_id_token(
-    provider: &ResolvedProvider,
-    request: &OAuthIdTokenRequest,
-) -> AuthResult<()> {
-    let valid = if let Some(verifier) = &provider.config.verify_id_token {
-        // Upstream converts verifier rejection and verifier errors into the same authentication error.
-        verifier
-            .verify_id_token(&request.token, request.nonce.as_deref())
-            .await
-            .unwrap_or(false)
-    } else if let Some(verifier) = provider
-        .generic
-        .as_ref()
-        .and_then(|generic| generic.verifier.as_ref())
-    {
-        verifier
-            .verify(&request.token, request.nonce.as_deref())
-            .await
-            .is_ok()
-    } else {
-        return Err(AuthError::Upstream {
-            status: 404,
-            code: "ID_TOKEN_NOT_SUPPORTED",
-            message: "id_token not supported",
-        });
-    };
-    if !valid {
-        return Err(AuthError::Upstream {
-            status: 401,
-            code: "INVALID_TOKEN",
-            message: "Invalid token",
-        });
-    }
-    Ok(())
-}
-
 async fn sign_in_with_id_token_core(
     req: &AuthRequest,
     body: &SocialSignInRequest,
@@ -475,9 +377,9 @@ async fn sign_in_with_id_token_core(
     meta: &better_auth_core::RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    verify_id_token(provider, id_token).await?;
+    let claims = super::id_token::verify(provider, id_token).await?;
 
-    let user_info = fetch_user_info_from_provider(
+    let user_info = super::social_profile::fetch_user_info_with_claims(
         provider,
         OAuthUserInfoRequest {
             access_token: id_token.access_token.clone(),
@@ -486,7 +388,8 @@ async fn sign_in_with_id_token_core(
             id_token: Some(id_token.token.clone()),
             ..Default::default()
         },
-        None,
+        id_token.nonce.as_deref(),
+        claims,
     )
     .await
     .map_err(|_| AuthError::Upstream {
@@ -515,9 +418,9 @@ async fn sign_in_with_id_token_core(
             request: req,
             profile: Some(&user_info.data),
             body: req.body_as_json()?,
-            disable_sign_up: provider.config.disable_implicit_sign_up
+            disable_sign_up: provider.config.disable_implicit_sign_up()
                 && !body.request_sign_up.unwrap_or(false)
-                || provider.config.disable_sign_up,
+                || provider.config.disable_sign_up(),
             callback_url: body.callback_url.as_deref().unwrap_or("/"),
             email_verification: config.email_verification.as_deref(),
         },
@@ -550,9 +453,9 @@ async fn link_with_id_token_core(
     current_user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SocialSignInResponse> {
-    verify_id_token(provider, id_token).await?;
+    let claims = super::id_token::verify(provider, id_token).await?;
 
-    let response = fetch_user_info_from_provider(
+    let response = super::social_profile::fetch_user_info_with_claims(
         provider,
         OAuthUserInfoRequest {
             access_token: id_token.access_token.clone(),
@@ -560,7 +463,8 @@ async fn link_with_id_token_core(
             id_token: Some(id_token.token.clone()),
             ..Default::default()
         },
-        None,
+        id_token.nonce.as_deref(),
+        claims,
     )
     .await
     .map_err(|_| AuthError::Upstream {

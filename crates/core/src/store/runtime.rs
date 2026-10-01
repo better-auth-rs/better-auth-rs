@@ -5,6 +5,11 @@ use crate::{AuthConfig, AuthResult, AuthSchema};
 
 /// Create an isolated configuration view over the same stored records.
 pub trait RuntimeStore<S: AuthSchema>: Send + Sync {
+    /// Identify the adapter in initialization metadata without querying stored records.
+    fn adapter_id(&self) -> &'static str {
+        "unknown"
+    }
+
     /// Declared callbacks installed on this adapter, without invoking any hook.
     fn database_hook_metadata(&self) -> Vec<crate::observability::database::DatabaseHookMetadata> {
         Vec::new()

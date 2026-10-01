@@ -4,7 +4,7 @@
     reason = "SeaORM derives require public generated entity types"
 )]
 
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateSession,
     CreateUser, CreateVerification, SchemaValue, store::EphemeralStore, types::ListUsersParams,
@@ -84,22 +84,25 @@ fn original_name(id: &str, ids: &[String; 2]) -> AuthResult<&'static str> {
 fn field(name: &'static str, trace: &Arc<Mutex<Trace>>) -> UserFieldConfig {
     let trace = trace.clone();
     UserFieldConfig {
-        output_transform: Some(UserFieldTransform::new(move |value| {
-            let mut trace = locked(&trace)?;
-            if !trace.armed {
-                return Ok(value);
-            }
-            let raw = value
-                .as_ref()
-                .and_then(Value::as_str)
-                .ok_or_else(|| AuthError::internal("Fixture output field must be a string"))?;
-            let event = format!("{name}:{raw}");
-            trace.events.push(event.clone());
-            if trace.failures.contains(&event.as_str()) {
-                return Err(AuthError::Config(event));
-            }
-            Ok(Some(json!(format!("{raw}:{}", trace.events.len()))))
-        })),
+        transform: Some(FieldTransforms {
+            output: Some(UserFieldTransform::new(move |value| {
+                let mut trace = locked(&trace)?;
+                if !trace.armed {
+                    return Ok(value);
+                }
+                let raw = value
+                    .as_ref()
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| AuthError::internal("Fixture output field must be a string"))?;
+                let event = format!("{name}:{raw}");
+                trace.events.push(event.clone());
+                if trace.failures.contains(&event.as_str()) {
+                    return Err(AuthError::Config(event));
+                }
+                Ok(Some(json!(format!("{raw}:{}", trace.events.len()))))
+            })),
+            ..Default::default()
+        }),
         ..Default::default()
     }
 }
@@ -108,13 +111,13 @@ fn config(trace: &Arc<Mutex<Trace>>) -> AuthConfig {
     for name in ["name", "image"] {
         let _ = config
             .user
-            .additional_fields
+            .fields_mut()
             .insert(name.into(), field(name, trace));
     }
     for name in ["first", "second"] {
         let _ = config
             .session
-            .additional_fields
+            .fields_mut()
             .insert(name.into(), field(name, trace));
     }
     for name in ["accountId", "providerId"] {

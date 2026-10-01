@@ -1,4 +1,4 @@
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth_seaorm::sea_orm::{self, entity::prelude::*};
 use serde::Serialize;
 
@@ -71,77 +71,83 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
         enabled: Some(true),
         ..Default::default()
     });
-    config.user.additional_fields = [
-        (
-            "changedMarker".into(),
-            UserFieldConfig {
-                required: Some(false),
-                default_value: Some(json!("created")),
-                on_update: Some(Arc::new(|| json!("updated"))),
-                ..Default::default()
-            },
-        ),
-        (
-            "department".into(),
-            UserFieldConfig {
-                required: Some(true),
-                ..Default::default()
-            },
-        ),
-        (
-            "alias".into(),
-            UserFieldConfig {
-                default_value: Some(json!("guest")),
-                input_transform: Some(UserFieldTransform::new(|value| suffix(value, "in"))),
-                output_transform: Some(UserFieldTransform::new(|value| suffix(value, "out"))),
-                ..Default::default()
-            },
-        ),
-        (
-            "optionalAlias".into(),
-            UserFieldConfig {
-                required: Some(false),
-                input_transform: Some(UserFieldTransform::new(|value| suffix(value, "in"))),
-                output_transform: Some(UserFieldTransform::new(|value| suffix(value, "out"))),
-                ..Default::default()
-            },
-        ),
-        (
-            "internalCode".into(),
-            UserFieldConfig {
-                input: false,
-                default_value: Some(json!("server")),
-                ..Default::default()
-            },
-        ),
-        (
-            "secretNote".into(),
-            UserFieldConfig {
-                returned: false,
-                default_value: Some(json!("hidden")),
-                ..Default::default()
-            },
-        ),
-        (
-            "score".into(),
-            UserFieldConfig {
-                field_type: UserFieldType::Number,
-                default_value: Some(json!(1)),
-                validator: Some(Arc::new(|value| {
-                    if value.as_f64().is_some_and(|score| score >= 0.0) {
-                        Ok(value)
-                    } else {
-                        Err(better_auth::AuthError::FieldInput {
-                            code: "VALIDATION_ERROR",
-                            message: "score must be nonnegative".into(),
-                        })
-                    }
-                })),
-                ..Default::default()
-            },
-        ),
-    ]
-    .into();
+    config.user.additional_fields = Some(
+        [
+            (
+                "changedMarker".into(),
+                UserFieldConfig {
+                    required: Some(false),
+                    default_value: Some(json!("created")),
+                    on_update: Some(Arc::new(|| json!("updated"))),
+                    ..Default::default()
+                },
+            ),
+            (
+                "department".into(),
+                UserFieldConfig {
+                    required: Some(true),
+                    ..Default::default()
+                },
+            ),
+            (
+                "alias".into(),
+                UserFieldConfig {
+                    default_value: Some(json!("guest")),
+                    transform: Some(FieldTransforms {
+                        input: Some(UserFieldTransform::new(|value| suffix(value, "in"))),
+                        output: Some(UserFieldTransform::new(|value| suffix(value, "out"))),
+                    }),
+                    ..Default::default()
+                },
+            ),
+            (
+                "optionalAlias".into(),
+                UserFieldConfig {
+                    required: Some(false),
+                    transform: Some(FieldTransforms {
+                        input: Some(UserFieldTransform::new(|value| suffix(value, "in"))),
+                        output: Some(UserFieldTransform::new(|value| suffix(value, "out"))),
+                    }),
+                    ..Default::default()
+                },
+            ),
+            (
+                "internalCode".into(),
+                UserFieldConfig {
+                    input: Some(false),
+                    default_value: Some(json!("server")),
+                    ..Default::default()
+                },
+            ),
+            (
+                "secretNote".into(),
+                UserFieldConfig {
+                    returned: Some(false),
+                    default_value: Some(json!("hidden")),
+                    ..Default::default()
+                },
+            ),
+            (
+                "score".into(),
+                UserFieldConfig {
+                    field_type: UserFieldType::Number,
+                    default_value: Some(json!(1)),
+                    validator: Some(Arc::new(|value| {
+                        if value.as_f64().is_some_and(|score| score >= 0.0) {
+                            Ok(value)
+                        } else {
+                            Err(better_auth::AuthError::FieldInput {
+                                code: "VALIDATION_ERROR",
+                                message: "score must be nonnegative".into(),
+                            })
+                        }
+                    })),
+                    ..Default::default()
+                },
+            ),
+        ]
+        .into(),
+    );
     for (name, field_type, default_value) in [
         ("enabled", UserFieldType::Boolean, json!(true)),
         ("tags", UserFieldType::StringArray, json!(["starter"])),
@@ -157,7 +163,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
             json!("basic"),
         ),
     ] {
-        config.user.additional_fields.insert(
+        config.user.fields_mut().insert(
             name.into(),
             UserFieldConfig {
                 field_type,
@@ -167,7 +173,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
             },
         );
     }
-    config.user.additional_fields.insert(
+    config.user.fields_mut().insert(
         "cohort".into(),
         UserFieldConfig {
             required: Some(false),
@@ -175,7 +181,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
             ..Default::default()
         },
     );
-    config.user.additional_fields.insert(
+    config.user.fields_mut().insert(
         "joinedAt".into(),
         UserFieldConfig {
             field_type: UserFieldType::Date,
@@ -184,7 +190,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
             ..Default::default()
         },
     );
-    config.user.additional_fields.insert(
+    config.user.fields_mut().insert(
         "label".into(),
         UserFieldConfig {
             required: Some(false),
@@ -268,16 +274,11 @@ pub async fn disabled_router(
         .with_state(auth);
     config
         .user
-        .additional_fields
+        .fields_mut()
         .get_mut("department")
         .unwrap()
-        .returned = false;
-    config
-        .user
-        .additional_fields
-        .get_mut("alias")
-        .unwrap()
-        .returned = false;
+        .returned = Some(false);
+    config.user.fields_mut().get_mut("alias").unwrap().returned = Some(false);
     let hidden = Arc::new(
         better_auth::AuthBuilder::<Schema>::new(config.clone())
             .store(better_auth_seaorm::SeaOrmStore::<Schema>::new(

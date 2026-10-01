@@ -1,6 +1,6 @@
 #![cfg(feature = "seaorm2")]
 
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -33,17 +33,20 @@ fn field(events: &Events, kind: &'static str, required: bool) -> UserFieldConfig
     let events = events.clone();
     UserFieldConfig {
         required: Some(required),
-        output_transform: Some(UserFieldTransform::new(move |value| {
-            let label = value
-                .as_ref()
-                .and_then(Value::as_str)
-                .unwrap_or("undefined");
-            events
-                .lock()
-                .map_err(|error| AuthError::internal(error.to_string()))?
-                .push(format!("{kind}:{label}"));
-            Ok(value)
-        })),
+        transform: Some(FieldTransforms {
+            output: Some(UserFieldTransform::new(move |value| {
+                let label = value
+                    .as_ref()
+                    .and_then(Value::as_str)
+                    .unwrap_or("undefined");
+                events
+                    .lock()
+                    .map_err(|error| AuthError::internal(error.to_string()))?
+                    .push(format!("{kind}:{label}"));
+                Ok(value)
+            })),
+            ..Default::default()
+        }),
         ..Default::default()
     }
 }
@@ -55,7 +58,7 @@ fn configuration(limit: Option<f64>, events: &Events) -> (AuthConfig, Organizati
     config.advanced.database.default_find_many_limit = limit;
     let _ = config
         .user
-        .additional_fields
+        .fields_mut()
         .insert("username".into(), field(events, "user", false));
     let mut plugin = OrganizationConfig::default();
     plugin.teams.enabled = true;
@@ -73,7 +76,7 @@ fn configuration(limit: Option<f64>, events: &Events) -> (AuthConfig, Organizati
         (&mut plugin.schema.organization_role, "role", "role", true),
     ] {
         let _ = fields
-            .additional_fields
+            .fields_mut()
             .insert(name.into(), field(events, kind, required));
     }
     (config, OrganizationPlugin::with_config(plugin))

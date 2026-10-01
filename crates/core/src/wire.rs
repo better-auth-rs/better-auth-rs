@@ -183,9 +183,9 @@ impl SessionView {
     pub fn filter_returned_fields(&mut self, config: &crate::config::SessionConfig) {
         self.additional_fields.retain(|name, _| {
             config
-                .additional_fields
+                .fields()
                 .get(name)
-                .is_none_or(|field| field.returned)
+                .is_none_or(|field| field.returned())
         });
     }
 
@@ -240,7 +240,7 @@ impl SessionView {
                     session,
                     view,
                     core,
-                    if config.additional_fields.is_empty() {
+                    if config.fields().is_empty() {
                         serde_json::Value::Null
                     } else {
                         serde_json::to_value(session)?
@@ -250,7 +250,7 @@ impl SessionView {
             .collect::<crate::AuthResult<Vec<_>>>()?;
         crate::user_fields::project_fields(
             &mut rows,
-            &config.additional_fields,
+            config.fields(),
             |(session, view, core, model), name, field| {
                 Box::pin(async move {
                     let value = if let Some(fields) = session.projected_fields() {

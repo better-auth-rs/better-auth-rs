@@ -1,0 +1,262 @@
+{
+  "omitted": {
+    "user": {},
+    "session": {}
+  },
+  "empty": {
+    "user": {
+      "additionalFields": {}
+    },
+    "session": {
+      "additionalFields": {}
+    }
+  },
+  "types": {
+    "user": {
+      "additionalFields": {
+        "field0": {
+          "type": "string"
+        },
+        "field1": {
+          "type": "number"
+        },
+        "field2": {
+          "type": "boolean"
+        },
+        "field3": {
+          "type": "date"
+        },
+        "field4": {
+          "type": "json"
+        },
+        "field5": {
+          "type": "string[]"
+        },
+        "field6": {
+          "type": "number[]"
+        },
+        "field7": {
+          "type": [
+            "bronze",
+            "silver"
+          ]
+        }
+      }
+    },
+    "session": {
+      "additionalFields": {
+        "field0": {
+          "type": "string"
+        },
+        "field1": {
+          "type": "number"
+        },
+        "field2": {
+          "type": "boolean"
+        },
+        "field3": {
+          "type": "date"
+        },
+        "field4": {
+          "type": "json"
+        },
+        "field5": {
+          "type": "string[]"
+        },
+        "field6": {
+          "type": "number[]"
+        },
+        "field7": {
+          "type": [
+            "bronze",
+            "silver"
+          ]
+        }
+      }
+    }
+  },
+  "flags": {
+    "user": {
+      "additionalFields": {
+        "omitted": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "string",
+          "required": true,
+          "input": true,
+          "returned": true
+        },
+        "disabled": {
+          "type": "string",
+          "required": false,
+          "input": false,
+          "returned": false
+        }
+      }
+    },
+    "session": {
+      "additionalFields": {
+        "omitted": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "string",
+          "required": true,
+          "input": true,
+          "returned": true
+        },
+        "disabled": {
+          "type": "string",
+          "required": false,
+          "input": false,
+          "returned": false
+        }
+      }
+    }
+  },
+  "declaration": {
+    "user": {
+      "additionalFields": {
+        "label": {
+          "type": "string",
+          "fieldName": "display_label",
+          "defaultValue": "hello"
+        },
+        "count": {
+          "type": "number",
+          "defaultValue": 7
+        },
+        "settings": {
+          "type": "json",
+          "defaultValue": {
+            "theme": "light",
+            "tags": [
+              "ordinary"
+            ]
+          }
+        },
+        "reference": {
+          "type": "string",
+          "references": {
+            "model": "user",
+            "field": "id"
+          }
+        },
+        "nothing": {
+          "type": "json",
+          "defaultValue": null
+        }
+      }
+    },
+    "session": {
+      "additionalFields": {
+        "label": {
+          "type": "string",
+          "fieldName": "display_label",
+          "defaultValue": "hello"
+        },
+        "count": {
+          "type": "number",
+          "defaultValue": 7
+        },
+        "settings": {
+          "type": "json",
+          "defaultValue": {
+            "theme": "light",
+            "tags": [
+              "ordinary"
+            ]
+          }
+        },
+        "reference": {
+          "type": "string",
+          "references": {
+            "model": "user",
+            "field": "id"
+          }
+        },
+        "nothing": {
+          "type": "json",
+          "defaultValue": null
+        }
+      }
+    }
+  },
+  "transforms": {
+    "user": {
+      "additionalFields": {
+        "omitted": {
+          "type": "string"
+        },
+        "empty": {
+          "type": "string",
+          "transform": {}
+        },
+        "input": {
+          "type": "string",
+          "transform": {}
+        },
+        "output": {
+          "type": "string",
+          "transform": {}
+        },
+        "both": {
+          "type": "string",
+          "transform": {}
+        },
+        "asynchronous": {
+          "type": "string",
+          "transform": {}
+        }
+      }
+    },
+    "session": {
+      "additionalFields": {
+        "omitted": {
+          "type": "string"
+        },
+        "empty": {
+          "type": "string",
+          "transform": {}
+        },
+        "input": {
+          "type": "string",
+          "transform": {}
+        },
+        "output": {
+          "type": "string",
+          "transform": {}
+        },
+        "both": {
+          "type": "string",
+          "transform": {}
+        },
+        "asynchronous": {
+          "type": "string",
+          "transform": {}
+        }
+      }
+    }
+  },
+  "factories": {
+    "user": {
+      "additionalFields": {
+        "label": {
+          "type": "string"
+        }
+      }
+    },
+    "session": {
+      "additionalFields": {
+        "label": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "plugin": {
+    "user": {},
+    "session": {}
+  }
+}

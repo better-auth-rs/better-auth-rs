@@ -1,4 +1,4 @@
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use std::sync::Arc;
 
 use better_auth::config::UserFieldConfig;
@@ -39,43 +39,47 @@ pub fn configure(profile: &str, config: &mut AuthConfig) {
     if !profile.starts_with("signup-") {
         return;
     }
-    config.user.additional_fields = [
-        (
-            "alias".into(),
-            UserFieldConfig {
-                required: Some(false),
-                default_value: Some(json!("guest")),
-                input_transform: Some(UserFieldTransform::new(|value| {
-                    Ok(
-                        value
-                            .map(|value| json!(format!("{}:in", value.as_str().unwrap_or("null")))),
-                    )
-                })),
-                output_transform: Some(UserFieldTransform::new(|value| {
-                    Ok(value
-                        .map(|value| json!(format!("{}:out", value.as_str().unwrap_or("null")))))
-                })),
-                ..Default::default()
-            },
-        ),
-        (
-            "optionalAlias".into(),
-            UserFieldConfig {
-                required: Some(false),
-                ..Default::default()
-            },
-        ),
-        (
-            "secretNote".into(),
-            UserFieldConfig {
-                required: Some(false),
-                returned: false,
-                default_value: Some(json!("hidden")),
-                ..Default::default()
-            },
-        ),
-    ]
-    .into();
+    config.user.additional_fields = Some(
+        [
+            (
+                "alias".into(),
+                UserFieldConfig {
+                    required: Some(false),
+                    default_value: Some(json!("guest")),
+                    transform: Some(FieldTransforms {
+                        input: Some(UserFieldTransform::new(|value| {
+                            Ok(value.map(|value| {
+                                json!(format!("{}:in", value.as_str().unwrap_or("null")))
+                            }))
+                        })),
+                        output: Some(UserFieldTransform::new(|value| {
+                            Ok(value.map(|value| {
+                                json!(format!("{}:out", value.as_str().unwrap_or("null")))
+                            }))
+                        })),
+                    }),
+                    ..Default::default()
+                },
+            ),
+            (
+                "optionalAlias".into(),
+                UserFieldConfig {
+                    required: Some(false),
+                    ..Default::default()
+                },
+            ),
+            (
+                "secretNote".into(),
+                UserFieldConfig {
+                    required: Some(false),
+                    returned: Some(false),
+                    default_value: Some(json!("hidden")),
+                    ..Default::default()
+                },
+            ),
+        ]
+        .into(),
+    );
 }
 
 pub fn plugin(profile: &str, plugin: EmailPasswordPlugin) -> EmailPasswordPlugin {

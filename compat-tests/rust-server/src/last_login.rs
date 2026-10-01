@@ -1,4 +1,4 @@
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
@@ -208,29 +208,31 @@ fn configure(profile: &str, base_url: &str) -> AuthConfig {
         ..Default::default()
     });
     if profile == "last-login-fields" {
-        let _ = config.user.additional_fields.insert(
+        let _ = config.user.fields_mut().insert(
             "lastLoginMethod".into(),
             UserFieldConfig {
                 required: Some(true),
-                input: true,
-                returned: false,
+                input: Some(true),
+                returned: Some(false),
                 field_name: Some("alias".into()),
-                input_transform: Some(UserFieldTransform::new(|value| {
-                    Ok(Some(json!(format!(
-                        "{}:in",
-                        value
-                            .and_then(|value| value.as_str().map(str::to_owned))
-                            .unwrap_or("undefined".into())
-                    ))))
-                })),
-                output_transform: Some(UserFieldTransform::new(|value| {
-                    Ok(Some(json!(format!(
-                        "{}:out",
-                        value
-                            .and_then(|value| value.as_str().map(str::to_owned))
-                            .unwrap_or("undefined".into())
-                    ))))
-                })),
+                transform: Some(FieldTransforms {
+                    input: Some(UserFieldTransform::new(|value| {
+                        Ok(Some(json!(format!(
+                            "{}:in",
+                            value
+                                .and_then(|value| value.as_str().map(str::to_owned))
+                                .unwrap_or("undefined".into())
+                        ))))
+                    })),
+                    output: Some(UserFieldTransform::new(|value| {
+                        Ok(Some(json!(format!(
+                            "{}:out",
+                            value
+                                .and_then(|value| value.as_str().map(str::to_owned))
+                                .unwrap_or("undefined".into())
+                        ))))
+                    })),
+                }),
                 ..Default::default()
             },
         );
@@ -337,11 +339,24 @@ async fn finish<S: AuthSchema>(
 }
 
 async fn snapshot<S: AuthSchema>(State(fixture): State<Fixture<S>>) -> Json<Value> {
-    let rows = fixture.auth.store().list_users(Default::default()).await.unwrap().0;
+    let rows = fixture
+        .auth
+        .store()
+        .list_users(Default::default())
+        .await
+        .unwrap()
+        .0;
     let mut users = Vec::with_capacity(rows.len());
     for user in rows {
-        let view = fixture.auth.context().internal_user_view(&user).await.unwrap();
-        users.push(json!({"email":user.email(),"method":view.additional_fields.get("lastLoginMethod")}));
+        let view = fixture
+            .auth
+            .context()
+            .internal_user_view(&user)
+            .await
+            .unwrap();
+        users.push(
+            json!({"email":user.email(),"method":view.additional_fields.get("lastLoginMethod")}),
+        );
     }
     let events = fixture.events.0.lock().unwrap().events.clone();
     let cache = fixture

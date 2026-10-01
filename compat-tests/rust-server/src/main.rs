@@ -611,45 +611,39 @@ fn mock_oauth_plugin(
                 &format!("http://127.0.0.1:{port}/__test/github/user/emails"),
             ),
         )
-        .add_provider(
-            "google",
-            OAuthProvider {
-                client_id: "google-client-id".to_string(),
-                end_session_endpoint: None,
-                post_logout_redirect_uri: None,
-                client_secret: "google-client-secret".to_string(),
-                auth_url: format!("http://localhost:{port}/__test/oauth/authorize"),
-                token_url: format!("http://127.0.0.1:{port}/__test/oauth/token"),
-                user_info_url: None,
-                scopes: vec![
-                    "email".to_string(),
-                    "profile".to_string(),
-                    "openid".to_string(),
-                ],
-                authorization_params: {
-                    let mut params =
-                        vec![("include_granted_scopes".to_string(), "true".to_string())];
-                    if std::env::var("COMPAT_PROFILE").as_deref() == Ok("one-tap-options") {
-                        params.push(("hd".to_string(), "example.com".to_string()));
-                    }
-                    params
-                },
-                map_user_info: None,
-                get_user_info: Some(Arc::new(CompatGoogleUserInfoHandler {
-                    profile: social_profile,
-                    preserve_image_null,
-                })),
-                refresh_access_token: Some(Arc::new(CompatGoogleRefreshHandler {
-                    mode: oauth_refresh_mode,
-                })),
-                verify_id_token: Some(Arc::new(CompatGoogleIdTokenVerifier {
-                    valid: social_id_token_valid,
-                })),
-                disable_implicit_sign_up: false,
-                disable_sign_up: false,
-                override_user_info_on_sign_in: false,
-            },
-        )
+        .add_provider("google", {
+            let mut provider = OAuthProvider::custom(
+                "google-client-id",
+                "google-client-secret",
+                &format!("http://localhost:{port}/__test/oauth/authorize"),
+                &format!("http://127.0.0.1:{port}/__test/oauth/token"),
+            );
+            provider.scopes = Some(vec![
+                "email".to_string(),
+                "profile".to_string(),
+                "openid".to_string(),
+            ]);
+            provider.authorization_params = {
+                let mut params = vec![("include_granted_scopes".to_string(), "true".to_string())];
+                if std::env::var("COMPAT_PROFILE").as_deref() == Ok("one-tap-options") {
+                    params.push(("hd".to_string(), "example.com".to_string()));
+                }
+                params
+            };
+            provider.get_user_info = Some(Arc::new(CompatGoogleUserInfoHandler {
+                profile: social_profile,
+                preserve_image_null,
+            }));
+            provider.refresh_access_token = Some(Arc::new(CompatGoogleRefreshHandler {
+                mode: oauth_refresh_mode,
+            }));
+            provider.verify_id_token = Some(Arc::new(CompatGoogleIdTokenVerifier {
+                valid: social_id_token_valid,
+            }));
+            provider.disable_implicit_sign_up = Some(false);
+            provider.disable_sign_up = Some(false);
+            provider
+        })
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -862,10 +856,10 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
         device_profile.as_str(),
         "organization-callbacks" | "organization-custom-team" | "two-factor-context"
     ) {
-        config.user.additional_fields.insert(
+        config.user.fields_mut().insert(
             "secretNote".into(),
             better_auth::config::UserFieldConfig {
-                returned: false,
+                returned: Some(false),
                 default_value: Some(serde_json::json!("hidden")),
                 ..Default::default()
             },
@@ -876,13 +870,13 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
             Some(better_auth::config::CookieCacheStrategy::Jwt);
         config
             .session
-            .additional_fields
+            .fields_mut()
             .insert("deviceLabel".into(), Default::default());
-        config.session.additional_fields.insert(
+        config.session.fields_mut().insert(
             "internalNote".into(),
             better_auth::config::SessionFieldConfig {
-                input: false,
-                returned: false,
+                input: Some(false),
+                returned: Some(false),
                 ..Default::default()
             },
         );

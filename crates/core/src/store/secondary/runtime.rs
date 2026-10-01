@@ -2,6 +2,10 @@ use super::*;
 use crate::store::{RuntimeStore, database_hooks::DatabaseHooks};
 
 impl<S: AuthSchema> RuntimeStore<S> for SecondaryStore<S> {
+    fn adapter_id(&self) -> &'static str {
+        self.inner.adapter_id()
+    }
+
     fn database_hook_metadata(&self) -> Vec<crate::observability::database::DatabaseHookMetadata> {
         self.inner.database_hook_metadata()
     }

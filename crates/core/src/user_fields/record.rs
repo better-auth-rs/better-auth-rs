@@ -60,35 +60,35 @@ impl crate::config::AccountConfig {
             (
                 "accessToken".into(),
                 UserFieldConfig {
-                    returned: false,
+                    returned: Some(false),
                     ..field(UserFieldType::String, false)
                 },
             ),
             (
                 "refreshToken".into(),
                 UserFieldConfig {
-                    returned: false,
+                    returned: Some(false),
                     ..field(UserFieldType::String, false)
                 },
             ),
             (
                 "idToken".into(),
                 UserFieldConfig {
-                    returned: false,
+                    returned: Some(false),
                     ..field(UserFieldType::String, false)
                 },
             ),
             (
                 "accessTokenExpiresAt".into(),
                 UserFieldConfig {
-                    returned: false,
+                    returned: Some(false),
                     ..field(UserFieldType::Date, false)
                 },
             ),
             (
                 "refreshTokenExpiresAt".into(),
                 UserFieldConfig {
-                    returned: false,
+                    returned: Some(false),
                     ..field(UserFieldType::Date, false)
                 },
             ),
@@ -96,7 +96,7 @@ impl crate::config::AccountConfig {
             (
                 "password".into(),
                 UserFieldConfig {
-                    returned: false,
+                    returned: Some(false),
                     ..field(UserFieldType::String, false)
                 },
             ),
@@ -107,7 +107,7 @@ impl crate::config::AccountConfig {
         .collect::<indexmap::IndexMap<_, _>>();
         fields.extend(self.additional_fields.clone());
         UserConfig {
-            additional_fields: fields,
+            additional_fields: Some(fields),
         }
     }
 }
@@ -126,18 +126,61 @@ impl crate::config::VerificationConfig {
         .collect::<indexmap::IndexMap<_, _>>();
         fields.extend(self.additional_fields.clone());
         UserConfig {
-            additional_fields: fields,
+            additional_fields: Some(fields),
         }
     }
 }
 
 impl UserConfig {
+    /// Project Organization rows in one batch while retaining adapter-owned IDs.
+    pub async fn organization_output_records(
+        &self,
+        records: Vec<AdapterRecord>,
+        supports_native_json: bool,
+    ) -> AuthResult<Vec<Map<String, Value>>> {
+        let mut rows = records
+            .into_iter()
+            .map(|record| {
+                let mut core = Map::new();
+                for (name, value) in record.output {
+                    if let Some(value) = value.json()? {
+                        let _ = core.insert(name, value);
+                    }
+                }
+                core.retain(|name, _| name == "id" || !self.fields().contains_key(name));
+                Ok((record.storage, core))
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        super::batch::project_fields(
+            &mut rows,
+            self.fields(),
+            |(storage, output), name, field| {
+                Box::pin(async move {
+                    if name == "id" {
+                        return Ok(());
+                    }
+                    let value = storage
+                        .get(field.field_name.as_deref().unwrap_or(name))
+                        .cloned();
+                    super::organization::assign_output(
+                        output,
+                        name,
+                        field,
+                        field.adapter_output(value, supports_native_json).await?,
+                    )
+                })
+            },
+        )
+        .await?;
+        Ok(rows.into_iter().map(|(_, output)| output).collect())
+    }
+
     /// Resolve a logical field in an adapter-owned record.
     pub fn record_storage_key<'a>(&'a self, name: &'a str) -> &'a str {
         if name == "id" {
             return name;
         }
-        self.additional_fields
+        self.fields()
             .get(name)
             .and_then(|field| field.field_name.as_deref())
             .unwrap_or(name)
@@ -168,6 +211,27 @@ impl UserConfig {
         supports_native_json: bool,
         supports_native_dates: bool,
     ) -> AuthResult<Vec<indexmap::IndexMap<String, SchemaValue<Value>>>> {
+        self.project_records_then(
+            storage,
+            supports_native_json,
+            supports_native_dates,
+            |_, fields| std::future::ready(Ok(fields)),
+        )
+        .await
+    }
+
+    /// Complete each successfully projected row without cancelling other started rows.
+    /// The original row index remains available for adapter-owned association data.
+    pub async fn project_records_then<R: Send, F>(
+        &self,
+        storage: &[Map<String, Value>],
+        supports_native_json: bool,
+        supports_native_dates: bool,
+        complete: impl Fn(usize, indexmap::IndexMap<String, SchemaValue<Value>>) -> F + Sync,
+    ) -> AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = AuthResult<R>> + Send,
+    {
         let records = storage
             .iter()
             .map(|storage| {
@@ -184,8 +248,13 @@ impl UserConfig {
                 Ok(AdapterRecord::new(core, storage.clone()))
             })
             .collect::<AuthResult<Vec<_>>>()?;
-        self.project_adapter_records(records, supports_native_json, supports_native_dates)
-            .await
+        self.project_adapter_records_then(
+            records,
+            supports_native_json,
+            supports_native_dates,
+            complete,
+        )
+        .await
     }
 
     /// Apply adapter input policies once to a complete logical record or update patch.
@@ -215,7 +284,7 @@ impl UserConfig {
             let _ = output.insert("id".into(), id.clone());
         }
         let transformed = self.storage_fields_async(input, create, true).await?;
-        for (name, field) in &self.additional_fields {
+        for (name, field) in self.fields() {
             if name == "id" {
                 continue;
             }
@@ -250,13 +319,34 @@ impl UserConfig {
     /// Project extracted records in row order, interleaving synchronous callbacks by field.
     pub async fn project_adapter_records(
         &self,
-        mut records: Vec<AdapterRecord>,
+        records: Vec<AdapterRecord>,
         supports_native_json: bool,
         supports_native_dates: bool,
     ) -> AuthResult<Vec<indexmap::IndexMap<String, SchemaValue<Value>>>> {
-        super::batch::project_fields(
+        self.project_adapter_records_then(
+            records,
+            supports_native_json,
+            supports_native_dates,
+            |_, fields| std::future::ready(Ok(fields)),
+        )
+        .await
+    }
+
+    /// Complete each extracted row after its output policies, retaining the original row order.
+    /// A failed projection skips its completion; other started rows still finish before an error returns.
+    pub async fn project_adapter_records_then<R: Send, F>(
+        &self,
+        mut records: Vec<AdapterRecord>,
+        supports_native_json: bool,
+        supports_native_dates: bool,
+        complete: impl Fn(usize, indexmap::IndexMap<String, SchemaValue<Value>>) -> F + Sync,
+    ) -> AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = AuthResult<R>> + Send,
+    {
+        super::batch::project_fields_then(
             &mut records,
-            &self.additional_fields,
+            self.fields(),
             |record, name, field| {
                 Box::pin(async move {
                     if name == "id" {
@@ -293,8 +383,8 @@ impl UserConfig {
                     Ok(())
                 })
             },
+            |index, record| complete(index, std::mem::take(&mut record.output)),
         )
-        .await?;
-        Ok(records.into_iter().map(|record| record.output).collect())
+        .await
     }
 }

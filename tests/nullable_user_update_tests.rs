@@ -1,7 +1,7 @@
 #![cfg(feature = "seaorm2")]
 
 use async_trait::async_trait;
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::store::database_hooks::{
@@ -313,23 +313,25 @@ async fn ephemeral_nullable_update_propagates_input_and_output_transform_user_no
     let input_mode = mode.clone();
     let output_mode = mode.clone();
     let mut config = AuthConfig::new("nullable-update-test-secret-at-least-32-characters");
-    let _ = config.user.additional_fields.insert(
+    let _ = config.user.fields_mut().insert(
         "marker".into(),
         better_auth_core::config::UserFieldConfig {
-            input_transform: Some(UserFieldTransform::new(move |value| {
-                if input_mode.load(Ordering::SeqCst) == 1 {
-                    Err(AuthError::UserNotFound)
-                } else {
-                    Ok(value)
-                }
-            })),
-            output_transform: Some(UserFieldTransform::new(move |value| {
-                if output_mode.load(Ordering::SeqCst) == 2 {
-                    Err(AuthError::UserNotFound)
-                } else {
-                    Ok(value)
-                }
-            })),
+            transform: Some(FieldTransforms {
+                input: Some(UserFieldTransform::new(move |value| {
+                    if input_mode.load(Ordering::SeqCst) == 1 {
+                        Err(AuthError::UserNotFound)
+                    } else {
+                        Ok(value)
+                    }
+                })),
+                output: Some(UserFieldTransform::new(move |value| {
+                    if output_mode.load(Ordering::SeqCst) == 2 {
+                        Err(AuthError::UserNotFound)
+                    } else {
+                        Ok(value)
+                    }
+                })),
+            }),
             ..Default::default()
         },
     );

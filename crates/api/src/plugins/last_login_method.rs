@@ -247,16 +247,18 @@ impl<S: AuthSchema> AuthPlugin<S> for LastLoginMethodPlugin<S> {
     async fn on_init(&self, context: &mut AuthInitContext<S>) -> AuthResult<()> {
         if self.config.store_in_database {
             context.register_user_fields(UserConfig {
-                additional_fields: [(
-                    "lastLoginMethod".into(),
-                    UserFieldConfig {
-                        required: Some(false),
-                        input: false,
-                        field_name: self.config.field_name.clone(),
-                        ..Default::default()
-                    },
-                )]
-                .into(),
+                additional_fields: Some(
+                    [(
+                        "lastLoginMethod".into(),
+                        UserFieldConfig {
+                            required: Some(false),
+                            input: Some(false),
+                            field_name: self.config.field_name.clone(),
+                            ..Default::default()
+                        },
+                    )]
+                    .into(),
+                ),
             });
             context.register_database_hook(Arc::new(LoginDatabaseHooks {
                 plugin: self.clone(),

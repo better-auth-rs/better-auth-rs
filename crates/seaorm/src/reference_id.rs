@@ -41,12 +41,9 @@ pub(crate) fn prepare_fields<C: sea_orm::ColumnTrait>(
     for (name, value) in fields {
         let column = column(name)?;
         let configured = config.and_then(|config| {
-            config
-                .additional_fields
-                .iter()
-                .find_map(|(logical, field)| {
-                    (field.field_name.as_deref().unwrap_or(logical) == name).then_some(field)
-                })
+            config.fields().iter().find_map(|(logical, field)| {
+                (field.field_name.as_deref().unwrap_or(logical) == name).then_some(field)
+            })
         });
         if name == "id"
             || configured.map_or_else(|| is_reference(&column), |field| field.references_id())
@@ -94,7 +91,7 @@ pub(crate) fn apply_bindings<A: sea_orm::ActiveModelTrait>(
     backend: sea_orm::DbBackend,
     column: impl Fn(&str) -> better_auth_core::AuthResult<<A::Entity as sea_orm::EntityTrait>::Column>,
 ) -> better_auth_core::AuthResult<()> {
-    for (name, field) in &fields.additional_fields {
+    for (name, field) in fields.fields() {
         if name == "id" || !field.references_id() {
             continue;
         }
@@ -254,25 +251,30 @@ mod tests {
         let calls = Arc::new(AtomicUsize::new(0));
         let observed = calls.clone();
         let config = UserConfig {
-            additional_fields: [(
-                "owner".into(),
-                UserFieldConfig {
-                    field_type: UserFieldType::Json,
-                    references: Some(UserFieldReference {
-                        model: "user".into(),
-                        field: "id".into(),
-                    }),
-                    input_transform: Some(better_auth_core::user_fields::UserFieldTransform::new(
-                        move |value| {
-                            assert_eq!(value, Some(json!("alias")));
-                            let _ = observed.fetch_add(1, Ordering::SeqCst);
-                            Ok(Some(json!(["0x10", null, [], ["1e0"]])))
-                        },
-                    )),
-                    ..Default::default()
-                },
-            )]
-            .into(),
+            additional_fields: Some(
+                [(
+                    "owner".into(),
+                    UserFieldConfig {
+                        field_type: UserFieldType::Json,
+                        references: Some(UserFieldReference {
+                            model: "user".into(),
+                            field: "id".into(),
+                        }),
+                        transform: Some(better_auth_core::user_fields::FieldTransforms {
+                            input: Some(better_auth_core::user_fields::UserFieldTransform::new(
+                                move |value| {
+                                    assert_eq!(value, Some(json!("alias")));
+                                    let _ = observed.fetch_add(1, Ordering::SeqCst);
+                                    Ok(Some(json!(["0x10", null, [], ["1e0"]])))
+                                },
+                            )),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                )]
+                .into(),
+            ),
         };
         for (policy, expected) in [
             (IdGeneration::Serial, json!([16, null, 0, 1])),
