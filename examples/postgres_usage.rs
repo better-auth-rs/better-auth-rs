@@ -172,8 +172,8 @@ mod user {
                 email: Set(create_user.email),
                 email_verified: Set(create_user.email_verified.unwrap_or(false)),
                 image: Set(create_user.image),
-                username: Set(create_user.username),
-                display_username: Set(create_user.display_username),
+                username: Set(create_user.username.flatten()),
+                display_username: Set(create_user.display_username.flatten()),
                 two_factor_enabled: Set(false),
                 role: Set(create_user.role),
                 banned: Set(create_user.banned.unwrap_or(false)),
@@ -201,10 +201,10 @@ mod user {
                 active.email_verified = Set(email_verified);
             }
             if let Some(username) = update.username {
-                active.username = Set(Some(username));
+                active.username = Set(username);
             }
             if let Some(display_username) = update.display_username {
-                active.display_username = Set(Some(display_username));
+                active.display_username = Set(display_username);
             }
             if let Some(role) = update.role {
                 active.role = Set(Some(role));

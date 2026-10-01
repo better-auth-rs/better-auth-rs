@@ -7,7 +7,8 @@ use serde_json::{Value, json};
 // Configuration changes must hide persisted plugin fields without deleting the user.
 #[tokio::test]
 async fn disabled_plugins_hide_stored_user_fields() {
-    let config = AuthConfig::new("user-fields-test-secret-at-least-32-characters");
+    let config = AuthConfig::new("user-fields-test-secret-at-least-32-characters")
+        .base_url("http://localhost:3000");
     let database = better_auth::seaorm::Database::connect("sqlite::memory:")
         .await
         .unwrap();

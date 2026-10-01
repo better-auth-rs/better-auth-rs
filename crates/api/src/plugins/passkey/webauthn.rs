@@ -137,7 +137,7 @@ pub(super) fn build_webauthn(
 
 pub(super) fn rp_id(config: &PasskeyConfig, auth_config: &AuthConfig) -> AuthResult<String> {
     if config.rp_id.is_empty() {
-        Url::parse(&auth_config.base_url)
+        Url::parse(auth_config.base_url.as_static().unwrap_or(""))
             .ok()
             .and_then(|url| url.host_str().map(str::to_owned))
             .ok_or_else(|| AuthError::config("Missing passkey RP ID"))

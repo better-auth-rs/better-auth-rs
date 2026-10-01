@@ -4,7 +4,7 @@ impl JwtPlugin {
     pub(super) async fn sign_session<S: AuthSchema>(
         &self,
         session: Value,
-        ctx: &AuthContext<S>,
+        endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<String> {
         let user = session
             .get("user")
@@ -26,7 +26,8 @@ impl JwtPlugin {
             .entry("iat")
             .or_insert_with(|| Utc::now().timestamp().into());
         let _ = payload.insert("sub".into(), subject);
-        self.sign(payload, ctx).await
+        self.sign_in_endpoint(payload, &JwtSigningOptions::default(), endpoint)
+            .await
     }
 
     /// Sign an application payload with the same persisted keys as `/token`.
@@ -39,34 +40,38 @@ impl JwtPlugin {
             .await
     }
 
-    /// Sign a payload with explicit protected headers and key selection.
+    /// Sign a native payload with explicit protected headers and key selection.
+    /// Use `sign_in_endpoint` to retain an endpoint request and transaction.
     pub async fn sign_with_options<S: AuthSchema>(
         &self,
         payload: Map<String, Value>,
         options: &JwtSigningOptions,
         ctx: &AuthContext<S>,
     ) -> AuthResult<String> {
-        self.sign_with_store(payload, options, &ctx.config, ctx.database.as_ref())
-            .await
+        ctx.with_native_context(Default::default(), |resolved| async move {
+            let mut endpoint = EndpointContext::new(None, json!({"payload":payload}), &resolved);
+            endpoint.path = Some("virtual:");
+            self.sign_in_endpoint(payload, options, &endpoint).await
+        })
+        .await
     }
 
-    pub(super) async fn sign_with_store(
+    /// Sign with the supplied endpoint context, including its active transaction.
+    pub async fn sign_in_endpoint<S: AuthSchema>(
         &self,
         mut payload: Map<String, Value>,
         options: &JwtSigningOptions,
-        config: &better_auth_core::AuthConfig,
-        store: &dyn better_auth_core::store::JwksStore,
+        endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<String> {
+        let config = &endpoint.auth.config;
         self.default_claims(&mut payload, config)?;
         if let Some(callback) = &self.config.custom_sign {
             return callback(payload, options.clone()).await;
         }
-        let mut keys = store.list_jwks().await?;
-        keys.sort_by_key(|key| std::cmp::Reverse(key.created_at));
         let selected = if let Some(id) = &options.key_id {
-            let key = keys
-                .iter()
-                .find(|key| &key.id == id)
+            let key = self
+                .read_key(id, endpoint)
+                .await?
                 .ok_or_else(|| AuthError::config("Requested JWT signing key does not exist"))?;
             if key.expires_at.is_some_and(|expiry| expiry < Utc::now())
                 || options.algorithm.is_some_and(|alg| {
@@ -79,16 +84,27 @@ impl JwtPlugin {
             }
             Some(key)
         } else {
+            let mut keys = self.read_keys(endpoint).await?.unwrap_or_default();
+            keys.sort_by_key(|key| std::cmp::Reverse(key.created_at));
             keys.retain(|key| key.expires_at.is_none_or(|expiry| expiry > Utc::now()));
-            keys.iter()
+            let preferred = keys
+                .iter()
                 .find(|key| {
                     key.alg.as_deref().unwrap_or(self.config.algorithm.name())
                         == options.algorithm.unwrap_or(self.config.algorithm).name()
                 })
-                .or_else(|| options.algorithm.is_none().then(|| keys.first()).flatten())
+                .cloned();
+            if preferred.is_some() || options.algorithm.is_some() {
+                preferred
+            } else {
+                let mut fallback = self.read_keys(endpoint).await?.unwrap_or_default();
+                fallback.retain(|key| key.expires_at.is_none_or(|expiry| expiry > Utc::now()));
+                fallback.sort_by_key(|key| std::cmp::Reverse(key.created_at));
+                fallback.into_iter().next()
+            }
         };
         let key = match selected {
-            Some(key) => key.clone(),
+            Some(key) => key,
             None => {
                 let algorithm = options.algorithm.unwrap_or(self.config.algorithm);
                 let parameters = self
@@ -106,7 +122,7 @@ impl JwtPlugin {
                     .ok_or_else(|| {
                         AuthError::config("Requested JWT algorithm is not configured")
                     })?;
-                self.create_key_pair_with_store(parameters, config, store)
+                self.create_key_pair_in_endpoint(parameters, endpoint)
                     .await?
             }
         };
@@ -137,11 +153,12 @@ impl JwtPlugin {
                 )));
             }
         };
-        let payload = JwtPayload::from_map(payload).map_err(jose_error)?;
+        claims::prepare_local_claims(&mut payload)?;
         let mut header = JwsHeader::from_map(options.header.clone()).map_err(jose_error)?;
         header.set_algorithm(algorithm);
         header.set_key_id(key.id);
-        josekit::jwt::encode_with_signer(&payload, &header, signer.as_ref()).map_err(jose_error)
+        josekit::jws::serialize_compact(&serde_json::to_vec(&payload)?, &header, signer.as_ref())
+            .map_err(jose_error)
     }
 
     fn default_claims(
@@ -149,26 +166,23 @@ impl JwtPlugin {
         payload: &mut Map<String, Value>,
         config: &better_auth_core::AuthConfig,
     ) -> AuthResult<()> {
-        let issued = payload
-            .get("iat")
-            .and_then(Value::as_f64)
-            .unwrap_or_else(|| Utc::now().timestamp() as f64);
+        let expiration =
+            claims::default_expiration(&self.config.expiration_time, payload.get("iat"))?;
         for (claim, default) in [
-            ("exp", self.config.expiration_time.claim(issued)),
+            ("exp", expiration),
             (
                 "iss",
                 self.config
                     .issuer
-                    .as_ref()
-                    .unwrap_or(&config.base_url)
-                    .clone()
+                    .as_deref()
+                    .unwrap_or_else(|| config.base_url.as_static().unwrap_or(""))
                     .into(),
             ),
             (
                 "aud",
                 match &self.config.audience {
                     Some(audience) => serde_json::to_value(audience)?,
-                    None => config.base_url.clone().into(),
+                    None => config.base_url.as_static().unwrap_or("").into(),
                 },
             ),
         ] {

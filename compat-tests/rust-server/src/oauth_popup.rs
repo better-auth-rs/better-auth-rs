@@ -41,7 +41,7 @@ impl OAuthPopupFixture {
         if !self.enabled {
             return;
         }
-        config.trusted_origins.push("https://embed.example".into());
+        config.trusted_origins = better_auth_core::TrustedValues::merge(vec![config.trusted_origins.clone(), vec!["https://embed.example".into()].into()]);
         config.session.bearer = Some(Default::default());
         config.account.store_state_strategy = Some(if profile == "oauth-popup-cookie" {
             OAuthStateStrategy::Cookie

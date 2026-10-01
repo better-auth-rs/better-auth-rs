@@ -20,7 +20,15 @@ use better_auth_core::{
 struct RuntimeResolver;
 impl<S: AuthSchema> LastLoginMethodResolver<S> for RuntimeResolver {
     fn resolve(&self, context: &EndpointContext<'_, S>) -> AuthResult<Option<String>> {
-        Ok(Some(context.auth.config.base_url.clone()))
+        Ok(Some(
+            context
+                .auth
+                .config
+                .base_url
+                .as_static()
+                .unwrap_or("")
+                .to_owned(),
+        ))
     }
 }
 

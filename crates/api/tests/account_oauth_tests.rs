@@ -422,7 +422,10 @@ async fn test_encrypt_oauth_tokens_stored_encrypted_in_db() {
     assert_eq!(decrypted_refresh, plaintext_refresh);
 
     // Now test via the get-access-token handler which should decrypt transparently
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
 
     let mut req = AuthRequest::new(HttpMethod::Post, "/get-access-token");
     req.body = Some(json!({"accountId": account_id}).to_string().into_bytes());
@@ -530,7 +533,10 @@ async fn test_get_access_token_preserves_plaintext_when_encryption_is_enabled() 
     )
     .await;
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
     let mut oauth_config = OAuthConfig::default();
     oauth_config.providers.insert(
         "google".to_string(),
@@ -567,7 +573,10 @@ async fn test_refresh_token_migrates_plaintext_when_encryption_is_enabled() {
     )
     .await;
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
     let mut oauth_config = OAuthConfig::default();
     let mut provider = make_test_provider("http://localhost:65535");
     provider.refresh_access_token = Some(Arc::new(RotatingRefreshHandler {
@@ -634,7 +643,10 @@ async fn test_refresh_token_persists_rotated_tokens_for_cookie_matched_account()
         Some(Utc::now() + Duration::minutes(30)),
     );
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
     let mut oauth_config = OAuthConfig::default();
     let mut provider = make_test_provider("http://localhost:65535");
     provider.refresh_access_token = Some(Arc::new(RotatingRefreshHandler {
@@ -714,7 +726,10 @@ async fn test_get_access_token_refresh_persists_rotated_tokens_for_cookie_matche
         Some(Utc::now() - Duration::seconds(10)),
     );
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
     let mut oauth_config = OAuthConfig::default();
     let mut provider = make_test_provider("http://localhost:65535");
     provider.refresh_access_token = Some(Arc::new(RotatingRefreshHandler {
@@ -789,7 +804,10 @@ async fn test_account_info_returns_provider_user_info_for_local_account_id() {
     )
     .await;
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
     let mut oauth_config = OAuthConfig::default();
     oauth_config
         .providers
@@ -839,7 +857,10 @@ async fn test_get_access_token_without_cookie_returns_account_not_found() {
     )
     .await;
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
     let mut oauth_config = OAuthConfig::default();
     oauth_config
         .providers
@@ -908,7 +929,10 @@ async fn test_get_access_token_rejects_cookie_for_the_wrong_user() {
         cookie_account.access_token_expires_at(),
     );
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
     let mut oauth_config = OAuthConfig::default();
     oauth_config
         .providers
@@ -949,7 +973,10 @@ async fn test_account_info_returns_provider_not_configured_message() {
     )
     .await;
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
     let oauth_plugin = OAuthPlugin::with_config(OAuthConfig::default());
 
     let mut req = AuthRequest::new(HttpMethod::Get, "/account-info");
@@ -991,7 +1018,10 @@ async fn test_account_info_rejects_missing_access_token() {
     )
     .await;
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
     let mut oauth_config = OAuthConfig::default();
     oauth_config
         .providers
@@ -1036,7 +1066,10 @@ async fn test_unlink_last_account_blocked_by_default() {
     )
     .await;
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
     let plugin = AccountManagementPlugin::new();
 
     let mut req = AuthRequest::new(HttpMethod::Post, "/unlink-account");
@@ -1085,7 +1118,10 @@ async fn test_unlink_last_account_allowed_when_configured() {
     )
     .await;
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
     let plugin = AccountManagementPlugin::new();
 
     let mut req = AuthRequest::new(HttpMethod::Post, "/unlink-account");
@@ -1169,7 +1205,10 @@ async fn test_unlink_non_last_account_always_allowed() {
         .await
         .unwrap();
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
     let plugin = AccountManagementPlugin::new();
 
     let mut req = AuthRequest::new(HttpMethod::Post, "/unlink-account");
@@ -1254,7 +1293,10 @@ async fn test_account_linking_disabled_rejects_new_provider() {
     .await
     .unwrap();
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
 
     // Simulate a callback request
     let mut req = AuthRequest::new(
@@ -1334,7 +1376,10 @@ async fn test_link_social_returns_redirect_url_with_state() {
         },
     );
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
     let oauth_plugin = OAuthPlugin::with_config(oauth_config);
 
     let mut req = AuthRequest::new(HttpMethod::Post, "/link-social");
@@ -1396,7 +1441,10 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
     .await
     .unwrap();
 
-    let ctx = AuthContext::new(config.clone(), db.clone());
+    let ctx = AuthContext::new(config.clone(), db.clone())
+        .initialize_request_context()
+        .await
+        .expect("test request context should initialize");
 
     let mut req = AuthRequest::new(
         HttpMethod::Get,

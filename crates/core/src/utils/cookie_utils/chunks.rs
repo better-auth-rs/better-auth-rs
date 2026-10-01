@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use super::{create_clear_cookie, create_session_like_cookie, get_cookie};
-use crate::{AuthConfig, AuthError, AuthRequest, AuthResult};
+use super::{get_cookie, render_cookie, resolved_template, serialize_cookie};
+use crate::{AuthError, AuthRequest, AuthResult, request_runtime::ResolvedCookie};
 
 fn chunk_index(name: &str, cookie_name: &str) -> Option<usize> {
     let suffix = name.strip_prefix(cookie_name)?.strip_prefix('.')?;
@@ -24,6 +24,14 @@ fn existing_names(req: &AuthRequest, name: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn clear_chunk(name: &str, parent: &ResolvedCookie) -> String {
+    let mut cookie = resolved_template(parent);
+    cookie.set_name(name.to_owned());
+    cookie.set_max_age(cookie::time::Duration::ZERO);
+    cookie.unset_expires();
+    render_cookie(cookie, parent)
+}
+
 /// Read a complete cookie or combine its numbered chunks in numeric order.
 pub fn get_chunked_cookie(req: &AuthRequest, name: &str) -> Option<String> {
     if let Some(value) = get_cookie(req, name).filter(|value| !value.is_empty()) {
@@ -39,25 +47,22 @@ pub fn get_chunked_cookie(req: &AuthRequest, name: &str) -> Option<String> {
 }
 
 /// Expire a cookie and every numbered chunk present on the request.
-pub fn clear_chunked_cookie(req: &AuthRequest, name: &str, config: &AuthConfig) -> AuthResult<()> {
-    for cookie in create_clear_chunked_cookies(req, name, config) {
+pub fn clear_chunked_cookie(req: &AuthRequest, cookie: &ResolvedCookie) -> AuthResult<()> {
+    for cookie in create_clear_chunked_cookies(req, cookie) {
         req.append_response_header("Set-Cookie", cookie)?;
     }
     Ok(())
 }
 
 /// Build expiration headers for a cookie and every numbered chunk on the request.
-pub fn create_clear_chunked_cookies(
-    req: &AuthRequest,
-    name: &str,
-    config: &AuthConfig,
-) -> Vec<String> {
-    let mut cookies = vec![create_clear_cookie(name, config)];
+pub fn create_clear_chunked_cookies(req: &AuthRequest, cookie: &ResolvedCookie) -> Vec<String> {
+    let name = &cookie.name;
+    let mut cookies = vec![clear_chunk(name, cookie)];
     cookies.extend(
         existing_names(req, name)
             .into_iter()
             .filter(|chunk| chunk != name)
-            .map(|chunk| create_clear_cookie(&chunk, config)),
+            .map(|chunk| clear_chunk(&chunk, cookie)),
     );
     cookies
 }
@@ -65,39 +70,38 @@ pub fn create_clear_chunked_cookies(
 /// Split an ASCII encoded cookie and expire stale chunks from the request.
 pub fn create_chunked_cookies(
     req: &AuthRequest,
-    name: &str,
+    cookie: &ResolvedCookie,
     value: &str,
-    max_age: Option<i64>,
-    config: &AuthConfig,
 ) -> AuthResult<Vec<String>> {
-    let overhead = create_session_like_cookie(&format!("{name}.99"), "", max_age, config).len();
+    let name = &cookie.name;
+    let template = resolved_template(cookie);
+    let write = |name: String, value: &str| {
+        let mut chunk = template.clone();
+        chunk.set_name(name);
+        serialize_cookie(chunk, value, cookie)
+    };
+    let overhead = write(format!("{name}.99"), "").len();
     let count_and_size = 4050_usize
         .checked_sub(overhead)
         .filter(|size| *size > 0)
         .map(|size| (value.len().div_ceil(size), size));
     let mut cookies: BTreeMap<String, String> = existing_names(req, name)
         .into_iter()
-        .map(|name| {
-            let cookie = create_clear_cookie(&name, config);
-            (name, cookie)
+        .map(|chunk| {
+            let header = clear_chunk(&chunk, cookie);
+            (chunk, header)
         })
         .collect();
     if let Some((count, chunk_size)) = count_and_size.filter(|(count, _)| *count <= 100) {
         if count <= 1 {
-            let _ = cookies.insert(
-                name.to_owned(),
-                create_session_like_cookie(name, value, max_age, config),
-            );
+            let _ = cookies.insert(name.to_owned(), write(name.to_owned(), value));
         } else {
             for (index, chunk) in value.as_bytes().chunks(chunk_size).enumerate() {
                 let chunk_name = format!("{name}.{index}");
                 let value = std::str::from_utf8(chunk).map_err(|error| {
                     AuthError::internal(format!("Encoding cookie chunk: {error}"))
                 })?;
-                let _ = cookies.insert(
-                    chunk_name.to_owned(),
-                    create_session_like_cookie(&chunk_name, value, max_age, config),
-                );
+                let _ = cookies.insert(chunk_name.to_owned(), write(chunk_name, value));
             }
         }
     } else {

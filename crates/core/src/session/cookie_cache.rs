@@ -10,7 +10,7 @@ use crate::config::{AuthConfig, CookieCacheConfig, CookieCacheStrategy};
 use crate::utils::cookie_utils::{
     clear_chunked_cookie, create_chunked_cookies, related_cookie_name,
 };
-use crate::{AuthError, AuthRequest, AuthResult};
+use crate::{AuthError, AuthRequest, AuthResult, CookieAttributes};
 
 pub(super) use crate::utils::cookie_utils::get_chunked_cookie as read;
 
@@ -28,6 +28,24 @@ pub(super) struct CachedSession {
 
 fn default_version() -> String {
     "1".to_string()
+}
+
+fn cache_cookie(
+    config: &AuthConfig,
+    cache: &CookieCacheConfig,
+    dont_remember: bool,
+) -> crate::request_runtime::ResolvedCookie {
+    let mut cookie = config.auth_cookie(
+        "session_data",
+        CookieAttributes {
+            max_age: Some(cache.max_age().num_seconds()),
+            ..Default::default()
+        },
+    );
+    if dont_remember {
+        cookie.attributes.max_age = None;
+    }
+    cookie
 }
 
 // Upstream revives UTC dates before checking the Compact HMAC. Use the same
@@ -64,11 +82,11 @@ pub(super) async fn payload(
     for value in payload.values_mut() {
         normalize_dates(value);
     }
-    let max_age = if dont_remember {
-        300
-    } else {
-        cache.max_age().num_seconds()
-    };
+    let max_age = cache_cookie(config, cache, dont_remember)
+        .attributes
+        .max_age
+        .filter(|age| *age != 0)
+        .unwrap_or(300);
     Ok((payload, max_age))
 }
 
@@ -83,11 +101,12 @@ pub(super) async fn encode(
     match cache.strategy() {
         CookieCacheStrategy::Compact => {
             let expires_at = now.timestamp_millis()
-                + if dont_remember {
-                    60_000
-                } else {
-                    max_age * 1000
-                };
+                + cache_cookie(config, cache, dont_remember)
+                    .attributes
+                    .max_age
+                    .filter(|age| *age != 0)
+                    .unwrap_or(60)
+                    * 1000;
             let mut signed = payload.clone();
             let _ = signed.insert("expiresAt".into(), expires_at.into());
             let mut mac = Hmac::<Sha256>::new_from_slice(config.signing_secret().as_bytes())
@@ -180,7 +199,7 @@ pub(super) fn decode(
 }
 
 pub(super) fn clear(req: &AuthRequest, config: &AuthConfig) -> AuthResult<()> {
-    clear_chunked_cookie(req, &related_cookie_name(config, "session_data"), config)
+    clear_chunked_cookie(req, &config.auth_cookie("session_data", Default::default()))
 }
 
 pub(super) async fn write(
@@ -204,9 +223,8 @@ pub(super) async fn write(
         Some(value) => value,
         None => encode(data, config, cache, dont_remember).await?,
     };
-    let name = related_cookie_name(config, "session_data");
-    let max_age = (!dont_remember).then_some(cache.max_age().num_seconds());
-    for cookie in create_chunked_cookies(req, &name, &value, max_age, config)? {
+    let cookie = cache_cookie(config, cache, dont_remember);
+    for cookie in create_chunked_cookies(req, &cookie, &value)? {
         req.append_response_header("Set-Cookie", cookie)?;
     }
     renew_account_cookie(
@@ -242,9 +260,16 @@ fn renew_account_cookie(
     if bind_account_user
         && account.get("userId").and_then(Value::as_str) != Some(data.user.id.as_str())
     {
-        return clear_chunked_cookie(req, &name, config);
+        return clear_chunked_cookie(req, &config.auth_cookie("account_data", Default::default()));
     }
-    let max_age = cache.max_age().num_seconds();
+    let cookie = config.auth_cookie(
+        "account_data",
+        CookieAttributes {
+            max_age: Some(cache.max_age().num_seconds()),
+            ..Default::default()
+        },
+    );
+    let max_age = cookie.attributes.max_age.unwrap_or(300);
     let max_age = if max_age == 0 { 300 } else { max_age };
     let value = crate::utils::jwe::encode(
         account,
@@ -252,7 +277,7 @@ fn renew_account_cookie(
         "better-auth-account",
         max_age,
     )?;
-    for cookie in create_chunked_cookies(req, &name, &value, Some(max_age), config)? {
+    for cookie in create_chunked_cookies(req, &cookie, &value)? {
         req.append_response_header("Set-Cookie", cookie)?;
     }
     Ok(())

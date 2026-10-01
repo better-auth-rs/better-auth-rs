@@ -88,8 +88,13 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthPopupPlugin {
             .filter(|value| !value.is_null())
             .cloned()
             .unwrap_or_else(|| "".into());
-        if let Some(token) = completion::session_token(response, &ctx.config.session.cookie_name)
-            .filter(|value| !value.is_empty())
+        if let Some(token) = completion::session_token(
+            response,
+            &ctx.config
+                .auth_cookie("session_token", Default::default())
+                .name,
+        )
+        .filter(|value| !value.is_empty())
         {
             completion::render(
                 response,
@@ -142,7 +147,7 @@ async fn start(req: &AuthRequest, ctx: &AuthContext<impl AuthSchema>) -> AuthRes
     let provider_name = req.query.get("provider").cloned().unwrap_or_default();
     let origin = req.query.get("popupOrigin").cloned().unwrap_or_default();
     if !better_auth_core::config::extract_origin(&origin)
-        .is_some_and(|origin| ctx.config.is_origin_trusted(&origin))
+        .is_some_and(|origin| ctx.is_origin_trusted(&origin))
     {
         return Err(AuthError::Upstream {
             status: 403,
@@ -158,7 +163,7 @@ async fn start(req: &AuthRequest, ctx: &AuthContext<impl AuthSchema>) -> AuthRes
         ("newUserCallbackURL", "invalid_new_user_callback_url"),
     ] {
         if let Some(value) = req.query.get(field).filter(|value| !value.is_empty())
-            && !ctx.config.is_redirect_target_trusted(value)
+            && !ctx.is_redirect_target_trusted(value)
         {
             completion::render(
                 &mut response,

@@ -195,7 +195,7 @@ impl MultiSessionPlugin {
 fn cookie_name(token: &str, config: &better_auth_core::AuthConfig) -> String {
     format!(
         "{}_multi-{}",
-        config.session.cookie_name,
+        config.auth_cookie("session_token", Default::default()).name,
         token.to_lowercase()
     )
 }

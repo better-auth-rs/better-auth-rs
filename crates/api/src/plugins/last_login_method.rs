@@ -9,7 +9,9 @@ use better_auth_core::store::database_hooks::{
     DatabaseHookContext, DatabaseHookControl, DatabaseHooks,
 };
 use better_auth_core::user_fields::{UserConfig, UserFieldConfig};
-use better_auth_core::utils::cookie_utils::{encode_cookie_value, session_cookie_template};
+use better_auth_core::utils::cookie_utils::{
+    encode_cookie_value, render_cookie, session_cookie_template,
+};
 use better_auth_core::{
     AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
     AuthRoute, AuthSchema, CreateUser, UpdateUser,
@@ -320,7 +322,13 @@ impl<S: AuthSchema> AuthPlugin<S> for LastLoginMethodPlugin<S> {
                 self.config.max_age.floor() as i64
             ));
         }
-        response.headers.append("Set-Cookie", cookie.to_string());
+        response.headers.append(
+            "Set-Cookie",
+            render_cookie(
+                cookie,
+                &auth.config.auth_cookie("session_token", Default::default()),
+            ),
+        );
         Ok(())
     }
 }

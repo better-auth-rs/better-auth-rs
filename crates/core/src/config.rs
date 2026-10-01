@@ -1,3 +1,6 @@
+pub use crate::request_runtime::{
+    BaseUrl, BaseUrlProtocol, DynamicBaseUrl, TrustedValues, TrustedValuesResolver,
+};
 mod cookie_cache;
 mod secrets;
 mod storage;
@@ -456,6 +459,7 @@ pub mod core_paths {
 /// Main configuration for BetterAuth
 #[derive(Clone)]
 pub struct AuthConfig {
+    pub(crate) resolved_cookies: Option<crate::request_runtime::CookieSettings>,
     /// Secret key for signing tokens and sessions
     pub secret: String,
 
@@ -469,7 +473,7 @@ pub struct AuthConfig {
     pub app_name: String,
 
     /// Base URL for the authentication service (e.g. `"http://localhost:3000"`).
-    pub base_url: String,
+    pub base_url: BaseUrl,
 
     /// Base path where the auth routes are mounted.
     ///
@@ -485,7 +489,7 @@ pub struct AuthConfig {
     /// Supports glob patterns (e.g. `"https://*.example.com"`).
     /// These are shared across all middleware that needs origin validation
     /// (CSRF, CORS, etc.).
-    pub trusted_origins: Vec<String>,
+    pub trusted_origins: TrustedValues,
 
     /// Paths that should be disabled (skipped) by the router.
     ///
@@ -540,7 +544,7 @@ pub struct AccountLinkingConfig {
     /// Enable account linking (default: true)
     pub enabled: bool,
     /// Trusted providers that can auto-link (default: empty = all trusted)
-    pub trusted_providers: Vec<String>,
+    pub trusted_providers: TrustedValues,
     /// Allow linking accounts with different emails (default: false) - SECURITY WARNING
     pub allow_different_emails: bool,
     /// Allow unlinking all accounts (default: false)
@@ -602,14 +606,6 @@ pub struct SessionConfig {
     /// Session freshness window. A session younger than this is considered
     /// "fresh" (useful for step-up auth or sensitive operations).
     pub fresh_age: Option<Duration>,
-
-    /// Cookie name for session token
-    pub cookie_name: String,
-
-    /// Cookie settings
-    pub cookie_secure: bool,
-    pub cookie_http_only: bool,
-    pub cookie_same_site: SameSite,
 
     /// Optional cookie-based session cache to avoid DB lookups.
     ///
@@ -816,7 +812,7 @@ impl Default for AccountLinkingConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            trusted_providers: Vec::new(),
+            trusted_providers: TrustedValues::default(),
             allow_different_emails: false,
             allow_unlinking_all: false,
             disable_implicit_linking: false,
@@ -873,9 +869,10 @@ pub struct AdvancedConfig {
     /// Database-related advanced options.
     pub database: AdvancedDatabaseConfig,
 
-    /// List of header names the framework trusts for extracting the
-    /// client's real IP when behind a proxy (e.g. `X-Forwarded-For`).
-    pub trusted_proxy_headers: Vec<String>,
+    /// Trust forwarded host and protocol headers when resolving the service URL.
+    pub trusted_proxy_headers: bool,
+    /// Override the initial secure-cookie policy.
+    pub use_secure_cookies: Option<bool>,
 }
 
 impl AdvancedConfig {
@@ -903,7 +900,7 @@ pub struct IpAddressConfig {
 #[derive(Debug, Clone)]
 pub struct CrossSubDomainConfig {
     /// The parent domain (e.g. `".example.com"`).
-    pub domain: String,
+    pub domain: Option<String>,
 }
 
 /// Overridable cookie attributes.
@@ -945,12 +942,13 @@ pub struct AdvancedDatabaseConfig {
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
+            resolved_cookies: None,
             secret: String::new(),
             secrets: None,
             app_name: "Better Auth".to_string(),
-            base_url: "http://localhost:3000".to_string(),
+            base_url: BaseUrl::Auto,
             base_path: "/api/auth".to_string(),
-            trusted_origins: Vec::new(),
+            trusted_origins: TrustedValues::default(),
             disabled_paths: Vec::new(),
             session: SessionConfig::default(),
             verification: VerificationConfig::default(),
@@ -974,12 +972,6 @@ impl Default for SessionConfig {
             disable_session_refresh: false,
             defer_session_refresh: false,
             fresh_age: None,
-            cookie_name: "better-auth.session_token".to_string(),
-            // Secure flag is derived from base_url scheme (HTTPS → true).
-            // Default base_url is http://localhost:3000, so default is false.
-            cookie_secure: false,
-            cookie_http_only: true,
-            cookie_same_site: SameSite::Lax,
             cookie_cache: None,
             bearer: None,
             additional_fields: Default::default(),
@@ -1081,12 +1073,8 @@ impl AuthConfig {
     }
 
     /// Set the base URL (e.g. `"https://myapp.com"`).
-    ///
-    /// Also updates `session.cookie_secure` to match the URL scheme:
-    /// HTTPS URLs set `Secure=true`, HTTP URLs set `Secure=false`.
-    pub fn base_url(mut self, url: impl Into<String>) -> Self {
+    pub fn base_url(mut self, url: impl Into<BaseUrl>) -> Self {
         self.base_url = url.into();
-        self.session.cookie_secure = self.base_url.starts_with("https://");
         self
     }
 
@@ -1103,13 +1091,14 @@ impl AuthConfig {
 
     /// Add a trusted origin. Supports glob patterns (e.g. `"https://*.example.com"`).
     pub fn trusted_origin(mut self, origin: impl Into<String>) -> Self {
-        self.trusted_origins.push(origin.into());
+        self.trusted_origins =
+            TrustedValues::merge(vec![self.trusted_origins, vec![origin.into()].into()]);
         self
     }
 
     /// Set all trusted origins at once.
-    pub fn trusted_origins(mut self, origins: Vec<String>) -> Self {
-        self.trusted_origins = origins;
+    pub fn trusted_origins(mut self, origins: impl Into<TrustedValues>) -> Self {
+        self.trusted_origins = origins.into();
         self
     }
 
@@ -1192,7 +1181,7 @@ impl AuthConfig {
 
     pub fn cross_sub_domain_cookies(mut self, domain: impl Into<String>) -> Self {
         self.advanced.cross_sub_domain_cookies = Some(CrossSubDomainConfig {
-            domain: domain.into(),
+            domain: Some(domain.into()),
         });
         self
     }
@@ -1208,16 +1197,20 @@ impl AuthConfig {
     /// `**` matches any characters including `/`.
     pub fn is_origin_trusted(&self, origin: &str) -> bool {
         // Check base_url origin
-        if let Some(base_origin) = extract_origin(&self.base_url)
+        if let Some(base_origin) = self.base_url.as_static().and_then(extract_origin)
             && origin == base_origin
         {
             return true;
         }
         // Check trusted_origins patterns
-        self.trusted_origins.iter().any(|pattern| {
-            let pattern_origin = extract_origin(pattern).unwrap_or_default();
-            glob_match::glob_match(&pattern_origin, origin)
-        })
+        self.trusted_origins
+            .as_static()
+            .unwrap_or(&[])
+            .iter()
+            .any(|pattern| {
+                let pattern_origin = extract_origin(pattern).unwrap_or_default();
+                glob_match::glob_match(&pattern_origin, origin)
+            })
     }
 
     /// Check whether a URL is a safe redirect target.
@@ -1354,9 +1347,9 @@ mod tests {
     fn new_config_uses_defaults() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567");
         assert_eq!(cfg.app_name, "Better Auth");
-        assert_eq!(cfg.base_url, "http://localhost:3000");
+        assert!(matches!(cfg.base_url, BaseUrl::Auto));
         assert_eq!(cfg.base_path, "/api/auth");
-        assert!(cfg.trusted_origins.is_empty());
+        assert!(cfg.trusted_origins.as_static().unwrap().is_empty());
     }
 
     // ── Builder methods ─────────────────────────────────────────────────
@@ -1365,7 +1358,12 @@ mod tests {
     #[test]
     fn base_url_sets_cookie_secure_for_https() {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567").base_url("https://myapp.com");
-        assert!(cfg.session.cookie_secure);
+        assert_eq!(
+            cfg.auth_cookie("session_token", Default::default())
+                .attributes
+                .secure,
+            Some(true)
+        );
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
@@ -1374,7 +1372,12 @@ mod tests {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
             .base_url("https://myapp.com")
             .base_url("http://localhost:3000");
-        assert!(!cfg.session.cookie_secure);
+        assert_eq!(
+            cfg.auth_cookie("session_token", Default::default())
+                .attributes
+                .secure,
+            Some(false)
+        );
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
@@ -1402,7 +1405,7 @@ mod tests {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
             .trusted_origin("https://a.com")
             .trusted_origin("https://b.com");
-        assert_eq!(cfg.trusted_origins.len(), 2);
+        assert_eq!(cfg.trusted_origins.as_static().unwrap().len(), 2);
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
@@ -1411,7 +1414,10 @@ mod tests {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
             .trusted_origin("https://old.com")
             .trusted_origins(vec!["https://new.com".to_string()]);
-        assert_eq!(cfg.trusted_origins, vec!["https://new.com"]);
+        assert_eq!(
+            cfg.trusted_origins.as_static().unwrap(),
+            &["https://new.com"]
+        );
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
@@ -1539,9 +1545,10 @@ mod tests {
         assert_eq!(s.expires_in, Duration::hours(24 * 7));
         assert_eq!(s.update_age, Some(Duration::hours(24)));
         assert!(!s.disable_session_refresh);
-        assert_eq!(s.cookie_name, "better-auth.session_token");
-        assert!(s.cookie_http_only);
-        assert_eq!(s.cookie_same_site, SameSite::Lax);
+        let cookie = AuthConfig::default().auth_cookie("session_token", Default::default());
+        assert_eq!(cookie.name, "better-auth.session_token");
+        assert_eq!(cookie.attributes.http_only, Some(true));
+        assert_eq!(cookie.attributes.same_site, Some(SameSite::Lax));
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
@@ -1652,7 +1659,7 @@ mod tests {
             .cross_sub_domain_cookies(".example.com");
         let csd = cfg.advanced.cross_sub_domain_cookies.as_ref();
         assert!(csd.is_some());
-        assert_eq!(csd.unwrap().domain, ".example.com");
+        assert_eq!(csd.unwrap().domain.as_deref(), Some(".example.com"));
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.

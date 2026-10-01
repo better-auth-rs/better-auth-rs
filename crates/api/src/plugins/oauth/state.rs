@@ -263,12 +263,7 @@ pub(crate) fn get_cookie(req: &AuthRequest, name: &str) -> Option<String> {
 }
 
 pub(crate) fn related_cookie_name(config: &AuthConfig, suffix: &str) -> String {
-    config
-        .session
-        .cookie_name
-        .strip_suffix("session_token")
-        .map(|prefix| format!("{}{}", prefix, suffix))
-        .unwrap_or_else(|| format!("better-auth.{}", suffix))
+    better_auth_core::utils::cookie_utils::related_cookie_name(config, suffix)
 }
 
 pub(crate) fn filter_additional_state_data(

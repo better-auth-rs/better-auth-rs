@@ -100,6 +100,9 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<S::User>> {
         self.inner.get_user_by_email(email).await
     }
+    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<S::User>> {
+        self.inner.get_user_by_username(username).await
+    }
     async fn update_user(&self, id: &str, update: crate::UpdateUser) -> AuthResult<S::User> {
         let user = self.inner.update_user(id, update).await?;
         let runtime = self.runtime.clone();
@@ -118,15 +121,27 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
             return self.inner.delete_user(id).await;
         }
         let sessions = self.runtime.references(id).await?;
-        self.inner.delete_user(id).await?;
-        let runtime = self.runtime.clone();
-        let id = id.to_owned();
-        self.inner.queue_after_commit(Box::pin(async move {
-            if let Err(error) = runtime.delete_cached_sessions(&id, &sessions).await {
-                tracing::error!(%error, "Failed to delete committed user sessions from secondary storage");
-            }
-            Ok(())
-        }))
+        if self
+            .inner
+            .delete_user_optional(id, self.runtime.database_sessions())
+            .await?
+            .is_some()
+        {
+            self.runtime
+                .queue_cached_user_session_deletion(id.to_owned(), sessions, Some(self.inner))
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn delete_user_optional(
+        &self,
+        id: &str,
+        delete_database_sessions: bool,
+    ) -> AuthResult<Option<S::User>> {
+        self.inner
+            .delete_user_optional(id, delete_database_sessions)
+            .await
     }
     async fn create_passkey(&self, input: crate::CreatePasskey) -> AuthResult<crate::Passkey> {
         self.inner.create_passkey(input).await
@@ -165,6 +180,9 @@ impl<S: AuthSchema> TransactionStore<S> for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> crate::store::JwksStore for Transaction<'_, S> {
+    async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>> {
+        crate::store::JwksStore::get_jwk(self.inner, id).await
+    }
     async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>> {
         crate::store::JwksStore::list_jwks(self.inner).await
     }

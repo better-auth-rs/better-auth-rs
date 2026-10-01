@@ -265,7 +265,9 @@ pub(crate) fn response_session_token(
         .headers
         .get_all("set-cookie")
         .filter_map(|value| cookie::Cookie::parse(value.as_str()).ok())
-        .filter(|cookie| cookie.name() == config.session.cookie_name)
+        .filter(|cookie| {
+            cookie.name() == config.auth_cookie("session_token", Default::default()).name
+        })
         .last()
         .filter(|cookie| {
             !cookie.value().is_empty()

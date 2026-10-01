@@ -101,6 +101,8 @@ let result = auth.admin()?.create_user(&CreateAdminUser {
 
 Passing `None` for headers selects requestless server provisioning. Passing any headers, including an empty map, requires an authenticated session and the corresponding permissions. Creation uses the registered admission policy and database hooks and does not create a session.
 
+With a dynamic base URL, supplied host headers resolve the runtime before authentication. Requestless provisioning requires a configured fallback; resolution failure prevents user creation.
+
 ### Ban Management
 
 | Endpoint | Method | Description |

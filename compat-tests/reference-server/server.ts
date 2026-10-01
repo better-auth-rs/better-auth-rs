@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { createDynamicContextFixture } from "./dynamic-context";
 import { createOAuthPopupFixture } from "./oauth-popup";
 import { mappedPluginSchema, mappedPluginExtras } from "./plugin-schema";
 import { createOrganizationCallbacks } from "./organization-callbacks";
@@ -18,6 +19,7 @@ import { admin, bearer, deviceAuthorization, twoFactor, username } from "better-
 import { createAdminOptionsFixture } from "./admin-options";
 import { createStatelessFixture } from "./stateless";
 import { createLastLoginFixture } from "./last-login";
+import { createUsernameFixture } from "./username-options";
 import { createDispatchErrorsFixture } from "./dispatch-errors";
 import { createIdentityContextFixture } from "./identity-context";
 import { createRateLimitFixture } from "./rate-limit-options";
@@ -53,6 +55,8 @@ import { createIdentityFixture } from "./identity-routes";
 import { userFields } from "./user-fields";
 import { tokenRoutePlugins } from "./token-routes";
 import { createJwtFixture } from "./jwt-fixture";
+import { createJwtAdapterFixture } from "./jwt-adapter";
+import { createStandaloneDatabaseLifecycleFixture } from "./database-lifecycle";
 
 function getPort() {
   const idx = process.argv.indexOf("--port");
@@ -83,11 +87,14 @@ function hasOwn(obj: unknown, key: string) {
 
 const PORT = getPort();
 const identityContextFixture = process.env.COMPAT_PROFILE === "identity-context" ? createIdentityContextFixture(`http://localhost:${PORT}`) : undefined;
+const dynamicContextFixture = (["dynamic-context", "dynamic-native", "dynamic-oauth"].includes(process.env.COMPAT_PROFILE ?? "") || process.env.COMPAT_PROFILE?.startsWith("dynamic-environment:")) ? createDynamicContextFixture() : undefined;
 const dispatchErrorsFixture = process.env.COMPAT_PROFILE === "dispatch-errors" ? createDispatchErrorsFixture(`http://localhost:${PORT}`) : undefined;
 const rateLimitFixture = process.env.COMPAT_PROFILE === "rate-limit-options" ? await createRateLimitFixture(`http://localhost:${PORT}`) : undefined;
 const oauthPopupFixture = createOAuthPopupFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`);
 const captchaFixture = createCaptchaFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`);
 const jwtFixture = await createJwtFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`);
+const jwtAdapterFixture = process.env.COMPAT_PROFILE === "jwt-adapter" ? createJwtAdapterFixture(`http://localhost:${PORT}`) : null;
+const databaseLifecycleFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("database-lifecycle") ? await createStandaloneDatabaseLifecycleFixture(process.env.COMPAT_PROFILE!, `http://localhost:${PORT}`) : null;
 const database = new Database(":memory:");
 const cryptoFixture = createCryptoFixture(process.env.COMPAT_PROFILE ?? "", database);
 const userAdmission = createUserAdmissionFixture(process.env.COMPAT_PROFILE ?? "");
@@ -114,6 +121,9 @@ const statelessFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("stateles
   : undefined;
 const lastLoginFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("last-login-")
   ? await createLastLoginFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`)
+  : undefined;
+const usernameFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("username-")
+  ? await createUsernameFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`)
   : undefined;
 const oneTapFixture = createOneTapFixture(process.env.COMPAT_PROFILE ?? "");
 const organizationCallbacks = createOrganizationCallbacks(process.env.COMPAT_PROFILE ?? "");
@@ -631,7 +641,11 @@ async function resetDatabaseState() {
 const server = Bun.serve({
   port: PORT,
   async fetch(request) {
+    if (usernameFixture) return usernameFixture.handle(request);
+    if (jwtAdapterFixture) return jwtAdapterFixture.handle(request);
+    if (databaseLifecycleFixture) return databaseLifecycleFixture.handle(request);
     if (identityContextFixture) return identityContextFixture.handle(request);
+    if (dynamicContextFixture) return dynamicContextFixture.handle(request);
     if (dispatchErrorsFixture) return dispatchErrorsFixture.handle(request);
     if (rateLimitFixture) return rateLimitFixture.handle(request);
     if (lastLoginFixture) return lastLoginFixture.handle(request);

@@ -23,6 +23,21 @@ impl EphemeralStore {
 
 #[async_trait]
 impl SessionStore<StatelessSchema> for EphemeralStore {
+    async fn update_session_with_writer(
+        &self,
+        token: &str,
+        update: SessionUpdate,
+        secondary: Option<crate::store::SessionUpdateWriter<StatelessSchema>>,
+    ) -> AuthResult<Option<SessionView>> {
+        EphemeralStore::update_session_with_writer(self, token, update, secondary).await
+    }
+
+    async fn end_session(&self, token: &str) -> AuthResult<()> {
+        self.delete_sessions_with_hooks(|row| row.token == token, true)
+            .await
+            .map(|_| ())
+    }
+
     async fn accept_invitation_with_teams(
         &self,
         invitation_id: &str,
@@ -327,23 +342,44 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
-        let _ = self
-            .delete_sessions_with_hooks(|session| session.token == token)
-            .await?;
+        let session = self.lock()?.sessions.get(token).cloned();
+        // A failed single-row snapshot prevents deletion, unlike a failed batch snapshot.
+        let Some(session) = session.and_then(|row| self.output_session(row).ok()) else {
+            return Ok(());
+        };
+        let transaction = EphemeralTransaction { store: self };
+        let context = self.hook_context(&transaction);
+        for hook in &self.hooks {
+            if hook.before_delete_session(&session, &context).await? == DatabaseHookControl::Cancel
+            {
+                return Ok(());
+            }
+        }
+        let _ = self.lock()?.sessions.shift_remove(token);
+        self.after(CommittedWrite::SessionDeleted(session)).await?;
         Ok(())
     }
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
-        let _ = self
-            .delete_sessions_with_hooks(|session| session.user_id == user_id)
-            .await?;
-        Ok(())
+        self.delete_user_sessions_optional(user_id, false)
+            .await
+            .map(|_| ())
+    }
+
+    async fn delete_user_sessions_optional(
+        &self,
+        user_id: &str,
+        preserve: bool,
+    ) -> AuthResult<Option<usize>> {
+        self.delete_sessions_with_hooks(|row| row.user_id == user_id, preserve)
+            .await
     }
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
         let now = Utc::now();
-        self.delete_sessions_with_hooks(|session| session.expires_at <= now || !session.active)
+        self.delete_sessions_with_hooks(|row| row.expires_at <= now || !row.active, false)
             .await
+            .map(Option::unwrap_or_default)
     }
 
     async fn update_session_active_organization(

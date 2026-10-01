@@ -102,6 +102,12 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
 Return `HookControl::Cancel` from a create or delete hook to cancel the write. Update hooks return `DatabaseHookUpdate::Cancel`. An error stops the operation and propagates to the caller.
 
+Bulk deletion snapshots the matching records, runs every before hook, performs one batch write, then runs after hooks in snapshot order. A before-hook cancellation preserves the complete batch. An after-hook error occurs after the complete write and stops later hooks and queued effects. User deletion applies this sequence to session children, then account children, before the user's own hooks. SQLite foreign-key cascades can remove children whose hooks cancelled their explicit deletion.
+
+Better Auth 1.7.6 catches deletion snapshot-read errors before running hooks. Bulk deletion still attempts its write; single-record deletion treats an unreadable snapshot as a missing record. This catch is limited to the snapshot read. Hook errors and write errors continue to propagate.
+
+Session deletion snapshots apply configured output transforms once and retain fields with `returned: false`. A transform error follows the same snapshot-read boundary. Output transforms, dates, JSON, and reference fields require runtime hydration for typed session snapshots; `AuthEntity` supplies that implementation. Runtime initialization rejects models without that capability. Ordinary scalar fields without an output policy retain their existing typed values.
+
 Atomic verification consumption returns `None` when a before-delete hook cancels. After-delete hooks run after the consumption transaction commits. An after-delete hook error propagates to the caller, but the consumed credential remains deleted.
 
 ```rust

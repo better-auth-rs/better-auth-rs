@@ -59,6 +59,10 @@ mod crypto;
 mod custom_session;
 mod device_generators;
 mod dispatch_errors;
+mod dynamic_context;
+mod dynamic_cookies;
+mod dynamic_native;
+mod dynamic_oauth;
 mod email_otp;
 mod email_otp_native;
 mod email_otp_transaction;
@@ -66,6 +70,9 @@ mod http_body;
 mod identity_context;
 mod identity_routes;
 mod jwt_fixture;
+mod jwt_adapter;
+mod jwt_session;
+mod database_lifecycle;
 mod last_login;
 mod oauth_link_id_token;
 mod oauth_popup;
@@ -86,6 +93,7 @@ mod two_factor_context;
 mod two_factor_options;
 mod user_admission;
 mod user_fields;
+mod username_options;
 
 type TestSchema = user_fields::Schema;
 
@@ -629,12 +637,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let secret = "compat-test-only-key-not-real-minimum-32chars";
     let device_profile = std::env::var("COMPAT_PROFILE").unwrap_or_default();
+    if device_profile.starts_with("database-lifecycle") {
+        let app = database_lifecycle::router(&device_profile, &format!("http://localhost:{port}")).await?;
+        axum::serve(listener, app).await?;
+        return Ok(());
+    }
+    if device_profile.starts_with("username-") {
+        let app = username_options::router(&device_profile, &format!("http://localhost:{port}")).await?;
+        axum::serve(listener, app).await?;
+        return Ok(());
+    }
+    if device_profile == "jwt-adapter" {
+        axum::serve(listener, jwt_adapter::router(&format!("http://localhost:{port}"))).await?;
+        return Ok(());
+    }
     if device_profile == "identity-context" {
         axum::serve(
             listener,
             identity_context::router(&format!("http://localhost:{port}")),
         )
         .await?;
+        return Ok(());
+    }
+    if matches!(device_profile.as_str(), "dynamic-context" | "dynamic-native" | "dynamic-oauth") || device_profile.starts_with("dynamic-environment:") {
+        axum::serve(listener, dynamic_context::router()).await?;
         return Ok(());
     }
     if device_profile == "dispatch-errors" {
@@ -666,10 +692,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(case) = std::env::var("COMPAT_PROXY_CASE") {
         let case: serde_json::Value = serde_json::from_str(&case)?;
         if let Some(base_url) = case["baseURL"].as_str() {
-            config.base_url = base_url.to_owned();
+            config.base_url = base_url.into();
         }
         if let Some(origins) = case.get("trustedOrigins") {
-            config.trusted_origins = serde_json::from_value(origins.clone())?;
+            config.trusted_origins = serde_json::from_value::<Vec<String>>(origins.clone())?.into();
         }
     }
     if device_profile == "organization-cache" {
@@ -734,13 +760,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     email_otp_transaction::EmailOtpTransactionFixture::configure(&device_profile, &mut config);
     oauth_link_id_token::OAuthLinkIdTokenFixture::configure(&device_profile, &mut config);
     let oauth_popup_fixture =
-        oauth_popup::OAuthPopupFixture::new(&device_profile, &config.base_url);
+        oauth_popup::OAuthPopupFixture::new(&device_profile, config.base_url.as_static().unwrap_or(""));
     oauth_popup_fixture.configure(&device_profile, &mut config);
     let admin_options_fixture = admin_options::AdminOptionsFixture::default();
     admin_options_fixture.configure(&device_profile, &mut config);
     let captcha_fixture = captcha::CaptchaFixture::default();
     captcha_fixture.configure(&device_profile, &mut config);
-    let captcha_plugin = captcha_fixture.plugin(&device_profile, &config.base_url);
+    let captcha_plugin = captcha_fixture.plugin(&device_profile, config.base_url.as_static().unwrap_or(""));
     let cookie_version_fixture = cookie_version::CookieVersionFixture::default();
     cookie_version_fixture.configure(&device_profile, &mut config);
     let cookie_version_router = cookie_version_fixture.router();

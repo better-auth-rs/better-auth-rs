@@ -11,9 +11,12 @@ impl<S: AuthSchema> SessionManager<S> {
         use crate::utils::cookie_utils::related_cookie_name;
         let cache_name = related_cookie_name(&self.config, "session_data");
         let endpoint_sets_session = response.headers.get_all("set-cookie").any(|value| {
-            value
-                .split_once('=')
-                .is_some_and(|(name, _)| name == self.config.session.cookie_name)
+            value.split_once('=').is_some_and(|(name, _)| {
+                name == self
+                    .config
+                    .auth_cookie("session_token", Default::default())
+                    .name
+            })
         });
         let endpoint_headers = std::mem::take(&mut response.headers);
         // Endpoint rotation or revocation supersedes credentials queued while
@@ -25,7 +28,11 @@ impl<S: AuthSchema> SessionManager<S> {
                 !(endpoint_sets_session
                     && name.eq_ignore_ascii_case("set-cookie")
                     && value.split_once('=').is_some_and(|(cookie, _)| {
-                        cookie == self.config.session.cookie_name
+                        cookie
+                            == self
+                                .config
+                                .auth_cookie("session_token", Default::default())
+                                .name
                             || cookie == cache_name
                             || cookie.starts_with(&format!("{cache_name}."))
                     }))
@@ -41,7 +48,13 @@ impl<S: AuthSchema> SessionManager<S> {
             .headers
             .get_all("set-cookie")
             .filter_map(|value| cookie::Cookie::parse(value.as_str()).ok())
-            .filter(|cookie| cookie.name() == self.config.session.cookie_name)
+            .filter(|cookie| {
+                cookie.name()
+                    == self
+                        .config
+                        .auth_cookie("session_token", Default::default())
+                        .name
+            })
             .last()
             .filter(|cookie| {
                 !cookie.value().is_empty()

@@ -19,6 +19,21 @@ where
     S: AuthSchema,
     S::User: SeaOrmUserModel,
 {
+    pub(super) async fn find_user_by_username(
+        &self,
+        db: &impl ConnectionTrait,
+        username: &str,
+    ) -> AuthResult<Option<S::User>> {
+        let Some(column) = S::User::username_column() else {
+            return Ok(None);
+        };
+        <S::User as SeaOrmUserModel>::Entity::find()
+            .filter(column.eq(username))
+            .one(db)
+            .await
+            .map_err(map_db_err)
+    }
+
     async fn create_user_with_connection<C>(
         &self,
         db: &C,
@@ -28,6 +43,7 @@ where
     where
         C: ConnectionTrait,
     {
+        create_user.prepare_user_fields(&self.config().user)?;
         create_user.email = normalize_optional_user_email(create_user.email);
         let hook_context = self.hook_context(tx);
         for hook in self.hooks() {
@@ -38,9 +54,7 @@ where
             {
                 return Err(cancelled_by_hook("user creation"));
             }
-        }
-        if let Some(username) = create_user.username.as_mut() {
-            *username = username.to_lowercase();
+            create_user.prepare_user_fields(&self.config().user)?;
         }
         let now = Utc::now();
         let user_id = create_user
@@ -49,7 +63,7 @@ where
             .map(S::User::parse_id)
             .transpose()?;
         let fields = self.config().user.storage_fields_for_adapter(
-            std::mem::take(&mut create_user.additional_fields),
+            create_user.take_user_field_input(&self.config().user),
             true,
             db.get_database_backend() == sea_orm::DbBackend::Postgres,
             S::User::native_json_field,
@@ -79,6 +93,7 @@ where
         id: &str,
         mut update: UpdateUser,
     ) -> AuthResult<S::User> {
+        update.prepare_user_fields(&self.config().user)?;
         update.email = normalize_optional_user_email(update.email);
         if update.phone_number == Some(None) {
             update.phone_number_verified = Some(false);
@@ -93,11 +108,11 @@ where
             {
                 DatabaseHookUpdate::Continue => {}
                 DatabaseHookUpdate::Cancel => return Err(cancelled_by_hook("user update")),
-                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+                DatabaseHookUpdate::Patch(mut patch) => {
+                    patch.prepare_user_fields(&self.config().user)?;
+                    update.merge(patch);
+                }
             }
-        }
-        if let Some(username) = update.username.as_mut() {
-            *username = username.to_lowercase();
         }
         let Some(model) = <S::User as SeaOrmUserModel>::Entity::find()
             .filter(<S::User as SeaOrmUserModel>::id_column().eq(user_id))
@@ -115,7 +130,7 @@ where
 
         let mut active = model.into_active_model();
         let fields = self.config().user.storage_fields_for_adapter(
-            std::mem::take(&mut update.additional_fields),
+            update.take_user_field_input(&self.config().user),
             false,
             db.get_database_backend() == sea_orm::DbBackend::Postgres,
             S::User::native_json_field,
@@ -137,52 +152,7 @@ where
         }
         Ok(user)
     }
-    pub(super) async fn delete_user_with_connection(
-        &self,
-        db: &impl ConnectionTrait,
-        tx: Option<super::HookTransaction<'_, S>>,
-        id: &str,
-    ) -> AuthResult<S::User> {
-        let user_id = S::User::parse_id(id)?;
-        let Some(user) = <S::User as SeaOrmUserModel>::Entity::find()
-            .filter(<S::User as SeaOrmUserModel>::id_column().eq(user_id.clone()))
-            .one(db)
-            .await
-            .map_err(map_db_err)?
-        else {
-            return Err(AuthError::UserNotFound);
-        };
-        let hook_context = self.hook_context(tx);
-        for hook in self.hooks() {
-            if hook
-                .before_delete_user(&user, &hook_context)
-                .await?
-                .is_cancelled()
-            {
-                return Err(cancelled_by_hook("user deletion"));
-            }
-        }
-        // API keys reference their owner polymorphically, so they carry no
-        // foreign key to cascade from. Without this, a deleted user's keys
-        // would outlive them and start working again if the id were reused.
-        let _ = <P::ApiKey as crate::SeaOrmPluginModel>::Entity::delete_many()
-            .filter(<P::ApiKey as crate::SeaOrmPluginModel>::column("reference_id")?.eq(id))
-            .exec(db)
-            .await
-            .map_err(map_db_err)?;
 
-        let _ = <S::User as SeaOrmUserModel>::Entity::delete_many()
-            .filter(<S::User as SeaOrmUserModel>::id_column().eq(user_id))
-            .exec(db)
-            .await
-            .map_err(map_db_err)?;
-        if tx.is_none() {
-            for hook in self.hooks() {
-                hook.after_delete_user(&user, &hook_context).await?;
-            }
-        }
-        Ok(user)
-    }
     pub(crate) async fn create_user_in_tx(
         &self,
         tx: super::HookTransaction<'_, S>,
@@ -285,14 +255,8 @@ where
     }
 
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<S::User>> {
-        let Some(col) = <S::User as SeaOrmUserModel>::username_column() else {
-            return Ok(None);
-        };
-        <S::User as SeaOrmUserModel>::Entity::find()
-            .filter(col.eq(username.to_lowercase()))
-            .one(self.connection())
+        self.find_user_by_username(self.connection(), username)
             .await
-            .map_err(map_db_err)
     }
 
     async fn get_user_by_phone_number(&self, phone_number: &str) -> AuthResult<Option<S::User>> {
@@ -311,9 +275,16 @@ where
     }
 
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
-        self.delete_user_with_connection(self.connection(), None, id)
+        self.delete_user_optional(id, true).await.map(|_| ())
+    }
+
+    async fn delete_user_optional(
+        &self,
+        id: &str,
+        delete_database_sessions: bool,
+    ) -> AuthResult<Option<S::User>> {
+        self.delete_user_with_connection(self.connection(), None, id, delete_database_sessions)
             .await
-            .map(|_| ())
     }
 
     async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<S::User>, usize)> {

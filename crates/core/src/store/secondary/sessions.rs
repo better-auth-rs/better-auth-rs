@@ -1,6 +1,7 @@
 use super::{SecondaryStore, decode, object, ttl};
 use crate::entity::AuthSession;
-use crate::store::{SessionStore, TeamMemberLimits};
+use crate::store::database_hooks::SessionUpdate;
+use crate::store::{SessionStore, SessionUpdateWriter, TeamMemberLimits};
 use crate::types::{CreateSession, Invitation, Member};
 use crate::wire::{SessionView, UserView};
 use crate::{AuthError, AuthResult, AuthSchema};
@@ -173,18 +174,27 @@ impl<S: AuthSchema> SecondaryStore<S> {
     async fn update_cached_session(
         &self,
         token: &str,
-        fields: Map<String, Value>,
+        update: SessionUpdate,
     ) -> AuthResult<Option<S::Session>> {
-        if self.storage.is_none() {
-            return Ok(None);
-        }
         let Some(mut cached) = decode(self.secondary()?.get(token).await?) else {
             return Ok(None);
         };
         let Some(session) = cached.get_mut("session").and_then(Value::as_object_mut) else {
             return Ok(None);
         };
+        let created_at = session.get("createdAt").cloned();
+        let mut fields = update.into_public_fields()?;
+        // Upstream uses nullish date defaults before parsing the cached session.
+        for name in ["expiresAt", "updatedAt"] {
+            if fields.get(name).is_some_and(Value::is_null) {
+                let _ = fields.remove(name);
+            }
+        }
         session.extend(fields);
+        // Upstream retains the cached creation date, even when a before hook patches it.
+        if let Some(created_at) = created_at {
+            let _ = session.insert("createdAt".into(), created_at);
+        }
         let mut view = SessionView::try_from(session.clone())?;
         view.filter_returned_fields(&self.config.session);
         *session = view.into();
@@ -194,9 +204,60 @@ impl<S: AuthSchema> SecondaryStore<S> {
             self.secondary()?
                 .set(token, &serde_json::to_string(&cached)?, Some(seconds))
                 .await?;
-            self.add_reference(&updated).await?;
+            let now = Utc::now().timestamp_millis();
+            let mut references = self.references(&updated.user_id()).await?;
+            references.retain(|reference| reference.expires_at > now && reference.token != token);
+            references.push(super::sessions::SessionReference {
+                token: token.to_owned(),
+                expires_at: updated.expires_at().timestamp_millis(),
+            });
+            self.write_references(&updated.user_id(), references)
+                .await?;
         }
         Ok(Some(updated))
+    }
+
+    async fn update_runtime_session(
+        &self,
+        token: &str,
+        update: SessionUpdate,
+    ) -> AuthResult<Option<S::Session>> {
+        let runtime = self.clone();
+        let lookup = token.to_owned();
+        self.inner
+            .update_session_with_writer(
+                token,
+                update,
+                Some(SessionUpdateWriter {
+                    write_database: self.database_sessions(),
+                    write: Box::new(move |update| {
+                        Box::pin(
+                            async move { runtime.update_cached_session(&lookup, update).await },
+                        )
+                    }),
+                }),
+            )
+            .await
+    }
+
+    pub(super) async fn queue_cached_user_session_deletion(
+        &self,
+        user_id: String,
+        references: Vec<SessionReference>,
+        transaction: Option<&dyn crate::store::AuthTransaction<S>>,
+    ) -> AuthResult<()> {
+        let runtime = self.clone();
+        let effect = Box::pin(async move {
+            // Upstream applies this onError policy both after commit and without a transaction.
+            if let Err(error) = runtime.delete_cached_sessions(&user_id, &references).await {
+                tracing::error!(%error, "Failed to delete committed user sessions from secondary storage");
+            }
+            Ok(())
+        });
+        match transaction {
+            Some(transaction) => transaction.queue_after_commit(effect),
+            None => effect.await,
+        }
     }
 
     pub(super) async fn delete_cached_sessions(
@@ -222,6 +283,27 @@ impl<S: AuthSchema> SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
+    async fn update_session_with_writer(
+        &self,
+        token: &str,
+        update: SessionUpdate,
+        secondary: Option<SessionUpdateWriter<S>>,
+    ) -> AuthResult<Option<S::Session>> {
+        self.inner
+            .update_session_with_writer(token, update, secondary)
+            .await
+    }
+
+    async fn delete_user_sessions_optional(
+        &self,
+        user_id: &str,
+        preserve: bool,
+    ) -> AuthResult<Option<usize>> {
+        self.inner
+            .delete_user_sessions_optional(user_id, preserve)
+            .await
+    }
+
     async fn create_session(&self, mut input: CreateSession) -> AuthResult<S::Session> {
         let session = if self.database_sessions() {
             self.inner.create_session(input).await?
@@ -284,14 +366,17 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         token: &str,
         fields: Map<String, Value>,
     ) -> AuthResult<Option<S::Session>> {
-        let mut public = fields.clone();
-        let _ = public.insert("updatedAt".into(), json!(Utc::now()));
-        let cached = self.update_cached_session(token, public).await?;
-        if self.database_sessions() {
-            self.inner.update_session_fields(token, fields).await
-        } else {
-            Ok(cached)
+        if self.storage.is_none() {
+            return self.inner.update_session_fields(token, fields).await;
         }
+        self.update_runtime_session(
+            token,
+            SessionUpdate {
+                additional_fields: fields,
+                ..Default::default()
+            },
+        )
+        .await
     }
 
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<S::Session>> {
@@ -340,34 +425,53 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         token: &str,
         expires_at: DateTime<Utc>,
     ) -> AuthResult<S::Session> {
-        let cached = self
-            .update_cached_session(
-                token,
-                object(json!({ "expiresAt": expires_at, "updatedAt": Utc::now() }))?,
-            )
-            .await?;
-        if self.database_sessions() {
-            self.inner.update_session_expiry(token, expires_at).await
-        } else {
-            cached.ok_or(AuthError::SessionNotFound)
+        if self.storage.is_none() {
+            return self.inner.update_session_expiry(token, expires_at).await;
         }
+        self.update_runtime_session(
+            token,
+            SessionUpdate {
+                expires_at: Some(expires_at),
+                updated_at: Some(Utc::now()),
+                ..Default::default()
+            },
+        )
+        .await?
+        .ok_or(AuthError::SessionNotFound)
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
         if self.storage.is_none() {
             return self.inner.delete_session(token).await;
         }
-        if let Some(cached) = decode(self.secondary()?.get(token).await?) {
+        let cached = self.secondary()?.get(token).await?;
+        if cached.as_ref().is_some_and(crate::user_fields::is_truthy) {
+            let cached = decode(cached);
             if let Some(user_id) = cached
-                .get("session")
+                .as_ref()
+                .and_then(|cached| cached.get("session"))
                 .and_then(|session| session.get("userId"))
                 .and_then(Value::as_str)
             {
-                let mut references = self.references(user_id).await?;
-                references.retain(|reference| {
-                    reference.token != token && reference.expires_at > Utc::now().timestamp_millis()
-                });
-                self.write_references(user_id, references).await?;
+                let references = self
+                    .secondary()?
+                    .get(&format!("active-sessions-{user_id}"))
+                    .await?;
+                if references
+                    .as_ref()
+                    .is_some_and(crate::user_fields::is_truthy)
+                {
+                    let mut references: Vec<SessionReference> = decode(references)
+                        .and_then(|value| serde_json::from_value(value).ok())
+                        .unwrap_or_default();
+                    references.retain(|reference| {
+                        reference.token != token
+                            && reference.expires_at > Utc::now().timestamp_millis()
+                    });
+                    self.write_references(user_id, references).await?;
+                } else {
+                    tracing::error!("Active sessions list not found in secondary storage");
+                }
             } else {
                 tracing::error!("Session not found in secondary storage");
                 return Ok(());
@@ -378,12 +482,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
             return Ok(());
         }
         if self.config.session.preserve_session_in_database {
-            if let Some(session) = self.inner.get_session(token).await?
-                && session.expires_at() > Utc::now()
-            {
-                self.inner.end_session(token).await?;
-            }
-            Ok(())
+            self.inner.end_session(token).await
         } else {
             self.inner.delete_session(token).await
         }
@@ -394,18 +493,20 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
             return self.inner.delete_user_sessions(user_id).await;
         }
         let references = self.references(user_id).await?;
-        if self.database_sessions() {
-            if self.config.session.preserve_session_in_database {
-                for session in self.inner.get_user_sessions(user_id).await? {
-                    if session.expires_at() > Utc::now() {
-                        self.inner.end_session(session.token()).await?;
-                    }
-                }
-            } else {
-                self.inner.delete_user_sessions(user_id).await?;
-            }
+        if self.database_sessions()
+            && self
+                .inner
+                .delete_user_sessions_optional(
+                    user_id,
+                    self.config.session.preserve_session_in_database,
+                )
+                .await?
+                .is_none()
+        {
+            return Ok(());
         }
-        self.delete_cached_sessions(user_id, &references).await
+        self.queue_cached_user_session_deletion(user_id.to_owned(), references, None)
+            .await
     }
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
@@ -421,17 +522,18 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         token: &str,
         team_id: Option<&str>,
     ) -> AuthResult<S::Session> {
-        let cached = self
-            .update_cached_session(
-                token,
-                object(json!({ "activeTeamId": team_id, "updatedAt": Utc::now() }))?,
-            )
-            .await?;
-        if self.database_sessions() {
-            self.inner.update_session_active_team(token, team_id).await
-        } else {
-            cached.ok_or(AuthError::SessionNotFound)
+        if self.storage.is_none() {
+            return self.inner.update_session_active_team(token, team_id).await;
         }
+        self.update_runtime_session(
+            token,
+            SessionUpdate {
+                active_team_id: Some(team_id.map(str::to_owned)),
+                ..Default::default()
+            },
+        )
+        .await?
+        .ok_or(AuthError::SessionNotFound)
     }
 
     async fn update_session_active_organization(
@@ -439,21 +541,21 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         token: &str,
         organization_id: Option<&str>,
     ) -> AuthResult<S::Session> {
-        let cached = self
-            .update_cached_session(
-                token,
-                object(
-                    json!({ "activeOrganizationId": organization_id, "updatedAt": Utc::now() }),
-                )?,
-            )
-            .await?;
-        if self.database_sessions() {
-            self.inner
+        if self.storage.is_none() {
+            return self
+                .inner
                 .update_session_active_organization(token, organization_id)
-                .await
-        } else {
-            cached.ok_or(AuthError::SessionNotFound)
+                .await;
         }
+        self.update_runtime_session(
+            token,
+            SessionUpdate {
+                active_organization_id: Some(organization_id.map(str::to_owned)),
+                ..Default::default()
+            },
+        )
+        .await?
+        .ok_or(AuthError::SessionNotFound)
     }
 
     async fn accept_invitation_with_teams(

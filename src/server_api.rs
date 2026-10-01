@@ -16,6 +16,8 @@ use crate::{AuthError, AuthResult, AuthSchema, BetterAuth};
 /// Input to a registered endpoint called from trusted server code.
 #[derive(Debug, Default)]
 pub struct EndpointInput {
+    /// Original Request for URL resolution and callbacks; native calls still bypass HTTP hooks.
+    pub request: Option<better_auth_core::AuthRequest>,
     /// Preserve omitted headers separately from an explicitly empty header collection.
     pub headers: Option<HashMap<String, String>>,
     /// JSON input subject to the endpoint's schema.
@@ -33,33 +35,48 @@ impl<S: AuthSchema> BetterAuth<S> {
         path: &str,
         input: EndpointInput,
     ) -> AuthResult<better_auth_core::AuthResponse> {
-        let mut request =
-            better_auth_core::AuthRequest::new(method, path).with_optional_headers(input.headers);
-        request.body = input
-            .body
-            .map(|body| serde_json::to_vec(&body))
-            .transpose()?;
-        request.query = input.query;
-        let mut context = better_auth_core::RequestHookContext::from_request(&request);
-        context.body = request
-            .body
-            .as_ref()
-            .map(|_| request.body_as_json())
-            .transpose()?;
-        context.meta = better_auth_core::RequestMeta::from_request_with_config(
-            &request,
-            &self.config().advanced.ip_address,
-        );
-        let route = self
-            .plugins()
-            .iter()
-            .flat_map(|plugin| plugin.routes())
-            .find(|route| route.matches(request.method(), path));
-        better_auth_core::with_request_hook_context_value(context, async {
-            better_auth_core::hooks::set_request_hook_route(path, route.as_ref());
-            self.dispatch_endpoint(&mut request, false).await
-        })
-        .await
+        let source = better_auth_core::NativeRequest {
+            request: input.request.as_ref(),
+            headers: input.headers.as_ref(),
+        };
+        self.context()
+            .with_native_context(source, |auth| {
+                let input = &input;
+                async move {
+                    let mut request = better_auth_core::AuthRequest::new(method, path)
+                        .with_optional_headers(input.headers.clone());
+                    if let Some(original) = &input.request {
+                        request = request.with_original_request(original.clone());
+                    }
+                    request.body = input
+                        .body
+                        .clone()
+                        .map(|body| serde_json::to_vec(&body))
+                        .transpose()?;
+                    request.query = input.query.clone();
+                    let mut context = better_auth_core::RequestHookContext::from_request(&request);
+                    context.body = request
+                        .body
+                        .as_ref()
+                        .map(|_| request.body_as_json())
+                        .transpose()?;
+                    context.meta = better_auth_core::RequestMeta::from_request_with_config(
+                        &request,
+                        &auth.config.advanced.ip_address,
+                    );
+                    let route = self
+                        .plugins()
+                        .iter()
+                        .flat_map(|plugin| plugin.routes())
+                        .find(|route| route.matches(request.method(), path));
+                    better_auth_core::with_request_hook_context_value(context, async {
+                        better_auth_core::hooks::set_request_hook_route(path, route.as_ref());
+                        self.dispatch_endpoint(&mut request, false, &auth).await
+                    })
+                    .await
+                }
+            })
+            .await
     }
 }
 
@@ -164,6 +181,7 @@ pub struct VerifyKeyOptions {
 }
 
 /// Server API bound to the registered API key plugin and initialized auth context.
+/// A dynamic base URL requires a configured fallback for these requestless operations.
 pub struct ApiKeyApi<'a, S: AuthSchema> {
     plugin: &'a ApiKeyPlugin,
     context: &'a AuthContext<S>,
@@ -196,26 +214,30 @@ impl<S: AuthSchema> ApiKeyApi<'_, S> {
         user_id: &str,
         options: CreateKeyOptions,
     ) -> AuthResult<CreateKeyResponse> {
-        self.plugin
-            .create_key(
-                self.context,
-                &CreateKeyRequest {
-                    config_id: options.config_id,
-                    user_id: Some(user_id.to_owned()),
-                    organization_id: options.organization_id,
-                    name: options.name,
-                    prefix: options.prefix,
-                    expires_in: options.expires_in,
-                    remaining: options.remaining,
-                    rate_limit_enabled: options.rate_limit_enabled,
-                    rate_limit_time_window: options.rate_limit_time_window,
-                    rate_limit_max: options.rate_limit_max,
-                    refill_interval: options.refill_interval,
-                    refill_amount: options.refill_amount,
-                    permissions: options.permissions,
-                    metadata: options.metadata,
-                },
-            )
+        self.context
+            .with_native_context(Default::default(), |context| async move {
+                self.plugin
+                    .create_key(
+                        &context,
+                        &CreateKeyRequest {
+                            config_id: options.config_id,
+                            user_id: Some(user_id.to_owned()),
+                            organization_id: options.organization_id,
+                            name: options.name,
+                            prefix: options.prefix,
+                            expires_in: options.expires_in,
+                            remaining: options.remaining,
+                            rate_limit_enabled: options.rate_limit_enabled,
+                            rate_limit_time_window: options.rate_limit_time_window,
+                            rate_limit_max: options.rate_limit_max,
+                            refill_interval: options.refill_interval,
+                            refill_amount: options.refill_amount,
+                            permissions: options.permissions,
+                            metadata: options.metadata,
+                        },
+                    )
+                    .await
+            })
             .await
     }
 
@@ -228,29 +250,33 @@ impl<S: AuthSchema> ApiKeyApi<'_, S> {
         key_id: &str,
         options: UpdateKeyOptions,
     ) -> AuthResult<ApiKeyView> {
-        self.plugin
-            .update_key(
-                self.context,
-                &UpdateKeyRequest {
-                    config_id: options.config_id,
-                    key_id: key_id.to_owned(),
-                    user_id: Some(user_id.to_owned()),
-                    name: options.name,
-                    enabled: options.enabled,
-                    remaining: options.remaining,
-                    rate_limit_enabled: options.rate_limit_enabled,
-                    rate_limit_time_window: options.rate_limit_time_window,
-                    rate_limit_max: options.rate_limit_max,
-                    refill_interval: options.refill_interval,
-                    refill_amount: options.refill_amount,
-                    permissions: options.permissions.into_option(),
-                    metadata: options
-                        .metadata
-                        .into_option()
-                        .map(|value| value.unwrap_or(Value::Null)),
-                    expires_in: options.expires_in.into_option(),
-                },
-            )
+        self.context
+            .with_native_context(Default::default(), |context| async move {
+                self.plugin
+                    .update_key(
+                        &context,
+                        &UpdateKeyRequest {
+                            config_id: options.config_id,
+                            key_id: key_id.to_owned(),
+                            user_id: Some(user_id.to_owned()),
+                            name: options.name,
+                            enabled: options.enabled,
+                            remaining: options.remaining,
+                            rate_limit_enabled: options.rate_limit_enabled,
+                            rate_limit_time_window: options.rate_limit_time_window,
+                            rate_limit_max: options.rate_limit_max,
+                            refill_interval: options.refill_interval,
+                            refill_amount: options.refill_amount,
+                            permissions: options.permissions.into_option(),
+                            metadata: options
+                                .metadata
+                                .into_option()
+                                .map(|value| value.unwrap_or(Value::Null)),
+                            expires_in: options.expires_in.into_option(),
+                        },
+                    )
+                    .await
+            })
             .await
     }
 
@@ -278,16 +304,22 @@ impl<S: AuthSchema> ApiKeyApi<'_, S> {
                     .collect(),
             )
         });
-        self.plugin
-            .verify_api_key(
-                &VerifyApiKey {
-                    key,
-                    config_id: options.config_id.as_deref(),
-                    permissions: permissions.as_ref(),
-                },
-                self.context,
-            )
+        self.context
+            .with_native_context(Default::default(), |context| async move {
+                Ok(self
+                    .plugin
+                    .verify_api_key(
+                        &VerifyApiKey {
+                            key,
+                            config_id: options.config_id.as_deref(),
+                            permissions: permissions.as_ref(),
+                        },
+                        &context,
+                    )
+                    .await)
+            })
             .await
+            .map_err(ApiKeyVerificationError::Endpoint)?
     }
 }
 
@@ -302,5 +334,10 @@ impl<S: AuthSchema> BetterAuth<S> {
     /// Provision users through the registered Admin plugin from trusted server code.
     pub fn admin(&self) -> AuthResult<better_auth_api::plugins::admin::AdminApi<'_, S>> {
         better_auth_api::plugins::admin::AdminApi::from_context(self.context())
+    }
+
+    /// Use the registered JWT key adapter from trusted server code.
+    pub fn jwt(&self) -> AuthResult<better_auth_api::plugins::jwt::JwtApi<'_, S>> {
+        better_auth_api::plugins::jwt::JwtApi::from_context(self.context())
     }
 }

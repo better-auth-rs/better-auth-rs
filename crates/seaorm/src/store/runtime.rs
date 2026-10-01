@@ -32,6 +32,7 @@ where
     ) -> AuthResult<Arc<dyn AuthStore<S>>> {
         let mut store = self.clone();
         store.config = config;
+        store.validate_session_delete_projection()?;
         store.organization_fields = Arc::new(RwLock::new(self.organization_fields()?));
         store.hooks = hooks
             .into_iter()

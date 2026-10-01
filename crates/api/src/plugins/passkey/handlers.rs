@@ -63,7 +63,7 @@ pub(super) async fn generate_register_options_core(
     let webauthn = build_webauthn(
         config,
         &ctx.config,
-        std::slice::from_ref(&ctx.config.base_url),
+        &[ctx.config.base_url.as_static().unwrap_or("").to_owned()],
     )?;
     let existing_passkeys = ctx.database.list_passkeys_by_user(&user.id).await?;
     let exclude_credentials = existing_passkeys
@@ -163,7 +163,7 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
     let webauthn = build_webauthn(
         config,
         &ctx.config,
-        std::slice::from_ref(&ctx.config.base_url),
+        &[ctx.config.base_url.as_static().unwrap_or("").to_owned()],
     )?;
 
     let stored_passkeys = if let Some(user) = maybe_user {

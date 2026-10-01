@@ -193,7 +193,8 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
 
 impl EphemeralStore {
     pub(super) async fn delete_user_accounts_with_hooks(&self, user_id: &str) -> AuthResult<()> {
-        let accounts = self.get_user_accounts(user_id).await?;
+        // Upstream catches only the deletion snapshot read; hook and write failures still propagate.
+        let accounts = self.get_user_accounts(user_id).await.unwrap_or_default();
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
         for account in &accounts {

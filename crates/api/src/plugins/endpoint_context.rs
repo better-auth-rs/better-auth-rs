@@ -10,7 +10,7 @@ use std::sync::Arc;
 /// The parsed endpoint input and the active authentication runtime.
 pub struct EndpointContext<'a, S: AuthSchema> {
     input_request: Option<&'a AuthRequest>,
-    /// Original HTTP request, when the call originates from HTTP.
+    /// Original Request supplied by HTTP transport or an explicit native caller.
     pub request: Option<&'a AuthRequest>,
     /// Endpoint path, including synthetic dispatch from another endpoint.
     pub path: Option<&'a str>,
@@ -66,14 +66,35 @@ impl<'a, S: AuthSchema> EndpointContext<'a, S> {
         super::email_otp::EmailOtpApi::from_endpoint(self)
     }
 
+    /// Use the registered JWT key adapter within this endpoint's active transaction.
+    pub fn jwt(&self) -> AuthResult<super::jwt::JwtApi<'a, S>> {
+        super::jwt::JwtApi::from_endpoint(self)
+    }
+
+    /// Construct a native endpoint without inferring a Request from ambient HTTP activity.
+    pub fn native(
+        input_request: Option<&'a AuthRequest>,
+        original_request: Option<&'a AuthRequest>,
+        body: Value,
+        auth: &'a AuthContext<S>,
+    ) -> Self {
+        let mut context = Self::new(input_request, body, auth);
+        context.request = original_request;
+        context.params.clear();
+        context
+    }
+
     /// Construct an endpoint context from its request, validated body, and runtime.
     /// Set `transaction` when the caller executes inside an active database transaction.
     pub fn new(request: Option<&'a AuthRequest>, body: Value, auth: &'a AuthContext<S>) -> Self {
         Self {
             input_request: request,
-            request: request.filter(|_| {
-                better_auth_core::hooks::current_request_hook_context()
-                    .is_none_or(|context| context.is_http)
+            request: request.and_then(|request| {
+                request.original_request().or_else(|| {
+                    better_auth_core::hooks::current_request_hook_context()
+                        .is_none_or(|context| context.is_http)
+                        .then_some(request)
+                })
             }),
             path: request.map(AuthRequest::path),
             params: better_auth_core::hooks::current_request_hook_context()

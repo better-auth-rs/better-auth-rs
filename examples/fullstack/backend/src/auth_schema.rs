@@ -1,8 +1,8 @@
-use better_auth::AuthSchema;
 use better_auth::seaorm::sea_orm;
 use better_auth::seaorm::sea_orm::entity::prelude::*;
 use better_auth::seaorm::sea_orm::{ConnectionTrait, Schema};
 use better_auth::seaorm::{AuthEntity, DatabaseConnection};
+use better_auth::AuthSchema;
 
 // Only include the fields your plugins need.
 // This example uses EmailPasswordPlugin, SessionManagementPlugin,
@@ -147,7 +147,10 @@ impl AuthSchema for AppAuthSchema {
 pub async fn run_app_migrations(database: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
     let schema = Schema::new(database.get_database_backend());
     for statement in [
-        schema.create_table_from_entity(user::Entity).if_not_exists().to_owned(),
+        schema
+            .create_table_from_entity(user::Entity)
+            .if_not_exists()
+            .to_owned(),
         schema
             .create_table_from_entity(session::Entity)
             .if_not_exists()

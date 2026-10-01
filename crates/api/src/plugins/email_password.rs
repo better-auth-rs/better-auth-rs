@@ -6,41 +6,21 @@ use validator::{Validate, ValidateEmail};
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{
-    AuthRequest, AuthResponse, ErrorCodeMessageResponse, HttpMethod, RequestMeta,
-};
+use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, RequestMeta};
 
 use super::{email_verification::EmailVerificationPlugin, two_factor};
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
-use better_auth_core::utils::username::{
-    UsernameValidationError, normalize_username, validate_username,
-};
 use better_auth_core::wire::UserView;
 
 use crate::plugins::helpers::{SessionIssueError, issue_user_session_with_lifetime};
 
 mod request;
 mod signup;
+use super::username::request::SignInUsernameRequest;
 use signup::sign_up_core;
 pub use signup::{CustomSyntheticUser, OnExistingUserSignUp, SyntheticUserInput};
 
-const MESSAGE_INVALID_USERNAME_OR_PASSWORD: &str = "Invalid username or password";
 const MESSAGE_EMAIL_NOT_VERIFIED: &str = "Email not verified";
-const MESSAGE_USERNAME_TOO_SHORT: &str = "Username is too short";
-const MESSAGE_USERNAME_TOO_LONG: &str = "Username is too long";
-const MESSAGE_INVALID_USERNAME: &str = "Username is invalid";
-const MESSAGE_USERNAME_IS_ALREADY_TAKEN: &str = "Username is already taken. Please try another.";
-
-fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult<AuthResponse> {
-    AuthResponse::json(
-        status,
-        &ErrorCodeMessageResponse {
-            code: Some(code.to_string()),
-            message: message.to_string(),
-        },
-    )
-    .map_err(AuthError::from)
-}
 
 /// Email and password authentication plugin
 pub struct EmailPasswordPlugin {
@@ -99,9 +79,6 @@ pub(crate) struct SignUpRequest {
     #[validate(length(min = 1, message = "Password is required"))]
     password: String,
     image: Option<String>,
-    username: Option<String>,
-    #[serde(rename = "displayUsername")]
-    display_username: Option<String>,
     #[serde(rename = "callbackURL")]
     callback_url: Option<String>,
     #[serde(rename = "rememberMe")]
@@ -120,26 +97,6 @@ pub(crate) struct SignInRequest {
     remember_me: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
-pub(crate) struct SignInUsernameRequest {
-    username: String,
-    password: String,
-    #[serde(rename = "rememberMe")]
-    remember_me: Option<bool>,
-    #[serde(rename = "callbackURL")]
-    callback_url: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Validate)]
-struct IsUsernameAvailableRequest {
-    username: String,
-}
-
-#[derive(Debug, Serialize)]
-struct IsUsernameAvailableResponse {
-    available: bool,
-}
-
 #[derive(Debug, Serialize)]
 pub(crate) struct SignUpResponse<U: Serialize> {
     token: Option<String>,
@@ -148,16 +105,6 @@ pub(crate) struct SignUpResponse<U: Serialize> {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct SignInResponse<U: Serialize> {
-    redirect: bool,
-    token: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    url: Option<String>,
-    user: U,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct SignInUsernameResponse<U: Serialize> {
-    /// Upstream returns the same redirect envelope as `/sign-in/email`.
     redirect: bool,
     token: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -258,13 +205,10 @@ impl EmailPasswordPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let mut endpoint_body: serde_json::Value = req
+        let endpoint_body: serde_json::Value = req
             .body_as_json()
             .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;
-        if self.config.username {
-            request::complete_signup_username(&mut endpoint_body);
-        }
-        let mut parsed_body = endpoint_body.clone();
+        let parsed_body = endpoint_body.clone();
         if let Some(value) = parsed_body.get("rememberMe")
             && !value.is_boolean()
         {
@@ -277,12 +221,6 @@ impl EmailPasswordPlugin {
                 .into(),
             );
         }
-        if !self.config.username
-            && let Some(body) = parsed_body.as_object_mut()
-        {
-            _ = body.remove("username");
-            _ = body.remove("displayUsername");
-        }
         let mut signup_req_source = req.clone();
         signup_req_source.body = Some(serde_json::to_vec(&parsed_body)?);
         let signup_req: SignUpRequest =
@@ -290,50 +228,7 @@ impl EmailPasswordPlugin {
                 Ok(v) => v,
                 Err(resp) => return Ok(resp),
             };
-        request::form_csrf(req, ctx)?;
-
-        if let Some(username) = signup_req.username.as_deref() {
-            match validate_username(username) {
-                Ok(()) => {}
-                Err(UsernameValidationError::TooShort) => {
-                    return username_error_response(
-                        400,
-                        "USERNAME_TOO_SHORT",
-                        MESSAGE_USERNAME_TOO_SHORT,
-                    );
-                }
-                Err(UsernameValidationError::TooLong) => {
-                    return username_error_response(
-                        400,
-                        "USERNAME_TOO_LONG",
-                        MESSAGE_USERNAME_TOO_LONG,
-                    );
-                }
-                Err(UsernameValidationError::Invalid) => {
-                    return username_error_response(
-                        400,
-                        "INVALID_USERNAME",
-                        MESSAGE_INVALID_USERNAME,
-                    );
-                }
-            }
-
-            // Upstream's username hook rejects a taken username before the user
-            // is created, so the client sees USERNAME_IS_ALREADY_TAKEN rather
-            // than a failed insert.
-            if ctx
-                .database
-                .get_user_by_username(&normalize_username(username))
-                .await?
-                .is_some()
-            {
-                return username_error_response(
-                    400,
-                    "USERNAME_IS_ALREADY_TAKEN",
-                    MESSAGE_USERNAME_IS_ALREADY_TAKEN,
-                );
-            }
-        }
+        request::form_csrf(req, ctx).await?;
 
         let response = sign_up_core(&signup_req, endpoint_body, &self.config, req, ctx).await?;
 
@@ -346,7 +241,7 @@ impl EmailPasswordPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let signin_req = request::sign_in(req)?;
-        request::form_csrf(req, ctx)?;
+        request::form_csrf(req, ctx).await?;
         if !signin_req.email.validate_email() {
             return Err(AuthError::bad_request("Invalid email"));
         }
@@ -390,90 +285,9 @@ impl EmailPasswordPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let signin_req: SignInUsernameRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
-
-        if signin_req.username.is_empty() || signin_req.password.is_empty() {
-            return username_error_response(
-                401,
-                "INVALID_USERNAME_OR_PASSWORD",
-                MESSAGE_INVALID_USERNAME_OR_PASSWORD,
-            );
-        }
-
-        let username = normalize_username(&signin_req.username);
-
-        match validate_username(&username) {
-            Ok(()) => {}
-            Err(UsernameValidationError::TooShort) => {
-                return username_error_response(
-                    422,
-                    "USERNAME_TOO_SHORT",
-                    MESSAGE_USERNAME_TOO_SHORT,
-                );
-            }
-            Err(UsernameValidationError::TooLong) => {
-                return username_error_response(
-                    422,
-                    "USERNAME_TOO_LONG",
-                    MESSAGE_USERNAME_TOO_LONG,
-                );
-            }
-            Err(UsernameValidationError::Invalid) => {
-                return username_error_response(422, "INVALID_USERNAME", MESSAGE_INVALID_USERNAME);
-            }
-        }
-
-        let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
-        match sign_in_username_core(
-            req,
-            &signin_req,
-            &username,
-            &self.config,
-            self.email_verification.as_deref(),
-            &meta,
-            ctx,
-        )
-        .await
-        {
-            Ok(SignInCoreResult::Success {
-                response,
-                set_cookie_headers,
-            }) => {
-                let username_response = SignInUsernameResponse {
-                    redirect: response.redirect,
-                    token: response.token,
-                    url: response.url,
-                    user: response.user,
-                };
-                let mut auth_response = AuthResponse::json(200, &username_response)?;
-                for cookie in set_cookie_headers {
-                    auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
-                }
-                Ok(auth_response)
-            }
-            Ok(SignInCoreResult::TwoFactorRedirect {
-                response,
-                set_cookie_headers,
-            }) => {
-                let mut auth_response = AuthResponse::json(200, &response)?;
-                for cookie in set_cookie_headers {
-                    auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
-                }
-                Ok(auth_response)
-            }
-            Err(SignInUsernameFailure::InvalidUsernameOrPassword) => username_error_response(
-                401,
-                "INVALID_USERNAME_OR_PASSWORD",
-                MESSAGE_INVALID_USERNAME_OR_PASSWORD,
-            ),
-            Err(SignInUsernameFailure::EmailNotVerified) => {
-                username_error_response(403, "EMAIL_NOT_VERIFIED", MESSAGE_EMAIL_NOT_VERIFIED)
-            }
-            Err(SignInUsernameFailure::Auth(error)) => Err(error),
-        }
+        super::username::UsernamePlugin::default()
+            .sign_in_with_verification(req, ctx, self.email_verification.as_deref())
+            .await
     }
 
     async fn handle_is_username_available(
@@ -481,40 +295,9 @@ impl EmailPasswordPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body: IsUsernameAvailableRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
-
-        match validate_username(&body.username) {
-            Ok(()) => {}
-            Err(UsernameValidationError::TooShort) => {
-                return username_error_response(
-                    422,
-                    "USERNAME_TOO_SHORT",
-                    MESSAGE_USERNAME_TOO_SHORT,
-                );
-            }
-            Err(UsernameValidationError::TooLong) => {
-                return username_error_response(
-                    422,
-                    "USERNAME_TOO_LONG",
-                    MESSAGE_USERNAME_TOO_LONG,
-                );
-            }
-            Err(UsernameValidationError::Invalid) => {
-                return username_error_response(422, "INVALID_USERNAME", MESSAGE_INVALID_USERNAME);
-            }
-        }
-
-        let normalized = normalize_username(&body.username);
-        let user = ctx.database.get_user_by_username(&normalized).await?;
-        let available = user.is_none();
-
-        Ok(AuthResponse::json(
-            200,
-            &IsUsernameAvailableResponse { available },
-        )?)
+        super::username::UsernamePlugin::default()
+            .available(req, ctx)
+            .await
     }
 }
 
@@ -724,20 +507,15 @@ pub(crate) async fn sign_in_username_core(
         || email_verification.is_some_and(EmailVerificationPlugin::is_verification_required))
         && !user.email_verified()
     {
-        if let Some(ev) = email_verification
-            && let Err(error) = ev
-                .send_verification_on_sign_in_with_request(
-                    &user,
-                    body.callback_url.as_deref(),
-                    Some(req),
-                    ctx,
-                )
-                .await
-        {
-            tracing::warn!(
-                error = %error,
-                "Failed to send verification email on username sign-in"
-            );
+        if let Some(ev) = email_verification {
+            ev.send_verification_on_sign_in_with_request(
+                &user,
+                body.callback_url.as_deref(),
+                Some(req),
+                ctx,
+            )
+            .await
+            .map_err(SignInUsernameFailure::Auth)?;
         }
         return Err(SignInUsernameFailure::EmailNotVerified);
     }
@@ -746,7 +524,7 @@ pub(crate) async fn sign_in_username_core(
         req,
         user,
         body.remember_me,
-        email_verification,
+        None,
         body.callback_url.as_deref(),
         meta,
         ctx,
@@ -790,9 +568,13 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
     async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
         ctx.password_policy.min_length = self.config.password_min_length;
         ctx.password_policy.max_length = self.config.password_max_length;
+        ctx.extensions.insert(self.config.clone());
         if self.config.username {
-            S::User::require_plugin_fields("username", &["username", "display_username"])?;
-            ctx.set_metadata("username.enabled", serde_json::Value::Bool(true));
+            <super::username::UsernamePlugin as AuthPlugin<S>>::on_init(
+                &super::username::UsernamePlugin::default(),
+                ctx,
+            )
+            .await?;
         }
         Ok(())
     }
@@ -820,6 +602,20 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
         }
 
         routes
+    }
+
+    async fn before_request(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<S>,
+    ) -> AuthResult<Option<better_auth_core::BeforeRequestAction>> {
+        if self.config.username {
+            super::username::UsernamePlugin::default()
+                .before_endpoint(req, ctx)
+                .await
+        } else {
+            Ok(None)
+        }
     }
 
     async fn on_request(
@@ -856,7 +652,7 @@ mod tests {
     type TestSchema =
         better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
-    async fn create_test_context(plugin: &EmailPasswordPlugin) -> AuthContext<TestSchema> {
+    async fn create_test_context(plugin: &EmailPasswordPlugin) -> Arc<AuthContext<TestSchema>> {
         let config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
         let config = Arc::new(config);
         let database = crate::plugins::test_helpers::create_test_database().await;
@@ -865,16 +661,28 @@ mod tests {
             <EmailPasswordPlugin as AuthPlugin<TestSchema>>::password_hasher(plugin);
         plugin.on_init(&mut init).await.unwrap();
         let parts = init.into_parts();
-        AuthContext {
-            config,
-            database,
-            extensions: parts.extensions,
-            email_verification_policy: parts.email_verification_policy,
-            email_provider: parts.email_provider,
-            secondary_storage: parts.secondary_storage,
-            password_policy: parts.password_policy,
-            metadata: parts.metadata,
-        }
+        let (adapter, endpoint) = better_auth_core::plugin_runtime::resolve_user_fields(
+            &config.user,
+            parts.plugin_user_fields.clone(),
+        );
+        let mut adapter_config = (*config).clone();
+        adapter_config.user = adapter;
+        let database = database
+            .with_runtime(Arc::new(adapter_config), parts.database_hooks.clone())
+            .unwrap();
+        let mut endpoint_config = (*config).clone();
+        endpoint_config.user = endpoint;
+        let mut context = AuthContext::new(Arc::new(endpoint_config), database);
+        parts.apply_request_runtime(&mut context);
+        context.extensions = parts.extensions;
+        context.email_verification_policy = parts.email_verification_policy;
+        context.email_provider = parts.email_provider;
+        context.secondary_storage = parts.secondary_storage;
+        context.password_policy = parts.password_policy;
+        context.metadata = parts.metadata;
+        let context = Arc::new(context);
+        parts.runtime.bind(&context).unwrap();
+        context
     }
 
     fn create_signup_request(email: &str, password: &str) -> AuthRequest {
@@ -1092,7 +900,7 @@ mod tests {
         let signin_req = AuthRequest::from_parts(
             HttpMethod::Post,
             "/sign-in/username".to_string(),
-            HashMap::new(),
+            HashMap::from([("content-type".into(), "application/json".into())]),
             Some(signin_body.to_string().into_bytes()),
             HashMap::new(),
         );
@@ -1129,7 +937,7 @@ mod tests {
         let req = AuthRequest::from_parts(
             HttpMethod::Post,
             "/is-username-available".to_string(),
-            HashMap::new(),
+            HashMap::from([("content-type".into(), "application/json".into())]),
             Some(body.to_string().into_bytes()),
             HashMap::new(),
         );
@@ -1171,7 +979,7 @@ mod tests {
         let req = AuthRequest::from_parts(
             HttpMethod::Post,
             "/is-username-available".to_string(),
-            HashMap::new(),
+            HashMap::from([("content-type".into(), "application/json".into())]),
             Some(body.to_string().into_bytes()),
             HashMap::new(),
         );
@@ -1196,14 +1004,15 @@ mod tests {
         let req = AuthRequest::from_parts(
             HttpMethod::Post,
             "/is-username-available".to_string(),
-            HashMap::new(),
+            HashMap::from([("content-type".into(), "application/json".into())]),
             Some(body.to_string().into_bytes()),
             HashMap::new(),
         );
         let response = plugin
             .handle_is_username_available(&req, &ctx)
             .await
-            .unwrap();
+            .unwrap_err()
+            .to_auth_response();
         assert_eq!(response.status, 422);
         let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
         assert_eq!(json["code"], "USERNAME_TOO_SHORT");
@@ -1221,14 +1030,15 @@ mod tests {
         let req = AuthRequest::from_parts(
             HttpMethod::Post,
             "/is-username-available".to_string(),
-            HashMap::new(),
+            HashMap::from([("content-type".into(), "application/json".into())]),
             Some(body.to_string().into_bytes()),
             HashMap::new(),
         );
         let response = plugin
             .handle_is_username_available(&req, &ctx)
             .await
-            .unwrap();
+            .unwrap_err()
+            .to_auth_response();
         assert_eq!(response.status, 422);
         let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
         assert_eq!(json["code"], "INVALID_USERNAME");

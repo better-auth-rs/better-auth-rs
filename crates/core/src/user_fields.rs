@@ -7,6 +7,7 @@ use std::sync::Arc;
 mod adapter;
 mod organization;
 mod output;
+mod user_record;
 
 /// Synchronous field transform. `None` represents undefined; `Some(Value::Null)` represents null.
 pub type UserFieldTransform = Arc<dyn Fn(Option<Value>) -> AuthResult<Option<Value>> + Send + Sync>;

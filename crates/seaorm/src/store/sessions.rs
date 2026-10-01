@@ -1,11 +1,10 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, ExprTrait, IntoActiveModel,
-    QueryFilter,
+    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter,
 };
 
-use better_auth_core::store::SessionStore;
+use better_auth_core::store::{SessionStore, SessionUpdateWriter};
 
 use crate::error::{AuthError, AuthResult};
 use crate::hooks::{DatabaseHookUpdate, SessionUpdate};
@@ -139,7 +138,19 @@ where
         db: &impl ConnectionTrait,
         tx: Option<super::HookTransaction<'_, S>>,
         token: &str,
+        update: SessionUpdate,
+    ) -> AuthResult<Option<S::Session>> {
+        self.update_session_with_writer_and_connection(db, tx, token, update, None)
+            .await
+    }
+
+    pub(super) async fn update_session_with_writer_and_connection(
+        &self,
+        db: &impl ConnectionTrait,
+        tx: Option<super::HookTransaction<'_, S>>,
+        token: &str,
         mut update: SessionUpdate,
+        secondary: Option<better_auth_core::store::SessionUpdateWriter<S>>,
     ) -> AuthResult<Option<S::Session>> {
         let context = self.hook_context(tx);
         let original = update.clone();
@@ -153,6 +164,41 @@ where
                 DatabaseHookUpdate::Patch(patch) => update.merge(patch),
             }
         }
+        let (write_database, cached) = match secondary {
+            Some(secondary) => {
+                let result = (secondary.write)(update.clone()).await?;
+                (secondary.write_database, result)
+            }
+            None => (true, None),
+        };
+        let session = if write_database {
+            self.write_session_update(db, token, update).await?
+        } else {
+            cached
+        };
+        let store = self.clone();
+        let updated = session.clone();
+        let after = Box::pin(async move {
+            let context = store.hook_context(None);
+            for hook in store.hooks() {
+                hook.after_update_session(updated.as_ref(), &context)
+                    .await?;
+            }
+            Ok(())
+        });
+        match tx {
+            Some((_, transaction)) => transaction.queue_after_commit(after)?,
+            None => after.await?,
+        }
+        Ok(session)
+    }
+
+    async fn write_session_update(
+        &self,
+        db: &impl ConnectionTrait,
+        token: &str,
+        mut update: SessionUpdate,
+    ) -> AuthResult<Option<S::Session>> {
         let reselect = match update.id.as_deref() {
             Some(id) => S::Session::id_column().eq(S::Session::parse_id(id)?),
             None => S::Session::token_column().eq(update.token.as_deref().unwrap_or(token)),
@@ -182,10 +228,6 @@ where
             _,
         >(db, active, S::Session::token_column().eq(token), reselect)
         .await?;
-        for hook in self.hooks() {
-            hook.after_update_session(session.as_ref(), &context)
-                .await?;
-        }
         Ok(session)
     }
 }
@@ -197,6 +239,22 @@ where
     S: AuthSchema + Send + Sync,
     S::Session: SeaOrmSessionModel,
 {
+    async fn update_session_with_writer(
+        &self,
+        token: &str,
+        update: SessionUpdate,
+        secondary: Option<SessionUpdateWriter<S>>,
+    ) -> AuthResult<Option<S::Session>> {
+        self.update_session_with_writer_and_connection(
+            self.connection(),
+            None,
+            token,
+            update,
+            secondary,
+        )
+        .await
+    }
+
     async fn before_create_runtime_session(&self, session: &mut CreateSession) -> AuthResult<()> {
         self.before_runtime_session_in_tx(session, None).await
     }
@@ -206,33 +264,10 @@ where
     }
 
     async fn end_session(&self, token: &str) -> AuthResult<()> {
-        use better_auth_core::entity::AuthSession;
-        let now = Utc::now();
-        let Some(session) = self
-            .get_session(token)
-            .await?
-            .filter(|session| session.expires_at() > now)
-        else {
-            return Ok(());
-        };
-        let context = self.hook_context(None);
-        for hook in self.hooks() {
-            if hook
-                .before_delete_session(&session, &context)
-                .await?
-                .is_cancelled()
-            {
-                return Err(cancelled_by_hook("session deletion"));
-            }
-        }
-        let mut active = session.clone().into_active_model();
-        S::Session::set_expires_at(&mut active, now);
-        self.apply_session_field_updates(&mut active)?;
-        let _ = active.update(self.connection()).await.map_err(map_db_err)?;
-        for hook in self.hooks() {
-            hook.after_delete_session(&session, &context).await?;
-        }
-        Ok(())
+        let condition = Condition::all().add(S::Session::token_column().eq(token));
+        self.delete_sessions_with_connection(self.connection(), None, condition, true)
+            .await
+            .map(|_| ())
     }
 
     async fn create_session(&self, create_session: CreateSession) -> AuthResult<S::Session> {
@@ -296,53 +331,63 @@ where
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
-        let session = self.get_session(token).await?;
-        let hook_context = self.hook_context(None);
-        if let Some(session) = &session {
-            for hook in self.hooks() {
-                if hook
-                    .before_delete_session(session, &hook_context)
-                    .await?
-                    .is_cancelled()
-                {
-                    return Err(cancelled_by_hook("session deletion"));
-                }
+        let snapshot = <S::Session as SeaOrmSessionModel>::Entity::find()
+            .filter(S::Session::token_column().eq(token))
+            .one(self.connection())
+            .await;
+        // Upstream deleteWithHooks treats only snapshot-read errors as a missing record.
+        let session = snapshot
+            .ok()
+            .flatten()
+            .and_then(|session| self.session_delete_snapshot(session).ok());
+        let Some(session) = session else {
+            return Ok(());
+        };
+        let context = self.hook_context(None);
+        for hook in self.hooks() {
+            if hook
+                .before_delete_session(&session, &context)
+                .await?
+                .is_cancelled()
+            {
+                return Ok(());
             }
         }
         let _ = <S::Session as SeaOrmSessionModel>::Entity::delete_many()
-            .filter(<S::Session as SeaOrmSessionModel>::token_column().eq(token))
+            .filter(S::Session::token_column().eq(token))
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
-        if let Some(session) = &session {
-            for hook in self.hooks() {
-                hook.after_delete_session(session, &hook_context).await?;
-            }
+        for hook in self.hooks() {
+            hook.after_delete_session(&session, &context).await?;
         }
         Ok(())
     }
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
-        let user_id = <S::Session as SeaOrmSessionModel>::parse_user_id(user_id)?;
-        <S::Session as SeaOrmSessionModel>::Entity::delete_many()
-            .filter(<S::Session as SeaOrmSessionModel>::user_id_column().eq(user_id))
-            .exec(self.connection())
+        self.delete_user_sessions_optional(user_id, false)
             .await
             .map(|_| ())
-            .map_err(map_db_err)
+    }
+
+    async fn delete_user_sessions_optional(
+        &self,
+        user_id: &str,
+        preserve: bool,
+    ) -> AuthResult<Option<usize>> {
+        let user_id = S::Session::parse_user_id(user_id)?;
+        let condition = Condition::all().add(S::Session::user_id_column().eq(user_id));
+        self.delete_sessions_with_connection(self.connection(), None, condition, preserve)
+            .await
     }
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
-        <S::Session as SeaOrmSessionModel>::Entity::delete_many()
-            .filter(
-                <S::Session as SeaOrmSessionModel>::expires_at_column()
-                    .lt(Utc::now())
-                    .or(<S::Session as SeaOrmSessionModel>::active_column().eq(false)),
-            )
-            .exec(self.connection())
+        let condition = Condition::any()
+            .add(S::Session::expires_at_column().lt(Utc::now()))
+            .add(S::Session::active_column().eq(false));
+        self.delete_sessions_with_connection(self.connection(), None, condition, false)
             .await
-            .map(|result| result.rows_affected as usize)
-            .map_err(map_db_err)
+            .map(Option::unwrap_or_default)
     }
 
     async fn update_session_active_organization(

@@ -1,0 +1,12 @@
+[
+  {"name":"explicit overrides all environment sources","env":{"BETTER_AUTH_URL":"https://first.test","NEXT_PUBLIC_BETTER_AUTH_URL":"https://second.test"},"input":{"baseURL":"https://explicit.test/auth"},"expected":"https://explicit.test/auth"},
+  {"name":"BETTER_AUTH_URL precedes public aliases","env":{"BETTER_AUTH_URL":"https://first.test","NEXT_PUBLIC_BETTER_AUTH_URL":"https://second.test","PUBLIC_BETTER_AUTH_URL":"https://third.test"},"expected":"https://first.test/api/auth"},
+  {"name":"NEXT_PUBLIC precedes PUBLIC","env":{"NEXT_PUBLIC_BETTER_AUTH_URL":"https://second.test","PUBLIC_BETTER_AUTH_URL":"https://third.test"},"expected":"https://second.test/api/auth"},
+  {"name":"empty alias falls through to PUBLIC","env":{"NEXT_PUBLIC_BETTER_AUTH_URL":"","PUBLIC_BETTER_AUTH_URL":"https://third.test","NUXT_PUBLIC_BETTER_AUTH_URL":"https://fourth.test"},"expected":"https://third.test/api/auth"},
+  {"name":"NUXT Better Auth alias precedes old alias","env":{"NUXT_PUBLIC_BETTER_AUTH_URL":"https://fourth.test","NUXT_PUBLIC_AUTH_URL":"https://fifth.test"},"expected":"https://fourth.test/api/auth"},
+  {"name":"old NUXT alias precedes BASE_URL","env":{"NUXT_PUBLIC_AUTH_URL":"https://fifth.test","BASE_URL":"https://sixth.test"},"expected":"https://fifth.test/api/auth"},
+  {"name":"BASE_URL fallback preserves its existing path","env":{"BASE_URL":"https://sixth.test/service"},"expected":"https://sixth.test/service"},
+  {"name":"root BASE_URL is ignored and environment origins are not trimmed","env":{"BASE_URL":"/","BETTER_AUTH_TRUSTED_ORIGINS":"https://one.test, https://two.test,,"},"expected":"","extraOrigins":["https://one.test"," https://two.test"]},
+  {"name":"invalid first source fails without lower-priority fallback","env":{"BETTER_AUTH_URL":"invalid","BASE_URL":"https://sixth.test"},"error":true},
+  {"name":"dynamic policy bypasses environment URL and keeps production cookie defaults","env":{"BETTER_AUTH_URL":"https://first.test","NODE_ENV":"production"},"input":{"baseURL":{"allowedHosts":["*.tenant.test"]}},"expected":"","secure":true}
+]

@@ -29,6 +29,7 @@ pub mod siwe;
 mod symmetric;
 pub mod two_factor;
 pub mod user_management;
+pub mod username;
 
 use serde::{Deserialize, Serialize};
 
@@ -64,7 +65,8 @@ pub(crate) mod test_helpers {
     }
 
     pub fn create_test_config() -> AuthConfig {
-        let mut config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
+        let mut config = AuthConfig::new("test-secret-key-at-least-32-chars-long")
+            .base_url("http://localhost:3000");
         config.session.bearer = Some(better_auth_core::config::BearerConfig::default());
         config
     }
@@ -98,6 +100,11 @@ pub(crate) mod test_helpers {
         let config = Arc::new(config);
         let database = create_test_database().await;
         AuthContext::new(config, database)
+            .initialize_request_context()
+            .await
+            .expect("test request context should initialize")
+            .as_ref()
+            .clone()
     }
 
     pub async fn create_user(
@@ -212,8 +219,9 @@ pub use email_verification::{
     EmailVerificationConfig, EmailVerificationHook, EmailVerificationPlugin, SendVerificationEmail,
 };
 pub use jwt::{
-    JwtAlgorithm, JwtAudience, JwtCallbackFuture, JwtCustomSign, JwtDefinePayload, JwtExpiration,
-    JwtGetSubject, JwtKeyPairConfig, JwtPlugin, JwtPluginConfig, JwtSigningOptions,
+    JwtAdapterFuture, JwtAlgorithm, JwtApi, JwtAudience, JwtCallOverrides, JwtCallbackFuture,
+    JwtCallbacks, JwtCustomSign, JwtDefinePayload, JwtExpiration, JwtGetSubject, JwtKeyOptions,
+    JwtKeyPairConfig, JwtPlugin, JwtPluginConfig, JwtSigningOptions, JwtTokenOptions,
 };
 pub use magic_link::{MagicLinkConfig, MagicLinkMessage, MagicLinkPlugin, SendMagicLink};
 pub use multi_session::{MultiSessionConfig, MultiSessionPlugin};

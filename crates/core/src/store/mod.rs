@@ -35,6 +35,19 @@ pub type TypedTransactionFuture<'a, T> = Pin<Box<dyn Future<Output = AuthResult<
 pub type TransactionWork<S> =
     dyn for<'tx> FnOnce(&'tx dyn AuthTransaction<S>) -> TransactionFuture<'tx> + Send;
 
+/// A secondary write that runs after update-before hooks and before the database write.
+pub struct SessionUpdateWriter<S: AuthSchema> {
+    /// Run the database update after the secondary write succeeds.
+    pub write_database: bool,
+    /// Receive the complete hook patch, before adapter field transformations.
+    pub write: Box<
+        dyn FnOnce(
+                database_hooks::SessionUpdate,
+            ) -> TypedTransactionFuture<'static, Option<S::Session>>
+            + Send,
+    >,
+}
+
 #[async_trait]
 pub trait AuthTransaction<S: AuthSchema>: JwksStore + Send + Sync {
     /// Queue an effect in write order. Run it after commit, discard it on rollback,
@@ -66,8 +79,25 @@ pub trait AuthTransaction<S: AuthSchema>: JwksStore + Send + Sync {
     }
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<S::User>>;
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<S::User>>;
+    /// Look up a username using the active transaction.
+    async fn get_user_by_username(&self, _username: &str) -> AuthResult<Option<S::User>> {
+        Err(AuthError::config(
+            "The store must support transactional username lookup",
+        ))
+    }
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<S::User>;
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
+    /// Delete children and the user, preserving cancellation for secondary cleanup.
+    async fn delete_user_optional(
+        &self,
+        _id: &str,
+        _delete_database_sessions: bool,
+    ) -> AuthResult<Option<S::User>> {
+        Err(AuthError::config(
+            "The store must preserve user deletion cancellation",
+        ))
+    }
+
     async fn create_passkey(&self, passkey: CreatePasskey) -> AuthResult<Passkey>;
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<S::User>;
     async fn create_account(&self, create_account: CreateAccount) -> AuthResult<S::Account>;
@@ -145,6 +175,17 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
     async fn get_user_by_phone_number(&self, phone_number: &str) -> AuthResult<Option<S::User>>;
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<S::User>;
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
+    /// Delete children and the user, preserving cancellation for secondary cleanup.
+    async fn delete_user_optional(
+        &self,
+        _id: &str,
+        _delete_database_sessions: bool,
+    ) -> AuthResult<Option<S::User>> {
+        Err(AuthError::config(
+            "The store must preserve user deletion cancellation",
+        ))
+    }
+
     async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<S::User>, usize)>;
 }
 
@@ -176,6 +217,29 @@ impl From<Option<usize>> for TeamMemberLimits<'_> {
 
 #[async_trait]
 pub trait SessionStore<S: AuthSchema>: Send + Sync {
+    /// Run one update lifecycle, with a secondary writer before the database write.
+    async fn update_session_with_writer(
+        &self,
+        _token: &str,
+        _update: database_hooks::SessionUpdate,
+        _secondary: Option<SessionUpdateWriter<S>>,
+    ) -> AuthResult<Option<S::Session>> {
+        Err(AuthError::config(
+            "The store must support ordered secondary session updates",
+        ))
+    }
+
+    /// None cancels cleanup. Some(0) means a completed write matched no rows.
+    async fn delete_user_sessions_optional(
+        &self,
+        _user_id: &str,
+        _preserve: bool,
+    ) -> AuthResult<Option<usize>> {
+        Err(AuthError::config(
+            "The store must preserve batch session deletion cancellation",
+        ))
+    }
+
     /// Run session creation hooks when secondary storage owns the session.
     async fn before_create_runtime_session(&self, _session: &mut CreateSession) -> AuthResult<()> {
         Ok(())
@@ -811,6 +875,8 @@ where
 /// Persistent signing keys shared by every JWT plugin instance.
 #[async_trait]
 pub trait JwksStore: Send + Sync {
+    /// Read one signing key by its ID without applying a find-many limit.
+    async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>>;
     /// List public and private key records, including expired keys retained for verification.
     async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>>;
     /// Persist a generated signing key.

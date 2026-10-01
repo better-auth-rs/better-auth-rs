@@ -30,6 +30,7 @@ async fn assert_signing_transaction<S: AuthSchema>(auth: BetterAuth<S>) {
         let request = AuthRequest::new(HttpMethod::Post, "/sign-up/email");
         let request_in_tx = request.clone();
         let manager = auth.context().session_manager();
+        let context = auth.context().clone();
         let result: AuthResult<()> = tokio::time::timeout(
             std::time::Duration::from_secs(5),
             transaction(auth.store().as_ref(), move |tx| {
@@ -52,6 +53,20 @@ async fn assert_signing_transaction<S: AuthSchema>(auth: BetterAuth<S>) {
                         })
                         .await?;
                     let data = manager.internal_data(&user, &session).await?;
+                    let mut endpoint =
+                        better_auth::plugins::endpoint_context::EndpointContext::native(
+                            None,
+                            None,
+                            serde_json::Value::Null,
+                            &context,
+                        );
+                    endpoint.transaction = Some(tx);
+                    let _ = endpoint
+                        .jwt()?
+                        .sign(serde_json::from_value(
+                            serde_json::json!({"sub":"transaction-user"}),
+                        )?)
+                        .await?;
                     manager
                         .set_session_cookie_in_transaction(&request_in_tx, data, Some(false), tx)
                         .await?;
@@ -89,7 +104,7 @@ async fn assert_signing_transaction<S: AuthSchema>(auth: BetterAuth<S>) {
 }
 
 #[tokio::test]
-async fn sqlite_cookie_signing_keys_share_the_session_transaction_and_rollback() {
+async fn sqlite_cookie_and_native_keys_share_the_session_transaction_and_rollback() {
     let config = config();
     let database = Database::connect("sqlite::memory:").await.unwrap();
     migrator::run_migrations(&database).await.unwrap();
@@ -104,11 +119,93 @@ async fn sqlite_cookie_signing_keys_share_the_session_transaction_and_rollback()
 }
 
 #[tokio::test]
-async fn ephemeral_cookie_signing_keys_share_the_session_transaction_and_rollback() {
+async fn ephemeral_cookie_and_native_keys_share_the_session_transaction_and_rollback() {
     let auth = BetterAuth::stateless(config())
         .plugin(JwtPlugin::new().session_cookie_cache(true))
         .build()
         .await
         .unwrap();
     assert_signing_transaction(auth).await;
+}
+
+fn transaction_callbacks<S: AuthSchema>(
+    events: Arc<std::sync::Mutex<Vec<&'static str>>>,
+) -> better_auth::plugins::JwtCallbacks<S> {
+    let read_events = events.clone();
+    better_auth::plugins::JwtCallbacks::default()
+        .get_jwks(move |endpoint| {
+            let events = read_events.clone();
+            Box::pin(async move {
+                let tx = endpoint
+                    .transaction
+                    .expect("JWT reads must retain the active transaction");
+                assert!(
+                    tx.get_user_by_email("transaction@example.com")
+                        .await?
+                        .is_some(),
+                    "callback must see the uncommitted user"
+                );
+                events.lock().unwrap().push("get");
+                tx.list_jwks().await.map(Some)
+            })
+        })
+        .create_jwk(move |key, endpoint| {
+            let events = events.clone();
+            Box::pin(async move {
+                let tx = endpoint
+                    .transaction
+                    .expect("JWT writes must retain the active transaction");
+                assert!(
+                    tx.get_user_by_email("transaction@example.com")
+                        .await?
+                        .is_some(),
+                    "callback must see the uncommitted user"
+                );
+                events.lock().unwrap().push("create");
+                tx.create_jwk(key).await
+            })
+        })
+}
+
+#[tokio::test]
+async fn sqlite_custom_jwt_callbacks_share_the_session_transaction_and_rollback() {
+    let config = config();
+    let database = Database::connect("sqlite::memory:").await.unwrap();
+    migrator::run_migrations(&database).await.unwrap();
+    let store = SeaOrmStore::<BundledSchema>::new(Arc::new(config.clone()), database);
+    let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let auth = AuthBuilder::new(config)
+        .store(store)
+        .plugin(
+            JwtPlugin::new()
+                .session_cookie_cache(true)
+                .callbacks(transaction_callbacks(events.clone())),
+        )
+        .build()
+        .await
+        .unwrap();
+    assert_signing_transaction(auth).await;
+    assert_eq!(
+        *events.lock().unwrap(),
+        ["get", "get", "create", "get", "get", "get", "create", "get"]
+    );
+}
+
+#[tokio::test]
+async fn ephemeral_custom_jwt_callbacks_share_the_session_transaction_and_rollback() {
+    let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let auth = BetterAuth::stateless(config())
+        .plugin(
+            JwtPlugin::new()
+                .session_cookie_cache(true)
+                .callbacks(transaction_callbacks(events.clone())),
+        )
+        .build()
+        .await
+        .unwrap();
+    assert_signing_transaction(auth).await;
+    assert_eq!(
+        *events.lock().unwrap(),
+        ["get", "get", "create", "get", "get", "get", "create", "get"]
+    );
 }

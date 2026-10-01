@@ -37,16 +37,16 @@ use better_auth::AuthConfig;
 use better_auth::config::SameSite;
 
 let mut config = AuthConfig::new("secret-key");
-config.session.cookie_secure = true;        // HTTPS only
-config.session.cookie_http_only = true;     // Not accessible via JavaScript
-config.session.cookie_same_site = SameSite::Lax; // CSRF protection
+config.advanced.use_secure_cookies = Some(true);        // HTTPS only
+config.advanced.default_cookie_attributes.http_only = Some(true);     // Not accessible via JavaScript
+config.advanced.default_cookie_attributes.same_site = Some(SameSite::Lax); // CSRF protection
 ```
 
 | Setting            | Recommended | Description                                        |
 | ------------------ | ----------- | -------------------------------------------------- |
-| `cookie_secure`    | `true`      | Only send over HTTPS                               |
-| `cookie_http_only` | `true`      | Block JavaScript access (prevents XSS token theft) |
-| `cookie_same_site` | `Lax`       | Prevents CSRF while allowing top-level navigations |
+| `use_secure_cookies`    | `true`      | Only send over HTTPS                               |
+| `default_cookie_attributes.http_only` | `true`      | Block JavaScript access (prevents XSS token theft) |
+| `default_cookie_attributes.same_site` | `Lax`       | Prevents CSRF while allowing top-level navigations |
 
 See [Cookies](/docs/concepts/cookies) for more details.
 
@@ -197,9 +197,9 @@ Signing uses only the current key. Retaining an encryption key does not keep old
 
 ## Production Checklist
 
-- [ ] Set `cookie_secure: true` (requires HTTPS)
-- [ ] Set `cookie_http_only: true`
-- [ ] Set `cookie_same_site: Lax` or `Strict`
+- [ ] Set `advanced.use_secure_cookies: Some(true)` (requires HTTPS)
+- [ ] Set `advanced.default_cookie_attributes.http_only: Some(true)`
+- [ ] Set `advanced.default_cookie_attributes.same_site: Some(Lax)` or `Strict`
 - [ ] Enable CSRF protection with trusted origins
 - [ ] Configure rate limiting on all authentication endpoints
 - [ ] Use a strong, random secret key (32+ characters)

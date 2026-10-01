@@ -27,6 +27,10 @@ pub mod middleware;
 pub mod openapi;
 pub mod plugin;
 pub mod plugin_runtime;
+pub mod request_runtime;
+pub use request_runtime::{
+    BaseUrl, BaseUrlProtocol, DynamicBaseUrl, NativeRequest, TrustedValues, TrustedValuesResolver,
+};
 mod runtime_extensions;
 pub mod schema;
 pub mod session;

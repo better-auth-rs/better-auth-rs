@@ -4,11 +4,8 @@ use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::utils::cookie_utils::{
     create_clear_cookie, create_session_like_cookie, related_cookie_name,
 };
-use better_auth_core::utils::username::{UsernameValidationError, validate_username};
 use better_auth_core::wire::{SessionView, UserView};
-use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, ErrorCodeMessageResponse,
-};
+use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult};
 use validator::Validate;
 
 pub mod access;
@@ -41,21 +38,6 @@ const MESSAGE_DELETE_USERS: &str = "You are not allowed to delete users";
 const MESSAGE_SET_USER_PASSWORD: &str = "You are not allowed to set users password";
 const MESSAGE_GET_USER: &str = "You are not allowed to get user";
 const MESSAGE_UPDATE_USERS: &str = "You are not allowed to update users";
-const MESSAGE_USERNAME_IS_ALREADY_TAKEN: &str = "Username is already taken. Please try another.";
-const MESSAGE_USERNAME_TOO_SHORT: &str = "Username is too short";
-const MESSAGE_USERNAME_TOO_LONG: &str = "Username is too long";
-const MESSAGE_INVALID_USERNAME: &str = "Username is invalid";
-
-fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult<AuthResponse> {
-    AuthResponse::json(
-        status,
-        &ErrorCodeMessageResponse {
-            code: Some(code.to_string()),
-            message: message.to_string(),
-        },
-    )
-    .map_err(AuthError::from)
-}
 
 /// Admin plugin for user management operations.
 pub struct AdminPlugin {
@@ -231,69 +213,10 @@ impl AdminPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = self.require_session(req, ctx).await?;
         self.authorize(&user, "user", "update", MESSAGE_UPDATE_USERS)?;
-        let mut body: AdminUpdateUserRequest = match better_auth_core::validate_request_body(req) {
+        let body: AdminUpdateUserRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let username = body
-            .data
-            .remove("username")
-            .and_then(|value| value.as_str().map(ToOwned::to_owned))
-            .map(|value| value.to_lowercase());
-        let display_username = body
-            .data
-            .remove("displayUsername")
-            .and_then(|value| value.as_str().map(ToOwned::to_owned));
-
-        if let Some(username) = username.as_deref() {
-            match validate_username(username) {
-                Ok(()) => {}
-                Err(UsernameValidationError::TooShort) => {
-                    return username_error_response(
-                        400,
-                        "USERNAME_TOO_SHORT",
-                        MESSAGE_USERNAME_TOO_SHORT,
-                    );
-                }
-                Err(UsernameValidationError::TooLong) => {
-                    return username_error_response(
-                        400,
-                        "USERNAME_IS_TOO_LONG",
-                        MESSAGE_USERNAME_TOO_LONG,
-                    );
-                }
-                Err(UsernameValidationError::Invalid) => {
-                    return username_error_response(
-                        400,
-                        "USERNAME_IS_INVALID",
-                        MESSAGE_INVALID_USERNAME,
-                    );
-                }
-            }
-
-            if let Some(existing_user) = ctx.database.get_user_by_username(username).await?
-                && AuthUser::id(&existing_user).as_ref() != body.user_id
-            {
-                return username_error_response(
-                    400,
-                    "USERNAME_IS_ALREADY_TAKEN",
-                    MESSAGE_USERNAME_IS_ALREADY_TAKEN,
-                );
-            }
-        }
-
-        if let Some(username) = username {
-            _ = body
-                .data
-                .insert("username".to_string(), serde_json::Value::String(username));
-        }
-        if let Some(display_username) = display_username {
-            _ = body.data.insert(
-                "displayUsername".to_string(),
-                serde_json::Value::String(display_username),
-            );
-        }
-
         let response = update_user_core(&body, &user, &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }

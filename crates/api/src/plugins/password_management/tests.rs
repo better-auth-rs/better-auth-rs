@@ -27,7 +27,8 @@ fn plugin_with_reset_sender() -> PasswordManagementPlugin {
 }
 
 async fn create_test_context_with_user() -> (AuthContext<TestSchema>, UserView, SessionView) {
-    let mut config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
+    let mut config =
+        AuthConfig::new("test-secret-key-at-least-32-chars-long").base_url("http://localhost:3000");
     config.session.bearer = Some(Default::default());
     config.password = PasswordConfig {
         min_length: 8,
@@ -373,7 +374,11 @@ async fn test_change_password_sets_cookie_on_session_revocation() {
 
     let cookie_value = set_cookie.unwrap();
     assert!(
-        cookie_value.contains(&ctx.config.session.cookie_name),
+        cookie_value.contains(
+            &ctx.config
+                .auth_cookie("session_token", Default::default())
+                .name
+        ),
         "Cookie must contain the session cookie name"
     );
     assert!(

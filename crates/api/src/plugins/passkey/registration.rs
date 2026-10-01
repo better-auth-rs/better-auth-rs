@@ -7,7 +7,6 @@ use better_auth_core::{
 };
 use chrono::Utc;
 use serde_json::{Map, Value};
-use std::sync::Arc;
 use webauthn_rs_core::proto::RegisterPublicKeyCredential;
 
 use super::{
@@ -375,14 +374,5 @@ impl<S: AuthSchema> Registration<S> {
     }
 }
 fn clone_context<S: AuthSchema>(ctx: &AuthContext<S>) -> AuthContext<S> {
-    AuthContext {
-        config: Arc::clone(&ctx.config),
-        database: Arc::clone(&ctx.database),
-        extensions: ctx.extensions.clone(),
-        email_verification_policy: ctx.email_verification_policy.clone(),
-        email_provider: ctx.email_provider.clone(),
-        secondary_storage: ctx.secondary_storage.clone(),
-        password_policy: ctx.password_policy.clone(),
-        metadata: ctx.metadata.clone(),
-    }
+    ctx.clone()
 }

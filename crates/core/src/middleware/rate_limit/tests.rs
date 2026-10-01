@@ -141,7 +141,7 @@ async fn ordered_rules_receive_plugin_values_and_normalize_only_the_counter_key(
         )
         .rule("/sign-in/email", RateLimitOverride::Disabled);
     let mut limiter = RateLimitMiddleware::new(config);
-    limiter.base_path = "/custom/auth/".into();
+    limiter.base_path = Box::new(|| "/custom/auth/".into());
     limiter.plugin_limits = vec![
         PluginRateLimit::prefix(
             "/sign-in",

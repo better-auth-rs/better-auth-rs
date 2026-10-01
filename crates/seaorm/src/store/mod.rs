@@ -20,6 +20,7 @@ mod passkeys;
 mod plugin_models;
 mod rate_limits;
 mod runtime;
+mod session_delete;
 mod sessions;
 mod team_capacity;
 mod team_invitation;
@@ -28,6 +29,7 @@ mod transaction_hooks;
 mod two_factor;
 mod two_factor_security;
 mod updates;
+mod user_delete;
 mod user_verification;
 mod users;
 mod value_filter;
@@ -258,6 +260,9 @@ where
             .await
             .map_err(map_db_err)
     }
+    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<S::User>> {
+        self.store.find_user_by_username(self.tx, username).await
+    }
     async fn update_user(
         &self,
         id: &str,
@@ -271,11 +276,27 @@ where
         Ok(record)
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
+        self.delete_user_optional(id, true).await.map(|_| ())
+    }
+
+    async fn delete_user_optional(
+        &self,
+        id: &str,
+        delete_database_sessions: bool,
+    ) -> AuthResult<Option<S::User>> {
         let record = self
             .store
-            .delete_user_with_connection(self.tx, Some((self.tx, self)), id)
+            .delete_user_with_connection(
+                self.tx,
+                Some((self.tx, self)),
+                id,
+                delete_database_sessions,
+            )
             .await?;
-        self.queue(transaction_hooks::Effect::UserDeleted(record))
+        if let Some(record) = &record {
+            self.queue(transaction_hooks::Effect::UserDeleted(record.clone()))?;
+        }
+        Ok(record)
     }
     async fn create_passkey(
         &self,

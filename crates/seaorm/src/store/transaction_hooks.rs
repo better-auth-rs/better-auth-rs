@@ -1,7 +1,8 @@
 use better_auth_core::{AuthResult, AuthSchema, CreateVerification};
 
-use super::{AuthError, SeaOrmStore, SeaOrmTransaction};
+use super::{AuthError, HookTransaction, SeaOrmStore, SeaOrmTransaction};
 use crate::schema::SeaOrmVerificationModel;
+use better_auth_core::store::TypedTransactionFuture;
 
 pub(super) enum Effect<S: AuthSchema> {
     UserCreated(S::User),
@@ -120,5 +121,15 @@ where
             }
         }
         Ok(())
+    }
+}
+
+pub(super) async fn after_write<S: AuthSchema>(
+    transaction: Option<HookTransaction<'_, S>>,
+    effect: TypedTransactionFuture<'static, ()>,
+) -> AuthResult<()> {
+    match transaction {
+        Some((_, transaction)) => transaction.queue_after_commit(effect),
+        None => effect.await,
     }
 }

@@ -394,7 +394,7 @@ impl PhoneNumberPlugin {
                 })
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect();
-            super::helpers::apply_user_create_fields(ctx, &rest, &mut create).await?;
+            super::helpers::apply_user_create_fields(ctx, &rest, &mut create)?;
             create.phone_number = Some(phone.to_owned());
             create.phone_number_verified = Some(true);
 

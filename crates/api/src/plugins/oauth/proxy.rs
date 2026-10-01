@@ -209,7 +209,7 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthProxyPlugin {
                 .production_url
                 .as_deref()
                 .filter(|url| !url.is_empty())
-                .unwrap_or(&ctx.config.base_url),
+                .unwrap_or(ctx.base_url()),
         )?;
         if location.origin() == production.origin()
             && let Some((_, target)) = location.query_pairs().find(|(key, _)| key == "callbackURL")
@@ -519,10 +519,7 @@ impl OAuthProxyPlugin {
             ));
         };
         handlers::validate_redirect_target(callback, ctx, "Invalid callbackURL")?;
-        let default_error = format!(
-            "{}/api/auth/error",
-            ctx.config.base_url.trim_end_matches('/')
-        );
+        let default_error = format!("{}/error", ctx.base_url().trim_end_matches('/'));
         let Some(encrypted) = req.query.get("profile").filter(|value| !value.is_empty()) else {
             return redirect_error(&default_error, "missing_profile", None);
         };

@@ -85,7 +85,8 @@ async fn update_session_persists_only_allowed_fields_and_returns_the_configured_
         .execute(&Schema::new(backend).create_table_from_entity(session::Entity))
         .await
         .unwrap();
-    let mut config = AuthConfig::new("session-fields-test-secret-at-least-32-chars");
+    let mut config = AuthConfig::new("session-fields-test-secret-at-least-32-chars")
+        .base_url("http://localhost:3000");
     let _ = config.session.additional_fields.insert(
         "label".into(),
         SessionFieldConfig {

@@ -23,6 +23,8 @@ pub struct Jwk {
 
 /// Key material to persist after generation.
 pub struct CreateJwk {
+    /// Generation time supplied to a custom key-persistence callback.
+    pub created_at: DateTime<Utc>,
     /// Serialized public JWK.
     pub public_key: String,
     /// Serialized or encrypted private JWK.

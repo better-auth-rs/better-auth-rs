@@ -156,12 +156,12 @@ async fn callbacks_receive_the_complete_session_and_custom_signing_options() {
                 Ok(serde_json::to_string(&payload)?)
             })
         }));
-    let claims: Value = serde_json::from_str(&plugin.sign_session(json!({"user": {"id": "owner"}, "session": {"id": "sid", "userId": "owner", "token": "session-token"}}), &ctx).await.unwrap()).unwrap();
+    let claims: Value = serde_json::from_str(&plugin.sign_session(json!({"user": {"id": "owner"}, "session": {"id": "sid", "userId": "owner", "token": "session-token"}}), &EndpointContext::native(None, None, Value::Null, &ctx)).await.unwrap()).unwrap();
     assert_eq!(claims["sub"], "owner");
     assert_eq!(claims["sessionId"], "sid");
     assert_eq!(claims["iat"], 123);
     assert_eq!(claims["exp"], 1023);
-    assert_eq!(claims["iss"], ctx.config.base_url);
+    assert_eq!(claims["iss"], ctx.config.base_url.as_static().unwrap());
 }
 
 #[tokio::test]
@@ -231,7 +231,7 @@ async fn cookie_signer_is_purpose_bound_and_cache_survives_store_revocation() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(claims["iss"], ctx.config.base_url);
+    assert_eq!(claims["iss"], ctx.config.base_url.as_static().unwrap());
     assert_eq!(claims["aud"], "better-auth:session-cache");
     assert!(
         plugin
@@ -283,7 +283,9 @@ async fn cookie_signer_is_purpose_bound_and_cache_survives_store_revocation() {
         "cookie".into(),
         format!(
             "{}={}; {cookie}",
-            ctx.config.session.cookie_name,
+            ctx.config
+                .auth_cookie("session_token", Default::default())
+                .name,
             better_auth_core::utils::cookie_utils::sign_cookie_value(
                 &data.session.token,
                 &ctx.config.secret
@@ -335,12 +337,19 @@ async fn expired_signing_keys_rotate_and_public_grace_does_not_reactivate_them()
                 .is_none()
         );
     }
-    let discovery: Value = serde_json::from_slice(&plugin.jwks(&ctx).await.unwrap().body).unwrap();
+    let discovery: Value = serde_json::from_slice(
+        &plugin
+            .jwks(&EndpointContext::native(None, None, Value::Null, &ctx))
+            .await
+            .unwrap()
+            .body,
+    )
+    .unwrap();
     assert_eq!(discovery["keys"].as_array().unwrap().len(), 2);
     let expired: Value = serde_json::from_slice(
         &JwtPlugin::new()
             .grace_period(Duration::zero())
-            .jwks(&ctx)
+            .jwks(&EndpointContext::native(None, None, Value::Null, &ctx))
             .await
             .unwrap()
             .body,
@@ -364,8 +373,8 @@ async fn expired_signing_keys_rotate_and_public_grace_does_not_reactivate_them()
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(payload["iss"], ctx.config.base_url);
-    assert_eq!(payload["aud"], ctx.config.base_url);
+    assert_eq!(payload["iss"], ctx.config.base_url.as_static().unwrap());
+    assert_eq!(payload["aud"], ctx.config.base_url.as_static().unwrap());
     assert!(payload["exp"].as_i64().unwrap() > Utc::now().timestamp());
     assert!(payload.get("iat").is_none());
 }

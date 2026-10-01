@@ -361,3 +361,25 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
         Ok(())
     }
 }
+
+impl SessionUpdate {
+    /// Serialize supplied fields using public names, preserving explicit null values.
+    pub fn into_public_fields(self) -> AuthResult<serde_json::Map<String, serde_json::Value>> {
+        let mut fields = self.additional_fields;
+        macro_rules! supplied {
+            ($($field:ident => $name:literal),* $(,)?) => {$(
+                if let Some(value) = self.$field {
+                    let _ = fields.insert($name.into(), serde_json::to_value(value)?);
+                }
+            )*};
+        }
+        supplied!(
+            id => "id", token => "token", user_id => "userId",
+            expires_at => "expiresAt", created_at => "createdAt", updated_at => "updatedAt",
+            ip_address => "ipAddress", user_agent => "userAgent",
+            impersonated_by => "impersonatedBy", active_organization_id => "activeOrganizationId",
+            active_team_id => "activeTeamId",
+        );
+        Ok(fields)
+    }
+}

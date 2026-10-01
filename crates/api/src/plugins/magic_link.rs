@@ -172,7 +172,7 @@ impl MagicLinkPlugin {
                 expires_at: Utc::now() + lifetime,
             })
             .await?;
-        let mut url = Url::parse(&ctx.config.base_url)
+        let mut url = Url::parse(ctx.base_url())
             .map_err(|error| AuthError::config(format!("Invalid base URL: {error}")))?;
         let base_path = if url.path() == "/" {
             ctx.config.base_path.as_str()
@@ -235,7 +235,7 @@ impl MagicLinkPlugin {
         if req.endpoint_headers().is_none() {
             return Err(super::json_body::validation_error("Headers is required").into());
         }
-        let base = Url::parse(&ctx.config.base_url)
+        let base = Url::parse(ctx.base_url())
             .map_err(|error| AuthError::config(format!("Invalid base URL: {error}")))?;
         let callback = callback_url(req, ctx, &base, "callbackURL", "/")?;
         let error_callback = callback_url(req, ctx, &base, "errorCallbackURL", callback.as_str())?;
@@ -352,8 +352,7 @@ fn callback_url<S: AuthSchema>(
         .unwrap_or(default);
     let decoded = urlencoding::decode(value)
         .map_err(|error| AuthError::bad_request(format!("Invalid callback URL: {error}")))?;
-    if !ctx.config.advanced.disable_origin_check && !ctx.config.is_redirect_target_trusted(&decoded)
-    {
+    if !ctx.config.advanced.disable_origin_check && !ctx.is_redirect_target_trusted(&decoded) {
         return Err(AuthError::forbidden("Invalid callbackURL"));
     }
     base.join(&decoded)

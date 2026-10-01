@@ -85,7 +85,9 @@ pub(crate) async fn request_password_reset_core(
         .unwrap_or_default();
     let reset_url = format!(
         "{}/reset-password/{}?callbackURL={}",
-        ctx.config.base_url, reset_token, callback_url
+        ctx.base_url(),
+        reset_token,
+        callback_url
     );
 
     let user_value = serde_json::to_value(ctx.internal_user_view(&user)?)?;
@@ -191,7 +193,7 @@ pub(crate) async fn reset_password_token_core(
 
     if token.is_empty() || query.callback_url.is_none() {
         return Ok(ResetPasswordTokenResult::Redirect(build_redirect_url(
-            &ctx.config.base_url,
+            ctx.base_url(),
             query.callback_url.as_deref(),
             &[("error", "INVALID_TOKEN")],
         )?));
@@ -207,14 +209,14 @@ pub(crate) async fn reset_password_token_core(
         .is_none_or(|verification| verification.expires_at() < Utc::now())
     {
         return Ok(ResetPasswordTokenResult::Redirect(build_redirect_url(
-            &ctx.config.base_url,
+            ctx.base_url(),
             query.callback_url.as_deref(),
             &[("error", "INVALID_TOKEN")],
         )?));
     }
 
     Ok(ResetPasswordTokenResult::Redirect(build_redirect_url(
-        &ctx.config.base_url,
+        ctx.base_url(),
         query.callback_url.as_deref(),
         &[("token", token)],
     )?))
@@ -334,7 +336,7 @@ fn validate_redirect_target(
     if ctx.config.advanced.disable_origin_check {
         return Ok(());
     }
-    if ctx.config.is_redirect_target_trusted(target) {
+    if ctx.is_redirect_target_trusted(target) {
         Ok(())
     } else {
         Err(AuthError::forbidden(error_message.to_string()))

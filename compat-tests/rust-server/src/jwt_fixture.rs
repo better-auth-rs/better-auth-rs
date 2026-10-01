@@ -50,7 +50,7 @@ impl JwtFixture {
             "jwt-advanced" => plugin.define_payload(Arc::new(|session| Box::pin(async move { Ok(serde_json::from_value(json!({"sessionId": session["session"]["id"], "userId": session["user"]["id"], "sessionUserId": session["session"]["userId"], "userAgent": session["session"]["userAgent"]}))?) }))).get_subject(Arc::new(|session| Box::pin(async move { Ok(session["session"]["id"].as_str().unwrap().to_owned()) }))),
             "jwt-remote" => {
                 let remote = self.remote.clone();
-                plugin.remote_url(format!("{}/__test/jwt/remote-jwks", self.remote.config.base_url)).custom_sign(Arc::new(move |payload, options| {
+                plugin.remote_url(format!("{}/__test/jwt/remote-jwks", self.remote.config.base_url.as_static().unwrap_or(""))).custom_sign(Arc::new(move |payload, options| {
                     let remote = remote.clone();
                     Box::pin(async move { JwtPlugin::new().sign_with_options(payload, &options, &remote).await })
                 }))

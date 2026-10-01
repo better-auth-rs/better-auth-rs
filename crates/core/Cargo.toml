@@ -59,6 +59,7 @@ hex.workspace = true
 chacha20poly1305.workspace = true
 subtle.workspace = true
 regex.workspace = true
+futures-util = "0.3.34"
 
 [features]
 default = []

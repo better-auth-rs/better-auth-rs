@@ -367,7 +367,14 @@ async fn preserved_session_revoke_ends_the_row_and_runs_delete_hooks_once() {
         .unwrap()
         .unwrap();
     assert!(preserved.expires_at <= Utc::now());
-    assert_eq!(preserved.updated_at, session.updated_at);
+    // Upstream preserved revocation runs adapter.updateMany, including updatedAt.onUpdate.
+    assert!(preserved.updated_at > session.updated_at);
+    assert!(
+        (preserved.updated_at - preserved.expires_at)
+            .num_milliseconds()
+            .abs()
+            < 1000
+    );
     assert_eq!(
         *hooks.events.lock().unwrap(),
         ["before-delete", "after-delete"]

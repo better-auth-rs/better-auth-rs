@@ -11,6 +11,7 @@ impl EphemeralStore {
         &self,
         mut update: UpdateUser,
     ) -> AuthResult<UpdateUser> {
+        update.prepare_user_fields(&self.config.user)?;
         let original = update.clone();
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
@@ -22,13 +23,24 @@ impl EphemeralStore {
                         "user update cancelled by database hook",
                     ));
                 }
-                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+                DatabaseHookUpdate::Patch(mut patch) => {
+                    patch.prepare_user_fields(&self.config.user)?;
+                    update.merge(patch);
+                }
             }
         }
-        update.additional_fields = self
+        let fields = update.take_user_field_input(&self.config.user);
+        update.additional_fields = self.config.user.storage_fields(fields, false)?;
+        update.username = self
             .config
             .user
-            .storage_fields(std::mem::take(&mut update.additional_fields), false)?;
+            .stored_username_field(&update.additional_fields, "username")?
+            .or(update.username);
+        update.display_username = self
+            .config
+            .user
+            .stored_username_field(&update.additional_fields, "displayUsername")?
+            .or(update.display_username);
         Ok(update)
     }
 
@@ -74,10 +86,10 @@ impl EphemeralStore {
                 user.phone_number_verified = Some(value);
             }
             if let Some(username) = update.username {
-                user.username = Some(username.to_lowercase());
+                user.username = username;
             }
             if let Some(display_username) = update.display_username {
-                user.display_username = Some(display_username);
+                user.display_username = display_username;
             }
             if let Some(role) = update.role {
                 user.role = Some(role);
@@ -131,6 +143,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         self.verify_unproven_user(user_id, true, None).await
     }
     async fn create_user(&self, mut create_user: CreateUser) -> AuthResult<UserView> {
+        create_user.prepare_user_fields(&self.config.user)?;
         create_user.email = create_user
             .email
             .map(|value| crate::utils::email::normalize_user_email(&value));
@@ -144,17 +157,28 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                     "user creation cancelled by database hook",
                 ));
             }
+            create_user.prepare_user_fields(&self.config.user)?;
         }
+        let fields = create_user.take_user_field_input(&self.config.user);
+        let fields = self.config.user.storage_fields(fields, true)?;
+        let username = self
+            .config
+            .user
+            .stored_username_field(&fields, "username")?
+            .or(create_user.username.take())
+            .flatten();
+        let display_username = self
+            .config
+            .user
+            .stored_username_field(&fields, "displayUsername")?
+            .or(create_user.display_username.take())
+            .flatten();
         let now = Utc::now();
         let id = create_user
             .id
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let username = create_user.username.map(|username| username.to_lowercase());
         let user = UserView {
-            additional_fields: self
-                .config
-                .user
-                .storage_fields(create_user.additional_fields, true)?,
+            additional_fields: fields,
             visible_fields: Some(
                 [
                     ("name", create_user.name.is_some()),
@@ -193,7 +217,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             phone_number: create_user.phone_number,
             phone_number_verified: create_user.phone_number_verified,
             username,
-            display_username: create_user.display_username,
+            display_username,
             two_factor_enabled: false,
             role: create_user.role,
             banned: create_user.banned.unwrap_or(false),
@@ -247,11 +271,10 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<UserView>> {
-        let normalized = username.to_lowercase();
         self.lock()?
             .users
             .values()
-            .find(|user| user.username.as_deref() == Some(&normalized))
+            .find(|user| user.username.as_deref() == Some(username))
             .cloned()
             .map(|user| self.output_user(user))
             .transpose()
@@ -282,21 +305,34 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
-        self.delete_user_sessions(id).await?;
+        self.delete_user_optional(id, true).await.map(|_| ())
+    }
+
+    async fn delete_user_optional(
+        &self,
+        id: &str,
+        delete_database_sessions: bool,
+    ) -> AuthResult<Option<UserView>> {
+        if delete_database_sessions {
+            self.delete_user_sessions(id).await?;
+        }
         self.delete_user_accounts_with_hooks(id).await?;
         let user = self.lock()?.users.get(id).cloned();
-        let Some(user) = user else { return Ok(()) };
-        let user = self.output_user(user)?;
+        // Upstream deleteWithHooks treats snapshot projection failures as a missing row.
+        let Some(user) = user.and_then(|user| self.output_user(user).ok()) else {
+            return Ok(None);
+        };
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             if hook.before_delete_user(&user, &context).await? == DatabaseHookControl::Cancel {
-                return Ok(());
+                return Ok(None);
             }
         }
         let _ = self.lock()?.users.shift_remove(id);
-        self.after(CommittedWrite::UserDeleted(user)).await?;
-        Ok(())
+        self.after(CommittedWrite::UserDeleted(user.clone()))
+            .await?;
+        Ok(Some(user))
     }
 
     async fn list_users(&self, _params: ListUsersParams) -> AuthResult<(Vec<UserView>, usize)> {

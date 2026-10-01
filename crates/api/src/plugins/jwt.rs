@@ -1,5 +1,6 @@
 //! Persisted JWT signing keys and public JWKS discovery.
 
+use crate::plugins::endpoint_context::EndpointContext;
 use better_auth_core::{
     AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
     AuthRoute, AuthSchema, CreateJwk, HttpMethod,
@@ -8,15 +9,22 @@ use chrono::{Duration, Utc};
 use josekit::{
     jwk::{self, Jwk},
     jws::{self, JwsHeader, JwsSigner},
-    jwt::JwtPayload,
 };
 use serde_json::{Map, Value, json};
 
+mod adapter;
 mod cache;
+mod callbacks;
+mod claims;
+mod native;
 mod options;
+mod overrides;
 mod signing;
 mod verification;
+pub use callbacks::{JwtAdapterFuture, JwtCallbacks};
+pub use native::JwtApi;
 pub use options::*;
+pub use overrides::{JwtCallOverrides, JwtKeyOptions, JwtTokenOptions};
 
 /// Supported asymmetric signing algorithms.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -141,6 +149,7 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
         ]
     }
     async fn on_init(&self, ctx: &mut AuthInitContext<S>) -> AuthResult<()> {
+        ctx.extensions.insert(self.config.clone());
         if self.config.custom_sign.is_some() && self.config.remote_url.is_none() {
             return Err(AuthError::config("custom_sign requires remote_url"));
         }
@@ -185,11 +194,21 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
-        if req.method() != &HttpMethod::Get {
+        if req.method() != &HttpMethod::Get
+            || (req.path() != self.config.jwks_path && req.path() != "/token")
+        {
             return Ok(None);
         }
+        if req.path() == "/token" && req.endpoint_headers().is_none() {
+            return Err(AuthError::Upstream {
+                status: 400,
+                code: "VALIDATION_ERROR",
+                message: "Headers is required",
+            });
+        }
+        let mut endpoint = EndpointContext::new(Some(req), request_body(req)?, ctx);
         if req.path() == self.config.jwks_path {
-            return self.jwks(ctx).await.map(Some);
+            return self.jwks(&endpoint).await.map(Some);
         }
         if req.path() == "/token" {
             let (user, session) = ctx
@@ -203,8 +222,9 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
                     },
                     error => error,
                 })?;
+            endpoint.session = Some((user.clone(), session.clone()));
             let token = self
-                .sign_session(json!({"user": user, "session": session}), ctx)
+                .sign_session(json!({"user": user, "session": session}), &endpoint)
                 .await?;
             return Ok(Some(AuthResponse::json(200, &json!({"token": token}))?));
         }
@@ -216,19 +236,17 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
         response: &mut AuthResponse,
         ctx: &AuthContext<S>,
     ) -> AuthResult<()> {
-        if self.config.disable_setting_jwt_header
-            || req.path() != "/get-session"
-            || response.status != 200
-        {
+        if self.config.disable_setting_jwt_header || req.path() != "/get-session" {
             return Ok(());
         }
-        let body: Value = serde_json::from_slice(&response.body)?;
-        let Some(user) = body.get("user").filter(|user| user.is_object()) else {
+        let Some(data) = req.session_snapshot()?.or(req.new_session()?) else {
             return Ok(());
         };
-        let token = self
-            .sign_session(json!({"user": user, "session": body.get("session")}), ctx)
-            .await?;
+        let payload = serde_json::to_value(&data)?;
+        let mut endpoint = EndpointContext::new(Some(req), request_body(req)?, ctx);
+        endpoint.session = Some((data.user, data.session));
+        endpoint.response = Some(response);
+        let token = self.sign_session(payload, &endpoint).await?;
         let _ = response.headers.insert("set-auth-jwt", token);
         let mut exposed: Vec<_> = response
             .headers
@@ -255,14 +273,14 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
 impl JwtPlugin {
     async fn create_key<S: AuthSchema>(
         &self,
-        ctx: &AuthContext<S>,
+        endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<better_auth_core::Jwk> {
-        self.create_key_pair(
+        self.create_key_pair_in_endpoint(
             JwtKeyPairConfig {
                 algorithm: self.config.algorithm,
                 modulus_length: self.config.modulus_length,
             },
-            ctx,
+            endpoint,
         )
         .await
     }
@@ -273,15 +291,20 @@ impl JwtPlugin {
         parameters: JwtKeyPairConfig,
         ctx: &AuthContext<S>,
     ) -> AuthResult<better_auth_core::Jwk> {
-        self.create_key_pair_with_store(parameters, &ctx.config, ctx.database.as_ref())
-            .await
+        ctx.with_native_context(Default::default(), |resolved| async move {
+            let mut endpoint = EndpointContext::new(None, Value::Null, &resolved);
+            endpoint.path = Some("virtual:");
+            self.create_key_pair_in_endpoint(parameters, &endpoint)
+                .await
+        })
+        .await
     }
 
-    async fn create_key_pair_with_store(
+    /// Provision a key with the supplied endpoint context and active transaction.
+    pub async fn create_key_pair_in_endpoint<S: AuthSchema>(
         &self,
         parameters: JwtKeyPairConfig,
-        config: &better_auth_core::AuthConfig,
-        store: &dyn better_auth_core::store::JwksStore,
+        endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<better_auth_core::Jwk> {
         if matches!(
             parameters.algorithm,
@@ -302,14 +325,15 @@ impl JwtPlugin {
             key.to_string()
         } else {
             serde_json::to_string(&super::symmetric::encrypt(
-                config.encryption_secret(),
+                endpoint.auth.config.encryption_secret(),
                 &key.to_string(),
             )?)?
         };
-        store
-            .create_jwk(CreateJwk {
+        self.persist_key(
+            CreateJwk {
                 public_key,
                 private_key,
+                created_at: Utc::now(),
                 expires_at: self
                     .config
                     .rotation_interval
@@ -317,20 +341,29 @@ impl JwtPlugin {
                     .map(|interval| Utc::now() + interval),
                 alg: parameters.algorithm.name().to_owned(),
                 crv: parameters.algorithm.curve().map(str::to_owned),
-            })
-            .await
+            },
+            endpoint,
+        )
+        .await
     }
 
-    async fn jwks<S: AuthSchema>(&self, ctx: &AuthContext<S>) -> AuthResult<AuthResponse> {
+    async fn jwks<S: AuthSchema>(
+        &self,
+        endpoint: &EndpointContext<'_, S>,
+    ) -> AuthResult<AuthResponse> {
         if self.config.remote_url.is_some() {
             let mut response = AuthResponse::new(404);
             let _ = response.headers.insert("content-type", "application/json");
             return Ok(response);
         }
-        let mut keys = ctx.database.list_jwks().await?;
-        if keys.is_empty() {
-            keys.push(self.create_key(ctx).await?);
+        let mut keys = self.read_keys(endpoint).await?;
+        if keys.as_ref().is_none_or(Vec::is_empty) {
+            let _ = self.create_key(endpoint).await?;
+            keys = self.read_keys(endpoint).await?;
         }
+        let keys = keys.filter(|keys| !keys.is_empty()).ok_or_else(|| {
+            AuthError::internal("No key sets found. Make sure you have a key in your database.")
+        })?;
         let mut public = Vec::new();
         for key in keys.into_iter().filter(|key| {
             key.expires_at
@@ -350,6 +383,19 @@ impl JwtPlugin {
         }
         Ok(AuthResponse::json(200, &json!({"keys": public}))?)
     }
+}
+
+fn request_body(request: &AuthRequest) -> AuthResult<Value> {
+    if let Some(context) = better_auth_core::hooks::current_request_hook_context() {
+        return Ok(context.body.unwrap_or(Value::Null));
+    }
+    request
+        .body
+        .as_ref()
+        .map(|_| request.body_as_json())
+        .transpose()
+        .map(|body| body.unwrap_or(Value::Null))
+        .map_err(Into::into)
 }
 
 fn jose_error(error: josekit::JoseError) -> AuthError {

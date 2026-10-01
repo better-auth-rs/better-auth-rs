@@ -43,6 +43,7 @@ pub struct AuthRequest {
     pub body: Option<Vec<u8>>,
     pub query: HashMap<String, String>,
     url: Option<url::Url>,
+    original_request: Option<std::sync::Arc<AuthRequest>>,
     pub(crate) parsed_http_body: Option<crate::http_body::ParsedHttpBody>,
     /// Session authenticated by a trusted plugin hook for the current request.
     pub(crate) virtual_session: Option<crate::wire::SessionView>,
@@ -51,6 +52,7 @@ pub struct AuthRequest {
     server_context: std::sync::Arc<std::sync::Mutex<serde_json::Map<String, serde_json::Value>>>,
     headers_present: bool,
     new_session: std::sync::Arc<std::sync::Mutex<Option<crate::session::SessionData>>>,
+    session_snapshot: std::sync::Arc<std::sync::Mutex<Option<crate::session::SessionData>>>,
 }
 
 /// Metadata extracted from an incoming request for session creation.
@@ -227,8 +229,18 @@ pub struct CreateUser {
     pub name: Option<String>,
     pub image: Option<String>,
     pub email_verified: Option<bool>,
-    pub username: Option<String>,
-    pub display_username: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_nullable_update"
+    )]
+    pub username: Option<Option<String>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_nullable_update"
+    )]
+    pub display_username: Option<Option<String>>,
     pub is_anonymous: Option<bool>,
     pub phone_number: Option<String>,
     pub phone_number_verified: Option<bool>,
@@ -249,8 +261,18 @@ pub struct UpdateUser {
     pub name: Option<String>,
     pub image: Option<String>,
     pub email_verified: Option<bool>,
-    pub username: Option<String>,
-    pub display_username: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_nullable_update"
+    )]
+    pub username: Option<Option<String>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_nullable_update"
+    )]
+    pub display_username: Option<Option<String>>,
     pub is_anonymous: Option<bool>,
     #[serde(
         default,
@@ -371,7 +393,7 @@ impl CreateUser {
     }
 
     pub fn with_username(mut self, username: impl Into<String>) -> Self {
-        self.username = Some(username.into());
+        self.username = Some(Some(username.into()));
         self
     }
 
@@ -401,12 +423,14 @@ impl AuthRequest {
             body: None,
             query: HashMap::new(),
             url: None,
+            original_request: None,
             parsed_http_body: None,
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),
             headers_present: true,
             new_session: Default::default(),
+            session_snapshot: Default::default(),
         }
     }
 
@@ -427,12 +451,14 @@ impl AuthRequest {
             body,
             query,
             url: None,
+            original_request: None,
             parsed_http_body: None,
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),
             headers_present: true,
             new_session: Default::default(),
+            session_snapshot: Default::default(),
         }
     }
 
@@ -440,16 +466,41 @@ impl AuthRequest {
         &self.method
     }
 
-    /// Supply native endpoint headers while preserving omission separately from an empty set.
+    /// Supply native endpoint headers with lowercase names, preserving omission separately from an empty set.
     pub fn with_optional_headers(mut self, headers: Option<HashMap<String, String>>) -> Self {
         self.headers_present = headers.is_some();
-        self.headers = headers.unwrap_or_default();
+        self.headers = headers
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(name, value)| (name.to_ascii_lowercase(), value))
+            .collect();
         self
     }
 
     /// Headers supplied to the endpoint, including an explicitly empty set.
     pub fn endpoint_headers(&self) -> Option<&HashMap<String, String>> {
         self.headers_present.then_some(&self.headers)
+    }
+
+    /// The endpoint's session snapshot, including an expired record retained by get-session.
+    /// This snapshot is not an authentication decision. Use the session manager to authenticate.
+    pub fn session_snapshot(&self) -> crate::AuthResult<Option<crate::session::SessionData>> {
+        Ok(self
+            .session_snapshot
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Session snapshot lock poisoned"))?
+            .clone())
+    }
+
+    pub(crate) fn set_session_snapshot(
+        &self,
+        data: Option<crate::session::SessionData>,
+    ) -> crate::AuthResult<()> {
+        *self
+            .session_snapshot
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Session snapshot lock poisoned"))? = data;
+        Ok(())
     }
 
     /// The exact identity last passed to the session-cookie writer during this endpoint call.
@@ -471,6 +522,16 @@ impl AuthRequest {
             .map_err(|_| crate::AuthError::internal("Session snapshot lock poisoned"))? =
             Some(data);
         Ok(())
+    }
+
+    /// Preserve an explicit native Request independently of endpoint headers and HTTP transport.
+    pub fn with_original_request(mut self, request: AuthRequest) -> Self {
+        self.original_request = Some(std::sync::Arc::new(request));
+        self
+    }
+
+    pub fn original_request(&self) -> Option<&AuthRequest> {
+        self.original_request.as_deref()
     }
 
     /// Attach the original URL supplied by the server transport.
@@ -719,9 +780,6 @@ pub struct UpdateUserRequest {
     #[validate(email(message = "Invalid email address"))]
     pub email: Option<String>,
     pub image: Option<String>,
-    pub username: Option<String>,
-    #[serde(rename = "displayUsername")]
-    pub display_username: Option<String>,
     pub role: Option<String>,
     pub metadata: Option<serde_json::Value>,
 }
@@ -873,12 +931,14 @@ mod tests {
             body: Some(br#"{"name":"test"}"#.to_vec()),
             query: HashMap::new(),
             url: None,
+            original_request: None,
             parsed_http_body: None,
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),
             headers_present: true,
             new_session: Default::default(),
+            session_snapshot: Default::default(),
         };
         let val: serde_json::Value = req.body_as_json().expect("parse");
         assert_eq!(val["name"], "test");
@@ -1020,7 +1080,10 @@ mod tests {
         assert_eq!(cu.email.as_deref(), Some("test@example.com"));
         assert_eq!(cu.name.as_deref(), Some("Test"));
         assert_eq!(cu.email_verified, Some(true));
-        assert_eq!(cu.username.as_deref(), Some("testuser"));
+        assert_eq!(
+            cu.username.as_ref().and_then(Option::as_deref),
+            Some("testuser")
+        );
         assert_eq!(cu.role.as_deref(), Some("admin"));
         assert!(cu.metadata.is_some());
     }

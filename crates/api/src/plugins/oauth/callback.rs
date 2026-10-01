@@ -101,7 +101,7 @@ pub(super) async fn handle_callback(
                             anonymous_user_id: None,
                             provider_name,
                             provider,
-                            callback_url: &ctx.config.base_url,
+                            callback_url: super::handlers::state_callback_url(None, ctx)?,
                             new_user_callback_url: None,
                             error_callback_url: None,
                             scopes: None,

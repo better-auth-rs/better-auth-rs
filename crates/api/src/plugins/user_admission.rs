@@ -182,8 +182,6 @@ pub(crate) async fn validate_create<S: AuthSchema>(
         ("email", input.email.as_ref()),
         ("name", input.name.as_ref()),
         ("image", input.image.as_ref()),
-        ("username", input.username.as_ref()),
-        ("displayUsername", input.display_username.as_ref()),
         ("phoneNumber", input.phone_number.as_ref()),
         ("role", input.role.as_ref()),
     ] {
@@ -195,6 +193,17 @@ pub(crate) async fn validate_create<S: AuthSchema>(
                 } else {
                     value.clone()
                 }),
+            );
+        }
+    }
+    for (name, value) in [
+        ("username", &input.username),
+        ("displayUsername", &input.display_username),
+    ] {
+        if let Some(value) = value {
+            let _ = user.insert(
+                name.into(),
+                value.clone().map(Value::String).unwrap_or(Value::Null),
             );
         }
     }

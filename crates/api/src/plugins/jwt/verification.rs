@@ -1,9 +1,14 @@
 use super::*;
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use base64::{
+    Engine as _, alphabet,
+    engine::{
+        DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig, general_purpose::URL_SAFE_NO_PAD,
+    },
+};
 use josekit::jws::JwsVerifier;
 
 impl JwtPlugin {
-    /// Verify a token with adapter keys. Invalid tokens return `None`; store failures propagate.
+    /// Verify a token with adapter keys. Invalid tokens and verification adapter errors return `None`.
     ///
     /// The optional issuer overrides the configured issuer. Like upstream `verifyJWT`,
     /// this reads local adapter keys even when `remote_url` is configured.
@@ -13,22 +18,131 @@ impl JwtPlugin {
         issuer: Option<&str>,
         ctx: &AuthContext<S>,
     ) -> AuthResult<Option<Map<String, Value>>> {
-        let keys = ctx.database.list_jwks().await?;
+        ctx.with_native_context(Default::default(), |resolved| async move {
+            let body = verification_body(token, issuer);
+            let mut endpoint = EndpointContext::new(None, body, &resolved);
+            endpoint.path = Some("virtual:");
+            self.verify_in_endpoint(token, issuer, &endpoint).await
+        })
+        .await
+    }
+
+    /// Verify with the supplied endpoint context and its key-adapter callbacks.
+    pub async fn verify_in_endpoint<S: AuthSchema>(
+        &self,
+        token: &str,
+        issuer: Option<&str>,
+        endpoint: &EndpointContext<'_, S>,
+    ) -> AuthResult<Option<Map<String, Value>>> {
+        if !has_key_id(token) {
+            return Ok(None);
+        }
+        let keys = match self.read_keys(endpoint).await {
+            Ok(Some(keys)) => keys,
+            Ok(None) => return Ok(None),
+            Err(error) => {
+                tracing::debug!(%error, "JWT verification failed");
+                return Ok(None);
+            }
+        };
+        let ctx = endpoint.auth;
         let issuer = issuer
+            .filter(|issuer| !issuer.is_empty())
             .or(self.config.issuer.as_deref())
-            .unwrap_or(&ctx.config.base_url);
-        let audience = self.config.audience.as_ref().map_or_else(
-            || vec![ctx.config.base_url.as_str()],
-            JwtAudience::recipients,
+            .or(ctx.config.base_url.as_static());
+        let audience = self
+            .config
+            .audience
+            .as_ref()
+            .map(JwtAudience::recipients)
+            .or_else(|| ctx.config.base_url.as_static().map(|base| vec![base]));
+        let verified = verify_local(
+            token,
+            &keys,
+            self.config.algorithm,
+            issuer,
+            audience.as_deref(),
+            0,
         );
-        let verified = verify_local(token, &keys, self.config.algorithm, issuer, &audience, 0);
         Ok(verified.filter(|payload| {
-            payload
-                .get("sub")
-                .and_then(Value::as_str)
-                .is_some_and(|sub| !sub.is_empty())
+            ["sub", "aud"].iter().all(|claim| {
+                payload
+                    .get(*claim)
+                    .is_some_and(better_auth_core::user_fields::is_truthy)
+            })
         }))
     }
+}
+
+pub(super) fn verification_body(token: &str, issuer: Option<&str>) -> Value {
+    let mut body = Map::from_iter([("token".into(), token.into())]);
+    if let Some(issuer) = issuer {
+        let _ = body.insert("issuer".into(), issuer.into());
+    }
+    body.into()
+}
+
+pub(super) fn has_key_id(token: &str) -> bool {
+    raw_header(token).is_some_and(|header| header.has_key_id())
+}
+
+#[serde_with::serde_as]
+#[derive(serde::Deserialize)]
+#[serde(transparent)]
+pub(super) struct Header(
+    // JSON property names may contain unpaired UTF-16 surrogates; serde's byte strings retain them.
+    #[serde_as(as = "std::collections::HashMap<serde_with::Bytes, _>")]
+    std::collections::HashMap<Vec<u8>, Box<serde_json::value::RawValue>>,
+);
+
+impl Header {
+    pub(super) fn has_key_id(&self) -> bool {
+        self.0
+            .get(b"kid".as_slice())
+            .is_some_and(|kid| match kid.get().as_bytes().first() {
+                Some(b'"') => kid.get() != "\"\"",
+                Some(b'[' | b'{') => true,
+                _ => serde_json::from_str::<Value>(kid.get())
+                    .is_ok_and(|value| better_auth_core::user_fields::is_truthy(&value)),
+            })
+    }
+
+    pub(super) fn has_type(&self, expected: &str) -> bool {
+        self.0.get(b"typ".as_slice()).is_some_and(|typ| {
+            serde_json::from_str::<String>(typ.get()).is_ok_and(|typ| typ == expected)
+        })
+    }
+}
+
+pub(super) fn raw_header(token: &str) -> Option<Header> {
+    if token.split('.').count() != 3 {
+        return None;
+    }
+    let encoded = token.split('.').next()?;
+    let alphabet = if encoded.contains(['-', '_']) {
+        &alphabet::URL_SAFE
+    } else {
+        &alphabet::STANDARD
+    };
+    let engine = GeneralPurpose::new(
+        alphabet,
+        GeneralPurposeConfig::new()
+            .with_decode_allow_trailing_bits(true)
+            .with_decode_padding_mode(DecodePaddingMode::Indifferent),
+    );
+    let encoded = encoded.split('=').next()?;
+    // The upstream decoder validates incomplete sextets, discards their bits, and stops at padding.
+    let encoded = if encoded.len() % 4 == 1 {
+        let _ = engine
+            .decode([*encoded.as_bytes().last()?, b'A', b'A', b'A'])
+            .ok()?;
+        encoded.get(..encoded.len() - 1)?
+    } else {
+        encoded
+    };
+    let bytes = engine.decode(encoded).ok()?;
+    let text = String::from_utf8_lossy(&bytes);
+    serde_json::from_str(text.strip_prefix('\u{feff}').unwrap_or(&text)).ok()
 }
 
 pub(super) fn protected_header(token: &str) -> Option<JwsHeader> {
@@ -40,8 +154,8 @@ pub(super) fn verify_local(
     token: &str,
     keys: &[better_auth_core::Jwk],
     default_algorithm: JwtAlgorithm,
-    issuer: &str,
-    audience: &[&str],
+    issuer: Option<&str>,
+    audience: Option<&[&str]>,
     tolerance: i64,
 ) -> Option<Map<String, Value>> {
     let header = protected_header(token)?;
@@ -61,23 +175,25 @@ pub(super) fn verify_local(
         "PS256" => Box::new(jws::PS256.verifier_from_jwk(&public).ok()?),
         _ => return None,
     };
-    let (payload, _) = josekit::jwt::decode_with_verifier(token, verifier.as_ref()).ok()?;
-    let claims = payload.claims_set();
-    if claims.get("iss").and_then(Value::as_str) != Some(issuer) {
+    // The JWT payload parser rejects claim types that upstream verification accepts.
+    let (payload, _) = josekit::jws::deserialize_compact(token, verifier.as_ref()).ok()?;
+    let claims: Map<String, Value> = serde_json::from_slice(&payload).ok()?;
+    if issuer.is_some_and(|issuer| claims.get("iss").and_then(Value::as_str) != Some(issuer)) {
         return None;
     }
-    let aud = claims.get("aud")?;
-    if !aud.as_str().is_some_and(|value| audience.contains(&value))
-        && !aud.as_array().is_some_and(|values| {
-            values.iter().all(Value::is_string)
-                && values.iter().any(|value| {
+    if let Some(audience) = audience {
+        let aud = claims.get("aud")?;
+        if !aud.as_str().is_some_and(|value| audience.contains(&value))
+            && !aud.as_array().is_some_and(|values| {
+                values.iter().any(|value| {
                     value
                         .as_str()
                         .is_some_and(|value| audience.contains(&value))
                 })
-        })
-    {
-        return None;
+            })
+        {
+            return None;
+        }
     }
     let now = Utc::now().timestamp() as f64;
     for field in ["iat", "exp", "nbf"] {
@@ -90,5 +206,5 @@ pub(super) fn verify_local(
             }
         }
     }
-    Some(claims.clone())
+    Some(claims)
 }

@@ -47,7 +47,7 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
                 config.verification_token_expiry,
                 None,
             )?;
-            let url = verification_url(&ctx.config.base_url, &token, body.callback_url.as_deref());
+            let url = verification_url(ctx.base_url(), &token, body.callback_url.as_deref());
             let user = ctx.user_view(user)?;
             if config.send_verification_email.is_none()
                 && crate::plugins::email_otp::callbacks::overrides_verification(ctx)
@@ -86,7 +86,7 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
                 config.verification_token_expiry,
                 None,
             )?;
-            let url = verification_url(&ctx.config.base_url, &token, body.callback_url.as_deref());
+            let url = verification_url(ctx.base_url(), &token, body.callback_url.as_deref());
             let user = ctx.user_view(&user)?;
             if config.send_verification_email.is_none()
                 && crate::plugins::email_otp::callbacks::overrides_verification(ctx)
@@ -190,11 +190,8 @@ where
                     config.verification_token_expiry,
                     Some("change-email-verification"),
                 )?;
-                let url = verification_url(
-                    &ctx.config.base_url,
-                    &new_token,
-                    query.callback_url.as_deref(),
-                );
+                let url =
+                    verification_url(ctx.base_url(), &new_token, query.callback_url.as_deref());
                 if let Some(ref sender) = config.send_verification_email {
                     let mut updated_user = ctx.user_view(&user)?;
                     updated_user.email = Some(update_to.to_string());
@@ -301,11 +298,8 @@ where
                     config.verification_token_expiry,
                     None,
                 )?;
-                let url = verification_url(
-                    &ctx.config.base_url,
-                    &new_token,
-                    query.callback_url.as_deref(),
-                );
+                let url =
+                    verification_url(ctx.base_url(), &new_token, query.callback_url.as_deref());
                 if let Some(ref sender) = config.send_verification_email {
                     let wire_user = ctx.user_view(&updated_user)?;
                     sender.send(&wire_user, &url, &new_token).await?;

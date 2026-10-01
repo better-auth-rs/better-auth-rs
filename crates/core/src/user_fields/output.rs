@@ -7,7 +7,8 @@ const PLUGIN_FIELDS: &[(&str, &[&str])] = &[
         "phone-number.enabled",
         &["phoneNumber", "phoneNumberVerified"],
     ),
-    ("username.enabled", &["username", "displayUsername"]),
+    ("username.enabled", &["username"]),
+    ("username.display.enabled", &["displayUsername"]),
     ("two_factor.enabled", &["twoFactorEnabled"]),
     (
         "admin.enabled",
@@ -71,6 +72,19 @@ impl UserView {
     /// Apply current `returned` restrictions to cached fields without repeating adapter transforms.
     /// Upstream keeps fields from disabled plugins until the cache expires or its version changes.
     pub(crate) fn filter_cached_fields(&mut self, config: &super::UserConfig) {
+        for (name, field) in &config.additional_fields {
+            if field.returned {
+                continue;
+            }
+            if let Some(fields) = &mut self.visible_fields {
+                let _ = fields.remove(name);
+            }
+            match name.as_str() {
+                "username" => self.username = None,
+                "displayUsername" => self.display_username = None,
+                _ => {}
+            }
+        }
         self.additional_fields.retain(|name, _| {
             config
                 .additional_fields
@@ -168,9 +182,37 @@ impl UserView {
                     let value = model
                         .as_ref()
                         .and_then(|model| model.get(field.field_name.as_ref().unwrap_or(name)))
-                        .cloned();
+                        .cloned()
+                        .or_else(|| match (name.as_str(), &field.field_name) {
+                            ("username", None) => Some(json!(user.username())),
+                            ("displayUsername", None) => Some(json!(user.display_username())),
+                            _ => None,
+                        });
                     field.adapter_output(value, supports_native_json)?
                 };
+                if name == "username" || name == "displayUsername" {
+                    if let Some(fields) = &mut view.visible_fields {
+                        if value.is_some() && (!public || field.returned) {
+                            let _ = fields.insert(name.clone());
+                        } else {
+                            let _ = fields.remove(name);
+                        }
+                    }
+                    let typed = if !public || field.returned {
+                        value
+                            .as_ref()
+                            .map(|value| serde_json::from_value(value.clone()))
+                            .transpose()?
+                            .flatten()
+                    } else {
+                        None
+                    };
+                    if name == "username" {
+                        view.username = typed;
+                    } else {
+                        view.display_username = typed;
+                    }
+                }
                 if let Some(mut value) = value {
                     if !field.references_id() {
                         field.normalize_date(&mut value)?;
@@ -295,8 +337,16 @@ impl TryFrom<Map<String, Value>> for UserView {
             is_anonymous: take(&mut fields, "isAnonymous")?,
             phone_number: take(&mut fields, "phoneNumber")?,
             phone_number_verified: take(&mut fields, "phoneNumberVerified")?,
-            username: take(&mut fields, "username")?,
-            display_username: take(&mut fields, "displayUsername")?,
+            // Keep schema-backed fields in the projected map for later cookie updates.
+            username: serde_json::from_value(
+                fields.get("username").cloned().unwrap_or(Value::Null),
+            )?,
+            display_username: serde_json::from_value(
+                fields
+                    .get("displayUsername")
+                    .cloned()
+                    .unwrap_or(Value::Null),
+            )?,
             two_factor_enabled: take::<Option<bool>>(&mut fields, "twoFactorEnabled")?
                 .unwrap_or(false),
             role: take(&mut fields, "role")?,

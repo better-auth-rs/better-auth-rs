@@ -110,7 +110,13 @@ async fn challenge_expiration_supersedes_earlier_refresh_credentials() {
         .unwrap()
         .with_appended_header(
             "Set-Cookie",
-            create_clear_cookie(&manager.config.session.cookie_name, &manager.config),
+            create_clear_cookie(
+                &manager
+                    .config
+                    .auth_cookie("session_token", Default::default())
+                    .name,
+                &manager.config,
+            ),
         )
         .with_appended_header(
             "Set-Cookie",

@@ -8,6 +8,6 @@ pub use better_auth_core::store::database_hooks::{
 };
 pub use better_auth_core::store::{
     AuthStore, AuthTransaction, CacheAdapter, EphemeralStore, MemoryCacheAdapter, RateLimitRecord,
-    RateLimitStore, RuntimeStore, SecondaryStorage, StatelessSchema, StoreCapabilities,
-    VerificationCleanup, VerificationSessionCleanup, transaction,
+    RateLimitStore, RuntimeStore, SecondaryStorage, SessionUpdateWriter, StatelessSchema,
+    StoreCapabilities, VerificationCleanup, VerificationSessionCleanup, transaction,
 };

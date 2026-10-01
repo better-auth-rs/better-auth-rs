@@ -156,14 +156,21 @@ pub(super) fn create_account_cookie_headers(
     payload: &AccountCookiePayload,
 ) -> AuthResult<Vec<String>> {
     let max_age = account_cookie_max_age(config);
-    let value = create_account_cookie_value(config.encryption_secret(), payload, max_age)?;
-    better_auth_core::utils::cookie_utils::create_chunked_cookies(
-        req,
-        &account_cookie_name(config),
-        &value,
-        Some(max_age.num_seconds()),
-        config,
-    )
+    let cookie = config.auth_cookie(
+        "account_data",
+        better_auth_core::CookieAttributes {
+            max_age: Some(max_age.num_seconds()),
+            ..Default::default()
+        },
+    );
+    let ttl = cookie
+        .attributes
+        .max_age
+        .filter(|age| *age != 0)
+        .unwrap_or(300);
+    let value =
+        create_account_cookie_value(config.encryption_secret(), payload, Duration::seconds(ttl))?;
+    better_auth_core::utils::cookie_utils::create_chunked_cookies(req, &cookie, &value)
 }
 
 pub(super) fn decode_account_cookie(
@@ -224,7 +231,7 @@ pub(crate) fn validate_redirect_target(
     if ctx.config.advanced.disable_origin_check {
         return Ok(());
     }
-    if ctx.config.is_redirect_target_trusted(target) {
+    if ctx.is_redirect_target_trusted(target) {
         Ok(())
     } else {
         Err(AuthError::forbidden(error_message.to_string()))
@@ -269,11 +276,22 @@ pub(super) fn build_redirect_url(
 }
 
 pub(super) fn auth_base_url(ctx: &AuthContext<impl better_auth_core::AuthSchema>) -> String {
-    format!(
-        "{}{}",
-        ctx.config.base_url.trim_end_matches('/'),
-        ctx.config.base_path
-    )
+    ctx.base_url().trim_end_matches('/').to_owned()
+}
+
+pub(super) fn state_callback_url<'a>(
+    callback: Option<&'a str>,
+    ctx: &'a AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<&'a str> {
+    callback
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            ctx.config
+                .base_url
+                .as_static()
+                .filter(|value| !value.is_empty())
+        })
+        .ok_or_else(|| AuthError::bad_request("callbackURL is required"))
 }
 
 pub(super) struct InitiatedOAuthFlow {
@@ -321,8 +339,8 @@ pub(super) async fn complete_link_social(
     )
     .await?;
     let linking = &ctx.config.account.account_linking;
-    let trusted_provider = linking
-        .trusted_providers
+    let trusted_provider = ctx
+        .trusted_providers()
         .iter()
         .any(|trusted| trusted == provider_name);
 
@@ -605,8 +623,8 @@ async fn link_with_id_token_core(
         .email()
         .ok_or_else(|| AuthError::forbidden("User email not found"))?;
     let linking = &ctx.config.account.account_linking;
-    let trusted_provider = linking
-        .trusted_providers
+    let trusted_provider = ctx
+        .trusted_providers()
         .iter()
         .any(|trusted| trusted == &body.provider);
 
@@ -716,11 +734,8 @@ async fn social_sign_in_core(
             message: "Provider not found",
         })?;
 
-    let callback_url = body
-        .callback_url
-        .clone()
-        .unwrap_or_else(|| ctx.config.base_url.clone());
-    super::proxy::validate_callback_url(req, &callback_url, ctx)?;
+    let callback_url = state_callback_url(body.callback_url.as_deref(), ctx)?;
+    super::proxy::validate_callback_url(req, callback_url, ctx)?;
     if let Some(error_callback_url) = body.error_callback_url.as_deref() {
         validate_redirect_target(error_callback_url, ctx, "Invalid errorCallbackURL")?;
     }
@@ -748,7 +763,7 @@ async fn social_sign_in_core(
             anonymous_user_id,
             provider_name: &body.provider,
             provider,
-            callback_url: &callback_url,
+            callback_url,
             new_user_callback_url: body.new_user_callback_url.clone(),
             error_callback_url: body.error_callback_url.clone(),
             scopes: body.scopes.as_deref(),
@@ -779,11 +794,8 @@ async fn link_social_core(
             message: "Provider not found",
         })?;
 
-    let callback_url = body
-        .callback_url
-        .clone()
-        .unwrap_or_else(|| ctx.config.base_url.clone());
-    super::proxy::validate_callback_url(req, &callback_url, ctx)?;
+    let callback_url = state_callback_url(body.callback_url.as_deref(), ctx)?;
+    super::proxy::validate_callback_url(req, callback_url, ctx)?;
     if let Some(error_callback_url) = body.error_callback_url.as_deref() {
         validate_redirect_target(error_callback_url, ctx, "Invalid errorCallbackURL")?;
     }
@@ -806,7 +818,7 @@ async fn link_social_core(
             anonymous_user_id: None,
             provider_name: &body.provider,
             provider,
-            callback_url: &callback_url,
+            callback_url,
             new_user_callback_url: None,
             error_callback_url: body.error_callback_url.clone(),
             scopes: body.scopes.as_deref(),

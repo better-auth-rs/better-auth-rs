@@ -320,11 +320,13 @@ impl<S: AuthSchema> SessionManager<S> {
                 .get_user_by_id(&session.user_id)
                 .await?
                 .ok_or(AuthError::UserNotFound)?;
+            let data = SessionData {
+                session: session.clone(),
+                user: self.user_view(&user)?,
+            };
+            req.set_session_snapshot(Some(data.clone()))?;
             return Ok(SessionResolution {
-                data: Some(SessionData {
-                    session: session.clone(),
-                    user: self.user_view(&user)?,
-                }),
+                data: Some(data),
                 needs_refresh: None,
             });
         }
@@ -391,11 +393,19 @@ impl<S: AuthSchema> SessionManager<S> {
                         ),
                     )?;
                 }
+                let raw_snapshot =
+                    self.capabilities.server_sessions() || cache.refresh_age().is_none();
+                if raw_snapshot {
+                    req.set_session_snapshot(Some(payload.data.clone()))?;
+                }
                 payload.data.user.filter_cached_fields(&self.config.user);
                 payload
                     .data
                     .session
                     .filter_returned_fields(&self.config.session);
+                if !raw_snapshot {
+                    req.set_session_snapshot(Some(payload.data.clone()))?;
+                }
                 return Ok(SessionResolution {
                     data: Some(payload.data),
                     needs_refresh: None,
@@ -406,22 +416,17 @@ impl<S: AuthSchema> SessionManager<S> {
         let is_post = req.path().ends_with("/get-session") && req.method() == &HttpMethod::Post;
         let stored = self.database.get_session_snapshot(&token).await?;
         let Some((session, cached_data)) = stored else {
+            req.set_session_snapshot(None)?;
             self.clear_cookies(req)?;
             return Ok(none());
         };
-        if session.expires_at() < Utc::now() || !session.active() {
-            self.clear_cookies(req)?;
-            if !self.config.session.defer_session_refresh || is_post {
-                self.database.delete_session(&token).await?;
-            }
-            return Ok(none());
-        }
         let mut data = if let Some(mut data) = cached_data {
             data.user = self.user_view(&data.user)?;
             data.session.filter_returned_fields(&self.config.session);
             data
         } else {
             let Some(user) = self.database.get_user_by_id(&session.user_id()).await? else {
+                req.set_session_snapshot(None)?;
                 self.clear_cookies(req)?;
                 return Ok(none());
             };
@@ -430,6 +435,14 @@ impl<S: AuthSchema> SessionManager<S> {
                 user: self.user_view(&user)?,
             }
         };
+        req.set_session_snapshot(Some(data.clone()))?;
+        if session.expires_at() < Utc::now() || !session.active() {
+            self.clear_cookies(req)?;
+            if !self.config.session.defer_session_refresh || is_post {
+                self.database.delete_session(&token).await?;
+            }
+            return Ok(none());
+        }
         let dont_remember = self.dont_remember(req);
         if dont_remember || query_flag(req, "disableRefresh") {
             return Ok(SessionResolution {
@@ -537,7 +550,13 @@ impl<S: AuthSchema> SessionManager<S> {
     pub fn clear_cookies(&self, req: &AuthRequest) -> AuthResult<()> {
         req.append_response_header(
             "Set-Cookie",
-            create_clear_cookie(&self.config.session.cookie_name, &self.config),
+            create_clear_cookie(
+                &self
+                    .config
+                    .auth_cookie("session_token", Default::default())
+                    .name,
+                &self.config,
+            ),
         )?;
         cookie_cache::clear(req, &self.config)?;
         for suffix in ["dont_remember", "oauth_state", "account_data"] {
@@ -552,7 +571,10 @@ impl<S: AuthSchema> SessionManager<S> {
             }
             let name = related_cookie_name(&self.config, suffix);
             if suffix == "account_data" {
-                crate::utils::cookie_utils::clear_chunked_cookie(req, &name, &self.config)?;
+                crate::utils::cookie_utils::clear_chunked_cookie(
+                    req,
+                    &self.config.auth_cookie(suffix, Default::default()),
+                )?;
             } else {
                 req.append_response_header("Set-Cookie", create_clear_cookie(&name, &self.config))?;
             }
@@ -700,8 +722,14 @@ impl<S: AuthSchema> SessionManager<S> {
                 }
             }
         }
-        get_cookie(req, &self.config.session.cookie_name)
-            .and_then(|value| verify_cookie_value(&value, self.config.signing_secret()))
+        get_cookie(
+            req,
+            &self
+                .config
+                .auth_cookie("session_token", Default::default())
+                .name,
+        )
+        .and_then(|value| verify_cookie_value(&value, self.config.signing_secret()))
     }
 }
 

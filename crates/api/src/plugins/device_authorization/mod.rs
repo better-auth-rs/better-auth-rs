@@ -270,7 +270,7 @@ impl DeviceAuthorizationPlugin {
 
             let (verification_uri, verification_uri_complete) = build_verification_uris(
                 self.config.verification_uri.as_deref(),
-                &ctx.config.base_url,
+                ctx.base_url(),
                 &user_code,
             )?;
 

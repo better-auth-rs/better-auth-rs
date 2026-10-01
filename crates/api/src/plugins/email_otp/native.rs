@@ -4,6 +4,7 @@ use better_auth_core::{AuthContext, AuthError, AuthResult, AuthSchema, AuthVerif
 
 /// Trusted server operations using the registered Email OTP plugin configuration.
 /// These methods have no HTTP routes and never send email.
+/// A dynamic base URL requires a configured fallback or an explicitly bound endpoint context.
 pub struct EmailOtpApi<'a, S: AuthSchema> {
     plugin: EmailOtpPlugin,
     context: &'a AuthContext<S>,
@@ -33,49 +34,57 @@ impl<'a, S: AuthSchema> EmailOtpApi<'a, S> {
     /// Generate and store a new code even when resend reuse is enabled.
     /// The email is lowercased but is not required to have email syntax or an existing user.
     pub async fn create(&self, email: &str, kind: EmailOtpType) -> AuthResult<String> {
-        let mut endpoint = EndpointContext::new(
-            None,
-            serde_json::json!({"email":email,"type":kind}),
-            self.context,
-        );
-        endpoint.path = Some("virtual:");
-        endpoint.transaction = self.transaction;
-        let email = email.to_lowercase();
-        self.plugin
-            .create_otp(&endpoint, &email, kind, &kind.identifier(&email))
+        self.context
+            .with_native_context(Default::default(), |context| async move {
+                let mut endpoint = EndpointContext::new(
+                    None,
+                    serde_json::json!({"email":email,"type":kind}),
+                    &context,
+                );
+                endpoint.path = Some("virtual:");
+                endpoint.transaction = self.transaction;
+                let email = email.to_lowercase();
+                self.plugin
+                    .create_otp(&endpoint, &email, kind, &kind.identifier(&email))
+                    .await
+            })
             .await
     }
 
     /// Read a live plaintext or decrypted code without consuming it or changing attempts.
     /// Live hashed codes return an error; missing or expired codes return `None` first.
     pub async fn get(&self, email: &str, kind: EmailOtpType) -> AuthResult<Option<String>> {
-        let identifier = kind.identifier(&email.to_lowercase());
-        let record = match self.transaction {
-            Some(transaction) => {
-                transaction
-                    .get_verification_including_expired(&identifier)
+        self.context
+            .with_native_context(Default::default(), |context| async move {
+                let identifier = kind.identifier(&email.to_lowercase());
+                let record = match self.transaction {
+                    Some(transaction) => {
+                        transaction
+                            .get_verification_including_expired(&identifier)
+                            .await?
+                    }
+                    None => {
+                        context
+                            .database
+                            .get_verification_including_expired(&identifier)
+                            .await?
+                    }
+                };
+                let Some(record) = record else {
+                    return Ok(None);
+                };
+                if record.expires_at() < chrono::Utc::now() {
+                    return Ok(None);
+                }
+                let (stored, _) = super::otp::split(record.value());
+                self.plugin
+                    .recover(stored, context.config.encryption_secret())
                     .await?
-            }
-            None => {
-                self.context
-                    .database
-                    .get_verification_including_expired(&identifier)
-                    .await?
-            }
-        };
-        let Some(record) = record else {
-            return Ok(None);
-        };
-        if record.expires_at() < chrono::Utc::now() {
-            return Ok(None);
-        }
-        let (stored, _) = super::otp::split(record.value());
-        self.plugin
-            .recover(stored, self.context.config.encryption_secret())
-            .await?
-            .map(Some)
-            .ok_or_else(|| {
-                AuthError::bad_request("OTP is hashed, cannot return the plain text OTP")
+                    .map(Some)
+                    .ok_or_else(|| {
+                        AuthError::bad_request("OTP is hashed, cannot return the plain text OTP")
+                    })
             })
+            .await
     }
 }

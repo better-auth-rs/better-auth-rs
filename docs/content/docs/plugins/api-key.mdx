@@ -194,6 +194,8 @@ Fields like `permissions`, `remaining`, `refillAmount`, `refillInterval`, `rateL
 
 ## Server-only Operations
 
+Typed `auth.api_keys()` operations resolve requestless runtime options before accessing storage. A dynamic base URL requires a configured fallback.
+
 Use `auth.api_keys()?` to access the registered plugin and initialized context from trusted Rust code. The accessor returns a configuration error when `ApiKeyPlugin` is not registered.
 
 ```rust

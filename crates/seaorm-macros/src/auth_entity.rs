@@ -157,7 +157,10 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             let Some(ident) = &field.ident else {
                 continue;
             };
-            if all_known.iter().any(|known| ident == known) {
+            if all_known.iter().any(|known| ident == known)
+                && ident != "username"
+                && ident != "display_username"
+            {
                 continue;
             }
             let name = serde_serialized_name(&field.attrs, "rename")?.unwrap_or_else(|| {
@@ -166,8 +169,19 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                     |rule| rule.apply_to_field(&ident.to_string()),
                 )
             });
+            let mut aliases = vec![name];
+            if ident == "username" || ident == "display_username" {
+                let canonical = if ident == "username" {
+                    "username"
+                } else {
+                    "displayUsername"
+                };
+                if !aliases.iter().any(|name| name == canonical) {
+                    aliases.push(canonical.to_owned());
+                }
+            }
             updates.push(quote! {
-                #name => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(
+                #(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(
                     #core_root::serde_json::from_value(value)?,
                 ),
             });
@@ -176,9 +190,9 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                 serde_rename_rule::RenameRule::PascalCase.apply_to_field(&ident.to_string())
             );
             json_columns.push(quote! {
-                #name => matches!(#seaorm_root::sea_orm::ColumnTrait::def(&Column::#column).get_column_type(), #seaorm_root::sea_orm::ColumnType::Json | #seaorm_root::sea_orm::ColumnType::JsonBinary),
+                #(#aliases)|* => matches!(#seaorm_root::sea_orm::ColumnTrait::def(&Column::#column).get_column_type(), #seaorm_root::sea_orm::ColumnType::Json | #seaorm_root::sea_orm::ColumnType::JsonBinary),
             });
-            field_columns.push(quote! { #name => Ok(Column::#column), });
+            field_columns.push(quote! { #(#aliases)|* => Ok(Column::#column), });
         }
         let methods = quote! {
             fn native_json_field(name: &str) -> bool {
@@ -444,11 +458,11 @@ fn plugin_set_fields_user(
     }
     if has("username") {
         out.push(
-            quote! { username: #seaorm_root::sea_orm::ActiveValue::Set(create_user.username) },
+            quote! { username: #seaorm_root::sea_orm::ActiveValue::Set(create_user.username.flatten()) },
         );
     }
     if has("display_username") {
-        out.push(quote! { display_username: #seaorm_root::sea_orm::ActiveValue::Set(create_user.display_username) });
+        out.push(quote! { display_username: #seaorm_root::sea_orm::ActiveValue::Set(create_user.display_username.flatten()) });
     }
     if has("two_factor_enabled") {
         out.push(quote! { two_factor_enabled: #seaorm_root::sea_orm::ActiveValue::Set(false) });
@@ -491,14 +505,14 @@ fn plugin_update_fields_user(
     if has("username") {
         out.push(quote! {
             if let ::std::option::Option::Some(username) = update.username {
-                active.username = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(username));
+                active.username = #seaorm_root::sea_orm::ActiveValue::Set(username);
             }
         });
     }
     if has("display_username") {
         out.push(quote! {
             if let ::std::option::Option::Some(display_username) = update.display_username {
-                active.display_username = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(display_username));
+                active.display_username = #seaorm_root::sea_orm::ActiveValue::Set(display_username);
             }
         });
     }

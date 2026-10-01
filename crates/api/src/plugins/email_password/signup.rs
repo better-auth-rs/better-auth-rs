@@ -3,7 +3,7 @@ use crate::plugins::{
     helpers::{apply_default_role, apply_user_create_fields},
 };
 use async_trait::async_trait;
-use better_auth_core::utils::{password as password_utils, username::normalize_username};
+use better_auth_core::utils::password as password_utils;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResult, AuthSchema, AuthSession, AuthUser,
     CreateAccount, CreateSession, CreateUser, RequestMeta, wire::UserView,
@@ -66,11 +66,13 @@ pub(super) fn synthetic_response<S: AuthSchema>(
         for (name, value) in [
             ("username", create.username.as_ref()),
             ("displayUsername", create.display_username.as_ref()),
-            ("phoneNumber", create.phone_number.as_ref()),
         ] {
             if let Some(value) = value {
                 let _ = core.insert(name.into(), json!(value));
             }
+        }
+        if let Some(phone) = &create.phone_number {
+            let _ = core.insert("phoneNumber".into(), json!(phone));
         }
         let _ = core.insert("id".into(), json!(id));
         core
@@ -105,18 +107,8 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
     let mut create_user = CreateUser::new()
         .with_email(body.email.to_lowercase())
         .with_name(&body.name);
-    apply_user_create_fields(ctx, &body.additional_fields, &mut create_user).await?;
+    apply_user_create_fields(ctx, &body.additional_fields, &mut create_user)?;
     create_user.image = body.image.clone();
-    if config.username {
-        if let Some(ref username) = body.username {
-            create_user = create_user.with_username(normalize_username(username));
-        }
-        if let Some(ref display_username) = body.display_username {
-            create_user.display_username = Some(display_username.clone());
-        } else if let Some(ref username) = body.username {
-            create_user.display_username = Some(username.clone());
-        }
-    }
     let protect_enumeration = config.require_email_verification || !config.auto_sign_in;
     if let Some(user) = ctx
         .database

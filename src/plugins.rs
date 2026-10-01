@@ -35,8 +35,9 @@ pub use better_auth_api::plugins::{
     SendMagicLink, TokenStorage, email_otp, magic_link, multi_session, one_time_token,
 };
 pub use better_auth_api::plugins::{
-    JwtAlgorithm, JwtAudience, JwtCallbackFuture, JwtCustomSign, JwtDefinePayload, JwtExpiration,
-    JwtGetSubject, JwtKeyPairConfig, JwtPlugin, JwtPluginConfig, JwtSigningOptions, jwt,
+    JwtAdapterFuture, JwtAlgorithm, JwtApi, JwtAudience, JwtCallOverrides, JwtCallbackFuture,
+    JwtCallbacks, JwtCustomSign, JwtDefinePayload, JwtExpiration, JwtGetSubject, JwtKeyOptions,
+    JwtKeyPairConfig, JwtPlugin, JwtPluginConfig, JwtSigningOptions, JwtTokenOptions, jwt,
 };
 pub use better_auth_api::plugins::{OAuthPopupPlugin, OAuthProxyConfig, OAuthProxyPlugin};
 pub use better_auth_api::plugins::{OneTapConfig, OneTapPlugin, one_tap};
@@ -49,4 +50,9 @@ pub use siwe::SiwePlugin;
 pub use better_auth_api::plugins::last_login_method::{
     self, BeforeStoreLastLoginCookie, LastLoginMethodConfig, LastLoginMethodPlugin,
     LastLoginMethodResolver,
+};
+
+pub use better_auth_api::plugins::username::{
+    self, UsernameConfig, UsernameNormalization, UsernameNormalizer, UsernamePlugin,
+    UsernameValidationOrder, UsernameValidator,
 };

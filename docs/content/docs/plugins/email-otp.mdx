@@ -82,4 +82,6 @@ The default-email override keeps the original request but supplies the OTP endpo
 
 Inside an application callback, use `endpoint.email_otp()?` or `EmailOtpApi::from_endpoint(endpoint)?`. Both operations use the callback's active database transaction. A native read sees codes created earlier in that transaction, and a rejected admission rolls back database OTP writes. The configured verification identifier policy applies to these operations. `auth.email_otp()` remains available for independent server calls.
 
+A dynamic base URL requires a configured fallback for independent server calls. Endpoint-bound calls retain the resolved URL and transaction without running URL resolvers again.
+
 Verification after hooks run after a successful transaction commit. Secondary storage writes execute immediately, matching upstream, so a database rollback does not undo a secondary storage write.

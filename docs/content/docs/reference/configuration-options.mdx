@@ -12,9 +12,9 @@ This page documents the public configuration types in `crates/core/src/config.rs
 | `secret` | `String` | resolved during `build()` | Signing/encryption key, or the legacy decryption key when `secrets` is configured; short or low-entropy values produce warnings |
 | `secrets` | `Option<Vec<VersionedSecret>>` | `None` | Ordered rotation keys; the first key signs and encrypts new data |
 | `app_name` | `String` | `"Better Auth"` | App name used by emails and cookie-related metadata |
-| `base_url` | `String` | `"http://localhost:3000"` | Base URL for the auth service |
+| `base_url` | `BaseUrl` | `Auto` | Explicit URL, dynamic host policy, or environment/request resolution |
 | `base_path` | `String` | `"/api/auth"` | Auth route mount prefix |
-| `trusted_origins` | `Vec<String>` | `[]` | Origins trusted for CSRF/origin checks |
+| `trusted_origins` | `TrustedValues` | `Static(vec![])` | Static origins or an asynchronous Request resolver |
 | `disabled_paths` | `Vec<String>` | `[]` | Routes that should behave as disabled |
 | `session` | `SessionConfig` | see below | Session token and cookie behavior |
 | `verification` | `VerificationConfig` | see below | Verification persistence and identifier policies |
@@ -39,10 +39,6 @@ Explicit `secrets`, including an invalid empty vector, takes precedence over `BE
 | `disable_session_refresh` | `bool` | `false` | Disable automatic refresh entirely |
 | `defer_session_refresh` | `bool` | `false` | Defer GET refresh and return `needsRefresh`; POST performs the refresh. POST returns 405 when disabled |
 | `fresh_age` | `Option<chrono::Duration>` | `None` | Optional freshness window for sensitive actions |
-| `cookie_name` | `String` | `"better-auth.session_token"` | Cookie name used for session transport |
-| `cookie_secure` | `bool` | Derived from `base_url` | `true` for HTTPS URLs, `false` for HTTP URLs |
-| `cookie_http_only` | `bool` | `true` | Prevent JavaScript access to the cookie |
-| `cookie_same_site` | `SameSite` | `Lax` | SameSite policy |
 | `cookie_cache` | `Option<CookieCacheConfig>` | Resolved during `build()` | Omitted configuration enables JWE caching only when database and secondary storage are both absent |
 | `bearer` | `Option<BearerConfig>` | `None` | Enable Bearer authentication; `require_signature` rejects unsigned tokens |
 | `additional_fields` | `IndexMap<String, SessionFieldConfig>` | Empty | Session field defaults, validators, transforms, update generators, mappings, and visibility |
@@ -66,6 +62,8 @@ Refresh semantics:
 Without secondary storage, session and verification data remain in the database regardless of the persistence flags. Install a backend through `BetterAuth::secondary_storage`. See [Secondary Storage](/docs/concepts/secondary-storage) for atomic consumption, TTL, fallback, and model hydration requirements.
 
 ## CookieCacheConfig
+
+Cookie names and attributes use `advanced.cookies`, `advanced.default_cookie_attributes`, and `advanced.cookie_prefix`. The default token name is `better-auth.session_token`, with `__Secure-` added by secure-cookie policy. See [Cookies](/docs/concepts/cookies) for merge order and migration from the removed `SessionConfig.cookie_*` fields.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -128,7 +126,7 @@ The default password hasher uses Better Auth-compatible scrypt. These retained l
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `bool` | `true` | Enable account linking |
-| `trusted_providers` | `Vec<String>` | `[]` | Providers allowed to auto-link |
+| `trusted_providers` | `TrustedValues` | `Static(vec![])` | Static providers or an asynchronous Request resolver |
 | `allow_different_emails` | `bool` | `false` | Allow linking accounts with different emails |
 | `allow_unlinking_all` | `bool` | `false` | Allow unlinking the last linked account |
 | `disable_implicit_linking` | `bool` | `false` | Only allow explicit linking via `link-social` |
@@ -186,7 +184,8 @@ Memory and database denials preserve the counter and return the remaining window
 | `default_cookie_attributes` | `CookieAttributes` | all `None` | Default attributes applied to every cookie |
 | `cookie_prefix` | `Option<String>` | `None` | Prefix applied to every cookie name |
 | `database` | `AdvancedDatabaseConfig` | see below | Database-related defaults |
-| `trusted_proxy_headers` | `Vec<String>` | `[]` | Headers trusted for real client IP extraction |
+| `trusted_proxy_headers` | `bool` | `false` | Trust validated forwarded host and protocol during URL resolution |
+| `use_secure_cookies` | `Option<bool>` | `None` | Override secure cookie naming and its initial attribute |
 
 ### IpAddressConfig
 
@@ -205,7 +204,7 @@ Disabling tracking omits session and CAPTCHA addresses and disables IP rate limi
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `domain` | `String` | Parent cookie domain such as `".example.com"` |
+| `domain` | `Option<String>` | Explicit parent domain, or `None` to use the resolved URL hostname |
 
 ### CookieAttributes
 

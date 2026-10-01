@@ -370,19 +370,6 @@ pub(crate) async fn update_user_core(
     {
         update.email_verified = Some(value);
     }
-    if ctx.get_metadata("username.enabled") == Some(&serde_json::Value::Bool(true))
-        && let Some(value) = body.data.get("username").and_then(|value| value.as_str())
-    {
-        update.username = Some(value.to_string());
-    }
-    if ctx.get_metadata("username.enabled") == Some(&serde_json::Value::Bool(true))
-        && let Some(value) = body
-            .data
-            .get("displayUsername")
-            .and_then(|value| value.as_str())
-    {
-        update.display_username = Some(value.to_string());
-    }
     if ctx.get_metadata("anonymous.enabled") == Some(&serde_json::Value::Bool(true)) {
         update.is_anonymous = body
             .data

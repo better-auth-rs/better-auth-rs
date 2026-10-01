@@ -37,6 +37,7 @@ async fn device_limits_respect_base_paths_overrides_and_disable()
     ];
     for (case, (rate_limit, allowed)) in cases.into_iter().enumerate() {
         let config = AuthConfig::new("device-limit-tests-secret-at-least-32-characters")
+            .base_url("http://localhost:3000")
             .base_path("/custom/auth");
         let database = Database::connect("sqlite::memory:").await?;
         better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)

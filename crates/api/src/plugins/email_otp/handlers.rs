@@ -157,7 +157,7 @@ impl EmailOtpPlugin {
                     .with_name(body.get("name"))
                     .with_email_verified(true);
                 input.image = body.optional("image").map(str::to_owned);
-                apply_user_create_fields(ctx, body.fields(), &mut input).await?;
+                apply_user_create_fields(ctx, body.fields(), &mut input)?;
 
                 let endpoint = EndpointContext::new(
                     Some(req),

@@ -15,6 +15,7 @@ use crate::types::{AuthRequest, AuthResponse, HttpMethod};
 pub type MetadataMap = HashMap<String, serde_json::Value>;
 
 pub struct AuthInitParts<S: AuthSchema> {
+    request_runtime: crate::request_runtime::RequestRuntime,
     pub plugin_user_fields: crate::user_fields::UserConfig,
     pub database_hooks: Vec<Arc<dyn crate::store::database_hooks::DatabaseHooks<S>>>,
     pub runtime: crate::plugin_runtime::PluginRuntime<S>,
@@ -187,6 +188,7 @@ pub struct AuthRoute {
 
 /// Initialization context passed to plugin setup.
 pub struct AuthInitContext<S: AuthSchema> {
+    request_runtime: crate::request_runtime::RequestRuntime,
     plugin_user_fields: crate::user_fields::UserConfig,
     database_hooks: Vec<Arc<dyn crate::store::database_hooks::DatabaseHooks<S>>>,
     runtime: crate::plugin_runtime::PluginRuntime<S>,
@@ -202,6 +204,7 @@ pub struct AuthInitContext<S: AuthSchema> {
 
 /// Context passed to plugin methods.
 pub struct AuthContext<S: AuthSchema> {
+    pub(crate) request_runtime: crate::request_runtime::RequestRuntime,
     pub extensions: crate::RuntimeExtensions,
     pub email_verification_policy: crate::email::EmailVerificationRuntimePolicy,
     pub config: Arc<AuthConfig>,
@@ -215,6 +218,7 @@ pub struct AuthContext<S: AuthSchema> {
 impl<S: AuthSchema> Clone for AuthContext<S> {
     fn clone(&self) -> Self {
         Self {
+            request_runtime: self.request_runtime.clone(),
             extensions: self.extensions.clone(),
             email_verification_policy: self.email_verification_policy.clone(),
             config: self.config.clone(),
@@ -287,6 +291,7 @@ impl<S: AuthSchema> AuthInitContext<S> {
         let email_provider = config.email_provider.clone();
         let password_policy = crate::utils::password::PasswordRuntimePolicy::new(&config.password);
         Self {
+            request_runtime: Default::default(),
             plugin_user_fields: Default::default(),
             database_hooks: Vec::new(),
             runtime: Default::default(),
@@ -299,6 +304,16 @@ impl<S: AuthSchema> AuthInitContext<S> {
             password_policy,
             metadata: MetadataMap::new(),
         }
+    }
+
+    /// Resolve initial URL and trust options before plugin initialization.
+    pub async fn initialize_request_context(&mut self) -> AuthResult<()> {
+        let mut context = AuthContext::new(self.config.clone(), self.database.clone());
+        context.request_runtime = self.request_runtime.clone();
+        let context = context.initialize_request_context().await?;
+        self.config = context.config.clone();
+        self.request_runtime = context.request_runtime.clone();
+        Ok(())
     }
 
     /// Register user schema fields in plugin registration order.
@@ -331,6 +346,7 @@ impl<S: AuthSchema> AuthInitContext<S> {
 
     pub fn into_parts(self) -> AuthInitParts<S> {
         AuthInitParts {
+            request_runtime: self.request_runtime,
             plugin_user_fields: self.plugin_user_fields,
             database_hooks: self.database_hooks,
             runtime: self.runtime,
@@ -349,6 +365,7 @@ impl<S: AuthSchema> AuthContext<S> {
         let email_provider = config.email_provider.clone();
         let password_policy = crate::utils::password::PasswordRuntimePolicy::new(&config.password);
         Self {
+            request_runtime: Default::default(),
             extensions: crate::RuntimeExtensions::default(),
             email_verification_policy: crate::email::EmailVerificationRuntimePolicy::default(),
             config,
@@ -368,6 +385,7 @@ impl<S: AuthSchema> AuthContext<S> {
         let email_provider = config.email_provider.clone();
         let password_policy = crate::utils::password::PasswordRuntimePolicy::new(&config.password);
         Self {
+            request_runtime: Default::default(),
             extensions: crate::RuntimeExtensions::default(),
             email_verification_policy: crate::email::EmailVerificationRuntimePolicy::default(),
             config,
@@ -523,10 +541,10 @@ impl<S: AuthSchema> AuthContext<S> {
         read: crate::session::SessionRead,
     ) -> AuthResult<(crate::wire::UserView, crate::wire::SessionView)> {
         let resolved = self.session_manager().resolve(req, read).await?;
-        resolved
-            .data
-            .map(|data| (data.user, data.session))
-            .ok_or(AuthError::Unauthenticated)
+        req.set_session_snapshot(resolved.data.clone())?;
+        let data = resolved.data.ok_or(AuthError::Unauthenticated)?;
+        req.set_server_context("auth.current-user-id", data.user.id.clone().into())?;
+        Ok((data.user, data.session))
     }
 }
 
@@ -639,5 +657,12 @@ mod tests {
 
         let (found_user, _found_session) = ctx.require_session(&req).await.unwrap();
         assert_eq!(found_user.id(), user.id());
+    }
+}
+
+impl<S: AuthSchema> AuthInitParts<S> {
+    /// Preserve the initialized trust snapshot and auth-instance identity in the final context.
+    pub fn apply_request_runtime(&self, context: &mut AuthContext<S>) {
+        context.request_runtime = self.request_runtime.clone();
     }
 }

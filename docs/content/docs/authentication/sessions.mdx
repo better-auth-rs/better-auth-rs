@@ -84,10 +84,10 @@ config.session.update_age = Some(Duration::days(1));
 config.session.disable_session_refresh = false;
 config.session.defer_session_refresh = false;
 config.session.fresh_age = Some(Duration::minutes(10));
-config.session.cookie_name = "better-auth.session_token".to_string();
-config.session.cookie_secure = true;
-config.session.cookie_http_only = true;
-config.session.cookie_same_site = SameSite::Lax;
+config.advanced.cookie_prefix = Some("better-auth".into());
+config.advanced.use_secure_cookies = Some(true);
+config.advanced.default_cookie_attributes.http_only = Some(true);
+config.advanced.default_cookie_attributes.same_site = Some(SameSite::Lax);
 ```
 
 - `update_age = Some(duration)`: refresh when the remaining lifetime falls below `expires_in - duration`.

@@ -1,0 +1,43 @@
+---
+title: Username
+description: Username authentication, validation, normalization, and typed storage.
+---
+
+Register `UsernamePlugin` alongside `EmailPasswordPlugin` to enable `/sign-in/username` and `/is-username-available`. `EmailPasswordPlugin::username(true)` remains a shorthand for the default options. Register one form per auth instance.
+
+```rust
+use better_auth::plugins::{EmailPasswordPlugin, UsernameConfig, UsernamePlugin};
+
+let auth = builder
+    .plugin(EmailPasswordPlugin::new())
+    .plugin(UsernamePlugin::new(UsernameConfig {
+        immutable_username: true,
+        ..Default::default()
+    }))
+    .build()
+    .await?;
+```
+
+Generate the user fields with the CLI's `username` plugin selection. Application models need `username: Option<String>` and, when enabled, `display_username: Option<String>`. `display_username: false` removes the display field requirement and its public output. `username_field_name` and `display_username_field_name` select serialized storage fields; map the corresponding SeaORM columns in the application model.
+
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `min_username_length`, `max_username_length` | `3.0`, `30.0` | Compare UTF-16 length; preserve upstream fractional limits and zero/NaN defaults |
+| `username_validator` | ASCII letters, digits, `_`, `.` | Await `UsernameValidator::validate`; false rejects the value |
+| `display_username_validator` | None | Await the validator when the upstream route or write hook validates a display name |
+| `username_normalization` | `Default` | Lowercase; `Disabled` preserves case; `Custom` invokes a synchronous callback |
+| `display_username_normalization` | `Default` | Preserve text; `Custom` invokes a synchronous callback |
+| `username_validation_order` | None | Preserve the distinct omitted, `PreNormalization`, and `PostNormalization` behaviors |
+| `display_username_validation_order` | None | Choose whether display validation receives the normalized text |
+| `immutable_username` | `false` | Reject changed usernames through HTTP and native update-user endpoints once a nonempty username exists |
+| `display_username` | `true` | Store and return the separate display username |
+
+Custom validators are asynchronous. Custom normalizers use `Arc<UsernameNormalizer>` and return `AuthResult<String>`. Errors propagate through the calling endpoint or adapter. Length checks run before the username validator and count UTF-16 units rather than Rust characters or UTF-8 bytes.
+
+Normalization runs at each upstream boundary. Email signup and update-user parse configured fields, database hooks normalize their patches, and the adapter applies field transforms. Direct adapter writes skip the endpoint layer. A non-idempotent callback can therefore run multiple times; the library does not combine these calls. Availability validates the original text. Username sign-in has its own ordering: explicit `PreNormalization` normalizes before validation and again for lookup, while omission and `PostNormalization` validate before the lookup normalization.
+
+Email signup can infer a missing username from a valid `displayUsername`, including when display storage is disabled. A missing or empty display name is filled from the username when the display field is enabled. Other user-creation routes use their own endpoint parser followed by the same database hooks and adapter policies.
+
+Native `call_endpoint` runs the same Username endpoint hooks. Direct `auth.store().create_user` and `update_user` calls run database hooks; immutable-username enforcement belongs to the update-user endpoint. Transactional uniqueness checks use the active transaction, including uncommitted users. Application before-update hooks receive the original patch and may overwrite an earlier plugin patch, matching upstream hook order.
+
+Trusted `CreateUser` and `UpdateUser` inputs distinguish omitted username fields (`None`), explicit null (`Some(None)`), and strings (`Some(Some(value))`). Nullable updates clear stored columns. Session caches apply public field visibility without running normalization again.

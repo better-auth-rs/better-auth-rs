@@ -28,7 +28,16 @@ impl EphemeralStore {
     pub(super) async fn update_session_with_hooks(
         &self,
         token: &str,
+        update: SessionUpdate,
+    ) -> AuthResult<Option<SessionView>> {
+        self.update_session_with_writer(token, update, None).await
+    }
+
+    pub(super) async fn update_session_with_writer(
+        &self,
+        token: &str,
         mut update: SessionUpdate,
+        secondary: Option<crate::store::SessionUpdateWriter<StatelessSchema>>,
     ) -> AuthResult<Option<SessionView>> {
         let original = update.clone();
         let transaction = EphemeralTransaction { store: self };
@@ -40,6 +49,28 @@ impl EphemeralStore {
                 DatabaseHookUpdate::Patch(patch) => update.merge(patch),
             }
         }
+        let (write_database, cached) = match secondary {
+            Some(secondary) => {
+                let result = (secondary.write)(update.clone()).await?;
+                (secondary.write_database, result)
+            }
+            None => (true, None),
+        };
+        let session = if write_database {
+            self.write_session_update(token, update)?
+        } else {
+            cached
+        };
+        self.after(CommittedWrite::SessionUpdated(session.clone()))
+            .await?;
+        Ok(session)
+    }
+
+    fn write_session_update(
+        &self,
+        token: &str,
+        mut update: SessionUpdate,
+    ) -> AuthResult<Option<SessionView>> {
         update.additional_fields = self
             .session_config
             .field_schema()
@@ -56,26 +87,29 @@ impl EphemeralStore {
             Ok(Some(session))
         })()?;
         let session = session.map(|row| self.output_session(row)).transpose()?;
-        self.after(CommittedWrite::SessionUpdated(session.clone()))
-            .await?;
         Ok(session)
     }
 
     pub(super) async fn delete_sessions_with_hooks(
         &self,
         predicate: impl Fn(&SessionView) -> bool + Send + Sync,
-    ) -> AuthResult<usize> {
+        preserve: bool,
+    ) -> AuthResult<Option<usize>> {
+        let now = Utc::now();
+        let matches = |row: &SessionView| predicate(row) && (!preserve || row.expires_at > now);
         let sessions: Vec<_> = self
             .lock()?
             .sessions
             .values()
-            .filter(|row| predicate(row))
+            .filter(|row| matches(row))
             .cloned()
             .collect();
+        // Upstream deleteManyWithHooks catches snapshot projection failures, then runs the write.
         let sessions: Vec<_> = sessions
             .into_iter()
             .map(|row| self.output_session(row))
-            .collect::<AuthResult<_>>()?;
+            .collect::<AuthResult<_>>()
+            .unwrap_or_default();
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
         for session in &sessions {
@@ -83,19 +117,38 @@ impl EphemeralStore {
                 if hook.before_delete_session(session, &context).await?
                     == DatabaseHookControl::Cancel
                 {
-                    return Ok(0);
+                    return Ok(None);
                 }
             }
         }
-        let count = {
+        let count = if preserve {
+            let expires_at = Utc::now();
+            let fields = self
+                .session_config
+                .field_schema()
+                .storage_fields(Default::default(), false)?;
+            let mut count = 0;
+            for session in self
+                .lock()?
+                .sessions
+                .values_mut()
+                .filter(|row| matches(row))
+            {
+                session.expires_at = expires_at;
+                session.updated_at = expires_at;
+                session.additional_fields.extend(fields.clone());
+                count += 1;
+            }
+            count
+        } else {
             let mut state = self.lock()?;
             let before = state.sessions.len();
-            state.sessions.retain(|_, row| !predicate(row));
+            state.sessions.retain(|_, row| !matches(row));
             before - state.sessions.len()
         };
         for session in sessions {
             self.after(CommittedWrite::SessionDeleted(session)).await?;
         }
-        Ok(count)
+        Ok(Some(count))
     }
 }

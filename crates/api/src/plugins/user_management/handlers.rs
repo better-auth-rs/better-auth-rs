@@ -89,7 +89,7 @@ pub(crate) async fn change_email_core(
     )?;
     let verification_url = format!(
         "{}/verify-email?token={}&callbackURL={}",
-        ctx.config.base_url,
+        ctx.base_url(),
         verification_token,
         urlencoding::encode(callback_url),
     );
@@ -174,7 +174,7 @@ pub(crate) async fn delete_user_core(
             .await?;
         let url = format!(
             "{}/delete-user/callback?token={}&callbackURL={}",
-            ctx.config.base_url,
+            ctx.base_url(),
             token,
             urlencoding::encode(body.callback_url.as_deref().unwrap_or("/")),
         );

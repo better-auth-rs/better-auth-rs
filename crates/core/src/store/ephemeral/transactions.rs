@@ -52,12 +52,25 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction<'_> {
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<UserView>> {
         self.store.get_user_by_email(email).await
     }
+    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<UserView>> {
+        self.store.get_user_by_username(username).await
+    }
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<UserView> {
         self.store.update_user(id, update).await
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
         self.store.delete_user(id).await
     }
+    async fn delete_user_optional(
+        &self,
+        id: &str,
+        delete_database_sessions: bool,
+    ) -> AuthResult<Option<UserView>> {
+        self.store
+            .delete_user_optional(id, delete_database_sessions)
+            .await
+    }
+
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
         self.store.create_passkey(input).await
     }
@@ -227,6 +240,9 @@ mod tests;
 
 #[async_trait]
 impl crate::store::JwksStore for EphemeralTransaction<'_> {
+    async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>> {
+        crate::store::JwksStore::get_jwk(self.store, id).await
+    }
     async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>> {
         crate::store::JwksStore::list_jwks(self.store).await
     }

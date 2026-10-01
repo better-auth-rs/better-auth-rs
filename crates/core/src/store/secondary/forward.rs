@@ -449,6 +449,9 @@ impl<S: AuthSchema> OrganizationRoleStore for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> JwksStore for SecondaryStore<S> {
+    async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>> {
+        self.inner.get_jwk(id).await
+    }
     async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>> {
         self.inner.list_jwks().await
     }

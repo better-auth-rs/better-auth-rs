@@ -3,7 +3,7 @@ use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use better_auth_core::{AuthResult, CreateJwk, Jwk, store::JwksStore};
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ConnectionTrait, EntityTrait};
+use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use serde_json::{Map, json};
 
 use super::{SeaOrmStore, entities::jwk, map_db_err};
@@ -47,6 +47,9 @@ impl<
     P: crate::SeaOrmPluginSchema,
 > JwksStore for SeaOrmStore<S, O, P>
 {
+    async fn get_jwk(&self, id: &str) -> AuthResult<Option<Jwk>> {
+        get::<P>(self.connection(), id).await
+    }
     async fn list_jwks(&self) -> AuthResult<Vec<Jwk>> {
         list::<P>(self.connection()).await
     }
@@ -62,12 +65,29 @@ impl<
     P: crate::SeaOrmPluginSchema,
 > JwksStore for super::SeaOrmTransaction<'_, S, O, P>
 {
+    async fn get_jwk(&self, id: &str) -> AuthResult<Option<Jwk>> {
+        get::<P>(self.tx, id).await
+    }
     async fn list_jwks(&self) -> AuthResult<Vec<Jwk>> {
         list::<P>(self.tx).await
     }
     async fn create_jwk(&self, input: CreateJwk) -> AuthResult<Jwk> {
         create::<P>(self.tx, input).await
     }
+}
+
+async fn get<P: crate::SeaOrmPluginSchema>(
+    connection: &impl ConnectionTrait,
+    id: &str,
+) -> AuthResult<Option<Jwk>> {
+    Entity::<P::Jwk>::find()
+        .filter(P::Jwk::column("id")?.eq(id))
+        .one(connection)
+        .await
+        .map_err(map_db_err)?
+        .as_ref()
+        .map(SeaOrmPluginModel::record)
+        .transpose()
 }
 
 async fn list<P: crate::SeaOrmPluginSchema>(

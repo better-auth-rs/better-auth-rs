@@ -52,6 +52,7 @@ impl CsrfConfig {
 pub struct CsrfMiddleware {
     config: CsrfConfig,
     auth_config: Arc<AuthConfig>,
+    trusted_origins: Option<Vec<String>>,
 }
 
 impl CsrfMiddleware {
@@ -59,6 +60,27 @@ impl CsrfMiddleware {
         Self {
             config,
             auth_config,
+            trusted_origins: None,
+        }
+    }
+
+    pub fn from_context<S: crate::AuthSchema>(
+        config: CsrfConfig,
+        context: &crate::AuthContext<S>,
+    ) -> Self {
+        Self {
+            config,
+            auth_config: context.config.clone(),
+            trusted_origins: Some(context.trusted_origins().to_vec()),
+        }
+    }
+
+    fn is_origin_trusted(&self, origin: &str) -> bool {
+        match &self.trusted_origins {
+            Some(values) => values.iter().any(|pattern| {
+                glob_match::glob_match(&extract_origin(pattern).unwrap_or_default(), origin)
+            }),
+            None => self.auth_config.is_origin_trusted(origin),
         }
     }
 
@@ -85,7 +107,11 @@ impl CsrfMiddleware {
             .any(|name| Self::header(req, name).is_some_and(|value| !value.trim().is_empty()))
     }
 
-    fn validate_origin(&self, req: &AuthRequest, force_validate: bool) -> Result<(), AuthError> {
+    async fn validate_origin(
+        &self,
+        req: &AuthRequest,
+        force_validate: bool,
+    ) -> Result<(), AuthError> {
         if self.auth_config.advanced.csrf_check_disabled()
             || self.auth_config.advanced.disable_origin_check
         {
@@ -110,7 +136,16 @@ impl CsrfMiddleware {
             .filter(|value| value != "null")
             .ok_or_else(|| AuthError::forbidden(MISSING_OR_NULL_ORIGIN))?;
 
-        if self.auth_config.is_origin_trusted(&origin) {
+        let trusted = if self.auth_config.trusted_origins.is_dynamic() {
+            let mut origins = self.trusted_origins.clone().unwrap_or_default();
+            origins.extend(self.auth_config.trusted_origins.resolve(Some(req)).await?);
+            origins.iter().any(|pattern| {
+                glob_match::glob_match(&extract_origin(pattern).unwrap_or_default(), &origin)
+            })
+        } else {
+            self.is_origin_trusted(&origin)
+        };
+        if trusted {
             Ok(())
         } else {
             Err(AuthError::forbidden(INVALID_ORIGIN))
@@ -118,13 +153,13 @@ impl CsrfMiddleware {
     }
 
     /// Validate a login form after the endpoint's input schema has passed.
-    pub fn validate_form_request(&self, req: &AuthRequest) -> Result<(), AuthError> {
+    pub async fn validate_form_request(&self, req: &AuthRequest) -> Result<(), AuthError> {
         if !self.config.enabled || self.auth_config.advanced.csrf_check_disabled() {
             return Ok(());
         }
 
         if Self::has_cookies(req) {
-            return self.validate_origin(req, false);
+            return self.validate_origin(req, false).await;
         }
 
         if Self::has_fetch_metadata(req) {
@@ -140,14 +175,14 @@ impl CsrfMiddleware {
                 return Err(AuthError::forbidden(CROSS_SITE_NAVIGATION_LOGIN_BLOCKED));
             }
 
-            return self.validate_origin(req, true);
+            return self.validate_origin(req, true).await;
         }
 
         if ["origin", "referer"]
             .into_iter()
             .any(|name| Self::header(req, name).is_some_and(|value| !value.is_empty()))
         {
-            return self.validate_origin(req, true);
+            return self.validate_origin(req, true).await;
         }
 
         Ok(())
@@ -182,7 +217,9 @@ impl CsrfMiddleware {
                     Self::target_error_message(name)
                 ))
             })?;
-            if !self.auth_config.is_redirect_target_trusted(value) {
+            if !crate::config::is_safe_relative_path(value)
+                && !extract_origin(value).is_some_and(|origin| self.is_origin_trusted(&origin))
+            {
                 return Err(AuthError::forbidden(Self::target_error_message(name)));
             }
         }
@@ -244,7 +281,7 @@ impl Middleware for CsrfMiddleware {
             return Ok(None);
         }
 
-        let csrf_result = self.validate_origin(req, false);
+        let csrf_result = self.validate_origin(req, false).await;
 
         if let Err(error) = csrf_result {
             return Ok(Some(Self::reject(error)));
@@ -339,6 +376,7 @@ mod tests {
         );
         assert!(
             mw.validate_form_request(&req)
+                .await
                 .err()
                 .map(|error| error.to_auth_response())
                 .is_none()
@@ -360,6 +398,7 @@ mod tests {
         );
         let message = forbidden_message(
             mw.validate_form_request(&req)
+                .await
                 .err()
                 .map(|error| error.to_auth_response()),
         )
@@ -379,6 +418,7 @@ mod tests {
                 let req = make_request(path, None, false, &headers);
                 let message = forbidden_message(
                     mw.validate_form_request(&req)
+                        .await
                         .err()
                         .map(|error| error.to_auth_response()),
                 )
@@ -393,6 +433,7 @@ mod tests {
                 let req = make_request(path, None, false, &headers);
                 assert!(
                     mw.validate_form_request(&req)
+                        .await
                         .err()
                         .map(|error| error.to_auth_response())
                         .is_none()
@@ -433,7 +474,7 @@ mod tests {
         let mut config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
             .base_url("http://localhost:3000")
             .disable_origin_check(true);
-        config.trusted_origins = vec![];
+        config.trusted_origins = vec![].into();
         let mw = CsrfMiddleware::new(CsrfConfig::new(), Arc::new(config));
         let mut req = make_request("/sign-in/social", None, false, &[]);
         req.body = Some(

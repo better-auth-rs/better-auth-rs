@@ -190,6 +190,18 @@ fn proxy_case(profile: &str) -> Option<serde_json::Value> {
     )
 }
 
+fn dynamic_environment_case(profile: &str) -> Option<serde_json::Value> {
+    let index = profile
+        .strip_prefix("dynamic-environment:")?
+        .parse::<usize>()
+        .expect("dynamic environment index");
+    let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+        "../compat-tests/client-tests/tests/config/dynamic-environment/cases.json"
+    ))
+    .expect("dynamic environment cases");
+    Some(cases.get(index).expect("dynamic environment case").clone())
+}
+
 fn proxy_environment<'a>(command: &'a mut Command, profile: &str, port: u16) -> &'a mut Command {
     for key in [
         "VERCEL_URL",
@@ -221,6 +233,23 @@ fn proxy_environment<'a>(command: &'a mut Command, profile: &str, port: u16) -> 
                 .replace("{base}", &format!("http://localhost:{port}")),
         );
     }
+    if let Some(case) = dynamic_environment_case(profile) {
+        for key in [
+            "BETTER_AUTH_URL",
+            "NEXT_PUBLIC_BETTER_AUTH_URL",
+            "PUBLIC_BETTER_AUTH_URL",
+            "NUXT_PUBLIC_BETTER_AUTH_URL",
+            "NUXT_PUBLIC_AUTH_URL",
+            "BASE_URL",
+            "BETTER_AUTH_TRUSTED_ORIGINS",
+            "NODE_ENV",
+        ] {
+            let _ = command.env_remove(key);
+        }
+        for (key, value) in case["env"].as_object().expect("dynamic environment") {
+            let _ = command.env(key, value.as_str().expect("environment value"));
+        }
+    }
     command
 }
 
@@ -237,6 +266,12 @@ fn run_bun_phase_suite(
         .arg("--bail")
         .args(paths)
         .env("COMPAT_PROFILE", profile)
+        .env(
+            "COMPAT_DYNAMIC_CASE",
+            dynamic_environment_case(profile)
+                .map(|case| case.to_string())
+                .unwrap_or_default(),
+        )
         .current_dir(project_root().join("compat-tests/client-tests"))
         .env("AUTH_BASE_URL_TS", format!("http://localhost:{ts_port}"))
         .env("COMPAT_OIDC_URL", oidc_url)
@@ -454,6 +489,10 @@ async fn configuration_client_compat() {
         "stateless-no-refresh",
         "stateless-secondary",
         "dispatch-errors",
+        "dynamic-context",
+        "dynamic-native",
+        "dynamic-oauth",
+        "dynamic-environment",
         "identity-context",
         "rate-limit-options",
         "last-login-cookie",
@@ -461,6 +500,13 @@ async fn configuration_client_compat() {
         "last-login-secondary",
         "last-login-ephemeral",
         "last-login-fields",
+        "username-order-default",
+        "username-order-pre",
+        "username-order-post",
+        "username-normalization-disabled",
+        "username-no-display",
+        "username-immutable-validation",
+        "username-writes",
         "device-generators",
         "http-body",
         "http-body-csrf-explicit",
@@ -546,6 +592,11 @@ async fn configuration_client_compat() {
         "jwt-advanced",
         "jwt-remote",
         "jwt-cache",
+        "jwt-adapter",
+        "database-lifecycle",
+        "database-lifecycle-cache",
+        "database-lifecycle-database",
+        "database-lifecycle-preserved",
     ] {
         if selected
             .as_ref()
@@ -554,7 +605,19 @@ async fn configuration_client_compat() {
             continue;
         }
         matched = true;
-        if profile == "oauth-proxy-env" {
+        if profile == "dynamic-environment" {
+            let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+                "../compat-tests/client-tests/tests/config/dynamic-environment/cases.json"
+            ))
+            .expect("dynamic environment cases");
+            for index in 0..cases.len() {
+                run_client_compat_profile(
+                    &["./tests/config/dynamic-environment/"],
+                    &format!("{profile}:{index}"),
+                )
+                .await;
+            }
+        } else if profile == "oauth-proxy-env" {
             let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!(
                 "../compat-tests/client-tests/tests/config/oauth-proxy-env/cases.json"
             ))
@@ -577,6 +640,8 @@ async fn configuration_client_compat() {
             run_client_compat_profile(&["./tests/config/admin-options/"], profile).await;
         } else if profile.starts_with("last-login-") {
             run_client_compat_profile(&["./tests/config/last-login/"], profile).await;
+        } else if profile.starts_with("username-") {
+            run_client_compat_profile(&["./tests/config/username-options/"], profile).await;
         } else if profile.starts_with("stateless-") {
             run_client_compat_profile(&["./tests/config/stateless/"], profile).await;
         } else if profile.starts_with("custom-session") {

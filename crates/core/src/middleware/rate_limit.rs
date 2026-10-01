@@ -17,7 +17,7 @@ static IP_WARNING_LOGGED: AtomicBool = AtomicBool::new(false);
 pub struct RateLimitMiddleware {
     config: RateLimitConfig,
     ip_address: crate::config::IpAddressConfig,
-    base_path: String,
+    base_path: Box<dyn Fn() -> String + Send + Sync>,
     plugin_limits: Vec<PluginRateLimit>,
     storage: Option<Arc<dyn RateLimitStorage>>,
 }
@@ -37,7 +37,7 @@ impl RateLimitMiddleware {
         Self {
             config,
             ip_address: Default::default(),
-            base_path: String::new(),
+            base_path: Box::new(String::new),
             plugin_limits: Vec::new(),
             storage,
         }
@@ -50,7 +50,14 @@ impl RateLimitMiddleware {
     ) -> Self {
         let mut limiter = Self::new(config);
         limiter.ip_address = context.config.advanced.ip_address.clone();
-        limiter.base_path = context.config.base_path.clone();
+        let identity = context.runtime_identity();
+        let base_path = context.base_path().to_owned();
+        limiter.base_path = Box::new(move || {
+            identity.current::<S>().map_or_else(
+                || base_path.clone(),
+                |context| context.base_path().to_owned(),
+            )
+        });
         limiter.plugin_limits = plugin_limits;
         if limiter.config.custom_storage.is_none() {
             let kind = limiter.config.storage.unwrap_or_else(|| {
@@ -160,7 +167,8 @@ impl Middleware for RateLimitMiddleware {
             return Ok(None);
         }
         let path = request.url().map_or(request.path(), |url| url.path());
-        let path = normalize_path(path, &self.base_path);
+        let base_path = (self.base_path)();
+        let path = normalize_path(path, &base_path);
         let ip = self.ip_address.resolve(request);
         if ip.is_none() && !IP_WARNING_LOGGED.swap(true, Ordering::Relaxed) {
             tracing::warn!(

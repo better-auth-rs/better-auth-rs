@@ -517,6 +517,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "base64"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
+
+[[package]]
 name = "base64ct"
 version = "1.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -583,6 +589,7 @@ dependencies = [
  "nonzero_ext",
  "openssl",
  "rand 0.8.5",
+ "regex",
  "reqwest",
  "serde",
  "serde_cbor_2",
@@ -616,6 +623,7 @@ dependencies = [
  "chacha20poly1305",
  "chrono",
  "cookie",
+ "futures-util",
  "glob-match",
  "hex",
  "hkdf",
@@ -970,10 +978,12 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "base64 0.23.1",
  "better-auth",
  "better-auth-core",
  "better-auth-seaorm",
  "chrono",
+ "josekit",
  "k256",
  "serde",
  "serde_json",

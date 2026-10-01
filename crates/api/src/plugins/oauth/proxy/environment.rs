@@ -48,7 +48,7 @@ impl OAuthProxyConfig {
         }
         // Upstream selects the first nonempty vendor value before validating its origin.
         let vendor = vendor_url().filter(|url| origin(url).is_some());
-        parse_url(vendor.as_deref().unwrap_or(&ctx.config.base_url))
+        parse_url(vendor.as_deref().unwrap_or(ctx.base_url()))
     }
 
     pub(super) fn skip_proxy<S: AuthSchema>(
@@ -69,7 +69,7 @@ impl OAuthProxyConfig {
             .as_deref()
             .filter(|url| !url.is_empty())
             .or(production_env.as_deref())
-            .unwrap_or(&ctx.config.base_url);
+            .unwrap_or(ctx.base_url());
         let current = self
             .current_url
             .clone()

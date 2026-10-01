@@ -2,6 +2,9 @@ use super::*;
 
 #[async_trait]
 impl crate::store::JwksStore for EphemeralStore {
+    async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>> {
+        Ok(self.lock()?.jwks.iter().find(|key| key.id == id).cloned())
+    }
     async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>> {
         Ok(self.lock()?.jwks.clone())
     }

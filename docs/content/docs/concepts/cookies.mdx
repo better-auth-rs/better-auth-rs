@@ -5,6 +5,16 @@ description: Session cookie configuration and behavior.
 
 Better Auth uses HTTP cookies to persist session tokens in the browser. This page explains how cookies are configured and the security implications of each setting.
 
+Configure names and attributes through `AuthConfig.advanced`; `SessionConfig` controls session lifetime and caching. The former `SessionConfig.cookie_name`, `cookie_secure`, `cookie_http_only`, and `cookie_same_site` fields have been removed. Use `advanced.cookies["session_token"].name`, `advanced.use_secure_cookies`, and global or per-cookie attributes instead.
+
+The resolver applies default attributes, `advanced.default_cookie_attributes`, caller attributes, then `advanced.cookies[logical_name].attributes`. `cookie_prefix` changes the default `better-auth` prefix. Per-cookie names replace that default name. Secure policy adds `__Secure-` independently of attribute overrides. The policy comes from `use_secure_cookies`, a fixed dynamic protocol, a static URL scheme, or the production environment. A dynamic incoming HTTPS URL does not change the initial cookie policy unless cross-subdomain cookies trigger per-request resolution.
+
+Serialization enforces `Secure` for `__Secure-` and `__Host-` names. A `__Host-` name also forces path `/` and removes the domain. Session issuance replaces the configured token-cookie `Max-Age` with the session lifetime, or omits it for a browser-session login. Cache cookies retain their own effective `Max-Age`.
+
+Set `advanced.cross_sub_domain_cookies = Some(CrossSubDomainConfig { domain: None })` to derive the domain from each resolved URL. An explicit domain stays fixed. Static initialization without a URL or explicit cross-subdomain domain fails; setting an unrelated cookie attribute domain does not satisfy that requirement. Cache chunks inherit their parent cookie attributes during writing and deletion.
+
+Use `config.auth_cookie("session_token", CookieAttributes::default())` to inspect the resolved name and attributes. Application cookies can use `context.create_auth_cookie` with their logical name and caller attributes.
+
 ## Default Cookie Settings
 
 By default, Better Auth sets session cookies with the following attributes:
@@ -27,10 +37,10 @@ use better_auth::config::SameSite;
 use chrono::Duration;
 
 let mut config = AuthConfig::new("your-secret-key-at-least-32-chars");
-config.session.cookie_name = "my-app.session".to_string();
-config.session.cookie_secure = true;
-config.session.cookie_http_only = true;
-config.session.cookie_same_site = SameSite::Lax;
+config.advanced.cookies.entry("session_token".into()).or_default().name = Some("my-app.session".into());
+config.advanced.use_secure_cookies = Some(true);
+config.advanced.default_cookie_attributes.http_only = Some(true);
+config.advanced.default_cookie_attributes.same_site = Some(SameSite::Lax);
 config.session.expires_in = Duration::hours(24 * 7); // 7 days
 ```
 
@@ -41,7 +51,7 @@ config.session.expires_in = Duration::hours(24 * 7); // 7 days
 When `true`, the cookie is only sent over HTTPS connections. This prevents session tokens from being transmitted in plaintext.
 
 ```rust
-config.session.cookie_secure = true;
+config.advanced.use_secure_cookies = Some(true);
 ```
 
 <Callout type="warn">
@@ -53,7 +63,7 @@ Always set `Secure: true` in production. Only disable it for local development o
 When `true`, the cookie cannot be accessed by JavaScript (`document.cookie`). This prevents XSS attacks from stealing session tokens.
 
 ```rust
-config.session.cookie_http_only = true;
+config.advanced.default_cookie_attributes.http_only = Some(true);
 ```
 
 Always keep this enabled unless you have a specific reason to access the session token from JavaScript.
@@ -72,10 +82,10 @@ Controls when the cookie is sent with cross-site requests:
 use better_auth::config::SameSite;
 
 // Recommended for most applications
-config.session.cookie_same_site = SameSite::Lax;
+config.advanced.default_cookie_attributes.same_site = Some(SameSite::Lax);
 
 // For cross-origin API access (requires Secure: true)
-config.session.cookie_same_site = SameSite::None;
+config.advanced.default_cookie_attributes.same_site = Some(SameSite::None);
 ```
 
 ### Expiration

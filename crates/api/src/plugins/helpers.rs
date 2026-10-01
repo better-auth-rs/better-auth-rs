@@ -366,8 +366,7 @@ pub fn delete_session_cookie_headers(
     let mut cookies = vec![create_clear_session_cookie(config)];
     cookies.extend(create_clear_chunked_cookies(
         req,
-        &related_cookie_name(config, "session_data"),
-        config,
+        &config.auth_cookie("session_data", Default::default()),
     ));
     cookies.push(create_clear_cookie(
         &related_cookie_name(config, "dont_remember"),
@@ -376,8 +375,7 @@ pub fn delete_session_cookie_headers(
     if config.account.store_account_cookie() {
         cookies.extend(create_clear_chunked_cookies(
             req,
-            &related_cookie_name(config, "account_data"),
-            config,
+            &config.auth_cookie("account_data", Default::default()),
         ));
     }
     if matches!(

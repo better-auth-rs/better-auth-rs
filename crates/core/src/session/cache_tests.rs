@@ -11,7 +11,7 @@ fn request(token: &str, config: &AuthConfig) -> AuthRequest {
         "cookie".into(),
         format!(
             "{}={}",
-            config.session.cookie_name,
+            config.auth_cookie("session_token", Default::default()).name,
             sign_cookie_value(token, &config.secret)
         ),
     );
@@ -77,10 +77,14 @@ async fn cache_renewal_preserves_account_binding_chunks_and_pending_cookies() {
     let name = "better-auth.account_data";
     let account_cookies = crate::utils::cookie_utils::create_chunked_cookies(
         &AuthRequest::new(HttpMethod::Get, "/"),
-        name,
+        &manager.config.auth_cookie(
+            "account_data",
+            crate::CookieAttributes {
+                max_age: Some(30),
+                ..Default::default()
+            },
+        ),
         &value,
-        Some(30),
-        &manager.config,
     )
     .unwrap();
     assert!(account_cookies.len() > 1);

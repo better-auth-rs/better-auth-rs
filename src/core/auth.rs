@@ -1,13 +1,9 @@
 use std::sync::Arc;
 
-use better_auth_core::utils::username::{
-    UsernameValidationError, normalize_username, validate_username,
-};
 use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse,
-    AuthResult, AuthSchema, AuthStore, BeforeRequestAction, EmailProvider,
-    ErrorCodeMessageResponse, HttpMethod, OkResponse, OpenApiBuilder, OpenApiSpec, SessionManager,
-    UpdateUser, UpdateUserRequest, core_paths,
+    AuthResult, AuthSchema, AuthStore, BeforeRequestAction, EmailProvider, HttpMethod, OkResponse,
+    OpenApiBuilder, OpenApiSpec, SessionManager, UpdateUser, UpdateUserRequest, core_paths,
     entity::AuthUser,
     hooks::{
         RequestHookContext, set_request_hook_route, update_request_hook_context,
@@ -18,17 +14,6 @@ use better_auth_core::{
         CsrfMiddleware, Middleware, RateLimitConfig, RateLimitMiddleware,
     },
 };
-
-fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult<AuthResponse> {
-    AuthResponse::json(
-        status,
-        &ErrorCodeMessageResponse {
-            code: Some(code.to_string()),
-            message: message.to_string(),
-        },
-    )
-    .map_err(AuthError::from)
-}
 
 fn endpoint_error(error: AuthError, request: &AuthRequest) -> AuthResult<AuthError> {
     if !error.is_api_error() {
@@ -176,6 +161,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
             .ok_or_else(|| AuthError::config("Auth store not configured"))?;
 
         let mut init_context = AuthInitContext::new(config.clone(), store.clone());
+        init_context.initialize_request_context().await?;
         init_context.extensions.insert(capabilities);
         init_context
             .extensions
@@ -196,7 +182,10 @@ impl<S: AuthSchema> AuthBuilder<S> {
             plugin.on_init(&mut init_context).await?;
         }
 
+        let config = init_context.config.clone();
         let mut init_parts = init_context.into_parts();
+        let mut context = AuthContext::new(config.clone(), store.clone());
+        init_parts.apply_request_runtime(&mut context);
         let has_plugin_runtime = !init_parts.plugin_user_fields.additional_fields.is_empty()
             || !init_parts.database_hooks.is_empty();
         let (adapter_fields, endpoint_fields) =
@@ -239,8 +228,9 @@ impl<S: AuthSchema> AuthBuilder<S> {
         };
 
         // Create context
-        let mut context =
-            AuthContext::with_metadata(config.clone(), store.clone(), init_parts.metadata);
+        context.config = config.clone();
+        context.database = store.clone();
+        context.metadata = init_parts.metadata;
         context.password_policy = init_parts.password_policy;
         context.secondary_storage = init_parts.secondary_storage;
         context.extensions = init_parts.extensions;
@@ -266,13 +256,9 @@ impl<S: AuthSchema> AuthBuilder<S> {
                 plugin_limits,
             )),
         ];
-        let mut middlewares: Vec<Box<dyn Middleware>> = vec![
-            Box::new(CsrfMiddleware::new(
-                self.csrf_config.unwrap_or_default(),
-                config.clone(),
-            )),
-            Box::new(CorsMiddleware::new(self.cors_config.unwrap_or_default())),
-        ];
+        let mut middlewares: Vec<Box<dyn Middleware>> = vec![Box::new(CorsMiddleware::new(
+            self.cors_config.unwrap_or_default(),
+        ))];
 
         middlewares.extend(self.custom_middlewares);
 
@@ -349,62 +335,75 @@ impl<S: AuthSchema> BetterAuth<S> {
             &req,
             &self.config.advanced.ip_address,
         );
-        with_request_hook_context_value(request_context, async {
-            if let Some(response) = self.handle_http_phase(&req).await? {
-                return middleware::run_after(&self.middlewares, &req, response).await;
-            }
-            match self.parse_endpoint_http_body(&mut req) {
-                Ok(Some(response)) => {
-                    return middleware::run_after(&self.middlewares, &req, response).await;
-                }
-                Err(error) => {
-                    return middleware::run_after(
-                        &self.middlewares,
-                        &req,
-                        error.to_http_response(),
-                    )
-                    .await;
-                }
-                Ok(None) => {}
-            }
-            let response = match self.dispatch_endpoint(&mut req, true).await {
-                Ok(response) => response,
-                Err(error) => error.to_http_response(),
-            };
-            middleware::run_after(&self.middlewares, &req, response).await
-        })
-        .await
+        let original = req.clone();
+        self.context
+            .with_http_context(&original, |context| async move {
+                with_request_hook_context_value(request_context, async {
+                    if let Some(response) = self.handle_http_phase(&req, &context).await? {
+                        return middleware::run_after(&self.middlewares, &req, response).await;
+                    }
+                    match self.parse_endpoint_http_body(&mut req, &context) {
+                        Ok(Some(response)) => {
+                            return middleware::run_after(&self.middlewares, &req, response).await;
+                        }
+                        Err(error) => {
+                            return middleware::run_after(
+                                &self.middlewares,
+                                &req,
+                                error.to_http_response(),
+                            )
+                            .await;
+                        }
+                        Ok(None) => {}
+                    }
+                    let response = match self.dispatch_endpoint(&mut req, true, &context).await {
+                        Ok(response) => response,
+                        Err(error) => error.to_http_response(),
+                    };
+                    middleware::run_after(&self.middlewares, &req, response).await
+                })
+                .await
+            })
+            .await
     }
 
-    async fn handle_http_phase(&self, req: &AuthRequest) -> AuthResult<Option<AuthResponse>> {
-        let path = if self.config.base_path.is_empty() || self.config.base_path == "/" {
+    async fn handle_http_phase(
+        &self,
+        req: &AuthRequest,
+        context: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        let path = if context.base_path().is_empty() || context.base_path() == "/" {
             req.path()
         } else {
             req.path()
-                .strip_prefix(&self.config.base_path)
+                .strip_prefix(context.base_path())
                 .unwrap_or(req.path())
         }
         .to_owned();
-        if self.config.is_path_disabled(&path) {
+        if context.config.is_path_disabled(&path) {
             return Ok(Some(AuthResponse::new(404)));
         }
         if let Some(response) = middleware::run_before(&self.http_middlewares, req).await? {
             return Ok(Some(response));
         }
         for plugin in &self.plugins {
-            if let Some(response) = plugin.on_http_request(req, &self.context).await? {
+            if let Some(response) = plugin.on_http_request(req, context).await? {
                 return Ok(Some(response));
             }
         }
         Ok(None)
     }
 
-    fn parse_endpoint_http_body(&self, req: &mut AuthRequest) -> AuthResult<Option<AuthResponse>> {
-        let path = if self.config.base_path == "/" {
+    fn parse_endpoint_http_body(
+        &self,
+        req: &mut AuthRequest,
+        context: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        let path = if context.base_path() == "/" {
             req.path()
         } else {
             req.path()
-                .strip_prefix(&self.config.base_path)
+                .strip_prefix(context.base_path())
                 .unwrap_or(req.path())
         }
         .to_owned();
@@ -436,8 +435,21 @@ impl<S: AuthSchema> BetterAuth<S> {
         &self,
         req: &mut AuthRequest,
         http: bool,
+        context: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
         if http {
+            let csrf = CsrfMiddleware::from_context(
+                context
+                    .extensions
+                    .get::<CsrfConfig>()
+                    .cloned()
+                    .unwrap_or_default(),
+                context,
+            );
+            if let Some(mut response) = csrf.before_request(req).await? {
+                response.headers.merge(req.take_response_headers()?);
+                return Ok(response);
+            }
             match middleware::run_before(&self.middlewares, req).await {
                 Ok(Some(mut response)) => {
                     response.headers.merge(req.take_response_headers()?);
@@ -453,7 +465,7 @@ impl<S: AuthSchema> BetterAuth<S> {
         // same normalised path that `on_request` / core handlers use.
         // External callers send e.g. "/api/auth/sign-in/email"; internally
         // handlers match against "/sign-in/email".
-        let base_path = &self.config.base_path;
+        let base_path = context.base_path();
         let stripped_path = if !base_path.is_empty() && base_path != "/" {
             req.path().strip_prefix(base_path).unwrap_or(req.path())
         } else {
@@ -473,7 +485,7 @@ impl<S: AuthSchema> BetterAuth<S> {
         // Run plugin before_request hooks (e.g. API-key → session emulation)
         // Plugins now see the normalised (base_path-stripped) path.
         for plugin in &self.plugins {
-            let action = match plugin.before_request(&internal_req, &self.context).await {
+            let action = match plugin.before_request(&internal_req, context).await {
                 Ok(action) => action,
                 Err(error) => return Err(endpoint_error(error, &internal_req)?),
             };
@@ -497,16 +509,17 @@ impl<S: AuthSchema> BetterAuth<S> {
             }
         }
 
-        let mut response = match self.execute_endpoint(&internal_req).await {
+        let mut response = match self.execute_endpoint(&internal_req, context).await {
             Ok(response) => response,
             Err(error) if error.is_api_error() => error.to_auth_response(),
             Err(error) => return Err(error),
         };
-        self.session_manager
+        context
+            .session_manager()
             .finish_response(&internal_req, &mut response)?;
         for plugin in &self.plugins {
             match plugin
-                .after_request(&internal_req, &mut response, &self.context)
+                .after_request(&internal_req, &mut response, context)
                 .await
             {
                 Ok(()) => response
@@ -529,15 +542,19 @@ impl<S: AuthSchema> BetterAuth<S> {
         }
     }
 
-    async fn execute_endpoint(&self, internal_req: &AuthRequest) -> AuthResult<AuthResponse> {
+    async fn execute_endpoint(
+        &self,
+        internal_req: &AuthRequest,
+        context: &AuthContext<S>,
+    ) -> AuthResult<AuthResponse> {
         // Handle core endpoints first
-        if let Some(response) = self.handle_core_request(internal_req).await? {
+        if let Some(response) = self.handle_core_request(internal_req, context).await? {
             return Ok(response);
         }
 
         // Try each plugin until one handles the request
         for plugin in &self.plugins {
-            if let Some(response) = plugin.on_request(internal_req, &self.context).await? {
+            if let Some(response) = plugin.on_request(internal_req, context).await? {
                 return Ok(response);
             }
         }
@@ -619,7 +636,11 @@ impl<S: AuthSchema> BetterAuth<S> {
     }
 
     /// Handle core authentication requests.
-    async fn handle_core_request(&self, req: &AuthRequest) -> AuthResult<Option<AuthResponse>> {
+    async fn handle_core_request(
+        &self,
+        req: &AuthRequest,
+        context: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Get, core_paths::OK) => {
                 Ok(Some(AuthResponse::json(200, &OkResponse { ok: true })?))
@@ -642,15 +663,19 @@ impl<S: AuthSchema> BetterAuth<S> {
                 Ok(Some(AuthResponse::json(200, &spec)?))
             }
             (HttpMethod::Post, core_paths::UPDATE_USER) => {
-                Ok(Some(self.handle_update_user(req).await?))
+                Ok(Some(self.handle_update_user(req, context).await?))
             }
             _ => Ok(None),
         }
     }
 
     /// Handle user profile update.
-    async fn handle_update_user(&self, req: &AuthRequest) -> AuthResult<AuthResponse> {
-        let (current_user, session) = self.context.require_session(req).await?;
+    async fn handle_update_user(
+        &self,
+        req: &AuthRequest,
+        context: &AuthContext<S>,
+    ) -> AuthResult<AuthResponse> {
+        let (current_user, session) = context.require_session(req).await?;
         let body: serde_json::Value = req
             .body_as_json()
             .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
@@ -682,71 +707,30 @@ impl<S: AuthSchema> BetterAuth<S> {
             return Err(AuthError::bad_request("Email can not be updated"));
         }
 
-        let clear_phone_number = self.context.get_metadata("phone-number.enabled")
+        let clear_phone_number = context.get_metadata("phone-number.enabled")
             == Some(&serde_json::Value::Bool(true))
             && body.get("phoneNumber") == Some(&serde_json::Value::Null);
-        let mut body = body.clone();
-        let additional_fields = self.context.parse_user_input(&body, false)?;
-        if self.context.get_metadata("username.enabled") != Some(&serde_json::Value::Bool(true)) {
-            _ = body.remove("username");
-            _ = body.remove("displayUsername");
-        }
+        let body = body.clone();
+        let additional_fields = context.parse_user_input(&body, false)?;
         let update_req: UpdateUserRequest = serde_json::from_value(serde_json::Value::Object(body))
-            .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
-        let username = update_req.username.as_deref().map(normalize_username);
-        let display_username = update_req.display_username;
-
-        if let Some(username) = username.as_deref() {
-            match validate_username(username) {
-                Ok(()) => {}
-                Err(UsernameValidationError::TooShort) => {
-                    return username_error_response(
-                        400,
-                        "USERNAME_TOO_SHORT",
-                        "Username is too short",
-                    );
-                }
-                Err(UsernameValidationError::TooLong) => {
-                    return username_error_response(
-                        400,
-                        "USERNAME_TOO_LONG",
-                        "Username is too long",
-                    );
-                }
-                Err(UsernameValidationError::Invalid) => {
-                    return username_error_response(400, "INVALID_USERNAME", "Username is invalid");
-                }
-            }
-
-            if let Some(existing_user) = self.store.get_user_by_username(username).await?
-                && existing_user.id() != current_user.id()
-            {
-                return username_error_response(
-                    400,
-                    "USERNAME_IS_ALREADY_TAKEN",
-                    "Username is already taken. Please try another.",
-                );
-            }
-        }
+            .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;
 
         let has_changes = clear_phone_number
             || update_req.name.is_some()
             || update_req.image.is_some()
-            || username.is_some()
-            || display_username.is_some()
             || !additional_fields.is_empty();
         if !has_changes {
             return Err(AuthError::bad_request("No fields to update"));
         }
 
-        let update_user = UpdateUser {
-            additional_fields,
+        let mut update_user = UpdateUser {
+            additional_fields: Default::default(),
             email: None,
             name: update_req.name,
             image: update_req.image,
             email_verified: None,
-            username,
-            display_username,
+            username: None,
+            display_username: None,
             role: None,
             banned: None,
             ban_reason: None,
@@ -758,15 +742,17 @@ impl<S: AuthSchema> BetterAuth<S> {
             metadata: None,
         };
 
+        update_user.assign_user_fields(additional_fields)?;
         let user = self
             .store
             .update_user(&current_user.id(), update_user)
             .await?;
-        self.session_manager
+        context
+            .session_manager()
             .set_session_cookie(
                 req,
                 better_auth_core::session::SessionData {
-                    user: self.context.internal_user_view(&user)?,
+                    user: context.internal_user_view(&user)?,
                     session,
                 },
                 None,

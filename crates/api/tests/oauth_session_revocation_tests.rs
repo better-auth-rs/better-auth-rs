@@ -35,7 +35,10 @@ impl Fixture {
     fn cookie(&self) -> String {
         format!(
             "{}={}",
-            self.ctx.config.session.cookie_name,
+            self.ctx
+                .config
+                .auth_cookie("session_token", Default::default())
+                .name,
             sign_cookie_value(&self.token, &self.ctx.config.secret)
         )
     }

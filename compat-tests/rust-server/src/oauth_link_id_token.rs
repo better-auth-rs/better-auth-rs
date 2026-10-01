@@ -82,7 +82,7 @@ impl OAuthLinkIdTokenFixture {
         config.account.encrypt_oauth_tokens = true;
         config.account.account_linking.enabled = profile != "oauth-link-id-token-disabled";
         config.account.account_linking.update_user_info_on_link = true;
-        config.account.account_linking.trusted_providers.clear();
+        config.account.account_linking.trusted_providers = Default::default();
         config.account.account_linking.allow_different_emails = false;
         config.user.additional_fields.insert(
             "department".into(),

@@ -45,12 +45,39 @@ let config = AuthConfig::new("your-secret-key-at-least-32-characters-long")
 ## Key Behaviors
 
 - **Session tokens are opaque tokens for the v1 HTTP surface.** Phases 0-12 use session cookies and Bearer tokens backed by the database. `JwtConfig` is only relevant when you enable the JWT surface from phase 13.
-- **`base_url(...)` also sets `session.cookie_secure`.** HTTPS URLs set `Secure=true`; HTTP URLs set `Secure=false`. With the default `http://localhost:3000`, the default is `false`.
+- **Cookie configuration uses `advanced`.** URL policy determines the secure prefix; global and per-cookie attributes can override the emitted attributes. See [Cookies](/docs/concepts/cookies).
 - **`update_age` and `disable_session_refresh` are separate controls.**
   - `Some(duration)` refreshes only when the session is older than that duration.
   - `None` refreshes on every access.
   - `disable_session_refresh(true)` disables refresh entirely.
 - **`fresh_age` is optional.** Leave it `None` unless you need a freshness window for sensitive actions.
+
+## Request URL and trust policy
+
+`base_url("https://auth.example.com")` keeps a fixed URL. An existing URL path takes precedence over `base_path`. The default `BaseUrl::Auto` checks `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `PUBLIC_BETTER_AUTH_URL`, `NUXT_PUBLIC_BETTER_AUTH_URL`, `NUXT_PUBLIC_AUTH_URL`, then `BASE_URL`. Empty values and `BASE_URL=/` are ignored. Without a configured or environment URL, HTTP requests use their own origin; native calls retain an empty static URL.
+
+Use `BaseUrl::Dynamic` when one auth instance serves several hosts:
+
+```rust
+use better_auth::config::{BaseUrl, DynamicBaseUrl, BaseUrlProtocol};
+
+let config = AuthConfig::new("your-secret-key-at-least-32-characters-long")
+    .base_url(BaseUrl::Dynamic(DynamicBaseUrl {
+        allowed_hosts: vec!["*.example.com".into()],
+        fallback: Some("https://auth.example.com".into()),
+        protocol: Some(BaseUrlProtocol::Https),
+    }));
+```
+
+Dynamic policies do not read URL environment variables. Invalid or unlisted hosts use the configured fallback, or fail when no fallback exists. `advanced.trusted_proxy_headers = true` permits validated forwarded host and protocol headers; client-IP proxy configuration does not enable URL proxy trust.
+
+`TrustedValues::Dynamic(Arc<dyn TrustedValuesResolver>)` configures asynchronous `trusted_origins` or `account.account_linking.trusted_providers`. The resolver receives `Option<&AuthRequest>` and returns `AuthResult<Vec<String>>`. Initialization calls origins, then providers, with no Request. HTTP requests resolve origins, then providers, before rate limiting and request hooks. Origin middleware calls functional origins again when it validates an Origin. `BETTER_AUTH_TRUSTED_ORIGINS` adds comma-separated values without trimming. Plugin origin contributions use `TrustedValues::merge`: static values precede concurrent callbacks, and callback results retain declaration order.
+
+`AuthContext::base_url()` contains the full resolved auth URL; `context.config.base_url.as_static()` contains the resolved origin. `PluginRuntime::context()` selects the current context for its own auth instance, including database hooks. Concurrent tenants and nested auth instances use separate contexts.
+
+Social sign-in, account linking, and IdP-initiated authorization use the resolved origin when `callbackURL` is absent or empty. Native calls without a resolved origin must provide `callbackURL`. OAuth Popup uses the full auth URL as its default callback.
+
+Native calls distinguish an original Request from endpoint headers. Pass these through `EndpointInput.request` and `EndpointInput.headers`, or `NativeRequest` on a native facade that accepts it. Dynamic calls resolve from the original Request first, then qualifying headers, then fallback. An actual Request remains available to endpoint callbacks, but native transport still bypasses HTTP request hooks. A static native call does not rerun trust resolvers. Lower-level facades use `AuthContext::with_native_context`; `from_endpoint` retains an already resolved context and active transaction.
 
 ## SessionConfig
 
@@ -62,10 +89,6 @@ Controls opaque session token handling and cookie behavior.
 | `update_age` | `Option<chrono::Duration>` | `Some(1 day)` |
 | `disable_session_refresh` | `bool` | `false` |
 | `fresh_age` | `Option<chrono::Duration>` | `None` |
-| `cookie_name` | `String` | `"better-auth.session_token"` |
-| `cookie_secure` | `bool` | Derived from `base_url` |
-| `cookie_http_only` | `bool` | `true` |
-| `cookie_same_site` | `SameSite` | `Lax` |
 | `cookie_cache` | `Option<CookieCacheConfig>` | `None` |
 
 `SameSite` variants: `Strict`, `Lax`, `None`.

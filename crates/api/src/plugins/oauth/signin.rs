@@ -321,8 +321,8 @@ pub(super) async fn process_oauth_sign_in(
 
     if let Some(existing_user) = existing_user {
         let linking = &ctx.config.account.account_linking;
-        let trusted_provider = linking
-            .trusted_providers
+        let trusted_provider = ctx
+            .trusted_providers()
             .iter()
             .any(|trusted| trusted == provider_name);
 

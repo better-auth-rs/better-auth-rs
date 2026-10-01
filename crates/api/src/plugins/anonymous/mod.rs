@@ -258,7 +258,12 @@ impl AnonymousPlugin {
             .get_all("set-cookie")
             .filter_map(|value| cookie::Cookie::parse(value.as_str()).ok())
             .find(|cookie| {
-                cookie.name() == ctx.config.session.cookie_name && !cookie.value().is_empty()
+                cookie.name()
+                    == ctx
+                        .config
+                        .auth_cookie("session_token", Default::default())
+                        .name
+                    && !cookie.value().is_empty()
             })
         else {
             return Ok(());

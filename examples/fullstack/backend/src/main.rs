@@ -1,15 +1,15 @@
-use axum::{Json, Router, response::IntoResponse, routing::get};
+use axum::http::HeaderName;
+use axum::{response::IntoResponse, routing::get, Json, Router};
 use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
 use better_auth::middleware::CsrfConfig;
 use better_auth::plugins::{
     EmailPasswordPlugin, PasskeyPlugin, PasswordManagementPlugin, SessionManagementPlugin,
 };
 use better_auth::prelude::AuthUser;
-use better_auth::{AuthConfig, BetterAuth};
 use better_auth::seaorm::{Database, SeaOrmStore};
+use better_auth::{AuthConfig, BetterAuth};
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use axum::http::HeaderName;
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Allow the frontend origin through the built-in CSRF middleware.
     let config = AuthConfig::new(secret)
         .trusted_origins(vec![frontend_url.clone()])
-        .base_url(&backend_url)
+        .base_url(backend_url.as_str())
         .password_min_length(8);
 
     let database_url = std::env::var("DATABASE_URL")
@@ -64,7 +64,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await?,
     );
 
-    println!("Auth instance created with plugins: {:?}", auth.plugin_names());
+    println!(
+        "Auth instance created with plugins: {:?}",
+        auth.plugin_names()
+    );
 
     let auth_router = auth.clone().axum_router();
 
@@ -72,9 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // When using allow_credentials(true), headers and methods must be listed
     // explicitly — wildcards are not allowed.
     let cors = CorsLayer::new()
-        .allow_origin(AllowOrigin::list([
-            frontend_url.parse().unwrap(),
-        ]))
+        .allow_origin(AllowOrigin::list([frontend_url.parse().unwrap()]))
         .allow_methods(AllowMethods::list([
             axum::http::Method::GET,
             axum::http::Method::POST,

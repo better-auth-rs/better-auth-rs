@@ -148,9 +148,26 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
             return self.inner.delete_user(id).await;
         }
         let references = self.references(id).await?;
-        self.inner.delete_user(id).await?;
-        self.delete_cached_sessions(id, &references).await
+        let removed = self
+            .inner
+            .delete_user_optional(id, self.database_sessions())
+            .await?;
+        if removed.is_some() {
+            self.queue_cached_user_session_deletion(id.to_owned(), references, None)
+                .await?;
+        }
+        Ok(())
     }
+    async fn delete_user_optional(
+        &self,
+        id: &str,
+        delete_database_sessions: bool,
+    ) -> AuthResult<Option<S::User>> {
+        self.inner
+            .delete_user_optional(id, delete_database_sessions)
+            .await
+    }
+
     async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<S::User>, usize)> {
         self.inner.list_users(params).await
     }

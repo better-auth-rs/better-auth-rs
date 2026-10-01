@@ -193,8 +193,11 @@ impl Entity {
                         column: field.column_name.unwrap_or(field.name).to_owned(),
                         registry_column: Some(field.column_name.unwrap_or(field.name)),
                         serialized: (definition.mod_name == "user"
-                            && field.name == "last_login_method")
-                            .then(|| "lastLoginMethod".to_owned()),
+                            && matches!(
+                                field.name,
+                                "username" | "display_username" | "last_login_method"
+                            ))
+                        .then(|| field.name.to_lower_camel_case()),
                         primary_key: field.is_primary_key,
                         unique: None,
                         attributes: None,

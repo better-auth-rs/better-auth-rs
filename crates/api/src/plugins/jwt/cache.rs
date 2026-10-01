@@ -32,23 +32,28 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
             ("sub".into(), subject),
             ("iat".into(), Utc::now().timestamp().into()),
             ("exp".into(), (Utc::now().timestamp() + expires_in).into()),
-            ("iss".into(), issuer(context.config).into()),
             ("aud".into(), AUDIENCE.into()),
         ]);
         let runtime = self.runtime.context()?;
-        let store: &dyn better_auth_core::store::JwksStore = match context.transaction {
-            Some(transaction) => transaction,
-            None => runtime.database.as_ref(),
-        };
+        let _ = payload.insert("iss".into(), issuer(&runtime).into());
+        let mut endpoint = EndpointContext::new(
+            Some(context.request),
+            request_body(context.request)?,
+            &runtime,
+        );
+        endpoint.transaction = context.transaction;
+        endpoint.session = context
+            .request
+            .session_snapshot()?
+            .map(|data| (data.user, data.session));
         self.plugin
-            .sign_with_store(
+            .sign_in_endpoint(
                 payload,
                 &JwtSigningOptions {
                     header: serde_json::from_value(json!({"typ": TYPE}))?,
                     ..Default::default()
                 },
-                context.config,
-                store,
+                &endpoint,
             )
             .await
     }
@@ -58,25 +63,37 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
         token: &str,
         context: SessionCookieContext<'_, S>,
     ) -> AuthResult<Option<Map<String, Value>>> {
-        if verification::protected_header(token)
-            .and_then(|header| header.token_type().map(str::to_owned))
-            .as_deref()
-            != Some(TYPE)
-        {
+        let Some(header) = verification::raw_header(token) else {
+            return Ok(None);
+        };
+        if !header.has_type(TYPE) || !header.has_key_id() {
             return Ok(None);
         }
         let runtime = self.runtime.context()?;
-        let store: &dyn better_auth_core::store::JwksStore = match context.transaction {
-            Some(transaction) => transaction,
-            None => runtime.database.as_ref(),
+        let mut endpoint = EndpointContext::new(
+            Some(context.request),
+            request_body(context.request)?,
+            &runtime,
+        );
+        endpoint.transaction = context.transaction;
+        endpoint.session = context
+            .request
+            .session_snapshot()?
+            .map(|data| (data.user, data.session));
+        let keys = match self.plugin.read_keys(&endpoint).await {
+            Ok(Some(keys)) => keys,
+            Ok(None) => return Ok(None),
+            Err(error) => {
+                tracing::debug!(%error, "Cookie-cache JWT verification failed");
+                return Ok(None);
+            }
         };
-        let keys = store.list_jwks().await?;
         let payload = verification::verify_local(
             token,
             &keys,
             self.plugin.config.algorithm,
-            issuer(context.config),
-            &[AUDIENCE],
+            Some(issuer(&runtime)),
+            Some(&[AUDIENCE]),
             15,
         );
         Ok(payload.filter(|payload| {
@@ -93,10 +110,15 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
     }
 }
 
-fn issuer(config: &better_auth_core::AuthConfig) -> &str {
-    if config.base_url.is_empty() {
+fn issuer<S: AuthSchema>(context: &AuthContext<S>) -> &str {
+    let base_url = context
+        .config
+        .base_url
+        .as_static()
+        .unwrap_or_else(|| context.base_url());
+    if base_url.is_empty() {
         AUDIENCE
     } else {
-        &config.base_url
+        base_url
     }
 }
