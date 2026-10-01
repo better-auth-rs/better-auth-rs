@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter,
+    QuerySelect,
 };
 
 use better_auth_core::store::{SessionStore, SessionUpdateWriter};
@@ -19,6 +20,18 @@ where
     S: AuthSchema,
     S::Session: SeaOrmSessionModel,
 {
+    pub(super) fn output_session(
+        &self,
+        row: &S::Session,
+        db: &impl ConnectionTrait,
+    ) -> AuthResult<better_auth_core::wire::SessionView> {
+        better_auth_core::wire::SessionView::with_internal_fields_for_adapter(
+            row,
+            &self.config().session,
+            db.get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+    }
+
     fn normalize_session_client_field(value: Option<String>) -> Option<String> {
         match value {
             Some(value) => Some(value),
@@ -74,7 +87,7 @@ where
 
     async fn after_runtime_session_in_tx(
         &self,
-        session: &S::Session,
+        session: &better_auth_core::wire::SessionView,
         tx: Option<super::HookTransaction<'_, S>>,
     ) -> AuthResult<()> {
         let context = self.hook_context(tx);
@@ -95,7 +108,7 @@ where
         db: &C,
         tx: Option<super::HookTransaction<'_, S>>,
         mut create_session: CreateSession,
-    ) -> AuthResult<S::Session>
+    ) -> AuthResult<better_auth_core::wire::SessionView>
     where
         C: ConnectionTrait,
     {
@@ -104,12 +117,17 @@ where
         let now = Utc::now();
         create_session.ip_address = Self::normalize_session_client_field(create_session.ip_address);
         create_session.user_agent = Self::normalize_session_client_field(create_session.user_agent);
+        let id = self.generated_id("session", None)?;
+        let parsed = id.as_deref().map(S::Session::parse_id).transpose()?;
         let mut active = S::Session::new_active(
-            None,
-            format!("session_{}", uuid::Uuid::new_v4()),
+            parsed,
+            better_auth_core::id::random_id(None),
             create_session,
             now,
         );
+        if id.is_none() {
+            active.not_set(S::Session::id_column());
+        }
         S::Session::apply_fields(
             &mut active,
             self.config()
@@ -134,6 +152,7 @@ where
             async { active.insert(db).await.map_err(map_db_err) },
         )
         .await?;
+        let session = self.output_session(&session, db)?;
         if tx.is_none() {
             self.after_runtime_session_in_tx(&session, None).await?;
         }
@@ -144,7 +163,7 @@ where
         &self,
         tx: super::HookTransaction<'_, S>,
         create_session: CreateSession,
-    ) -> AuthResult<S::Session> {
+    ) -> AuthResult<better_auth_core::wire::SessionView> {
         self.create_session_with_connection(tx.0, Some(tx), create_session)
             .await
     }
@@ -155,7 +174,7 @@ where
         tx: Option<super::HookTransaction<'_, S>>,
         token: &str,
         update: SessionUpdate,
-    ) -> AuthResult<Option<S::Session>> {
+    ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
         self.update_session_with_writer_and_connection(db, tx, token, update, None)
             .await
     }
@@ -166,8 +185,8 @@ where
         tx: Option<super::HookTransaction<'_, S>>,
         token: &str,
         mut update: SessionUpdate,
-        secondary: Option<better_auth_core::store::SessionUpdateWriter<S>>,
-    ) -> AuthResult<Option<S::Session>> {
+        secondary: Option<better_auth_core::store::SessionUpdateWriter>,
+    ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
         let context = self.hook_context(tx);
         let original = update.clone();
         for hook in self.hooks() {
@@ -223,7 +242,7 @@ where
         db: &impl ConnectionTrait,
         token: &str,
         mut update: SessionUpdate,
-    ) -> AuthResult<Option<S::Session>> {
+    ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
         let reselect = match update.id.as_deref() {
             Some(id) => S::Session::id_column().eq(S::Session::parse_id(id)?),
             None => S::Session::token_column().eq(update.token.as_deref().unwrap_or(token)),
@@ -259,7 +278,10 @@ where
             ),
         )
         .await?;
-        Ok(session)
+        session
+            .as_ref()
+            .map(|row| self.output_session(row, db))
+            .transpose()
     }
 }
 
@@ -274,8 +296,8 @@ where
         &self,
         token: &str,
         update: SessionUpdate,
-        secondary: Option<SessionUpdateWriter<S>>,
-    ) -> AuthResult<Option<S::Session>> {
+        secondary: Option<SessionUpdateWriter>,
+    ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
         self.update_session_with_writer_and_connection(
             self.connection(),
             None,
@@ -290,7 +312,10 @@ where
         self.before_runtime_session_in_tx(session, None).await
     }
 
-    async fn after_create_runtime_session(&self, session: &S::Session) -> AuthResult<()> {
+    async fn after_create_runtime_session(
+        &self,
+        session: &better_auth_core::wire::SessionView,
+    ) -> AuthResult<()> {
         self.after_runtime_session_in_tx(session, None).await
     }
 
@@ -301,12 +326,18 @@ where
             .map(|_| ())
     }
 
-    async fn create_session(&self, create_session: CreateSession) -> AuthResult<S::Session> {
+    async fn create_session(
+        &self,
+        create_session: CreateSession,
+    ) -> AuthResult<better_auth_core::wire::SessionView> {
         self.create_session_with_connection(self.connection(), None, create_session)
             .await
     }
 
-    async fn get_session(&self, token: &str) -> AuthResult<Option<S::Session>> {
+    async fn get_session(
+        &self,
+        token: &str,
+    ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
         database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findOne",
@@ -319,10 +350,16 @@ where
                     .map_err(map_db_err)
             },
         )
-        .await
+        .await?
+        .as_ref()
+        .map(|row| self.output_session(row, self.connection()))
+        .transpose()
     }
 
-    async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<S::Session>> {
+    async fn get_user_sessions(
+        &self,
+        user_id: &str,
+    ) -> AuthResult<Vec<better_auth_core::wire::SessionView>> {
         let user_id = <S::Session as SeaOrmSessionModel>::parse_user_id(user_id)?;
         database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
@@ -331,19 +368,26 @@ where
                 <S::Session as SeaOrmSessionModel>::Entity::find()
                     .filter(<S::Session as SeaOrmSessionModel>::user_id_column().eq(user_id))
                     .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
+                    .limit(super::pagination::default_limit(
+                        self.config(),
+                        self.connection().get_database_backend(),
+                    )?)
                     .all(self.connection())
                     .await
                     .map_err(map_db_err)
             },
         )
-        .await
+        .await?
+        .iter()
+        .map(|row| self.output_session(row, self.connection()))
+        .collect()
     }
 
     async fn update_session_fields(
         &self,
         token: &str,
         fields: serde_json::Map<String, serde_json::Value>,
-    ) -> AuthResult<Option<S::Session>> {
+    ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
         self.update_session_with_connection(
             self.connection(),
             None,
@@ -360,7 +404,7 @@ where
         &self,
         token: &str,
         expires_at: DateTime<Utc>,
-    ) -> AuthResult<S::Session> {
+    ) -> AuthResult<better_auth_core::wire::SessionView> {
         self.update_session_with_connection(
             self.connection(),
             None,
@@ -480,7 +524,7 @@ where
         &self,
         token: &str,
         organization_id: Option<&str>,
-    ) -> AuthResult<S::Session> {
+    ) -> AuthResult<better_auth_core::wire::SessionView> {
         self.update_session_with_connection(
             self.connection(),
             None,
@@ -503,7 +547,7 @@ where
     ) -> AuthResult<(
         better_auth_core::Member,
         better_auth_core::Invitation,
-        Option<S::Session>,
+        Option<better_auth_core::wire::SessionView>,
     )> {
         self.accept_team_invitation(
             invitation_id,
@@ -518,7 +562,7 @@ where
         &self,
         token: &str,
         team_id: Option<&str>,
-    ) -> AuthResult<S::Session> {
+    ) -> AuthResult<better_auth_core::wire::SessionView> {
         self.update_session_with_connection(
             self.connection(),
             None,

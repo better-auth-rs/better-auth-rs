@@ -100,7 +100,12 @@ fn require_user_permission(
     message: &str,
 ) -> AuthResult<()> {
     let permission = std::collections::HashMap::from([("user".into(), vec![action.into()])]);
-    if has_permission(Some(&user.id), user.role.as_deref(), config, &permission) {
+    if has_permission(
+        Some(user.id.typed()?),
+        user.role.as_deref(),
+        config,
+        &permission,
+    ) {
         Ok(())
     } else {
         Err(AuthError::forbidden(message))
@@ -259,8 +264,8 @@ pub(crate) async fn create_user_core(
         let _ = ctx
             .database
             .create_account(CreateAccount {
-                user_id: (user.id().to_string()).into(),
-                account_id: (user.id().to_string()).into(),
+                user_id: user.id().into_owned(),
+                account_id: user.id().into_owned(),
                 provider_id: ("credential".to_string()).into(),
                 access_token: Default::default(),
                 refresh_token: Default::default(),
@@ -305,7 +310,7 @@ pub(crate) async fn update_user_core(
         let permissions =
             std::collections::HashMap::from([("user".to_string(), vec!["set-role".to_string()])]);
         if !has_permission(
-            Some(acting_user.id.as_str()),
+            acting_user.id.as_str(),
             acting_user.role.as_deref(),
             config,
             &permissions,
@@ -327,7 +332,7 @@ pub(crate) async fn update_user_core(
             "You are not allowed to ban users",
         )?;
         if body.data.get("banned") == Some(&serde_json::Value::Bool(true))
-            && body.user_id == acting_user.id
+            && acting_user.id == body.user_id.as_str()
         {
             return Err(AuthError::bad_request("You cannot ban yourself"));
         }
@@ -347,7 +352,7 @@ pub(crate) async fn update_user_core(
                 return Err(AuthError::bad_request("Invalid email"));
             }
             if let Some(existing) = ctx.database.get_user_by_email(&email).await?
-                && existing.id() != body.user_id
+                && existing.id().into_owned() != body.user_id.as_str()
             {
                 return Err(AuthError::bad_request(
                     "User already exists. Use another email.",
@@ -548,7 +553,7 @@ pub(crate) async fn impersonate_user_core(
     SessionUserResponse<SessionView, UserView>,
     better_auth_core::session::SessionData,
 )> {
-    if body.user_id == acting_user.id.as_str() {
+    if acting_user.id == body.user_id.as_str() {
         return Err(AuthError::bad_request("Cannot impersonate yourself"));
     }
 
@@ -600,11 +605,11 @@ pub(crate) async fn impersonate_user_core(
         + Duration::try_seconds(config.impersonation_session_duration.unwrap_or(60 * 60))
             .unwrap_or(Duration::hours(1));
     let create_session = CreateSession {
-        user_id: target.id().to_string(),
+        user_id: target.id().into_owned(),
         expires_at,
         ip_address: ip_address.map(|value| value.to_string()),
         user_agent: user_agent.map(|value| value.to_string()),
-        impersonated_by: Some(acting_user.id.as_str().to_string()),
+        impersonated_by: acting_user.id.as_str().map(str::to_owned),
         active_organization_id: None,
     };
 
@@ -763,11 +768,6 @@ pub(crate) fn has_permission_core(
 
     Ok(PermissionResponse {
         error: None,
-        success: has_permission(
-            Some(user.id.as_str()),
-            user.role.as_deref(),
-            config,
-            requested,
-        ),
+        success: has_permission(user.id.as_str(), user.role.as_deref(), config, requested),
     })
 }

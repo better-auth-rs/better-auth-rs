@@ -3,7 +3,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::borrow::Cow;
-use uuid::Uuid;
 
 use crate::entity::{AuthInvitation, AuthMember, AuthOrganization};
 
@@ -53,7 +52,8 @@ pub struct Organization {
     /// Application fields projected by the configured organization schema.
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub name: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -78,7 +78,8 @@ pub struct Member {
     /// Application fields projected by the configured member schema.
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(rename = "organizationId")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub organization_id: SchemaValue<String>,
@@ -135,7 +136,8 @@ pub struct Invitation {
     #[serde(rename = "teamId")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub team_id: SchemaValue<Option<String>>,
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(rename = "organizationId")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub organization_id: SchemaValue<String>,
@@ -208,7 +210,7 @@ pub struct CreateOrganization {
 impl CreateOrganization {
     pub fn new(name: impl Into<String>, slug: impl Into<String>) -> Self {
         Self {
-            id: Some(Uuid::new_v4().to_string()),
+            id: None,
             additional_fields: Default::default(),
             name: name.into().into(),
             slug: slug.into().into(),
@@ -246,8 +248,8 @@ pub struct UpdateOrganization {
 pub struct CreateMember {
     /// Validated application input before adapter transforms.
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
-    pub organization_id: String,
-    pub user_id: String,
+    pub organization_id: SchemaValue<String>,
+    pub user_id: SchemaValue<String>,
     pub role: SchemaValue<String>,
 }
 
@@ -258,9 +260,9 @@ impl CreateMember {
         role: impl Into<String>,
     ) -> Self {
         Self {
-            organization_id: organization_id.into(),
+            organization_id: organization_id.into().into(),
             additional_fields: Default::default(),
-            user_id: user_id.into(),
+            user_id: user_id.into().into(),
             role: role.into().into(),
         }
     }
@@ -324,8 +326,8 @@ impl AuthOrganization for Organization {
         Some(&self.additional_fields)
     }
 
-    fn id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.id)
+    fn id(&self) -> SchemaValue<Cow<'_, str>> {
+        self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
     fn name(&self) -> &SchemaValue<String> {
         &self.name
@@ -349,8 +351,8 @@ impl AuthMember for Member {
         Some(&self.additional_fields)
     }
 
-    fn id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.id)
+    fn id(&self) -> SchemaValue<Cow<'_, str>> {
+        self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
     fn organization_id(&self) -> &SchemaValue<String> {
         &self.organization_id
@@ -387,8 +389,8 @@ impl AuthInvitation for Invitation {
     fn team_id(&self) -> &SchemaValue<Option<String>> {
         &self.team_id
     }
-    fn id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.id)
+    fn id(&self) -> SchemaValue<Cow<'_, str>> {
+        self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
     fn organization_id(&self) -> &SchemaValue<String> {
         &self.organization_id

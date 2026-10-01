@@ -202,10 +202,11 @@ macro_rules! impl_auth_plugin {
 pub type QueryValidator = fn(Option<serde_json::Value>) -> AuthResult<Option<serde_json::Value>>;
 
 /// Validate a decoded body once and retain its typed handler input.
-pub type BodyValidator = fn(&AuthRequest) -> AuthResult<crate::endpoint_input::ValidatedBody>;
+pub type BodyValidator =
+    Arc<dyn Fn(&AuthRequest) -> AuthResult<crate::endpoint_input::ValidatedBody> + Send + Sync>;
 
 /// Route definition for plugins
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AuthRoute {
     pub path: String,
     pub method: HttpMethod,
@@ -267,6 +268,24 @@ impl<S: AuthSchema> Clone for AuthContext<S> {
     }
 }
 
+impl std::fmt::Debug for AuthRoute {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthRoute")
+            .field("path", &self.path)
+            .field("method", &self.method)
+            .field("operation_id", &self.operation_id)
+            .field("openapi", &self.openapi)
+            .field("endpoint_key", &self.endpoint_key)
+            .field("allowed_media_types", &self.allowed_media_types)
+            .field("query_validator", &self.query_validator)
+            .field(
+                "body_validator",
+                &self.body_validator.as_ref().map(|_| "configured"),
+            )
+            .finish()
+    }
+}
+
 impl AuthRoute {
     /// Match the method and slash-separated path, including named `{parameter}` segments.
     pub fn matches(&self, method: &HttpMethod, path: &str) -> bool {
@@ -298,8 +317,14 @@ impl AuthRoute {
     }
 
     /// Install a body validator. Body validation precedes query validation.
-    pub fn body_validator(mut self, validator: BodyValidator) -> Self {
-        self.body_validator = Some(validator);
+    pub fn body_validator(
+        mut self,
+        validator: impl Fn(&AuthRequest) -> AuthResult<crate::endpoint_input::ValidatedBody>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        self.body_validator = Some(Arc::new(validator));
         self
     }
 
@@ -605,7 +630,9 @@ impl<S: AuthSchema> AuthContext<S> {
         let resolved = self.session_manager().resolve(req, read).await?;
         req.set_session_snapshot(resolved.data.clone())?;
         let data = resolved.data.ok_or(AuthError::Unauthenticated)?;
-        req.set_server_context("auth.current-user-id", data.user.id.clone().into())?;
+        if let Some(id) = data.user.id.json()? {
+            req.set_server_context("auth.current-user-id", id)?;
+        }
         Ok((data.user, data.session))
     }
 }

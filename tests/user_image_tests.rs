@@ -58,7 +58,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for ImageHooks {
 
     async fn after_create_user(
         &self,
-        row: &S::User,
+        row: &better_auth_core::wire::UserView,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("create.after", UserView::from(row));
@@ -79,7 +79,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for ImageHooks {
 
     async fn after_update_user(
         &self,
-        row: Option<&S::User>,
+        row: Option<&better_auth_core::wire::UserView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("update.after", UserView::from(row.unwrap()));
@@ -108,7 +108,7 @@ async fn check_image<S: AuthSchema>(store: Arc<dyn AuthStore<S>>, hooks: ImageHo
         let id = created.id();
         let kept = store
             .update_user(
-                &id,
+                id.typed().unwrap(),
                 UpdateUser {
                     name: Some("Renamed".into()),
                     ..Default::default()
@@ -119,13 +119,16 @@ async fn check_image<S: AuthSchema>(store: Arc<dyn AuthStore<S>>, hooks: ImageHo
         assert_eq!(image(UserView::from(&kept)), initial);
         for value in [json!(SECOND), Value::Null] {
             let update = serde_json::from_value(json!({"image": value})).unwrap();
-            let updated = store.update_user(&id, update).await.unwrap();
+            let updated = store
+                .update_user(id.typed().unwrap(), update)
+                .await
+                .unwrap();
             assert_eq!(image(UserView::from(&updated)), json!({"image": value}));
         }
         hooks.reject.store(true, Ordering::SeqCst);
         let failure = store
             .update_user(
-                &id,
+                id.typed().unwrap(),
                 UpdateUser {
                     image: Some(Some(FIRST.into())),
                     ..Default::default()
@@ -135,7 +138,11 @@ async fn check_image<S: AuthSchema>(store: Arc<dyn AuthStore<S>>, hooks: ImageHo
         assert!(
             matches!(failure, Err(AuthError::Internal(message)) if message == "image update rejected")
         );
-        let stored = store.get_user_by_id(&id).await.unwrap().unwrap();
+        let stored = store
+            .get_user_by_id(id.typed().unwrap())
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(image(UserView::from(&stored)), json!({"image": null}));
         let event = |name: &str, mut fields: Value| {
             fields["event"] = json!(name);

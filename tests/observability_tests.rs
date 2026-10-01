@@ -944,6 +944,118 @@ mod sqlite {
             .map_err(|error| AuthError::internal(error.to_string()))?;
         check_device_operations(&SeaOrmStore::<Tables>::new(config(), db), "device_code").await
     }
+
+    #[tokio::test]
+    async fn api_key_list_traces_default_limited_find_many_and_unlimited_count() -> AuthResult<()> {
+        use better_auth_core::store::ApiKeyStore;
+        let db = Database::connect("sqlite::memory:")
+            .await
+            .map_err(|error| AuthError::internal(error.to_string()))?;
+        let _ = db
+            .execute(
+                &Schema::new(db.get_database_backend())
+                    .create_table_from_entity(better_auth_seaorm::store::entities::api_key::Entity),
+            )
+            .await
+            .map_err(|error| AuthError::internal(error.to_string()))?;
+        let mut config = config();
+        config.advanced.database.default_find_many_limit = Some(2.0);
+        let store = SeaOrmStore::<Tables>::new(config, db.clone());
+        check_api_key_list(&store, "api_keys").await?;
+        let _ = db
+            .execute_unprepared("DROP TABLE api_keys")
+            .await
+            .map_err(|error| AuthError::internal(error.to_string()))?;
+        let capture = Capture::default();
+        assert!(
+            store
+                .count_api_keys_by_reference("owner")
+                .instrument(capture.span())
+                .await
+                .is_err()
+        );
+        let records = capture
+            .0
+            .lock()
+            .map_err(|_| AuthError::internal("capture poisoned"))?;
+        assert_eq!(records.len(), 1);
+        let record = records.first().expect("count span");
+        assert_eq!(
+            record.fields.get("db.operation.name"),
+            Some(&json!("count"))
+        );
+        assert_eq!(record.fields.get("otel.status_code"), Some(&json!("ERROR")));
+        assert_eq!(record.exceptions.len(), 1);
+        assert_eq!(record.closed, 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn api_key_usage_traces_independent_guarded_writes() -> AuthResult<()> {
+        let db = Database::connect("sqlite::memory:")
+            .await
+            .map_err(|error| AuthError::internal(error.to_string()))?;
+        let _ = db
+            .execute(
+                &Schema::new(db.get_database_backend())
+                    .create_table_from_entity(better_auth_seaorm::store::entities::api_key::Entity),
+            )
+            .await
+            .map_err(|error| AuthError::internal(error.to_string()))?;
+        check_api_key_operations(&SeaOrmStore::<Tables>::new(config(), db), "api_keys").await
+    }
+
+    #[tokio::test]
+    async fn api_key_failed_later_writes_preserve_quota_and_rate_changes() -> AuthResult<()> {
+        use better_auth_core::store::ApiKeyStore;
+        for field in ["remaining", "request_count", "updated_at"] {
+            let db = Database::connect("sqlite::memory:")
+                .await
+                .map_err(|error| AuthError::internal(error.to_string()))?;
+            let _ = db
+                .execute(
+                    &Schema::new(db.get_database_backend()).create_table_from_entity(
+                        better_auth_seaorm::store::entities::api_key::Entity,
+                    ),
+                )
+                .await
+                .map_err(|error| AuthError::internal(error.to_string()))?;
+            let store = SeaOrmStore::<Tables>::new(config(), db.clone());
+            let key = store.create_api_key(api_key_input()).await?;
+            let sql = format!(
+                "CREATE TRIGGER reject_write BEFORE UPDATE OF {field} ON api_keys BEGIN SELECT RAISE(ABORT, 'controlled storage failure'); END"
+            );
+            let _ = db
+                .execute_unprepared(&sql)
+                .await
+                .map_err(|error| AuthError::internal(error.to_string()))?;
+            let expected: &[&str] = match field {
+                "remaining" => &["incrementOne"],
+                "request_count" => &["incrementOne", "incrementOne"],
+                _ => &["incrementOne", "incrementOne", "update"],
+            };
+            assert!(
+                trace_api_key_usage(&store, &key, expected, "api_keys")
+                    .await
+                    .is_err()
+            );
+            let stored = store
+                .get_api_key_by_id_value(&key.id)
+                .await?
+                .expect("key remains");
+            assert_eq!(
+                stored.remaining,
+                Some(if field == "remaining" { 3.0 } else { 2.0 })
+            );
+            assert_eq!(
+                stored.request_count,
+                Some(if field == "updated_at" { 1.0 } else { 0.0 })
+            );
+            assert_eq!(stored.last_request.is_none(), field != "updated_at");
+            assert_eq!(stored.updated_at, key.updated_at);
+        }
+        Ok(())
+    }
     mod user {
         use super::*;
         #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, AuthEntity)]
@@ -985,7 +1097,7 @@ mod sqlite {
         }
         async fn after_update_user(
             &self,
-            _: Option<&user::Model>,
+            _: Option<&better_auth::wire::UserView>,
             _: &SeaOrmHookContext<'_, Tables>,
         ) -> AuthResult<()> {
             Ok(())
@@ -1037,7 +1149,7 @@ mod sqlite {
             let id = if kind == "missing" {
                 "missing"
             } else {
-                &second.id
+                second.id.typed()?
             };
             let mut update = UpdateUser {
                 name: Some("Changed".into()),
@@ -1099,7 +1211,7 @@ mod sqlite {
         }
         assert_eq!(
             store
-                .get_user_by_id(&second.id)
+                .get_user_by_id(second.id.typed()?)
                 .await?
                 .and_then(|user| user.email),
             Some("second@example.test".into())
@@ -1250,7 +1362,7 @@ async fn check_plugin_operations(
         );
         assert_eq!(
             store
-                .update_passkey_name(&row.id, "Renamed")
+                .update_passkey_name(row.id.typed()?, "Renamed")
                 .await?
                 .name
                 .as_deref(),
@@ -1263,7 +1375,7 @@ async fn check_plugin_operations(
                 .is_err()
         );
         assert_eq!(store.list_passkeys_by_user("owner").await?.len(), 1);
-        store.delete_passkey(&row.id).await?;
+        store.delete_passkey(row.id.typed()?).await?;
         assert!(store.list_passkeys_by_user("owner").await?.is_empty());
         let key = store
             .create_jwk(better_auth_core::CreateJwk {
@@ -1276,13 +1388,12 @@ async fn check_plugin_operations(
             })
             .await?;
         assert_eq!(
-            store.get_jwk(&key.id).await?.map(|key| key.id),
+            store.get_jwk(key.id.typed()?).await?.map(|key| key.id),
             Some(key.id.clone())
         );
         assert_eq!(store.list_jwks().await?.len(), 1);
         let wallet = store
-            .create_wallet_address(better_auth_core::WalletAddress {
-                id: "wallet".into(),
+            .create_wallet_address(better_auth_core::CreateWalletAddress {
                 user_id: "owner".into(),
                 address: "0x123".into(),
                 chain_id: 1,
@@ -1423,7 +1534,7 @@ async fn check_device_operations(
         assert!(
             store
                 .update_device_code(
-                    "missing",
+                    &"missing".into(),
                     better_auth_core::UpdateDeviceCode {
                         status: Some("denied".into()),
                         ..Default::default()
@@ -1491,4 +1602,182 @@ async fn check_device_operations(
         assert_eq!(record.closed, 1);
     }
     Ok(())
+}
+
+#[path = "observability/admin_counts.rs"]
+mod admin_counts;
+
+fn api_key_input() -> better_auth_core::CreateApiKey {
+    better_auth_core::CreateApiKey {
+        reference_id: "owner".into(),
+        config_id: "default".into(),
+        name: None,
+        prefix: None,
+        key_hash: "stored-secret".into(),
+        start: None,
+        expires_at: None,
+        remaining: Some(3.0),
+        enabled: true,
+        rate_limit_enabled: true,
+        rate_limit_time_window: Some(60_000.0),
+        rate_limit_max: Some(1.0),
+        refill_interval: None,
+        refill_amount: None,
+        permissions: None,
+        metadata: None,
+    }
+}
+
+async fn trace_api_key_usage(
+    store: &impl better_auth_core::store::ApiKeyStore,
+    snapshot: &better_auth_core::ApiKey,
+    expected: &[&str],
+    collection: &str,
+) -> AuthResult<better_auth_core::store::ConsumeApiKeyResult> {
+    let capture = Capture::default();
+    let result = store
+        .consume_api_key_usage(snapshot, true)
+        .instrument(capture.span())
+        .await;
+    let records = capture
+        .0
+        .lock()
+        .map_err(|_| AuthError::internal("capture poisoned"))?;
+    assert_eq!(records.len(), expected.len(), "{records:#?}");
+    for (index, (record, operation)) in records.iter().zip(expected).enumerate() {
+        assert_eq!(
+            record.fields.get("otel.name"),
+            Some(&json!(format!("db {operation} {collection}")))
+        );
+        assert_eq!(
+            record.fields.get("db.operation.name"),
+            Some(&json!(operation))
+        );
+        assert_eq!(
+            record.fields.get("db.collection.name"),
+            Some(&json!(collection))
+        );
+        assert_eq!(record.closed, 1);
+        if result.is_err() && index + 1 == expected.len() {
+            assert_eq!(record.fields.get("otel.status_code"), Some(&json!("ERROR")));
+            assert_eq!(record.exceptions.len(), 1);
+            assert!(
+                record
+                    .exceptions
+                    .first()
+                    .expect("recorded failure")
+                    .contains("controlled storage failure")
+            );
+        } else {
+            assert!(record.exceptions.is_empty());
+            assert!(!record.fields.contains_key("otel.status_code"));
+        }
+    }
+    result
+}
+
+async fn check_api_key_operations(
+    store: &impl better_auth_core::store::ApiKeyStore,
+    collection: &str,
+) -> AuthResult<()> {
+    use better_auth_core::store::ConsumeApiKeyResult;
+    let key = store.create_api_key(api_key_input()).await?;
+    let allowed = trace_api_key_usage(
+        store,
+        &key,
+        &["incrementOne", "incrementOne", "update"],
+        collection,
+    )
+    .await?;
+    let ConsumeApiKeyResult::Allowed(allowed) = allowed else {
+        return Err(AuthError::internal("first usage must succeed"));
+    };
+    assert_eq!(allowed.remaining, Some(2.0));
+    assert_eq!(allowed.request_count, Some(1.0));
+    let mut snapshot = *allowed;
+    for remaining in [1.0, 0.0] {
+        let result = trace_api_key_usage(store, &snapshot, &["incrementOne"], collection).await?;
+        assert!(matches!(result, ConsumeApiKeyResult::RateLimited { .. }));
+        let stored = store
+            .get_api_key_by_id_value(&key.id)
+            .await?
+            .expect("quota write remains");
+        assert_eq!(stored.remaining, Some(remaining));
+        assert_eq!(stored.request_count, snapshot.request_count);
+        assert_eq!(stored.last_request, snapshot.last_request);
+        assert_eq!(stored.updated_at, snapshot.updated_at);
+        snapshot = stored;
+    }
+    let exhausted = trace_api_key_usage(store, &snapshot, &["delete"], collection).await?;
+    assert!(matches!(exhausted, ConsumeApiKeyResult::UsageExhausted));
+    assert!(store.get_api_key_by_id_value(&key.id).await?.is_none());
+    Ok(())
+}
+
+#[tokio::test]
+async fn memory_api_key_usage_traces_independent_guarded_writes() -> AuthResult<()> {
+    check_api_key_operations(
+        &better_auth_core::store::EphemeralStore::new(Arc::new(config())),
+        "apikey",
+    )
+    .await
+}
+
+async fn check_api_key_list(
+    store: &impl better_auth_core::store::ApiKeyStore,
+    collection: &str,
+) -> AuthResult<()> {
+    for (index, name) in ["D", "A", "E", "C", "B"].into_iter().enumerate() {
+        let mut input = api_key_input();
+        input.name = Some(name.into());
+        input.key_hash = format!("secret-{index}");
+        let _ = store.create_api_key(input).await?;
+    }
+    let capture = Capture::default();
+    let (keys, count) = async {
+        tokio::join!(
+            store.find_api_keys_by_reference("owner", Some(("name", "desc"))),
+            store.count_api_keys_by_reference("owner"),
+        )
+    }
+    .instrument(capture.span())
+    .await;
+    assert_eq!(
+        keys?
+            .iter()
+            .map(|key| key.name.as_deref())
+            .collect::<Vec<_>>(),
+        [Some("E"), Some("D")]
+    );
+    assert_eq!(count?, 5);
+    let records = capture
+        .0
+        .lock()
+        .map_err(|_| AuthError::internal("capture poisoned"))?;
+    assert_eq!(records.len(), 2);
+    for (record, operation) in records.iter().zip(["findMany", "count"]) {
+        assert_eq!(
+            record.fields.get("db.operation.name"),
+            Some(&json!(operation))
+        );
+        assert_eq!(
+            record.fields.get("db.collection.name"),
+            Some(&json!(collection))
+        );
+        assert!(record.exceptions.is_empty());
+        assert_eq!(record.closed, 1);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn memory_api_key_list_traces_default_limited_find_many_and_unlimited_count() -> AuthResult<()>
+{
+    let mut config = config();
+    config.advanced.database.default_find_many_limit = Some(2.0);
+    check_api_key_list(
+        &better_auth_core::store::EphemeralStore::new(Arc::new(config)),
+        "apikey",
+    )
+    .await
 }

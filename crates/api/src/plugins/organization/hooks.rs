@@ -110,8 +110,8 @@ pub struct OrganizationTeamMemberTarget<'a> {
 pub struct OrganizationMemberDraft {
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 
-    pub organization_id: String,
-    pub user_id: String,
+    pub organization_id: better_auth_core::SchemaValue<String>,
+    pub user_id: better_auth_core::SchemaValue<String>,
     pub role: better_auth_core::SchemaValue<String>,
     /// Server-side addMember input; team assignment is handled separately from this record.
     pub team_id: Option<String>,
@@ -141,7 +141,7 @@ pub struct OrganizationTeamDraft {
 
     pub id: Option<String>,
     pub name: better_auth_core::SchemaValue<String>,
-    pub organization_id: String,
+    pub organization_id: better_auth_core::SchemaValue<String>,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// None leaves the route default; Some(None) explicitly clears the timestamp.
     pub updated_at: Option<Option<chrono::DateTime<chrono::Utc>>>,

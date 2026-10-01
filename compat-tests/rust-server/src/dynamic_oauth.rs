@@ -101,7 +101,10 @@ pub async fn run() -> AuthResult<Value> {
         };
         let response=auth.handle_request(request(json!({"provider":"google","idToken":{"token":json!({"id":format!("provider-{tenant}"),"email":email,"name":tenant,"emailVerified":false}).to_string()}}))).await?;
         let body: Value = serde_json::from_slice(&response.body)?;
-        let accounts = auth.store().get_user_accounts(&user.id()).await?;
+        let accounts = auth
+            .store()
+            .get_user_accounts(user.id().typed().unwrap())
+            .await?;
         let authorization=auth.handle_request(request(json!({"provider":"google","callbackURL":format!("https://{tenant}.tenant.test/done"),"disableRedirect":true}))).await?;
         let data: Value = serde_json::from_slice(&authorization.body)?;
         let url = url::Url::parse(data["url"].as_str().unwrap()).unwrap();
@@ -117,7 +120,7 @@ pub async fn run() -> AuthResult<Value> {
                     .map_err(better_auth::AuthError::from)
             })
             .transpose()?;
-        results.push(json!({"tenant":tenant,"status":response.status,"error":body.get("message"),"signedIn":body.get("token").is_some_and(|v|!v.is_null()),"accounts":accounts.iter().map(|row|json!({"providerId":row.provider_id,"accountId":row.account_id,"sameUser":row.user_id==user.id().as_ref()})).collect::<Vec<_>>(),"redirectURI":query.get("redirect_uri"),"statePersisted":stored.is_some(),"stateCallback":payload.as_ref().and_then(|p|p.get("callbackURL")),"stateBound":payload.as_ref().and_then(|p|p.get("oauthState")).and_then(Value::as_str)==Some(state.as_ref())}));
+        results.push(json!({"tenant":tenant,"status":response.status,"error":body.get("message"),"signedIn":body.get("token").is_some_and(|v|!v.is_null()),"accounts":accounts.iter().map(|row|json!({"providerId":row.provider_id,"accountId":row.account_id,"sameUser":row.user_id==user.id().into_owned()})).collect::<Vec<_>>(),"redirectURI":query.get("redirect_uri"),"statePersisted":stored.is_some(),"stateCallback":payload.as_ref().and_then(|p|p.get("callbackURL")),"stateBound":payload.as_ref().and_then(|p|p.get("oauthState")).and_then(Value::as_str)==Some(state.as_ref())}));
     }
     Ok(json!(results))
 }

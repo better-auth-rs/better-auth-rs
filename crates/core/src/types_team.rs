@@ -10,7 +10,8 @@ pub struct Team {
     /// Application fields projected by the configured team schema.
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub name: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -32,7 +33,7 @@ pub struct CreateTeam {
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub updated_at: Option<DateTime<Utc>>,
     pub name: SchemaValue<String>,
-    pub organization_id: String,
+    pub organization_id: SchemaValue<String>,
 }
 
 /// Mutable team fields. Team IDs cannot be changed.
@@ -50,8 +51,10 @@ pub struct UpdateTeam {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamMember {
-    pub id: String,
-    pub team_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub team_id: SchemaValue<String>,
     pub user_id: String,
     #[serde(serialize_with = "crate::utils::date::serialize")]
     pub created_at: DateTime<Utc>,
@@ -64,7 +67,8 @@ pub struct OrganizationRole {
     /// Application fields projected by the configured role schema.
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub organization_id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]

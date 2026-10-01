@@ -1,3 +1,4 @@
+import { runIdPolicy } from "./id-policy";
 import { runDynamicOAuth } from "./dynamic-oauth";
 import { runDynamicCookies } from "./dynamic-cookies";
 import { runDynamicNative } from "./dynamic-native";
@@ -169,6 +170,7 @@ export function createDynamicContextFixture() {
     if (path === "/__test/reset-state") return Response.json({ success: true });
     if (path === "/__test/dynamic-cookies") return Response.json(await runDynamicCookies());
     if (path === "/__test/dynamic-oauth") return Response.json(await runDynamicOAuth());
+    if (path === "/__test/id-policy") return Response.json(await runIdPolicy(await request.json()));
     if (path === "/__test/dynamic-native") return Response.json(await runDynamicNative(await request.json()));
     if (path !== "/__test/dynamic-context") return new Response(null, { status: 404 });
     return Response.json(await runDynamicContext(await request.json()));

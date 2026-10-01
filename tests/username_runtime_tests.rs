@@ -105,7 +105,7 @@ async fn username_login_only_sends_verification_when_required_and_propagates_del
             assert_eq!(delivery.0.load(Ordering::SeqCst), 1);
             assert!(
                 auth.store()
-                    .get_user_sessions(&user.id())
+                    .get_user_sessions(user.id().typed().unwrap())
                     .await
                     .unwrap()
                     .is_empty()

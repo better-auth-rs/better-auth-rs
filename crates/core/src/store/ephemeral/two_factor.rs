@@ -4,7 +4,7 @@ use super::*;
 impl TwoFactorStore for EphemeralStore {
     async fn update_two_factor(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         update: crate::types::UpdateTwoFactor,
     ) -> AuthResult<TwoFactor> {
         self.raw("twoFactor", "update", |state| {
@@ -28,7 +28,7 @@ impl TwoFactorStore for EphemeralStore {
     }
     async fn compare_exchange_two_factor_backup_codes(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         previous: &str,
         replacement: &str,
     ) -> AuthResult<bool> {
@@ -48,7 +48,7 @@ impl TwoFactorStore for EphemeralStore {
     }
     async fn record_two_factor_failure(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         max_attempts: i64,
         locked_until: chrono::DateTime<Utc>,
     ) -> AuthResult<()> {
@@ -77,7 +77,7 @@ impl TwoFactorStore for EphemeralStore {
     }
     async fn reset_two_factor_failures(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         locked_before: Option<chrono::DateTime<Utc>>,
     ) -> AuthResult<()> {
         self.raw(
@@ -103,7 +103,10 @@ impl TwoFactorStore for EphemeralStore {
     }
     async fn create_two_factor(&self, input: CreateTwoFactor) -> AuthResult<TwoFactor> {
         let factor = TwoFactor {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: self
+                .generated_id("twoFactor", None, self.lock()?.two_factors.len())?
+                .map(crate::SchemaValue::Typed)
+                .unwrap_or_default(),
             user_id: input.user_id,
             secret: input.secret,
             backup_codes: input.backup_codes,
@@ -114,7 +117,7 @@ impl TwoFactorStore for EphemeralStore {
             updated_at: Utc::now(),
         };
         self.raw("twoFactor", "create", |state| {
-            let _ = state.two_factors.insert(factor.id.clone(), factor.clone());
+            let _ = state.two_factors.push(factor.clone());
             Ok(factor)
         })
         .await
@@ -123,7 +126,7 @@ impl TwoFactorStore for EphemeralStore {
         self.raw("twoFactor", "findOne", |state| {
             Ok(state
                 .two_factors
-                .values()
+                .iter()
                 .find(|factor| factor.user_id == user_id)
                 .cloned())
         })
@@ -137,7 +140,7 @@ impl TwoFactorStore for EphemeralStore {
         self.raw("twoFactor", "update", |state| {
             let Some(factor) = state
                 .two_factors
-                .values_mut()
+                .iter_mut()
                 .find(|factor| factor.user_id == user_id)
             else {
                 return Ok(None);
@@ -151,9 +154,7 @@ impl TwoFactorStore for EphemeralStore {
     }
     async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
         self.raw("twoFactor", "delete", |state| {
-            state
-                .two_factors
-                .retain(|_, factor| factor.user_id != user_id);
+            state.two_factors.retain(|factor| factor.user_id != user_id);
             Ok(())
         })
         .await

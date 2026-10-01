@@ -21,6 +21,16 @@ pub enum SchemaValue<T> {
 }
 
 impl<T> SchemaValue<T> {
+    /// Borrow the typed value without turning a missing field into a placeholder.
+    pub fn as_ref(&self) -> SchemaValue<&T> {
+        match self {
+            Self::Typed(value) => SchemaValue::Typed(value),
+            Self::Dynamic(value) => SchemaValue::Dynamic(value.clone()),
+            Self::InvalidDate => SchemaValue::InvalidDate,
+            Self::Undefined => SchemaValue::Undefined,
+        }
+    }
+
     /// Transform the default type without changing dynamic or omitted values.
     pub fn map<U>(self, transform: impl FnOnce(T) -> U) -> SchemaValue<U> {
         match self {
@@ -56,6 +66,22 @@ impl<T> SchemaValue<Option<T>> {
 impl<T: PartialEq> PartialEq<T> for SchemaValue<T> {
     fn eq(&self, other: &T) -> bool {
         matches!(self, Self::Typed(value) if value == other)
+    }
+}
+
+impl PartialEq<str> for SchemaValue<String> {
+    fn eq(&self, other: &str) -> bool {
+        matches!(self, Self::Typed(value) if value == other)
+    }
+}
+
+impl SchemaValue<String> {
+    /// Inspect a string value for an adapter comparison without converting omission.
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::Typed(value) => Some(value),
+            _ => None,
+        }
     }
 }
 
@@ -163,6 +189,13 @@ pub(crate) fn number_string(number: f64) -> String {
         format!("{number:e}")
     } else {
         number.to_string()
+    }
+}
+
+impl SchemaValue<std::borrow::Cow<'_, str>> {
+    /// Own a borrowed identifier while retaining an omitted value.
+    pub fn into_owned(self) -> SchemaValue<String> {
+        self.map(std::borrow::Cow::into_owned)
     }
 }
 

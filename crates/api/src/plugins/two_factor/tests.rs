@@ -48,7 +48,7 @@ pub(super) async fn create_test_context_with_credential_user(
         UserView::from(
             &ctx.database
                 .update_user(
-                    &user.id,
+                    user.id.typed().unwrap(),
                     better_auth_core::UpdateUser {
                         two_factor_enabled: Some(true),
                         ..Default::default()
@@ -61,7 +61,9 @@ pub(super) async fn create_test_context_with_credential_user(
         user
     };
 
-    let session = test_helpers::create_session(&ctx, user.id.clone(), Duration::hours(1)).await;
+    let session =
+        test_helpers::create_session(&ctx, user.id.typed().unwrap().clone(), Duration::hours(1))
+            .await;
     (ctx, user, session)
 }
 
@@ -276,14 +278,17 @@ async fn test_view_backup_codes_returns_decrypted_codes() {
         .database
         .create_two_factor(better_auth_core::CreateTwoFactor {
             verified: true,
-            user_id: user.id.clone(),
+            user_id: user.id.typed().unwrap().clone(),
             secret: encrypt_value(&ctx.config.secret, "totp-secret").unwrap(),
             backup_codes: encrypted,
         })
         .await
         .unwrap();
 
-    let backup_codes = plugin.view_backup_codes(&user.id, &ctx).await.unwrap();
+    let backup_codes = plugin
+        .view_backup_codes(user.id.typed().unwrap(), &ctx)
+        .await
+        .unwrap();
     assert_eq!(backup_codes, expected_codes);
 }
 
@@ -297,14 +302,17 @@ async fn test_view_backup_codes_rejects_invalid_stored_json() {
         .database
         .create_two_factor(better_auth_core::CreateTwoFactor {
             verified: true,
-            user_id: user.id.clone(),
+            user_id: user.id.typed().unwrap().clone(),
             secret: encrypt_value(&ctx.config.secret, "totp-secret").unwrap(),
             backup_codes: encrypt_value(&ctx.config.secret, "\"not-an-array\"").unwrap(),
         })
         .await
         .unwrap();
 
-    let err = plugin.view_backup_codes(&user.id, &ctx).await.unwrap_err();
+    let err = plugin
+        .view_backup_codes(user.id.typed().unwrap(), &ctx)
+        .await
+        .unwrap_err();
     assert_eq!(err.to_string(), "Invalid backup code");
 }
 

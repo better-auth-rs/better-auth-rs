@@ -5,7 +5,7 @@ use better_auth::plugins::admin::{
 };
 use better_auth::seaorm::{SeaOrmHookContext, SeaOrmHooks};
 use better_auth::{AuthError, AuthResult, BetterAuth};
-use better_auth_core::{AuthPlugin, AuthRequest, AuthSchema, AuthUser, HttpMethod, UpdateUser};
+use better_auth_core::{AuthPlugin, AuthRequest, AuthUser, HttpMethod, UpdateUser};
 use better_auth_seaorm::sea_orm::{ConnectionTrait, DbBackend, Statement};
 use serde_json::{Value, json};
 use std::{
@@ -133,7 +133,7 @@ impl AdminOptionsFixture {
                 }
                 let mut user = match body.get("email").and_then(Value::as_str) { Some(email) => auth.store().get_user_by_email(email).await?, None => None };
                 if let (Some(existing), Some(patch)) = (&user, body.get("patch")) {
-                    user = Some(auth.store().update_user(&existing.id(), UpdateUser {
+                    user = Some(auth.store().update_user(existing.id().typed().unwrap(), UpdateUser {
                         role: patch.get("role").and_then(Value::as_str).map(str::to_owned),
                         banned: patch.get("banned").and_then(Value::as_bool),
                         ban_reason: patch.get("banReason").map(|value| serde_json::from_value(value.clone())).transpose()?,
@@ -141,7 +141,7 @@ impl AdminOptionsFixture {
                         ..Default::default()
                     }).await?);
                 }
-                let sessions = match &user { Some(user) => auth.store().get_user_sessions(&user.id()).await?.len(), None => 0 };
+                let sessions = match &user { Some(user) => auth.store().get_user_sessions(user.id().typed().unwrap()).await?.len(), None => 0 };
                 let events = fixture.state.lock().unwrap().events.clone();
                 let user = user.as_ref().map(|user| auth.context().internal_user_view(user)).transpose()?.map(|user| json!({"email":user.email,"role":user.role,"name":user.name,"banned":user.banned,"banReason":user.ban_reason,"hasBanExpires":user.ban_expires.is_some(),"secretNote":user.additional_fields.get("secretNote")}));
                 Ok(Json(json!({"events":events,"user":user,"sessions":sessions})))
@@ -167,7 +167,7 @@ fn native_error(error: AuthError) -> AuthResult<Value> {
 impl SeaOrmHooks<TestSchema> for AdminOptionsFixture {
     async fn after_update_user(
         &self,
-        user: Option<&<TestSchema as AuthSchema>::User>,
+        user: Option<&better_auth_core::wire::UserView>,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<()> {
         let Some(user) = user else {
@@ -187,7 +187,7 @@ impl SeaOrmHooks<TestSchema> for AdminOptionsFixture {
         let query = Statement::from_sql_and_values(
             DbBackend::Sqlite,
             "SELECT COUNT(*) AS count FROM sessions WHERE user_id = ?",
-            [user.id().into_owned().into()],
+            [user.id().typed()?.to_string().into()],
         );
         let row = match ctx.tx {
             Some(tx) => tx.query_one_raw(query).await,

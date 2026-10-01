@@ -492,7 +492,7 @@ async fn invoke<S: AuthSchema>(
                 .auth
                 .store()
                 .update_user(
-                    &user.id(),
+                    user.id().typed().unwrap(),
                     UpdateUser {
                         additional_fields: fields,
                         ..Default::default()

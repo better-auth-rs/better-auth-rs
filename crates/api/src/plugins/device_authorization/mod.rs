@@ -1,3 +1,4 @@
+mod request;
 use base64::Engine as _;
 use chrono::{Duration, Utc};
 use rand::RngCore;
@@ -20,9 +21,8 @@ pub(super) mod types;
 mod tests;
 
 use types::{
-    DeviceActionRequest, DeviceActionResponse, DeviceCodeRequest, DeviceCodeResponse,
-    DeviceErrorResponse, DeviceReviewContext, DeviceTokenRequest, DeviceTokenResponse,
-    DeviceVerifyResponse,
+    DeviceActionRequest, DeviceActionResponse, DeviceCodeResponse, DeviceErrorResponse,
+    DeviceReviewContext, DeviceTokenRequest, DeviceTokenResponse, DeviceVerifyResponse,
 };
 
 const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
@@ -230,10 +230,7 @@ impl DeviceAuthorizationPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body: DeviceCodeRequest = match better_auth_core::validate_request_body(req) {
-            Ok(value) => value,
-            Err(response) => return Ok(response),
-        };
+        let body = request::normalize_code(req, request::read(req, request::code)?)?;
 
         if !self.validate_client_id(&body.client_id).await? {
             return device_error_response(400, "invalid_client", INVALID_CLIENT_ID);
@@ -300,14 +297,7 @@ impl DeviceAuthorizationPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body: DeviceTokenRequest = match better_auth_core::validate_request_body(req) {
-            Ok(value) => value,
-            Err(response) => return Ok(response),
-        };
-
-        if body.grant_type != DEVICE_GRANT_TYPE {
-            return device_error_response(400, "invalid_request", INVALID_REQUEST);
-        }
+        let body: DeviceTokenRequest = request::read(req, request::token)?;
 
         if !self.validate_client_id(&body.client_id).await? {
             return device_error_response(400, "invalid_grant", INVALID_CLIENT_ID);
@@ -321,7 +311,13 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "invalid_grant", INVALID_DEVICE_CODE);
         };
 
-        if let Some(client_id) = device_code.client_id.as_deref()
+        let client_id: Option<String> = serde_json::from_value(
+            device_code
+                .client_id
+                .json()?
+                .unwrap_or(serde_json::Value::Null),
+        )?;
+        if let Some(client_id) = client_id.as_deref()
             && client_id != body.client_id
         {
             return device_error_response(400, "invalid_grant", CLIENT_ID_MISMATCH);
@@ -381,7 +377,7 @@ impl DeviceAuthorizationPlugin {
 
             let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
             let session =
-                match issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
+                match issue_user_session(ctx, user.id().typed()?, meta.ip_address, meta.user_agent)
                     .await
                     .map_err(SessionIssueError::into_auth_error)
                 {
@@ -416,7 +412,10 @@ impl DeviceAuthorizationPlugin {
                         - Utc::now().timestamp_millis())
                     .div_euclid(1000)
                     .max(0),
-                    scope: device_code.scope.unwrap_or_default(),
+                    scope: serde_json::from_value::<Option<String>>(
+                        device_code.scope.json()?.unwrap_or(serde_json::Value::Null),
+                    )?
+                    .unwrap_or_default(),
                 },
             )?
             .with_header("Cache-Control", "no-store")
@@ -448,7 +447,7 @@ impl DeviceAuthorizationPlugin {
             Err(AuthError::Unauthenticated) => None,
             Err(error) => return Err(error),
         };
-        if let Some(user_id) = user_id.as_deref()
+        if let Some(user_id) = user_id.as_ref().and_then(|id| id.as_str())
             && device_code.user_id.is_none()
             && device_code.status == DEVICE_STATUS_PENDING
             && ctx
@@ -458,7 +457,8 @@ impl DeviceAuthorizationPlugin {
         {
             device_code.user_id = Some(user_id.to_string());
         }
-        let can_review = user_id.is_some() && device_code.user_id == user_id;
+        let can_review = user_id.is_some()
+            && device_code.user_id.as_deref() == user_id.as_ref().and_then(|id| id.as_str());
 
         AuthResponse::json(
             200,
@@ -507,10 +507,7 @@ impl DeviceAuthorizationPlugin {
         };
 
         let current_user_id = user.id().into_owned();
-        let body: DeviceActionRequest = match better_auth_core::validate_request_body(req) {
-            Ok(value) => value,
-            Err(response) => return Ok(response),
-        };
+        let body: DeviceActionRequest = request::read(req, request::action)?;
 
         let Some(device_code) = find_device_code_by_user_code(ctx, &body.user_code).await? else {
             return device_error_response(400, "invalid_request", INVALID_USER_CODE);
@@ -531,7 +528,7 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "invalid_request", DEVICE_CODE_NOT_CLAIMED);
         };
 
-        if claimed_user_id != current_user_id {
+        if current_user_id != claimed_user_id {
             return device_error_response(403, "access_denied", decision.forbidden_message());
         }
 
@@ -602,11 +599,11 @@ fn validate_generated_code(code: String, label: &str) -> AuthResult<String> {
 better_auth_core::impl_auth_plugin! {
     DeviceAuthorizationPlugin, "device-authorization";
     routes {
-        post "/device/code" => handle_device_code, "deviceCode", allowed_media_types = ["application/json", "application/x-www-form-urlencoded"];
-        post "/device/token" => handle_device_token, "deviceToken";
+        post "/device/code" => handle_device_code, "deviceCode", allowed_media_types = ["application/json", "application/x-www-form-urlencoded"], body = request::code;
+        post "/device/token" => handle_device_token, "deviceToken", body = request::token;
         get "/device" => handle_device_verify, "deviceVerify", query = crate::plugins::query_input::device;
-        post "/device/approve" => handle_device_approve, "deviceApprove";
-        post "/device/deny" => handle_device_deny, "deviceDeny";
+        post "/device/approve" => handle_device_approve, "deviceApprove", body = request::action;
+        post "/device/deny" => handle_device_deny, "deviceDeny", body = request::action;
     }
     extra {
         async fn on_init(&self, _: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {

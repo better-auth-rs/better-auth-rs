@@ -169,7 +169,7 @@ impl AnonymousPlugin {
 
         let user = super::user_admission::create_user(create, "anonymous", &endpoint).await?;
         let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
-        let issued = issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
+        let issued = issue_user_session(ctx, user.id().typed()?, meta.ip_address, meta.user_agent)
             .await
             .map_err(SessionIssueError::into_auth_error)?;
         let manager = ctx.session_manager();
@@ -211,7 +211,7 @@ impl AnonymousPlugin {
             return Err(error(403, "USER_IS_NOT_ANONYMOUS", "User is not anonymous"));
         }
         ctx.database
-            .delete_user_sessions(&user.id)
+            .delete_user_sessions(user.id.typed()?)
             .await
             .map_err(|cause| {
                 better_auth_core::observability::logger::current().error(
@@ -224,17 +224,20 @@ impl AnonymousPlugin {
                     "Failed to delete anonymous user sessions",
                 )
             })?;
-        ctx.database.delete_user(&user.id).await.map_err(|cause| {
-            better_auth_core::observability::logger::current().error(
-                "Failed to delete anonymous user",
-                &[better_auth_core::observability::LogArgument::Error(&cause)],
-            );
-            error(
-                500,
-                "FAILED_TO_DELETE_ANONYMOUS_USER",
-                "Failed to delete anonymous user",
-            )
-        })?;
+        ctx.database
+            .delete_user(user.id.typed()?)
+            .await
+            .map_err(|cause| {
+                better_auth_core::observability::logger::current().error(
+                    "Failed to delete anonymous user",
+                    &[better_auth_core::observability::LogArgument::Error(&cause)],
+                );
+                error(
+                    500,
+                    "FAILED_TO_DELETE_ANONYMOUS_USER",
+                    "Failed to delete anonymous user",
+                )
+            })?;
         ctx.session_manager().clear_cookies(req)?;
         Ok(AuthResponse::json(
             200,
@@ -387,7 +390,7 @@ impl AnonymousPlugin {
             && new_session.user.is_anonymous != Some(true)
         {
             // Upstream keeps a successful sign-in when post-link cleanup fails.
-            if let Err(cause) = ctx.database.delete_user(&previous.user.id).await {
+            if let Err(cause) = ctx.database.delete_user(previous.user.id.typed()?).await {
                 better_auth_core::observability::logger::current().error(
                     "Failed to clean up anonymous user during post-link cleanup",
                     &[better_auth_core::observability::LogArgument::Error(&cause)],
@@ -431,8 +434,9 @@ better_auth_core::impl_auth_plugin!(AnonymousPlugin, "anonymous";
                     let session = ctx.session_manager()
                         .resolve(req, better_auth_core::session::SessionRead::Authoritative)
                         .await?.data;
-                    if let Some(session) = session.filter(|session| session.user.is_anonymous == Some(true)) {
-                        req.set_server_context("anonymousUserId", session.user.id.into())?;
+                    if let Some(session) = session.filter(|session| session.user.is_anonymous == Some(true))
+                        && let Some(id) = session.user.id.json()? {
+                        req.set_server_context("anonymousUserId", id)?;
                     }
                     Ok(None)
                 },

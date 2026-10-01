@@ -58,10 +58,10 @@ pub(super) async fn resolve_user<S: AuthSchema>(
         let name = user
             .email()
             .filter(|email| !email.is_empty())
-            .unwrap_or(&user.id)
+            .unwrap_or(user.id.typed()?)
             .to_owned();
         return Ok(PasskeyRegistrationUser {
-            id: user.id,
+            id: user.id.typed()?.clone(),
             display_name: Some(name.clone()),
             name,
         });
@@ -298,7 +298,13 @@ impl<S: AuthSchema> Registration<S> {
     async fn persist(
         mut self,
         transaction: Option<&dyn AuthTransaction<S>>,
-    ) -> AuthResult<(better_auth_core::Passkey, Option<(S::User, S::Session)>)> {
+    ) -> AuthResult<(
+        better_auth_core::Passkey,
+        Option<(
+            better_auth_core::wire::UserView,
+            better_auth_core::wire::SessionView,
+        )>,
+    )> {
         if let Some(hook) = &self.config.registration.after_verification {
             let users = Users {
                 ctx: &self.ctx,
@@ -359,9 +365,10 @@ impl<S: AuthSchema> Registration<S> {
             None => self.ctx.database.create_passkey(self.input).await?,
         };
         let session = if let Some(user) = user {
-            let _ = crate::plugins::helpers::session_user(&self.ctx, &user.id(), transaction)
-                .await
-                .map_err(crate::plugins::helpers::SessionIssueError::into_auth_error)?;
+            let _ =
+                crate::plugins::helpers::session_user(&self.ctx, user.id().typed()?, transaction)
+                    .await
+                    .map_err(crate::plugins::helpers::SessionIssueError::into_auth_error)?;
             let input = CreateSession {
                 user_id: user.id().into_owned(),
                 expires_at: Utc::now() + self.ctx.config.session.expires_in,

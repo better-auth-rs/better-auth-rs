@@ -72,7 +72,9 @@ async fn runtime_scopes_isolate_instances_and_restore_nested_errors_while_databa
     let (b, br) = build(store.clone()).await;
     let request = |tenant: &str| {
         AuthRequest::new(HttpMethod::Get, "/api/auth/ok").with_url(
-            url::Url::parse(&format!("https://{tenant}.tenant.test/api/auth/ok")).unwrap(),
+            format!("https://{tenant}.tenant.test/api/auth/ok")
+                .parse()
+                .unwrap(),
         )
     };
     let ra = request("a");

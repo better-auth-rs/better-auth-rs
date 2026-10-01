@@ -164,6 +164,22 @@ pub(crate) fn string_input<T: serde::de::DeserializeOwned>(
     req: &AuthRequest,
     fields: &[(&str, bool)],
 ) -> better_auth_core::AuthResult<(T, Value)> {
+    string_fields_input(req, fields, None)
+}
+
+pub(crate) fn email_input<T: serde::de::DeserializeOwned>(
+    req: &AuthRequest,
+    email: &str,
+    optional: &str,
+) -> better_auth_core::AuthResult<(T, Value)> {
+    string_fields_input(req, &[(email, true), (optional, false)], Some(email))
+}
+
+fn string_fields_input<T: serde::de::DeserializeOwned>(
+    req: &AuthRequest,
+    fields: &[(&str, bool)],
+    email: Option<&str>,
+) -> better_auth_core::AuthResult<(T, Value)> {
     let body = req.input_body()?;
     let object = body.as_ref().and_then(Value::as_object).ok_or_else(|| {
         better_auth_core::AuthError::from(validation_error(&invalid_type(
@@ -176,7 +192,10 @@ pub(crate) fn string_input<T: serde::de::DeserializeOwned>(
     let mut errors = Vec::new();
     for &(name, required) in fields {
         match object.get(name) {
-            Some(value @ Value::String(_)) => {
+            Some(value @ Value::String(text)) => {
+                if email == Some(name) && !valid_email(text)? {
+                    errors.push(format!("[body.{name}] Invalid email address"));
+                }
                 let _ = output.insert(name.into(), value.clone());
             }
             None if !required => {}

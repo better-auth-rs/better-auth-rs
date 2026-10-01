@@ -71,7 +71,7 @@ fn deserialize_present_metadata<'de, D: serde::Deserializer<'de>>(
     serde_json::Value::deserialize(deserializer).map(Some)
 }
 
-#[derive(Debug, Deserialize, Serialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Serialize, Validate)]
 pub struct CreateOrganizationRequest {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
@@ -84,11 +84,13 @@ pub struct CreateOrganizationRequest {
     pub logo: SchemaValue<Option<String>>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub metadata: SchemaValue<Option<serde_json::Value>>,
+    #[serde(rename = "userId")]
+    pub user_id: Option<String>,
     #[serde(rename = "keepCurrentActiveOrganization")]
     pub keep_current_active_organization: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 pub struct UpdateOrganizationData {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
@@ -103,25 +105,25 @@ pub struct UpdateOrganizationData {
     pub metadata: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 pub struct UpdateOrganizationRequest {
     #[serde(rename = "organizationId")]
     pub organization_id: Option<String>,
     pub data: UpdateOrganizationData,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 pub struct DeleteOrganizationRequest {
     #[serde(rename = "organizationId")]
     pub organization_id: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 pub struct CheckSlugRequest {
     pub slug: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 pub struct SetActiveOrganizationRequest {
     #[serde(
         default,
@@ -133,7 +135,7 @@ pub struct SetActiveOrganizationRequest {
     pub organization_slug: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 pub struct LeaveOrganizationRequest {
     #[serde(rename = "organizationId")]
     pub organization_id: String,
@@ -153,7 +155,7 @@ pub struct GetFullOrganizationQuery {
     pub members_limit: Option<f64>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Serialize, Validate)]
 pub struct InviteMemberRequest {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
@@ -177,7 +179,7 @@ pub struct InviteMemberRequest {
     pub resend: SchemaValue<bool>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 pub struct RemoveMemberRequest {
     #[serde(rename = "memberIdOrEmail")]
     pub member_id_or_email: String,
@@ -185,7 +187,7 @@ pub struct RemoveMemberRequest {
     pub organization_id: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 pub struct UpdateMemberRoleRequest {
     #[serde(rename = "memberId")]
     pub member_id: String,
@@ -222,19 +224,19 @@ pub struct ListMembersQuery {
     pub filter_operator: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 pub struct AcceptInvitationRequest {
     #[serde(rename = "invitationId")]
     pub invitation_id: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 pub struct RejectInvitationRequest {
     #[serde(rename = "invitationId")]
     pub invitation_id: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 pub struct CancelInvitationRequest {
     #[serde(rename = "invitationId")]
     pub invitation_id: String,
@@ -261,9 +263,9 @@ pub struct ListInvitationsQuery {
     pub organization_id: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 pub struct HasPermissionRequest {
-    pub permissions: HashMap<String, Vec<String>>,
+    pub permissions: Option<HashMap<String, Vec<String>>>,
     #[serde(rename = "organizationId")]
     pub organization_id: Option<String>,
 }
@@ -325,7 +327,8 @@ pub struct BasicMemberResponse {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(rename = "userId")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub user_id: SchemaValue<String>,
@@ -382,7 +385,8 @@ pub struct CreatedOrganizationResponse {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub name: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -403,7 +407,8 @@ pub struct OrganizationResponse {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub name: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -423,7 +428,7 @@ impl CreatedOrganizationResponse {
     pub fn from_organization(organization: &impl AuthOrganization) -> Self {
         Self {
             additional_fields: organization.projected_fields().cloned().unwrap_or_default(),
-            id: organization.id().to_string(),
+            id: organization.id().into_owned(),
             name: organization.name().clone(),
             slug: organization.slug().clone(),
             logo: organization.logo().clone(),
@@ -443,7 +448,7 @@ impl OrganizationResponse {
     pub fn from_organization(organization: &impl AuthOrganization) -> Self {
         Self {
             additional_fields: organization.projected_fields().cloned().unwrap_or_default(),
-            id: organization.id().to_string(),
+            id: organization.id().into_owned(),
             name: organization.name().clone(),
             slug: organization.slug().clone(),
             logo: organization.logo().clone(),
@@ -468,7 +473,8 @@ pub struct MemberResponse {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(rename = "organizationId")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub organization_id: SchemaValue<String>,
@@ -492,7 +498,7 @@ impl MemberResponse {
     ) -> Self {
         Self {
             additional_fields: member.projected_fields().cloned().unwrap_or_default(),
-            id: member.id().to_string(),
+            id: member.id().into_owned(),
             organization_id: member.organization_id().clone(),
             user_id: member.user_id().clone(),
             role: member.role().clone(),
@@ -506,7 +512,7 @@ impl BasicMemberResponse {
     pub fn from_member(member: &impl AuthMember) -> Self {
         Self {
             additional_fields: member.projected_fields().cloned().unwrap_or_default(),
-            id: member.id().to_string(),
+            id: member.id().into_owned(),
             organization_id: member.organization_id().clone(),
             user_id: member.user_id().clone(),
             role: member.role().clone(),

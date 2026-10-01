@@ -27,7 +27,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         &self,
         token: &str,
         update: SessionUpdate,
-        secondary: Option<crate::store::SessionUpdateWriter<StatelessSchema>>,
+        secondary: Option<crate::store::SessionUpdateWriter>,
     ) -> AuthResult<Option<SessionView>> {
         EphemeralStore::update_session_with_writer(self, token, update, secondary).await
     }
@@ -131,7 +131,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                         .ok_or(AuthError::SessionNotFound)
                 })
                 .transpose()?;
-            if state.members.values().any(|member| {
+            if state.members.iter().any(|member| {
                 member.organization_id == invitation.organization_id && member.user_id == user_id
             }) {
                 return Err(AuthError::bad_request("User is already a member"));
@@ -170,7 +170,10 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             let organization_id = invitation.organization_id.typed()?.clone();
             let member = Member {
                 additional_fields: Default::default(),
-                id: uuid::Uuid::new_v4().to_string(),
+                id: self
+                    .generated_id("member", None, state.members.len())?
+                    .map(crate::SchemaValue::Typed)
+                    .unwrap_or_default(),
                 organization_id: invitation.organization_id.clone(),
                 user_id: (user_id.to_owned()).into(),
                 role: invitation.role,
@@ -184,16 +187,22 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                     .iter()
                     .any(|member| member.team_id == *team_id && member.user_id == user_id)
                 {
+                    let id = self
+                        .generated_id("teamMember", None, state.team_members.len())?
+                        .map(crate::SchemaValue::Typed)
+                        .unwrap_or_default();
                     state.team_members.push(crate::TeamMember {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        team_id: (*team_id).to_owned(),
+                        id,
+                        team_id: (*team_id).to_owned().into(),
                         user_id: user_id.to_owned(),
                         created_at: Utc::now(),
                     });
                 }
             }
-            state.teams.extend(reserved_teams);
-            let _ = state.members.insert(member.id.clone(), member.clone());
+            for (id, team) in reserved_teams {
+                let _ = state.teams.replace(&id, team);
+            }
+            let _ = state.members.push(member.clone());
             let Some(mut session) = session else {
                 return Ok((member_output, None));
             };
@@ -279,7 +288,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         self.before_create_runtime_session(&mut create_session)
             .await?;
         let now = Utc::now();
-        let token = format!("session_{}", uuid::Uuid::new_v4());
+        let token = crate::id::random_id(None);
         let session = SessionView {
             visible_fields: Some(
                 [
@@ -294,7 +303,10 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 .map(|(name, _)| name.to_owned())
                 .collect(),
             ),
-            id: uuid::Uuid::new_v4().to_string(),
+            id: self
+                .generated_id("session", None, self.lock()?.sessions.len())?
+                .map(crate::SchemaValue::Typed)
+                .unwrap_or_default(),
             expires_at: create_session.expires_at,
             token: token.clone(),
             created_at: now,
@@ -348,12 +360,16 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<SessionView>> {
         let sessions: Vec<_> = self
             .raw("session", "findMany", |state| {
-                Ok(state
-                    .sessions
-                    .values()
-                    .filter(|session| session.user_id == user_id)
-                    .cloned()
-                    .collect())
+                Ok(crate::query::paginate_memory(
+                    state
+                        .sessions
+                        .values()
+                        .filter(|session| session.user_id == user_id)
+                        .cloned()
+                        .collect(),
+                    Some(self.config.advanced.database.find_many_limit()),
+                    None,
+                ))
             })
             .await?;
         sessions
@@ -531,13 +547,13 @@ async fn invitation_fields_update_atomically_with_team_membership() {
         .await
         .unwrap();
     let mut input = CreateInvitation::new(
-        &organization.id,
+        organization.id.typed().unwrap(),
         "member@example.com",
         "member",
         "owner",
         Utc::now() + chrono::Duration::days(1),
     );
-    input.team_id = Some(team.id.clone());
+    input.team_id = Some(team.id.typed().unwrap().clone());
     let invitation = store.create_invitation(input).await.unwrap();
     let session = store
         .create_session(CreateSession {
@@ -553,7 +569,7 @@ async fn invitation_fields_update_atomically_with_team_membership() {
     assert!(
         store
             .accept_invitation_with_teams(
-                &invitation.id,
+                invitation.id.typed().unwrap(),
                 "member",
                 Some(&session.token),
                 true,
@@ -562,17 +578,23 @@ async fn invitation_fields_update_atomically_with_team_membership() {
             .await
             .is_err()
     );
-    assert!(store.list_team_members(&team.id).await.unwrap().is_empty());
     assert!(
         store
-            .get_member(&organization.id, "member")
+            .list_team_members(team.id.typed().unwrap())
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        store
+            .get_member(organization.id.typed().unwrap(), "member")
             .await
             .unwrap()
             .is_none()
     );
     assert!(
         store
-            .get_invitation_by_id(&invitation.id)
+            .get_invitation_by_id(invitation.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -581,7 +603,7 @@ async fn invitation_fields_update_atomically_with_team_membership() {
     reject.store(false, Ordering::SeqCst);
     let (member, accepted, _) = store
         .accept_invitation_with_teams(
-            &invitation.id,
+            invitation.id.typed().unwrap(),
             "member",
             Some(&session.token),
             true,
@@ -599,12 +621,19 @@ async fn invitation_fields_update_atomically_with_team_membership() {
     );
     assert_eq!(
         store
-            .get_invitation_by_id(&invitation.id)
+            .get_invitation_by_id(invitation.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
             .additional_fields,
         accepted.additional_fields
     );
-    assert_eq!(store.list_team_members(&team.id).await.unwrap().len(), 1);
+    assert_eq!(
+        store
+            .list_team_members(team.id.typed().unwrap())
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
 }

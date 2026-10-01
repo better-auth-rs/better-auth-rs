@@ -43,13 +43,14 @@ pub(super) async fn increment_returning_one<E>(
     db: &sea_orm::DbConn,
     query: sea_orm::UpdateMany<E>,
     filter: SimpleExpr,
+    reselect: SimpleExpr,
 ) -> AuthResult<Option<E::Model>>
 where
     E: EntityTrait,
 {
     use sea_orm::{QuerySelect, TransactionTrait};
     if db.get_database_backend() != sea_orm::DbBackend::MySql {
-        return execute_update_returning_one(db, query, filter).await;
+        return execute_update_returning_one(db, query, reselect).await;
     }
     let tx = db.begin().await.map_err(map_db_err)?;
     let result = async {
@@ -63,7 +64,7 @@ where
         {
             return Ok(None);
         }
-        execute_update_returning_one(&tx, query, filter).await
+        execute_update_returning_one(&tx, query, reselect).await
     }
     .await;
     if result.is_ok() {

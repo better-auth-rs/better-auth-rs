@@ -17,7 +17,7 @@ async fn context() -> (AuthContext<TestSchema>, String, String) {
         )
         .await
         .unwrap();
-    let user_id = user.id().to_string();
+    let user_id = user.id().into_owned();
     let session = database
         .create_session(CreateSession {
             user_id: user_id.clone(),
@@ -32,7 +32,11 @@ async fn context() -> (AuthContext<TestSchema>, String, String) {
     let token = better_auth_core::entity::AuthSession::token(&session).to_string();
     let mut config = AuthConfig::new("a-secret-that-is-at-least-32-characters");
     config.session.bearer = Some(Default::default());
-    (AuthContext::new(Arc::new(config), database), user_id, token)
+    (
+        AuthContext::new(Arc::new(config), database),
+        user_id.typed().unwrap().clone(),
+        token,
+    )
 }
 
 fn request(token: &str, path: &str, body: serde_json::Value) -> AuthRequest {
@@ -254,7 +258,7 @@ async fn trusted_creation_and_update_preserve_permissions_and_fractional_expirat
         .update_key(
             &ctx,
             &UpdateKeyRequest {
-                key_id: key.api_key.id.clone(),
+                key_id: key.api_key.id.typed().unwrap().clone(),
                 user_id: Some(user_id),
                 remaining: Some(5.0),
                 permissions: Some(None),
@@ -269,7 +273,7 @@ async fn trusted_creation_and_update_preserve_permissions_and_fractional_expirat
     assert_eq!(updated.expires_at, None);
     let stored = ctx
         .database
-        .get_api_key_by_id(&key.api_key.id)
+        .get_api_key_by_id(key.api_key.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();

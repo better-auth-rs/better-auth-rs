@@ -72,6 +72,7 @@ mod email_otp;
 mod email_otp_native;
 mod email_otp_transaction;
 mod http_body;
+mod id_policy;
 mod identity_context;
 mod identity_routes;
 mod jwt_adapter;
@@ -679,7 +680,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         axum::serve(listener, app).await?;
         return Ok(());
     }
-    if device_profile.starts_with("request-query-") {
+    if device_profile.starts_with("request-security-")
+        || device_profile.starts_with("request-organization-")
+        || device_profile.starts_with("request-query-")
+        || device_profile.starts_with("request-plugin-")
+        || device_profile.starts_with("request-change-email")
+    {
         let app =
             request_query::router(&device_profile, &format!("http://localhost:{port}")).await?;
         axum::serve(listener, app).await?;
@@ -727,7 +733,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if matches!(
         device_profile.as_str(),
-        "dynamic-context" | "dynamic-native" | "dynamic-oauth"
+        "dynamic-context" | "dynamic-native" | "dynamic-oauth" | "id-policy"
     ) || device_profile.starts_with("dynamic-environment:")
     {
         axum::serve(listener, dynamic_context::router()).await?;
@@ -1748,7 +1754,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .store()
                         .create_verification(CreateVerification {
 identifier: (format!("reset-password:{}", body.token)).into(),
-value: (user.id.to_string()).into(),
+value: (user.id.typed().unwrap().to_string()).into(),
 expires_at: (expires_at).into(),
 ..Default::default()
 })
@@ -1802,7 +1808,7 @@ expires_at: (expires_at).into(),
                         .store()
                         .create_verification(CreateVerification {
 identifier: (format!("delete-account-{}", body.token)).into(),
-value: (user.id.to_string()).into(),
+value: (user.id.typed().unwrap().to_string()).into(),
 expires_at: (expires_at).into(),
 ..Default::default()
 })
@@ -1842,7 +1848,7 @@ expires_at: (expires_at).into(),
                         }
                     };
 
-                    let accounts = match auth.store().get_user_accounts(&user.id.to_string()).await
+                    let accounts = match auth.store().get_user_accounts(&user.id.typed().unwrap().to_string()).await
                     {
                         Ok(accounts) => accounts,
                         Err(error) => {
@@ -1895,7 +1901,7 @@ expires_at: (expires_at).into(),
                     if let Err(error) = auth
                         .store()
                         .update_user(
-                            &user.id(),
+                            user.id().typed().unwrap(),
                             better_auth::prelude::UpdateUser {
                                 role: Some("admin".to_string()),
                                 ..Default::default()
@@ -2049,7 +2055,7 @@ expires_at: (expires_at).into(),
                         }
                     };
 
-                    let accounts = match auth.store().get_user_accounts(&user.id.to_string()).await
+                    let accounts = match auth.store().get_user_accounts(&user.id.typed().unwrap().to_string()).await
                     {
                         Ok(accounts) => accounts,
                         Err(error) => {
@@ -2075,7 +2081,7 @@ expires_at: (expires_at).into(),
                     let account = match auth
                         .store()
                         .create_account(CreateAccount {
-user_id: (user.id.to_string()).into(),
+user_id: (user.id.typed().unwrap().to_string()).into(),
 account_id: (account_id).into(),
 provider_id: (provider_id).into(),
 access_token: (body.access_token).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),

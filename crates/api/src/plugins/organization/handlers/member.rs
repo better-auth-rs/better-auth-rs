@@ -38,7 +38,7 @@ pub(crate) async fn get_active_member_core(
 
     let member = ctx
         .database
-        .get_member(org_id, &user.id())
+        .get_member(org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
@@ -58,20 +58,23 @@ pub(crate) async fn list_members_core(
             .get_organization_by_slug(slug)
             .await?
             .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-        organization.id().to_string()
+        organization.id().typed()?.to_string()
     } else {
         resolve_organization_id(query.organization_id.as_deref(), None, session, ctx).await?
     };
 
     let _ = ctx
         .database
-        .get_member(&org_id, &user.id())
+        .get_member(&org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
 
     let member_params = ListOrganizationMembersParams {
         organization_id: org_id,
-        limit: query.limit.or(Some(config.member_list_limit() as f64)),
+        limit: query
+            .limit
+            .filter(|limit| *limit != 0.0 && !limit.is_nan())
+            .or(Some(config.member_list_limit() as f64)),
         offset: query.offset,
         sort_by: query.sort_by.clone(),
         sort_direction: query.sort_direction.clone(),
@@ -89,16 +92,17 @@ pub(crate) async fn list_members_core(
         .collect::<AuthResult<Vec<_>>>()?;
     let users_by_id = ctx
         .database
-        .list_users_by_ids(&user_ids)
+        .list_users_by_ids(&user_ids, members_raw.len() as f64)
         .await?
         .into_iter()
-        .map(|user| (user.id().to_string(), user))
+        .map(|user| (user.id.as_str().map(str::to_owned), user))
         .collect::<HashMap<_, _>>();
     let mut members = Vec::with_capacity(members_raw.len());
     for member in &members_raw {
-        if let Some(user_info) = users_by_id.get(member.user_id.typed()?) {
-            members.push(MemberResponse::from_member_and_user(member, user_info));
-        }
+        let user_info = users_by_id
+            .get(&member.user_id.as_str().map(str::to_owned))
+            .ok_or_else(|| AuthError::internal("Unexpected error: User not found for member"))?;
+        members.push(MemberResponse::from_member_and_user(member, user_info));
     }
 
     Ok(ListMembersResponse { members, total })
@@ -116,14 +120,14 @@ pub(crate) async fn get_active_member_role_core(
             .get_organization_by_slug(slug)
             .await?
             .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-        organization.id().to_string()
+        organization.id().typed()?.to_string()
     } else {
         resolve_organization_id(query.organization_id.as_deref(), None, session, ctx).await?
     };
 
     let requester_member = ctx
         .database
-        .get_member(&org_id, &user.id())
+        .get_member(&org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
 
@@ -155,7 +159,7 @@ pub(crate) async fn remove_member_core(
 
     let requester_member = ctx
         .database
-        .get_member(&org_id, &user.id())
+        .get_member(&org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
@@ -166,7 +170,7 @@ pub(crate) async fn remove_member_core(
             .await?
             .ok_or_else(|| AuthError::bad_request("Member not found"))?;
         ctx.database
-            .get_member(&org_id, &target_user.id())
+            .get_member(&org_id, target_user.id().typed()?)
             .await?
             .ok_or_else(|| AuthError::bad_request("Member not found"))?
     } else {
@@ -175,7 +179,7 @@ pub(crate) async fn remove_member_core(
             .await?
             .ok_or_else(|| AuthError::bad_request("Member not found"))?
     };
-    let is_self_removal = target_member.user_id().typed()?.as_str() == user.id();
+    let is_self_removal = target_member.user_id().clone() == user.id().into_owned();
 
     if has_role(&target_member, &config.creator_role)? {
         if !has_role(&requester_member, &config.creator_role)? {
@@ -247,7 +251,9 @@ pub(crate) async fn remove_member_core(
         },
     };
 
-    ctx.database.delete_member(&target_member.id()).await?;
+    ctx.database
+        .delete_member(target_member.id().typed()?)
+        .await?;
 
     if is_self_removal && session.active_organization_id() == Some(&org_id) {
         let _ = ctx
@@ -274,7 +280,7 @@ pub(crate) async fn update_member_role_core(
 
     let requester_member = ctx
         .database
-        .get_member(&org_id, &user.id())
+        .get_member(&org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
@@ -452,10 +458,7 @@ pub async fn handle_remove_member(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: RemoveMemberRequest = match better_auth_core::validate_request_body(req) {
-        Ok(v) => v,
-        Err(resp) => return Ok(resp),
-    };
+    let body: RemoveMemberRequest = super::super::request::read(req, &config.schema)?;
     let response = remove_member_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -467,10 +470,7 @@ pub async fn handle_update_member_role(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: UpdateMemberRoleRequest = match better_auth_core::validate_request_body(req) {
-        Ok(v) => v,
-        Err(resp) => return Ok(resp),
-    };
+    let body: UpdateMemberRoleRequest = super::super::request::read(req, &config.schema)?;
     let response = match update_member_role_core(&body, &user, &session, config, ctx).await {
         Err(AuthError::BadRequest(message)) if message.starts_with("ROLE_NOT_FOUND: ") => {
             return Ok(AuthResponse::json(

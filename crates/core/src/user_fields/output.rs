@@ -254,6 +254,9 @@ impl From<UserView> for Map<String, Value> {
                 ),
             ),
         ]);
+        if user.id.is_undefined() {
+            let _ = result.remove("id");
+        }
         for name in ["name", "email", "image"] {
             if user
                 .visible_fields
@@ -331,7 +334,7 @@ impl TryFrom<Map<String, Value>> for UserView {
                 .collect(),
         );
         Ok(Self {
-            id: take(&mut fields, "id")?,
+            id: crate::SchemaValue::from_json(fields.remove("id")),
             name: take(&mut fields, "name")?,
             email: take(&mut fields, "email")?,
             email_verified: take(&mut fields, "emailVerified")?,

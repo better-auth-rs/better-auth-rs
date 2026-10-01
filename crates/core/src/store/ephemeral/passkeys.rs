@@ -12,7 +12,10 @@ impl PasskeyStore for EphemeralStore {
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
         let now = Utc::now();
         let passkey = Passkey {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: self
+                .generated_id("passkey", None, self.lock()?.passkeys.len())?
+                .map(crate::SchemaValue::Typed)
+                .unwrap_or_default(),
             user_id: input.user_id,
             name: input.name,
             credential_id: input.credential_id,
@@ -27,7 +30,7 @@ impl PasskeyStore for EphemeralStore {
             updated_at: now,
         };
         self.raw("passkey", "create", |state| {
-            let _ = state.passkeys.insert(passkey.id.clone(), passkey.clone());
+            let _ = state.passkeys.push(passkey.clone());
             Ok(passkey)
         })
         .await
@@ -47,7 +50,7 @@ impl PasskeyStore for EphemeralStore {
         self.raw("passkey", "findOne", |state| {
             Ok(state
                 .passkeys
-                .values()
+                .iter()
                 .find(|passkey| passkey.credential_id == credential_id)
                 .cloned())
         })
@@ -58,7 +61,7 @@ impl PasskeyStore for EphemeralStore {
         self.raw("passkey", "findMany", |state| {
             let mut passkeys: Vec<_> = state
                 .passkeys
-                .values()
+                .iter()
                 .filter(|passkey| passkey.user_id == user_id)
                 .cloned()
                 .collect();
@@ -70,7 +73,7 @@ impl PasskeyStore for EphemeralStore {
 
     async fn update_passkey_authentication(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         update: UpdatePasskeyAuthentication,
     ) -> AuthResult<Passkey> {
         self.raw("passkey", "update", |state| {
@@ -103,7 +106,7 @@ impl PasskeyStore for EphemeralStore {
 
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
         self.raw("passkey", "delete", |state| {
-            let _ = state.passkeys.shift_remove(id);
+            let _ = state.passkeys.remove(id);
             Ok(())
         })
         .await

@@ -64,6 +64,10 @@ Organization metadata uses nullable native JSON in the default Rust storage: SQL
 
 For fields declared `Json`, SQLite converts objects to JSON text after the application input transform. The application output transform receives that text before the adapter parses JSON. PostgreSQL preserves native JSON at these boundaries. These conversions also apply to the built-in `metadata` and dynamic-role `permission` fields. Routes retain their upstream decoding rules: for example, a `Json` permission policy can produce an object that a later role route fails to parse again. The create-role response keeps the original requested permissions even when a field policy changes the stored permissions.
 
+Organization body schemas run after endpoint before hooks and before authentication or endpoint middleware. Callbacks in the handler receive the validated projection; endpoint before and after hooks retain raw input. Organization creation lets configured fields replace base fields, while organization update keeps its base fields. Team and dynamic-role routes retain their own upstream schema precedence and union rules.
+
+Trusted native calls to `/organization/create` can omit both headers and a Request and supply `userId`. The plugin loads that user and applies organization limits, while bypassing a false `allow_user_to_create_organization` result for this server action. Explicit empty headers or a supplied Request still require an authenticated session. Native `/organization/check-slug` also permits omitted headers and Request. These rules do not grant an HTTP caller permission to act as another user.
+
 ## Additional fields
 
 Set `OrganizationConfig::schema` to an `OrganizationFields` value. The `organization`, `member`, `invitation`, `team`, and `organization_role` members each use `UserConfig::additional_fields`. Define the corresponding typed SeaORM columns and select the application's organization models as described in the [database guide](/docs/concepts/database). The plugin configures the store during initialization.

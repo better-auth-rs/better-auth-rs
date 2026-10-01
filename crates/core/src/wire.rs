@@ -32,7 +32,7 @@ pub struct UserView {
     /// Present optional core fields and enabled plugin fields. `None` preserves an unconfigured view.
     #[serde(skip)]
     pub visible_fields: Option<std::collections::BTreeSet<String>>,
-    pub id: String,
+    pub id: SchemaValue<String>,
     pub name: Option<String>,
     pub email: Option<String>,
     #[serde(rename = "emailVerified")]
@@ -89,7 +89,7 @@ pub struct SessionView {
     /// Plugin field presence in the database projection or signed cache.
     #[serde(skip)]
     pub visible_fields: Option<std::collections::BTreeSet<String>>,
-    pub id: String,
+    pub id: SchemaValue<String>,
     #[serde(rename = "expiresAt")]
     #[serde(serialize_with = "crate::utils::date::serialize")]
     pub expires_at: DateTime<Utc>,
@@ -105,7 +105,7 @@ pub struct SessionView {
     #[serde(rename = "userAgent")]
     pub user_agent: Option<String>,
     #[serde(rename = "userId")]
-    pub user_id: String,
+    pub user_id: SchemaValue<String>,
     #[serde(rename = "impersonatedBy")]
     pub impersonated_by: Option<String>,
     #[serde(rename = "activeOrganizationId")]
@@ -253,8 +253,8 @@ impl AuthUser for UserView {
         "ban_expires",
         "metadata",
     ];
-    fn id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.id)
+    fn id(&self) -> SchemaValue<Cow<'_, str>> {
+        self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
     fn email(&self) -> Option<&str> {
         self.email.as_deref()
@@ -316,22 +316,14 @@ impl AuthSession for SessionView {
     fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
         Some(&self.additional_fields)
     }
-    const SUPPORTS_RUNTIME_HYDRATION: bool = true;
-    fn from_runtime_fields(
-        fields: serde_json::Map<String, serde_json::Value>,
-    ) -> crate::AuthResult<Self> {
-        let mut session: Self = serde_json::from_value(serde_json::Value::Object(fields))?;
-        session.active = true;
-        Ok(session)
-    }
 
     const PLUGIN_FIELDS: &'static [&'static str] = &[
         "impersonated_by",
         "active_organization_id",
         "active_team_id",
     ];
-    fn id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.id)
+    fn id(&self) -> SchemaValue<Cow<'_, str>> {
+        self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
     fn expires_at(&self) -> DateTime<Utc> {
         self.expires_at
@@ -351,8 +343,8 @@ impl AuthSession for SessionView {
     fn user_agent(&self) -> Option<&str> {
         self.user_agent.as_deref()
     }
-    fn user_id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.user_id)
+    fn user_id(&self) -> SchemaValue<Cow<'_, str>> {
+        self.user_id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
     fn impersonated_by(&self) -> Option<&str> {
         self.impersonated_by.as_deref()
@@ -392,7 +384,8 @@ pub struct OrganizationView {
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub name: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -431,7 +424,8 @@ pub struct InvitationView {
     #[serde(rename = "teamId")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub team_id: SchemaValue<Option<String>>,
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(rename = "organizationId")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub organization_id: SchemaValue<String>,
@@ -474,7 +468,8 @@ impl<T: AuthInvitation> From<&T> for InvitationView {
 /// Public passkey response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PasskeyView {
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(rename = "credentialID")]
@@ -522,7 +517,8 @@ impl<T: AuthPasskey> From<&T> for PasskeyView {
 /// over the wire (matches upstream TS behavior).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ApiKeyView {
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     pub name: Option<String>,
     pub start: Option<crate::ApiKeyStart>,
     pub prefix: Option<String>,
@@ -614,7 +610,7 @@ mod tests {
         let user = UserView {
             visible_fields: None,
             additional_fields: Default::default(),
-            id: "user-1".to_string(),
+            id: "user-1".to_string().into(),
             name: Some("Ada".to_string()),
             email: Some("ada@example.com".to_string()),
             email_verified: true,
@@ -644,14 +640,14 @@ mod tests {
     fn session_view_serializes_camel_case() {
         let session = SessionView {
             visible_fields: None,
-            id: "session-1".to_string(),
+            id: "session-1".to_string().into(),
             expires_at: Utc::now(),
             token: "token".to_string(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             ip_address: Some("127.0.0.1".to_string()),
             user_agent: Some("agent".to_string()),
-            user_id: "user-1".to_string(),
+            user_id: "user-1".to_string().into(),
             impersonated_by: Some("admin-1".to_string()),
             active_organization_id: Some("org-1".to_string()),
             active_team_id: None,

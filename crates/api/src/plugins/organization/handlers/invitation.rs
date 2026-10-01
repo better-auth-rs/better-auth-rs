@@ -142,7 +142,7 @@ pub(crate) async fn invite_member_core(
     if let Some(existing_user) = ctx.database.get_user_by_email(&email).await?
         && ctx
             .database
-            .get_member(&org_id, &existing_user.id())
+            .get_member(&org_id, existing_user.id().typed()?)
             .await?
             .is_some()
     {
@@ -171,7 +171,7 @@ pub(crate) async fn invite_member_core(
     let invitation = if let Some(existing) = existing.as_ref().filter(|_| resend) {
         let _ = ctx
             .database
-            .update_invitation_expiry(&existing.id(), expires_at)
+            .update_invitation_expiry(existing.id().typed()?, expires_at)
             .await?;
         let mut response = existing.clone();
         response.expires_at = expires_at.into();
@@ -180,7 +180,7 @@ pub(crate) async fn invite_member_core(
         if let Some(existing) = existing {
             let _ = ctx
                 .database
-                .update_invitation_status(&existing.id(), InvitationStatus::Canceled)
+                .update_invitation_status(existing.id().typed()?, InvitationStatus::Canceled)
                 .await?;
         }
         {
@@ -238,7 +238,7 @@ pub(crate) async fn invite_member_core(
                 teams.push(team);
             }
             for team in &teams {
-                let team_id = &team.id;
+                let team_id = team.id.typed()?;
                 let limit = config
                     .team_member_limit(OrganizationTeamMemberLimit {
                         organization_id: &org_id,
@@ -279,7 +279,7 @@ pub(crate) async fn invite_member_core(
             organization_id: org_id,
             email: email.clone(),
             role: normalized_roles(&role_input),
-            inviter_id: user.id().to_string(),
+            inviter_id: user.id().typed()?.to_string(),
             expires_at: body
                 .additional_fields
                 .get("expiresAt")
@@ -302,7 +302,7 @@ pub(crate) async fn invite_member_core(
         let expires_at =
             chrono::Utc::now() + chrono::Duration::seconds(config.invitation_lifetime() as i64);
         ctx.database
-            .create_invitation(draft.into_create(expires_at, &user.id())?)
+            .create_invitation(draft.into_create(expires_at, user.id().typed()?)?)
             .await?
     };
     let invitation_view = InvitationView::from(&invitation);
@@ -416,7 +416,7 @@ pub(crate) async fn list_invitations_core(
 
     let _ = ctx
         .database
-        .get_member(&org_id, &user.id())
+        .get_member(&org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -451,7 +451,7 @@ pub(crate) async fn list_user_invitations_core(
         .await?
         .into_iter()
         .map(|organization| {
-            let organization_id = organization.id.clone();
+            let organization_id = organization.id.as_str().map(str::to_owned);
             (organization_id, organization)
         })
         .collect::<HashMap<_, _>>();
@@ -459,7 +459,7 @@ pub(crate) async fn list_user_invitations_core(
 
     for invitation in all_invitations.iter() {
         let organization = organizations_by_id
-            .get(invitation.organization_id().typed()?.as_str())
+            .get(&Some(invitation.organization_id().typed()?.clone()))
             .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
 
         pending.push(UserInvitationResponse {
@@ -552,8 +552,8 @@ pub(crate) async fn accept_invitation_core(
     let (member, accepted, snapshot) = ctx
         .database
         .accept_invitation_with_teams(
-            &invitation.id(),
-            &user.id(),
+            invitation.id().typed()?,
+            user.id().typed()?,
             Some(session.token()),
             config.teams.enabled,
             better_auth_core::store::TeamMemberLimits::Resolver(&resolver),
@@ -630,7 +630,7 @@ pub(crate) async fn reject_invitation_core(
     }
     let updated_invitation = ctx
         .database
-        .update_invitation_status(&invitation.id(), InvitationStatus::Rejected)
+        .update_invitation_status(invitation.id().typed()?, InvitationStatus::Rejected)
         .await?;
 
     if let Some(hooks) = &config.hooks {
@@ -661,7 +661,10 @@ pub(crate) async fn cancel_invitation_core(
 
     let member = ctx
         .database
-        .get_member(invitation.organization_id().typed()?.as_str(), &user.id())
+        .get_member(
+            invitation.organization_id().typed()?.as_str(),
+            user.id().typed()?,
+        )
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -697,7 +700,7 @@ pub(crate) async fn cancel_invitation_core(
     }
     let updated_invitation = ctx
         .database
-        .update_invitation_status(&invitation.id(), InvitationStatus::Canceled)
+        .update_invitation_status(invitation.id().typed()?, InvitationStatus::Canceled)
         .await?;
 
     if let Some(hooks) = &config.hooks {
@@ -721,30 +724,7 @@ pub async fn handle_invite_member(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    use crate::plugins::organization::input::BaseField;
-    let body = match crate::plugins::json_body::parse(req) {
-        Ok(body) => body,
-        Err(response) => return Ok(response),
-    };
-    let body = body
-        .as_ref()
-        .and_then(serde_json::Value::as_object)
-        .ok_or_else(|| AuthError::FieldInput {
-            code: "VALIDATION_ERROR",
-            message: crate::plugins::json_body::invalid_type("body", "object", body.as_ref()),
-        })?;
-    let body = crate::plugins::organization::input::validate(
-        &config.schema.invitation,
-        body.clone(),
-        &[
-            ("email", BaseField::String, true),
-            ("role", BaseField::Roles, true),
-            ("organizationId", BaseField::String, false),
-            ("resend", BaseField::Boolean, false),
-            ("teamId", BaseField::Roles, false),
-        ],
-    )?;
-    let body: InviteMemberRequest = serde_json::from_value(serde_json::Value::Object(body))?;
+    let body: InviteMemberRequest = super::super::request::read(req, &config.schema)?;
     let invitation = invite_member_core(&body, &user, &session, config, ctx, Some(req)).await?;
     Ok(AuthResponse::json(200, &invitation)?)
 }
@@ -796,10 +776,7 @@ pub async fn handle_accept_invitation(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: AcceptInvitationRequest = match better_auth_core::validate_request_body(req) {
-        Ok(value) => value,
-        Err(response) => return Ok(response),
-    };
+    let body: AcceptInvitationRequest = super::super::request::read(req, &config.schema)?;
     let (response, snapshot) = accept_invitation_core(&body, &user, &session, config, ctx).await?;
     let response = AuthResponse::json(200, &response)?;
     if let Some(snapshot) = snapshot {
@@ -825,10 +802,7 @@ pub async fn handle_reject_invitation(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
-    let body: RejectInvitationRequest = match better_auth_core::validate_request_body(req) {
-        Ok(value) => value,
-        Err(response) => return Ok(response),
-    };
+    let body: RejectInvitationRequest = super::super::request::read(req, &config.schema)?;
     let response = reject_invitation_core(&body, &user, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -839,10 +813,7 @@ pub async fn handle_cancel_invitation(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, _session) = require_session(req, ctx).await?;
-    let body: CancelInvitationRequest = match better_auth_core::validate_request_body(req) {
-        Ok(value) => value,
-        Err(response) => return Ok(response),
-    };
+    let body: CancelInvitationRequest = super::super::request::read(req, &config.schema)?;
     let response = cancel_invitation_core(&body, &user, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -881,7 +852,7 @@ mod tests {
         ctx.database
             .create_member(CreateMember {
                 additional_fields: Default::default(),
-                organization_id: organization.id.clone(),
+                organization_id: organization.id.typed().unwrap().clone().into(),
                 user_id: user.id.clone(),
                 role: "owner".into(),
             })
@@ -900,7 +871,7 @@ mod tests {
             .unwrap();
         let shortened = *first.expires_at.typed().unwrap() - Duration::hours(1);
         ctx.database
-            .update_invitation_expiry(&first.id, shortened)
+            .update_invitation_expiry(first.id.typed().unwrap(), shortened)
             .await
             .unwrap();
         body.resend = true.into();
@@ -911,7 +882,7 @@ mod tests {
         assert!(*resent.expires_at.typed().unwrap() > shortened);
         assert_eq!(
             ctx.database
-                .get_invitation_by_id(&first.id)
+                .get_invitation_by_id(first.id.typed().unwrap())
                 .await
                 .unwrap()
                 .unwrap()

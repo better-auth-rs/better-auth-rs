@@ -41,7 +41,7 @@ pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static 
         require_plugin_fields(plugin, "user", Self::PLUGIN_FIELDS, required)
     }
 
-    fn id(&self) -> Cow<'_, str>;
+    fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn email(&self) -> Option<&str>;
     fn name(&self) -> Option<&str>;
     fn email_verified(&self) -> bool;
@@ -81,16 +81,6 @@ pub trait AuthSession: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
     fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
         None
     }
-    /// Whether this model can be constructed from secondary storage without a database row.
-    const SUPPORTS_RUNTIME_HYDRATION: bool = false;
-    /// Construct the typed model from canonical core fields and serialized application fields.
-    fn from_runtime_fields(
-        _fields: serde_json::Map<String, serde_json::Value>,
-    ) -> crate::AuthResult<Self> {
-        Err(crate::AuthError::config(
-            "This auth model does not support secondary storage hydration",
-        ))
-    }
 
     /// Plugin fields that the entity and store can read and persist.
     ///
@@ -103,14 +93,14 @@ pub trait AuthSession: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
         require_plugin_fields(plugin, "session", Self::PLUGIN_FIELDS, required)
     }
 
-    fn id(&self) -> Cow<'_, str>;
+    fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn expires_at(&self) -> DateTime<Utc>;
     fn token(&self) -> &str;
     fn created_at(&self) -> DateTime<Utc>;
     fn updated_at(&self) -> DateTime<Utc>;
     fn ip_address(&self) -> Option<&str>;
     fn user_agent(&self) -> Option<&str>;
-    fn user_id(&self) -> Cow<'_, str>;
+    fn user_id(&self) -> SchemaValue<Cow<'_, str>>;
     fn impersonated_by(&self) -> Option<&str>;
     fn active_organization_id(&self) -> Option<&str>;
     /// Active team selected for this session.
@@ -164,7 +154,7 @@ pub trait AuthOrganization: Clone + Send + Sync + Serialize + std::fmt::Debug + 
         None
     }
 
-    fn id(&self) -> Cow<'_, str>;
+    fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn name(&self) -> &SchemaValue<String>;
     fn slug(&self) -> &SchemaValue<String>;
     fn logo(&self) -> &SchemaValue<Option<String>>;
@@ -179,7 +169,7 @@ pub trait AuthMember: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stati
         None
     }
 
-    fn id(&self) -> Cow<'_, str>;
+    fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn organization_id(&self) -> &SchemaValue<String>;
     fn user_id(&self) -> &SchemaValue<String>;
     fn role(&self) -> &SchemaValue<String>;
@@ -193,7 +183,7 @@ pub trait AuthInvitation: Clone + Send + Sync + Serialize + std::fmt::Debug + 's
         None
     }
 
-    fn id(&self) -> Cow<'_, str>;
+    fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn organization_id(&self) -> &SchemaValue<String>;
     fn email(&self) -> &SchemaValue<String>;
     fn role(&self) -> &SchemaValue<String>;
@@ -217,17 +207,6 @@ pub trait AuthInvitation: Clone + Send + Sync + Serialize + std::fmt::Debug + 's
 
 /// Trait representing a verification token entity.
 pub trait AuthVerification: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    /// Whether this model can be constructed from secondary storage without a database row.
-    const SUPPORTS_RUNTIME_HYDRATION: bool = false;
-    /// Construct the typed model from canonical core fields and serialized application fields.
-    fn from_runtime_fields(
-        _fields: serde_json::Map<String, serde_json::Value>,
-    ) -> crate::AuthResult<Self> {
-        Err(crate::AuthError::config(
-            "This auth model does not support secondary storage hydration",
-        ))
-    }
-
     fn id(&self) -> Cow<'_, str>;
     fn identifier(&self) -> &str;
     fn value(&self) -> &str;
@@ -238,7 +217,7 @@ pub trait AuthVerification: Clone + Send + Sync + Serialize + std::fmt::Debug + 
 
 /// Trait representing a two-factor authentication entity.
 pub trait AuthTwoFactor: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    fn id(&self) -> Cow<'_, str>;
+    fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn secret(&self) -> &str;
     fn backup_codes(&self) -> &str;
     fn user_id(&self) -> Cow<'_, str>;
@@ -251,7 +230,7 @@ pub trait AuthTwoFactor: Clone + Send + Sync + Serialize + std::fmt::Debug + 'st
 
 /// Trait representing an API key entity.
 pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    fn id(&self) -> Cow<'_, str>;
+    fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn name(&self) -> Option<&str>;
     fn start(&self) -> Option<Cow<'_, crate::ApiKeyStart>>;
     fn prefix(&self) -> Option<&str>;
@@ -281,7 +260,7 @@ pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stati
 
 /// Trait representing a passkey entity.
 pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
-    fn id(&self) -> Cow<'_, str>;
+    fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn name(&self) -> Option<&str>;
     fn public_key(&self) -> &str;
     fn user_id(&self) -> Cow<'_, str>;
@@ -308,7 +287,8 @@ pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
 pub struct MemberUserView {
     /// Optional field presence inherited from the source user.
     pub visible_fields: Option<std::collections::BTreeSet<String>>,
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     pub email: Option<String>,
     pub name: Option<String>,
     pub image: Option<String>,
@@ -321,7 +301,7 @@ impl MemberUserView {
     pub fn from_user(user: &impl AuthUser) -> Self {
         Self {
             visible_fields: user.field_presence().cloned(),
-            id: user.id().to_string(),
+            id: user.id().into_owned(),
             email: user.email().map(|s| s.to_string()),
             name: user.name().map(|s| s.to_string()),
             image: user.image().map(|s| s.to_string()),

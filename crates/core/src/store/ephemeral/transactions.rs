@@ -62,6 +62,12 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction<'_> {
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
         self.store.delete_expired_verifications().await
     }
+    async fn get_user_by_id_field(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
+        self.store.get_user_by_id_field(id).await
+    }
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<UserView>> {
         self.store.get_user_by_id(id).await
     }
@@ -73,6 +79,13 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction<'_> {
     }
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<UserView> {
         self.store.update_user(id, update).await
+    }
+    async fn update_user_optional(
+        &self,
+        id: &str,
+        update: UpdateUser,
+    ) -> AuthResult<Option<UserView>> {
+        self.store.update_user_optional(id, update).await
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
         self.store.delete_user(id).await
@@ -125,63 +138,118 @@ fn merge_rows<T: Clone + PartialEq>(
     live: &mut Vec<T>,
     base: &[T],
     working: Vec<T>,
-    id: impl Fn(&T) -> &str,
+    id: impl Fn(&T) -> Option<String>,
 ) {
-    let base = base
-        .iter()
-        .map(|row| (id(row).to_owned(), row.clone()))
-        .collect();
-    let working = working
-        .into_iter()
-        .map(|row| (id(&row).to_owned(), row))
-        .collect();
-    let mut merged = std::mem::take(live)
-        .into_iter()
-        .map(|row| (id(&row).to_owned(), row))
-        .collect();
-    merge_map(&mut merged, &base, working);
-    *live = merged.into_values().collect();
+    let base: HashMap<_, _> = base.iter().map(|row| (id(row), row)).collect();
+    let changed: HashMap<_, _> = working.iter().map(|row| (id(row), row)).collect();
+    let mut placed = std::collections::HashSet::new();
+    live.retain_mut(|row| {
+        let key = id(row);
+        if base.contains_key(&key) && !changed.contains_key(&key) {
+            return false;
+        }
+        if let Some(replacement) = changed.get(&key)
+            && base.get(&key) != Some(replacement)
+        {
+            row.clone_from(replacement);
+        }
+        let _ = placed.insert(key);
+        true
+    });
+    for row in working {
+        let key = id(&row);
+        if !base.contains_key(&key) && !placed.contains(&key) {
+            live.push(row);
+        }
+    }
 }
 
 impl State {
     fn merge(&mut self, base: &Self, working: Self) {
-        merge_map(&mut self.users, &base.users, working.users);
-        merge_map(&mut self.accounts, &base.accounts, working.accounts);
-        merge_map(&mut self.sessions, &base.sessions, working.sessions);
-        merge_map(
+        merge_rows(
+            self.users.as_mut_vec(),
+            &base.users,
+            working.users.into_vec(),
+            |row| row.id.as_str().map(str::to_owned),
+        );
+        merge_rows(
+            &mut self.accounts,
+            &base.accounts,
+            working.accounts,
+            |row| row.get("id").and_then(Value::as_str).map(str::to_owned),
+        );
+        let mut sessions: Vec<_> = std::mem::take(&mut self.sessions).into_values().collect();
+        let base_sessions: Vec<_> = base.sessions.values().cloned().collect();
+        merge_rows(
+            &mut sessions,
+            &base_sessions,
+            working.sessions.into_values().collect(),
+            |row| row.id.as_str().map(str::to_owned),
+        );
+        self.sessions = sessions
+            .into_iter()
+            .map(|row| (row.token.clone(), row))
+            .collect();
+        merge_rows(
             &mut self.verifications,
             &base.verifications,
             working.verifications,
+            |row| row.get("id").and_then(Value::as_str).map(str::to_owned),
         );
-        merge_map(
-            &mut self.organizations,
+        merge_rows(
+            self.organizations.as_mut_vec(),
             &base.organizations,
-            working.organizations,
+            working.organizations.into_vec(),
+            |row| row.id.as_str().map(str::to_owned),
         );
-        merge_map(&mut self.members, &base.members, working.members);
-        merge_map(
-            &mut self.invitations,
+        merge_rows(
+            self.members.as_mut_vec(),
+            &base.members,
+            working.members.into_vec(),
+            |row| row.id.as_str().map(str::to_owned),
+        );
+        merge_rows(
+            self.invitations.as_mut_vec(),
             &base.invitations,
-            working.invitations,
+            working.invitations.into_vec(),
+            |row| row.id.as_str().map(str::to_owned),
         );
-        merge_map(&mut self.teams, &base.teams, working.teams);
-        merge_map(
-            &mut self.organization_roles,
+        merge_rows(
+            self.teams.as_mut_vec(),
+            &base.teams,
+            working.teams.into_vec(),
+            |row| row.id.as_str().map(str::to_owned),
+        );
+        merge_rows(
+            self.organization_roles.as_mut_vec(),
             &base.organization_roles,
-            working.organization_roles,
+            working.organization_roles.into_vec(),
+            |row| row.id.as_str().map(str::to_owned),
         );
-        merge_map(
-            &mut self.two_factors,
+        merge_rows(
+            self.two_factors.as_mut_vec(),
             &base.two_factors,
-            working.two_factors,
+            working.two_factors.into_vec(),
+            |row| row.id.as_str().map(str::to_owned),
         );
-        merge_map(
-            &mut self.device_codes,
+        merge_rows(
+            self.device_codes.as_mut_vec(),
             &base.device_codes,
-            working.device_codes,
+            working.device_codes.into_vec(),
+            |row| row.id.as_str().map(str::to_owned),
         );
-        merge_map(&mut self.api_keys, &base.api_keys, working.api_keys);
-        merge_map(&mut self.passkeys, &base.passkeys, working.passkeys);
+        merge_rows(
+            self.api_keys.as_mut_vec(),
+            &base.api_keys,
+            working.api_keys.into_vec(),
+            |row| row.id.as_str().map(str::to_owned),
+        );
+        merge_rows(
+            self.passkeys.as_mut_vec(),
+            &base.passkeys,
+            working.passkeys.into_vec(),
+            |row| row.id.as_str().map(str::to_owned),
+        );
         merge_map(
             &mut self.rate_limits,
             &base.rate_limits,
@@ -191,11 +259,13 @@ impl State {
             &mut self.team_members,
             &base.team_members,
             working.team_members,
-            |row| &row.id,
+            |row| row.id.as_str().map(str::to_owned),
         );
-        merge_rows(&mut self.jwks, &base.jwks, working.jwks, |row| &row.id);
+        merge_rows(&mut self.jwks, &base.jwks, working.jwks, |row| {
+            row.id.as_str().map(str::to_owned)
+        });
         merge_rows(&mut self.wallets, &base.wallets, working.wallets, |row| {
-            &row.id
+            row.id.as_str().map(str::to_owned)
         });
     }
 }

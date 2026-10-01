@@ -7,7 +7,6 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, ExprTrait, QueryFilter, sea_query::Expr,
 };
 use serde_json::{Map, json};
-use uuid::Uuid;
 
 use better_auth_core::store::TwoFactorStore;
 
@@ -26,17 +25,20 @@ where
 {
     async fn create_two_factor(&self, two_factor: CreateTwoFactor) -> AuthResult<TwoFactor> {
         let now = Utc::now();
-        let active = P::TwoFactor::active(Map::from_iter([
-            ("id".to_owned(), json!(Uuid::new_v4().to_string())),
-            ("secret".to_owned(), json!(two_factor.secret)),
-            ("backup_codes".to_owned(), json!(two_factor.backup_codes)),
-            ("user_id".to_owned(), json!(two_factor.user_id)),
-            ("verified".to_owned(), json!(two_factor.verified)),
-            ("failed_verification_count".to_owned(), json!(0)),
-            ("locked_until".to_owned(), serde_json::Value::Null),
-            ("created_at".to_owned(), json!(now)),
-            ("updated_at".to_owned(), json!(now)),
-        ]))?;
+        let active = P::TwoFactor::active(self.create_fields(
+            "twoFactor",
+            None,
+            Map::from_iter([
+                ("secret".to_owned(), json!(two_factor.secret)),
+                ("backup_codes".to_owned(), json!(two_factor.backup_codes)),
+                ("user_id".to_owned(), json!(two_factor.user_id)),
+                ("verified".to_owned(), json!(two_factor.verified)),
+                ("failed_verification_count".to_owned(), json!(0)),
+                ("locked_until".to_owned(), serde_json::Value::Null),
+                ("created_at".to_owned(), json!(now)),
+                ("updated_at".to_owned(), json!(now)),
+            ]),
+        )?)?;
         database_operation::<Entity<P::TwoFactor>, _>(self.config(), "create", async {
             active.insert(self.connection()).await.map_err(map_db_err)
         })
@@ -92,7 +94,12 @@ where
         .await
     }
 
-    async fn update_two_factor(&self, id: &str, update: UpdateTwoFactor) -> AuthResult<TwoFactor> {
+    async fn update_two_factor(
+        &self,
+        id: &better_auth_core::SchemaValue<String>,
+        update: UpdateTwoFactor,
+    ) -> AuthResult<TwoFactor> {
+        let id = id.typed()?;
         let mut active = P::TwoFactor::active(Map::from_iter([
             ("id".to_owned(), json!(id.to_owned())),
             ("updated_at".to_owned(), json!(Utc::now())),
@@ -123,10 +130,11 @@ where
 
     async fn compare_exchange_two_factor_backup_codes(
         &self,
-        id: &str,
+        id: &better_auth_core::SchemaValue<String>,
         previous: &str,
         replacement: &str,
     ) -> AuthResult<bool> {
+        let id = id.typed()?;
         database_operation::<Entity<P::TwoFactor>, _>(self.config(), "incrementOne", async {
             Entity::<P::TwoFactor>::update_many()
                 .col_expr(
@@ -146,10 +154,11 @@ where
 
     async fn record_two_factor_failure(
         &self,
-        id: &str,
+        id: &better_auth_core::SchemaValue<String>,
         max_attempts: i64,
         locked_until: chrono::DateTime<Utc>,
     ) -> AuthResult<()> {
+        let id = id.typed()?;
         let filter = P::TwoFactor::column("id")?.eq(id);
         let query = Entity::<P::TwoFactor>::update_many()
             .col_expr(
@@ -159,7 +168,13 @@ where
             .filter(filter.clone());
         let row =
             database_operation::<Entity<P::TwoFactor>, _>(self.config(), "incrementOne", async {
-                super::updates::increment_returning_one(self.connection(), query, filter).await
+                super::updates::increment_returning_one(
+                    self.connection(),
+                    query,
+                    filter.clone(),
+                    filter,
+                )
+                .await
             })
             .await?;
         let failures = row
@@ -187,9 +202,10 @@ where
 
     async fn reset_two_factor_failures(
         &self,
-        id: &str,
+        id: &better_auth_core::SchemaValue<String>,
         locked_before: Option<chrono::DateTime<Utc>>,
     ) -> AuthResult<()> {
+        let id = id.typed()?;
         let mut update = Entity::<P::TwoFactor>::update_many()
             .col_expr(
                 P::TwoFactor::column("failed_verification_count")?,

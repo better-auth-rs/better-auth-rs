@@ -11,7 +11,9 @@ use chrono::Utc;
 
 use super::{
     helpers::delete_session_cookie_headers,
-    one_time_token::{find_session, response_session_token, session_required, token_body},
+    one_time_token::{
+        find_session, response_session_token, session_required, session_token_body, token_body,
+    },
 };
 
 /// Device session configuration.
@@ -32,8 +34,8 @@ better_auth_core::impl_auth_plugin! {
     MultiSessionPlugin, "multi-session";
     routes {
         get "/multi-session/list-device-sessions" => handle_list, "listDeviceSessions";
-        post "/multi-session/set-active" => handle_set_active, "setActiveSession";
-        post "/multi-session/revoke" => handle_revoke, "revokeDeviceSession";
+        post "/multi-session/set-active" => handle_set_active, "setActiveSession", body = session_token_body;
+        post "/multi-session/revoke" => handle_revoke, "revokeDeviceSession", body = session_token_body;
     }
     extra {
         async fn after_request(&self, req: &AuthRequest, response: &mut AuthResponse, ctx: &AuthContext<S>) -> AuthResult<()> {
@@ -65,7 +67,7 @@ impl MultiSessionPlugin {
         let mut users = std::collections::HashSet::new();
         let sessions: Vec<_> = sessions
             .into_iter()
-            .filter(|(_, user)| users.insert(user.id.clone()))
+            .filter(|(_, user)| users.insert(user.id.as_str().map(str::to_owned)))
             .map(|(session, user)| serde_json::json!({ "session": session, "user": user }))
             .collect();
         Ok(AuthResponse::json(200, &sessions)?)

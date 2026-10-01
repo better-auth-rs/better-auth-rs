@@ -24,6 +24,7 @@ pub mod entity;
 pub mod error;
 mod error_codes;
 pub mod hooks;
+pub mod id;
 pub mod middleware;
 pub mod observability;
 pub use observability::{
@@ -106,10 +107,10 @@ pub use store::{
 pub use types::{
     ApiKey, AuthRequest, AuthResponse, CodeMessageResponse, CreateAccount, CreateApiKey,
     CreateDeviceCode, CreateInvitation, CreateMember, CreateOrganization, CreatePasskey,
-    CreateSession, CreateTwoFactor, CreateUser, CreateVerification, DeviceCode,
-    ErrorCodeMessageResponse, ErrorMessageResponse, Headers, HealthCheckResponse, HttpMethod,
-    Invitation, InvitationStatus, ListUsersParams, Member, OkResponse, Organization, Passkey,
-    RateLimitErrorResponse, RequestMeta, StatusMessageResponse, StatusResponse,
+    CreateSession, CreateTwoFactor, CreateUser, CreateVerification, CreateWalletAddress,
+    DeviceCode, ErrorCodeMessageResponse, ErrorMessageResponse, Headers, HealthCheckResponse,
+    HttpMethod, Invitation, InvitationStatus, ListUsersParams, Member, OkResponse, Organization,
+    Passkey, RateLimitErrorResponse, RequestMeta, StatusMessageResponse, StatusResponse,
     SuccessMessageResponse, SuccessResponse, TwoFactor, UpdateAccount, UpdateApiKey,
     UpdateDeviceCode, UpdateOrganization, UpdatePasskey, UpdatePasskeyAuthentication,
     UpdateTwoFactor, UpdateUser, UpdateUserRequest, UpdateUserResponse, ValidationErrorResponse,

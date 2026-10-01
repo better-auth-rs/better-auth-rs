@@ -1,12 +1,14 @@
 //! Persisted signing keys for the JWT plugin.
 
+use crate::SchemaValue;
+
 use chrono::{DateTime, Utc};
 
 /// A persisted signing key. Private key material must never enter an HTTP response.
 #[derive(Clone, PartialEq)]
 pub struct Jwk {
     /// Stable identifier used by the JWT `kid` header.
-    pub id: String,
+    pub id: SchemaValue<String>,
     /// Serialized public JWK.
     pub public_key: String,
     /// Serialized private JWK, encrypted unless explicitly configured otherwise.

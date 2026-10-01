@@ -62,7 +62,7 @@ async fn fixture(config: Arc<AuthConfig>) -> Fixture {
         .unwrap();
     let account = store
         .create_account(CreateAccount {
-            user_id: (user.id().to_string()).into(),
+            user_id: (user.id().typed().unwrap().to_string()).into(),
             account_id: ("provider-subject".to_string()).into(),
             provider_id: ("provider".to_string()).into(),
             access_token: (Some("provider-access".to_string())).into(),
@@ -83,7 +83,7 @@ async fn fixture(config: Arc<AuthConfig>) -> Fixture {
         .unwrap();
     Fixture {
         ctx,
-        user_id: user.id().to_string(),
+        user_id: user.id().typed().unwrap().to_string(),
         account_id: account.id.typed().unwrap().to_string(),
         token: session.token().to_string(),
     }

@@ -439,6 +439,8 @@ impl std::fmt::Display for SameSite {
 /// Advanced configuration options (mirrors TS `advanced` block).
 #[derive(Debug, Clone, Default)]
 pub struct AdvancedConfig {
+    /// Legacy context-only override. Database inserts use `database.generate_id`.
+    pub generate_id: Option<crate::id::IdGenerator>,
     /// Match HTTP routes with or without one trailing slash. Default: false.
     /// Consecutive slashes remain invalid. Native endpoint calls use exact paths.
     pub skip_trailing_slashes: bool,
@@ -482,6 +484,18 @@ pub struct AdvancedConfig {
 }
 
 impl AdvancedConfig {
+    pub fn generate_id(
+        &self,
+        model: &str,
+        size: Option<usize>,
+    ) -> crate::AuthResult<Option<String>> {
+        let request = crate::id::IdGenerationRequest { model, size };
+        match &self.generate_id {
+            Some(generator) => generator.generate(request),
+            None => self.database.generate_id.generate(request),
+        }
+    }
+
     pub(crate) fn csrf_check_disabled(&self) -> bool {
         self.disable_csrf_check.unwrap_or(self.disable_origin_check)
     }
@@ -536,18 +550,15 @@ pub struct CookieOverride {
 }
 
 /// Database-related advanced options.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AdvancedDatabaseConfig {
     /// Validate physical tables and written columns at runtime unless explicitly disabled.
     /// Omission reports unsupported adapters at debug level; explicit true reports a warning.
     pub validate_schema: Option<bool>,
 
-    /// Default `LIMIT` for "find many" queries.
-    pub default_find_many_limit: usize,
-
-    /// If `true`, auto-generated IDs will be numeric (auto-increment style)
-    /// rather than UUIDs.
-    pub use_number_id: bool,
+    pub generate_id: crate::id::IdGeneration,
+    /// Default limit for find-many queries. Omission uses 100; adapters preserve numeric semantics.
+    pub default_find_many_limit: Option<f64>,
 }
 impl Default for AuthConfig {
     fn default() -> Self {
@@ -604,13 +615,10 @@ impl Default for IpAddressConfig {
     }
 }
 
-impl Default for AdvancedDatabaseConfig {
-    fn default() -> Self {
-        Self {
-            validate_schema: None,
-            default_find_many_limit: 100,
-            use_number_id: false,
-        }
+impl AdvancedDatabaseConfig {
+    /// Return the configured default, including zero and non-finite values.
+    pub fn find_many_limit(&self) -> f64 {
+        self.default_find_many_limit.unwrap_or(100.0)
     }
 }
 
@@ -1281,8 +1289,8 @@ mod tests {
     #[test]
     fn advanced_database_defaults() {
         let d = AdvancedDatabaseConfig::default();
-        assert_eq!(d.default_find_many_limit, 100);
-        assert!(!d.use_number_id);
+        assert_eq!(d.default_find_many_limit, None);
+        assert!(matches!(d.generate_id, crate::id::IdGeneration::Random));
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.

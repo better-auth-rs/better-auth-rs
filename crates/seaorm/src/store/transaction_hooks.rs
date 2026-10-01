@@ -4,19 +4,19 @@ use super::{AuthError, HookTransaction, SeaOrmStore, SeaOrmTransaction};
 use crate::schema::SeaOrmVerificationModel;
 use better_auth_core::store::TypedTransactionFuture;
 
-pub(super) enum Effect<S: AuthSchema> {
-    UserCreated(S::User),
-    UserUpdated(Option<S::User>),
-    UserDeleted(S::User),
+pub(super) enum Effect {
+    UserCreated(better_auth_core::wire::UserView),
+    UserUpdated(Option<better_auth_core::wire::UserView>),
+    UserDeleted(better_auth_core::wire::UserView),
     AccountCreated(Box<better_auth_core::wire::AccountView>),
-    SessionCreated(S::Session),
+    SessionCreated(better_auth_core::wire::SessionView),
     Created(Box<better_auth_core::wire::VerificationView>),
     Deleted(Box<better_auth_core::wire::VerificationView>),
 }
 
-pub(super) enum PendingEffect<S: AuthSchema> {
+pub(super) enum PendingEffect {
     Database {
-        effect: Box<Effect<S>>,
+        effect: Box<Effect>,
         request: Option<better_auth_core::hooks::RequestHookContext>,
     },
     External {
@@ -34,7 +34,7 @@ where
     S::Account: crate::schema::SeaOrmAccountModel,
     S::Session: crate::schema::SeaOrmSessionModel,
 {
-    pub(super) fn queue(&self, effect: Effect<S>) -> AuthResult<()> {
+    pub(super) fn queue(&self, effect: Effect) -> AuthResult<()> {
         self.effects
             .lock()
             .map_err(|_| AuthError::internal("Transaction hook queue lock poisoned"))?
@@ -82,7 +82,7 @@ where
 {
     pub(super) async fn finish_transaction_effects(
         &self,
-        effects: Vec<PendingEffect<S>>,
+        effects: Vec<PendingEffect>,
     ) -> AuthResult<()> {
         for pending in effects {
             let (effect, request) = match pending {

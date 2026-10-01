@@ -62,7 +62,11 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
     assert_eq!(organization.additional_fields["label"], "original:in:out");
     assert_eq!(organization.additional_fields["secret"], "hidden");
     let _ = store
-        .create_member(CreateMember::new(&organization.id, "owner", "owner"))
+        .create_member(CreateMember::new(
+            organization.id.typed().unwrap(),
+            "owner",
+            "owner",
+        ))
         .await
         .unwrap();
     let team = store
@@ -85,20 +89,20 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
         .await
         .unwrap();
     let mut invitation = CreateInvitation::new(
-        &organization.id,
+        organization.id.typed().unwrap(),
         "recipient@example.com",
         "member",
         "owner",
         chrono::Utc::now() + chrono::Duration::hours(1),
     );
-    invitation.team_id = Some(team.id.clone());
+    invitation.team_id = Some(team.id.typed().unwrap().clone());
     let _ = invitation
         .additional_fields
         .insert("label".into(), json!("invite"));
     let invitation = store.create_invitation(invitation).await.unwrap();
     let (member, accepted, snapshot) = store
         .accept_invitation_with_teams(
-            &invitation.id,
+            invitation.id.typed().unwrap(),
             "recipient",
             Some(session.token()),
             true,
@@ -111,16 +115,16 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
     assert_eq!(accepted.additional_fields["marker"], "updated");
     assert_eq!(
         snapshot.unwrap().active_team_id.as_deref(),
-        Some(team.id.as_str())
+        team.id.as_str()
     );
-    let raw = fixture::models::organization::Entity::find_by_id(&organization.id)
+    let raw = fixture::models::organization::Entity::find_by_id(organization.id.typed().unwrap())
         .one(&db)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(raw.stored_label.as_deref(), Some("original:in"));
     let membership = fixture::models::team_member::Entity::find()
-        .filter(fixture::models::team_member::Column::TeamId.eq(&team.id))
+        .filter(fixture::models::team_member::Column::TeamId.eq(team.id.typed().unwrap()))
         .one(&db)
         .await
         .unwrap()
@@ -129,7 +133,7 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
         membership.membership_key,
         Some(
             better_auth::__private_core::organization_fields::team_membership_key(
-                &team.id,
+                team.id.typed().unwrap(),
                 "recipient"
             )
             .unwrap()
@@ -143,14 +147,14 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
         .with_organization_schema::<fixture::models::Models>();
     store.configure_organization_fields(options.schema).unwrap();
     let restored = store
-        .get_organization_by_id(&organization.id)
+        .get_organization_by_id(organization.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
     assert_eq!(restored.additional_fields["label"], "original:in:out");
     let updated = store
         .update_organization(
-            &organization.id,
+            organization.id.typed().unwrap(),
             UpdateOrganization {
                 metadata: Some(json!(null)),
                 additional_fields: [("label".into(), json!("changed"))].into_iter().collect(),
@@ -165,7 +169,7 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
     assert_eq!(updated.additional_fields["marker"], "updated");
     let updated = store
         .update_organization(
-            &organization.id,
+            organization.id.typed().unwrap(),
             UpdateOrganization {
                 metadata: Some(json!({})),
                 ..Default::default()
@@ -175,12 +179,15 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
         .unwrap();
     assert_eq!(updated.metadata, Some(json!({})));
     let pending = store
-        .get_invitation_by_id(&invitation.id)
+        .get_invitation_by_id(invitation.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
     assert_eq!(pending.additional_fields["marker"], "updated");
-    let users = store.list_team_members(&team.id).await.unwrap();
+    let users = store
+        .list_team_members(team.id.typed().unwrap())
+        .await
+        .unwrap();
     assert_eq!(users.len(), 1);
     fixture::reset(&db).await.unwrap();
     drop(store);

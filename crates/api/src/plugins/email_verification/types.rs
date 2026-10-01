@@ -1,9 +1,7 @@
 use serde::Deserialize;
-use validator::Validate;
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct SendVerificationEmailRequest {
-    #[validate(email(message = "Invalid email address"))]
     pub(crate) email: String,
     #[serde(rename = "callbackURL")]
     pub(crate) callback_url: Option<String>,
@@ -27,4 +25,18 @@ pub(crate) enum VerifyEmailResult {
         body: serde_json::Value,
         session_data: Option<better_auth_core::session::SessionData>,
     },
+}
+
+pub(super) fn body(
+    req: &better_auth_core::AuthRequest,
+) -> better_auth_core::AuthResult<better_auth_core::endpoint_input::ValidatedBody> {
+    let (body, projection) = crate::plugins::json_body::email_input::<SendVerificationEmailRequest>(
+        req,
+        "email",
+        "callbackURL",
+    )?;
+    Ok(better_auth_core::endpoint_input::ValidatedBody::new(
+        Some(projection),
+        body,
+    ))
 }

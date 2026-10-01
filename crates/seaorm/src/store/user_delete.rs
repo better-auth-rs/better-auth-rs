@@ -1,5 +1,5 @@
 use super::instrumentation::database_operation;
-use sea_orm::{ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
 
 use super::transaction_hooks::after_write;
 use super::{HookTransaction, map_db_err};
@@ -29,6 +29,10 @@ where
                 async {
                     <S::Account as SeaOrmAccountModel>::Entity::find()
                         .filter(condition.clone())
+                        .limit(super::pagination::default_limit(
+                            self.config(),
+                            db.get_database_backend(),
+                        )?)
                         .all(db)
                         .await
                         .map_err(map_db_err)
@@ -93,7 +97,7 @@ where
         tx: Option<HookTransaction<'_, S>>,
         id: &str,
         delete_database_sessions: bool,
-    ) -> AuthResult<Option<S::User>> {
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         if delete_database_sessions {
             let owner = S::Session::parse_user_id(id)?;
             let condition = Condition::all().add(S::Session::user_id_column().eq(owner));
@@ -117,7 +121,12 @@ where
                     .map_err(map_db_err)
             },
         )
-        .await;
+        .await
+        .and_then(|row| {
+            row.as_ref()
+                .map(|row| self.output_user(row, db))
+                .transpose()
+        });
         // deleteWithHooks returns null after a missing or unreadable snapshot.
         let user = match snapshot {
             Ok(Some(user)) => user,

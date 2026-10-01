@@ -23,7 +23,10 @@ impl<S: AuthSchema> VerificationSessionCleanup for CachedVerificationSessions<'_
 }
 
 impl<S: AuthSchema> SecondaryStore<S> {
-    pub(super) async fn refresh_user_sessions(&self, user: &S::User) -> AuthResult<()> {
+    pub(super) async fn refresh_user_sessions(
+        &self,
+        user: &crate::wire::UserView,
+    ) -> AuthResult<()> {
         if self.storage.is_none() {
             return Ok(());
         }
@@ -33,7 +36,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
             &self.metadata,
             self.inner.supports_native_json(),
         )?;
-        for reference in self.references(&user.id).await? {
+        for reference in self.references(&user.id.display_string()?).await? {
             if reference.expires_at <= chrono::Utc::now().timestamp_millis() {
                 continue;
             }
@@ -66,7 +69,10 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
     fn supports_native_json(&self) -> bool {
         self.inner.supports_native_json()
     }
-    async fn get_user_by_id_value(&self, id: &serde_json::Value) -> AuthResult<Option<S::User>> {
+    async fn get_user_by_id_value(
+        &self,
+        id: &serde_json::Value,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner.get_user_by_id_value(id).await
     }
 
@@ -75,7 +81,7 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
         user_id: &str,
         cleanup: VerificationCleanup,
         sessions: Option<&dyn VerificationSessionCleanup>,
-    ) -> AuthResult<Option<S::User>> {
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner
             .verify_user_with_cleanup(user_id, cleanup, sessions)
             .await
@@ -84,7 +90,7 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
     async fn verify_user_and_revoke_unproven_access(
         &self,
         user_id: &str,
-    ) -> AuthResult<Option<S::User>> {
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         if self.storage.is_none() {
             return self
                 .inner
@@ -120,27 +126,54 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
         }
         Ok(user)
     }
-    async fn create_user(&self, input: CreateUser) -> AuthResult<S::User> {
+    async fn create_user(&self, input: CreateUser) -> AuthResult<crate::wire::UserView> {
         self.inner.create_user(input).await
     }
-    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<S::User>> {
+    async fn get_user_by_id_field(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
+        self.inner.get_user_by_id_field(id).await
+    }
+    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner.get_user_by_id(id).await
     }
-    async fn list_users_by_ids(&self, ids: &[String]) -> AuthResult<Vec<S::User>> {
-        self.inner.list_users_by_ids(ids).await
+    async fn list_users_by_ids(
+        &self,
+        ids: &[String],
+        limit: f64,
+    ) -> AuthResult<Vec<crate::wire::UserView>> {
+        self.inner.list_users_by_ids(ids, limit).await
     }
-    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<S::User>> {
+    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner.get_user_by_email(email).await
     }
-    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<S::User>> {
+    async fn get_user_by_username(
+        &self,
+        username: &str,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner.get_user_by_username(username).await
     }
-    async fn get_user_by_phone_number(&self, phone: &str) -> AuthResult<Option<S::User>> {
+    async fn get_user_by_phone_number(
+        &self,
+        phone: &str,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner.get_user_by_phone_number(phone).await
     }
-    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<S::User> {
+    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<crate::wire::UserView> {
         let user = self.inner.update_user(id, update).await?;
         self.refresh_user_sessions(&user).await?;
+        Ok(user)
+    }
+    async fn update_user_optional(
+        &self,
+        id: &str,
+        update: UpdateUser,
+    ) -> AuthResult<Option<crate::UserView>> {
+        let user = self.inner.update_user_optional(id, update).await?;
+        if let Some(user) = &user {
+            self.refresh_user_sessions(user).await?;
+        }
         Ok(user)
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
@@ -162,13 +195,16 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
         &self,
         id: &str,
         delete_database_sessions: bool,
-    ) -> AuthResult<Option<S::User>> {
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner
             .delete_user_optional(id, delete_database_sessions)
             .await
     }
 
-    async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<S::User>, usize)> {
+    async fn list_users(
+        &self,
+        params: ListUsersParams,
+    ) -> AuthResult<(Vec<crate::wire::UserView>, usize)> {
         self.inner.list_users(params).await
     }
 }

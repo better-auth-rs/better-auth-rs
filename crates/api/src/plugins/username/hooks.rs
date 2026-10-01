@@ -2,7 +2,7 @@ use better_auth_core::plugin_runtime::PluginRuntime;
 use better_auth_core::store::database_hooks::{
     DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks,
 };
-use better_auth_core::{AuthResult, AuthSchema, AuthUser, CreateUser, UpdateUser};
+use better_auth_core::{AuthResult, AuthSchema, CreateUser, UpdateUser};
 
 use super::config::{UsernameConfig, error};
 
@@ -33,7 +33,7 @@ impl<S: AuthSchema> UsernameHooks<S> {
                 .await?
         };
         if let Some(user) = existing
-            && current_user_id != Some(user.id().as_ref())
+            && current_user_id != user.id.as_str()
         {
             return Err(error(
                 400,

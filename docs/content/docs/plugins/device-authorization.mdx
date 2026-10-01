@@ -19,3 +19,7 @@ Application generators return `AuthResult<String>`. Each attempt awaits the devi
 The plugin retries a unique-constraint collision at most three times. Each retry generates both codes again. Other persistence errors propagate. Client validation and `on_device_auth_request` run once before generation.
 
 The generator methods now accept asynchronous closures. Change a synchronous closure from `|| value` to `|| async { Ok(value) }`. Keep application-owned admission policy in `validate_client`; a valid device token does not establish machine inventory identity.
+
+All four POST routes validate their bodies before authentication and endpoint middleware. `/device/code` returns OAuth `invalid_request` validation errors. The other routes use `VALIDATION_ERROR`. Empty `client_id` is rejected; empty `user_id` and `scope` are omitted before callbacks and persistence. Form requests reject repeated nonempty values for these three fields. Endpoint hooks retain the original input.
+
+`DeviceCode.client_id` and `DeviceCode.scope` use `SchemaValue<Option<String>>` so native store reads retain omitted memory fields and SQL null values. Use `json()` to inspect presence and `typed()` for a present nullable string. Device review responses preserve the same distinction.

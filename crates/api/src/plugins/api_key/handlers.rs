@@ -120,7 +120,7 @@ impl ApiKeyPlugin {
             && body
                 .user_id
                 .as_ref()
-                .is_some_and(|user_id| !user_id.is_empty() && *user_id != session.user_id)
+                .is_some_and(|user_id| !user_id.is_empty() && session.user_id != user_id.as_str())
         {
             return Err(super::api_key_error(
                 super::ApiKeyErrorCode::UnauthorizedSession,
@@ -128,7 +128,7 @@ impl ApiKeyPlugin {
         }
         let user_id = session
             .as_ref()
-            .map(|(session, _)| session.user_id.as_str())
+            .and_then(|(session, _)| session.user_id.as_str())
             .or(body.user_id.as_deref().filter(|id| !id.is_empty()))
             .ok_or_else(|| super::api_key_error(super::ApiKeyErrorCode::UnauthorizedSession))?;
         create_key_for_user(body, user_id, self, ctx, None).await
@@ -156,7 +156,7 @@ impl ApiKeyPlugin {
             && body
                 .user_id
                 .as_ref()
-                .is_some_and(|user_id| !user_id.is_empty() && *user_id != session.user_id)
+                .is_some_and(|user_id| !user_id.is_empty() && session.user_id != user_id.as_str())
         {
             return Err(super::api_key_error(
                 super::ApiKeyErrorCode::UnauthorizedSession,
@@ -164,7 +164,7 @@ impl ApiKeyPlugin {
         }
         let user_id = session
             .as_ref()
-            .map(|(session, _)| session.user_id.as_str())
+            .and_then(|(session, _)| session.user_id.as_str())
             .or(body.user_id.as_deref().filter(|id| !id.is_empty()))
             .ok_or_else(|| super::api_key_error(super::ApiKeyErrorCode::UnauthorizedSession))?;
         update_key_for_user(body, user_id, self, ctx).await
@@ -393,21 +393,19 @@ pub(crate) async fn list_keys_core(
             .filter(|config| groups.insert(super::storage::group(config)))
             .collect()
     };
-    let mut keys = Vec::new();
-    for config in configurations {
-        let group = super::storage::list(config, ctx, reference_id).await?;
-        let mut group_views: Vec<_> = group.iter().map(ApiKeyView::from).collect();
-        if let Some(sort_by) = query.sort_by.as_deref() {
-            sort_views(&mut group_views, sort_by, query.sort_direction.as_deref());
-        }
-        let mut group: std::collections::HashMap<_, _> =
-            group.into_iter().map(|key| (key.id.clone(), key)).collect();
-        keys.extend(
-            group_views
-                .into_iter()
-                .filter_map(|view| group.remove(&view.id)),
-        );
-    }
+    let sort = query
+        .sort_by
+        .as_deref()
+        .filter(|field| !field.is_empty())
+        .map(|field| (field, query.sort_direction.as_deref().unwrap_or("asc")));
+    let groups = futures_util::future::join_all(
+        configurations
+            .into_iter()
+            .map(|config| super::storage::list(config, ctx, reference_id, sort)),
+    )
+    .await;
+    let groups: Vec<_> = groups.into_iter().collect::<AuthResult<_>>()?;
+    let mut keys: Vec<_> = groups.into_iter().flatten().collect();
     super::storage::deduplicate(&mut keys);
     let mut views: Vec<ApiKeyView> = keys
         .iter()
@@ -439,49 +437,6 @@ pub(crate) async fn list_keys_core(
         limit: query.limit,
         offset: query.offset,
     })
-}
-
-fn compare_numbers(left: Option<f64>, right: Option<f64>) -> std::cmp::Ordering {
-    match (left, right) {
-        (Some(left), Some(right)) => left.total_cmp(&right),
-        (None, None) => std::cmp::Ordering::Equal,
-        (None, Some(_)) => std::cmp::Ordering::Less,
-        (Some(_), None) => std::cmp::Ordering::Greater,
-    }
-}
-
-fn sort_views(views: &mut [ApiKeyView], sort_by: &str, direction: Option<&str>) {
-    views.sort_by(|a, b| {
-        let ordering = match sort_by {
-            "id" => a.id.cmp(&b.id),
-            "name" => a.name.cmp(&b.name),
-            "start" => a.start.cmp(&b.start),
-            "prefix" => a.prefix.cmp(&b.prefix),
-            "referenceId" => a.reference_id.cmp(&b.reference_id),
-            "configId" => a.config_id.cmp(&b.config_id),
-            "enabled" => a.enabled.cmp(&b.enabled),
-            "rateLimitEnabled" => a.rate_limit_enabled.cmp(&b.rate_limit_enabled),
-            "createdAt" => a.created_at.cmp(&b.created_at),
-            "updatedAt" => a.updated_at.cmp(&b.updated_at),
-            "expiresAt" => a.expires_at.cmp(&b.expires_at),
-            "lastRequest" => a.last_request.cmp(&b.last_request),
-            "lastRefillAt" => a.last_refill_at.cmp(&b.last_refill_at),
-            "remaining" => compare_numbers(a.remaining, b.remaining),
-            "requestCount" => compare_numbers(a.request_count, b.request_count),
-            "rateLimitMax" => compare_numbers(a.rate_limit_max, b.rate_limit_max),
-            "rateLimitTimeWindow" => {
-                compare_numbers(a.rate_limit_time_window, b.rate_limit_time_window)
-            }
-            "refillAmount" => compare_numbers(a.refill_amount, b.refill_amount),
-            "refillInterval" => compare_numbers(a.refill_interval, b.refill_interval),
-            _ => std::cmp::Ordering::Equal,
-        };
-        if direction == Some("desc") {
-            ordering.reverse()
-        } else {
-            ordering
-        }
-    });
 }
 
 pub(crate) async fn update_key_core(

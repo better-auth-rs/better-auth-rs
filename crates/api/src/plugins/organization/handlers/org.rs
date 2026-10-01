@@ -1,4 +1,7 @@
-use super::{require_session, resolve_organization_id};
+use super::{
+    optional_session, request_only_session, request_present, require_session,
+    resolve_organization_id,
+};
 use crate::plugins::organization::rbac::check_permission;
 use crate::plugins::organization::types::{
     BasicMemberResponse, CheckSlugRequest, CheckSlugResponse, CreateOrganizationRequest,
@@ -16,24 +19,6 @@ use better_auth_core::types::{AuthRequest, AuthResponse, CreateOrganization, Upd
 use better_auth_core::wire::InvitationView;
 use std::collections::HashMap;
 
-fn validate_metadata_input(value: Option<&serde_json::Value>, path: &str) -> AuthResult<()> {
-    if let Some(value) = value {
-        let received = match value {
-            serde_json::Value::Null => "null",
-            serde_json::Value::Bool(_) => "boolean",
-            serde_json::Value::Number(_) => "number",
-            serde_json::Value::String(_) => "string",
-            serde_json::Value::Array(_) => "array",
-            serde_json::Value::Object(_) => return Ok(()),
-        };
-        return Err(AuthError::FieldInput {
-            code: "VALIDATION_ERROR",
-            message: format!("[{path}] Invalid input: expected record, received {received}"),
-        });
-    }
-    Ok(())
-}
-
 fn has_role(member: &impl AuthMember, role: &str) -> AuthResult<bool> {
     Ok(member
         .role()
@@ -49,7 +34,8 @@ fn has_role(member: &impl AuthMember, role: &str) -> AuthResult<bool> {
 
 pub(crate) async fn create_organization_core(
     body: &CreateOrganizationRequest,
-    user: &impl AuthUser,
+    user: &better_auth_core::wire::UserView,
+    system_action: bool,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     request: Option<&AuthRequest>,
@@ -57,15 +43,18 @@ pub(crate) async fn create_organization_core(
     CreateOrganizationResponse<CreatedOrganizationResponse, BasicMemberResponse>,
     Option<String>,
 )> {
-    let user_view = ctx.user_view(user)?;
-    if !config.may_create(&user_view).await? {
+    let user_view = user.clone();
+    if !config.may_create(&user_view).await? && !system_action {
         return Err(AuthError::Upstream {
             status: 403,
             code: "YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION",
             message: "You are not allowed to create a new organization",
         });
     }
-    let user_orgs = ctx.database.list_user_organizations(&user.id()).await?;
+    let user_orgs = ctx
+        .database
+        .list_user_organizations(user.id().typed()?)
+        .await?;
     if config
         .organization_limit_reached(&user_view, user_orgs.len())
         .await?
@@ -119,8 +108,8 @@ pub(crate) async fn create_organization_core(
         additional_fields: Default::default(),
         team_id: None,
         created_at: None,
-        organization_id: organization.id().to_string(),
-        user_id: user.id().to_string(),
+        organization_id: organization.id().into_owned(),
+        user_id: user.id().into_owned(),
         role: if config.creator_role.is_empty() {
             "owner".into()
         } else {
@@ -181,7 +170,7 @@ pub(crate) async fn create_organization_core(
         let team = crate::plugins::organization::fields::team(team, ctx);
         let _ = ctx
             .database
-            .add_team_member(&team.id, &user.id(), None)
+            .add_team_member(&team.id, user.id().typed()?, None)
             .await?;
         if let Some(hooks) = &config.hooks {
             hooks
@@ -192,7 +181,7 @@ pub(crate) async fn create_organization_core(
                 })
                 .await?;
         }
-        default_team_id = Some(team.id);
+        default_team_id = team.id.as_str().map(str::to_owned);
     }
     if let Some(hooks) = &config.hooks {
         hooks.after_create_organization(event).await?;
@@ -241,7 +230,7 @@ pub(crate) async fn update_organization_core(
 
     let member = ctx
         .database
-        .get_member(&org_id, &user.id())
+        .get_member(&org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -262,7 +251,7 @@ pub(crate) async fn update_organization_core(
 
     if let Some(ref new_slug) = slug
         && let Some(existing) = ctx.database.get_organization_by_slug(new_slug).await?
-        && existing.id() != org_id
+        && existing.id != org_id
     {
         return Err(AuthError::bad_request("Organization slug already taken"));
     }
@@ -325,7 +314,7 @@ pub(crate) async fn delete_organization_core(
 
     let member = ctx
         .database
-        .get_member(&body.organization_id, &user.id())
+        .get_member(&body.organization_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::bad_request("User is not a member of the organization"))?;
 
@@ -386,7 +375,10 @@ pub(crate) async fn list_organizations_core(
     user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<OrganizationResponse>> {
-    let organizations = ctx.database.list_user_organizations(&user.id()).await?;
+    let organizations = ctx
+        .database
+        .list_user_organizations(user.id().typed()?)
+        .await?;
     Ok(organizations
         .iter()
         .map(OrganizationResponse::from_organization)
@@ -406,7 +398,7 @@ pub(crate) async fn get_full_organization_core(
             .get_organization_by_slug(slug)
             .await?
             .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-        organization.id().to_string()
+        organization.id().typed()?.to_string()
     } else if let Some(id) = query.organization_id.as_deref() {
         id.to_string()
     } else if let Some(active_org_id) = session.active_organization_id() {
@@ -417,7 +409,7 @@ pub(crate) async fn get_full_organization_core(
 
     let _ = ctx
         .database
-        .get_member(&org_id, &user.id())
+        .get_member(&org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::forbidden("User is not a member of the organization"))?;
 
@@ -430,9 +422,7 @@ pub(crate) async fn get_full_organization_core(
     let members_limit = query
         .members_limit
         .filter(|limit| *limit != 0.0 && !limit.is_nan())
-        .or(Some(
-            ctx.config.advanced.database.default_find_many_limit as f64,
-        ));
+        .or(Some(ctx.config.advanced.database.find_many_limit()));
     let member_params = ListOrganizationMembersParams {
         organization_id: org_id.clone(),
         limit: members_limit,
@@ -446,19 +436,24 @@ pub(crate) async fn get_full_organization_core(
         .iter()
         .map(|member| member.user_id.typed().cloned())
         .collect::<AuthResult<Vec<_>>>()?;
-    let users_by_id = ctx
-        .database
-        .list_users_by_ids(&user_ids)
-        .await?
+    let users = if user_ids.is_empty() {
+        Vec::new()
+    } else {
+        ctx.database
+            .list_users_by_ids(&user_ids, config.member_list_limit() as f64)
+            .await?
+    };
+    let users_by_id = users
         .into_iter()
-        .map(|user| (user.id().to_string(), user))
+        .map(|user| (user.id.as_str().map(str::to_owned), user))
         .collect::<HashMap<_, _>>();
     let mut members = Vec::with_capacity(members_raw.len());
 
     for member in &members_raw {
-        if let Some(user_info) = users_by_id.get(member.user_id.typed()?) {
-            members.push(MemberResponse::from_member_and_user(member, user_info));
-        }
+        let user_info = users_by_id
+            .get(&member.user_id.as_str().map(str::to_owned))
+            .ok_or_else(|| AuthError::internal("Unexpected error: User not found for member"))?;
+        members.push(MemberResponse::from_member_and_user(member, user_info));
     }
 
     let invitations = ctx.database.list_organization_invitations(&org_id).await?;
@@ -527,7 +522,7 @@ pub(crate) async fn set_active_organization_core(
             .get_organization_by_slug(slug)
             .await?
             .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-        organization.id().to_string()
+        organization.id().typed()?.to_string()
     } else if let Some(active_org_id) = session.active_organization_id() {
         active_org_id.to_string()
     } else {
@@ -536,7 +531,7 @@ pub(crate) async fn set_active_organization_core(
 
     let _ = ctx
         .database
-        .get_member(&org_id, &user.id())
+        .get_member(&org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::forbidden("User is not a member of the organization"))?;
 
@@ -570,7 +565,7 @@ pub(crate) async fn leave_organization_core(
 ) -> AuthResult<MemberResponse> {
     let member = ctx
         .database
-        .get_member(&body.organization_id, &user.id())
+        .get_member(&body.organization_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
@@ -594,7 +589,7 @@ pub(crate) async fn leave_organization_core(
     }
 
     let response = MemberResponse::from_member_and_user(&member, user);
-    ctx.database.delete_member(&member.id()).await?;
+    ctx.database.delete_member(member.id().typed()?).await?;
 
     if session.active_organization_id() == Some(&body.organization_id) {
         let _ = ctx
@@ -616,75 +611,43 @@ pub async fn handle_create_organization(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
-    let mut body: CreateOrganizationRequest = req
-        .body_as_json()
-        .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;
-    let mut schema = config.schema.organization.clone();
-    for (name, required) in [("name", true), ("slug", true), ("logo", false)] {
-        if !schema
-            .additional_fields
-            .get(name)
-            .is_some_and(|field| field.input)
-        {
-            let _ = schema.additional_fields.insert(
-                name.into(),
-                better_auth_core::user_fields::UserFieldConfig {
-                    required: Some(required),
-                    ..Default::default()
-                },
-            );
+    let session = optional_session(req, ctx).await?;
+    if session.is_none() && request_present(req, ctx) {
+        return Err(AuthError::from(AuthResponse::json(
+            401,
+            &serde_json::Value::Null,
+        )?));
+    }
+    let body: CreateOrganizationRequest = super::super::request::read(req, &config.schema)?;
+    let user = if let Some((user, _)) = &session {
+        user.clone()
+    } else {
+        let id = body.user_id.as_deref().filter(|id| !id.is_empty());
+        let user = match id {
+            Some(id) => ctx.database.get_user_by_id(id).await?,
+            None => None,
         }
-    }
-    if !config
-        .schema
-        .organization
-        .additional_fields
-        .get("metadata")
-        .is_some_and(|field| field.input)
-    {
-        validate_metadata_input(body.metadata.json()?.as_ref(), "body.metadata")?;
-    }
-    body.additional_fields = crate::plugins::organization::fields::parse_input(
-        &schema,
-        &body,
-        &body.additional_fields,
-        "body",
-        false,
-    )?;
-    for (name, value) in [("name", &body.name), ("slug", &body.slug)] {
-        if !config
-            .schema
-            .organization
-            .additional_fields
-            .get(name)
-            .is_some_and(|field| field.input)
-            && value.typed()?.is_empty()
-        {
-            return Err(AuthError::FieldInput {
-                code: "VALIDATION_ERROR",
-                message: format!("[body.{name}] Too small: expected string to have >=1 characters"),
-            });
-        }
-    }
+        .ok_or(AuthError::from(AuthResponse::json(
+            401,
+            &serde_json::Value::Null,
+        )?))?;
+        ctx.internal_user_view(&user)?
+    };
     let (response, default_team_id) =
-        create_organization_core(&body, &user, config, ctx, Some(req)).await?;
-    if !body.keep_current_active_organization.unwrap_or(false) {
-        let _ = ctx
-            .database
-            .update_session_active_organization(
-                session.token(),
-                Some(response.organization.id.as_str()),
-            )
-            .await?;
-    }
+        create_organization_core(&body, &user, session.is_none(), config, ctx, Some(req)).await?;
     if !body.keep_current_active_organization.unwrap_or(false)
-        && let Some(team_id) = default_team_id
+        && let Some((_, session)) = session
     {
         let _ = ctx
             .database
-            .update_session_active_team(session.token(), Some(&team_id))
+            .update_session_active_organization(session.token(), response.organization.id.as_str())
             .await?;
+        if let Some(team_id) = default_team_id {
+            let _ = ctx
+                .database
+                .update_session_active_team(session.token(), Some(&team_id))
+                .await?;
+        }
     }
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -696,36 +659,7 @@ pub async fn handle_update_organization(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let raw: serde_json::Value = req
-        .body_as_json()
-        .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;
-    let base = better_auth_core::user_fields::UserConfig {
-        additional_fields: [("name", true), ("slug", true), ("logo", false)]
-            .into_iter()
-            .map(|(name, required)| {
-                (
-                    name.to_owned(),
-                    better_auth_core::user_fields::UserFieldConfig {
-                        required: Some(required),
-                        ..Default::default()
-                    },
-                )
-            })
-            .collect(),
-    };
-    if let Some(data) = raw.get("data").and_then(serde_json::Value::as_object) {
-        let _ = base.parse_organization_input(data, "body.data", true)?;
-    }
-    let mut body: UpdateOrganizationRequest = serde_json::from_value(raw)
-        .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;
-    validate_metadata_input(body.data.metadata.as_ref(), "body.data.metadata")?;
-    let mut schema = config.schema.organization.clone();
-    // The upstream update schema applies base fields after additional fields.
-    schema
-        .additional_fields
-        .retain(|name, _| !matches!(name.as_str(), "name" | "slug" | "logo" | "metadata"));
-    body.data.additional_fields =
-        schema.parse_organization_input(&body.data.additional_fields, "body.data", true)?;
+    let body: UpdateOrganizationRequest = super::super::request::read(req, &config.schema)?;
     let updated = update_organization_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &updated)?)
 }
@@ -737,10 +671,7 @@ pub async fn handle_delete_organization(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: DeleteOrganizationRequest = match better_auth_core::validate_request_body(req) {
-        Ok(v) => v,
-        Err(resp) => return Ok(resp),
-    };
+    let body: DeleteOrganizationRequest = super::super::request::read(req, &config.schema)?;
     let response = delete_organization_core(&body, &user, &session, Some(req), config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -776,7 +707,7 @@ pub async fn handle_get_organization(
 
     if ctx
         .database
-        .get_member(&organization.id(), &user.id())
+        .get_member(organization.id().typed()?, user.id().typed()?)
         .await?
         .is_none()
     {
@@ -811,11 +742,8 @@ pub async fn handle_check_slug(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let _ = require_session(req, ctx).await?;
-    let body: CheckSlugRequest = match better_auth_core::validate_request_body(req) {
-        Ok(v) => v,
-        Err(resp) => return Ok(resp),
-    };
+    let _ = request_only_session(req, ctx).await?;
+    let body: CheckSlugRequest = super::super::request::read(req, &Default::default())?;
     let response = check_slug_core(&body, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -826,10 +754,7 @@ pub async fn handle_set_active_organization(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: SetActiveOrganizationRequest = match better_auth_core::validate_request_body(req) {
-        Ok(v) => v,
-        Err(resp) => return Ok(resp),
-    };
+    let body: SetActiveOrganizationRequest = super::super::request::read(req, &Default::default())?;
     let organization = set_active_organization_core(req, &body, &user, &session, ctx).await?;
     Ok(AuthResponse::json(200, &organization)?)
 }
@@ -841,10 +766,7 @@ pub async fn handle_leave_organization(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: LeaveOrganizationRequest = match better_auth_core::validate_request_body(req) {
-        Ok(v) => v,
-        Err(resp) => return Ok(resp),
-    };
+    let body: LeaveOrganizationRequest = super::super::request::read(req, &config.schema)?;
     let response = leave_organization_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -910,7 +832,7 @@ mod tests {
             .await
             .expect("organization should be created");
         ctx.database
-            .update_session_active_organization(&session.token, Some(&existing.id))
+            .update_session_active_organization(&session.token, Some(existing.id.typed().unwrap()))
             .await
             .expect("active organization should update");
 
@@ -935,7 +857,10 @@ mod tests {
             .await
             .expect("session lookup should succeed")
             .expect("session should exist");
-        assert_eq!(updated_session.active_organization_id, Some(existing.id));
+        assert_eq!(
+            updated_session.active_organization_id,
+            Some(existing.id.typed().unwrap().clone())
+        );
         assert_eq!(user.id, session.user_id);
     }
 
@@ -1026,7 +951,7 @@ mod tests {
 
         let response = get_full_organization_core(
             &GetFullOrganizationQuery {
-                organization_id: Some(organization.id.clone()),
+                organization_id: Some(organization.id.typed().unwrap().clone()),
                 organization_slug: None,
                 members_limit: Some(1.0),
             },

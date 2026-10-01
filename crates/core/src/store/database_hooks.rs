@@ -136,7 +136,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed user creation.
     async fn after_create_user(
         &self,
-        _data: &S::User,
+        _data: &crate::wire::UserView,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())
@@ -152,7 +152,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed user update.
     async fn after_update_user(
         &self,
-        _data: Option<&S::User>,
+        _data: Option<&crate::wire::UserView>,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())
@@ -160,7 +160,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Cancel a user deletion before storage changes.
     async fn before_delete_user(
         &self,
-        _data: &S::User,
+        _data: &crate::wire::UserView,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookControl> {
         Ok(DatabaseHookControl::Continue)
@@ -168,7 +168,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed user deletion.
     async fn after_delete_user(
         &self,
-        _data: &S::User,
+        _data: &crate::wire::UserView,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())
@@ -234,7 +234,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed session creation.
     async fn after_create_session(
         &self,
-        _data: &S::Session,
+        _data: &crate::wire::SessionView,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())
@@ -250,7 +250,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed session update.
     async fn after_update_session(
         &self,
-        _data: Option<&S::Session>,
+        _data: Option<&crate::wire::SessionView>,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())
@@ -258,7 +258,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Cancel a session deletion before storage changes.
     async fn before_delete_session(
         &self,
-        _data: &S::Session,
+        _data: &crate::wire::SessionView,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookControl> {
         Ok(DatabaseHookControl::Continue)
@@ -266,7 +266,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed session deletion.
     async fn after_delete_session(
         &self,
-        _data: &S::Session,
+        _data: &crate::wire::SessionView,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())

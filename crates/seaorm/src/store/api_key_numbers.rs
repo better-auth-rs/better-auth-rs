@@ -105,9 +105,9 @@ mod tests {
         let store = SeaOrmStore::<BundledSchema>::new(AuthConfig::new("test-secret"), database);
         let existing = store.get_api_key_by_id("existing").await.unwrap().unwrap();
         assert_eq!(existing.remaining, Some(2147483648.0));
-        let _ = store
+        let updated = store
             .update_api_key(
-                "existing",
+                &"existing".into(),
                 UpdateApiKey {
                     remaining: Some(2.5),
                     ..Default::default()
@@ -115,10 +115,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let result = store
-            .consume_api_key_usage("existing", false)
-            .await
-            .unwrap();
+        let result = store.consume_api_key_usage(&updated, false).await.unwrap();
         let ConsumeApiKeyResult::Allowed(key) = result else {
             panic!("key must remain usable after migration")
         };

@@ -1,6 +1,7 @@
+mod request;
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use better_auth_core::types::WalletAddress;
+use better_auth_core::types::CreateWalletAddress;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
     AuthUser, CreateAccount, CreateUser, CreateVerification, RequestMeta,
@@ -8,7 +9,6 @@ use better_auth_core::{
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use serde_json::{Value, json};
 use sha3::{Digest, Keccak256};
-use validator::ValidateEmail;
 
 use super::helpers::{SessionIssueError, issue_user_session};
 
@@ -93,19 +93,8 @@ impl SiwePlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = match super::json_body::parse(req) {
-            Ok(body) => body,
-            Err(response) => return Ok(response),
-        };
-        if let Some(body) = body {
-            if !body.is_object() {
-                return Ok(super::json_body::validation_error(
-                    &super::json_body::invalid_type("body", "object", Some(&body)),
-                ));
-            }
-            if let Some(message) = unknown_keys(&body, &[]) {
-                return Ok(super::json_body::validation_error(&message));
-            }
+        if req.validated_body::<()>().is_none() {
+            let _ = request::nonce(req)?;
         }
         let nonce = (self.get_nonce)().await?;
         if !valid_nonce(&nonce) {
@@ -130,67 +119,14 @@ impl SiwePlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let value = match super::json_body::parse(req) {
-            Ok(body) => body,
-            Err(response) => return Ok(response),
-        };
-        if !value.as_ref().is_some_and(Value::is_object) {
-            return Ok(super::json_body::validation_error(
-                &super::json_body::invalid_type("body", "object", value.as_ref()),
-            ));
-        }
-        let body = value.unwrap_or_default();
-        let mut errors = Vec::new();
-        for key in ["message", "signature"] {
-            match body.get(key).and_then(Value::as_str) {
-                None => errors.push(super::json_body::invalid_type(
-                    &format!("body.{key}"),
-                    "string",
-                    body.get(key),
-                )),
-                Some("") => errors.push(format!(
-                    "[body.{key}] Too small: expected string to have >=1 characters"
-                )),
-                Some(_) => {}
-            }
-        }
-        let email = body.get("email").and_then(Value::as_str);
-        if body.get("email").is_some() {
-            match email {
-                None => errors.push(super::json_body::invalid_type(
-                    "body.email",
-                    "string",
-                    body.get("email"),
-                )),
-                Some(email) if !email.validate_email() => {
-                    errors.push("[body.email] Invalid email address".into())
-                }
-                _ => {}
-            }
-        }
-        if let Some(message) = unknown_keys(&body, &["message", "signature", "email"]) {
-            errors.push(message);
-        }
-        if !self.anonymous && email.is_none() {
-            errors.push(
-                "[body.email] Email is required when the anonymous plugin option is disabled."
-                    .into(),
-            );
-        }
-        if !errors.is_empty() {
-            return Ok(super::json_body::validation_error(&errors.join("; ")));
-        }
+        let body = request::read(req, self.anonymous)?;
         match self
             .verify_inner(
                 req,
                 ctx,
-                body.get("message")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default(),
-                body.get("signature")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default(),
-                email,
+                &body.message,
+                &body.signature,
+                body.email.as_deref(),
             )
             .await
         {
@@ -358,9 +294,8 @@ impl SiwePlugin {
         if new_user || exact_wallet.is_none() {
             let _ = ctx
                 .database
-                .create_wallet_address(WalletAddress {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    user_id: user.id().into_owned(),
+                .create_wallet_address(CreateWalletAddress {
+                    user_id: user.id().typed()?.to_string(),
                     address: address.clone(),
                     chain_id,
                     is_primary: new_user,
@@ -370,7 +305,7 @@ impl SiwePlugin {
             let _ = ctx
                 .database
                 .create_account(CreateAccount {
-                    user_id: (user.id().into_owned()).into(),
+                    user_id: user.id().into_owned(),
                     provider_id: "siwe".into(),
                     account_id: (format!("{address}:{chain_id}")).into(),
                     access_token: Default::default(),
@@ -385,7 +320,7 @@ impl SiwePlugin {
                 .await?;
         }
         let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
-        let issued = issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
+        let issued = issue_user_session(ctx, user.id().typed()?, meta.ip_address, meta.user_agent)
             .await
             .map_err(SessionIssueError::into_auth_error)?;
         let manager = ctx.session_manager();
@@ -511,13 +446,37 @@ impl<'a> ParsedMessage<'a> {
     }
 }
 
-better_auth_core::impl_auth_plugin!(SiwePlugin, "siwe";
-    routes {
-        post "/siwe/nonce" => nonce, "getSiweNonce";
-        post "/siwe/get-nonce" => nonce, "getNonce";
-        post "/siwe/verify" => verify, "verifySiweMessage";
+#[async_trait::async_trait]
+impl<S: AuthSchema> better_auth_core::AuthPlugin<S> for SiwePlugin {
+    fn name(&self) -> &'static str {
+        "siwe"
     }
-);
+    fn routes(&self) -> Vec<better_auth_core::AuthRoute> {
+        let anonymous = self.anonymous;
+        vec![
+            better_auth_core::AuthRoute::post("/siwe/nonce", "getSiweNonce")
+                .body_validator(request::nonce),
+            better_auth_core::AuthRoute::post("/siwe/get-nonce", "getNonce")
+                .body_validator(request::nonce),
+            better_auth_core::AuthRoute::post("/siwe/verify", "verifySiweMessage")
+                .body_validator(move |req| request::verify(req, anonymous)),
+        ]
+    }
+    async fn on_request(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        if req.method != better_auth_core::HttpMethod::Post {
+            return Ok(None);
+        }
+        match req.path() {
+            "/siwe/nonce" | "/siwe/get-nonce" => self.nonce(req, ctx).await.map(Some),
+            "/siwe/verify" => self.verify(req, ctx).await.map(Some),
+            _ => Ok(None),
+        }
+    }
+}
 
 fn unknown_keys(body: &Value, allowed: &[&str]) -> Option<String> {
     let keys: Vec<_> = body

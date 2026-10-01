@@ -166,11 +166,15 @@ pub async fn require_org_api_key_permission(
 /// Fetch the user's credential account, if present.
 pub async fn get_credential_account<S: better_auth_core::AuthSchema>(
     ctx: &AuthContext<S>,
-    user_id: impl AsRef<str>,
+    user_id: impl Into<better_auth_core::SchemaValue<String>>,
 ) -> AuthResult<Option<better_auth_core::wire::AccountView>> {
+    let user_id = user_id.into();
+    let Some(user_id) = user_id.as_str() else {
+        return Ok(None);
+    };
     Ok(ctx
         .database
-        .get_user_accounts(user_id.as_ref())
+        .get_user_accounts(user_id)
         .await?
         .into_iter()
         .find(|account| account.provider_id == "credential"))
@@ -181,7 +185,7 @@ pub async fn get_credential_password_hash(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     user: &impl AuthUser,
 ) -> AuthResult<Option<String>> {
-    let Some(account) = get_credential_account(ctx, user.id()).await? else {
+    let Some(account) = get_credential_account(ctx, user.id().into_owned()).await? else {
         return Ok(None);
     };
     if !account.password.is_truthy()? {
@@ -217,9 +221,9 @@ pub fn apply_default_role(
 }
 
 /// Result of issuing a real session for a user.
-pub struct IssuedSession<S: better_auth_core::AuthSchema> {
-    pub user: S::User,
-    pub session: S::Session,
+pub struct IssuedSession {
+    pub user: better_auth_core::wire::UserView,
+    pub session: better_auth_core::wire::SessionView,
 }
 
 /// Session issuance failures that callers may need to surface differently from
@@ -279,7 +283,7 @@ pub async fn issue_user_session<S: better_auth_core::AuthSchema>(
     user_id: &str,
     ip_address: Option<String>,
     user_agent: Option<String>,
-) -> Result<IssuedSession<S>, SessionIssueError> {
+) -> Result<IssuedSession, SessionIssueError> {
     issue_user_session_with_lifetime(
         ctx,
         user_id,
@@ -296,7 +300,7 @@ pub(crate) async fn issue_user_session_with_lifetime<S: better_auth_core::AuthSc
     ip_address: Option<String>,
     user_agent: Option<String>,
     expires_in: chrono::Duration,
-) -> Result<IssuedSession<S>, SessionIssueError> {
+) -> Result<IssuedSession, SessionIssueError> {
     let user = session_user(ctx, user_id, None).await?;
 
     let session = ctx
@@ -312,7 +316,7 @@ pub(crate) async fn session_user<S: better_auth_core::AuthSchema>(
     ctx: &AuthContext<S>,
     user_id: &str,
     transaction: Option<&dyn better_auth_core::store::AuthTransaction<S>>,
-) -> Result<S::User, SessionIssueError> {
+) -> Result<better_auth_core::wire::UserView, SessionIssueError> {
     let user = match transaction {
         Some(tx) => tx.get_user_by_id(user_id).await?,
         None => ctx.database.get_user_by_id(user_id).await?,

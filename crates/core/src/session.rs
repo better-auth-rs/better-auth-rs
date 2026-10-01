@@ -249,7 +249,7 @@ impl<S: AuthSchema> SessionManager<S> {
         user: &impl AuthUser,
         ip_address: Option<String>,
         user_agent: Option<String>,
-    ) -> AuthResult<S::Session> {
+    ) -> AuthResult<crate::wire::SessionView> {
         self.create_session_with_lifetime(
             user,
             ip_address,
@@ -266,11 +266,11 @@ impl<S: AuthSchema> SessionManager<S> {
         ip_address: Option<String>,
         user_agent: Option<String>,
         expires_in: chrono::Duration,
-    ) -> AuthResult<S::Session> {
+    ) -> AuthResult<crate::wire::SessionView> {
         let expires_at = Utc::now() + expires_in;
 
         let create_session = CreateSession {
-            user_id: user.id().to_string(),
+            user_id: user.id().into_owned(),
             expires_at,
             ip_address,
             user_agent,
@@ -283,7 +283,7 @@ impl<S: AuthSchema> SessionManager<S> {
     }
 
     /// Read a session directly from the server store and refresh its expiry.
-    pub async fn get_session(&self, token: &str) -> AuthResult<Option<S::Session>> {
+    pub async fn get_session(&self, token: &str) -> AuthResult<Option<crate::wire::SessionView>> {
         let Some(session) = self.database.get_session(token).await? else {
             return Ok(None);
         };
@@ -340,9 +340,12 @@ impl<S: AuthSchema> SessionManager<S> {
             needs_refresh: None,
         };
         if let Some(session) = req.virtual_session() {
+            let Some(user_id) = session.user_id.as_str() else {
+                return Ok(none());
+            };
             let user = self
                 .database
-                .get_user_by_id(&session.user_id)
+                .get_user_by_id(user_id)
                 .await?
                 .ok_or(AuthError::UserNotFound)?;
             let data = SessionData {
@@ -450,7 +453,10 @@ impl<S: AuthSchema> SessionManager<S> {
             data.session.filter_returned_fields(&self.config.session);
             data
         } else {
-            let Some(user) = self.database.get_user_by_id(&session.user_id()).await? else {
+            let Some(user_id) = session.user_id.as_str() else {
+                return Ok(none());
+            };
+            let Some(user) = self.database.get_user_by_id(user_id).await? else {
                 req.set_session_snapshot(None)?;
                 self.clear_cookies(req)?;
                 return Ok(none());
@@ -623,7 +629,7 @@ impl<S: AuthSchema> SessionManager<S> {
     pub async fn list_user_sessions(
         &self,
         user_id: impl AsRef<str>,
-    ) -> AuthResult<Vec<S::Session>> {
+    ) -> AuthResult<Vec<crate::wire::SessionView>> {
         let sessions = self.database.get_user_sessions(user_id.as_ref()).await?;
         let now = Utc::now();
 
@@ -1095,7 +1101,10 @@ mod tests {
         let _ = mgr.create_session(&user, None, None).await.unwrap();
         let _ = mgr.create_session(&user, None, None).await.unwrap();
 
-        let sessions = mgr.list_user_sessions(user.id()).await.unwrap();
+        let sessions = mgr
+            .list_user_sessions(user.id().typed().unwrap())
+            .await
+            .unwrap();
         assert_eq!(sessions.len(), 2);
     }
 
@@ -1113,10 +1122,16 @@ mod tests {
         let _ = mgr.create_session(&user, None, None).await.unwrap();
         let _ = mgr.create_session(&user, None, None).await.unwrap();
 
-        let count = mgr.revoke_all_user_sessions(user.id()).await.unwrap();
+        let count = mgr
+            .revoke_all_user_sessions(user.id().typed().unwrap())
+            .await
+            .unwrap();
         assert_eq!(count, 2);
 
-        let sessions = mgr.list_user_sessions(user.id()).await.unwrap();
+        let sessions = mgr
+            .list_user_sessions(user.id().typed().unwrap())
+            .await
+            .unwrap();
         assert!(sessions.is_empty());
     }
 
@@ -1136,12 +1151,15 @@ mod tests {
         let _ = mgr.create_session(&user, None, None).await.unwrap();
 
         let count = mgr
-            .revoke_other_user_sessions(user.id(), current.token())
+            .revoke_other_user_sessions(user.id().typed().unwrap(), current.token())
             .await
             .unwrap();
         assert_eq!(count, 2);
 
-        let remaining = mgr.list_user_sessions(user.id()).await.unwrap();
+        let remaining = mgr
+            .list_user_sessions(user.id().typed().unwrap())
+            .await
+            .unwrap();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].token(), current.token());
     }

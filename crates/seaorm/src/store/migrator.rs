@@ -395,17 +395,6 @@ async fn create_accounts(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                 .to_owned(),
         )
         .await?;
-    manager
-        .create_index(
-            Index::create()
-                .name("idx_accounts_provider_account")
-                .table(account::Entity)
-                .col(account::Column::ProviderId)
-                .col(account::Column::AccountId)
-                .unique()
-                .to_owned(),
-        )
-        .await?;
 
     Ok(())
 }

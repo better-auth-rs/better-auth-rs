@@ -390,7 +390,9 @@ impl JwtPlugin {
             if let Some(curve) = key.crv {
                 let _ = value.entry("crv").or_insert(curve.into());
             }
-            let _ = value.insert("kid".into(), key.id.into());
+            if let Some(id) = key.id.json()? {
+                let _ = value.insert("kid".into(), id);
+            }
             public.push(value);
         }
         Ok(AuthResponse::json(200, &json!({"keys": public}))?)

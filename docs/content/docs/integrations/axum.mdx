@@ -180,8 +180,10 @@ async fn get_profile(
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `user` | `YourSchema::User` | The authenticated app-owned user model |
-| `session` | `YourSchema::Session` | The current app-owned session model |
+| `user` | `UserView` | The authenticated user with configured application fields |
+| `session` | `SessionView` | The persisted session with configured application fields |
+
+The schema parameter selects the `BetterAuth` instance from application state. The extractor returns runtime views, which preserve omitted IDs and configured output transforms. Query application entity models directly for columns outside the auth schema.
 
 ### `OptionalSession` — Optional Authentication
 
@@ -211,7 +213,7 @@ async fn home(
 
 ### `CachedSession` — Cookie and Server Sessions
 
-Use `CachedSession<YourSchema>` when the route can accept the configured signed cookie cache. Use `CachedSession<StatelessSchema>` with `BetterAuth::stateless`. The extractor returns `UserView` and `SessionView`, including configured public fields. `CurrentSession` continues to return application-owned models from server storage.
+Use `CachedSession<YourSchema>` when the route can accept the configured signed cookie cache. Use `CachedSession<StatelessSchema>` with `BetterAuth::stateless`. Both session extractors return `UserView` and `SessionView`; `CurrentSession` resolves those records from server storage.
 
 Return the extractor with the response to send refreshed cookies, Bearer response headers and the session endpoint's cache-prevention headers. The extractor preserves application cookies already present in the response.
 

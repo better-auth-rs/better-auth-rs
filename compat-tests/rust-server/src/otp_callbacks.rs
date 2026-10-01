@@ -88,7 +88,7 @@ impl OtpCallbacksFixture {
                     Ok(message.code == "246810")
                 }) })
                 .on_verification(move |message, endpoint| { let fixture=verified.clone(); Box::pin(async move {
-                    let user=endpoint.auth.database.get_user_by_id(&message.user.id).await?.unwrap();
+                    let user=endpoint.auth.database.get_user_by_id(message.user.id.typed().unwrap()).await?.unwrap();
                     fixture.event("phone.verified", json!({"phoneNumber":message.phone_number,"persistedVerified":user.phone_number_verified(),"name":message.user.name}), endpoint);
                     Self::fail(endpoint,"verified")
                 }) }))

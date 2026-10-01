@@ -6,7 +6,6 @@
 
 use std::sync::{Arc, Mutex};
 
-use async_trait::async_trait;
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthSession, AuthStore, AuthUser, CreateAccount,
     CreateSession, CreateUser, HttpMethod, UpdateUser,
@@ -52,7 +51,7 @@ impl OrderedHooks {
 impl SeaOrmHooks<BundledSchema> for OrderedHooks {
     async fn after_update_user(
         &self,
-        _: Option<&<BundledSchema as AuthSchema>::User>,
+        _: Option<&better_auth_core::wire::UserView>,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         self.after_user()
@@ -120,7 +119,7 @@ async fn check_order<S: AuthSchema>(
         Box::pin(async move {
             let _ = tx
                 .update_user(
-                    &tx_user_id,
+                    tx_user_id.typed().unwrap(),
                     UpdateUser {
                         name: Some("Updated".into()),
                         ..Default::default()
@@ -174,13 +173,21 @@ async fn check_order<S: AuthSchema>(
         "late after hook"
     };
     assert!(matches!(result, Err(AuthError::Internal(message)) if message == expected_error));
-    let stored = store.get_user_by_id(&user_id).await.unwrap().unwrap();
+    let stored = store
+        .get_user_by_id(user_id.typed().unwrap())
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(
         stored.name(),
         Some(if rollback { "Original" } else { "Updated" })
     );
     assert_eq!(
-        store.get_user_accounts(&user_id).await.unwrap().is_empty(),
+        store
+            .get_user_accounts(user_id.typed().unwrap())
+            .await
+            .unwrap()
+            .is_empty(),
         rollback
     );
     let encoded = cache.get(session.token()).await.unwrap().unwrap();

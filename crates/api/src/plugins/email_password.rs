@@ -347,7 +347,7 @@ async fn finalize_sign_in_with_user_core(
     };
     let issued = issue_user_session_with_lifetime(
         ctx,
-        &user.id(),
+        user.id().typed()?,
         meta.ip_address.clone(),
         meta.user_agent.clone(),
         expires_in,
@@ -794,7 +794,7 @@ mod tests {
             .unwrap();
         let stored_hash = ctx
             .database
-            .get_user_accounts(&user.id())
+            .get_user_accounts(user.id().typed().unwrap())
             .await
             .unwrap()
             .into_iter()

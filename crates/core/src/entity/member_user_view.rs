@@ -3,7 +3,10 @@ use serde_json::{Map, Value, json};
 
 impl From<MemberUserView> for Map<String, Value> {
     fn from(user: MemberUserView) -> Self {
-        let mut fields = Map::from_iter([("id".into(), json!(user.id))]);
+        let mut fields = Map::new();
+        if !user.id.is_undefined() {
+            let _ = fields.insert("id".into(), json!(user.id));
+        }
         for (name, value) in [
             ("email", user.email),
             ("name", user.name),
@@ -28,7 +31,7 @@ impl TryFrom<Map<String, Value>> for MemberUserView {
         let visible_fields = Some(fields.keys().cloned().collect());
         Ok(Self {
             visible_fields,
-            id: serde_json::from_value(fields.remove("id").unwrap_or(Value::Null))?,
+            id: crate::SchemaValue::from_json(fields.remove("id")),
             email: serde_json::from_value(fields.remove("email").unwrap_or(Value::Null))?,
             name: serde_json::from_value(fields.remove("name").unwrap_or(Value::Null))?,
             image: serde_json::from_value(fields.remove("image").unwrap_or(Value::Null))?,

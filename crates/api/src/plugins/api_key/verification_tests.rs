@@ -77,7 +77,7 @@ async fn unscoped_verification_uses_the_issuing_configuration_limits() {
     .await;
     ctx.database
         .update_api_key(
-            &id,
+            &id.clone().into(),
             UpdateApiKey {
                 rate_limit_enabled: Some(true),
                 rate_limit_max: Some(1.0),
@@ -224,7 +224,7 @@ async fn session_header_selects_a_named_config_without_a_default() {
     assert_eq!(response.status, 200);
     let body = json_body(&response);
     assert_eq!(body["session"]["token"], key);
-    assert_eq!(body["session"]["userId"], user.id);
+    assert_eq!(body["session"]["userId"], user.id.typed().unwrap().as_str());
     assert_eq!(body["user"]["emailVerified"], false);
     assert!(body["session"]["createdAt"].is_string());
     assert!(body["session"]["expiresAt"].is_string());
@@ -287,7 +287,7 @@ async fn organization_key_verifies_without_emulating_a_user_session() {
     ctx.database
         .create_api_key(better_auth_core::CreateApiKey {
             // A colliding user ID must not turn an organization key into a user session.
-            reference_id: user.id,
+            reference_id: user.id.typed().unwrap().clone(),
             config_id: "default".to_owned(),
             key_hash,
             start: Some(start),
@@ -406,7 +406,7 @@ async fn verified_session_authenticates_a_protected_plugin_route_without_a_datab
     assert_eq!(json_body(&response)["apiKeys"][0]["id"], id);
     assert_eq!(
         ctx.database
-            .get_user_sessions(&user.id)
+            .get_user_sessions(user.id.typed().unwrap())
             .await
             .unwrap()
             .len(),

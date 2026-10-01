@@ -122,7 +122,7 @@ async fn concurrent_signing_retains_verifiable_keys_and_pins_never_replace_expir
             .sign_with_options(
                 payload,
                 &JwtSigningOptions {
-                    key_id: Some(expired.id),
+                    key_id: Some(expired.id.typed().unwrap().clone()),
                     ..Default::default()
                 },
                 &ctx

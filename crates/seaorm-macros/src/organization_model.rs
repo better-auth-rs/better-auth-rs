@@ -79,12 +79,20 @@ pub(super) fn generate(
                 continue;
             }
             if role == EntityRole::TeamMember {
-                output.push(quote!(#ident: self.#ident.to_owned()));
+                output.push(if matches!(name.as_str(), "id" | "team_id") {
+                    quote!(#ident: #core_root::SchemaValue::Typed(self.#ident.to_owned()))
+                } else {
+                    quote!(#ident: self.#ident.to_owned())
+                });
                 continue;
             }
             if name == "id" {
                 output_values.push(quote!(let _ = projected.remove(#public_name);));
-                output.push(quote!(#ident: self.#ident.to_owned()));
+                output.push(if name == "id" {
+                    quote!(#ident: #core_root::SchemaValue::Typed(self.#ident.to_owned()))
+                } else {
+                    quote!(#ident: self.#ident.to_owned())
+                });
                 continue;
             }
             if matches!(name.as_str(), "created_at" | "updated_at" | "expires_at") {

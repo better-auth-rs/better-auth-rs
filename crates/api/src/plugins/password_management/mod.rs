@@ -268,13 +268,16 @@ impl PasswordManagementPlugin {
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<S>,
-    ) -> AuthResult<Option<S::User>> {
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         let session_manager = ctx.session_manager();
 
         if let Some(token) = session_manager.extract_session_token(req)
             && let Some(session) = session_manager.get_session(&token).await?
         {
-            return ctx.database.get_user_by_id(&session.user_id()).await;
+            return ctx
+                .database
+                .get_user_by_id(session.user_id().typed()?)
+                .await;
         }
 
         Ok(None)

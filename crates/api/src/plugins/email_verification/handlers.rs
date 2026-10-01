@@ -214,10 +214,11 @@ where
                 let (mut session_user, session): (UserView, SessionView) = match current_session {
                     Some((user, session)) => (user, session),
                     None => {
-                        let session = issue_user_session(ctx, &user.id(), ip_address, user_agent)
-                            .await
-                            .map_err(SessionIssueError::into_auth_error)?
-                            .session;
+                        let session =
+                            issue_user_session(ctx, user.id().typed()?, ip_address, user_agent)
+                                .await
+                                .map_err(SessionIssueError::into_auth_error)?
+                                .session;
                         (
                             ctx.internal_user_view(&user)?,
                             ctx.session_manager()
@@ -230,7 +231,7 @@ where
                 let updated_user = ctx
                     .database
                     .update_user(
-                        &user.id(),
+                        user.id().typed()?,
                         UpdateUser {
                             email: Some(update_to.to_string()),
                             email_verified: Some(true),
@@ -269,9 +270,10 @@ where
                 let (mut session_user, session) = match current_session {
                     Some(pair) => pair,
                     None => {
-                        let issued = issue_user_session(ctx, &user.id(), ip_address, user_agent)
-                            .await
-                            .map_err(SessionIssueError::into_auth_error)?;
+                        let issued =
+                            issue_user_session(ctx, user.id().typed()?, ip_address, user_agent)
+                                .await
+                                .map_err(SessionIssueError::into_auth_error)?;
                         (
                             ctx.internal_user_view(&user)?,
                             ctx.session_manager()
@@ -283,7 +285,7 @@ where
                 let updated_user = ctx
                     .database
                     .update_user(
-                        &user.id(),
+                        user.id().typed()?,
                         UpdateUser {
                             email: Some(update_to.to_string()),
                             email_verified: Some(false),
@@ -351,7 +353,7 @@ where
     let updated_user = ctx
         .database
         .update_user(
-            &user.id(),
+            user.id().typed()?,
             UpdateUser {
                 email_verified: Some(true),
                 ..Default::default()
@@ -373,7 +375,7 @@ where
                 session,
             }
         } else {
-            let issued = issue_user_session(ctx, &user.id(), ip_address, user_agent)
+            let issued = issue_user_session(ctx, user.id().typed()?, ip_address, user_agent)
                 .await
                 .map_err(SessionIssueError::into_auth_error)?;
             ctx.session_manager()

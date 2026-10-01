@@ -1,5 +1,17 @@
-use better_auth_core::AuthResult;
+use better_auth_core::{AuthConfig, AuthResult};
 use sea_orm::{DatabaseBackend, DbErr};
+
+pub(super) fn default_limit(
+    config: &AuthConfig,
+    backend: DatabaseBackend,
+) -> AuthResult<Option<u64>> {
+    sql_pagination(
+        backend,
+        Some(config.advanced.database.find_many_limit()),
+        None,
+    )
+    .map(|(limit, _)| limit)
+}
 
 /// Convert query pagination at the SQL adapter boundary without truncating input.
 pub(super) fn sql_pagination(

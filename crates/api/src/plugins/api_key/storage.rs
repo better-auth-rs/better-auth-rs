@@ -117,7 +117,7 @@ async fn cached(storage: &dyn SecondaryStorage, key: &str) -> AuthResult<Option<
     Ok(deserialize(storage.get(key).await?))
 }
 
-fn reference_ids(value: Option<Value>) -> Vec<String> {
+fn reference_ids(value: Option<Value>) -> Vec<better_auth_core::SchemaValue<String>> {
     let value = match value {
         Some(Value::String(value)) => serde_json::from_str(&value).ok(),
         value => value,
@@ -177,7 +177,7 @@ pub(super) async fn put(
     let value = serialize(key)?;
     let ttl = ttl(key)?;
     let hashed = format!("api-key:{}", key.key_hash);
-    let id = format!("api-key:by-id:{}", key.id);
+    let id = format!("api-key:by-id:{}", key.id.display_string()?);
     let reference = format!("api-key:by-ref:{}", key.reference_id);
     if fallback {
         let (hashed, id, reference) = tokio::join!(
@@ -205,7 +205,7 @@ async fn remove_cached(
     fallback: bool,
 ) -> AuthResult<()> {
     let hashed = format!("api-key:{}", key.key_hash);
-    let id = format!("api-key:by-id:{}", key.id);
+    let id = format!("api-key:by-id:{}", key.id.display_string()?);
     let reference = format!("api-key:by-ref:{}", key.reference_id);
     if fallback {
         let (hashed, id, reference) = tokio::join!(
@@ -289,7 +289,13 @@ pub(super) async fn create(
     } else {
         let created_at = now();
         ApiKey {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: ctx
+                .config
+                .advanced
+                .generate_id("apikey", None)?
+                .filter(|id| !id.is_empty())
+                .unwrap_or_else(|| better_auth_core::id::random_id(None))
+                .into(),
             name: input.name,
             start: input.start,
             prefix: input.prefix,
@@ -443,6 +449,7 @@ pub(super) async fn list(
     config: &ApiKeyConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     reference: &str,
+    sort: Option<(&str, &str)>,
 ) -> AuthResult<Vec<ApiKey>> {
     let storage = backend(config, ctx);
     if config.storage == ApiKeyStorage::SecondaryStorage {
@@ -451,11 +458,29 @@ pub(super) async fn list(
             if !ids.is_empty() || !config.fallback_to_database {
                 let mut keys = Vec::new();
                 for id in ids {
-                    if let Some(key) =
-                        cached(storage.as_ref(), &format!("api-key:by-id:{id}")).await?
+                    if let Some(key) = cached(
+                        storage.as_ref(),
+                        &format!("api-key:by-id:{}", id.display_string()?),
+                    )
+                    .await?
                     {
                         keys.push(key);
                     }
+                }
+                if let Some((field, direction)) = sort {
+                    let mut views: Vec<_> = keys
+                        .iter()
+                        .map(better_auth_core::wire::ApiKeyView::from)
+                        .collect();
+                    sort_views(&mut views, field, Some(direction));
+                    let mut by_id: std::collections::HashMap<_, _> = keys
+                        .into_iter()
+                        .map(|key| (key.id.as_str().map(str::to_owned), key))
+                        .collect();
+                    keys = views
+                        .into_iter()
+                        .filter_map(|view| by_id.remove(&view.id.as_str().map(str::to_owned)))
+                        .collect();
                 }
                 return Ok(keys);
             }
@@ -464,7 +489,14 @@ pub(super) async fn list(
             return Ok(Vec::new());
         }
     }
-    let keys = ctx.database.list_api_keys_by_reference(reference).await?;
+    let (keys, total) = tokio::join!(
+        ctx.database.find_api_keys_by_reference(reference, sort),
+        ctx.database.count_api_keys_by_reference(reference),
+    );
+    let keys = keys?;
+    // The public endpoint recomputes total from these rows, but upstream still
+    // performs the adapter count and propagates a failure from that operation.
+    let _ = total?;
     if config.storage == ApiKeyStorage::SecondaryStorage
         && !keys.is_empty()
         && let Some(storage) = storage
@@ -484,9 +516,65 @@ pub(super) async fn list(
     Ok(keys)
 }
 
+fn compare_numbers(left: Option<f64>, right: Option<f64>) -> std::cmp::Ordering {
+    match (left, right) {
+        (Some(left), Some(right)) => left
+            .partial_cmp(&right)
+            .unwrap_or(std::cmp::Ordering::Equal),
+        (None, None) => std::cmp::Ordering::Equal,
+        (None, Some(_)) => std::cmp::Ordering::Less,
+        (Some(_), None) => std::cmp::Ordering::Greater,
+    }
+}
+
+fn compare_strings(left: Option<&str>, right: Option<&str>) -> std::cmp::Ordering {
+    match (left, right) {
+        (Some(left), Some(right)) => left.encode_utf16().cmp(right.encode_utf16()),
+        _ => left.cmp(&right),
+    }
+}
+
+fn sort_views(
+    views: &mut [better_auth_core::wire::ApiKeyView],
+    sort_by: &str,
+    direction: Option<&str>,
+) {
+    views.sort_by(|a, b| {
+        let ordering = match sort_by {
+            "id" => compare_strings(a.id.as_str(), b.id.as_str()),
+            "name" => compare_strings(a.name.as_deref(), b.name.as_deref()),
+            "start" => a.start.cmp(&b.start),
+            "prefix" => compare_strings(a.prefix.as_deref(), b.prefix.as_deref()),
+            "referenceId" => compare_strings(Some(&a.reference_id), Some(&b.reference_id)),
+            "configId" => compare_strings(Some(&a.config_id), Some(&b.config_id)),
+            "enabled" => a.enabled.cmp(&b.enabled),
+            "rateLimitEnabled" => a.rate_limit_enabled.cmp(&b.rate_limit_enabled),
+            "createdAt" => a.created_at.cmp(&b.created_at),
+            "updatedAt" => a.updated_at.cmp(&b.updated_at),
+            "expiresAt" => a.expires_at.cmp(&b.expires_at),
+            "lastRequest" => a.last_request.cmp(&b.last_request),
+            "lastRefillAt" => a.last_refill_at.cmp(&b.last_refill_at),
+            "remaining" => compare_numbers(a.remaining, b.remaining),
+            "requestCount" => compare_numbers(a.request_count, b.request_count),
+            "rateLimitMax" => compare_numbers(a.rate_limit_max, b.rate_limit_max),
+            "rateLimitTimeWindow" => {
+                compare_numbers(a.rate_limit_time_window, b.rate_limit_time_window)
+            }
+            "refillAmount" => compare_numbers(a.refill_amount, b.refill_amount),
+            "refillInterval" => compare_numbers(a.refill_interval, b.refill_interval),
+            _ => std::cmp::Ordering::Equal,
+        };
+        if direction == Some("desc") {
+            ordering.reverse()
+        } else {
+            ordering
+        }
+    });
+}
+
 pub(super) fn deduplicate(keys: &mut Vec<ApiKey>) {
     let mut ids = HashSet::new();
-    keys.retain(|key| ids.insert(key.id.clone()));
+    keys.retain(|key| ids.insert(key.id.as_str().map(str::to_owned)));
 }
 
 #[cfg(test)]

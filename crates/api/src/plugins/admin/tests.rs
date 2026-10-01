@@ -27,7 +27,8 @@ async fn create_admin_context() -> (
     )
     .await;
     let admin_session =
-        test_helpers::create_session(&ctx, admin.id.clone(), Duration::hours(24)).await;
+        test_helpers::create_session(&ctx, admin.id.typed().unwrap().clone(), Duration::hours(24))
+            .await;
 
     let user = test_helpers::create_user(
         &ctx,
@@ -38,7 +39,8 @@ async fn create_admin_context() -> (
     )
     .await;
     let user_session =
-        test_helpers::create_session(&ctx, user.id.clone(), Duration::hours(24)).await;
+        test_helpers::create_session(&ctx, user.id.typed().unwrap().clone(), Duration::hours(24))
+            .await;
 
     (ctx, admin, admin_session, user, user_session)
 }
@@ -144,7 +146,11 @@ async fn test_ban_revokes_user_sessions() {
     let (ctx, _admin, admin_session, user, _user_session) = create_admin_context().await;
     let plugin = AdminPlugin::new();
 
-    let sessions = ctx.database.get_user_sessions(&user.id).await.unwrap();
+    let sessions = ctx
+        .database
+        .get_user_sessions(user.id.typed().unwrap())
+        .await
+        .unwrap();
     assert!(!sessions.is_empty());
 
     let req = make_request(
@@ -160,7 +166,11 @@ async fn test_ban_revokes_user_sessions() {
     let resp = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
     assert_eq!(resp.status, 200);
 
-    let sessions = ctx.database.get_user_sessions(&user.id).await.unwrap();
+    let sessions = ctx
+        .database
+        .get_user_sessions(user.id.typed().unwrap())
+        .await
+        .unwrap();
     assert!(sessions.is_empty());
 }
 
@@ -196,7 +206,7 @@ async fn test_unban_clears_ban_reason_and_expires() {
 
     let updated_user = ctx
         .database
-        .get_user_by_id(&user.id)
+        .get_user_by_id(user.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
@@ -232,7 +242,10 @@ async fn test_impersonation_session_tracks_admin_id() {
         .to_string();
     let session = ctx.database.get_session(&token).await.unwrap().unwrap();
 
-    assert_eq!(session.impersonated_by().unwrap(), admin.id);
+    assert_eq!(
+        session.impersonated_by().unwrap(),
+        admin.id.typed().unwrap()
+    );
 }
 
 #[tokio::test]

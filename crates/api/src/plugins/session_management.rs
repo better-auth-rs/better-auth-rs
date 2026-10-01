@@ -230,7 +230,7 @@ impl SessionManagementPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_authoritative_session(req).await?;
-        let mut sessions = list_sessions_core(user.id(), ctx).await?;
+        let mut sessions = list_sessions_core(user.id().typed()?, ctx).await?;
         if admin_plugin_enabled(ctx) {
             sessions.retain(|session| session.impersonated_by.is_none());
         }
@@ -259,7 +259,7 @@ impl SessionManagementPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_authoritative_session(req).await?;
-        let response = revoke_sessions_core(user.id(), ctx).await?;
+        let response = revoke_sessions_core(user.id().typed()?, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -269,7 +269,8 @@ impl SessionManagementPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, current_session) = ctx.require_authoritative_session(req).await?;
-        let response = revoke_other_sessions_core(user.id(), &current_session, ctx).await?;
+        let response =
+            revoke_other_sessions_core(user.id().typed()?, &current_session, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 }
@@ -746,7 +747,11 @@ mod tests {
 
         assert_eq!(response.status, 200);
 
-        let user_sessions = ctx.database.get_user_sessions(&user.id).await.unwrap();
+        let user_sessions = ctx
+            .database
+            .get_user_sessions(user.id.typed().unwrap())
+            .await
+            .unwrap();
         assert_eq!(user_sessions.len(), 0);
     }
 

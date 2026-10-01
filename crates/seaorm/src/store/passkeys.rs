@@ -7,7 +7,6 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder,
 };
 use serde_json::{Map, json};
-use uuid::Uuid;
 
 use better_auth_core::store::PasskeyStore;
 
@@ -74,9 +73,10 @@ where
 
     async fn update_passkey_authentication(
         &self,
-        id: &str,
+        id: &better_auth_core::SchemaValue<String>,
         update: UpdatePasskeyAuthentication,
     ) -> AuthResult<Passkey> {
+        let id = id.typed()?;
         database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
             let Some(model) = Entity::<P::Passkey>::find()
                 .filter(P::Passkey::column("id")?.eq(id))
@@ -150,21 +150,24 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let counter = i64::try_from(input.counter)
             .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
 
-        let active = P::Passkey::active(Map::from_iter([
-            ("id".to_owned(), json!(Uuid::new_v4().to_string())),
-            ("name".to_owned(), json!(input.name)),
-            ("public_key".to_owned(), json!(input.public_key)),
-            ("user_id".to_owned(), json!(input.user_id)),
-            ("credential_id".to_owned(), json!(input.credential_id)),
-            ("counter".to_owned(), json!(counter)),
-            ("device_type".to_owned(), json!(input.device_type)),
-            ("backed_up".to_owned(), json!(input.backed_up)),
-            ("transports".to_owned(), json!(input.transports)),
-            ("credential".to_owned(), json!(input.credential)),
-            ("aaguid".to_owned(), json!(input.aaguid)),
-            ("created_at".to_owned(), json!(Utc::now())),
-            ("updated_at".to_owned(), json!(Utc::now())),
-        ]))?;
+        let active = P::Passkey::active(self.create_fields(
+            "passkey",
+            None,
+            Map::from_iter([
+                ("name".to_owned(), json!(input.name)),
+                ("public_key".to_owned(), json!(input.public_key)),
+                ("user_id".to_owned(), json!(input.user_id)),
+                ("credential_id".to_owned(), json!(input.credential_id)),
+                ("counter".to_owned(), json!(counter)),
+                ("device_type".to_owned(), json!(input.device_type)),
+                ("backed_up".to_owned(), json!(input.backed_up)),
+                ("transports".to_owned(), json!(input.transports)),
+                ("credential".to_owned(), json!(input.credential)),
+                ("aaguid".to_owned(), json!(input.aaguid)),
+                ("created_at".to_owned(), json!(Utc::now())),
+                ("updated_at".to_owned(), json!(Utc::now())),
+            ]),
+        )?)?;
         database_operation::<Entity<P::Passkey>, _>(self.config(), "create", async {
             active.insert(connection).await.map_err(map_db_err)
         })

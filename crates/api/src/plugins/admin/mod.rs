@@ -141,7 +141,7 @@ impl AdminPlugin {
     ) -> AuthResult<()> {
         let permissions = HashMap::from([(resource.to_string(), vec![action.to_string()])]);
         if has_permission(
-            Some(user.id.as_str()),
+            user.id.as_str(),
             user.role.as_deref(),
             &self.config,
             &permissions,
@@ -270,7 +270,7 @@ impl AdminPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = ban_user_core(&body, user.id.as_str(), &self.config, ctx).await?;
+        let response = ban_user_core(&body, user.id.typed()?.as_str(), &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -416,7 +416,7 @@ impl AdminPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = remove_user_core(&body, user.id.as_str(), ctx).await?;
+        let response = remove_user_core(&body, user.id.typed()?.as_str(), ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 

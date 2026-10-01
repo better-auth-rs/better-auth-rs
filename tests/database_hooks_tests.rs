@@ -193,7 +193,10 @@ impl ProvisioningService {
         let statement = Query::insert()
             .into_table(Alias::new("app_workspaces"))
             .columns([Alias::new("user_id"), Alias::new("name")])
-            .values_panic([user.id().into_owned().into(), "Default Workspace".into()])
+            .values_panic([
+                user.id().typed().unwrap().to_string().into(),
+                "Default Workspace".into(),
+            ])
             .to_owned();
 
         if let Some(tx) = ctx.tx {
@@ -222,7 +225,7 @@ struct OnboardingHook {
 impl SeaOrmHooks<TestSchema> for OnboardingHook {
     async fn after_create_user(
         &self,
-        user: &<TestSchema as better_auth_core::AuthSchema>::User,
+        user: &better_auth_core::wire::UserView,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<()> {
         self.service
@@ -241,7 +244,7 @@ struct DeleteCaptureHook {
 impl SeaOrmHooks<TestSchema> for DeleteCaptureHook {
     async fn before_delete_user(
         &self,
-        user: &<TestSchema as better_auth_core::AuthSchema>::User,
+        user: &better_auth_core::wire::UserView,
         _ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<HookControl> {
         self.emails
@@ -456,7 +459,7 @@ async fn delete_hooks_receive_the_loaded_user_entity() {
         .expect("user should be created");
 
     auth.store()
-        .delete_user(&user.id())
+        .delete_user(user.id().typed().unwrap())
         .await
         .expect("user should be deleted");
 

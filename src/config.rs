@@ -17,3 +17,4 @@ pub use better_auth_core::config::{
 };
 
 pub use better_auth_core::api_error::{ApiErrorHandler, ApiErrorTask};
+pub use better_auth_core::id::{IdGeneration, IdGenerationRequest, IdGenerator};

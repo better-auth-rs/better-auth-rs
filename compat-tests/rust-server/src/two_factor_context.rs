@@ -27,7 +27,7 @@ impl TwoFactorContextFixture {
                 let fixture = fixture.clone();
                 let outbox = outbox.clone();
                 Box::pin(async move {
-                    let stored = endpoint.auth.database.get_user_by_id(&user.id).await?.expect("callback user exists");
+                    let stored = endpoint.auth.database.get_user_by_id(user.id.typed().unwrap()).await?.expect("callback user exists");
                     fixture.events.lock().unwrap().push(json!({
                         "user": { "id":user.id, "email":user.email, "secretNote":user.additional_fields.get("secretNote") },
                         "databaseUser": { "id":stored.id(), "email":stored.email() },

@@ -156,7 +156,9 @@ impl JwtPlugin {
         claims::prepare_local_claims(&mut payload)?;
         let mut header = JwsHeader::from_map(options.header.clone()).map_err(jose_error)?;
         header.set_algorithm(algorithm);
-        header.set_key_id(key.id);
+        if let Some(id) = key.id.as_str() {
+            header.set_key_id(id);
+        }
         josekit::jws::serialize_compact(&serde_json::to_vec(&payload)?, &header, signer.as_ref())
             .map_err(jose_error)
     }

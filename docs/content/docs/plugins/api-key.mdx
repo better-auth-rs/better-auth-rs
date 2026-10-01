@@ -85,7 +85,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
     .await?;
 ```
 
-`fallback_to_database` keeps database rows authoritative. A cache miss loads the database row and restores both cache indexes. Writes update the database before refreshing the cache. Cache I/O errors propagate; the runtime does not treat an I/O failure as a miss. Verification consumes quota atomically in the database and then refreshes the cache. A cache write failure can therefore follow a successful database mutation. If a database row disappears after a cached ownership lookup, update returns the unchanged cached snapshot, matching the upstream null-update result.
+`fallback_to_database` keeps database rows authoritative. A cache miss loads the database row and restores both cache indexes. Writes update the database before refreshing the cache. Cache I/O errors propagate; the runtime does not treat an I/O failure as a miss. Verification commits each guarded quota and rate-limit write separately, then updates the timestamp and refreshes the cache. A later database failure preserves earlier committed writes. A cache write failure can therefore follow a successful database mutation. If a database row disappears after a cached ownership lookup, update returns the unchanged cached snapshot, matching the upstream null-update result.
 
 Without database fallback, the backend stores the full key under `api-key:<hash>` and `api-key:by-id:<id>`. The `api-key:by-ref:<referenceId>` entry stores the owner's key IDs without a TTL. Key entries use the remaining expiration time rounded down to whole seconds; a nonpositive TTL is omitted, matching upstream. Listing ignores entries whose key records have expired. Reference-list mutations are serialized within the process. Quota consumption uses the upstream read/merge/write behavior and does not provide cross-request atomic enforcement. A rate-limit rejection in this mode occurs before the quota write.
 
@@ -180,9 +180,11 @@ The API Key plugin exposes 5 client-facing endpoints. All require an authenticat
 |-----------------|-------------|
 | `configId` | Configuration to list keys from; absent lists all registered configurations for the requested owner type |
 | `organizationId` | Selects organization-owned keys; omit to list user-owned keys |
-| `limit`, `offset` | Page window; `total` counts the whole result set and both fields are omitted when not sent |
-| `sortBy` | One of `createdAt`, `updatedAt`, `name`, `expiresAt` |
+| `limit`, `offset` | Page window after storage selection; both fields are omitted when not sent |
+| `sortBy` | API key field used for sorting before the adapter limit |
 | `sortDirection` | `asc` (default) or `desc` |
+
+Database-backed lists sort before applying `advanced.database.default_find_many_limit`. The public endpoint then deduplicates and filters those rows, computes `total`, and applies the requested page window. As in Better Auth 1.7.6, five database records with a default limit of two produce `total: 2`. The adapter still performs a separate unrestricted count, and a count failure rejects the request. Secondary-storage cache hits use the complete cached key set; a database fallback caches only the rows returned by that database read.
 
 <Callout type="warn">
 The full `key` value is returned only during creation. Store it securely — it cannot be retrieved later.

@@ -150,8 +150,14 @@ async fn test_device_code_response_shape_and_storage() {
         .unwrap()
         .unwrap();
     assert_eq!(stored.polling_interval, Some(2000));
-    assert_eq!(stored.client_id.as_deref(), Some("test-client"));
-    assert_eq!(stored.scope.as_deref(), Some("openid profile"));
+    assert_eq!(
+        stored.client_id.typed().unwrap().as_deref(),
+        Some("test-client")
+    );
+    assert_eq!(
+        stored.scope.typed().unwrap().as_deref(),
+        Some("openid profile")
+    );
 }
 
 // Upstream source: packages/better-auth/src/plugins/device-authorization/device-authorization.test.ts :: client validation scenarios; adapted to the Rust plugin builder API.

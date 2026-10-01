@@ -59,7 +59,7 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     }
     async fn after_create_session(
         &self,
-        session: &Session,
+        session: &better_auth_core::wire::SessionView,
         ctx: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         if self.pure {
@@ -105,7 +105,7 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     }
     async fn before_delete_session(
         &self,
-        _: &Session,
+        _: &better_auth_core::wire::SessionView,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<HookControl> {
         self.events.lock().unwrap().push("before-delete");
@@ -113,7 +113,7 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     }
     async fn after_delete_session(
         &self,
-        _: &Session,
+        _: &better_auth_core::wire::SessionView,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         self.events.lock().unwrap().push("after-delete");
@@ -145,7 +145,7 @@ async fn setup(preserve: bool) -> (BetterAuth<BundledSchema>, DatabaseConnection
 
 fn input(user_id: String) -> CreateSession {
     CreateSession {
-        user_id,
+        user_id: user_id.into(),
         expires_at: Utc::now() + Duration::hours(1),
         ip_address: None,
         user_agent: None,
@@ -164,7 +164,7 @@ async fn pure_secondary_creation_runs_hooks_and_cancellation_prevents_cache_writ
         .unwrap();
     let session = auth
         .store()
-        .create_session(input(user.id.clone()))
+        .create_session(input(user.id.typed().unwrap().clone()))
         .await
         .unwrap();
     assert_eq!(session.user_agent(), Some("hook-agent"));
@@ -202,14 +202,14 @@ async fn pure_secondary_creation_runs_hooks_and_cancellation_prevents_cache_writ
         .unwrap();
     assert!(
         auth.store()
-            .create_session(input(other.id.clone()))
+            .create_session(input(other.id.typed().unwrap().clone()))
             .await
             .is_err()
     );
     assert!(
         hooks
             .cache
-            .get(&format!("active-sessions-{}", other.id))
+            .get(&format!("active-sessions-{}", other.id.typed().unwrap()))
             .await
             .unwrap()
             .is_none()
@@ -256,7 +256,7 @@ async fn transaction_publishes_session_and_after_hook_only_after_commit() {
                     .create_user(CreateUser::new().with_email(tx_email))
                     .await?;
                 let session = tx
-                    .create_session_with_deferred_secondary(input(user.id))
+                    .create_session_with_deferred_secondary(input(user.id.typed().unwrap().clone()))
                     .await?;
                 *captured.lock().unwrap() = session.token().to_owned();
                 assert!(cache.get(session.token()).await?.is_none());
@@ -303,12 +303,14 @@ async fn default_transaction_session_mirrors_the_uncommitted_user_without_deferr
             let result: AuthResult<()> = transaction(auth.store().as_ref(), move |tx| {
                 Box::pin(async move {
                     let user = tx.create_user(CreateUser::new().with_email(email)).await?;
-                    let session = tx.create_session(input(user.id.clone())).await?;
+                    let session = tx
+                        .create_session(input(user.id.typed().unwrap().clone()))
+                        .await?;
                     *captured.lock().unwrap() = session.token().to_owned();
                     let encoded = cache.get(session.token()).await?.unwrap();
                     let cached: serde_json::Value =
                         serde_json::from_str(encoded.as_str().unwrap())?;
-                    assert_eq!(cached["user"]["id"], user.id);
+                    assert_eq!(cached["user"]["id"], user.id.typed().unwrap().as_str());
                     assert_eq!(cached["user"]["email"], email);
                     if commit {
                         Ok(())
@@ -353,7 +355,11 @@ async fn preserved_session_revoke_ends_the_row_and_runs_delete_hooks_once() {
         .create_user(CreateUser::new().with_email("preserve@example.com"))
         .await
         .unwrap();
-    let session = auth.store().create_session(input(user.id)).await.unwrap();
+    let session = auth
+        .store()
+        .create_session(input(user.id.typed().unwrap().clone()))
+        .await
+        .unwrap();
     hooks.events.lock().unwrap().clear();
     auth.store().delete_session(session.token()).await.unwrap();
     auth.store().delete_session(session.token()).await.unwrap();
@@ -365,7 +371,7 @@ async fn preserved_session_revoke_ends_the_row_and_runs_delete_hooks_once() {
             .is_none()
     );
     assert!(hooks.cache.get(session.token()).await.unwrap().is_none());
-    let preserved = SessionEntity::find_by_id(&session.id)
+    let preserved = SessionEntity::find_by_id(session.id.typed().unwrap())
         .one(&database)
         .await
         .unwrap()
@@ -417,19 +423,19 @@ async fn pure_secondary_email_verification_does_not_require_a_session_table() {
             .unwrap();
         let session = auth
             .store()
-            .create_session(input(user.id.clone()))
+            .create_session(input(user.id.typed().unwrap().clone()))
             .await
             .unwrap();
         let result = auth
             .store()
-            .verify_user_and_revoke_unproven_access(&user.id)
+            .verify_user_and_revoke_unproven_access(user.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap();
         assert!(result.email_verified());
         assert_eq!(
             auth.store()
-                .get_user_accounts(&user.id)
+                .get_user_accounts(user.id.typed().unwrap())
                 .await
                 .unwrap()
                 .len(),
@@ -507,7 +513,7 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
         .unwrap();
     let unproven = auth
         .store()
-        .create_session(input(user.id.clone()))
+        .create_session(input(user.id.typed().unwrap().clone()))
         .await
         .unwrap();
 
@@ -517,7 +523,7 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
         let id = user.id.clone();
         tokio::spawn(async move {
             auth.store()
-                .verify_user_and_revoke_unproven_access(&id)
+                .verify_user_and_revoke_unproven_access(id.typed().unwrap())
                 .await
         })
     };
@@ -526,7 +532,7 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
         .unwrap();
     let winner = auth
         .store()
-        .verify_user_and_revoke_unproven_access(&user.id)
+        .verify_user_and_revoke_unproven_access(user.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
@@ -540,7 +546,7 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
     );
     let proven = auth
         .store()
-        .create_session(input(user.id.clone()))
+        .create_session(input(user.id.typed().unwrap().clone()))
         .await
         .unwrap();
     cache.release.notify_one();
@@ -553,7 +559,11 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
             .unwrap()
             .is_some()
     );
-    let active = auth.store().get_user_sessions(&user.id).await.unwrap();
+    let active = auth
+        .store()
+        .get_user_sessions(user.id.typed().unwrap())
+        .await
+        .unwrap();
     assert_eq!(active.len(), 1);
     assert_eq!(active.first().unwrap().token(), proven.token());
 }
@@ -564,7 +574,7 @@ struct FailAfterVerification;
 impl SeaOrmHooks<BundledSchema> for FailAfterVerification {
     async fn after_update_user(
         &self,
-        _: Option<&<BundledSchema as better_auth::AuthSchema>::User>,
+        _: Option<&better_auth_core::wire::UserView>,
         ctx: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(ctx.tx.is_none());
@@ -596,12 +606,12 @@ async fn committed_verification_revokes_cache_when_after_hook_fails() {
         .unwrap();
     let old = auth
         .store()
-        .create_session(input(user.id.clone()))
+        .create_session(input(user.id.typed().unwrap().clone()))
         .await
         .unwrap();
     let error = auth
         .store()
-        .verify_user_and_revoke_unproven_access(&user.id)
+        .verify_user_and_revoke_unproven_access(user.id.typed().unwrap())
         .await
         .unwrap_err();
     assert!(
@@ -609,7 +619,7 @@ async fn committed_verification_revokes_cache_when_after_hook_fails() {
     );
     assert!(
         auth.store()
-            .get_user_by_id(&user.id)
+            .get_user_by_id(user.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -625,7 +635,7 @@ async fn committed_verification_revokes_cache_when_after_hook_fails() {
     );
     assert!(
         auth.store()
-            .get_user_sessions(&user.id)
+            .get_user_sessions(user.id.typed().unwrap())
             .await
             .unwrap()
             .is_empty()
@@ -633,12 +643,12 @@ async fn committed_verification_revokes_cache_when_after_hook_fails() {
 
     let owner = auth
         .store()
-        .create_session(input(user.id.clone()))
+        .create_session(input(user.id.typed().unwrap().clone()))
         .await
         .unwrap();
     assert!(
         auth.store()
-            .verify_user_and_revoke_unproven_access(&user.id)
+            .verify_user_and_revoke_unproven_access(user.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -694,14 +704,14 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
         .unwrap();
     let old = auth
         .store()
-        .create_session(input(user.id.clone()))
+        .create_session(input(user.id.typed().unwrap().clone()))
         .await
         .unwrap();
 
     cache.fail_delete_next.store(true, Ordering::SeqCst);
     let error = auth
         .store()
-        .verify_user_and_revoke_unproven_access(&user.id)
+        .verify_user_and_revoke_unproven_access(user.id.typed().unwrap())
         .await
         .unwrap_err();
     assert!(
@@ -710,7 +720,7 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
     assert!(
         !auth
             .store()
-            .get_user_by_id(&user.id)
+            .get_user_by_id(user.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -718,7 +728,7 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
     );
     assert_eq!(
         auth.store()
-            .get_user_accounts(&user.id)
+            .get_user_accounts(user.id.typed().unwrap())
             .await
             .unwrap()
             .len(),
@@ -734,7 +744,7 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
 
     assert!(
         auth.store()
-            .verify_user_and_revoke_unproven_access(&user.id)
+            .verify_user_and_revoke_unproven_access(user.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -742,7 +752,7 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
     );
     assert!(
         auth.store()
-            .get_user_accounts(&user.id)
+            .get_user_accounts(user.id.typed().unwrap())
             .await
             .unwrap()
             .is_empty()
@@ -757,18 +767,22 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
     );
     let owner = auth
         .store()
-        .create_session(input(user.id.clone()))
+        .create_session(input(user.id.typed().unwrap().clone()))
         .await
         .unwrap();
     assert!(
         auth.store()
-            .verify_user_and_revoke_unproven_access(&user.id)
+            .verify_user_and_revoke_unproven_access(user.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
             .email_verified()
     );
-    let sessions = auth.store().get_user_sessions(&user.id).await.unwrap();
+    let sessions = auth
+        .store()
+        .get_user_sessions(user.id.typed().unwrap())
+        .await
+        .unwrap();
     assert_eq!(sessions.len(), 1);
     assert_eq!(sessions.first().unwrap().token(), owner.token());
 }
@@ -789,7 +803,7 @@ async fn transaction_user_changes_refresh_or_revoke_cached_sessions_only_after_c
                 .unwrap();
             let session = auth
                 .store()
-                .create_session(input(user.id.clone()))
+                .create_session(input(user.id.typed().unwrap().clone()))
                 .await
                 .unwrap();
             let token = session.token().to_owned();
@@ -800,7 +814,7 @@ async fn transaction_user_changes_refresh_or_revoke_cached_sessions_only_after_c
                 Box::pin(async move {
                     let _ = tx
                         .update_user(
-                            &user_id,
+                            user_id.typed().unwrap(),
                             better_auth::prelude::UpdateUser {
                                 name: Some("Updated".into()),
                                 ..Default::default()
@@ -808,7 +822,7 @@ async fn transaction_user_changes_refresh_or_revoke_cached_sessions_only_after_c
                         )
                         .await?;
                     if delete {
-                        tx.delete_user(&user_id).await?;
+                        tx.delete_user(user_id.typed().unwrap()).await?;
                     }
                     let encoded = cache.get(&cached_token).await?.unwrap();
                     let cached: serde_json::Value =
@@ -829,7 +843,11 @@ async fn transaction_user_changes_refresh_or_revoke_cached_sessions_only_after_c
             .await;
             assert_eq!(result.is_ok(), commit);
             let cached = hooks.cache.get(&token).await.unwrap();
-            let stored = auth.store().get_user_by_id(&user.id).await.unwrap();
+            let stored = auth
+                .store()
+                .get_user_by_id(user.id.typed().unwrap())
+                .await
+                .unwrap();
             if delete && commit {
                 assert!(cached.is_none());
                 assert!(stored.is_none());
@@ -874,7 +892,7 @@ async fn transaction_user_changes_without_secondary_follow_database_commit_and_r
                 .unwrap();
             let session = auth
                 .store()
-                .create_session(input(user.id.clone()))
+                .create_session(input(user.id.typed().unwrap().clone()))
                 .await
                 .unwrap();
             let user_id = user.id.clone();
@@ -882,7 +900,7 @@ async fn transaction_user_changes_without_secondary_follow_database_commit_and_r
                 Box::pin(async move {
                     let updated = tx
                         .update_user(
-                            &user_id,
+                            user_id.typed().unwrap(),
                             better_auth::prelude::UpdateUser {
                                 name: Some("Updated".into()),
                                 ..Default::default()
@@ -891,8 +909,8 @@ async fn transaction_user_changes_without_secondary_follow_database_commit_and_r
                         .await?;
                     assert_eq!(updated.name(), Some("Updated"));
                     if delete {
-                        tx.delete_user(&user_id).await?;
-                        assert!(tx.get_user_by_id(&user_id).await?.is_none());
+                        tx.delete_user(user_id.typed().unwrap()).await?;
+                        assert!(tx.get_user_by_id(user_id.typed().unwrap()).await?.is_none());
                     }
                     if commit {
                         Ok(())
@@ -910,7 +928,11 @@ async fn transaction_user_changes_without_secondary_follow_database_commit_and_r
                     "Internal server error: database transaction rollback"
                 );
             }
-            let stored = auth.store().get_user_by_id(&user.id).await.unwrap();
+            let stored = auth
+                .store()
+                .get_user_by_id(user.id.typed().unwrap())
+                .await
+                .unwrap();
             if delete && commit {
                 assert!(stored.is_none());
                 assert!(

@@ -53,7 +53,7 @@ pub(crate) async fn list_accounts_core(
     user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<AccountResponse>> {
-    let accounts = ctx.database.get_user_accounts(&user.id()).await?;
+    let accounts = ctx.database.get_user_accounts(user.id().typed()?).await?;
 
     accounts
         .into_iter()
@@ -95,7 +95,7 @@ pub(crate) async fn unlink_account_core(
     account_id: &str,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
-    let accounts = ctx.database.get_user_accounts(&user.id()).await?;
+    let accounts = ctx.database.get_user_accounts(user.id().typed()?).await?;
     if accounts.len() == 1 && !ctx.config.account.account_linking.allow_unlinking_all {
         return Err(AuthError::bad_request("You can't unlink your last account"));
     }

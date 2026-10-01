@@ -54,7 +54,12 @@ pub(super) fn synthetic_response<S: AuthSchema>(
         ("createdAt".into(), json!(now)),
         ("updatedAt".into(), json!(now)),
     ]);
-    let id = uuid::Uuid::new_v4().to_string();
+    let id = ctx
+        .config
+        .advanced
+        .generate_id("user", None)?
+        .filter(|id| !id.is_empty())
+        .unwrap_or_else(|| better_auth_core::id::random_id(None));
     let data = if let Some(factory) = &config.custom_synthetic_user {
         factory(SyntheticUserInput {
             core_fields: core,
@@ -199,8 +204,8 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
 
                 let _ = tx
                     .create_account(CreateAccount {
-                        user_id: (user.id().to_string()).into(),
-                        account_id: (user.id().to_string()).into(),
+                        user_id: user.id().into_owned(),
+                        account_id: user.id().into_owned(),
                         provider_id: ("credential".to_string()).into(),
                         access_token: Default::default(),
                         refresh_token: Default::default(),
@@ -218,7 +223,7 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
                 if auto_sign_in {
                     let session = tx
                         .create_session(CreateSession {
-                            user_id: user.id().to_string(),
+                            user_id: user.id().into_owned(),
                             expires_at: chrono::Utc::now() + expires_in,
                             ip_address,
                             user_agent,

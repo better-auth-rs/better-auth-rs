@@ -46,13 +46,15 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             .account
             .field_schema()
             .record_storage_fields_for_adapter(input.fields()?, true, true, |_| true)?;
-        let id = fields
-            .entry("id")
-            .or_insert_with(|| Value::String(uuid::Uuid::new_v4().to_string()))
-            .clone();
-        let key = crate::SchemaValue::<String>::from_json(Some(id)).display_string()?;
+        let supplied = fields
+            .remove("id")
+            .and_then(|id| id.as_str().map(str::to_owned));
+        let id = self.generated_id("account", supplied, self.lock()?.accounts.len())?;
+        if let Some(id) = id {
+            let _ = fields.insert("id".into(), Value::String(id));
+        }
         self.raw("account", "create", |state| {
-            let _ = state.accounts.insert(key, fields.clone());
+            state.accounts.push(fields.clone());
             Ok(())
         })
         .await?;
@@ -69,39 +71,55 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         account_id: &str,
     ) -> AuthResult<Option<AccountView>> {
         let fields = self.config.account.field_schema();
-        let record = self
-            .raw("account", "findOne", |state| {
+        let records = self
+            .raw("account", "findMany", |state| {
                 Ok(state
                     .accounts
-                    .values()
-                    .find(|record| {
+                    .iter()
+                    .filter(|record| {
                         record.get(fields.record_storage_key("providerId"))
                             == Some(&Value::String(provider.to_owned()))
                             && record.get(fields.record_storage_key("accountId"))
                                 == Some(&Value::String(account_id.to_owned()))
                     })
-                    .cloned())
+                    .take(2)
+                    .cloned()
+                    .collect::<Vec<_>>())
             })
             .await?;
-        record
-            .as_ref()
+        // Upstream starts every row projection before observing an output error.
+        let accounts = records
+            .iter()
             .map(|record| self.output_account(record))
-            .transpose()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .collect::<AuthResult<Vec<_>>>()?;
+        if accounts.len() > 1 {
+            return Err(AuthError::internal(format!(
+                "Multiple accounts match the same accountId for provider {}. Resolve duplicate account identities before continuing.",
+                serde_json::to_string(provider)?
+            )));
+        }
+        Ok(accounts.into_iter().next())
     }
 
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<AccountView>> {
         let fields = self.config.account.field_schema();
         let records: Vec<_> = self
             .raw("account", "findMany", |state| {
-                Ok(state
-                    .accounts
-                    .values()
-                    .filter(|record| {
-                        record.get(fields.record_storage_key("userId"))
-                            == Some(&Value::String(user_id.to_owned()))
-                    })
-                    .cloned()
-                    .collect())
+                Ok(crate::query::paginate_memory(
+                    state
+                        .accounts
+                        .iter()
+                        .filter(|record| {
+                            record.get(fields.record_storage_key("userId"))
+                                == Some(&Value::String(user_id.to_owned()))
+                        })
+                        .cloned()
+                        .collect(),
+                    Some(self.config.advanced.database.find_many_limit()),
+                    None,
+                ))
             })
             .await?;
         records
@@ -146,16 +164,13 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         let record = self
             .raw("account", "update", |state| {
                 Ok({
-                    if let Some(position) = state.accounts.get_index_of(id) {
-                        let (_, mut fields) =
-                            state.accounts.shift_remove_index(position).ok_or_else(|| {
-                                AuthError::internal("Account position changed while locked")
-                            })?;
+                    if let Some(fields) = state
+                        .accounts
+                        .iter_mut()
+                        .find(|row| row.get("id").and_then(Value::as_str) == Some(id))
+                    {
                         fields.extend(patch);
-                        let id = crate::SchemaValue::<String>::from_json(fields.get("id").cloned())
-                            .display_string()?;
-                        let _ = state.accounts.shift_insert(position, id, fields.clone());
-                        Some(fields)
+                        Some(fields.clone())
                     } else {
                         None
                     }
@@ -174,7 +189,11 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
         let record = self
             .raw("account", "findOne", |state| {
-                Ok(state.accounts.get(id).cloned())
+                Ok(state
+                    .accounts
+                    .iter()
+                    .find(|row| row.get("id").and_then(Value::as_str) == Some(id))
+                    .cloned())
             })
             .await?;
         // Upstream single-delete catches the read and output projection before hooks and writes.
@@ -197,7 +216,13 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             }
         }
         self.raw("account", "delete", |state| {
-            let _ = state.accounts.shift_remove(id);
+            if let Some(position) = state
+                .accounts
+                .iter()
+                .position(|row| row.get("id").and_then(Value::as_str) == Some(id))
+            {
+                let _ = state.accounts.remove(position);
+            }
             Ok(())
         })
         .await?;
@@ -228,7 +253,7 @@ impl EphemeralStore {
         }
         let schema = self.config.account.field_schema();
         self.raw("account", "deleteMany", |state| {
-            state.accounts.retain(|_, record| {
+            state.accounts.retain(|record| {
                 record.get(schema.record_storage_key("userId"))
                     != Some(&Value::String(user_id.to_owned()))
             });

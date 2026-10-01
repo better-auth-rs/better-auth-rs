@@ -31,9 +31,9 @@ pub(crate) fn routes() -> Vec<AuthRoute> {
     ]
 }
 
-#[derive(Deserialize, serde::Serialize, Validate)]
+#[derive(Clone, Deserialize, serde::Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
-struct CreateBody {
+pub(in crate::plugins::organization) struct CreateBody {
     #[serde(flatten)]
     additional_fields: serde_json::Map<String, serde_json::Value>,
     #[serde(
@@ -48,28 +48,28 @@ struct CreateBody {
     )]
     organization_id: NullableStringField,
 }
-#[derive(Deserialize, Validate)]
+#[derive(Clone, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-struct TeamBody {
+pub(in crate::plugins::organization) struct TeamBody {
     team_id: String,
     organization_id: Option<String>,
 }
-#[derive(Deserialize, Validate)]
+#[derive(Clone, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-struct MemberBody {
+pub(in crate::plugins::organization) struct MemberBody {
     team_id: String,
     user_id: String,
     organization_id: Option<String>,
 }
-#[derive(Deserialize, Validate)]
+#[derive(Clone, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-struct UpdateBody {
+pub(in crate::plugins::organization) struct UpdateBody {
     team_id: String,
     data: UpdateData,
 }
-#[derive(Deserialize, serde::Serialize)]
+#[derive(Clone, Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-struct UpdateData {
+pub(in crate::plugins::organization) struct UpdateData {
     #[serde(flatten)]
     additional_fields: serde_json::Map<String, serde_json::Value>,
     #[serde(
@@ -96,26 +96,9 @@ fn optional_string(value: NullableStringField, path: &str) -> AuthResult<Option<
     }
 }
 
-fn input_schema(config: &OrganizationConfig) -> better_auth_core::user_fields::UserConfig {
-    let mut schema = config.schema.team.clone();
-    if !schema
-        .additional_fields
-        .get("name")
-        .is_some_and(|field| field.input)
-    {
-        let _ = schema.additional_fields.insert(
-            "name".into(),
-            better_auth_core::user_fields::UserFieldConfig {
-                required: Some(true),
-                ..Default::default()
-            },
-        );
-    }
-    schema
-}
-#[derive(Deserialize, Validate)]
+#[derive(Clone, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-struct ActiveBody {
+pub(in crate::plugins::organization) struct ActiveBody {
     #[serde(
         default,
         deserialize_with = "crate::plugins::organization::types::deserialize_nullable_string_field"
@@ -178,32 +161,28 @@ pub(crate) async fn handle_team_request(
     };
     macro_rules! body {
         ($ty:ty) => {
-            match better_auth_core::validate_request_body::<$ty>(req) {
-                Ok(body) => body,
-                Err(response) => return Ok(Some(response)),
-            }
+            super::super::request::read::<$ty>(req, &config.schema)?
         };
     }
     let response = match (req.method(), req.path()) {
         (HttpMethod::Post, "/organization/create-team") => {
             let body = body!(CreateBody);
-            let additional_fields = crate::plugins::organization::fields::parse_input(
-                &input_schema(config),
-                &body,
-                &body.additional_fields,
-                "body",
-                false,
-            )?;
+            let additional_fields = body.additional_fields.clone();
             let organization_id = optional_string(body.organization_id, "body.organizationId")?;
             let org =
                 resolve_organization_id(organization_id.as_deref(), None, &session, ctx).await?;
-            if ctx.database.get_member(&org, &user.id()).await?.is_none() {
+            if ctx
+                .database
+                .get_member(&org, user.id().typed()?)
+                .await?
+                .is_none()
+            {
                 return Err(AuthError::forbidden(
                     "You are not allowed to invite users to this organization",
                 ));
             }
             authorize(
-                &user.id(),
+                user.id().typed()?,
                 &org,
                 ("team", "create"),
                 "You are not allowed to create teams in this organization",
@@ -243,7 +222,7 @@ pub(crate) async fn handle_team_request(
                     .map(str::to_owned),
                 additional_fields,
                 name: body.name,
-                organization_id: org,
+                organization_id: org.into(),
                 created_at: None,
                 updated_at: None,
             };
@@ -270,20 +249,14 @@ pub(crate) async fn handle_team_request(
         }
         (HttpMethod::Post, "/organization/update-team") => {
             let body = body!(UpdateBody);
-            let additional_fields = crate::plugins::organization::fields::parse_input(
-                &input_schema(config),
-                &body.data,
-                &body.data.additional_fields,
-                "body.data",
-                true,
-            )?;
+            let additional_fields = body.data.additional_fields.clone();
             let name = (!body.data.name.is_undefined()).then_some(body.data.name);
             let organization_id =
                 optional_string(body.data.organization_id, "body.data.organizationId")?;
             let org =
                 resolve_organization_id(organization_id.as_deref(), None, &session, ctx).await?;
             authorize(
-                &user.id(),
+                user.id().typed()?,
                 &org,
                 ("team", "update"),
                 "You are not allowed to update this team",
@@ -312,7 +285,7 @@ pub(crate) async fn handle_team_request(
             if let Some(hooks) = &config.hooks {
                 hooks.before_update_team(&mut updates, event).await?;
             }
-            let updated = ctx.database.update_team(&team.id, updates).await?;
+            let updated = ctx.database.update_team(team.id.typed()?, updates).await?;
             let updated = crate::plugins::organization::fields::team(updated, ctx);
             if let Some(hooks) = &config.hooks {
                 hooks
@@ -329,14 +302,18 @@ pub(crate) async fn handle_team_request(
             let org = resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx)
                 .await?;
             if session.active_team_id() == Some(body.team_id.as_str())
-                || ctx.database.get_member(&org, &user.id()).await?.is_none()
+                || ctx
+                    .database
+                    .get_member(&org, user.id().typed()?)
+                    .await?
+                    .is_none()
             {
                 return Err(AuthError::forbidden(
                     "You are not allowed to delete this team",
                 ));
             }
             authorize(
-                &user.id(),
+                user.id().typed()?,
                 &org,
                 ("team", "delete"),
                 "You are not allowed to delete teams in this organization",
@@ -365,7 +342,7 @@ pub(crate) async fn handle_team_request(
             if let Some(hooks) = &config.hooks {
                 hooks.before_delete_team(event).await?;
             }
-            ctx.database.delete_team(&team.id).await?;
+            ctx.database.delete_team(team.id.typed()?).await?;
             if let Some(hooks) = &config.hooks {
                 hooks.after_delete_team(event).await?;
             }
@@ -378,7 +355,12 @@ pub(crate) async fn handle_team_request(
             let org =
                 resolve_organization_id(req.query_string("organizationId")?, None, &session, ctx)
                     .await?;
-            if ctx.database.get_member(&org, &user.id()).await?.is_none() {
+            if ctx
+                .database
+                .get_member(&org, user.id().typed()?)
+                .await?
+                .is_none()
+            {
                 return Err(AuthError::forbidden(
                     "You are not allowed to access this organization as an owner",
                 ));
@@ -417,7 +399,7 @@ pub(crate) async fn handle_team_request(
             let team = find_team(&team_id, &org, ctx).await?;
             if ctx
                 .database
-                .get_team_member(&team_id, &user.id())
+                .get_team_member(&team_id, user.id().typed()?)
                 .await?
                 .is_none()
             {
@@ -437,21 +419,26 @@ pub(crate) async fn handle_team_request(
             let target = req
                 .query_string("userId")?
                 .filter(|id| !id.is_empty())
-                .unwrap_or(&user.id);
+                .unwrap_or(user.id.typed()?);
             let explicit_org = req
                 .query_string("organizationId")?
                 .filter(|id| !id.is_empty());
             let org = explicit_org.or(session.active_organization_id());
-            if target != user.id || explicit_org.is_some() {
+            if user.id != target || explicit_org.is_some() {
                 let org = org.ok_or_else(|| AuthError::bad_request("No active organization"))?;
-                if ctx.database.get_member(org, &user.id()).await?.is_none() {
+                if ctx
+                    .database
+                    .get_member(org, user.id().typed()?)
+                    .await?
+                    .is_none()
+                {
                     return Err(AuthError::forbidden(
                         "You are not a member of this organization",
                     ));
                 }
-                if target != user.id {
+                if user.id != target {
                     authorize(
-                        &user.id(),
+                        user.id().typed()?,
                         org,
                         ("member", "update"),
                         "You are not allowed to update this member",
@@ -501,12 +488,12 @@ pub(crate) async fn handle_team_request(
                 .ok_or_else(|| AuthError::bad_request("Team not found"))?;
             if ctx
                 .database
-                .get_member(team.organization_id.typed()?, &user.id())
+                .get_member(team.organization_id.typed()?, user.id().typed()?)
                 .await?
                 .is_none()
                 || ctx
                     .database
-                    .get_team_member(team_id, &user.id())
+                    .get_team_member(team_id, user.id().typed()?)
                     .await?
                     .is_none()
             {
@@ -521,14 +508,19 @@ pub(crate) async fn handle_team_request(
             let body = body!(MemberBody);
             let org = resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx)
                 .await?;
-            if ctx.database.get_member(&org, &user.id()).await?.is_none() {
+            if ctx
+                .database
+                .get_member(&org, user.id().typed()?)
+                .await?
+                .is_none()
+            {
                 return Err(AuthError::bad_request(
                     "User is not a member of the organization",
                 ));
             }
             let adding = req.path() == "/organization/add-team-member";
             authorize(
-                &user.id(),
+                user.id().typed()?,
                 &org,
                 ("member", if adding { "update" } else { "delete" }),
                 if adding {
@@ -575,14 +567,14 @@ pub(crate) async fn handle_team_request(
                 }
                 let maximum = config
                     .team_member_limit(OrganizationTeamMemberLimit {
-                        team_id: &team.id,
+                        team_id: team.id.typed()?,
                         organization_id: &org,
                         session: actor,
                     })
                     .await?;
                 let member = ctx
                     .database
-                    .add_team_member(&body.team_id, &body.user_id, maximum)
+                    .add_team_member(&body.team_id.clone().into(), &body.user_id, maximum)
                     .await?
                     .ok_or_else(|| AuthError::forbidden("Team member limit reached"))?;
                 if let Some(hooks) = &config.hooks {
@@ -660,7 +652,7 @@ mod tests {
             .await
             .unwrap();
         ctx.database
-            .update_session_active_organization(&session.token, Some(&org.id))
+            .update_session_active_organization(&session.token, Some(org.id.typed().unwrap()))
             .await
             .unwrap();
         let config = OrganizationConfig {
@@ -698,7 +690,7 @@ mod tests {
         assert_eq!(first.body, duplicate.body);
         assert_eq!(
             ctx.database
-                .list_team_members(&team.id)
+                .list_team_members(team.id.typed().unwrap())
                 .await
                 .unwrap()
                 .len(),
@@ -706,7 +698,7 @@ mod tests {
         );
         let full = super::super::org::get_full_organization_core(
             &crate::plugins::organization::types::GetFullOrganizationQuery {
-                organization_id: Some(org.id.clone()),
+                organization_id: Some(org.id.typed().unwrap().clone()),
                 ..Default::default()
             },
             &user,

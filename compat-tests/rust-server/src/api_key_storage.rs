@@ -217,7 +217,7 @@ impl ApiKeyStorageFixture {
                     };
                     if body["action"] == "delete-database" {
                         auth.store()
-                            .delete_api_key(body["id"].as_str().unwrap())
+                            .delete_api_key(&body["id"].as_str().unwrap().into())
                             .await
                             .unwrap();
                     }

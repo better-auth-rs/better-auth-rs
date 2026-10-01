@@ -153,7 +153,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     );
     assert!(!organization.additional_fields.contains_key("name"));
     assert_eq!(
-        fixture::models::organization::Entity::find_by_id(&organization.id)
+        fixture::models::organization::Entity::find_by_id(organization.id.typed().unwrap())
             .one(store.connection())
             .await
             .unwrap()
@@ -163,7 +163,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     );
     let organization = store
         .update_organization(
-            &organization.id,
+            organization.id.typed().unwrap(),
             UpdateOrganization {
                 name: Some("Updated".into()),
                 logo: Some(None),
@@ -177,14 +177,18 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     assert_eq!(organization.logo, None);
     assert_eq!(organization.metadata, Some(Value::Null));
     let member = store
-        .create_member(CreateMember::new(&organization.id, "owner", "owner"))
+        .create_member(CreateMember::new(
+            organization.id.typed().unwrap(),
+            "owner",
+            "owner",
+        ))
         .await
         .unwrap();
     assert_eq!(member.role, "owner:in:out");
     assert!(!member.additional_fields.contains_key("role"));
     assert_eq!(
         store
-            .update_member_role(&member.id, "admin")
+            .update_member_role(member.id.typed().unwrap(), "admin")
             .await
             .unwrap()
             .role,
@@ -192,7 +196,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     );
     let invitation = store
         .create_invitation(CreateInvitation::new(
-            &organization.id,
+            organization.id.typed().unwrap(),
             "recipient@example.com",
             "member",
             "owner",
@@ -204,7 +208,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     assert!(!invitation.additional_fields.contains_key("role"));
     assert_eq!(
         store
-            .get_invitation_by_id(&invitation.id)
+            .get_invitation_by_id(invitation.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -225,7 +229,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     assert_eq!(team.updated_at, Some(default_date));
     let team = store
         .update_team(
-            &team.id,
+            team.id.typed().unwrap(),
             UpdateTeam {
                 name: Some("Platform".into()),
                 ..Default::default()
@@ -237,7 +241,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     assert_eq!(team.updated_at, Some(default_date));
     let role = store
         .create_organization_role(CreateOrganizationRole {
-            organization_id: organization.id.clone(),
+            organization_id: organization.id.typed().unwrap().clone(),
             role: "editor".into(),
             permission: json!({"project":["read"]}),
             additional_fields: Default::default(),
@@ -249,7 +253,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     assert_eq!(role.updated_at, Some(default_date));
     let role = store
         .update_organization_role(
-            &role.id,
+            role.id.typed().unwrap(),
             UpdateOrganizationRole {
                 role: Some("writer".into()),
                 ..Default::default()
@@ -270,7 +274,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     store.configure_organization_fields(config.schema).unwrap();
     assert_eq!(
         store
-            .update_team(&team.id, UpdateTeam::default())
+            .update_team(team.id.typed().unwrap(), UpdateTeam::default())
             .await
             .unwrap()
             .updated_at,
@@ -372,7 +376,7 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
     store.configure_organization_fields(config.schema).unwrap();
     let invitation = store
         .create_invitation(CreateInvitation::new(
-            &organization.id,
+            organization.id.typed().unwrap(),
             "recipient@example.com",
             "member",
             "owner",
@@ -385,7 +389,7 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
         Some(json!("unrecognized"))
     );
     assert_eq!(
-        fixture::models::invitation::Entity::find_by_id(&invitation.id)
+        fixture::models::invitation::Entity::find_by_id(invitation.id.typed().unwrap())
             .one(store.connection())
             .await
             .unwrap()
@@ -442,7 +446,13 @@ async fn team_capacity_uses_the_transformed_durable_counter() {
             .unwrap()
             .is_none()
     );
-    assert!(store.list_team_members(&team.id).await.unwrap().is_empty());
+    assert!(
+        store
+            .list_team_members(team.id.typed().unwrap())
+            .await
+            .unwrap()
+            .is_empty()
+    );
     let member = store
         .add_team_member(&team.id, "owner", Some(3))
         .await
@@ -450,7 +460,7 @@ async fn team_capacity_uses_the_transformed_durable_counter() {
         .unwrap();
     assert_eq!(
         store
-            .get_team(&team.id)
+            .get_team(team.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -466,11 +476,17 @@ async fn team_capacity_uses_the_transformed_durable_counter() {
             .id,
         member.id
     );
-    store.remove_team_member(&team.id, "owner").await.unwrap();
-    store.remove_team_member(&team.id, "owner").await.unwrap();
+    store
+        .remove_team_member(team.id.typed().unwrap(), "owner")
+        .await
+        .unwrap();
+    store
+        .remove_team_member(team.id.typed().unwrap(), "owner")
+        .await
+        .unwrap();
     assert_eq!(
         store
-            .get_team(&team.id)
+            .get_team(team.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -479,7 +495,7 @@ async fn team_capacity_uses_the_transformed_durable_counter() {
     );
     assert_eq!(inputs.load(Ordering::SeqCst), 3);
     assert_eq!(
-        fixture::models::team::Entity::find_by_id(&team.id)
+        fixture::models::team::Entity::find_by_id(team.id.typed().unwrap())
             .one(store.connection())
             .await
             .unwrap()

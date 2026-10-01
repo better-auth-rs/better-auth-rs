@@ -48,6 +48,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## Adapter configuration
+
+Every auth build passes its final configuration and plugin database hooks to `RuntimeStore::with_runtime`. Custom adapters must implement this method. Return a store view that shares stored records, binds the supplied configuration, and prepends plugin hooks to application hooks. Keep configuration and hook lists isolated from the original store and other auth builds.
+
+`advanced.database.default_find_many_limit` preserves an optional numeric value; omission uses 100. Account and database session lists apply the default before output transforms. Bulk-delete hooks receive a limited snapshot, while the write still deletes every matching row. Verification lookup retains its explicit one-row limit, and secondary session lists remain uncapped. Memory follows JavaScript slice behavior; SQLite accepts negative integer limits as unlimited and rejects fractional or non-finite limits.
+
 ## Generate an initial schema
 
 Run the CLI with every plugin that your application registers:
@@ -78,6 +84,24 @@ pub struct AppAuthSchema;
 Each model must implement its corresponding auth entity trait. You may place each binding in a separate `#[auth(...)]` attribute. Each binding must appear exactly once.
 
 Auth responses serialize timestamps as UTC ISO 8601 strings with three fractional digits, matching the upstream JavaScript client. Stored database timestamps retain their original precision.
+
+## Model IDs
+
+Configure `advanced.database.generate_id` with `IdGeneration::Random`, `Uuid`, `Serial`, `Database`, or `Custom(IdGenerator)`. `Random` uses 32 alphanumeric characters. For SQL stores, `Serial` requires numeric auto-increment columns and `Database` requires application database defaults. The memory adapter uses its current table length plus one for `Serial`; deletion can therefore produce duplicate IDs. `Database` omits IDs in memory. PostgreSQL `Uuid` uses the database UUID default; SQLite generates UUIDs in Rust. These options do not change existing columns or migrations.
+
+A custom generator receives the logical model name, such as `user`, `apikey`, or `walletAddress`. Table aliases do not change that name. Return `Ok(None)` to omit the ID, or an error to stop the write. Create-before hooks run before generation. A cancelled hook does not invoke the generator.
+
+```rust
+use better_auth::config::IdGeneration;
+let mut config = better_auth::AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long");
+config.advanced.database.generate_id = IdGeneration::Uuid;
+```
+
+An explicit `CreateUser.id`, `CreateOrganization.id`, `CreateInvitation.id`, or `CreateTeam.id` is a force-allowed ID. In UUID mode, invalid explicit UUIDs are omitted and the database applies its default or constraint. `CreateOrganization::new` leaves generation to the store. `WalletStore::create_wallet_address` takes `CreateWalletAddress` without a caller-generated ID.
+
+Pure-secondary sessions and API keys use the context generator. The legacy `advanced.generate_id` callback overrides that context operation only. `IdGenerator` returns `Option<String>`: `None` represents upstream `false`, and `Some(value)` represents a string. Pure-secondary sessions use a random ID for `None`; an explicit empty string omits the session ID. Pure-secondary API keys use the upstream truthy fallback for both cases. Pure-secondary verification records have no generated ID. Session tokens and other authentication credentials use separate random generators.
+
+Runtime records use `SchemaValue<String>` for IDs so `Undefined` remains distinct from an empty string. JSON omits absent IDs. Store and database-hook methods return `UserView` and `SessionView`; `AuthSchema::User` and `AuthSchema::Session` remain typed database mappings. Use `id.typed()?` only when the operation requires a present string ID. Use `id.is_undefined()` to inspect omission. Query application entity models directly when an application needs columns outside its configured auth fields.
 
 ## Map plugin tables and columns
 
@@ -245,6 +269,8 @@ See [Account and Verification Fields](/docs/concepts/account-verification-fields
 
 `AccountStore::create_account_optional` and `update_account_optional` return `None` when a database hook cancels that account write. Hook errors remain errors, including errors from nested writes. The strict `create_account` and `update_account` methods retain their existing cancellation error behavior. Custom stores with cancellable hooks must implement the optional methods; their default implementations wrap successful strict results in `Some`.
 
+Account schemas permit duplicate `(provider_id, account_id)` pairs, matching upstream storage. `AccountStore::get_account` reads at most two matching records and rejects an ambiguous identity after output projection. Its two-row limit is independent of `advanced.database.default_find_many_limit`. Generated schemas retain the account user index and foreign key. Existing applications that require upstream storage behavior must remove the former composite unique index in an application-owned migration; schema generation does not alter existing databases. Resolve duplicate identities before authentication can select an account.
+
 ## Testing
 
 Run `devenv shell -- ./scripts/consumer-check.sh` to generate fresh schemas and test an independent consumer against the public package. The check creates SQLite tables, registers and signs in a user, protects an Axum route, creates an API key, and enables TOTP. A second schema verifies all six Organization model mappings, additional field storage types, partial updates, and organization deletion. A third schema renames every field in all six plugin tables and maps user, session, account, and verification columns. Tests exercise authentication, TOTP, API key quota consumption, device claims, passkey updates, JWT keys, and wallet chain lookup. Database constraint checks cover uniqueness and foreign keys.
@@ -279,7 +305,7 @@ Adapters used with secondary sessions must implement `SessionStore::update_sessi
 
 `SessionStore::delete_sessions` deletes a token list through one batch lifecycle. `end_sessions` expires only its live rows and preserves database records. Multi-session uses these capabilities instead of repeated single-session deletion. With secondary storage, token deletions start together before the database batch and leave active-session indices unchanged. The first cache error prevents the database batch while pending cache deletions continue. Custom adapters must implement both batch capabilities when these paths are used; default implementations return configuration errors.
 
-`AuthEntity` generates runtime hydration for custom session models. The application retains typed model fields and does not need to deserialize the user model. Handwritten session models must provide runtime hydration before enabling secondary storage. Account and Verification persistence models instead produce `AccountView` and `VerificationView` through their `record` methods; secondary verification storage uses `VerificationView` directly. See [Secondary Storage](/docs/concepts/secondary-storage) for fallback rules and `VerificationIdentifierConfig` migration behavior.
+`AuthEntity` supplies field mappings for custom session models. Runtime store and hook results use `UserView` and `SessionView`; these records preserve fields from secondary storage without constructing an application entity model. Account and Verification persistence models instead produce `AccountView` and `VerificationView` through their `record` methods; secondary verification storage uses `VerificationView` directly. See [Secondary Storage](/docs/concepts/secondary-storage) for fallback rules and `VerificationIdentifierConfig` migration behavior.
 
 ## Runtime schema validation
 
@@ -302,3 +328,5 @@ fn extra_insert_columns() -> Vec<Column> {
 Leave the default empty list when inserts do not supply extra columns. Do not declare every entity column: an unconfigured required column must still fail preflight.
 
 Custom database adapters can implement `RuntimeStore::schema_check` using `SchemaInspector` and the typed physical `SchemaTable` descriptors. The descriptor supports migration-disabled tables and merges logical models that share a physical table. It does not use OpenAPI documentation as persistence metadata.
+
+Organization member queries supply an explicit user limit. Full organization queries use the static membership limit for the user page. A member without a matching user fails the operation.

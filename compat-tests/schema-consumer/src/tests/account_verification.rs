@@ -84,7 +84,7 @@ async fn generated_account_verification_fields_keep_storage_and_output_types_sep
     let account = auth
         .store()
         .create_account(CreateAccount {
-            user_id: user.id.into(),
+            user_id: user.id,
             account_id: "subject".into(),
             provider_id: "fixture".into(),
             scope: SchemaValue::Dynamic(json!(1.25)),

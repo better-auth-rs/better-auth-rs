@@ -35,6 +35,7 @@ mod lifecycle_tests;
 mod organization;
 mod passkeys;
 mod rate_limits;
+mod rows;
 mod runtime;
 mod session_hooks;
 mod sessions;
@@ -81,6 +82,25 @@ impl Default for EphemeralStore {
 }
 
 impl EphemeralStore {
+    fn generated_id(
+        &self,
+        model: &str,
+        supplied: Option<String>,
+        row_count: usize,
+    ) -> AuthResult<Option<String>> {
+        if matches!(
+            self.config.advanced.database.generate_id,
+            crate::id::IdGeneration::Serial
+        ) {
+            return Ok(Some((row_count + 1).to_string()));
+        }
+        self.config
+            .advanced
+            .database
+            .generate_id
+            .adapter_id(model, supplied, false)
+    }
+
     /// Construct an empty adapter. Restarting the process discards all records.
     pub fn new(config: Arc<AuthConfig>) -> Self {
         Self {

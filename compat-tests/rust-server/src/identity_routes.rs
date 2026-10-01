@@ -105,7 +105,7 @@ impl IdentityFixture {
             match body["action"].as_str() {
                 Some("links")=>Json(json!(fixture.state.lock().await.links)),
                 Some("expire")=>{store.update_verification_by_identifier(body["identifier"].as_str().unwrap(),None,Some(Utc::now()-Duration::seconds(1))).await.unwrap();Json(json!({"success":true}))},
-                Some("phone")=>{let user=store.get_user_by_email(body["email"].as_str().unwrap()).await.unwrap().unwrap();store.update_user(&user.id(),UpdateUser{phone_number:Some(Some(body["phoneNumber"].as_str().unwrap().to_owned())),phone_number_verified:Some(body["verified"].as_bool().unwrap_or(false)),..Default::default()}).await.unwrap();Json(json!({"success":true}))},
+                Some("phone")=>{let user=store.get_user_by_email(body["email"].as_str().unwrap()).await.unwrap().unwrap();store.update_user(user.id().typed().unwrap(),UpdateUser{phone_number:Some(Some(body["phoneNumber"].as_str().unwrap().to_owned())),phone_number_verified:Some(body["verified"].as_bool().unwrap_or(false)),..Default::default()}).await.unwrap();Json(json!({"success":true}))},
                 Some("wallets")=>{use better_auth_seaorm::store::entities::wallet_address::{Entity,Column};let wallets=Entity::find().order_by_asc(Column::ChainId).all(store.connection()).await.unwrap();Json(json!(wallets.into_iter().map(|wallet|json!({"address":wallet.address,"chainId":wallet.chain_id,"isPrimary":wallet.is_primary,"userId":wallet.user_id})).collect::<Vec<_>>()))},
                 _=>Json(json!(fixture.state.lock().await.outbox.get(body["phoneNumber"].as_str().unwrap()).cloned().unwrap_or_default())),
             }

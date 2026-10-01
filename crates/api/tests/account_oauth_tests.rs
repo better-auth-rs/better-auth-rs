@@ -129,7 +129,7 @@ async fn setup_user_with_account(
         .await
         .unwrap();
 
-    let user_id = user.id().to_string();
+    let user_id = user.id().typed().unwrap().to_string();
 
     let account = db
         .create_account(CreateAccount {
@@ -1218,7 +1218,7 @@ async fn test_unlink_non_last_account_always_allowed() {
         .await
         .unwrap();
 
-    let user_id = user.id().to_string();
+    let user_id = user.id().typed().unwrap().to_string();
 
     // Create two accounts
     let google_account = db
@@ -1312,7 +1312,7 @@ async fn test_account_linking_disabled_rejects_new_provider() {
         .unwrap();
 
     db.create_account(CreateAccount {
-        user_id: (user.id().to_string()).into(),
+        user_id: (user.id().typed().unwrap().to_string()).into(),
         account_id: ("old-github-id".to_string()).into(),
         provider_id: ("github".to_string()).into(),
         access_token: (Some("old-token".to_string())).into(),
@@ -1557,7 +1557,10 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
                 .unwrap()
                 .expect("User should have been created");
 
-            let accounts = db.get_user_accounts(&user.id()).await.unwrap();
+            let accounts = db
+                .get_user_accounts(user.id().typed().unwrap())
+                .await
+                .unwrap();
             assert_eq!(accounts.len(), 1);
 
             let stored_access = accounts[0]

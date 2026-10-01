@@ -35,6 +35,52 @@ pub(crate) async fn require_session<S: better_auth_core::AuthSchema>(
     })
 }
 
+async fn optional_session<S: better_auth_core::AuthSchema>(
+    req: &AuthRequest,
+    ctx: &AuthContext<S>,
+) -> AuthResult<
+    Option<(
+        better_auth_core::wire::UserView,
+        better_auth_core::wire::SessionView,
+    )>,
+> {
+    match ctx.require_session(req).await {
+        Ok(session) => Ok(Some(session)),
+        Err(AuthError::Unauthenticated) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+fn request_present<S: better_auth_core::AuthSchema>(
+    req: &AuthRequest,
+    ctx: &AuthContext<S>,
+) -> bool {
+    let endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+        Some(req),
+        serde_json::Value::Null,
+        ctx,
+    );
+    endpoint.request.is_some() || endpoint.headers().is_some()
+}
+async fn request_only_session<S: better_auth_core::AuthSchema>(
+    req: &AuthRequest,
+    ctx: &AuthContext<S>,
+) -> AuthResult<
+    Option<(
+        better_auth_core::wire::UserView,
+        better_auth_core::wire::SessionView,
+    )>,
+> {
+    let session = optional_session(req, ctx).await?;
+    if session.is_none() && request_present(req, ctx) {
+        return Err(AuthError::Upstream {
+            status: 401,
+            code: "UNAUTHORIZED",
+            message: "Unauthorized",
+        });
+    }
+    Ok(session)
+}
+
 /// Helper function to get organization ID from request or session
 pub(crate) async fn resolve_organization_id(
     org_id: Option<&str>,
@@ -49,7 +95,7 @@ pub(crate) async fn resolve_organization_id(
     if let Some(slug) = org_slug.filter(|slug| !slug.is_empty()) {
         if let Some(org) = ctx.database.get_organization_by_slug(slug).await? {
             use better_auth_core::entity::AuthOrganization;
-            return Ok(org.id().to_string());
+            return Ok(org.id().typed()?.to_string());
         }
         return Err(AuthError::not_found("Organization not found"));
     }
@@ -76,14 +122,14 @@ pub(crate) async fn has_permission_core(
 
     let member = ctx
         .database
-        .get_member(&org_id, &user.id())
+        .get_member(&org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
     let has_all_permissions = check_permissions(
         member.role().typed()?,
         &org_id,
-        &body.permissions,
+        body.permissions.as_ref(),
         config,
         ctx,
     )
@@ -106,10 +152,7 @@ pub async fn handle_has_permission(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let body: HasPermissionRequest = match better_auth_core::validate_request_body(req) {
-        Ok(v) => v,
-        Err(resp) => return Ok(resp),
-    };
+    let body: HasPermissionRequest = super::request::read(req, &config.schema)?;
     let response = has_permission_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }

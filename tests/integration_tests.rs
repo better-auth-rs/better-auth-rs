@@ -50,6 +50,9 @@ async fn user_id_from_email(auth: &Arc<BetterAuth<TestSchema>>, email: &str) -> 
         .unwrap()
         .map(|user| user.id)
         .unwrap_or_else(|| panic!("expected user for email {email}"))
+        .typed()
+        .unwrap()
+        .clone()
 }
 
 /// Integration test for get-session endpoint
@@ -115,7 +118,7 @@ async fn test_revoke_session_integration() {
     use chrono::{Duration, Utc};
 
     let create_session = CreateSession {
-        user_id: user_id.clone(),
+        user_id: user_id.clone().into(),
         expires_at: Utc::now() + Duration::hours(24),
         ip_address: Some("192.168.1.1".to_string()),
         user_agent: Some("test-agent-2".to_string()),
@@ -576,7 +579,7 @@ async fn test_revoke_other_sessions_integration() {
     use std::collections::HashMap;
 
     let create_session = CreateSession {
-        user_id: user_id.clone(),
+        user_id: user_id.clone().into(),
         expires_at: Utc::now() + Duration::hours(24),
         ip_address: Some("192.168.1.1".to_string()),
         user_agent: Some("other-agent".to_string()),
@@ -717,8 +720,14 @@ async fn test_unauthorized_password_operations() {
 // Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_change_email_success() {
-    let auth = create_test_auth_memory().await;
-    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+    let auth = Arc::new(
+        create_test_auth_with_options(TestAuthOptions {
+            change_email_without_verification: true,
+            ..Default::default()
+        })
+        .await,
+    );
+    let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
     use better_auth::prelude::AuthRequest;
     use std::collections::HashMap;
@@ -747,19 +756,32 @@ async fn test_change_email_success() {
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     assert_eq!(data["status"], true);
     assert!(data.get("message").is_none());
+    let user = auth
+        .store()
+        .get_user_by_id(&user_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(user.email(), Some("newemail@test.com"));
 }
 
-/// Integration test for change-email duplicate → 409
+/// Existing addresses return success without changing account ownership.
 // Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
 async fn test_change_email_duplicate() {
-    let auth = create_test_auth_memory().await;
+    let auth = Arc::new(
+        create_test_auth_with_options(TestAuthOptions {
+            change_email_without_verification: true,
+            ..Default::default()
+        })
+        .await,
+    );
 
     use better_auth::prelude::{AuthRequest, CreateUser};
     use std::collections::HashMap;
 
     // Create first user
-    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+    let (user_id, session_token) = create_test_user_and_session(auth.clone()).await;
 
     // Create second user with a different email
     let create_user = CreateUser::new()
@@ -785,7 +807,25 @@ async fn test_change_email_duplicate() {
     );
 
     let response = auth.handle_request(request).await.unwrap();
-    assert_eq!(response.status, 422);
+    assert_eq!(response.status, 200);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&response.body).unwrap(),
+        serde_json::json!({"status":true})
+    );
+    let user = auth
+        .store()
+        .get_user_by_id(&user_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(user.email(), Some("integration@test.com"));
+    let target = auth
+        .store()
+        .get_user_by_email("existing@test.com")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_ne!(user.id, target.id);
 }
 
 /// Integration test for change-email unauthenticated → 401

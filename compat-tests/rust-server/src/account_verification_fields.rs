@@ -382,7 +382,7 @@ impl Fixture {
             )
             .await?;
         Ok(Self {
-            user_id: user.id.clone(),
+            user_id: user.id.typed().unwrap().clone(),
             auth,
             db,
             state,
@@ -526,7 +526,7 @@ impl Fixture {
             .auth
             .store()
             .create_session(better_auth_core::CreateSession {
-                user_id: self.user_id.clone(),
+                user_id: self.user_id.clone().into(),
                 expires_at: chrono::Utc::now() + chrono::Duration::days(1),
                 ip_address: None,
                 user_agent: None,

@@ -18,9 +18,9 @@ pub use super::types_org::{
     Organization, UpdateOrganization,
 };
 pub use super::types_plugin::{
-    ApiKey, CreateApiKey, CreateDeviceCode, CreatePasskey, CreateTwoFactor, DeviceCode, Passkey,
-    TwoFactor, UpdateApiKey, UpdateDeviceCode, UpdatePasskey, UpdatePasskeyAuthentication,
-    UpdateTwoFactor, WalletAddress,
+    ApiKey, CreateApiKey, CreateDeviceCode, CreatePasskey, CreateTwoFactor, CreateWalletAddress,
+    DeviceCode, Passkey, TwoFactor, UpdateApiKey, UpdateDeviceCode, UpdatePasskey,
+    UpdatePasskeyAuthentication, UpdateTwoFactor, WalletAddress,
 };
 
 /// HTTP method enumeration
@@ -326,7 +326,7 @@ where
 /// Session creation data
 #[derive(Debug, Clone)]
 pub struct CreateSession {
-    pub user_id: String,
+    pub user_id: crate::SchemaValue<String>,
     pub expires_at: DateTime<Utc>,
     pub ip_address: Option<String>,
     pub user_agent: Option<String>,
@@ -560,7 +560,7 @@ impl AuthRequest {
     pub fn virtual_user_id(&self) -> Option<&str> {
         self.virtual_session
             .as_ref()
-            .map(|session| session.user_id.as_str())
+            .and_then(|session| session.user_id.as_str())
     }
 
     /// Return the session authenticated by a trusted plugin hook.

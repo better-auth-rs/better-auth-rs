@@ -76,7 +76,7 @@ Refresh semantics:
 
 `VerificationIdentifierConfig.default` selects `Plain`, `Hashed`, or `Custom(Arc<dyn VerificationIdentifierHasher>)`. `overrides` is an ordered vector of `(prefix, strategy)` pairs; the first matching prefix wins. `Hashed` uses unpadded URL-safe SHA-256. `Custom` calls the asynchronous `hash` method. Read and consume operations can migrate from existing plaintext identifiers; update and deletion address only the configured representation.
 
-Without secondary storage, session and verification data remain in the database regardless of the persistence flags. Install a backend through `BetterAuth::secondary_storage`. See [Secondary Storage](/docs/concepts/secondary-storage) for atomic consumption, TTL, fallback, and model hydration requirements.
+Without secondary storage, session and verification data remain in the database regardless of the persistence flags. Install a backend through `BetterAuth::secondary_storage`. See [Secondary Storage](/docs/concepts/secondary-storage) for atomic consumption, TTL, fallback, and runtime record semantics.
 
 ## CookieCacheConfig
 
@@ -133,12 +133,14 @@ The default password hasher uses Better Auth-compatible scrypt. These retained l
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `update_account_on_sign_in` | `bool` | `true` | Refresh stored OAuth account data during sign-in |
+| `update_account_on_sign_in` | `bool` | `true` | Refresh stored OAuth tokens during sign-in |
 | `account_linking` | `AccountLinkingConfig` | see below | Account-linking behavior |
 | `encrypt_oauth_tokens` | `bool` | `false` | Encrypt stored OAuth tokens |
 | `store_account_cookie` | `Option<bool>` | `None` | Resolves to `true` without a database, including secondary-only authentication |
 | `store_state_strategy` | `Option<OAuthStateStrategy>` | `None` | Resolves to `Cookie` without server storage, otherwise `Database` |
 | `skip_state_cookie_check` | `bool` | `false` | Skip callback cookie-state verification |
+
+Ordinary sign-in preserves stored scopes. With `update_account_on_sign_in: false`, sign-in also preserves stored tokens and the account-cookie token snapshot. Explicit linking merges existing and newly granted scopes in stable order.
 
 ### AccountLinkingConfig
 
@@ -192,6 +194,8 @@ Use `CustomRateLimitRule::Dynamic(Arc<dyn RateLimitRuleResolver>)` for asynchron
 Memory and database denials preserve the counter and return the remaining window. Secondary storage counts denied requests and returns the full window. A custom storage implementation must make the decision and counter update atomic. Storage and resolver errors propagate from the HTTP request phase. See [Database rate limits](/docs/concepts/database#database-rate-limits) for schema generation.
 
 ## AdvancedConfig
+
+`generate_id: Option<IdGenerator>` is the legacy context-only override. Database inserts use `advanced.database.generate_id`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -250,8 +254,8 @@ Disabling tracking omits session and CAPTCHA addresses and disables IP rate limi
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `default_find_many_limit` | `usize` | `100` | Default limit for "find many" queries |
-| `use_number_id` | `bool` | `false` | Prefer numeric generated IDs instead of UUID-like IDs |
+| `default_find_many_limit` | `Option<f64>` | `None` → `100` | Default limit for find-many queries; preserve adapter-specific numeric behavior |
+| `generate_id` | `IdGeneration` | `Random` | Generate model IDs or delegate to database defaults |
 
 ## Plugin-Specific Config
 

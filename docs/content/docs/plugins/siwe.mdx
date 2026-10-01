@@ -28,3 +28,5 @@ As in Better Auth 1.7.6, wallet registration has no unique wallet constraint or 
 `anonymous(false)` requires an email in verification requests. An existing email account is never linked based only on a wallet signature: the new wallet receives a placeholder email instead. A database reservation prevents simultaneous wallets from claiming the same new email.
 
 If an email reservation cannot be stored, the plugin logs the failure and uses the wallet placeholder email. Reservation cleanup failures are logged without invalidating the completed user creation, matching upstream behavior.
+
+Nonce requests accept an omitted body or an empty object. Both schemas reject unknown fields. Verification validates all fields before authentication and requires an original Request, including for native calls. Native callers must pass that Request explicitly. With `anonymous(false)`, the email-required refinement runs after valid field types, including when another field fails a length constraint.

@@ -66,7 +66,7 @@ async fn invalid_team_input_precedes_policies_and_preserves_null_errors() {
         .await
         .unwrap();
     ctx.database
-        .update_session_active_organization(&session.token, Some(&org.id))
+        .update_session_active_organization(&session.token, Some(org.id.typed().unwrap()))
         .await
         .unwrap();
     let callbacks = Arc::new(Callbacks::default());

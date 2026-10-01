@@ -45,7 +45,11 @@ async fn setup_admin(auth: &better_auth::BetterAuth<TestSchema>) -> String {
         role: Some("admin".to_string()),
         ..Default::default()
     };
-    let _ = auth.store().update_user(&user.id(), update).await.unwrap();
+    let _ = auth
+        .store()
+        .update_user(user.id().typed().unwrap(), update)
+        .await
+        .unwrap();
 
     token
 }

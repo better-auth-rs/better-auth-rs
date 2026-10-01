@@ -43,9 +43,17 @@ fn database_error(error: sea_orm::DbErr) -> AuthError {
 fn rejected() -> AuthError {
     AuthError::internal("Fixture lifecycle rejected")
 }
-fn session_view(session: &Session) -> Value {
+fn stored_session_view(session: &Session) -> Value {
     json!({"id":session.id,"token":session.token,"userId":session.user_id,
         "label":session.device_label,
+        "createdAt":session.created_at.to_rfc3339_opts(SecondsFormat::Millis,true),
+        "updatedAt":session.updated_at.to_rfc3339_opts(SecondsFormat::Millis,true),
+        "expiresAt":session.expires_at.to_rfc3339_opts(SecondsFormat::Millis,true)})
+}
+
+fn session_view(session: &better_auth_core::SessionView) -> Value {
+    json!({"id":session.id,"token":session.token,"userId":session.user_id,
+        "label":session.additional_fields.get("label"),
         "createdAt":session.created_at.to_rfc3339_opts(SecondsFormat::Millis,true),
         "updatedAt":session.updated_at.to_rfc3339_opts(SecondsFormat::Millis,true),
         "expiresAt":session.expires_at.to_rfc3339_opts(SecondsFormat::Millis,true)})
@@ -75,7 +83,7 @@ impl Events {
             .await
             .map_err(database_error)?
             .iter()
-            .map(session_view)
+            .map(stored_session_view)
             .collect())
     }
     async fn record(&self, kind: &str, data: Value) -> AuthResult<()> {
@@ -235,17 +243,17 @@ impl SecondaryStorage for Events {
 impl SeaOrmHooks<Schema> for Events {
     async fn before_delete_user(
         &self,
-        row: &<Schema as AuthSchema>::User,
+        row: &better_auth_core::wire::UserView,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<HookControl> {
-        self.before_delete("user", &row.id).await
+        self.before_delete("user", row.id.typed().unwrap()).await
     }
     async fn after_delete_user(
         &self,
-        row: &<Schema as AuthSchema>::User,
+        row: &better_auth_core::wire::UserView,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<()> {
-        self.after_delete("user", &row.id).await
+        self.after_delete("user", row.id.typed().unwrap()).await
     }
     async fn before_delete_account(
         &self,
@@ -263,17 +271,17 @@ impl SeaOrmHooks<Schema> for Events {
     }
     async fn before_delete_session(
         &self,
-        row: &Session,
+        row: &better_auth_core::wire::SessionView,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<HookControl> {
-        self.before_delete("session", &row.id).await
+        self.before_delete("session", row.id.typed().unwrap()).await
     }
     async fn after_delete_session(
         &self,
-        row: &Session,
+        row: &better_auth_core::wire::SessionView,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<()> {
-        self.after_delete("session", &row.id).await
+        self.after_delete("session", row.id.typed().unwrap()).await
     }
     async fn before_update_session(
         &self,
@@ -312,7 +320,7 @@ impl SeaOrmHooks<Schema> for Events {
     }
     async fn after_update_session(
         &self,
-        row: Option<&Session>,
+        row: Option<&better_auth_core::wire::SessionView>,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<()> {
         self.record(

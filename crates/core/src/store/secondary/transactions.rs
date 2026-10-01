@@ -17,7 +17,7 @@ impl<S: AuthSchema> Transaction<'_, S> {
         &self,
         mut input: CreateSession,
         deferred: bool,
-    ) -> AuthResult<S::Session> {
+    ) -> AuthResult<crate::wire::SessionView> {
         let session = if self.runtime.database_sessions() {
             self.inner.create_session(input).await?
         } else {
@@ -115,16 +115,29 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
         self.inner.delete_expired_verifications().await
     }
-    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<S::User>> {
+    async fn get_user_by_id_field(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
+        self.inner.get_user_by_id_field(id).await
+    }
+    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner.get_user_by_id(id).await
     }
-    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<S::User>> {
+    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner.get_user_by_email(email).await
     }
-    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<S::User>> {
+    async fn get_user_by_username(
+        &self,
+        username: &str,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner.get_user_by_username(username).await
     }
-    async fn update_user(&self, id: &str, update: crate::UpdateUser) -> AuthResult<S::User> {
+    async fn update_user(
+        &self,
+        id: &str,
+        update: crate::UpdateUser,
+    ) -> AuthResult<crate::wire::UserView> {
         let user = self.inner.update_user(id, update).await?;
         let runtime = self.runtime.clone();
         let updated = user.clone();
@@ -138,6 +151,24 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
             }
             Ok(())
         }))?;
+        Ok(user)
+    }
+    async fn update_user_optional(
+        &self,
+        id: &str,
+        update: crate::UpdateUser,
+    ) -> AuthResult<Option<crate::UserView>> {
+        let user = self.inner.update_user_optional(id, update).await?;
+        if let Some(updated) = user.clone() {
+            let runtime = self.runtime.clone();
+            self.inner.queue_after_commit(Box::pin(async move {
+                // Upstream logs a committed cache refresh failure and continues the hook queue.
+                if let Err(error)=runtime.refresh_user_sessions(&updated).await {
+                    tracing::error!(%error,"Failed to refresh committed user sessions in secondary storage");
+                }
+                Ok(())
+            }))?;
+        }
         Ok(user)
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
@@ -162,7 +193,7 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
         &self,
         id: &str,
         delete_database_sessions: bool,
-    ) -> AuthResult<Option<S::User>> {
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner
             .delete_user_optional(id, delete_database_sessions)
             .await
@@ -170,19 +201,19 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
     async fn create_passkey(&self, input: crate::CreatePasskey) -> AuthResult<crate::Passkey> {
         self.inner.create_passkey(input).await
     }
-    async fn create_user(&self, input: CreateUser) -> AuthResult<S::User> {
+    async fn create_user(&self, input: CreateUser) -> AuthResult<crate::wire::UserView> {
         self.inner.create_user(input).await
     }
     async fn create_account(&self, input: CreateAccount) -> AuthResult<crate::wire::AccountView> {
         self.inner.create_account(input).await
     }
-    async fn create_session(&self, input: CreateSession) -> AuthResult<S::Session> {
+    async fn create_session(&self, input: CreateSession) -> AuthResult<crate::wire::SessionView> {
         self.create_session_with_storage(input, false).await
     }
     async fn create_session_with_deferred_secondary(
         &self,
         input: CreateSession,
-    ) -> AuthResult<S::Session> {
+    ) -> AuthResult<crate::wire::SessionView> {
         self.create_session_with_storage(input, true).await
     }
 }

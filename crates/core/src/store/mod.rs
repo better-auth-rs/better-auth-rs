@@ -1,3 +1,6 @@
+mod api_key_usage;
+pub use api_key_usage::ApiKeyUsageWrite;
+
 use async_trait::async_trait;
 use std::any::Any;
 use std::future::Future;
@@ -37,14 +40,14 @@ pub type TransactionWork<S> =
     dyn for<'tx> FnOnce(&'tx dyn AuthTransaction<S>) -> TransactionFuture<'tx> + Send;
 
 /// A secondary write that runs after update-before hooks and before the database write.
-pub struct SessionUpdateWriter<S: AuthSchema> {
+pub struct SessionUpdateWriter {
     /// Run the database update after the secondary write succeeds.
     pub write_database: bool,
     /// Receive the complete hook patch, before adapter field transformations.
     pub write: Box<
         dyn FnOnce(
                 database_hooks::SessionUpdate,
-            ) -> TypedTransactionFuture<'static, Option<S::Session>>
+            ) -> TypedTransactionFuture<'static, Option<crate::wire::SessionView>>
             + Send,
     >,
 }
@@ -104,40 +107,65 @@ pub trait AuthTransaction<S: AuthSchema>: JwksStore + Send + Sync {
     async fn before_create_runtime_session(&self, _session: &mut CreateSession) -> AuthResult<()> {
         Ok(())
     }
-    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<S::User>>;
-    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<S::User>>;
+    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<crate::wire::UserView>>;
+    /// Query the adapter ID field without the internal adapter's falsy-ID guard.
+    /// Pure secondary session creation uses this lookup before publishing its user snapshot.
+    async fn get_user_by_id_field(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
+        self.get_user_by_id(id.typed()?).await
+    }
+
+    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<crate::wire::UserView>>;
     /// Look up a username using the active transaction.
-    async fn get_user_by_username(&self, _username: &str) -> AuthResult<Option<S::User>> {
+    async fn get_user_by_username(
+        &self,
+        _username: &str,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         Err(AuthError::config(
             "The store must support transactional username lookup",
         ))
     }
-    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<S::User>;
+    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<crate::UserView>;
+    /// Return null for a cancelled update or a missing row. Cancellation skips after hooks.
+    async fn update_user_optional(
+        &self,
+        _id: &str,
+        _update: UpdateUser,
+    ) -> AuthResult<Option<crate::UserView>> {
+        Err(AuthError::config(
+            "The store must support nullable user updates",
+        ))
+    }
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
     /// Delete children and the user, preserving cancellation for secondary cleanup.
     async fn delete_user_optional(
         &self,
         _id: &str,
         _delete_database_sessions: bool,
-    ) -> AuthResult<Option<S::User>> {
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         Err(AuthError::config(
             "The store must preserve user deletion cancellation",
         ))
     }
 
     async fn create_passkey(&self, passkey: CreatePasskey) -> AuthResult<Passkey>;
-    async fn create_user(&self, create_user: CreateUser) -> AuthResult<S::User>;
+    async fn create_user(&self, create_user: CreateUser) -> AuthResult<crate::wire::UserView>;
     async fn create_account(
         &self,
         create_account: CreateAccount,
     ) -> AuthResult<crate::wire::AccountView>;
-    async fn create_session(&self, create_session: CreateSession) -> AuthResult<S::Session>;
+    async fn create_session(
+        &self,
+        create_session: CreateSession,
+    ) -> AuthResult<crate::wire::SessionView>;
     /// Defer secondary session writes until commit, after the session's database after hooks.
     /// Database-only adapters can use the ordinary transaction creation path.
     async fn create_session_with_deferred_secondary(
         &self,
         create_session: CreateSession,
-    ) -> AuthResult<S::Session> {
+    ) -> AuthResult<crate::wire::SessionView> {
         self.create_session(create_session).await
     }
 }
@@ -172,7 +200,7 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
         _user_id: &str,
         _cleanup: VerificationCleanup,
         _sessions: Option<&dyn VerificationSessionCleanup>,
-    ) -> AuthResult<Option<S::User>> {
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         Err(AuthError::config(
             "The store must support pre-commit session cleanup during user verification",
         ))
@@ -182,11 +210,23 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
     async fn verify_user_and_revoke_unproven_access(
         &self,
         user_id: &str,
-    ) -> AuthResult<Option<S::User>>;
-    async fn create_user(&self, create_user: CreateUser) -> AuthResult<S::User>;
-    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<S::User>>;
+    ) -> AuthResult<Option<crate::wire::UserView>>;
+    async fn create_user(&self, create_user: CreateUser) -> AuthResult<crate::wire::UserView>;
+    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<crate::wire::UserView>>;
+    /// Query the adapter ID field without the internal adapter's falsy-ID guard.
+    /// Pure secondary session creation uses this lookup before publishing its user snapshot.
+    async fn get_user_by_id_field(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
+        self.get_user_by_id(id.typed()?).await
+    }
+
     /// Query an ID supplied through a replacement organization schema.
-    async fn get_user_by_id_value(&self, id: &serde_json::Value) -> AuthResult<Option<S::User>> {
+    async fn get_user_by_id_value(
+        &self,
+        id: &serde_json::Value,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         let id = id.as_str().ok_or_else(|| {
             crate::AuthError::config(
                 "The store must support dynamic user ID queries for this schema",
@@ -195,28 +235,48 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
         self.get_user_by_id(id).await
     }
 
-    /// Fetch multiple users by id.
+    /// Fetch users by ID with an explicit adapter limit before output transforms.
     ///
     /// Implementations may return rows in any order. Callers must remap by id
     /// when response order matters.
-    async fn list_users_by_ids(&self, ids: &[String]) -> AuthResult<Vec<S::User>>;
-    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<S::User>>;
-    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<S::User>>;
-    async fn get_user_by_phone_number(&self, phone_number: &str) -> AuthResult<Option<S::User>>;
-    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<S::User>;
+    async fn list_users_by_ids(
+        &self,
+        ids: &[String],
+        limit: f64,
+    ) -> AuthResult<Vec<crate::UserView>>;
+    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<crate::UserView>>;
+    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<crate::UserView>>;
+    async fn get_user_by_phone_number(
+        &self,
+        phone_number: &str,
+    ) -> AuthResult<Option<crate::UserView>>;
+    async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<crate::UserView>;
+    /// Return null for a cancelled update or a missing row. Cancellation skips after hooks.
+    async fn update_user_optional(
+        &self,
+        _id: &str,
+        _update: UpdateUser,
+    ) -> AuthResult<Option<crate::UserView>> {
+        Err(AuthError::config(
+            "The store must support nullable user updates",
+        ))
+    }
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
     /// Delete children and the user, preserving cancellation for secondary cleanup.
     async fn delete_user_optional(
         &self,
         _id: &str,
         _delete_database_sessions: bool,
-    ) -> AuthResult<Option<S::User>> {
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         Err(AuthError::config(
             "The store must preserve user deletion cancellation",
         ))
     }
 
-    async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<S::User>, usize)>;
+    async fn list_users(
+        &self,
+        params: ListUsersParams,
+    ) -> AuthResult<(Vec<crate::wire::UserView>, usize)>;
 }
 
 /// Resolve a team's capacity inside the invitation acceptance transaction.
@@ -252,8 +312,8 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         &self,
         _token: &str,
         _update: database_hooks::SessionUpdate,
-        _secondary: Option<SessionUpdateWriter<S>>,
-    ) -> AuthResult<Option<S::Session>> {
+        _secondary: Option<SessionUpdateWriter>,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
         Err(AuthError::config(
             "The store must support ordered secondary session updates",
         ))
@@ -275,7 +335,10 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         Ok(())
     }
     /// Run creation hooks after secondary storage contains the committed session.
-    async fn after_create_runtime_session(&self, _session: &S::Session) -> AuthResult<()> {
+    async fn after_create_runtime_session(
+        &self,
+        _session: &crate::wire::SessionView,
+    ) -> AuthResult<()> {
         Ok(())
     }
     /// End a live session while retaining its database row for audit.
@@ -292,7 +355,12 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
     async fn get_session_snapshot(
         &self,
         token: &str,
-    ) -> AuthResult<Option<(S::Session, Option<crate::session::SessionData>)>> {
+    ) -> AuthResult<
+        Option<(
+            crate::wire::SessionView,
+            Option<crate::session::SessionData>,
+        )>,
+    > {
         Ok(self
             .get_session(token)
             .await?
@@ -310,21 +378,24 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         session_token: Option<&str>,
         teams_enabled: bool,
         maximum: TeamMemberLimits<'_>,
-    ) -> AuthResult<(Member, Invitation, Option<S::Session>)>;
-    async fn create_session(&self, create_session: CreateSession) -> AuthResult<S::Session>;
-    async fn get_session(&self, token: &str) -> AuthResult<Option<S::Session>>;
+    ) -> AuthResult<(Member, Invitation, Option<crate::wire::SessionView>)>;
+    async fn create_session(
+        &self,
+        create_session: CreateSession,
+    ) -> AuthResult<crate::wire::SessionView>;
+    async fn get_session(&self, token: &str) -> AuthResult<Option<crate::wire::SessionView>>;
     /// Persist application session fields and update the modification timestamp.
     async fn update_session_fields(
         &self,
         token: &str,
         fields: serde_json::Map<String, serde_json::Value>,
-    ) -> AuthResult<Option<S::Session>>;
-    async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<S::Session>>;
+    ) -> AuthResult<Option<crate::wire::SessionView>>;
+    async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<crate::wire::SessionView>>;
     /// List stored sessions with optional secondary projections that preserve absent fields.
     async fn get_user_session_snapshots(
         &self,
         user_id: &str,
-    ) -> AuthResult<Vec<(S::Session, Option<crate::wire::SessionView>)>> {
+    ) -> AuthResult<Vec<(crate::wire::SessionView, Option<crate::wire::SessionView>)>> {
         Ok(self
             .get_user_sessions(user_id)
             .await?
@@ -337,7 +408,7 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         &self,
         token: &str,
         expires_at: chrono::DateTime<chrono::Utc>,
-    ) -> AuthResult<S::Session>;
+    ) -> AuthResult<crate::wire::SessionView>;
     async fn delete_session(&self, token: &str) -> AuthResult<()>;
     /// Delete a token list through one batch lifecycle. Do not update active-session indices.
     async fn delete_sessions(&self, _tokens: &[String]) -> AuthResult<()> {
@@ -357,12 +428,12 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         &self,
         token: &str,
         team_id: Option<&str>,
-    ) -> AuthResult<S::Session>;
+    ) -> AuthResult<crate::wire::SessionView>;
     async fn update_session_active_organization(
         &self,
         token: &str,
         organization_id: Option<&str>,
-    ) -> AuthResult<S::Session>;
+    ) -> AuthResult<crate::wire::SessionView>;
 }
 
 #[async_trait]
@@ -670,27 +741,27 @@ pub trait TwoFactorStore: Send + Sync {
     /// Update an existing authenticator enrollment.
     async fn update_two_factor(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         update: crate::types::UpdateTwoFactor,
     ) -> AuthResult<TwoFactor>;
     /// Replace backup codes only if the stored value still equals the caller's snapshot.
     async fn compare_exchange_two_factor_backup_codes(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         previous: &str,
         replacement: &str,
     ) -> AuthResult<bool>;
     /// Atomically count a failed verification and lock the account once the budget is spent.
     async fn record_two_factor_failure(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         max_attempts: i64,
         locked_until: chrono::DateTime<chrono::Utc>,
     ) -> AuthResult<()>;
     /// Reset failed verifications, optionally requiring an expired lock.
     async fn reset_two_factor_failures(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         locked_before: Option<chrono::DateTime<chrono::Utc>>,
     ) -> AuthResult<()>;
     async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()>;
@@ -700,27 +771,52 @@ pub trait TwoFactorStore: Send + Sync {
 pub trait ApiKeyStore: Send + Sync {
     async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<ApiKey>;
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>>;
+    /// Read an internal API key ID without replacing an omitted Memory adapter ID.
+    async fn get_api_key_by_id_value(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<ApiKey>> {
+        self.get_api_key_by_id(id.typed()?).await
+    }
     async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>>;
-    async fn list_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<Vec<ApiKey>>;
-    async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<ApiKey>;
-    async fn delete_api_key(&self, id: &str) -> AuthResult<()>;
+    /// Read API keys with the adapter's default limit and no explicit sort.
+    async fn list_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<Vec<ApiKey>> {
+        self.find_api_keys_by_reference(reference_id, None).await
+    }
+    /// Read API keys, sorting before the adapter's default limit.
+    /// `sort` contains the schema field name and `asc` or `desc` direction.
+    async fn find_api_keys_by_reference(
+        &self,
+        reference_id: &str,
+        sort: Option<(&str, &str)>,
+    ) -> AuthResult<Vec<ApiKey>>;
+    /// Count all matching API keys without applying the adapter's default limit.
+    async fn count_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<u64>;
+    async fn update_api_key(
+        &self,
+        id: &crate::SchemaValue<String>,
+        update: UpdateApiKey,
+    ) -> AuthResult<ApiKey>;
+    async fn delete_api_key(&self, id: &crate::SchemaValue<String>) -> AuthResult<()>;
     async fn delete_expired_api_keys(&self) -> AuthResult<usize>;
 
-    /// Atomically consume one use of an API key: decrement remaining
-    /// (with refill), increment rate-limit counter, and update timestamps.
-    ///
-    /// All counter mutations are derived from the locked row inside a
-    /// transaction, preventing concurrent requests from corrupting counters.
-    /// Read-only checks (enabled, expired, permissions) happen before this
-    /// call in the plugin layer.
-    ///
-    /// `global_rate_limit_enabled`: whether the plugin-level rate limiting
-    /// is turned on. Per-key settings are read from the locked row.
+    /// Apply one conditional usage write and return the resulting row.
+    /// A failed guard returns `None`; each successful call commits independently.
+    async fn write_api_key_usage(
+        &self,
+        id: &crate::SchemaValue<String>,
+        write: ApiKeyUsageWrite,
+    ) -> AuthResult<Option<ApiKey>>;
+
+    /// Consume quota, claim a rate slot, and update the timestamp in adapter order.
+    /// Earlier writes remain committed if a later write fails.
     async fn consume_api_key_usage(
         &self,
-        id: &str,
+        snapshot: &ApiKey,
         global_rate_limit_enabled: bool,
-    ) -> AuthResult<ConsumeApiKeyResult>;
+    ) -> AuthResult<ConsumeApiKeyResult> {
+        api_key_usage::consume(self, snapshot, global_rate_limit_enabled).await
+    }
 }
 
 /// Outcome of an atomic API key usage consumption.
@@ -747,7 +843,7 @@ pub trait PasskeyStore: Send + Sync {
     async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>>;
     async fn update_passkey_authentication(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         update: UpdatePasskeyAuthentication,
     ) -> AuthResult<Passkey>;
     async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey>;
@@ -770,7 +866,7 @@ pub trait DeviceCodeStore: Send + Sync {
     /// Update mutable device-code state such as approval status or poll time.
     async fn update_device_code(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         update: UpdateDeviceCode,
     ) -> AuthResult<DeviceCode>;
     /// Update a device code only when it still has the expected status.
@@ -779,7 +875,7 @@ pub trait DeviceCodeStore: Send + Sync {
     /// row was already moved to a different state.
     async fn update_device_code_if_status(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         current_status: &str,
         update: UpdateDeviceCode,
     ) -> AuthResult<bool>;
@@ -789,13 +885,21 @@ pub trait DeviceCodeStore: Send + Sync {
     /// row was already claimed or no longer pending. The status and
     /// unclaimed checks are part of the write so two concurrent verifiers
     /// cannot both claim the same code.
-    async fn claim_device_code(&self, id: &str, user_id: &str) -> AuthResult<bool>;
+    async fn claim_device_code(
+        &self,
+        id: &crate::SchemaValue<String>,
+        user_id: &str,
+    ) -> AuthResult<bool>;
     /// Delete a device code record.
-    async fn delete_device_code(&self, id: &str) -> AuthResult<()>;
+    async fn delete_device_code(&self, id: &crate::SchemaValue<String>) -> AuthResult<()>;
     /// Delete a device code only when it still has the expected status.
     ///
     /// Returns `true` when a matching row was deleted and `false` otherwise.
-    async fn delete_device_code_if_status(&self, id: &str, status: &str) -> AuthResult<bool>;
+    async fn delete_device_code_if_status(
+        &self,
+        id: &crate::SchemaValue<String>,
+        status: &str,
+    ) -> AuthResult<bool>;
 }
 
 #[async_trait]
@@ -815,7 +919,7 @@ pub trait WalletStore: Send + Sync {
     ) -> AuthResult<Option<crate::types::WalletAddress>>;
     async fn create_wallet_address(
         &self,
-        wallet: crate::types::WalletAddress,
+        wallet: crate::types::CreateWalletAddress,
     ) -> AuthResult<crate::types::WalletAddress>;
 }
 
@@ -847,7 +951,7 @@ pub trait TeamStore: Send + Sync {
     /// Return None when the maximum member count is reached.
     async fn add_team_member(
         &self,
-        team_id: &str,
+        team_id: &crate::SchemaValue<String>,
         user_id: &str,
         maximum: Option<usize>,
     ) -> AuthResult<Option<crate::TeamMember>>;
@@ -877,7 +981,7 @@ pub trait OrganizationRoleStore: Send + Sync {
 /// A persistent database rate-limit record. Timestamps use Unix milliseconds.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RateLimitRecord {
-    pub id: String,
+    pub id: crate::SchemaValue<String>,
     pub key: String,
     pub count: f64,
     pub last_request: i64,

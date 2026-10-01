@@ -17,10 +17,14 @@ impl RateLimitStore for EphemeralStore {
         let mut reset = false;
         let allowed = match state.rate_limits.get_mut(key) {
             None => {
+                let id = self
+                    .generated_id("rateLimit", None, state.rate_limits.len())?
+                    .map(crate::SchemaValue::Typed)
+                    .unwrap_or_default();
                 let _ = state.rate_limits.insert(
                     key.to_owned(),
                     RateLimitRecord {
-                        id: uuid::Uuid::new_v4().to_string(),
+                        id,
                         key: key.to_owned(),
                         count: 1.0,
                         last_request: now,

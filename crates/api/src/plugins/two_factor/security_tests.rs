@@ -43,7 +43,7 @@ async fn challenge_database_failures_preserve_upstream_errors_and_cookie_expiry(
     )
     .await;
     for (identifier, value) in [
-        ("failure-challenge", user.id.as_str()),
+        ("failure-challenge", user.id.typed().unwrap().as_str()),
         ("2fa-attempts-failure-challenge", "5"),
     ] {
         let _ = ctx
@@ -154,7 +154,7 @@ async fn otp_enrollment_rotates_session_and_does_not_enroll_an_authenticator() {
     );
     assert!(
         ctx.database
-            .get_two_factor_by_user_id(&user.id)
+            .get_two_factor_by_user_id(user.id.typed().unwrap())
             .await
             .unwrap()
             .is_none()
@@ -199,7 +199,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
     .unwrap();
     let first_record = ctx
         .database
-        .get_two_factor_by_user_id(&user.id)
+        .get_two_factor_by_user_id(user.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
@@ -216,7 +216,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
     .unwrap();
     let second_record = ctx
         .database
-        .get_two_factor_by_user_id(&user.id)
+        .get_two_factor_by_user_id(user.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
@@ -281,7 +281,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
     );
     let preserved = ctx
         .database
-        .get_two_factor_by_user_id(&user.id)
+        .get_two_factor_by_user_id(user.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
@@ -314,7 +314,7 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
     .unwrap();
     let user = UserView::from(
         &ctx.database
-            .get_user_by_id(&user.id)
+            .get_user_by_id(user.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap(),
@@ -376,7 +376,7 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
     );
     let factor = ctx
         .database
-        .get_two_factor_by_user_id(&user.id)
+        .get_two_factor_by_user_id(user.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
@@ -390,7 +390,7 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
         .unwrap();
     let factor = ctx
         .database
-        .get_two_factor_by_user_id(&user.id)
+        .get_two_factor_by_user_id(user.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
@@ -425,7 +425,7 @@ async fn concurrent_otp_requests_create_only_one_session_and_invalidate_older_co
     };
     let before = ctx
         .database
-        .get_user_sessions(&user.id)
+        .get_user_sessions(user.id.typed().unwrap())
         .await
         .unwrap()
         .len();
@@ -436,7 +436,7 @@ async fn concurrent_otp_requests_create_only_one_session_and_invalidate_older_co
     assert_eq!(usize::from(first.is_ok()) + usize::from(second.is_ok()), 1);
     assert_eq!(
         ctx.database
-            .get_user_sessions(&user.id)
+            .get_user_sessions(user.id.typed().unwrap())
             .await
             .unwrap()
             .len(),

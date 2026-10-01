@@ -59,7 +59,11 @@ pub(super) fn generate(
         if !core.contains(&name.as_str()) {
             continue;
         }
-        let value = if role == EntityRole::RateLimit && name == "count" {
+        let value = if name == "id"
+            || (role == EntityRole::DeviceCode && matches!(name.as_str(), "client_id" | "scope"))
+        {
+            quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
+        } else if role == EntityRole::RateLimit && name == "count" {
             quote!(f64::from(self.#ident.to_owned()))
         } else if role == EntityRole::ApiKey && name == "start" {
             quote!(self.#ident.clone().map(#core_root::ApiKeyStart::from))

@@ -374,7 +374,9 @@ pub(super) async fn handle_get_access_token(
         Err(message) => return invalid_selection("body", message),
     };
     let (_, session) = ctx.require_authoritative_session(req).await?;
-    let account = selection.resolve(req, &session.user_id, ctx).await?;
+    let account = selection
+        .resolve(req, session.user_id.typed()?, ctx)
+        .await?;
     let (response, cookies) = valid_access_token(&account, config, req, ctx).await?;
     token_response(&response, cookies)
 }
@@ -389,7 +391,9 @@ pub(super) async fn handle_refresh_token(
         Err(message) => return invalid_selection("body", message),
     };
     let (_, session) = ctx.require_authoritative_session(req).await?;
-    let account = selection.resolve(req, &session.user_id, ctx).await?;
+    let account = selection
+        .resolve(req, session.user_id.typed()?, ctx)
+        .await?;
     let provider = provider_for(config, &account)?;
     if !account.refresh_token.is_truthy()? {
         return Err(AuthError::bad_request("Refresh token not found"));
@@ -448,7 +452,9 @@ pub(super) async fn handle_account_info(
         Err(message) => return invalid_selection("query", message),
     };
     let (_, session) = ctx.require_authoritative_session(req).await?;
-    let account = selection.resolve(req, &session.user_id, ctx).await?;
+    let account = selection
+        .resolve(req, session.user_id.typed()?, ctx)
+        .await?;
     let provider = config
         .providers
         .iter()

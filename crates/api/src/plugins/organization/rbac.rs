@@ -261,7 +261,7 @@ fn authorize(role: &str, permissions: &Statements, roles: &HashMap<String, State
 pub(crate) async fn check_permissions(
     role: &str,
     organization_id: &str,
-    permissions: &Statements,
+    permissions: Option<&Statements>,
     config: &super::OrganizationConfig,
     ctx: &better_auth_core::AuthContext<impl better_auth_core::AuthSchema>,
 ) -> better_auth_core::AuthResult<bool> {
@@ -301,7 +301,7 @@ pub(crate) async fn check_permissions(
             }
         }
     }
-    Ok(authorize(role, permissions, &roles))
+    Ok(permissions.is_some_and(|permissions| authorize(role, permissions, &roles)))
 }
 
 /// Authorize one resource through the organization's configured and persisted roles.
@@ -316,10 +316,10 @@ pub(crate) async fn check_permission(
     check_permissions(
         role,
         organization_id,
-        &HashMap::from([(
+        Some(&HashMap::from([(
             resource.to_owned(),
             actions.iter().map(|action| (*action).to_owned()).collect(),
-        )]),
+        )])),
         config,
         ctx,
     )

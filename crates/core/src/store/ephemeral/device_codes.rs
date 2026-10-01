@@ -4,7 +4,10 @@ use super::*;
 impl DeviceCodeStore for EphemeralStore {
     async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode> {
         let device_code = DeviceCode {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: self
+                .generated_id("deviceCode", None, self.lock()?.device_codes.len())?
+                .map(crate::SchemaValue::Typed)
+                .unwrap_or_default(),
             device_code: input.device_code,
             user_code: input.user_code,
             user_id: input.user_id,
@@ -12,13 +15,17 @@ impl DeviceCodeStore for EphemeralStore {
             status: input.status,
             last_polled_at: input.last_polled_at,
             polling_interval: input.polling_interval,
-            client_id: input.client_id,
-            scope: input.scope,
+            client_id: input
+                .client_id
+                .map(|value| crate::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            scope: input
+                .scope
+                .map(|value| crate::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
         };
         self.raw("deviceCode", "create", |state| {
-            let _ = state
-                .device_codes
-                .insert(device_code.id.clone(), device_code.clone());
+            state.device_codes.push(device_code.clone());
             Ok(device_code)
         })
         .await
@@ -31,7 +38,7 @@ impl DeviceCodeStore for EphemeralStore {
         self.raw("deviceCode", "findOne", |state| {
             Ok(state
                 .device_codes
-                .values()
+                .iter()
                 .find(|value| value.device_code == device_code)
                 .cloned())
         })
@@ -45,7 +52,7 @@ impl DeviceCodeStore for EphemeralStore {
         self.raw("deviceCode", "findOne", |state| {
             Ok(state
                 .device_codes
-                .values()
+                .iter()
                 .find(|value| value.user_code == user_code)
                 .cloned())
         })
@@ -54,7 +61,7 @@ impl DeviceCodeStore for EphemeralStore {
 
     async fn update_device_code(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         update: UpdateDeviceCode,
     ) -> AuthResult<DeviceCode> {
         self.raw("deviceCode", "update", |state| {
@@ -80,7 +87,7 @@ impl DeviceCodeStore for EphemeralStore {
 
     async fn update_device_code_if_status(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         current_status: &str,
         update: UpdateDeviceCode,
     ) -> AuthResult<bool> {
@@ -108,7 +115,11 @@ impl DeviceCodeStore for EphemeralStore {
         .await
     }
 
-    async fn claim_device_code(&self, id: &str, user_id: &str) -> AuthResult<bool> {
+    async fn claim_device_code(
+        &self,
+        id: &crate::SchemaValue<String>,
+        user_id: &str,
+    ) -> AuthResult<bool> {
         self.raw("deviceCode", "incrementOne", |state| {
             let Some(device_code) = state.device_codes.get_mut(id) else {
                 return Ok(false);
@@ -124,15 +135,19 @@ impl DeviceCodeStore for EphemeralStore {
         .await
     }
 
-    async fn delete_device_code(&self, id: &str) -> AuthResult<()> {
+    async fn delete_device_code(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
         self.raw("deviceCode", "delete", |state| {
-            let _ = state.device_codes.shift_remove(id);
+            let _ = state.device_codes.remove(id);
             Ok(())
         })
         .await
     }
 
-    async fn delete_device_code_if_status(&self, id: &str, status: &str) -> AuthResult<bool> {
+    async fn delete_device_code_if_status(
+        &self,
+        id: &crate::SchemaValue<String>,
+        status: &str,
+    ) -> AuthResult<bool> {
         self.raw("deviceCode", "delete", |state| {
             let should_delete = state
                 .device_codes
@@ -140,7 +155,7 @@ impl DeviceCodeStore for EphemeralStore {
                 .is_some_and(|device_code| device_code.status == status);
 
             if should_delete {
-                let _ = state.device_codes.shift_remove(id);
+                let _ = state.device_codes.remove(id);
             }
 
             Ok(should_delete)

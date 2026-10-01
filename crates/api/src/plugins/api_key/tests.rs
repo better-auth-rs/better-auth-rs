@@ -28,7 +28,7 @@ async fn create_test_context_with_user() -> (AuthContext<TestSchema>, UserView, 
 
     let session = database
         .create_session(CreateSession {
-            user_id: user.id().to_string(),
+            user_id: user.id().into_owned(),
             expires_at: Utc::now() + Duration::hours(24),
             ip_address: Some("127.0.0.1".to_string()),
             user_agent: Some("test-agent".to_string()),
@@ -60,7 +60,7 @@ async fn create_user_with_session(
     let session = ctx
         .database
         .create_session(CreateSession {
-            user_id: user.id().to_string(),
+            user_id: user.id().into_owned(),
             expires_at: Utc::now() + Duration::hours(24),
             ip_address: None,
             user_agent: None,
@@ -146,7 +146,7 @@ async fn create_key_with_server_fields(
 ) -> (String, String) {
     let (id, raw_key) = create_key_and_get_raw(plugin, ctx, token, client_body).await;
     ctx.database
-        .update_api_key(&id, server_fields)
+        .update_api_key(&id.clone().into(), server_fields)
         .await
         .unwrap();
     (id, raw_key)
@@ -331,7 +331,10 @@ async fn test_list_returns_only_user_keys() {
     assert_eq!(list_body["total"], 1);
     // Upstream renamed the owner field to `referenceId` (a user or an
     // organization id) and stamps the owning configuration on every key.
-    assert_eq!(list[0]["referenceId"].as_str().unwrap(), user1.id);
+    assert_eq!(
+        list[0]["referenceId"].as_str().unwrap(),
+        user1.id.typed().unwrap()
+    );
     assert_eq!(list[0]["configId"].as_str().unwrap(), "default");
     assert!(list[0].get("userId").is_none());
     assert!(list[0].get("key").is_none());
@@ -409,7 +412,10 @@ async fn test_verify_disabled_key() {
         enabled: Some(false),
         ..Default::default()
     };
-    ctx.database.update_api_key(&id, update).await.unwrap();
+    ctx.database
+        .update_api_key(&id.clone().into(), update)
+        .await
+        .unwrap();
 
     let body = verify_key(&plugin, &ctx, &raw_key, None).await;
     assert_eq!(body["valid"], false);
@@ -434,7 +440,10 @@ async fn test_verify_expired_key() {
         expires_at: Some(Some(past)),
         ..Default::default()
     };
-    ctx.database.update_api_key(&id, update).await.unwrap();
+    ctx.database
+        .update_api_key(&id.clone().into(), update)
+        .await
+        .unwrap();
 
     let body = verify_key(&plugin, &ctx, &raw_key, None).await;
     assert_eq!(body["valid"], false);
@@ -543,7 +552,7 @@ async fn test_delete_all_expired() {
     let past = (Utc::now() - Duration::hours(1)).to_rfc3339();
     ctx.database
         .update_api_key(
-            &id1,
+            &id1.clone().into(),
             UpdateApiKey {
                 expires_at: Some(Some(past)),
                 ..Default::default()
@@ -558,7 +567,7 @@ async fn test_delete_all_expired() {
     // Only the non-expired key should remain
     let remaining_keys = ctx
         .database
-        .list_api_keys_by_reference(&_user.id)
+        .list_api_keys_by_reference(_user.id.typed().unwrap())
         .await
         .unwrap();
     assert_eq!(remaining_keys.len(), 1);
@@ -731,3 +740,221 @@ mod session_tests;
 
 #[path = "verification_tests.rs"]
 mod verification_tests;
+
+async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthSchema>) {
+    let plugin = ApiKeyPlugin::with_config(ApiKeyConfig::default());
+    let mut keys = Vec::new();
+    for (index, name) in ["D", "A", "E", "C", "B"].into_iter().enumerate() {
+        let key = ctx
+            .database
+            .create_api_key(better_auth_core::CreateApiKey {
+                reference_id: "list-owner".into(),
+                config_id: "default".into(),
+                name: Some(name.into()),
+                key_hash: format!("stored-{index}"),
+                prefix: None,
+                start: None,
+                expires_at: None,
+                remaining: None,
+                enabled: true,
+                rate_limit_enabled: false,
+                rate_limit_time_window: None,
+                rate_limit_max: None,
+                refill_interval: None,
+                refill_amount: None,
+                permissions: None,
+                metadata: None,
+            })
+            .await
+            .unwrap();
+        keys.push(key);
+    }
+    assert_eq!(
+        ctx.database
+            .count_api_keys_by_reference("list-owner")
+            .await
+            .unwrap(),
+        5
+    );
+    let query = types::ListKeysQuery {
+        sort_by: Some("name".into()),
+        sort_direction: Some("desc".into()),
+        limit: Some(1),
+        offset: Some(1),
+        ..Default::default()
+    };
+    let result = handlers::list_keys_core("list-owner", &query, &plugin, ctx)
+        .await
+        .unwrap();
+    assert_eq!(result.total, 2);
+    assert_eq!(
+        result
+            .api_keys
+            .iter()
+            .map(|key| key.name.as_deref())
+            .collect::<Vec<_>>(),
+        [Some("D")]
+    );
+    assert_eq!((result.limit, result.offset), (Some(1), Some(1)));
+
+    let cache = Arc::new(better_auth_core::store::MemoryCacheAdapter::new());
+    for key in &keys {
+        storage::put(cache.as_ref(), key, false).await.unwrap();
+    }
+    let plugin = ApiKeyPlugin::with_config(ApiKeyConfig {
+        storage: ApiKeyStorage::SecondaryStorage,
+        custom_storage: Some(cache),
+        ..Default::default()
+    });
+    let result = handlers::list_keys_core("list-owner", &query, &plugin, ctx)
+        .await
+        .unwrap();
+    assert_eq!(result.total, 5);
+    assert_eq!(
+        result
+            .api_keys
+            .iter()
+            .map(|key| key.name.as_deref())
+            .collect::<Vec<_>>(),
+        [Some("D")]
+    );
+
+    let cache = Arc::new(better_auth_core::store::MemoryCacheAdapter::new());
+    let plugin = ApiKeyPlugin::with_config(ApiKeyConfig {
+        storage: ApiKeyStorage::SecondaryStorage,
+        custom_storage: Some(cache),
+        fallback_to_database: true,
+        ..Default::default()
+    });
+    for _ in 0..2 {
+        let result = handlers::list_keys_core("list-owner", &query, &plugin, ctx)
+            .await
+            .unwrap();
+        assert_eq!(result.total, 2);
+        assert_eq!(
+            result
+                .api_keys
+                .iter()
+                .map(|key| key.name.as_deref())
+                .collect::<Vec<_>>(),
+            [Some("D")]
+        );
+    }
+    let cache = Arc::new(better_auth_core::store::MemoryCacheAdapter::new());
+    for ((mut key, name), remaining) in keys
+        .into_iter()
+        .zip([
+            Some("\u{e000}"),
+            Some("\u{10000}"),
+            Some("a"),
+            None,
+            Some("A"),
+        ])
+        .zip([Some(0.0), Some(-0.0), Some(1.0), Some(-1.0), None])
+    {
+        key.name = name.map(str::to_owned);
+        key.remaining = remaining;
+        storage::put(cache.as_ref(), &key, false).await.unwrap();
+    }
+    let plugin = ApiKeyPlugin::with_config(ApiKeyConfig {
+        storage: ApiKeyStorage::SecondaryStorage,
+        custom_storage: Some(cache),
+        ..Default::default()
+    });
+    for direction in ["asc", "desc"] {
+        let query = types::ListKeysQuery {
+            sort_by: Some("name".into()),
+            sort_direction: Some(direction.into()),
+            ..Default::default()
+        };
+        let result = handlers::list_keys_core("list-owner", &query, &plugin, ctx)
+            .await
+            .unwrap();
+        let mut expected = [
+            None,
+            Some("A"),
+            Some("a"),
+            Some("\u{10000}"),
+            Some("\u{e000}"),
+        ];
+        if direction == "desc" {
+            expected.reverse();
+        }
+        assert_eq!(
+            result
+                .api_keys
+                .iter()
+                .map(|key| key.name.as_deref())
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+    for (direction, expected) in [
+        (
+            "asc",
+            [
+                Some("A"),
+                None,
+                Some("\u{e000}"),
+                Some("\u{10000}"),
+                Some("a"),
+            ],
+        ),
+        (
+            "desc",
+            [
+                Some("a"),
+                Some("\u{e000}"),
+                Some("\u{10000}"),
+                None,
+                Some("A"),
+            ],
+        ),
+    ] {
+        let query = types::ListKeysQuery {
+            sort_by: Some("remaining".into()),
+            sort_direction: Some(direction.into()),
+            ..Default::default()
+        };
+        let result = handlers::list_keys_core("list-owner", &query, &plugin, ctx)
+            .await
+            .unwrap();
+        assert_eq!(
+            result
+                .api_keys
+                .iter()
+                .map(|key| key.name.as_deref())
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+}
+
+#[tokio::test]
+async fn list_memory_applies_adapter_default_before_public_pagination() {
+    let mut config = crate::plugins::test_helpers::create_test_config();
+    config.advanced.database.default_find_many_limit = Some(2.0);
+    let config = Arc::new(config);
+    let store = Arc::new(better_auth_core::store::EphemeralStore::new(config.clone()));
+    let ctx = AuthContext::new(config, store);
+    check_list_default_limit(&ctx).await;
+}
+
+#[tokio::test]
+async fn list_sqlite_applies_adapter_default_before_public_pagination() {
+    let mut config = crate::plugins::test_helpers::create_test_config();
+    config.advanced.database.default_find_many_limit = Some(2.0);
+    let config = Arc::new(config);
+    let db = better_auth_seaorm::Database::connect("sqlite::memory:")
+        .await
+        .unwrap();
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&db)
+        .await
+        .unwrap();
+    let store = Arc::new(better_auth_seaorm::SeaOrmStore::<TestSchema>::new(
+        config.clone(),
+        db,
+    ));
+    let ctx = AuthContext::new(config, store);
+    check_list_default_limit(&ctx).await;
+}

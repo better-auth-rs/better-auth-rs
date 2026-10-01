@@ -1,22 +1,23 @@
+use super::rows::Rows;
 use super::*;
 
 #[derive(Clone, Default)]
 pub(super) struct State {
-    pub(super) organizations: IndexMap<String, Organization>,
-    pub(super) members: IndexMap<String, Member>,
-    pub(super) invitations: IndexMap<String, Invitation>,
-    pub(super) teams: IndexMap<String, crate::Team>,
+    pub(super) organizations: Rows<Organization>,
+    pub(super) members: Rows<Member>,
+    pub(super) invitations: Rows<Invitation>,
+    pub(super) teams: Rows<crate::Team>,
     pub(super) team_members: Vec<crate::TeamMember>,
-    pub(super) organization_roles: IndexMap<String, crate::OrganizationRole>,
+    pub(super) organization_roles: Rows<crate::OrganizationRole>,
     pub(super) jwks: Vec<crate::Jwk>,
-    pub(super) users: IndexMap<String, UserView>,
+    pub(super) users: Rows<UserView>,
     pub(super) wallets: Vec<crate::types::WalletAddress>,
     pub(super) sessions: IndexMap<String, SessionView>,
-    pub(super) accounts: IndexMap<String, Map<String, Value>>,
-    pub(super) verifications: IndexMap<String, Map<String, Value>>,
-    pub(super) two_factors: IndexMap<String, TwoFactor>,
-    pub(super) device_codes: IndexMap<String, DeviceCode>,
-    pub(super) api_keys: IndexMap<String, ApiKey>,
-    pub(super) passkeys: IndexMap<String, Passkey>,
+    pub(super) accounts: Vec<Map<String, Value>>,
+    pub(super) verifications: Vec<Map<String, Value>>,
+    pub(super) two_factors: Rows<TwoFactor>,
+    pub(super) device_codes: Rows<DeviceCode>,
+    pub(super) api_keys: Rows<ApiKey>,
+    pub(super) passkeys: Rows<Passkey>,
     pub(super) rate_limits: IndexMap<String, crate::store::RateLimitRecord>,
 }

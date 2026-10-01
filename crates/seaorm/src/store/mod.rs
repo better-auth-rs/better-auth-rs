@@ -173,6 +173,26 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         &self.config
     }
 
+    fn generated_id(&self, model: &str, supplied: Option<String>) -> AuthResult<Option<String>> {
+        self.config.advanced.database.generate_id.adapter_id(
+            model,
+            supplied,
+            self.db.get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+    }
+
+    fn create_fields(
+        &self,
+        model: &str,
+        supplied: Option<String>,
+        mut fields: serde_json::Map<String, serde_json::Value>,
+    ) -> AuthResult<serde_json::Map<String, serde_json::Value>> {
+        if let Some(id) = self.generated_id(model, supplied)? {
+            let _ = fields.insert("id".into(), serde_json::Value::String(id));
+        }
+        Ok(fields)
+    }
+
     pub(crate) fn hooks(&self) -> &[Arc<dyn SeaOrmHooks<S>>] {
         &self.hooks
     }
@@ -205,7 +225,7 @@ struct SeaOrmTransaction<
 > {
     store: &'a SeaOrmStore<S, O, P>,
     tx: &'a DatabaseTransaction,
-    effects: Mutex<Vec<transaction_hooks::PendingEffect<S>>>,
+    effects: Mutex<Vec<transaction_hooks::PendingEffect>>,
 }
 
 #[async_trait]
@@ -275,16 +295,25 @@ where
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
         self.delete_expired_transaction_verifications().await
     }
-    async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<S::User>> {
+    async fn get_user_by_id(
+        &self,
+        id: &str,
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
         let id = S::User::parse_id(id)?;
         <S::User as SeaOrmUserModel>::Entity::find()
             .filter(<S::User as SeaOrmUserModel>::id_column().eq(id))
             .one(self.tx)
             .await
-            .map_err(map_db_err)
+            .map_err(map_db_err)?
+            .as_ref()
+            .map(|row| self.store.output_user(row, self.tx))
+            .transpose()
     }
-    async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<S::User>> {
+    async fn get_user_by_email(
+        &self,
+        email: &str,
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
         <S::User as SeaOrmUserModel>::Entity::find()
             .filter(
@@ -293,21 +322,43 @@ where
             )
             .one(self.tx)
             .await
-            .map_err(map_db_err)
+            .map_err(map_db_err)?
+            .as_ref()
+            .map(|row| self.store.output_user(row, self.tx))
+            .transpose()
     }
-    async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<S::User>> {
+    async fn get_user_by_username(
+        &self,
+        username: &str,
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         self.store.find_user_by_username(self.tx, username).await
     }
     async fn update_user(
         &self,
         id: &str,
         update: better_auth_core::UpdateUser,
-    ) -> AuthResult<S::User> {
+    ) -> AuthResult<better_auth_core::wire::UserView> {
         let record = self
             .store
             .update_user_with_connection(self.tx, Some((self.tx, self)), id, update)
             .await?;
         self.queue(transaction_hooks::Effect::UserUpdated(Some(record.clone())))?;
+        Ok(record)
+    }
+    async fn update_user_optional(
+        &self,
+        id: &str,
+        update: better_auth_core::UpdateUser,
+    ) -> AuthResult<Option<better_auth_core::UserView>> {
+        let record = self
+            .store
+            .update_user_outcome_with_connection(self.tx, Some((self.tx, self)), id, update)
+            .await?
+            .continue_value()
+            .flatten();
+        if let Some(user) = &record {
+            self.queue(transaction_hooks::Effect::UserUpdated(Some(user.clone())))?;
+        }
         Ok(record)
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
@@ -318,7 +369,7 @@ where
         &self,
         id: &str,
         delete_database_sessions: bool,
-    ) -> AuthResult<Option<S::User>> {
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         let record = self
             .store
             .delete_user_with_connection(
@@ -349,7 +400,10 @@ where
             .before_runtime_session_in_tx(session, Some((self.tx, self)))
             .await
     }
-    async fn create_user(&self, create_user: better_auth_core::CreateUser) -> AuthResult<S::User> {
+    async fn create_user(
+        &self,
+        create_user: better_auth_core::CreateUser,
+    ) -> AuthResult<better_auth_core::wire::UserView> {
         let record = self
             .store
             .create_user_in_tx((self.tx, self), create_user)
@@ -375,7 +429,7 @@ where
     async fn create_session(
         &self,
         create_session: better_auth_core::CreateSession,
-    ) -> AuthResult<S::Session> {
+    ) -> AuthResult<better_auth_core::wire::SessionView> {
         let record = self
             .store
             .create_session_in_tx((self.tx, self), create_session)

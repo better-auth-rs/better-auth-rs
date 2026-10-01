@@ -9,7 +9,6 @@ mod users;
 mod verifications;
 
 use super::{AuthStore, SecondaryStorage};
-use crate::entity::AuthSession;
 use crate::plugin::MetadataMap;
 use crate::{AuthConfig, AuthError, AuthResult, AuthSchema};
 use chrono::{DateTime, Utc};
@@ -39,18 +38,13 @@ impl<S: AuthSchema> Clone for SecondaryStore<S> {
 }
 
 impl<S: AuthSchema> SecondaryStore<S> {
-    /// Validate model hydration before secondary storage serves requests.
+    /// Install the secondary backend while retaining canonical runtime records.
     pub fn new(
         inner: Arc<dyn AuthStore<S>>,
         storage: Arc<dyn SecondaryStorage>,
         config: Arc<AuthConfig>,
         metadata: MetadataMap,
     ) -> AuthResult<Self> {
-        if !S::Session::SUPPORTS_RUNTIME_HYDRATION {
-            return Err(AuthError::config(
-                "Secondary storage requires AuthSession runtime hydration; derive AuthEntity or implement from_runtime_fields",
-            ));
-        }
         Ok(Self {
             inner,
             storage: Some(storage),

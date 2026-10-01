@@ -9,7 +9,6 @@ use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-use async_trait::async_trait;
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthSession, AuthStore, AuthUser, CreateAccount,
     CreateSession, CreateUser,
@@ -59,7 +58,7 @@ impl ProjectionHooks {
 impl SeaOrmHooks<ProjectionSchema> for ProjectionHooks {
     async fn before_delete_session(
         &self,
-        row: &application_session::Model,
+        row: &better_auth_core::wire::SessionView,
         _: &SeaOrmHookContext<'_, ProjectionSchema>,
     ) -> AuthResult<HookControl> {
         self.record(row)?;
@@ -67,7 +66,7 @@ impl SeaOrmHooks<ProjectionSchema> for ProjectionHooks {
     }
     async fn after_delete_session(
         &self,
-        row: &application_session::Model,
+        row: &better_auth_core::wire::SessionView,
         _: &SeaOrmHookContext<'_, ProjectionSchema>,
     ) -> AuthResult<()> {
         self.record(row)
@@ -101,8 +100,14 @@ async fn check_projected_snapshots<S: AuthSchema>(
         .create_user(CreateUser::new().with_email("snapshot@example.com"))
         .await
         .unwrap();
-    let first = store.create_session(session(&user.id())).await.unwrap();
-    let second = store.create_session(session(&user.id())).await.unwrap();
+    let first = store
+        .create_session(session(user.id().typed().unwrap()))
+        .await
+        .unwrap();
+    let second = store
+        .create_session(session(user.id().typed().unwrap()))
+        .await
+        .unwrap();
     store.delete_session(first.token()).await.unwrap();
     assert_eq!(
         *hooks.0.lock().unwrap(),
@@ -117,7 +122,7 @@ async fn check_projected_snapshots<S: AuthSchema>(
     reject.store(true, Ordering::SeqCst);
     assert_eq!(
         store
-            .delete_user_sessions_optional(&user.id(), false)
+            .delete_user_sessions_optional(user.id().typed().unwrap(), false)
             .await
             .unwrap(),
         Some(1)
@@ -204,7 +209,7 @@ impl Hooks {
 impl<S: AuthSchema> SeaOrmHooks<S> for Hooks {
     async fn before_delete_session(
         &self,
-        _: &S::Session,
+        _: &better_auth_core::wire::SessionView,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         Ok(if self.before_session() {
@@ -215,7 +220,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Hooks {
     }
     async fn after_delete_session(
         &self,
-        _: &S::Session,
+        _: &better_auth_core::wire::SessionView,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.after("session.after")
@@ -237,13 +242,17 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Hooks {
     }
     async fn before_delete_user(
         &self,
-        _: &S::User,
+        _: &better_auth_core::wire::UserView,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         self.before("user.before");
         Ok(HookControl::Continue)
     }
-    async fn after_delete_user(&self, _: &S::User, _: &SeaOrmHookContext<'_, S>) -> AuthResult<()> {
+    async fn after_delete_user(
+        &self,
+        _: &better_auth_core::wire::UserView,
+        _: &SeaOrmHookContext<'_, S>,
+    ) -> AuthResult<()> {
         self.after("user.after")
     }
 }
@@ -251,7 +260,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Hooks {
 impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     async fn before_delete_session(
         &self,
-        _: &S::Session,
+        _: &better_auth_core::wire::SessionView,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookControl> {
         Ok(if self.before_session() {
@@ -262,7 +271,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     }
     async fn after_delete_session(
         &self,
-        _: &S::Session,
+        _: &better_auth_core::wire::SessionView,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.after("session.after")
@@ -284,7 +293,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     }
     async fn before_delete_user(
         &self,
-        _: &S::User,
+        _: &better_auth_core::wire::UserView,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookControl> {
         self.before("user.before");
@@ -292,7 +301,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     }
     async fn after_delete_user(
         &self,
-        _: &S::User,
+        _: &better_auth_core::wire::UserView,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.after("user.after")
@@ -323,11 +332,20 @@ async fn check_batch<S: AuthSchema>(store: Arc<dyn AuthStore<S>>, hooks: Hooks) 
         .await
         .unwrap();
     for _ in 0..2 {
-        let _ = store.create_session(session(&user.id())).await.unwrap();
+        let _ = store
+            .create_session(session(user.id().typed().unwrap()))
+            .await
+            .unwrap();
     }
     hooks.events.lock().unwrap().clear();
-    let result = store.delete_user_sessions_optional(&user.id(), false).await;
-    let count = store.get_user_sessions(&user.id()).await.unwrap().len();
+    let result = store
+        .delete_user_sessions_optional(user.id().typed().unwrap(), false)
+        .await;
+    let count = store
+        .get_user_sessions(user.id().typed().unwrap())
+        .await
+        .unwrap()
+        .len();
     if hooks.cancel_second {
         assert_eq!(result.unwrap(), None);
         assert_eq!(count, 2);
@@ -406,7 +424,10 @@ async fn check_transaction<S: AuthSchema>(
         })
         .await
         .unwrap();
-    let session = store.create_session(session(&user_id)).await.unwrap();
+    let session = store
+        .create_session(session(user_id.typed().unwrap()))
+        .await
+        .unwrap();
     let token = session.token().to_owned();
     hooks.events.lock().unwrap().clear();
     let tx_id = user_id.clone();
@@ -415,7 +436,7 @@ async fn check_transaction<S: AuthSchema>(
     let tx_events = hooks.events.clone();
     let result: AuthResult<()> = transaction(&store, move |tx| {
         Box::pin(async move {
-            tx.delete_user(&tx_id).await?;
+            tx.delete_user(tx_id.typed().unwrap()).await?;
             assert_eq!(
                 *tx_events.lock().unwrap(),
                 ["session.before", "account.before", "user.before"]
@@ -431,7 +452,11 @@ async fn check_transaction<S: AuthSchema>(
     let should_fail = rollback || hooks.fail_after.is_some();
     assert_eq!(result.is_err(), should_fail);
     assert_eq!(
-        inner.get_user_by_id(&user_id).await.unwrap().is_some(),
+        inner
+            .get_user_by_id(user_id.typed().unwrap())
+            .await
+            .unwrap()
+            .is_some(),
         rollback
     );
     assert_eq!(inner.get_session(&token).await.unwrap().is_some(), rollback);
@@ -518,7 +543,10 @@ async fn ephemeral_delete_snapshot_projection_error_does_not_cancel_the_batch_wr
         .create_user(CreateUser::new().with_email("projection@example.com"))
         .await
         .unwrap();
-    let session = store.create_session(session(&user.id())).await.unwrap();
+    let session = store
+        .create_session(session(user.id().typed().unwrap()))
+        .await
+        .unwrap();
     reject.store(true, Ordering::SeqCst);
     store.delete_session(session.token()).await.unwrap();
     reject.store(false, Ordering::SeqCst);
@@ -527,7 +555,7 @@ async fn ephemeral_delete_snapshot_projection_error_does_not_cancel_the_batch_wr
     reject.store(true, Ordering::SeqCst);
     assert_eq!(
         store
-            .delete_user_sessions_optional(&user.id(), false)
+            .delete_user_sessions_optional(user.id().typed().unwrap(), false)
             .await
             .unwrap(),
         Some(1)
@@ -546,9 +574,18 @@ async fn check_token_batch<S: AuthSchema>(
         .create_user(CreateUser::new().with_email("token-batch@example.com"))
         .await
         .unwrap();
-    let first = store.create_session(session(&user.id())).await.unwrap();
-    let second = store.create_session(session(&user.id())).await.unwrap();
-    let untouched = store.create_session(session(&user.id())).await.unwrap();
+    let first = store
+        .create_session(session(user.id().typed().unwrap()))
+        .await
+        .unwrap();
+    let second = store
+        .create_session(session(user.id().typed().unwrap()))
+        .await
+        .unwrap();
+    let untouched = store
+        .create_session(session(user.id().typed().unwrap()))
+        .await
+        .unwrap();
     let tokens = vec![
         first.token().to_owned(),
         first.token().to_owned(),

@@ -39,7 +39,6 @@ where
     ) -> AuthResult<Arc<dyn AuthStore<S>>> {
         let mut store = self.clone();
         store.config = config;
-        store.validate_session_delete_projection()?;
         store.organization_fields = Arc::new(RwLock::new(self.organization_fields()?));
         store.hooks = hooks
             .into_iter()
@@ -76,7 +75,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_create_user(
         &self,
-        _data: &S::User,
+        _data: &better_auth_core::wire::UserView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {
@@ -103,7 +102,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_update_user(
         &self,
-        _data: Option<&S::User>,
+        _data: Option<&better_auth_core::wire::UserView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {
@@ -116,7 +115,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn before_delete_user(
         &self,
-        _data: &S::User,
+        _data: &better_auth_core::wire::UserView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         let context = DatabaseHookContext {
@@ -132,7 +131,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_delete_user(
         &self,
-        _data: &S::User,
+        _data: &better_auth_core::wire::UserView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {
@@ -246,7 +245,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_create_session(
         &self,
-        _data: &S::Session,
+        _data: &better_auth_core::wire::SessionView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {
@@ -273,7 +272,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_update_session(
         &self,
-        _data: Option<&S::Session>,
+        _data: Option<&better_auth_core::wire::SessionView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {
@@ -286,7 +285,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn before_delete_session(
         &self,
-        _data: &S::Session,
+        _data: &better_auth_core::wire::SessionView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         let context = DatabaseHookContext {
@@ -302,7 +301,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_delete_session(
         &self,
-        _data: &S::Session,
+        _data: &better_auth_core::wire::SessionView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {

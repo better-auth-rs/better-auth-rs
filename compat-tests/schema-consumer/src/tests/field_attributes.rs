@@ -314,7 +314,7 @@ async fn generated_id_references_keep_database_bindings_and_output_conversion_or
     let created = auth.store().create_organization(input).await.unwrap();
     let found = auth
         .store()
-        .get_organization_by_id(&created.id)
+        .get_organization_by_id(created.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
@@ -333,7 +333,7 @@ async fn generated_id_references_keep_database_bindings_and_output_conversion_or
         assert_eq!(fields.get("wideFractional"), Some(&json!(1.25)));
     }
     assert_eq!(calls.load(Ordering::SeqCst), 2);
-    let stored = generated::organization::Entity::find_by_id(&created.id)
+    let stored = generated::organization::Entity::find_by_id(created.id.typed().unwrap())
         .one(&database)
         .await
         .unwrap()
@@ -348,7 +348,7 @@ async fn generated_id_references_keep_database_bindings_and_output_conversion_or
         update.additional_fields.insert("owner".into(), value);
         let updated = auth
             .store()
-            .update_organization(&created.id, update)
+            .update_organization(created.id.typed().unwrap(), update)
             .await
             .unwrap();
         assert_eq!(

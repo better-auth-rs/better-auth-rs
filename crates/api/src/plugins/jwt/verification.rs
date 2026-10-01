@@ -162,9 +162,7 @@ pub(super) fn verify_local(
     tolerance: i64,
 ) -> Option<Map<String, Value>> {
     let header = protected_header(token)?;
-    let key = keys
-        .iter()
-        .find(|key| Some(key.id.as_str()) == header.key_id())?;
+    let key = keys.iter().find(|key| key.id.as_str() == header.key_id())?;
     let algorithm = key.alg.as_deref().unwrap_or(default_algorithm.name());
     if header.algorithm() != Some(algorithm) {
         return None;

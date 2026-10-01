@@ -25,7 +25,11 @@ use compat::validator::{EndpointResult, SpecValidator};
 /// The hard compatibility gate is the dual-server client-compat harness.
 #[tokio::test]
 async fn test_spec_driven_endpoint_validation() {
-    let auth = create_test_auth().await;
+    let auth = create_test_auth_with_options(TestAuthOptions {
+        change_email_without_verification: true,
+        ..Default::default()
+    })
+    .await;
     let mut validator = SpecValidator::new();
 
     // --- GET /ok ---
@@ -206,6 +210,9 @@ async fn test_spec_driven_endpoint_validation() {
     )
     .await;
     validator.validate_endpoint("/change-email", "post", status, &body);
+    let (status, session) = send_request(&auth, get_with_auth("/get-session", &ce_token)).await;
+    assert_eq!(status, 200);
+    assert_eq!(session["user"]["email"], "ce_new@example.com");
 
     // --- GET /list-accounts ---
     let (la_token, _) = signup_user(&auth, "la@example.com", "password123", "LA User").await;

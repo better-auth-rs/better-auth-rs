@@ -22,18 +22,18 @@ impl<
 > TeamStore for SeaOrmStore<S, O, P>
 {
     async fn create_team(&self, mut input: CreateTeam) -> AuthResult<Team> {
-        let mut core = values([
-            (
-                "id",
-                json!(input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())),
-            ),
-            ("organization_id", json!(input.organization_id)),
-            (
-                "created_at",
-                json!(input.created_at.unwrap_or_else(Utc::now)),
-            ),
-            ("member_count", json!(0)),
-        ]);
+        let mut core = self.create_fields(
+            "team",
+            input.id,
+            values([
+                ("organization_id", json!(input.organization_id)),
+                (
+                    "created_at",
+                    json!(input.created_at.unwrap_or_else(Utc::now)),
+                ),
+                ("member_count", json!(0)),
+            ]),
+        )?;
         if let Some(name) = input.name.json()? {
             let _ = core.insert("name".into(), name);
         }
@@ -132,7 +132,7 @@ impl<
                 if retained.len() != ids.split(',').count() {
                     let _ = models::update::<O::Invitation, _>(
                         &tx,
-                        &row.id,
+                        row.id.typed()?,
                         values([(
                             "team_id",
                             json!((!retained.is_empty()).then(|| retained.join(","))),
@@ -162,7 +162,10 @@ impl<
             .await
             .map_err(map_db_err)?
             .into_iter()
-            .map(|row| row.record(&Default::default()).map(|member| member.team_id))
+            .map(|row| {
+                row.record(&Default::default())
+                    .and_then(|member| member.team_id.typed().cloned())
+            })
             .collect::<AuthResult<Vec<_>>>()?;
         Entity::<O::Team>::find()
             .filter(O::Team::column("id")?.is_in(ids))
@@ -197,10 +200,11 @@ impl<
     }
     async fn add_team_member(
         &self,
-        team_id: &str,
+        team_id: &better_auth_core::SchemaValue<String>,
         user_id: &str,
         maximum: Option<usize>,
     ) -> AuthResult<Option<TeamMember>> {
+        let team_id = team_id.typed()?;
         let tx = self.connection().begin().await.map_err(map_db_err)?;
         // Lock the aggregate before reading membership or capacity, including on SQLite.
         let locked = Entity::<O::Team>::update_many()
@@ -244,18 +248,21 @@ impl<
         }
         let member = models::insert::<O::TeamMember, _>(
             &tx,
-            values([
-                ("id", json!(uuid::Uuid::new_v4().to_string())),
-                ("team_id", json!(team_id)),
-                ("user_id", json!(user_id)),
-                (
-                    "membership_key",
-                    json!(better_auth_core::organization_fields::team_membership_key(
-                        team_id, user_id
-                    )?),
-                ),
-                ("created_at", json!(Utc::now())),
-            ]),
+            self.create_fields(
+                "teamMember",
+                None,
+                values([
+                    ("team_id", json!(team_id)),
+                    ("user_id", json!(user_id)),
+                    (
+                        "membership_key",
+                        json!(better_auth_core::organization_fields::team_membership_key(
+                            team_id, user_id
+                        )?),
+                    ),
+                    ("created_at", json!(Utc::now())),
+                ]),
+            )?,
             Default::default(),
             &Default::default(),
         )

@@ -21,10 +21,14 @@ impl SessionUpdate {
         macro_rules! fields {
             ($($field:ident),* $(,)?) => {$(if let Some(value) = self.$field { session.$field = value; })*};
         }
+        if let Some(id) = self.id {
+            session.id = id.into();
+        }
+        if let Some(user_id) = self.user_id {
+            session.user_id = user_id.into();
+        }
         fields!(
-            id,
             token,
-            user_id,
             expires_at,
             created_at,
             ip_address,
@@ -51,7 +55,7 @@ impl EphemeralStore {
         &self,
         token: &str,
         mut update: SessionUpdate,
-        secondary: Option<crate::store::SessionUpdateWriter<StatelessSchema>>,
+        secondary: Option<crate::store::SessionUpdateWriter>,
     ) -> AuthResult<Option<SessionView>> {
         let original = update.clone();
         let transaction = EphemeralTransaction { store: self };
@@ -123,12 +127,16 @@ impl EphemeralStore {
         let matches = |row: &SessionView| predicate(row) && (!preserve || row.expires_at > now);
         let sessions: Vec<_> = self
             .raw("session", "findMany", |state| {
-                Ok(state
-                    .sessions
-                    .values()
-                    .filter(|row| matches(row))
-                    .cloned()
-                    .collect())
+                Ok(crate::query::paginate_memory(
+                    state
+                        .sessions
+                        .values()
+                        .filter(|row| matches(row))
+                        .cloned()
+                        .collect(),
+                    Some(self.config.advanced.database.find_many_limit()),
+                    None,
+                ))
             })
             .await?;
         // Upstream deleteManyWithHooks catches snapshot projection failures, then runs the write.

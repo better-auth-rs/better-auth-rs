@@ -16,9 +16,11 @@ use better_auth::{
     AuthBuilder, AuthConfig, BetterAuth, PasswordHasher,
     integrations::axum::AxumIntegration,
     plugins::{
-        AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, EmailPasswordPlugin, OAuthPlugin,
-        OrganizationPlugin, PasskeyPlugin, PasswordManagementPlugin, SessionManagementPlugin,
-        UserManagementPlugin,
+        AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, DeviceAuthorizationPlugin,
+        EmailPasswordPlugin, EmailVerificationPlugin, MagicLinkPlugin, MultiSessionPlugin,
+        OAuthPlugin, OneTapPlugin, OneTimeTokenPlugin, OrganizationPlugin, PasskeyPlugin,
+        PasswordManagementPlugin, SessionManagementPlugin, SiwePlugin, UserManagementPlugin,
+        UsernamePlugin,
     },
 };
 use better_auth_core::{
@@ -120,16 +122,86 @@ fn configure<S: AuthSchema>(
     builder: AuthBuilder<S>,
     events: Events,
     body: BodyTrace,
+    profile: &str,
 ) -> AuthBuilder<S> {
+    let mut verification = EmailVerificationPlugin::new();
+    if profile != "request-change-email-no-sender" {
+        verification = verification.custom_send_verification_email(Arc::new(body.clone()));
+    }
+    if profile == "request-change-email-no-confirmation" {
+        verification = verification.verification_token_expiry(chrono::Duration::seconds(90));
+    }
+    let mut management = UserManagementPlugin::new()
+        .delete_user_enabled(true)
+        .change_email_enabled(profile != "request-change-email-disabled")
+        .update_without_verification(true);
+    if profile.starts_with("request-change-email")
+        && profile != "request-change-email-no-confirmation"
+    {
+        management = management.send_change_email_confirmation(Arc::new(body.clone()));
+    }
+    let builder = builder.plugin(BodyBefore(body.clone()));
+    let builder = if profile.starts_with("request-security-") {
+        let device_index = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let device_code_index = device_index.clone();
+        let device_body = body.clone();
+        let siwe_body = body.clone();
+        builder
+            .plugin(MagicLinkPlugin::new().custom_send_magic_link(Arc::new(body.clone())))
+            .plugin(OneTapPlugin::new().client_id(vec!["request-security-client".into()]))
+            .plugin(
+                DeviceAuthorizationPlugin::new()
+                    .generate_device_code_with(move || {
+                        let index =
+                            device_code_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                        async move { Ok(format!("request-device-{index}")) }
+                    })
+                    .generate_user_code_with(move || {
+                        let index = device_index.load(std::sync::atomic::Ordering::SeqCst);
+                        async move { Ok(format!("REQ2345{index}")) }
+                    })
+                    .on_device_auth_request(move |_, _| {
+                        device_body.current("device.sender", None);
+                        async { Ok(()) }
+                    }),
+            )
+            .plugin(
+                SiwePlugin::new(
+                    "localhost",
+                    move || {
+                        siwe_body.current("siwe.nonce", None);
+                        async { Ok("REQUESTNONCE2345".into()) }
+                    },
+                    |_| async { Ok(false) },
+                )
+                .anonymous(false),
+            )
+    } else {
+        builder
+    };
+    let builder = if profile.starts_with("request-plugin-") {
+        builder
+            .plugin(UsernamePlugin::new(Default::default()))
+            .plugin(MultiSessionPlugin::new())
+            .plugin(OneTimeTokenPlugin::new())
+    } else {
+        builder
+    };
+    let builder =
+        if profile.starts_with("request-plugin-") || profile.starts_with("request-change-email") {
+            builder.plugin(verification)
+        } else {
+            builder
+        };
     builder
         .rate_limit(RateLimitConfig::new().enabled(false))
-        .plugin(BodyBefore(body.clone()))
         .plugin(EmailPasswordPlugin::new().password_hasher(Arc::new(Hasher(body.clone()))))
         .plugin(SessionManagementPlugin::new())
         .plugin(AccountManagementPlugin::new())
         .plugin(AdminPlugin::new().default_role("admin".to_owned()))
         .plugin(OrganizationPlugin::with_config(
             better_auth::plugins::OrganizationConfig {
+                hooks: Some(Arc::new(body.clone())),
                 teams: better_auth::plugins::organization::OrganizationTeamsConfig {
                     enabled: true,
                     ..Default::default()
@@ -145,12 +217,7 @@ fn configure<S: AuthSchema>(
         .plugin(ApiKeyPlugin::with_config(Default::default()))
         .plugin(PasskeyPlugin::new())
         .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(body.clone())))
-        .plugin(
-            UserManagementPlugin::new()
-                .delete_user_enabled(true)
-                .change_email_enabled(true)
-                .update_without_verification(true),
-        )
+        .plugin(management)
         .plugin(OAuthPlugin::new())
         .plugin(Trace(events, body))
 }
@@ -171,7 +238,74 @@ fn wire(response: AuthResult<AuthResponse>) -> Response {
 }
 
 fn routes<S: AuthSchema>(auth: Arc<BetterAuth<S>>, events: Events, body: BodyTrace) -> Router {
+    let email_events = body.1.clone();
     let controls = Router::new()
+        .route(
+            "/__test/device-record",
+            post({
+                let auth = auth.clone();
+                move |Json(input): Json<Value>| {
+                    let auth = auth.clone();
+                    async move {
+                        wire(
+                            auth.store()
+                                .get_device_code_by_device_code(
+                                    input["deviceCode"].as_str().unwrap(),
+                                )
+                                .await
+                                .and_then(|record| {
+                                    AuthResponse::json(200, &record).map_err(Into::into)
+                                }),
+                        )
+                    }
+                }
+            }),
+        )
+        .route(
+            "/__test/email-events",
+            get({
+                let events = email_events.clone();
+                move || {
+                    let events = events.clone();
+                    async move { Json(json!({"events":events.lock().unwrap().clone()})) }
+                }
+            })
+            .post(move || {
+                let events = email_events.clone();
+                async move {
+                    events.lock().unwrap().clear();
+                    Json(json!({"events":[]}))
+                }
+            }),
+        )
+        .route(
+            "/__test/query-user-verified",
+            post({
+                let auth = auth.clone();
+                move |Json(input): Json<Value>| {
+                    let auth = auth.clone();
+                    async move {
+                        wire(
+                            auth.store()
+                                .update_user(
+                                    input["id"].as_str().unwrap(),
+                                    better_auth_core::UpdateUser {
+                                        email_verified: Some(
+                                            input["emailVerified"].as_bool().unwrap(),
+                                        ),
+                                        ..Default::default()
+                                    },
+                                )
+                                .await
+                                .and_then(|_| {
+                                    AuthResponse::json(200, &json!({"success":true}))
+                                        .map_err(Into::into)
+                                }),
+                        )
+                    }
+                }
+            }),
+        )
         .route(
             "/__test/body-events",
             get({
@@ -331,7 +465,7 @@ pub async fn router(profile: &str, base_url: &str) -> AuthResult<Router> {
     });
     let events = Arc::new(Mutex::new(Vec::new()));
     let body = BodyTrace::default();
-    if profile == "request-query-sqlite" {
+    if profile.ends_with("-sqlite") || profile.starts_with("request-change-email") {
         use better_auth_seaorm::store::__private_test_support::{
             bundled_schema::BundledSchema, migrator::run_migrations,
         };
@@ -346,6 +480,7 @@ pub async fn router(profile: &str, base_url: &str) -> AuthResult<Router> {
             BetterAuth::<BundledSchema>::new(config).store(store),
             events.clone(),
             body.clone(),
+            profile,
         )
         .build()
         .await?;
@@ -355,6 +490,7 @@ pub async fn router(profile: &str, base_url: &str) -> AuthResult<Router> {
             BetterAuth::<StatelessSchema>::stateless(config),
             events.clone(),
             body.clone(),
+            profile,
         )
         .build()
         .await?;

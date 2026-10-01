@@ -20,7 +20,7 @@ use better_auth_core::{AuthPlugin, HttpMethod};
 #[test]
 fn test_default_config() {
     let config = EmailVerificationConfig::default();
-    assert_eq!(config.verification_token_expiry, Duration::hours(24));
+    assert_eq!(config.verification_token_expiry, Duration::hours(1));
     assert!(config.send_email_notifications);
     assert!(!config.require_verification_for_signin);
     assert!(!config.send_on_sign_in);
@@ -349,7 +349,11 @@ async fn test_send_verification_on_sign_in_verified_user() {
         email_verified: Some(true),
         ..Default::default()
     };
-    let verified = ctx.database.update_user(&user.id, update).await.unwrap();
+    let verified = ctx
+        .database
+        .update_user(user.id.typed().unwrap(), update)
+        .await
+        .unwrap();
     // Should return Ok(()) for already-verified user
     plugin
         .send_verification_on_sign_in(&verified, None, &ctx)
@@ -955,7 +959,7 @@ async fn test_verify_email_already_verified_returns_ok() {
     // Mark verified
     ctx.database
         .update_user(
-            &user.id,
+            user.id.typed().unwrap(),
             UpdateUser {
                 email_verified: Some(true),
                 ..Default::default()
@@ -997,7 +1001,7 @@ async fn test_send_verification_email_already_verified_returns_error() {
         .unwrap();
     ctx.database
         .update_user(
-            &user.id,
+            user.id.typed().unwrap(),
             UpdateUser {
                 email_verified: Some(true),
                 ..Default::default()

@@ -16,6 +16,7 @@ use crate::plugins::organization::{OrganizationConfig, rbac::check_permission};
 type Permissions = HashMap<String, Vec<String>>;
 
 // Preserve request order because upstream returns missingPermissions in that order.
+#[derive(Clone)]
 struct RequestedPermissions(Vec<(String, serde_json::Value)>);
 
 impl RequestedPermissions {
@@ -70,9 +71,9 @@ impl serde::Serialize for RequestedPermissions {
     }
 }
 
-#[derive(Deserialize, Validate)]
+#[derive(Clone, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-struct CreateRole {
+pub(in crate::plugins::organization) struct CreateRole {
     #[serde(default)]
     additional_fields: OptionalField<serde_json::Map<String, serde_json::Value>>,
     organization_id: Option<String>,
@@ -80,31 +81,31 @@ struct CreateRole {
     permission: RequestedPermissions,
 }
 
-#[derive(Default, Deserialize, Validate)]
+#[derive(Clone, Default, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-struct RoleSelector {
+pub(in crate::plugins::organization) struct RoleSelector {
     organization_id: Option<String>,
     role_name: Option<String>,
     role_id: Option<String>,
 }
 
-#[derive(Deserialize, Validate)]
-struct UpdateRole {
+#[derive(Clone, Deserialize, Validate)]
+pub(in crate::plugins::organization) struct UpdateRole {
     #[serde(flatten)]
     selector: RoleSelector,
     data: RoleUpdate,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RoleUpdate {
+pub(in crate::plugins::organization) struct RoleUpdate {
     #[serde(default)]
     role_name: OptionalField<String>,
     #[serde(default)]
     permission: OptionalField<RequestedPermissions>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 enum OptionalField<T> {
     #[default]
     Missing,
@@ -126,37 +127,6 @@ impl<T> OptionalField<T> {
             _ => None,
         }
     }
-}
-
-fn selector_error(selector: &RoleSelector, location: &str) -> Option<String> {
-    if selector
-        .role_name
-        .as_ref()
-        .is_some_and(|name| !name.is_empty())
-        || selector.role_id.as_ref().is_some_and(|id| !id.is_empty())
-    {
-        return None;
-    }
-    let field = if selector.role_name.as_deref() == Some("") {
-        Some("roleName")
-    } else if selector.role_id.as_deref() == Some("") {
-        Some("roleId")
-    } else {
-        None
-    };
-    Some(match field {
-        Some(field) => {
-            format!("[{location}.{field}] Too small: expected string to have >=1 characters")
-        }
-        None => format!("[{location}] Invalid input"),
-    })
-}
-
-fn validation(message: &str) -> AuthResult<Option<AuthResponse>> {
-    Ok(Some(AuthResponse::json(
-        400,
-        &json!({"code":"VALIDATION_ERROR", "message":message}),
-    )?))
 }
 
 fn role_error(action: &str) -> AuthError {
@@ -250,7 +220,7 @@ async fn authorize_member(
         })?;
     let member = ctx
         .database
-        .get_member(organization_id, &user.id)
+        .get_member(organization_id, user.id.typed()?)
         .await?
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
     let permission = if action == "list" { "read" } else { action };
@@ -369,26 +339,11 @@ pub async fn handle_role_request(
     ctx: &AuthContext<impl AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<Option<AuthResponse>> {
-    // Authentication precedes body validation in the upstream organization middleware.
     let (_, session) = require_session(req, ctx).await?;
     let response = match (req.method(), req.path()) {
         (HttpMethod::Post, "/organization/create-role") => {
-            let body: CreateRole = match better_auth_core::validate_request_body(req) {
-                Ok(body) => body,
-                Err(response) => return Ok(Some(response)),
-            };
-            let additional_fields = match body.additional_fields {
-                OptionalField::Missing => Default::default(),
-                OptionalField::Null => {
-                    return validation(
-                        "[body.additionalFields] Invalid input: expected object, received null",
-                    );
-                }
-                OptionalField::Value(fields) => config
-                    .schema
-                    .organization_role
-                    .parse_organization_input(&fields, "body.additionalFields", false)?,
-            };
+            let body: CreateRole = super::super::request::read(req, &config.schema)?;
+            let additional_fields = body.additional_fields.into_option().unwrap_or_default();
             let _ = require_ac(config)?;
             if body
                 .organization_id
@@ -495,13 +450,7 @@ pub async fn handle_role_request(
             }
         }
         (HttpMethod::Post, "/organization/delete-role") => {
-            let selector: RoleSelector = match better_auth_core::validate_request_body(req) {
-                Ok(body) => body,
-                Err(response) => return Ok(Some(response)),
-            };
-            if let Some(message) = selector_error(&selector, "body") {
-                return validation(&message);
-            }
+            let selector: RoleSelector = super::super::request::read(req, &config.schema)?;
             let (organization_id, _) = authorize_member(
                 req,
                 selector.organization_id.as_deref(),
@@ -539,53 +488,34 @@ pub async fn handle_role_request(
                     message: "Cannot delete a role that is assigned to members. Please reassign the members to a different role first",
                 });
             }
-            ctx.database.delete_organization_role(&role.id).await?;
+            ctx.database
+                .delete_organization_role(role.id.typed()?)
+                .await?;
             AuthResponse::json(200, &json!({"success":true}))?
         }
         (HttpMethod::Post, "/organization/update-role") => {
-            let mut schema = config.schema.organization_role.clone();
-            for field in schema.additional_fields.values_mut() {
-                field.required = Some(false);
-            }
-            let raw: serde_json::Value =
-                serde_json::from_slice(req.body.as_deref().unwrap_or(b"null"))?;
-            let mut parsed_request = req.clone();
+            let body: UpdateRole = super::super::request::read(req, &config.schema)?;
+            let raw = req.input_body()?;
+            let raw_data = raw
+                .as_ref()
+                .and_then(|value| value.get("data"))
+                .and_then(serde_json::Value::as_object)
+                .ok_or_else(|| AuthError::internal("Validated role data is missing"))?;
+            let schema = &config.schema.organization_role;
             let overrides_permission = schema
                 .additional_fields
                 .get("permission")
                 .is_some_and(|field| field.input);
-            if overrides_permission {
-                let mut input = raw.clone();
-                if let Some(data) = input
-                    .get_mut("data")
-                    .and_then(serde_json::Value::as_object_mut)
-                {
-                    let _ = data.remove("permission");
-                }
-                parsed_request.body = Some(serde_json::to_vec(&input)?);
-            }
-            let body: UpdateRole = match better_auth_core::validate_request_body(&parsed_request) {
-                Ok(body) => body,
-                Err(response) => return Ok(Some(response)),
-            };
-            if let Some(message) = selector_error(&body.selector, "body") {
-                return validation(&message);
-            }
-            if matches!(body.data.permission, OptionalField::Null) {
-                return validation(
-                    "[body.data.permission] Invalid input: expected record, received null",
-                );
-            }
-            if matches!(body.data.role_name, OptionalField::Null) {
-                return validation(
-                    "[body.data.roleName] Invalid input: expected string, received null",
-                );
-            }
-            let raw_data = raw
-                .get("data")
-                .and_then(serde_json::Value::as_object)
-                .ok_or_else(|| AuthError::bad_request("Expected role update data"))?;
-            let mut fields = schema.parse_organization_input(raw_data, "body.data", true)?;
+            let mut fields: serde_json::Map<String, serde_json::Value> = raw_data
+                .iter()
+                .filter(|(name, _)| {
+                    schema
+                        .additional_fields
+                        .get(*name)
+                        .is_some_and(|field| field.input)
+                })
+                .map(|(name, value)| (name.clone(), value.clone()))
+                .collect();
             let requested = body.data.permission.into_option();
             let permission = if overrides_permission {
                 fields.remove("permission")
@@ -643,7 +573,7 @@ pub async fn handle_role_request(
             let _ = ctx
                 .database
                 .update_organization_role(
-                    &role.id,
+                    role.id.typed()?,
                     UpdateOrganizationRole {
                         additional_fields: fields.clone(),
                         role: name.clone(),
@@ -657,7 +587,7 @@ pub async fn handle_role_request(
                 .remove("id")
                 .and_then(|value| value.as_str().map(str::to_owned))
             {
-                updated.id = value;
+                updated.id = value.into();
             }
             if let Some(value) = fields.remove("organizationId") {
                 updated.organization_id = better_auth_core::SchemaValue::Dynamic(value);
@@ -760,7 +690,7 @@ mod tests {
         assert_eq!(denied["missingPermissions"], json!(["organization:delete"]));
         assert!(
             ctx.database
-                .list_organization_roles(&org.id)
+                .list_organization_roles(org.id.typed().unwrap())
                 .await
                 .unwrap()
                 .is_empty()
@@ -771,12 +701,16 @@ mod tests {
                 .unwrap()
                 .unwrap();
         assert_eq!(created.status, 200);
-        let rows = ctx.database.list_organization_roles(&org.id).await.unwrap();
+        let rows = ctx
+            .database
+            .list_organization_roles(org.id.typed().unwrap())
+            .await
+            .unwrap();
         assert_eq!(rows[0].role, "editor");
         assert!(
             check_permission(
                 "editor",
-                &org.id,
+                org.id.typed().unwrap(),
                 "organization",
                 &["update"],
                 &config,

@@ -107,7 +107,9 @@ impl EmailOtpPlugin {
             .email_verification_policy
             .auto_sign_in_after_verification
         {
-            return self.session_response(req, ctx, &user.id(), true).await;
+            return self
+                .session_response(req, ctx, user.id().typed()?, true)
+                .await;
         }
         let manager = ctx.session_manager();
         if let Some(mut current) = manager
@@ -144,7 +146,7 @@ impl EmailOtpPlugin {
         let user = match ctx.database.get_user_by_email(&email).await? {
             Some(user) if !user.email_verified() => ctx
                 .database
-                .verify_user_and_revoke_unproven_access(&user.id())
+                .verify_user_and_revoke_unproven_access(user.id().typed()?)
                 .await?
                 .ok_or_else(invalid_otp)?,
             Some(user) => user,
@@ -167,7 +169,8 @@ impl EmailOtpPlugin {
                 crate::plugins::user_admission::create_user(input, "email-otp", &endpoint).await?
             }
         };
-        self.session_response(req, ctx, &user.id(), false).await
+        self.session_response(req, ctx, user.id().typed()?, false)
+            .await
     }
 
     pub(super) async fn request_password_reset(
@@ -218,7 +221,7 @@ impl EmailOtpPlugin {
         let hash =
             password::hash_password(ctx.password_policy.hasher.as_ref(), body.get("password"))
                 .await?;
-        if let Some(account) = get_credential_account(ctx, user.id()).await? {
+        if let Some(account) = get_credential_account(ctx, user.id().into_owned()).await? {
             let _ = ctx
                 .database
                 .update_account(
@@ -235,8 +238,8 @@ impl EmailOtpPlugin {
             let _ = ctx
                 .database
                 .create_account(CreateAccount {
-                    user_id: (user.id().to_string()).into(),
-                    account_id: (user.id().to_string()).into(),
+                    user_id: user.id().into_owned(),
+                    account_id: user.id().into_owned(),
                     provider_id: ("credential".to_owned()).into(),
                     password: (Some(hash))
                         .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
@@ -262,7 +265,7 @@ impl EmailOtpPlugin {
             let _ = ctx
                 .database
                 .update_user(
-                    &user.id(),
+                    user.id().typed()?,
                     UpdateUser {
                         email_verified: Some(true),
                         ..Default::default()
@@ -271,7 +274,9 @@ impl EmailOtpPlugin {
                 .await?;
         }
         if ctx.password_policy.revoke_sessions_on_password_reset {
-            ctx.database.delete_user_sessions(&user.id()).await?;
+            ctx.database
+                .delete_user_sessions(user.id().typed()?)
+                .await?;
         }
         success()
     }
@@ -375,16 +380,16 @@ impl EmailOtpPlugin {
     async fn mark_verified<S: AuthSchema>(
         &self,
         ctx: &AuthContext<S>,
-        user: &S::User,
+        user: &better_auth_core::wire::UserView,
         email: String,
-    ) -> AuthResult<S::User> {
+    ) -> AuthResult<better_auth_core::wire::UserView> {
         if let Some(hook) = &ctx.email_verification_policy.before_email_verification {
             hook(&ctx.user_view(user)?).await?;
         }
         let user = ctx
             .database
             .update_user(
-                &user.id(),
+                user.id().typed()?,
                 UpdateUser {
                     email: Some(email),
                     email_verified: Some(true),

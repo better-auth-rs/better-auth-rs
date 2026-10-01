@@ -1,3 +1,4 @@
+use crate::SchemaValue;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -7,7 +8,8 @@ use crate::entity::{AuthApiKey, AuthPasskey, AuthTwoFactor};
 /// Two-factor authentication response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TwoFactor {
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     pub secret: String,
     #[serde(rename = "backupCodes")]
     pub backup_codes: String,
@@ -54,7 +56,8 @@ pub struct UpdateTwoFactor {
 /// Passkey response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Passkey {
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(rename = "publicKey")]
@@ -115,7 +118,8 @@ pub struct UpdatePasskeyAuthentication {
 /// Device authorization code storage shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DeviceCode {
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     #[serde(rename = "deviceCode")]
     pub device_code: String,
     #[serde(rename = "userCode")]
@@ -131,10 +135,14 @@ pub struct DeviceCode {
     pub last_polled_at: Option<DateTime<Utc>>,
     #[serde(rename = "pollingInterval", skip_serializing_if = "Option::is_none")]
     pub polling_interval: Option<i64>,
-    #[serde(rename = "clientId", skip_serializing_if = "Option::is_none")]
-    pub client_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub scope: Option<String>,
+    #[serde(
+        default,
+        rename = "clientId",
+        skip_serializing_if = "crate::SchemaValue::is_undefined"
+    )]
+    pub client_id: crate::SchemaValue<Option<String>>,
+    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
+    pub scope: crate::SchemaValue<Option<String>>,
 }
 
 /// Input for creating a new device authorization code.
@@ -167,7 +175,8 @@ pub struct UpdateDeviceCode {
 /// API key response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ApiKey {
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
     pub name: Option<String>,
     pub start: Option<crate::ApiKeyStart>,
     pub prefix: Option<String>,
@@ -255,8 +264,8 @@ pub struct UpdateApiKey {
 }
 
 impl AuthTwoFactor for TwoFactor {
-    fn id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.id)
+    fn id(&self) -> SchemaValue<Cow<'_, str>> {
+        self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
     fn secret(&self) -> &str {
         &self.secret
@@ -301,8 +310,8 @@ impl<T: AuthTwoFactor> From<&T> for TwoFactor {
 }
 
 impl AuthApiKey for ApiKey {
-    fn id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.id)
+    fn id(&self) -> SchemaValue<Cow<'_, str>> {
+        self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
     fn name(&self) -> Option<&str> {
         self.name.as_deref()
@@ -399,8 +408,8 @@ impl<T: AuthApiKey> From<&T> for ApiKey {
 }
 
 impl AuthPasskey for Passkey {
-    fn id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.id)
+    fn id(&self) -> SchemaValue<Cow<'_, str>> {
+        self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
     fn name(&self) -> Option<&str> {
         self.name.as_deref()
@@ -463,7 +472,18 @@ impl<T: AuthPasskey> From<&T> for Passkey {
 /// Persisted SIWE wallet identity. Multiple chains can belong to one user.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WalletAddress {
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
+    pub user_id: String,
+    pub address: String,
+    pub chain_id: i64,
+    pub is_primary: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+/// SIWE wallet creation data. The adapter generates the model ID.
+#[derive(Debug, Clone)]
+pub struct CreateWalletAddress {
     pub user_id: String,
     pub address: String,
     pub chain_id: i64,

@@ -324,7 +324,7 @@ pub(crate) async fn inspect_trusted_device(
 
     let expected_token = sign_value(
         ctx.config.signing_secret(),
-        &format!("{}!{}", user.id(), trust_identifier),
+        &format!("{}!{}", user.id().display_string()?, trust_identifier),
     )?;
     if token != expected_token {
         return Ok(TrustedDeviceCheck {
@@ -344,7 +344,7 @@ pub(crate) async fn inspect_trusted_device(
         });
     };
 
-    if verification.value != user.id().as_ref()
+    if verification.value != user.id().into_owned()
         || verification.expires_at.is_before_or_equal(Utc::now())
     {
         return Ok(TrustedDeviceCheck {
@@ -375,7 +375,7 @@ pub(crate) async fn begin_sign_in_challenge(
         .database
         .create_verification(CreateVerification {
             identifier: (identifier.clone()).into(),
-            value: (user.id().to_string()).into(),
+            value: user.id().into_owned(),
             expires_at: (Utc::now() + Duration::seconds(two_factor_cookie_max_age(ctx))).into(),
             ..Default::default()
         })
@@ -425,7 +425,7 @@ pub(crate) async fn begin_sign_in_challenge(
         .unwrap_or(false)
         && ctx
             .database
-            .get_two_factor_by_user_id(user.id().as_ref())
+            .get_two_factor_by_user_id(user.id().typed()?)
             .await?
             .is_some_and(|factor| factor.verified)
     {
@@ -688,7 +688,11 @@ async fn resolve_two_factor_state<S: better_auth_core::AuthSchema>(
 ) -> AuthResult<ResolvedTwoFactorState> {
     match ctx.require_session(req).await {
         Ok((user, session)) => {
-            let key = format!("{}!{}", user.id(), session.id());
+            let key = format!(
+                "{}!{}",
+                user.id().display_string()?,
+                session.id().display_string()?
+            );
             return Ok(ResolvedTwoFactorState::Session {
                 user,
                 session: Box::new(session),
@@ -740,7 +744,7 @@ async fn verify_existing_session_factor(
         let updated_user = ctx
             .database
             .update_user(
-                user.id().as_ref(),
+                user.id().typed()?,
                 UpdateUser {
                     two_factor_enabled: Some(true),
                     ..Default::default()
@@ -749,7 +753,7 @@ async fn verify_existing_session_factor(
             .await?;
         let issued = issue_user_session(
             ctx,
-            updated_user.id().as_ref(),
+            updated_user.id().typed()?,
             session.ip_address().map(str::to_owned),
             session.user_agent().map(str::to_owned),
         )
@@ -863,7 +867,7 @@ async fn load_two_factor_record(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<TwoFactor> {
     ctx.database
-        .get_two_factor_by_user_id(user.id().as_ref())
+        .get_two_factor_by_user_id(user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::bad_request("TOTP not enabled"))
 }

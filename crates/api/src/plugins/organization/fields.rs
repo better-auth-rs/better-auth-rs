@@ -88,23 +88,6 @@ mod tests {
     }
 }
 
-pub(super) fn parse_input<T: serde::Serialize>(
-    schema: &better_auth_core::user_fields::UserConfig,
-    body: &T,
-    additional: &serde_json::Map<String, Value>,
-    prefix: &str,
-    partial: bool,
-) -> better_auth_core::AuthResult<serde_json::Map<String, Value>> {
-    let input = serde_json::to_value(body)?;
-    let input = input.as_object().ok_or_else(|| {
-        better_auth_core::AuthError::config("Organization input must serialize as an object")
-    })?;
-    let mut parsed = schema.parse_organization_input(input, prefix, partial)?;
-    // Typed request fields already contain the validated core values.
-    parsed.retain(|name, _| additional.contains_key(name));
-    Ok(parsed)
-}
-
 pub(super) fn organization(
     organization: &impl AuthOrganization,
     ctx: &AuthContext<impl AuthSchema>,

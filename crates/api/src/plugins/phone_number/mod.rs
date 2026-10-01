@@ -368,7 +368,7 @@ impl PhoneNumberPlugin {
             }
             ctx.database
                 .update_user(
-                    &user.id,
+                    user.id.typed()?,
                     UpdateUser {
                         phone_number: Some(Some(phone.to_owned())),
                         phone_number_verified: Some(true),
@@ -379,7 +379,7 @@ impl PhoneNumberPlugin {
         } else if let Some(user) = found {
             ctx.database
                 .update_user(
-                    &user.id(),
+                    user.id().typed()?,
                     UpdateUser {
                         phone_number_verified: Some(true),
                         ..Default::default()
@@ -488,7 +488,7 @@ impl PhoneNumberPlugin {
                 "Phone number not verified",
             ));
         }
-        let account = get_credential_account(ctx, user.id())
+        let account = get_credential_account(ctx, user.id().into_owned())
             .await?
             .ok_or_else(invalid_credentials)?;
         if account.password.is_absent() {
@@ -516,7 +516,7 @@ impl PhoneNumberPlugin {
         &self,
         ctx: &AuthContext<S>,
         req: &AuthRequest,
-        user: &S::User,
+        user: &better_auth_core::wire::UserView,
         dont_remember: bool,
         status: bool,
     ) -> AuthResult<AuthResponse> {
@@ -528,7 +528,7 @@ impl PhoneNumberPlugin {
         };
         let issued = issue_user_session_with_lifetime(
             ctx,
-            &user.id(),
+            user.id().typed()?,
             meta.ip_address,
             meta.user_agent,
             lifetime,
@@ -618,7 +618,7 @@ impl PhoneNumberPlugin {
             .ok_or_else(|| error(400, "UNEXPECTED_ERROR", "Unexpected error"))?;
         check_password_length(ctx, password, true)?;
         let hash = hash_password(ctx.password_policy.hasher.as_ref(), password).await?;
-        if let Some(account) = get_credential_account(ctx, user.id()).await? {
+        if let Some(account) = get_credential_account(ctx, user.id().into_owned()).await? {
             let _ = ctx
                 .database
                 .update_account(
@@ -635,8 +635,8 @@ impl PhoneNumberPlugin {
             let _ = ctx
                 .database
                 .create_account(CreateAccount {
-                    user_id: (user.id().into_owned()).into(),
-                    account_id: (user.id().into_owned()).into(),
+                    user_id: user.id().into_owned(),
+                    account_id: user.id().into_owned(),
                     provider_id: "credential".into(),
                     password: (Some(hash))
                         .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
@@ -659,7 +659,9 @@ impl PhoneNumberPlugin {
             .await?;
         }
         if ctx.password_policy.revoke_sessions_on_password_reset {
-            ctx.database.delete_user_sessions(&user.id()).await?;
+            ctx.database
+                .delete_user_sessions(user.id().typed()?)
+                .await?;
         }
         Ok(AuthResponse::json(200, &json!({"status":true}))?)
     }

@@ -111,7 +111,10 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
         .additional_fields
         .insert("owner".into(), session_field);
     let auth = BetterAuth::<AppSchema>::new(config.clone())
-        .store(SeaOrmStore::<AppSchema>::new(config.clone(), database))
+        .store(SeaOrmStore::<AppSchema>::new(
+            config.clone(),
+            database.clone(),
+        ))
         .build()
         .await
         .unwrap();
@@ -128,11 +131,29 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
         })
         .await
         .unwrap();
-    assert_eq!(user.owner, Some(ReferenceId::Text("1".into())));
-    assert_eq!(session.owner, Some(ReferenceId::Text("1".into())));
+    assert_eq!(user.additional_fields["owner"], "1");
+    assert_eq!(
+        user::Entity::find_by_id(user.id.typed().unwrap())
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .owner,
+        Some(ReferenceId::Text("1".into()))
+    );
+    assert_eq!(session.additional_fields["owner"], "1");
+    assert_eq!(
+        session::Entity::find_by_id(session.id.typed().unwrap())
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .owner,
+        Some(ReferenceId::Text("1".into()))
+    );
     let updated_user = store
         .update_user(
-            &user.id,
+            user.id.typed().unwrap(),
             UpdateUser {
                 additional_fields: [("owner".into(), json!(1e20))].into_iter().collect(),
                 ..Default::default()
@@ -149,13 +170,24 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
         .unwrap()
         .unwrap();
     assert_eq!(
-        updated_user.owner,
+        user::Entity::find_by_id(updated_user.id.typed().unwrap())
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .owner,
         Some(ReferenceId::Text("1.0e+20".into()))
     );
     assert_eq!(
-        updated_session.owner,
+        session::Entity::find_by_id(updated_session.id.typed().unwrap())
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .owner,
         Some(ReferenceId::Text("1.0e+20".into()))
     );
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
     let user_view =
         UserView::with_fields_for_adapter(&updated_user, &config.user, &Default::default(), false)
             .unwrap();
@@ -166,10 +198,20 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
         serde_json::to_value(session_view).unwrap()["owner"],
         "1.0e+20"
     );
-    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
     let refreshed = store
         .update_session_expiry(&session.token, session.expires_at)
         .await
         .unwrap();
-    assert_eq!(refreshed.owner, Some(ReferenceId::Text("0.0".into())));
+    assert_eq!(refreshed.additional_fields["owner"], "0.0");
+    assert_eq!(
+        session::Entity::find_by_id(refreshed.id.typed().unwrap())
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap()
+            .owner,
+        Some(ReferenceId::Text("0.0".into()))
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 5);
 }

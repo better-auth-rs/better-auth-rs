@@ -107,7 +107,7 @@ impl AuthPlugin<StatelessSchema> for Fixture {
             let _ = ctx
                 .database
                 .update_user(
-                    &data.user.id,
+                    data.user.id.typed().unwrap(),
                     UpdateUser {
                         name: Some("Changed after issue".into()),
                         additional_fields: serde_json::Map::from_iter([(
@@ -162,14 +162,14 @@ async fn build(base: &str, input: &Value, events: Arc<Mutex<Vec<Value>>>) -> Aut
             Ok("Anonymous fixture".into())
         }) })
         .on_link_account(move |linked, endpoint| { let fixture=link.clone(); Box::pin(async move {
-            let stored = endpoint.auth.database.get_user_by_id(&linked.new_user.id).await?.unwrap();
+            let stored = endpoint.auth.database.get_user_by_id(linked.new_user.id.typed().unwrap()).await?.unwrap();
             let snapshot=endpoint.new_session()?.unwrap();
             fixture.record(json!({"event":"link","context":context(endpoint),
                 "oldHidden":linked.anonymous_user.additional_fields.get("secretNote"),"oldSessionHidden":linked.anonymous_session.additional_fields.get("secretSession"),
                 "newHidden":linked.new_user.additional_fields.get("secretNote"),"newSessionHidden":linked.new_session.additional_fields.get("secretSession"),
                 "newName":linked.new_user.name,"storedName":stored.name(),"storedHidden":stored.additional_fields.get("secretNote"),
                 "sameSnapshot":snapshot.user.id == linked.new_user.id && snapshot.user.name == linked.new_user.name,
-                "oldExists":endpoint.auth.database.get_user_by_id(&linked.anonymous_user.id).await?.is_some()}));
+                "oldExists":endpoint.auth.database.get_user_by_id(linked.anonymous_user.id.typed().unwrap()).await?.is_some()}));
             endpoint.set_header("x-callback-observed","anonymous-link")?;
             fixture.fail()
         }) }));
@@ -316,7 +316,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
     let store = &auth.context().database;
     let member = store.get_user_by_email("member@example.com").await?;
     let sessions = if let Some(user) = &member {
-        store.get_user_sessions(&user.id).await?
+        store.get_user_sessions(user.id.typed().unwrap()).await?
     } else {
         vec![]
     };

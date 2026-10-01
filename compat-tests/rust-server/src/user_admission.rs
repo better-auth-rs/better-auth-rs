@@ -151,8 +151,8 @@ impl UserAdmissionFixture {
         Router::new().route("/__test/user-admission",post(move |Json(body):Json<Value>|{let fixture=fixture.clone();let auth=auth.clone();async move{
             {let mut state=fixture.state.lock().unwrap();if let Some(mode)=body["mode"].as_str(){state.mode=mode.into();}if body["clear"]==true{state.events.clear();}}
             let user=match body["email"].as_str(){Some(email)=>auth.store().get_user_by_email(email).await?,None=>None};
-            if body["promote"]==true {if let Some(user)=&user{let _=auth.store().update_user(&user.id(),UpdateUser{role:Some("admin".into()),email_verified:Some(true),..Default::default()}).await?;}}
-            let accounts=match &user{Some(user)=>auth.store().get_user_accounts(&user.id()).await?,None=>vec![]};
+            if body["promote"]==true {if let Some(user)=&user{let _=auth.store().update_user(user.id().typed().unwrap(),UpdateUser{role:Some("admin".into()),email_verified:Some(true),..Default::default()}).await?;}}
+            let accounts=match &user{Some(user)=>auth.store().get_user_accounts(user.id().typed().unwrap()).await?,None=>vec![]};
             let audit=auth.store().get_user_by_email("admission-audit@example.com").await?.is_some();
             let state=fixture.state.lock().unwrap();
             Ok::<_,AuthError>(Json(json!({"events":state.events,"magicURL":state.magic_url,"exists":user.is_some(),"auditExists":audit,"accounts":accounts.iter().map(|account|json!({"providerId":account.provider_id,"accessToken":account.access_token})).collect::<Vec<_>>()})))

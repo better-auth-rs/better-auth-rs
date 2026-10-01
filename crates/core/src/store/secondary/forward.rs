@@ -212,14 +212,14 @@ impl<S: AuthSchema> TwoFactorStore for SecondaryStore<S> {
     }
     async fn update_two_factor(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         update: crate::types::UpdateTwoFactor,
     ) -> AuthResult<TwoFactor> {
         self.inner.update_two_factor(id, update).await
     }
     async fn compare_exchange_two_factor_backup_codes(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         previous: &str,
         replacement: &str,
     ) -> AuthResult<bool> {
@@ -229,7 +229,7 @@ impl<S: AuthSchema> TwoFactorStore for SecondaryStore<S> {
     }
     async fn record_two_factor_failure(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         max_attempts: i64,
         locked_until: chrono::DateTime<chrono::Utc>,
     ) -> AuthResult<()> {
@@ -239,7 +239,7 @@ impl<S: AuthSchema> TwoFactorStore for SecondaryStore<S> {
     }
     async fn reset_two_factor_failures(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         locked_before: Option<chrono::DateTime<chrono::Utc>>,
     ) -> AuthResult<()> {
         self.inner
@@ -259,29 +259,46 @@ impl<S: AuthSchema> ApiKeyStore for SecondaryStore<S> {
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
         self.inner.get_api_key_by_id(id).await
     }
+    async fn get_api_key_by_id_value(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<ApiKey>> {
+        self.inner.get_api_key_by_id_value(id).await
+    }
     async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>> {
         self.inner.get_api_key_by_hash(hash).await
     }
-    async fn list_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<Vec<ApiKey>> {
-        self.inner.list_api_keys_by_reference(reference_id).await
+    async fn find_api_keys_by_reference(
+        &self,
+        reference_id: &str,
+        sort: Option<(&str, &str)>,
+    ) -> AuthResult<Vec<ApiKey>> {
+        self.inner
+            .find_api_keys_by_reference(reference_id, sort)
+            .await
     }
-    async fn update_api_key(&self, id: &str, update: UpdateApiKey) -> AuthResult<ApiKey> {
+    async fn count_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<u64> {
+        self.inner.count_api_keys_by_reference(reference_id).await
+    }
+    async fn update_api_key(
+        &self,
+        id: &crate::SchemaValue<String>,
+        update: UpdateApiKey,
+    ) -> AuthResult<ApiKey> {
         self.inner.update_api_key(id, update).await
     }
-    async fn delete_api_key(&self, id: &str) -> AuthResult<()> {
+    async fn delete_api_key(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
         self.inner.delete_api_key(id).await
     }
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
         self.inner.delete_expired_api_keys().await
     }
-    async fn consume_api_key_usage(
+    async fn write_api_key_usage(
         &self,
-        id: &str,
-        global_rate_limit_enabled: bool,
-    ) -> AuthResult<ConsumeApiKeyResult> {
-        self.inner
-            .consume_api_key_usage(id, global_rate_limit_enabled)
-            .await
+        id: &crate::SchemaValue<String>,
+        write: crate::store::ApiKeyUsageWrite,
+    ) -> AuthResult<Option<ApiKey>> {
+        self.inner.write_api_key_usage(id, write).await
     }
 }
 
@@ -304,7 +321,7 @@ impl<S: AuthSchema> PasskeyStore for SecondaryStore<S> {
     }
     async fn update_passkey_authentication(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         update: UpdatePasskeyAuthentication,
     ) -> AuthResult<Passkey> {
         self.inner.update_passkey_authentication(id, update).await
@@ -336,14 +353,14 @@ impl<S: AuthSchema> DeviceCodeStore for SecondaryStore<S> {
     }
     async fn update_device_code(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         update: UpdateDeviceCode,
     ) -> AuthResult<DeviceCode> {
         self.inner.update_device_code(id, update).await
     }
     async fn update_device_code_if_status(
         &self,
-        id: &str,
+        id: &crate::SchemaValue<String>,
         current_status: &str,
         update: UpdateDeviceCode,
     ) -> AuthResult<bool> {
@@ -351,13 +368,21 @@ impl<S: AuthSchema> DeviceCodeStore for SecondaryStore<S> {
             .update_device_code_if_status(id, current_status, update)
             .await
     }
-    async fn claim_device_code(&self, id: &str, user_id: &str) -> AuthResult<bool> {
+    async fn claim_device_code(
+        &self,
+        id: &crate::SchemaValue<String>,
+        user_id: &str,
+    ) -> AuthResult<bool> {
         self.inner.claim_device_code(id, user_id).await
     }
-    async fn delete_device_code(&self, id: &str) -> AuthResult<()> {
+    async fn delete_device_code(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
         self.inner.delete_device_code(id).await
     }
-    async fn delete_device_code_if_status(&self, id: &str, status: &str) -> AuthResult<bool> {
+    async fn delete_device_code_if_status(
+        &self,
+        id: &crate::SchemaValue<String>,
+        status: &str,
+    ) -> AuthResult<bool> {
         self.inner.delete_device_code_if_status(id, status).await
     }
 }
@@ -373,7 +398,7 @@ impl<S: AuthSchema> WalletStore for SecondaryStore<S> {
     }
     async fn create_wallet_address(
         &self,
-        wallet: crate::types::WalletAddress,
+        wallet: crate::types::CreateWalletAddress,
     ) -> AuthResult<crate::types::WalletAddress> {
         self.inner.create_wallet_address(wallet).await
     }
@@ -414,7 +439,7 @@ impl<S: AuthSchema> TeamStore for SecondaryStore<S> {
     }
     async fn add_team_member(
         &self,
-        team_id: &str,
+        team_id: &crate::SchemaValue<String>,
         user_id: &str,
         maximum: Option<usize>,
     ) -> AuthResult<Option<crate::TeamMember>> {

@@ -165,10 +165,6 @@ mod tests {
                 "FOREIGN KEY constraint failed",
             ),
             (
-                "INSERT INTO accounts SELECT 'duplicate', account_id, provider_id, user_id, access_token, refresh_token, id_token, access_token_expires_at, refresh_token_expires_at, scope, password, created_at, updated_at FROM accounts LIMIT 1",
-                "UNIQUE constraint failed: accounts.provider_id, accounts.account_id",
-            ),
-            (
                 "INSERT INTO two_factor SELECT 'duplicate', secret, backup_codes, user_id, verified, failed_verification_count, locked_until, created_at, updated_at FROM two_factor LIMIT 1",
                 "UNIQUE constraint failed: two_factor.user_id",
             ),
@@ -179,6 +175,18 @@ mod tests {
                 "unexpected constraint error: {error}"
             );
         }
+        database.execute_unprepared("INSERT INTO accounts SELECT 'duplicate', account_id, provider_id, user_id, access_token, refresh_token, id_token, access_token_expires_at, refresh_token_expires_at, scope, password, created_at, updated_at FROM accounts LIMIT 1").await.unwrap();
+        let store =
+            SeaOrmStore::<generated::AppAuthSchema>::new(AuthConfig::default(), database.clone());
+        let store: &dyn better_auth::store::AuthStore<generated::AppAuthSchema> = &store;
+        let error = store
+            .get_account("credential", signup["user"]["id"].as_str().unwrap())
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.instrumentation_message(),
+            "Multiple accounts match the same accountId for provider \"credential\". Resolve duplicate account identities before continuing."
+        );
         database.close().await.unwrap();
     }
 }

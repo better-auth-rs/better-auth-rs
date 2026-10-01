@@ -69,8 +69,8 @@ mod user {
             "ban_expires",
             "metadata",
         ];
-        fn id(&self) -> Cow<'_, str> {
-            Cow::Owned(self.id.to_string())
+        fn id(&self) -> better_auth_core::SchemaValue<Cow<'_, str>> {
+            better_auth_core::SchemaValue::Typed(Cow::Owned(self.id.to_string()))
         }
 
         fn email(&self) -> Option<&str> {
@@ -284,8 +284,8 @@ mod session {
     impl AuthSession for Model {
         const PLUGIN_FIELDS: &'static [&'static str] =
             &["impersonated_by", "active_organization_id"];
-        fn id(&self) -> Cow<'_, str> {
-            Cow::Owned(self.id.to_string())
+        fn id(&self) -> better_auth_core::SchemaValue<Cow<'_, str>> {
+            better_auth_core::SchemaValue::Typed(Cow::Owned(self.id.to_string()))
         }
 
         fn expires_at(&self) -> DateTime<Utc> {
@@ -312,8 +312,8 @@ mod session {
             self.user_agent.as_deref()
         }
 
-        fn user_id(&self) -> Cow<'_, str> {
-            Cow::Owned(self.user_id.to_string())
+        fn user_id(&self) -> better_auth_core::SchemaValue<Cow<'_, str>> {
+            better_auth_core::SchemaValue::Typed(Cow::Owned(self.user_id.to_string()))
         }
 
         fn impersonated_by(&self) -> Option<&str> {
@@ -433,10 +433,10 @@ mod session {
             create_session: CreateSession,
             now: DateTime<Utc>,
         ) -> Self::ActiveModel {
-            let user_id = create_session
-                .user_id
-                .parse()
-                .expect("session user ids come from validated auth user identifiers");
+            let user_id = create_session.user_id.as_str().map(|id| {
+                id.parse()
+                    .expect("session user ids come from validated auth user identifiers")
+            });
             ActiveModel {
                 id: id.map_or(NotSet, Set),
                 expires_at: Set(create_session.expires_at),
@@ -445,7 +445,7 @@ mod session {
                 updated_at: Set(now),
                 ip_address: Set(create_session.ip_address),
                 user_agent: Set(create_session.user_agent),
-                user_id: Set(user_id),
+                user_id: user_id.map_or(NotSet, Set),
                 impersonated_by: Set(create_session.impersonated_by),
                 active_organization_id: Set(create_session.active_organization_id),
                 active: Set(true),
@@ -889,9 +889,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     run_app_migrations(&database).await?;
     println!("Database connection established\n");
 
-    let config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
+    let mut config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
         .base_url("http://localhost:3000")
         .password_min_length(8);
+    config.advanced.database.generate_id = better_auth::config::IdGeneration::Serial;
     let store = SeaOrmStore::<AppSchema>::new(config.clone(), database.clone());
 
     let auth = BetterAuth::<AppSchema>::new(config)

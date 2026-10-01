@@ -149,7 +149,7 @@ Native query input is independent of an optional original Request. Supplying an 
 
 ### Body validation and before-hook input changes
 
-`AuthRoute::body_validator` receives decoded endpoint input and returns `ValidatedBody`. The result contains the exact JSON projection for callbacks and a typed value for the handler. Read the typed value with `AuthRequest::validated_body`; use `input_body` to read the endpoint projection. The dispatcher validates body before query, after all before hooks and before endpoint middleware. After hooks retain the original endpoint input when validation returns an API error.
+`AuthRoute::body_validator` accepts a cloneable callback that can capture an instance's schema. Register the callback once when constructing the route. The callback receives decoded endpoint input and returns `ValidatedBody`. The result contains the exact JSON projection for callbacks and a typed value for the handler. Read the typed value with `AuthRequest::validated_body`; use `input_body` to read the endpoint projection. The dispatcher validates body before query, after all before hooks and before endpoint middleware. After hooks retain the original endpoint input when validation returns an API error.
 
 The `impl_auth_plugin!` route declaration accepts `body = validator` and `query = validator` after the handler name. These validators use the same shared dispatch boundary as the `AuthRoute` builder methods.
 

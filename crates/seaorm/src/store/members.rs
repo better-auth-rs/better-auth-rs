@@ -4,7 +4,6 @@ use sea_orm::{
     ColumnTrait, DatabaseBackend, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, Select,
 };
-use uuid::Uuid;
 
 use better_auth_core::store::{ListOrganizationMembersParams, MemberStore};
 
@@ -204,12 +203,15 @@ where
     S: AuthSchema + Send + Sync,
 {
     async fn create_member(&self, member: CreateMember) -> AuthResult<Member> {
-        let mut core = values([
-            ("id", json!(Uuid::new_v4().to_string())),
-            ("organization_id", json!(member.organization_id)),
-            ("user_id", json!(member.user_id)),
-            ("created_at", json!(Utc::now())),
-        ]);
+        let mut core = self.create_fields(
+            "member",
+            None,
+            values([
+                ("organization_id", json!(member.organization_id)),
+                ("user_id", json!(member.user_id)),
+                ("created_at", json!(Utc::now())),
+            ]),
+        )?;
         if let Some(role) = member.role.json()? {
             let _ = core.insert("role".into(), role);
         }
@@ -299,19 +301,19 @@ where
                         O::Team::column("member_count")?,
                         Expr::col(O::Team::column("member_count")?),
                     )
-                    .filter(O::Team::column("id")?.eq(&team.id))
+                    .filter(O::Team::column("id")?.eq(team.id.typed()?))
                     .exec(&tx)
                     .await
                     .map_err(map_db_err)?;
                 let deleted = Entity::<O::TeamMember>::delete_many()
-                    .filter(O::TeamMember::column("team_id")?.eq(&team.id))
+                    .filter(O::TeamMember::column("team_id")?.eq(team.id.typed()?))
                     .filter(O::TeamMember::column("user_id")?.eq(member.user_id.typed()?.clone()))
                     .exec(&tx)
                     .await
                     .map_err(map_db_err)?;
                 super::team_capacity::release::<O::Team, _>(
                     &tx,
-                    &team.id,
+                    team.id.typed()?,
                     deleted.rows_affected,
                     &self.organization_fields()?.team,
                 )

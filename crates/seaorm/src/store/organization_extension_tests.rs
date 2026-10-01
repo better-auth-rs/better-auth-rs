@@ -99,7 +99,7 @@ async fn json_policies_keep_native_model_values_and_transform_each_read_once() {
         created.permission.json().unwrap(),
         Some(json!({"visible":["read"]}))
     );
-    let row = super::entities::organization_role::Entity::find_by_id(&created.id)
+    let row = super::entities::organization_role::Entity::find_by_id(created.id.typed().unwrap())
         .one(store.connection())
         .await
         .unwrap()
@@ -107,7 +107,7 @@ async fn json_policies_keep_native_model_values_and_transform_each_read_once() {
     assert_eq!(row.permission, json!({"stored":["read"]}));
     assert_eq!(
         store
-            .get_organization_role(&created.id)
+            .get_organization_role(created.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -116,7 +116,7 @@ async fn json_policies_keep_native_model_values_and_transform_each_read_once() {
     );
     let updated = store
         .update_organization_role(
-            &created.id,
+            created.id.typed().unwrap(),
             UpdateOrganizationRole {
                 permission: Some(json!({"source":["write"]})),
                 ..Default::default()
@@ -128,7 +128,7 @@ async fn json_policies_keep_native_model_values_and_transform_each_read_once() {
         updated.permission.json().unwrap(),
         Some(json!({"visible":["write"]}))
     );
-    let row = super::entities::organization_role::Entity::find_by_id(&created.id)
+    let row = super::entities::organization_role::Entity::find_by_id(created.id.typed().unwrap())
         .one(store.connection())
         .await
         .unwrap()
@@ -136,7 +136,7 @@ async fn json_policies_keep_native_model_values_and_transform_each_read_once() {
     assert_eq!(row.permission, json!({"stored":["write"]}));
     assert_eq!(
         store
-            .get_organization_role(&created.id)
+            .get_organization_role(created.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -190,9 +190,25 @@ async fn team_capacity_deduplication_and_scoped_cleanup() {
         .create_member(CreateMember::new("org-a", &winner.user_id, "member"))
         .await
         .unwrap();
-    store.delete_member(&member.id).await.unwrap();
-    assert!(store.list_team_members(&a.id).await.unwrap().is_empty());
-    assert_eq!(store.list_team_members(&b.id).await.unwrap().len(), 1);
+    store
+        .delete_member(member.id.typed().unwrap())
+        .await
+        .unwrap();
+    assert!(
+        store
+            .list_team_members(a.id.typed().unwrap())
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        store
+            .list_team_members(b.id.typed().unwrap())
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
     let mut input = CreateInvitation::new(
         "org-a",
         "invite@example.com",
@@ -200,19 +216,25 @@ async fn team_capacity_deduplication_and_scoped_cleanup() {
         "user-a",
         chrono::Utc::now() + chrono::Duration::hours(1),
     );
-    input.team_id = Some(a.id.clone());
+    input.team_id = Some(a.id.typed().unwrap().clone());
     let invitation = store.create_invitation(input).await.unwrap();
-    store.delete_team(&a.id).await.unwrap();
+    store.delete_team(a.id.typed().unwrap()).await.unwrap();
     assert_eq!(
         store
-            .get_invitation_by_id(&invitation.id)
+            .get_invitation_by_id(invitation.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
             .team_id,
         None
     );
-    assert!(store.get_team(&b.id).await.unwrap().is_some());
+    assert!(
+        store
+            .get_team(b.id.typed().unwrap())
+            .await
+            .unwrap()
+            .is_some()
+    );
 }
 
 #[tokio::test]
@@ -238,7 +260,7 @@ async fn dynamic_roles_persist_json_and_organization_deletion_cascades() {
         .unwrap();
     let updated = store
         .update_organization_role(
-            &role.id,
+            role.id.typed().unwrap(),
             UpdateOrganizationRole {
                 additional_fields: Default::default(),
                 role: Some("writer".into()),
@@ -265,13 +287,25 @@ async fn dynamic_roles_persist_json_and_organization_deletion_cascades() {
     store.delete_organization("org-a").await.unwrap();
     assert!(
         store
-            .get_organization_role(&role.id)
+            .get_organization_role(role.id.typed().unwrap())
             .await
             .unwrap()
             .is_none()
     );
-    assert!(store.get_team(&team.id).await.unwrap().is_none());
-    assert!(store.list_team_members(&team.id).await.unwrap().is_empty());
+    assert!(
+        store
+            .get_team(team.id.typed().unwrap())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        store
+            .list_team_members(team.id.typed().unwrap())
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(
         store.list_organization_roles("org-b").await.unwrap().len(),
         1
@@ -322,12 +356,16 @@ async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full()
         "user-a",
         chrono::Utc::now() + chrono::Duration::hours(1),
     );
-    input.team_id = Some(format!("{},{}", first.id, full.id));
+    input.team_id = Some(format!(
+        "{},{}",
+        first.id.typed().unwrap(),
+        full.id.typed().unwrap()
+    ));
     let invitation = store.create_invitation(input).await.unwrap();
     assert!(
         store
             .accept_invitation_with_teams(
-                &invitation.id,
+                invitation.id.typed().unwrap(),
                 "user-b",
                 Some(session.token()),
                 true,
@@ -338,14 +376,20 @@ async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full()
     );
     assert_eq!(
         store
-            .get_invitation_by_id(&invitation.id)
+            .get_invitation_by_id(invitation.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
             .status,
         InvitationStatus::Pending
     );
-    assert!(store.list_team_members(&first.id).await.unwrap().is_empty());
+    assert!(
+        store
+            .list_team_members(first.id.typed().unwrap())
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert!(store.get_member("org-a", "user-b").await.unwrap().is_none());
     assert_eq!(
         store
@@ -356,17 +400,20 @@ async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full()
             .active_organization_id(),
         None
     );
-    store.remove_team_member(&full.id, "user-a").await.unwrap();
+    store
+        .remove_team_member(full.id.typed().unwrap(), "user-a")
+        .await
+        .unwrap();
     let (a, b) = tokio::join!(
         store.accept_invitation_with_teams(
-            &invitation.id,
+            invitation.id.typed().unwrap(),
             "user-b",
             Some(session.token()),
             true,
             Some(1).into()
         ),
         store.accept_invitation_with_teams(
-            &invitation.id,
+            invitation.id.typed().unwrap(),
             "user-b",
             Some(session.token()),
             true,
@@ -374,8 +421,22 @@ async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full()
         )
     );
     assert_eq!(usize::from(a.is_ok()) + usize::from(b.is_ok()), 1);
-    assert_eq!(store.list_team_members(&first.id).await.unwrap().len(), 1);
-    assert_eq!(store.list_team_members(&full.id).await.unwrap().len(), 1);
+    assert_eq!(
+        store
+            .list_team_members(first.id.typed().unwrap())
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        store
+            .list_team_members(full.id.typed().unwrap())
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
     assert_eq!(
         store
             .get_session(session.token())
@@ -418,11 +479,11 @@ async fn single_team_invitation_captures_cookie_before_switching_organization() 
         "user-a",
         chrono::Utc::now() + chrono::Duration::hours(1),
     );
-    input.team_id = Some(team.id.clone());
+    input.team_id = Some(team.id.typed().unwrap().clone());
     let invitation = store.create_invitation(input).await.unwrap();
     let (member, accepted, snapshot) = store
         .accept_invitation_with_teams(
-            &invitation.id,
+            invitation.id.typed().unwrap(),
             "user-b",
             Some(session.token()),
             true,
@@ -437,10 +498,10 @@ async fn single_team_invitation_captures_cookie_before_switching_organization() 
     );
     let snapshot = snapshot.unwrap();
     assert_eq!(snapshot.active_organization_id(), Some("org-b"));
-    assert_eq!(snapshot.active_team_id(), Some(team.id.as_str()));
+    assert_eq!(snapshot.active_team_id(), team.id.as_str());
     let persisted = store.get_session(session.token()).await.unwrap().unwrap();
     assert_eq!(persisted.active_organization_id(), Some("org-a"));
-    assert_eq!(persisted.active_team_id(), Some(team.id.as_str()));
+    assert_eq!(persisted.active_team_id(), team.id.as_str());
 }
 
 #[tokio::test]
@@ -474,7 +535,7 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
             .unwrap();
     }
     store
-        .add_team_member("second", "user-a", None)
+        .add_team_member(&"second".into(), "user-a", None)
         .await
         .unwrap();
     let session = store
@@ -503,7 +564,7 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
     };
     let error = store
         .accept_invitation_with_teams(
-            &invitation.id,
+            invitation.id.typed().unwrap(),
             "user-b",
             Some(session.token()),
             true,
@@ -518,7 +579,7 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
     assert!(store.get_member("org-a", "user-b").await.unwrap().is_none());
     assert_eq!(
         store
-            .get_invitation_by_id(&invitation.id)
+            .get_invitation_by_id(invitation.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -539,7 +600,7 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
         .store(false, std::sync::atomic::Ordering::SeqCst);
     store
         .accept_invitation_with_teams(
-            &invitation.id,
+            invitation.id.typed().unwrap(),
             "user-b",
             Some(session.token()),
             true,
@@ -551,7 +612,7 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
     assert_eq!(store.list_team_members("second").await.unwrap().len(), 2);
     assert_eq!(
         store
-            .get_invitation_by_id(&invitation.id)
+            .get_invitation_by_id(invitation.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -581,7 +642,7 @@ async fn application_team_and_invitation_fields_survive_persistence() {
     assert_eq!(team.created_at, timestamp);
     let team = store
         .update_team(
-            &team.id,
+            team.id.typed().unwrap(),
             UpdateTeam {
                 organization_id: Some("org-b".into()),
                 updated_at: Some(Some(timestamp)),

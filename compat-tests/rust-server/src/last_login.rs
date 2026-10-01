@@ -149,19 +149,19 @@ macro_rules! hooks {
                 self.record("user.before", context.request.as_ref(), Some(user.additional_fields.get("lastLoginMethod").cloned().unwrap_or(Value::Null)));
                 Ok($control::Continue)
             }
-            async fn after_create_user(&self, _: &S::User, context: &$context<'_,S>) -> AuthResult<()> { self.record("user.after", context.request.as_ref(), None); Ok(()) }
+            async fn after_create_user(&self, _: &better_auth_core::wire::UserView, context: &$context<'_,S>) -> AuthResult<()> { self.record("user.after", context.request.as_ref(), None); Ok(()) }
             async fn before_update_user(&self, $($id: &str,)? user: &UpdateUser, context: &$context<'_,S>) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
                 self.record("user.update", context.request.as_ref(), Some(user.additional_fields.get("lastLoginMethod").cloned().unwrap_or(Value::Null)));
                 if self.fails("update") { return Err(rejected()); }
                 Ok(DatabaseHookUpdate::Continue)
             }
-            async fn after_update_user(&self, _: Option<&S::User>, context: &$context<'_,S>) -> AuthResult<()> { self.record("user.updated", context.request.as_ref(), None); Ok(()) }
+            async fn after_update_user(&self, _: Option<&better_auth_core::wire::UserView>, context: &$context<'_,S>) -> AuthResult<()> { self.record("user.updated", context.request.as_ref(), None); Ok(()) }
             async fn before_create_session(&self, _: &mut CreateSession, context: &$context<'_,S>) -> AuthResult<$control> {
                 self.record("session.before", context.request.as_ref(), None);
                 if self.fails("session") { return Err(rejected()); }
                 Ok($control::Continue)
             }
-            async fn after_create_session(&self, _: &S::Session, context: &$context<'_,S>) -> AuthResult<()> { self.record("session.after", context.request.as_ref(), None); Ok(()) }
+            async fn after_create_session(&self, _: &better_auth_core::wire::SessionView, context: &$context<'_,S>) -> AuthResult<()> { self.record("session.after", context.request.as_ref(), None); Ok(()) }
         }
     };
 }
@@ -383,7 +383,12 @@ async fn reset<S: AuthSchema>(State(fixture): State<Fixture<S>>) -> Json<Value> 
         .unwrap()
         .0
     {
-        fixture.auth.store().delete_user(&user.id()).await.unwrap();
+        fixture
+            .auth
+            .store()
+            .delete_user(user.id().typed().unwrap())
+            .await
+            .unwrap();
     }
     *fixture.events.0.lock().unwrap() = Trace::default();
     fixture.cache.0.lock().unwrap().clear();

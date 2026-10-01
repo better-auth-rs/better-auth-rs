@@ -12,7 +12,7 @@ struct FailAfterVerification;
 impl crate::hooks::SeaOrmHooks<BundledSchema> for FailAfterVerification {
     async fn after_update_user(
         &self,
-        _user: Option<&<BundledSchema as AuthSchema>::User>,
+        _user: Option<&better_auth_core::wire::UserView>,
         ctx: &crate::hooks::SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(ctx.tx.is_none());
@@ -24,7 +24,7 @@ impl crate::hooks::SeaOrmHooks<BundledSchema> for FailAfterVerification {
 
 fn session(user_id: &str) -> CreateSession {
     CreateSession {
-        user_id: user_id.to_owned(),
+        user_id: user_id.to_owned().into(),
         expires_at: Utc::now() + chrono::Duration::hours(1),
         ip_address: None,
         user_agent: None,
@@ -62,26 +62,26 @@ refresh_token_expires_at: Default::default(),
 scope: Default::default(),
 ..Default::default()
 }).await?;
-            let _ = store.create_session(session(&user_id)).await?;
+            let _ = store.create_session(session(user_id.typed().unwrap())).await?;
             let failing = SeaOrmStore::<BundledSchema>::new(config, database.clone()).hook(FailAfterVerification);
-            assert!(matches!(failing.verify_user_and_revoke_unproven_access(&user_id).await, Err(better_auth_core::AuthError::Internal(message)) if message == "verification hook failed"));
-            assert!(store.get_user_by_id(&user_id).await?.unwrap().email_verified());
-            assert!(store.get_user_accounts(&user_id).await?.is_empty());
-            assert!(store.get_user_sessions(&user_id).await?.is_empty());
-            let _ = store.update_user(&user_id, UpdateUser { email_verified: Some(false), ..Default::default() }).await?;
+            assert!(matches!(failing.verify_user_and_revoke_unproven_access(user_id.typed().unwrap()).await, Err(better_auth_core::AuthError::Internal(message)) if message == "verification hook failed"));
+            assert!(store.get_user_by_id(user_id.typed().unwrap()).await?.unwrap().email_verified());
+            assert!(store.get_user_accounts(user_id.typed().unwrap()).await?.is_empty());
+            assert!(store.get_user_sessions(user_id.typed().unwrap()).await?.is_empty());
+            let _ = store.update_user(user_id.typed().unwrap(), UpdateUser { email_verified: Some(false), ..Default::default() }).await?;
             let barrier = Arc::new(Barrier::new(8));
             let mut tasks = JoinSet::new();
             for _ in 0..8 {
                 let store = store.clone(); let barrier = barrier.clone(); let user_id = user_id.clone();
                 let _ = tasks.spawn(async move {
                     let _ = barrier.wait().await;
-                    let user = store.verify_user_and_revoke_unproven_access(&user_id).await?.unwrap();
+                    let user = store.verify_user_and_revoke_unproven_access(user_id.typed().unwrap()).await?.unwrap();
                     assert!(user.email_verified());
-                    store.create_session(session(&user_id)).await
+                    store.create_session(session(user_id.typed().unwrap())).await
                 });
             }
             while let Some(result) = tasks.join_next().await { let _ = result??; }
-            assert_eq!(store.get_user_sessions(&user_id).await?.len(), 8);
+            assert_eq!(store.get_user_sessions(user_id.typed().unwrap()).await?.len(), 8);
             Ok::<_, Box<dyn std::error::Error>>(())
         }.await;
         database.close().await?;

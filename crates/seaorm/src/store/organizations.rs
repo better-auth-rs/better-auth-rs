@@ -46,14 +46,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
     async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Organization> {
         let config = self.organization_fields()?.organization;
         let now = Utc::now();
-        let mut core = values([
-            (
-                "id",
-                json!(org.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())),
-            ),
-            ("created_at", json!(now)),
-            ("auth_updated_at", json!(now)),
-        ]);
+        let mut core = self.create_fields(
+            "organization",
+            org.id,
+            values([("created_at", json!(now)), ("auth_updated_at", json!(now))]),
+        )?;
         for (name, value) in [
             ("name", org.name.json()?),
             ("slug", org.slug.json()?),
@@ -247,11 +244,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             &config.organization,
         )?
         .into_iter()
-        .map(|organization| (organization.id.clone(), organization))
+        .map(|organization| (organization.id.as_str().map(str::to_owned), organization))
         .collect::<std::collections::HashMap<_, _>>();
         Ok(ids
             .into_iter()
-            .filter_map(|id| organizations.get(&id).cloned())
+            .filter_map(|id| organizations.get(&Some(id)).cloned())
             .collect())
     }
 }

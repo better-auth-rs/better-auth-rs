@@ -172,7 +172,7 @@ pub async fn run(input: Value) -> AuthResult<Value> {
         let key = auth
             .api_keys()?
             .create(
-                &seed.id(),
+                seed.id().typed().unwrap(),
                 CreateKeyOptions {
                     name: Some("Native key".into()),
                     ..Default::default()
@@ -194,8 +194,9 @@ pub async fn run(input: Value) -> AuthResult<Value> {
             "key-update",
             auth.api_keys()?
                 .update(
-                    &seed.id(),
-                    key.as_ref().map_or("missing", |key| &key.api_key.id),
+                    seed.id().typed().unwrap(),
+                    key.as_ref()
+                        .map_or("missing", |key| key.api_key.id.typed().unwrap()),
                     UpdateKeyOptions {
                         name: Some("Updated key".into()),
                         ..Default::default()
@@ -224,6 +225,6 @@ pub async fn run(input: Value) -> AuthResult<Value> {
     } else {
         "native@example.com"
     };
-    let snapshot = json!({"admin":auth.store().get_user_by_email("admin@example.com").await?.is_some(),"signup":auth.store().get_user_by_email("signup@example.com").await?.is_some(),"otp":auth.store().get_verification_including_expired(&format!("sign-in-otp-{email}")).await?.is_some(),"keys":auth.store().list_api_keys_by_reference(&seed.id()).await?.len()});
+    let snapshot = json!({"admin":auth.store().get_user_by_email("admin@example.com").await?.is_some(),"signup":auth.store().get_user_by_email("signup@example.com").await?.is_some(),"otp":auth.store().get_verification_including_expired(&format!("sign-in-otp-{email}")).await?.is_some(),"keys":auth.store().list_api_keys_by_reference(seed.id().typed().unwrap()).await?.len()});
     Ok(json!({"calls":calls,"events":*probe.events.lock().unwrap(),"snapshot":snapshot}))
 }

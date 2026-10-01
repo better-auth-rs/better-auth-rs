@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use chrono::Duration;
 use std::sync::Arc;
 
-use better_auth_core::entity::AuthUser;
 use better_auth_core::wire::UserView;
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
@@ -22,29 +21,8 @@ use types::*;
 // User info snapshot (dyn-compatible alternative to &dyn AuthUser)
 // ---------------------------------------------------------------------------
 
-/// A plain-data snapshot of the core user fields, passed to callback hooks.
-///
-/// `AuthUser` is **not** dyn-compatible (it requires `Serialize`), so we
-/// extract the fields the callbacks are most likely to need into this struct.
-#[derive(Debug, Clone)]
-pub struct UserInfo {
-    pub id: String,
-    pub email: Option<String>,
-    pub name: Option<String>,
-    pub email_verified: bool,
-}
-
-impl UserInfo {
-    /// Build a [`UserInfo`] from any type that implements [`AuthUser`].
-    fn from_auth_user(user: &impl AuthUser) -> Self {
-        Self {
-            id: user.id().to_string(),
-            email: user.email().map(|s| s.to_string()),
-            name: user.name().map(|s| s.to_string()),
-            email_verified: user.email_verified(),
-        }
-    }
-}
+/// Public user snapshot passed to change-email callbacks, including additional fields.
+pub type UserInfo = UserView;
 
 // ---------------------------------------------------------------------------
 // Callback traits
@@ -52,9 +30,8 @@ impl UserInfo {
 
 /// Custom callback for sending change-email confirmation emails.
 ///
-/// If set on [`ChangeEmailConfig`], this callback is invoked instead of the
-/// default [`EmailProvider`](better_auth_core::EmailProvider). This allows callers to customise the email
-/// subject, template, and delivery mechanism.
+/// A verified user receives this confirmation when email verification delivery
+/// is also configured. Unverified users use the verification sender.
 #[async_trait]
 pub trait SendChangeEmailConfirmation: Send + Sync {
     async fn send(
@@ -103,8 +80,8 @@ pub trait SendDeleteAccountVerification: Send + Sync {
 pub struct ChangeEmailConfig {
     /// Whether the change-email endpoints are enabled. Default: `false`.
     pub enabled: bool,
-    /// If `true`, the new email is updated immediately without sending a
-    /// verification email. Default: `false`.
+    /// Update an unverified user's email immediately. A configured verification
+    /// sender still sends to the new address after session-cookie issuance.
     pub update_without_verification: bool,
     /// Optional custom callback for sending the confirmation email.
     pub send_change_email_confirmation: Option<Arc<dyn SendChangeEmailConfirmation>>,
@@ -257,19 +234,19 @@ impl UserManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (mut user, session) = ctx.require_session(req).await?;
+        let (user, session) = ctx
+            .require_authoritative_session(req)
+            .await
+            .map_err(|error| match error {
+                AuthError::Unauthenticated => AuthError::Upstream {
+                    status: 401,
+                    code: "UNAUTHORIZED",
+                    message: "Unauthorized",
+                },
+                error => error,
+            })?;
         let body = request::change_email(req)?;
-        let response = change_email_core(&body, &user, &self.config, ctx).await?;
-        if !user.email_verified && self.config.change_email.update_without_verification {
-            user.email = Some(body.new_email.to_lowercase());
-            ctx.session_manager()
-                .set_session_cookie(
-                    req,
-                    better_auth_core::session::SessionData { user, session },
-                    None,
-                )
-                .await?;
-        }
+        let response = change_email_core(&body, &user, &session, req, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -344,13 +321,10 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for UserManagementPlugin {
     }
 
     fn routes(&self) -> Vec<AuthRoute> {
-        let mut routes = Vec::new();
-        if self.config.change_email.enabled {
-            routes.push(
-                AuthRoute::post("/change-email", "changeEmail")
-                    .body_validator(request::change_email_body),
-            );
-        }
+        let mut routes = vec![
+            AuthRoute::post("/change-email", "changeEmail")
+                .body_validator(request::change_email_body),
+        ];
         if self.config.delete_user.enabled {
             routes.push(
                 AuthRoute::post("/delete-user", "deleteUser")
@@ -371,7 +345,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for UserManagementPlugin {
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             // -- change email --
-            (HttpMethod::Post, "/change-email") if self.config.change_email.enabled => {
+            (HttpMethod::Post, "/change-email") => {
                 Ok(Some(self.handle_change_email(req, ctx).await?))
             }
             // -- delete user --

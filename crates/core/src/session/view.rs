@@ -16,6 +16,12 @@ impl From<SessionView> for Map<String, Value> {
             ("userAgent".into(), json!(session.user_agent)),
             ("userId".into(), json!(session.user_id)),
         ]);
+        if session.id.is_undefined() {
+            let _ = fields.remove("id");
+        }
+        if session.user_id.is_undefined() {
+            let _ = fields.remove("userId");
+        }
         for (name, value) in [
             ("impersonatedBy", json!(session.impersonated_by)),
             ("activeTeamId", json!(session.active_team_id)),
@@ -55,14 +61,14 @@ impl TryFrom<Map<String, Value>> for SessionView {
                 .collect(),
         );
         Ok(Self {
-            id: take(&mut fields, "id")?,
+            id: crate::SchemaValue::from_json(fields.remove("id")),
             token: take(&mut fields, "token")?,
             expires_at: take(&mut fields, "expiresAt")?,
             created_at: take(&mut fields, "createdAt")?,
             updated_at: take(&mut fields, "updatedAt")?,
             ip_address: take(&mut fields, "ipAddress")?,
             user_agent: take(&mut fields, "userAgent")?,
-            user_id: take(&mut fields, "userId")?,
+            user_id: crate::SchemaValue::from_json(fields.remove("userId")),
             impersonated_by: take(&mut fields, "impersonatedBy")?,
             active_organization_id: take(&mut fields, "activeOrganizationId")?,
             active_team_id: take(&mut fields, "activeTeamId")?,

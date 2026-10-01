@@ -108,13 +108,13 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
         .unwrap();
     let one = first
         .store()
-        .get_user_by_id(&one.id())
+        .get_user_by_id(one.id().typed().unwrap())
         .await
         .unwrap()
         .unwrap();
     let two = second
         .store()
-        .get_user_by_id(&two.id())
+        .get_user_by_id(two.id().typed().unwrap())
         .await
         .unwrap()
         .unwrap();
@@ -129,7 +129,7 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
     assert!(
         first
             .store()
-            .get_user_by_id(&two.id())
+            .get_user_by_id(two.id().typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -163,7 +163,7 @@ impl DatabaseHooks<Schema> for NestedHook {
     }
     async fn after_create_user(
         &self,
-        user: &<Schema as AuthSchema>::User,
+        user: &better_auth_core::wire::UserView,
         context: &DatabaseHookContext<'_, Schema>,
     ) -> AuthResult<()> {
         assert!(context.transaction.is_none());
@@ -192,7 +192,7 @@ impl better_auth_seaorm::hooks::SeaOrmHooks<Schema> for ApplicationHook {
     }
     async fn after_create_user(
         &self,
-        user: &<Schema as AuthSchema>::User,
+        user: &better_auth_core::wire::UserView,
         context: &better_auth_seaorm::hooks::SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<()> {
         assert!(context.tx.is_none());

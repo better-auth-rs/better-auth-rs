@@ -26,8 +26,8 @@ pub struct EmailVerificationPlugin {
 #[derive(Clone, better_auth_core::PluginConfig)]
 #[plugin(name = "EmailVerificationPlugin")]
 pub struct EmailVerificationConfig {
-    /// How long a verification token stays valid. Default: 24 hours.
-    #[config(default = Duration::hours(24))]
+    /// How long a verification token stays valid. Default: one hour.
+    #[config(default = Duration::hours(1))]
     pub verification_token_expiry: Duration,
     /// Whether sign-in sends through the default email provider. Default: true.
     /// Custom senders are independent of this setting.
@@ -72,7 +72,7 @@ impl EmailVerificationPlugin {
 better_auth_core::impl_auth_plugin! {
     EmailVerificationPlugin, "email-verification";
     routes {
-        post "/send-verification-email" => handle_send_verification_email, "sendVerificationEmail";
+        post "/send-verification-email" => handle_send_verification_email, "sendVerificationEmail", body = types::body;
         get "/verify-email" => handle_verify_email, "verifyEmail", query = crate::plugins::query_input::verify_email;
     }
     extra {
@@ -121,10 +121,9 @@ impl EmailVerificationPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body: SendVerificationEmailRequest = match better_auth_core::validate_request_body(req)
-        {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
+        let body = match req.validated_body::<SendVerificationEmailRequest>() {
+            Some(body) => body.clone(),
+            None => super::json_body::email_input(req, "email", "callbackURL")?.0,
         };
         let current_user = ctx.require_session(req).await.ok().map(|(user, _)| user);
         let mut config = self.config.clone();

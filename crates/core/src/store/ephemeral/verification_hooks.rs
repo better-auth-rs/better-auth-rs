@@ -33,24 +33,13 @@ impl EphemeralStore {
         let record = self
             .raw("verification", "update", |state| {
                 Ok({
-                    let position = state.verifications.values().position(|row| {
+                    let row = state.verifications.iter_mut().find(|row| {
                         self.verification_field(row, "identifier")
                             == Some(&Value::String(identifier.to_owned()))
                     });
-                    if let Some(position) = position {
-                        let (_, mut record) = state
-                            .verifications
-                            .shift_remove_index(position)
-                            .ok_or_else(|| {
-                                AuthError::internal("Verification position changed while locked")
-                            })?;
+                    if let Some(record) = row {
                         record.extend(patch);
-                        let id = crate::SchemaValue::<String>::from_json(record.get("id").cloned())
-                            .display_string()?;
-                        let _ = state
-                            .verifications
-                            .shift_insert(position, id, record.clone());
-                        Some(record)
+                        Some(record.clone())
                     } else {
                         None
                     }
@@ -76,13 +65,20 @@ impl EphemeralStore {
                 "verification",
                 if many { "findMany" } else { "findOne" },
                 |state| {
-                    Ok(state
-                        .verifications
-                        .values()
-                        .filter(|row| predicate(row))
-                        .take(if many { usize::MAX } else { 1 })
-                        .cloned()
-                        .collect())
+                    Ok(crate::query::paginate_memory(
+                        state
+                            .verifications
+                            .iter()
+                            .filter(|row| predicate(row))
+                            .cloned()
+                            .collect(),
+                        Some(if many {
+                            self.config.advanced.database.find_many_limit()
+                        } else {
+                            1.0
+                        }),
+                        None,
+                    ))
                 },
             )
             .await?;
@@ -119,7 +115,7 @@ impl EphemeralStore {
                 |state| {
                     Ok({
                         let count = state.verifications.len();
-                        state.verifications.retain(|_, row| !predicate(row));
+                        state.verifications.retain(|row| !predicate(row));
                         count - state.verifications.len()
                     })
                 },
@@ -157,10 +153,14 @@ impl EphemeralStore {
                 return Ok(None);
             }
         }
-        let id = snapshot.id.typed()?;
+        let id = snapshot.id.json()?;
         let Some(consumed) = self
             .raw("verification", "consumeOne", |state| {
-                Ok(state.verifications.shift_remove(id))
+                Ok(state
+                    .verifications
+                    .iter()
+                    .position(|row| row.get("id") == id.as_ref())
+                    .map(|position| state.verifications.remove(position)))
             })
             .await?
         else {
@@ -168,7 +168,7 @@ impl EphemeralStore {
         };
         let consumed = self.output_verification(&consumed)?;
         self.raw("verification", "deleteMany", |state| {
-            state.verifications.retain(|_, row| {
+            state.verifications.retain(|row| {
                 self.verification_field(row, "identifier")
                     != Some(&Value::String(identifier.to_owned()))
             });

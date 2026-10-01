@@ -120,7 +120,7 @@ impl OrganizationPlugin {
             .get_organization_by_id_value(&org_value)
             .await?
             .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-        let org_id = organization.id.as_str();
+        let org_id = organization.id.typed()?.as_str();
         let count = ctx.database.list_organization_members(org_id).await?.len();
         let organization_view =
             crate::plugins::organization::fields::organization(&organization, ctx);
@@ -138,10 +138,13 @@ impl OrganizationPlugin {
         }
         let mut data = OrganizationMemberDraft {
             additional_fields,
-            organization_id: org_id.to_owned(),
+            organization_id: org_id.to_owned().into(),
             user_id: user.id().into_owned(),
             role: super::input::parse_roles(&input.role)?,
-            team_id: team.as_ref().map(|team| team.id.clone()),
+            team_id: team
+                .as_ref()
+                .map(|team| team.id.typed().cloned())
+                .transpose()?,
             created_at: None,
         };
         if let Some(hooks) = &self.config.hooks {
@@ -149,7 +152,7 @@ impl OrganizationPlugin {
         }
         let member = ctx.database.create_member(data.into_create()).await?;
         if let Some(team) = team {
-            let team_id = team.id;
+            let team_id = team.id.typed()?.clone();
             let result = async {
                 let maximum = if let Some((actor, session)) = &session {
                     let user_view = ctx.user_view(actor)?;
@@ -176,14 +179,14 @@ impl OrganizationPlugin {
                 };
                 let _ = ctx
                     .database
-                    .add_team_member(&team_id, &user.id(), maximum)
+                    .add_team_member(&team_id.into(), user.id().typed()?, maximum)
                     .await?
                     .ok_or_else(|| AuthError::forbidden("Team member limit reached"))?;
                 AuthResult::Ok(())
             }
             .await;
             if let Err(error) = result {
-                ctx.database.delete_member(&member.id).await?;
+                ctx.database.delete_member(member.id.typed()?).await?;
                 return Err(error);
             }
         }

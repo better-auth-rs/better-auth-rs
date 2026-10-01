@@ -45,33 +45,7 @@ pub(super) fn reset(req: &AuthRequest) -> AuthResult<ResetPasswordRequest> {
 fn request_reset_input(
     req: &AuthRequest,
 ) -> AuthResult<(super::types::RequestPasswordResetRequest, Value)> {
-    let body = req.input_body()?;
-    let object = body.as_ref().and_then(Value::as_object).ok_or_else(|| {
-        better_auth_core::AuthError::from(validation_error(&invalid_type(
-            "body",
-            "object",
-            body.as_ref(),
-        )))
-    })?;
-    let mut errors = Vec::new();
-    let mut output = Map::new();
-    for (name, required) in [("email", true), ("redirectTo", false)] {
-        match object.get(name) {
-            Some(Value::String(value)) => {
-                if name == "email" && !crate::plugins::json_body::valid_email(value)? {
-                    errors.push("[body.email] Invalid email address".to_owned());
-                }
-                let _ = output.insert(name.to_owned(), Value::String(value.clone()));
-            }
-            None if !required => {}
-            value => errors.push(invalid_type(&format!("body.{name}"), "string", value)),
-        }
-    }
-    if !errors.is_empty() {
-        return Err(validation_error(&errors.join("; ")).into());
-    }
-    let projection = Value::Object(output);
-    Ok((serde_json::from_value(projection.clone())?, projection))
+    crate::plugins::json_body::email_input(req, "email", "redirectTo")
 }
 
 fn change_input(req: &AuthRequest) -> AuthResult<(super::types::ChangePasswordRequest, Value)> {

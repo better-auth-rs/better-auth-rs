@@ -716,7 +716,7 @@ impl ApiKeyPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = create_key_core(&body, user.id(), self, ctx, Some(req)).await?;
+        let response = create_key_core(&body, user.id().typed()?, self, ctx, Some(req)).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -730,7 +730,7 @@ impl ApiKeyPlugin {
             .query_string("id")?
             .ok_or_else(|| AuthError::bad_request("Query parameter 'id' is required"))?;
         let config_id = req.query_string("configId")?;
-        let response = get_key_core(id, config_id, user.id(), self, ctx).await?;
+        let response = get_key_core(id, config_id, user.id().typed()?, self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -741,7 +741,7 @@ impl ApiKeyPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let query = ListKeysQuery::from_request(req)?;
-        let response = list_keys_core(user.id(), &query, self, ctx).await?;
+        let response = list_keys_core(user.id().typed()?, &query, self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -761,7 +761,7 @@ impl ApiKeyPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = update_key_core(&body, user.id(), self, ctx).await?;
+        let response = update_key_core(&body, user.id().typed()?, self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -778,7 +778,7 @@ impl ApiKeyPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = delete_key_core(&body, user.id(), self, ctx).await?;
+        let response = delete_key_core(&body, user.id().typed()?, self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 }

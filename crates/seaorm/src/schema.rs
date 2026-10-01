@@ -15,7 +15,7 @@ pub trait SeaOrmUserModel:
     AuthUser + IntoActiveModel<Self::ActiveModel> + Clone + Send + Sync + 'static + FromQueryResult
 {
     type Id: Clone + Into<Value> + Send + Sync + 'static;
-    type Entity: EntityTrait<Model = Self>;
+    type Entity: EntityTrait<Model = Self, Column = Self::Column>;
     type ActiveModel: ActiveModelTrait<Entity = Self::Entity> + ActiveModelBehavior + Send;
     type Column: ColumnTrait;
 
@@ -73,7 +73,7 @@ pub trait SeaOrmSessionModel:
 {
     type Id: Clone + Into<Value> + Send + Sync + 'static;
     type UserId: Clone + Into<Value> + Send + Sync + 'static;
-    type Entity: EntityTrait<Model = Self>;
+    type Entity: EntityTrait<Model = Self, Column = Self::Column>;
     type ActiveModel: ActiveModelTrait<Entity = Self::Entity> + ActiveModelBehavior + Send;
     type Column: ColumnTrait;
 

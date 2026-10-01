@@ -165,7 +165,7 @@ impl PasswordSecurityFixture {
             return Ok(json!({"user":false,"hash":null}));
         };
         let account = store
-            .get_user_accounts(user.id().as_ref())
+            .get_user_accounts(user.id().typed().unwrap().as_ref())
             .await?
             .into_iter()
             .find(|account| account.provider_id == "credential");

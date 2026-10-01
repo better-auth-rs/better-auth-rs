@@ -446,8 +446,18 @@ async fn configuration_client_compat() {
     for profile in [
         "api-error",
         "api-error-production",
+        "request-security-memory",
+        "request-security-sqlite",
+        "request-organization-memory",
+        "request-organization-sqlite",
         "request-query-memory",
         "request-query-sqlite",
+        "request-plugin-memory",
+        "request-plugin-sqlite",
+        "request-change-email",
+        "request-change-email-no-sender",
+        "request-change-email-no-confirmation",
+        "request-change-email-disabled",
         "trailing-slashes-default",
         "trailing-slashes-true",
         "trailing-slashes-false",
@@ -508,6 +518,7 @@ async fn configuration_client_compat() {
         "dispatch-errors",
         "dynamic-context",
         "dynamic-native",
+        "id-policy",
         "dynamic-oauth",
         "dynamic-environment",
         "identity-context",
@@ -661,6 +672,14 @@ async fn configuration_client_compat() {
             run_client_compat_profile(&["./tests/config/last-login/"], profile).await;
         } else if matches!(profile, "api-error" | "api-error-production") {
             run_client_compat_profile(&["./tests/config/api-error/"], profile).await;
+        } else if profile.starts_with("request-security-") {
+            run_client_compat_profile(&["./tests/config/request-security/"], profile).await;
+        } else if profile.starts_with("request-organization-") {
+            run_client_compat_profile(&["./tests/config/request-organization/"], profile).await;
+        } else if profile.starts_with("request-plugin-") {
+            run_client_compat_profile(&["./tests/config/request-plugin/"], profile).await;
+        } else if profile.starts_with("request-change-email") {
+            run_client_compat_profile(&["./tests/config/change-email/"], profile).await;
         } else if profile.starts_with("request-query-") {
             run_client_compat_profile(&["./tests/config/request-query/"], profile).await;
         } else if profile.starts_with("trailing-slashes-") {

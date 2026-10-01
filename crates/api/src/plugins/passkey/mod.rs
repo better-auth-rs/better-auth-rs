@@ -165,10 +165,7 @@ impl PasskeyPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-        let body: DeletePasskeyRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body: DeletePasskeyRequest = types::read(req, types::deletion_body)?;
         let result = delete_passkey_core(&body, &user, ctx).await?;
         AuthResponse::json(200, &result).map_err(AuthError::from)
     }
@@ -180,10 +177,7 @@ impl PasskeyPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-        let body: UpdatePasskeyRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body: UpdatePasskeyRequest = types::read(req, types::update_body)?;
         let result = update_passkey_core(&body, &user, ctx).await?;
         AuthResponse::json(200, &result).map_err(AuthError::from)
     }
@@ -193,11 +187,11 @@ better_auth_core::impl_auth_plugin! {
     PasskeyPlugin, "passkey";
     routes {
         get  "/passkey/generate-register-options"      => handle_generate_register_options,      "generatePasskeyRegistrationOptions", query = crate::plugins::query_input::passkey_registration;
-        post "/passkey/verify-registration"            => handle_verify_registration,            "passkeyVerifyRegistration";
+        post "/passkey/verify-registration"            => handle_verify_registration,            "passkeyVerifyRegistration", body = types::registration_body;
         get  "/passkey/generate-authenticate-options"  => handle_generate_authenticate_options,  "passkeyGenerateAuthenticateOptions";
-        post "/passkey/verify-authentication"          => handle_verify_authentication,          "passkeyVerifyAuthentication";
+        post "/passkey/verify-authentication"          => handle_verify_authentication,          "passkeyVerifyAuthentication", body = types::authentication_body;
         get  "/passkey/list-user-passkeys"             => handle_list_user_passkeys,             "listPasskeys";
-        post "/passkey/delete-passkey"                 => handle_delete_passkey,                 "deletePasskey";
-        post "/passkey/update-passkey"                 => handle_update_passkey,                 "updatePasskey";
+        post "/passkey/delete-passkey"                 => handle_delete_passkey,                 "deletePasskey", body = types::deletion_body;
+        post "/passkey/update-passkey"                 => handle_update_passkey,                 "updatePasskey", body = types::update_body;
     }
 }

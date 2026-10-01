@@ -46,7 +46,7 @@ async fn rotation_supersedes_earlier_refresh_token_and_cache() {
     let (manager, req, old) = refreshed_request().await;
     let user = manager
         .database
-        .get_user_by_id(&old.user.id)
+        .get_user_by_id(old.user.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();

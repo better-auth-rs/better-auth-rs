@@ -12,10 +12,10 @@ pub use better_auth_core::entity::{
 pub use better_auth_core::types::{
     ApiKey, AuthRequest, AuthResponse, CreateAccount, CreateApiKey, CreateDeviceCode,
     CreateInvitation, CreateMember, CreateOrganization, CreatePasskey, CreateSession,
-    CreateTwoFactor, CreateUser, CreateVerification, DeviceCode, Headers, HttpMethod, Invitation,
-    InvitationStatus, ListUsersParams, Member, Organization, Passkey, RequestMeta, TwoFactor,
-    UpdateAccount, UpdateApiKey, UpdateDeviceCode, UpdateOrganization, UpdatePasskey, UpdateUser,
-    UpdateUserRequest, UpdateUserResponse,
+    CreateTwoFactor, CreateUser, CreateVerification, CreateWalletAddress, DeviceCode, Headers,
+    HttpMethod, Invitation, InvitationStatus, ListUsersParams, Member, Organization, Passkey,
+    RequestMeta, TwoFactor, UpdateAccount, UpdateApiKey, UpdateDeviceCode, UpdateOrganization,
+    UpdatePasskey, UpdateUser, UpdateUserRequest, UpdateUserResponse,
 };
 pub use better_auth_core::wire::{AccountView, SessionView, UserView, VerificationView};
 

@@ -6,7 +6,6 @@
 
 use std::sync::{Arc, Mutex};
 
-use async_trait::async_trait;
 use better_auth_core::{
     AuthConfig, AuthError, AuthRequest, AuthResult, AuthSchema, AuthStore, CreateUser, HttpMethod,
     UpdateUser,
@@ -95,7 +94,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for MissingUpdateHooks {
 
     async fn after_update_user(
         &self,
-        user: Option<&S::User>,
+        user: Option<&better_auth_core::wire::UserView>,
         context: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.after_missing(
@@ -120,7 +119,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for MissingUpdateHooks {
 
     async fn after_update_user(
         &self,
-        user: Option<&S::User>,
+        user: Option<&better_auth_core::wire::UserView>,
         context: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.after_missing(

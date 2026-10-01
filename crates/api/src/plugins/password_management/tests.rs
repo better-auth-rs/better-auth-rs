@@ -69,7 +69,9 @@ async fn create_test_context_with_user() -> (AuthContext<TestSchema>, UserView, 
         })
         .await
         .unwrap();
-    let session = test_helpers::create_session(&ctx, user.id.clone(), Duration::hours(24)).await;
+    let session =
+        test_helpers::create_session(&ctx, user.id.typed().unwrap().clone(), Duration::hours(24))
+            .await;
 
     (ctx, user, session)
 }
@@ -78,7 +80,11 @@ async fn create_test_context_with_oauth_only_user()
 -> (AuthContext<TestSchema>, UserView, SessionView) {
     let (ctx, user, session) = create_test_context_with_user().await;
 
-    let existing_accounts = ctx.database.get_user_accounts(&user.id).await.unwrap();
+    let existing_accounts = ctx
+        .database
+        .get_user_accounts(user.id.typed().unwrap())
+        .await
+        .unwrap();
     for account in existing_accounts {
         ctx.database
             .delete_account(account.id.typed().unwrap())
@@ -198,7 +204,7 @@ async fn test_reset_password_success() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, &user.id).await;
+    let reset_token = create_reset_token(&ctx, user.id.typed().unwrap()).await;
 
     let body = serde_json::json!({
         "newPassword": "NewPassword123!",
@@ -220,7 +226,11 @@ async fn test_reset_password_success() {
     assert!(response_data.status);
 
     // Verify password was updated
-    let accounts = ctx.database.get_user_accounts(&user.id).await.unwrap();
+    let accounts = ctx
+        .database
+        .get_user_accounts(user.id.typed().unwrap())
+        .await
+        .unwrap();
     let stored_hash = accounts
         .iter()
         .find(|account| account.provider_id == "credential")
@@ -269,7 +279,7 @@ async fn test_reset_password_weak_password() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, &user.id).await;
+    let reset_token = create_reset_token(&ctx, user.id.typed().unwrap()).await;
 
     let body = serde_json::json!({
         "newPassword": "weak",
@@ -613,7 +623,7 @@ async fn test_reset_password_token_endpoint_redirects_with_callback_token() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, &user.id).await;
+    let reset_token = create_reset_token(&ctx, user.id.typed().unwrap()).await;
 
     let mut query = HashMap::new();
     query.insert(
@@ -650,7 +660,7 @@ async fn test_reset_password_token_endpoint_with_callback() {
     let plugin = PasswordManagementPlugin::new();
     let (ctx, user, _session) = create_test_context_with_user().await;
 
-    let reset_token = create_reset_token(&ctx, &user.id).await;
+    let reset_token = create_reset_token(&ctx, user.id.typed().unwrap()).await;
 
     let mut query = HashMap::new();
     query.insert(
@@ -939,7 +949,7 @@ async fn test_on_password_reset_callback() {
     plugin.on_init(&mut init).await.unwrap();
     ctx.password_policy = init.password_policy;
 
-    let reset_token = create_reset_token(&ctx, &user.id).await;
+    let reset_token = create_reset_token(&ctx, user.id.typed().unwrap()).await;
 
     let body = serde_json::json!({
         "newPassword": "NewPassword123!",
@@ -972,7 +982,7 @@ async fn test_revoke_sessions_on_password_reset_false() {
     plugin.on_init(&mut init).await.unwrap();
     ctx.password_policy = init.password_policy;
 
-    let reset_token = create_reset_token(&ctx, &user.id).await;
+    let reset_token = create_reset_token(&ctx, user.id.typed().unwrap()).await;
 
     let body = serde_json::json!({
         "newPassword": "NewPassword123!",
@@ -989,7 +999,11 @@ async fn test_revoke_sessions_on_password_reset_false() {
     assert_eq!(response.status, 200);
 
     // Session should still exist since revoke_sessions_on_password_reset=false
-    let sessions = ctx.database.get_user_sessions(&user.id).await.unwrap();
+    let sessions = ctx
+        .database
+        .get_user_sessions(user.id.typed().unwrap())
+        .await
+        .unwrap();
     assert!(
         !sessions.is_empty(),
         "Sessions should remain when revoke_sessions_on_password_reset=false"
@@ -1010,7 +1024,7 @@ async fn test_revoke_sessions_on_password_reset_true() {
     plugin.on_init(&mut init).await.unwrap();
     ctx.password_policy = init.password_policy;
 
-    let reset_token = create_reset_token(&ctx, &user.id).await;
+    let reset_token = create_reset_token(&ctx, user.id.typed().unwrap()).await;
 
     let body = serde_json::json!({
         "newPassword": "NewPassword123!",
@@ -1027,7 +1041,11 @@ async fn test_revoke_sessions_on_password_reset_true() {
     assert_eq!(response.status, 200);
 
     // Sessions should be revoked since revoke_sessions_on_password_reset=true (default)
-    let sessions = ctx.database.get_user_sessions(&user.id).await.unwrap();
+    let sessions = ctx
+        .database
+        .get_user_sessions(user.id.typed().unwrap())
+        .await
+        .unwrap();
     assert!(
         sessions.is_empty(),
         "Sessions should be revoked when revoke_sessions_on_password_reset=true"

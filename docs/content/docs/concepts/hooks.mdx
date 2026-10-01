@@ -58,7 +58,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_create_user(
         &self,
-        user: &S::User,
+        user: &better_auth::wire::UserView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()>;
 
@@ -71,19 +71,19 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_update_user(
         &self,
-        user: Option<&S::User>,
+        user: Option<&better_auth::wire::UserView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()>;
 
     async fn before_delete_user(
         &self,
-        user: &S::User,
+        user: &better_auth::wire::UserView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl>;
 
     async fn after_delete_user(
         &self,
-        user: &S::User,
+        user: &better_auth::wire::UserView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()>;
 
@@ -95,7 +95,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_create_session(
         &self,
-        session: &S::Session,
+        session: &better_auth::wire::SessionView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()>;
 }

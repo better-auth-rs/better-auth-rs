@@ -47,7 +47,7 @@ async fn field_names_accept_rust_and_serde_aliases_without_losing_or_repeating_t
         let organization = store.create_organization(create).await.unwrap();
         assert_eq!(organization.additional_fields["label"], "original:in:out");
         let restored = store
-            .get_organization_by_id(&organization.id)
+            .get_organization_by_id(organization.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap();
@@ -55,7 +55,7 @@ async fn field_names_accept_rust_and_serde_aliases_without_losing_or_repeating_t
 
         let updated = store
             .update_organization(
-                &organization.id,
+                organization.id.typed().unwrap(),
                 UpdateOrganization {
                     additional_fields: [("label".into(), json!("changed"))].into_iter().collect(),
                     ..Default::default()
@@ -64,11 +64,12 @@ async fn field_names_accept_rust_and_serde_aliases_without_losing_or_repeating_t
             .await
             .unwrap();
         assert_eq!(updated.additional_fields["label"], "changed:in:out");
-        let raw = fixture::models::organization::Entity::find_by_id(&organization.id)
-            .one(&db)
-            .await
-            .unwrap()
-            .unwrap();
+        let raw =
+            fixture::models::organization::Entity::find_by_id(organization.id.typed().unwrap())
+                .one(&db)
+                .await
+                .unwrap()
+                .unwrap();
         assert_eq!(raw.stored_label.as_deref(), Some("changed:in"));
         fixture::reset(&db).await.unwrap();
     }

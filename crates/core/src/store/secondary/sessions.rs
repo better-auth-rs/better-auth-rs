@@ -19,20 +19,16 @@ pub(super) struct SessionReference {
 }
 
 impl<S: AuthSchema> SecondaryStore<S> {
-    pub(super) fn hydrate_session(&self, mut fields: Map<String, Value>) -> AuthResult<S::Session> {
-        for (name, field) in &self.config.session.additional_fields {
-            let storage =
-                S::Session::serialized_field_name(field.field_name.as_deref().unwrap_or(name));
-            if storage != name
-                && let Some(value) = fields.remove(name)
-            {
-                let _ = fields.insert(storage.to_owned(), value);
-            }
-        }
-        S::Session::from_runtime_fields(fields)
+    pub(super) fn hydrate_session(&self, fields: Map<String, Value>) -> AuthResult<SessionView> {
+        let mut session = SessionView::try_from(fields)?;
+        session.active = true;
+        Ok(session)
     }
 
-    pub(super) fn session_fields(&self, session: &S::Session) -> AuthResult<Map<String, Value>> {
+    pub(super) fn session_fields(
+        &self,
+        session: &crate::wire::SessionView,
+    ) -> AuthResult<Map<String, Value>> {
         let mut config = self.config.session.clone();
         for field in config.additional_fields.values_mut() {
             field.returned = true;
@@ -87,15 +83,26 @@ impl<S: AuthSchema> SecondaryStore<S> {
         Ok(fields)
     }
 
-    pub(super) fn new_session(&self, input: CreateSession) -> AuthResult<S::Session> {
+    pub(super) fn new_session(&self, input: CreateSession) -> AuthResult<crate::wire::SessionView> {
         let now = Utc::now();
+        let id = self
+            .config
+            .advanced
+            .generate_id("session", None)?
+            .unwrap_or_else(|| crate::id::random_id(None));
         let mut fields = object(json!({
-            "id": uuid::Uuid::new_v4().to_string(), "token": format!("session_{}", uuid::Uuid::new_v4()),
+            "id": id, "token": crate::id::random_id(None),
             "userId": input.user_id, "expiresAt": input.expires_at, "createdAt": now, "updatedAt": now,
             "ipAddress": input.ip_address.unwrap_or_default(), "userAgent": input.user_agent.unwrap_or_default(),
             "impersonatedBy": input.impersonated_by, "activeOrganizationId": input.active_organization_id,
             "activeTeamId": null,
         }))?;
+        if id.is_empty() {
+            let _ = fields.remove("id");
+        }
+        if input.user_id.is_undefined() {
+            let _ = fields.remove("userId");
+        }
         fields.extend(self.config.session.default_fields());
         self.hydrate_session(fields)
     }
@@ -129,25 +136,29 @@ impl<S: AuthSchema> SecondaryStore<S> {
         }
     }
 
-    async fn add_reference(&self, session: &S::Session) -> AuthResult<()> {
+    async fn add_reference(&self, session: &crate::wire::SessionView) -> AuthResult<()> {
         let now = Utc::now().timestamp_millis();
-        let mut references = self.references(&session.user_id()).await?;
+        let mut references = self.references(&session.user_id.display_string()?).await?;
         references
             .retain(|reference| reference.expires_at > now && reference.token != session.token());
         references.push(SessionReference {
             token: session.token().to_owned(),
             expires_at: session.expires_at().timestamp_millis(),
         });
-        self.write_references(&session.user_id(), references).await
+        self.write_references(&session.user_id.display_string()?, references)
+            .await
     }
 
-    pub(super) async fn mirror_session(&self, session: &S::Session) -> AuthResult<()> {
+    pub(super) async fn mirror_session(
+        &self,
+        session: &crate::wire::SessionView,
+    ) -> AuthResult<()> {
         self.mirror_session_in_transaction(session, None).await
     }
 
     pub(super) async fn mirror_session_in_transaction(
         &self,
-        session: &S::Session,
+        session: &crate::wire::SessionView,
         transaction: Option<&dyn crate::store::AuthTransaction<S>>,
     ) -> AuthResult<()> {
         if self.storage.is_none() || ttl(session.expires_at()) == 0 {
@@ -155,8 +166,8 @@ impl<S: AuthSchema> SecondaryStore<S> {
         }
         self.add_reference(session).await?;
         let user = match transaction {
-            Some(transaction) => transaction.get_user_by_id(&session.user_id()).await?,
-            None => self.inner.get_user_by_id(&session.user_id()).await?,
+            Some(transaction) => transaction.get_user_by_id_field(&session.user_id).await?,
+            None => self.inner.get_user_by_id_field(&session.user_id).await?,
         }
         .map(|user| {
             UserView::with_internal_fields_for_adapter(
@@ -181,7 +192,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         &self,
         token: &str,
         update: SessionUpdate,
-    ) -> AuthResult<Option<S::Session>> {
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
         let Some(mut cached) = decode(self.secondary()?.get(token).await?) else {
             return Ok(None);
         };
@@ -211,13 +222,13 @@ impl<S: AuthSchema> SecondaryStore<S> {
                 .set(token, &serde_json::to_string(&cached)?, Some(seconds))
                 .await?;
             let now = Utc::now().timestamp_millis();
-            let mut references = self.references(&updated.user_id()).await?;
+            let mut references = self.references(&updated.user_id.display_string()?).await?;
             references.retain(|reference| reference.expires_at > now && reference.token != token);
             references.push(super::sessions::SessionReference {
                 token: token.to_owned(),
                 expires_at: updated.expires_at().timestamp_millis(),
             });
-            self.write_references(&updated.user_id(), references)
+            self.write_references(&updated.user_id.display_string()?, references)
                 .await?;
         }
         Ok(Some(updated))
@@ -227,7 +238,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         &self,
         token: &str,
         update: SessionUpdate,
-    ) -> AuthResult<Option<S::Session>> {
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
         let runtime = self.clone();
         let lookup = token.to_owned();
         self.inner
@@ -296,8 +307,8 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         &self,
         token: &str,
         update: SessionUpdate,
-        secondary: Option<SessionUpdateWriter<S>>,
-    ) -> AuthResult<Option<S::Session>> {
+        secondary: Option<SessionUpdateWriter>,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
         self.inner
             .update_session_with_writer(token, update, secondary)
             .await
@@ -313,7 +324,10 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
             .await
     }
 
-    async fn create_session(&self, mut input: CreateSession) -> AuthResult<S::Session> {
+    async fn create_session(
+        &self,
+        mut input: CreateSession,
+    ) -> AuthResult<crate::wire::SessionView> {
         let session = if self.database_sessions() {
             self.inner.create_session(input).await?
         } else {
@@ -327,7 +341,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         Ok(session)
     }
 
-    async fn get_session(&self, token: &str) -> AuthResult<Option<S::Session>> {
+    async fn get_session(&self, token: &str) -> AuthResult<Option<crate::wire::SessionView>> {
         Ok(self
             .get_session_snapshot(token)
             .await?
@@ -337,7 +351,12 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
     async fn get_session_snapshot(
         &self,
         token: &str,
-    ) -> AuthResult<Option<(S::Session, Option<crate::session::SessionData>)>> {
+    ) -> AuthResult<
+        Option<(
+            crate::wire::SessionView,
+            Option<crate::session::SessionData>,
+        )>,
+    > {
         if self.storage.is_none() {
             return self.inner.get_session_snapshot(token).await;
         }
@@ -374,7 +393,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         &self,
         token: &str,
         fields: Map<String, Value>,
-    ) -> AuthResult<Option<S::Session>> {
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
         if self.storage.is_none() {
             return self.inner.update_session_fields(token, fields).await;
         }
@@ -388,7 +407,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         .await
     }
 
-    async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<S::Session>> {
+    async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<crate::wire::SessionView>> {
         Ok(self
             .get_user_session_snapshots(user_id)
             .await?
@@ -400,7 +419,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
     async fn get_user_session_snapshots(
         &self,
         user_id: &str,
-    ) -> AuthResult<Vec<(S::Session, Option<SessionView>)>> {
+    ) -> AuthResult<Vec<(crate::wire::SessionView, Option<SessionView>)>> {
         if self.storage.is_none() {
             return self.inner.get_user_session_snapshots(user_id).await;
         }
@@ -433,7 +452,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         &self,
         token: &str,
         expires_at: DateTime<Utc>,
-    ) -> AuthResult<S::Session> {
+    ) -> AuthResult<crate::wire::SessionView> {
         if self.storage.is_none() {
             return self.inner.update_session_expiry(token, expires_at).await;
         }
@@ -551,7 +570,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         &self,
         token: &str,
         team_id: Option<&str>,
-    ) -> AuthResult<S::Session> {
+    ) -> AuthResult<crate::wire::SessionView> {
         if self.storage.is_none() {
             return self.inner.update_session_active_team(token, team_id).await;
         }
@@ -570,7 +589,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         &self,
         token: &str,
         organization_id: Option<&str>,
-    ) -> AuthResult<S::Session> {
+    ) -> AuthResult<crate::wire::SessionView> {
         if self.storage.is_none() {
             return self
                 .inner
@@ -595,7 +614,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         session_token: Option<&str>,
         teams_enabled: bool,
         maximum: TeamMemberLimits<'_>,
-    ) -> AuthResult<(Member, Invitation, Option<S::Session>)> {
+    ) -> AuthResult<(Member, Invitation, Option<crate::wire::SessionView>)> {
         let database_token = session_token.filter(|_| self.database_sessions());
         let (member, invitation, snapshot) = self
             .inner

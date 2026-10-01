@@ -39,7 +39,7 @@ async fn test_generate_register_options_sets_cookie_and_uses_query_name() {
 
     ctx.database
         .create_passkey(CreatePasskey {
-            user_id: user.id.clone(),
+            user_id: user.id.typed().unwrap().clone(),
             name: Some("Existing Key".to_string()),
             credential_id: credential_id("cred-existing"),
             public_key: "public-key".to_string(),
@@ -124,7 +124,7 @@ async fn test_generate_authenticate_options_with_auth_lists_allow_credentials() 
 
     ctx.database
         .create_passkey(CreatePasskey {
-            user_id: user.id.clone(),
+            user_id: user.id.typed().unwrap().clone(),
             name: Some("Authenticator".to_string()),
             credential_id: credential_id("cred-auth"),
             public_key: "public-key".to_string(),
@@ -246,7 +246,7 @@ async fn test_list_user_passkeys_matches_upstream_optional_fields() {
 
     ctx.database
         .create_passkey(CreatePasskey {
-            user_id: user.id.clone(),
+            user_id: user.id.typed().unwrap().clone(),
             name: None,
             credential_id: credential_id("cred-list"),
             public_key: "public-key".to_string(),
@@ -296,7 +296,7 @@ async fn test_delete_passkey_non_owner_is_forbidden() {
     let passkey = ctx
         .database
         .create_passkey(CreatePasskey {
-            user_id: other.id.clone(),
+            user_id: other.id.typed().unwrap().clone(),
             name: Some("Other Key".to_string()),
             credential_id: credential_id("cred-other-delete"),
             public_key: "public-key".to_string(),
@@ -343,7 +343,7 @@ async fn test_update_passkey_non_owner_uses_ts_error_message() {
     let passkey = ctx
         .database
         .create_passkey(CreatePasskey {
-            user_id: other.id.clone(),
+            user_id: other.id.typed().unwrap().clone(),
             name: Some("Other Key".to_string()),
             credential_id: credential_id("cred-other-update"),
             public_key: "public-key".to_string(),

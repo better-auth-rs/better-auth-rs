@@ -53,7 +53,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_create_user(
         &self,
-        user: &S::User,
+        user: &better_auth_core::wire::UserView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (user, ctx);
@@ -72,7 +72,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_update_user(
         &self,
-        user: Option<&S::User>,
+        user: Option<&better_auth_core::wire::UserView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (user, ctx);
@@ -81,7 +81,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_delete_user(
         &self,
-        user: &S::User,
+        user: &better_auth_core::wire::UserView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         let _ = (user, ctx);
@@ -90,7 +90,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_delete_user(
         &self,
-        user: &S::User,
+        user: &better_auth_core::wire::UserView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (user, ctx);
@@ -108,7 +108,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_create_session(
         &self,
-        session: &S::Session,
+        session: &better_auth_core::wire::SessionView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (session, ctx);
@@ -117,7 +117,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_delete_session(
         &self,
-        session: &S::Session,
+        session: &better_auth_core::wire::SessionView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         let _ = (session, ctx);
@@ -136,7 +136,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_update_session(
         &self,
-        session: Option<&S::Session>,
+        session: Option<&better_auth_core::wire::SessionView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (session, ctx);
@@ -145,7 +145,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_delete_session(
         &self,
-        session: &S::Session,
+        session: &better_auth_core::wire::SessionView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (session, ctx);

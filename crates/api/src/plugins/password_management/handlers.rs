@@ -77,7 +77,7 @@ pub(crate) async fn request_password_reset_core(
         .database
         .create_verification(better_auth_core::CreateVerification {
             identifier: (format!("reset-password:{}", reset_token)).into(),
-            value: (user.id().to_string()).into(),
+            value: user.id().into_owned(),
             expires_at: (expires_at).into(),
             ..Default::default()
         })
@@ -145,7 +145,7 @@ pub(crate) async fn reset_password_core(
         password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.new_password)
             .await?;
 
-    if let Some(account) = get_credential_account(ctx, &user_id).await? {
+    if let Some(account) = get_credential_account(ctx, user_id.as_str()).await? {
         let _ = ctx
             .database
             .update_account(
@@ -272,7 +272,7 @@ pub(crate) async fn change_password_core(
         })?;
     }
 
-    let credential_account = get_credential_account(ctx, user.id())
+    let credential_account = get_credential_account(ctx, user.id().into_owned())
         .await?
         .ok_or_else(|| AuthError::bad_request("Credential account not found"))?;
     let _ = ctx
@@ -289,10 +289,12 @@ pub(crate) async fn change_password_core(
         .await?;
 
     let new_token = if body.revoke_other_sessions == Some(true) {
-        ctx.database.delete_user_sessions(&user.id()).await?;
+        ctx.database
+            .delete_user_sessions(user.id().typed()?)
+            .await?;
         let session = issue_user_session(
             ctx,
-            &user.id(),
+            user.id().typed()?,
             meta.ip_address.clone(),
             meta.user_agent.clone(),
         )
@@ -308,7 +310,7 @@ pub(crate) async fn change_password_core(
         token: new_token.as_ref().map(|data| data.session.token.clone()),
         user: ctx
             .database
-            .get_user_by_id(&user.id())
+            .get_user_by_id(user.id().typed()?)
             .await?
             .map(|user| ctx.user_view(&user))
             .transpose()?

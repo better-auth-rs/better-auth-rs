@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Default)]
-pub(super) struct BodyTrace(pub Arc<Mutex<Vec<Value>>>);
+pub(super) struct BodyTrace(pub Arc<Mutex<Vec<Value>>>, pub Arc<Mutex<Vec<Value>>>);
 
 impl BodyTrace {
     pub(super) fn record(
@@ -20,21 +20,41 @@ impl BodyTrace {
         response: Option<&AuthResponse>,
     ) {
         let Some(context) = context.filter(|context| {
-            matches!(
-                context.path.as_str(),
-                "/sign-in/email"
-                    | "/sign-up/email"
-                    | "/request-password-reset"
-                    | "/change-password"
-                    | "/verify-password"
-                    | "/sign-out"
-                    | "/revoke-session"
-                    | "/unlink-account"
-                    | "/change-email"
-                    | "/delete-user"
-                    | "/get-access-token"
-                    | "/refresh-token"
-            )
+            context.path.starts_with("/organization/")
+                || matches!(
+                    context.path.as_str(),
+                    "/sign-in/email"
+                        | "/sign-up/email"
+                        | "/request-password-reset"
+                        | "/change-password"
+                        | "/verify-password"
+                        | "/sign-out"
+                        | "/revoke-session"
+                        | "/unlink-account"
+                        | "/change-email"
+                        | "/delete-user"
+                        | "/get-access-token"
+                        | "/refresh-token"
+                        | "/sign-in/username"
+                        | "/is-username-available"
+                        | "/one-time-token/verify"
+                        | "/multi-session/set-active"
+                        | "/multi-session/revoke"
+                        | "/sign-in/magic-link"
+                        | "/one-tap/callback"
+                        | "/passkey/verify-registration"
+                        | "/passkey/verify-authentication"
+                        | "/passkey/update-passkey"
+                        | "/passkey/delete-passkey"
+                        | "/device/code"
+                        | "/device/token"
+                        | "/device/approve"
+                        | "/device/deny"
+                        | "/siwe/nonce"
+                        | "/siwe/get-nonce"
+                        | "/siwe/verify"
+                        | "/send-verification-email"
+                )
         }) else {
             return;
         };
@@ -46,8 +66,8 @@ impl BodyTrace {
             .and_then(|response| serde_json::from_slice::<Value>(&response.body).ok())
             .and_then(|value| value.get("code").cloned());
         self.0.lock().unwrap().push(json!({
-            "phase":phase, "body":context.body, "request":request.is_some(),
-            "requestBody":request.and_then(|request| request.body.as_ref()).map(|bytes| std::str::from_utf8(bytes).unwrap()),
+            "phase":phase, "body":super::snapshot(&context.body), "request":request.is_some(),
+            "requestBody":request.map(|request| std::str::from_utf8(request.body.as_deref().unwrap_or_default()).unwrap()),
             "errorCode":error,
         }));
     }
@@ -100,11 +120,16 @@ impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
         better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::UpdateUser>,
     > {
         self.record("user.update.before", context.request.as_ref(), None);
+        if context.request.as_ref().is_some_and(|request| {
+            request.path == "/change-email" && request.headers.contains_key("x-user-update-cancel")
+        }) {
+            return Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Cancel);
+        }
         Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
     async fn after_update_user(
         &self,
-        _: Option<&S::User>,
+        _: Option<&better_auth_core::wire::UserView>,
         context: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("user.update.after", context.request.as_ref(), None);
@@ -113,7 +138,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
 
     async fn before_delete_session(
         &self,
-        _: &S::Session,
+        _: &better_auth_core::wire::SessionView,
         context: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookControl> {
         self.record("session.delete.before", context.request.as_ref(), None);
@@ -121,7 +146,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
     }
     async fn after_delete_session(
         &self,
-        _: &S::Session,
+        _: &better_auth_core::wire::SessionView,
         context: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("session.delete.after", context.request.as_ref(), None);
@@ -137,7 +162,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
     }
     async fn after_create_user(
         &self,
-        _: &S::User,
+        _: &better_auth_core::wire::UserView,
         context: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("user.after", context.request.as_ref(), None);
@@ -154,7 +179,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
     }
     async fn after_create_session(
         &self,
-        _: &S::Session,
+        _: &better_auth_core::wire::SessionView,
         context: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("session.after", context.request.as_ref(), None);
@@ -166,6 +191,128 @@ impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
 impl better_auth::plugins::SendResetPassword for BodyTrace {
     async fn send(&self, _: &Value, _: &str, _: &str) -> AuthResult<()> {
         self.current("sender", None);
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl better_auth_core::email::SendVerificationEmail for BodyTrace {
+    async fn send(
+        &self,
+        user: &better_auth_core::wire::UserView,
+        url: &str,
+        token: &str,
+    ) -> AuthResult<()> {
+        self.current("email.sender", None);
+        self.email("verification", user, None, url, token)
+    }
+}
+
+impl BodyTrace {
+    fn email(
+        &self,
+        kind: &str,
+        user: &better_auth_core::wire::UserView,
+        new_email: Option<&str>,
+        url: &str,
+        token: &str,
+    ) -> AuthResult<()> {
+        use base64::Engine;
+        let context = current_request_hook_context().unwrap();
+        if context.path != "/change-email" {
+            return Ok(());
+        }
+        let claims: Value = serde_json::from_slice(
+            &base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .decode(token.split('.').nth(1).unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        let callback = url::Url::parse(url)
+            .unwrap()
+            .query_pairs()
+            .find(|(key, _)| key == "callbackURL")
+            .unwrap()
+            .1
+            .into_owned();
+        self.1.lock().unwrap().push(json!({"kind":kind,"user":user,"newEmail":new_email,"claims":{"email":claims["email"],"updateTo":claims.get("updateTo"),"requestType":claims.get("requestType"),"expiresIn":claims["exp"].as_i64().unwrap()-claims["iat"].as_i64().unwrap()},"callback":callback,"request":context.is_http || context.request.original_request().is_some(),"cookieIssued":context.request.new_session()?.is_some()}));
+        if context.headers.contains_key("x-email-fail") {
+            return Err(better_auth_core::AuthError::internal(
+                "fixture sender failure",
+            ));
+        }
+        Ok(())
+    }
+}
+#[async_trait::async_trait]
+impl better_auth::plugins::SendChangeEmailConfirmation for BodyTrace {
+    async fn send(
+        &self,
+        user: &better_auth_core::wire::UserView,
+        new_email: &str,
+        url: &str,
+        token: &str,
+    ) -> AuthResult<()> {
+        self.current("email.confirmation", None);
+        self.email("confirmation", user, Some(new_email), url, token)
+    }
+}
+
+#[async_trait::async_trait]
+impl better_auth::plugins::organization::hooks::OrganizationHooks for BodyTrace {
+    async fn before_create_organization(
+        &self,
+        _: &mut better_auth_core::CreateOrganization,
+        _: &better_auth_core::wire::UserView,
+    ) -> AuthResult<()> {
+        self.current("organization.create", None);
+        Ok(())
+    }
+    async fn before_update_organization(
+        &self,
+        _: &mut better_auth_core::UpdateOrganization,
+        _: better_auth::plugins::organization::hooks::OrganizationActor<'_>,
+    ) -> AuthResult<()> {
+        self.current("organization.update", None);
+        Ok(())
+    }
+    async fn before_create_team(
+        &self,
+        _: &mut better_auth::plugins::organization::hooks::OrganizationTeamDraft,
+        _: &better_auth::plugins::organization::types::OrganizationResponse,
+        _: Option<&better_auth_core::wire::UserView>,
+    ) -> AuthResult<()> {
+        self.current("team.create", None);
+        Ok(())
+    }
+    async fn before_update_team(
+        &self,
+        _: &mut better_auth_core::UpdateTeam,
+        _: better_auth::plugins::organization::hooks::OrganizationTeamEvent<'_>,
+    ) -> AuthResult<()> {
+        self.current("team.update", None);
+        Ok(())
+    }
+    async fn before_create_invitation(
+        &self,
+        _: &mut better_auth::plugins::organization::hooks::OrganizationInvitationDraft,
+        _: better_auth::plugins::organization::hooks::OrganizationUser<'_>,
+    ) -> AuthResult<()> {
+        self.current("invitation.create", None);
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl better_auth::plugins::SendMagicLink for BodyTrace {
+    async fn send(&self, message: &better_auth::plugins::MagicLinkMessage) -> AuthResult<()> {
+        self.current("magic.sender", None);
+        let mut value = serde_json::to_value(message)?;
+        value
+            .as_object_mut()
+            .unwrap()
+            .insert("kind".into(), "magic".into());
+        self.1.lock().unwrap().push(value);
         Ok(())
     }
 }

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::{AuthStore, database_hooks::DatabaseHooks};
-use crate::{AuthConfig, AuthError, AuthResult, AuthSchema};
+use crate::{AuthConfig, AuthResult, AuthSchema};
 
 /// Create an isolated configuration view over the same stored records.
 pub trait RuntimeStore<S: AuthSchema>: Send + Sync {
@@ -18,15 +18,11 @@ pub trait RuntimeStore<S: AuthSchema>: Send + Sync {
         None
     }
 
-    /// Install plugin hooks before application hooks without changing the original store.
-    /// Custom adapters need this capability only for plugins that register fields or database hooks.
+    /// Bind the final configuration and prepend plugin hooks without changing the original store.
+    /// Share stored records, but isolate configuration and hook lists for each auth build.
     fn with_runtime(
         &self,
-        _config: Arc<AuthConfig>,
-        _hooks: Vec<Arc<dyn DatabaseHooks<S>>>,
-    ) -> AuthResult<Arc<dyn AuthStore<S>>> {
-        Err(AuthError::config(
-            "This adapter does not support plugin database hooks or fields",
-        ))
-    }
+        config: Arc<AuthConfig>,
+        hooks: Vec<Arc<dyn DatabaseHooks<S>>>,
+    ) -> AuthResult<Arc<dyn AuthStore<S>>>;
 }

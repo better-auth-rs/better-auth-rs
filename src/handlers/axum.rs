@@ -346,8 +346,9 @@ pub(super) fn convert_auth_response(auth_response: AuthResponse) -> Response {
 #[cfg(feature = "axum")]
 #[derive(Debug, Clone)]
 pub struct CurrentSession<T: AuthSchema> {
-    pub user: T::User,
-    pub session: T::Session,
+    pub user: better_auth_core::UserView,
+    pub session: better_auth_core::SessionView,
+    schema: std::marker::PhantomData<T>,
 }
 
 /// Optional authenticated session extractor.
@@ -426,10 +427,14 @@ async fn resolve_session<T: AuthSchema>(
         .ok_or(AuthError::SessionNotFound)?;
     let user = auth
         .store()
-        .get_user_by_id(&session.user_id())
+        .get_user_by_id(session.user_id().typed()?)
         .await?
         .ok_or(AuthError::UserNotFound)?;
-    Ok(CurrentSession { user, session })
+    Ok(CurrentSession {
+        user,
+        session,
+        schema: std::marker::PhantomData,
+    })
 }
 
 #[cfg(feature = "axum")]

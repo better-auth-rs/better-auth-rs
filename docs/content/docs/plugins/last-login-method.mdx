@@ -39,4 +39,4 @@ User creation writes the resolved method before application database hooks. Sess
 
 User field policies follow two upstream merge orders. Application fields override plugin fields for adapter transforms and physical mapping. Plugin fields override application fields for endpoint validation and public filtering. Output transforms run at the adapter projection boundary and do not run again when reading the cookie cache.
 
-SeaORM and `EphemeralStore` support these plugin hooks and fields. Custom adapters must implement `RuntimeStore::with_runtime` when a plugin registers either capability. A custom adapter without these capabilities can still initialize plugins that do not register hooks or fields. Runtime hooks and field configuration are isolated when two authentication instances share the same underlying store.
+SeaORM and `EphemeralStore` support these plugin hooks and fields. Every auth build calls `RuntimeStore::with_runtime` to bind the final configuration and prepend plugin hooks to application hooks. Custom adapters must implement this method. Configuration and hook lists remain isolated when two authentication instances share stored records.

@@ -25,6 +25,11 @@ impl ValidatedBody {
         Self { projection, typed }
     }
 
+    /// Read the typed result without parsing the validated projection again.
+    pub fn get<T: Send + Sync + 'static>(&self) -> Option<&T> {
+        self.typed.get()
+    }
+
     /// Preserve input for endpoints without a body schema.
     pub fn unvalidated(projection: Option<Value>) -> Self {
         Self {

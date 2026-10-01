@@ -332,6 +332,10 @@ where
                 async {
                     <S::Verification as SeaOrmVerificationModel>::Entity::find()
                         .filter(filter.clone())
+                        .limit(super::pagination::default_limit(
+                            self.config(),
+                            connection.get_database_backend(),
+                        )?)
                         .all(connection)
                         .await
                         .map_err(map_db_err)
@@ -595,7 +599,18 @@ where
         verification = verification.with_timestamps(Utc::now());
         self.before_runtime_verification_in_tx(&mut verification, tx)
             .await?;
-        let active = self.new_verification_active(connection, None, verification)?;
+        let id = self.generated_id(
+            "verification",
+            verification
+                .id
+                .json()?
+                .and_then(|id| id.as_str().map(str::to_owned)),
+        )?;
+        let parsed = id.as_deref().map(S::Verification::parse_id).transpose()?;
+        let mut active = self.new_verification_active(connection, parsed, verification)?;
+        if id.is_none() {
+            active.not_set(S::Verification::id_column());
+        }
         let row = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
             self.config(),
             "create",

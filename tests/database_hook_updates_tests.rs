@@ -21,8 +21,6 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-type User = <BundledSchema as AuthSchema>::User;
-type Session = <BundledSchema as AuthSchema>::Session;
 type Verification = <BundledSchema as AuthSchema>::Verification;
 
 async fn store() -> SeaOrmStore<BundledSchema> {
@@ -141,7 +139,7 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
     }
     async fn after_update_user(
         &self,
-        value: Option<&User>,
+        value: Option<&better_auth_core::wire::UserView>,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         if value.is_none() {
@@ -161,7 +159,7 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
     }
     async fn after_update_session(
         &self,
-        value: Option<&Session>,
+        value: Option<&better_auth_core::wire::SessionView>,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         if value.is_none() {
@@ -238,7 +236,7 @@ async fn updates_merge_independent_patches_and_dispatch_missing_rows_to_after_ho
         });
     let updated = store
         .update_user(
-            &user.id(),
+            user.id().typed().unwrap(),
             UpdateUser {
                 name: Some("requested".into()),
                 ..Default::default()
@@ -358,13 +356,17 @@ impl SeaOrmHooks<BundledSchema> for CommitHook {
     }
     async fn after_create_user(
         &self,
-        user: &User,
+        user: &better_auth_core::wire::UserView,
         ctx: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(ctx.tx.is_none());
         let fresh = SeaOrmStore::<BundledSchema>::new(ctx.config.clone(), ctx.db.clone());
         assert_eq!(
-            fresh.get_user_by_id(&user.id()).await?.unwrap().name(),
+            fresh
+                .get_user_by_id(user.id().typed().unwrap())
+                .await?
+                .unwrap()
+                .name(),
             Some("Updated")
         );
         self.events.lock().unwrap().push("created".into());
@@ -375,7 +377,7 @@ impl SeaOrmHooks<BundledSchema> for CommitHook {
     }
     async fn after_update_user(
         &self,
-        user: Option<&User>,
+        user: Option<&better_auth_core::wire::UserView>,
         ctx: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(ctx.tx.is_none());
@@ -404,7 +406,7 @@ async fn transaction_hooks_wait_for_commit_skip_rollback_and_preserve_rows_after
                     .await?;
                 let _ = tx
                     .update_user(
-                        &user.id(),
+                        user.id().typed().unwrap(),
                         UpdateUser {
                             name: Some("Updated".into()),
                             ..Default::default()

@@ -202,7 +202,7 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
                 .await?;
             let factor = store
                 .create_two_factor(CreateTwoFactor {
-                    user_id: user.id().into_owned(),
+                    user_id: user.id().into_owned().typed().unwrap().clone(),
                     secret: "encrypted-secret".into(),
                     backup_codes: "original-codes".into(),
                     verified: true,
@@ -237,7 +237,9 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
             while let Some(result) = tasks.join_next().await {
                 backup_winners += usize::from(result??);
             }
-            let stored = store.get_two_factor_by_user_id(user.id().as_ref()).await?;
+            let stored = store
+                .get_two_factor_by_user_id(user.id().typed().unwrap().as_ref())
+                .await?;
             Ok::<_, Box<dyn std::error::Error>>((
                 values,
                 consumed_again,

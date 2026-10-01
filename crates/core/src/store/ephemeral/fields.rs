@@ -126,7 +126,7 @@ async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
     );
     assert_eq!(
         store
-            .get_team(&team.id)
+            .get_team(team.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -134,10 +134,13 @@ async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
             .as_f64(),
         Some(3.0)
     );
-    store.remove_team_member(&team.id, "user").await.unwrap();
+    store
+        .remove_team_member(team.id.typed().unwrap(), "user")
+        .await
+        .unwrap();
     assert_eq!(
         store
-            .get_team(&team.id)
+            .get_team(team.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -212,9 +215,6 @@ impl EphemeralStore {
             }
         }
         record.extend(stored);
-        if create && role == EntityRole::Organization {
-            let _ = record.entry("logo".to_owned()).or_insert(Value::Null);
-        }
         decode_record(&schema, record)
     }
 
@@ -337,12 +337,18 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
     assert_eq!(organization.metadata, Some(Value::Null));
     assert!(organization.additional_fields.is_empty());
     assert_eq!(
-        store.lock().unwrap().organizations[&organization.id].name,
+        store
+            .lock()
+            .unwrap()
+            .organizations
+            .get(&organization.id)
+            .unwrap()
+            .name,
         "original:in"
     );
     let updated = store
         .update_organization(
-            &organization.id,
+            organization.id.typed().unwrap(),
             UpdateOrganization {
                 name: Some("changed".into()),
                 ..Default::default()
@@ -354,7 +360,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
     assert_eq!(updated.metadata, Some(Value::Null));
     let updated = store
         .update_organization(
-            &organization.id,
+            organization.id.typed().unwrap(),
             UpdateOrganization {
                 metadata: Some(json!({"literal":"value"})),
                 ..Default::default()
@@ -365,7 +371,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
     assert_eq!(updated.metadata, Some(json!({"literal":"value"})));
     assert_eq!(
         store
-            .get_organization_by_id(&organization.id)
+            .get_organization_by_id(organization.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -386,14 +392,18 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
             .is_none()
     );
     let member = store
-        .create_member(CreateMember::new(&organization.id, "recipient", "member"))
+        .create_member(CreateMember::new(
+            organization.id.typed().unwrap(),
+            "recipient",
+            "member",
+        ))
         .await
         .unwrap();
     assert_eq!(member.role, "member:in:out");
     assert!(member.additional_fields.is_empty());
     let invitation = store
         .create_invitation(CreateInvitation::new(
-            &organization.id,
+            organization.id.typed().unwrap(),
             "target@example.com",
             "member",
             "owner",
@@ -414,7 +424,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
     assert_eq!(team.name, "team:in:out");
     let team = store
         .update_team(
-            &team.id,
+            team.id.typed().unwrap(),
             UpdateTeam {
                 name: Some("updated".into()),
                 ..Default::default()
@@ -427,7 +437,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
     let role = store
         .create_organization_role(CreateOrganizationRole {
             additional_fields: Default::default(),
-            organization_id: organization.id,
+            organization_id: organization.id.typed().unwrap().clone(),
             role: "editor".into(),
             permission: json!({"member":["read"]}),
         })
@@ -469,7 +479,7 @@ async fn invalid_builtin_transform_cannot_partially_update_a_memory_record() {
     assert!(
         store
             .update_organization(
-                &organization.id,
+                organization.id.typed().unwrap(),
                 UpdateOrganization {
                     name: Some("changed".into()),
                     slug: Some("changed".into()),
@@ -480,8 +490,14 @@ async fn invalid_builtin_transform_cannot_partially_update_a_memory_record() {
             .is_err()
     );
     let state = store.lock().unwrap();
-    assert_eq!(state.organizations[&organization.id].name, "original");
-    assert_eq!(state.organizations[&organization.id].slug, "original");
+    assert_eq!(
+        state.organizations.get(&organization.id).unwrap().name,
+        "original"
+    );
+    assert_eq!(
+        state.organizations.get(&organization.id).unwrap().slug,
+        "original"
+    );
 }
 
 #[tokio::test]
@@ -528,14 +544,19 @@ async fn memory_core_fields_keep_dynamic_values_and_output_omission() {
         .output_transform = Some(Arc::new(|_| Ok(None)));
     store.configure_organization_fields(fields).unwrap();
     let omitted = store
-        .get_organization_by_id(&organization.id)
+        .get_organization_by_id(organization.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
     assert!(omitted.name.is_undefined());
     assert!(serde_json::to_value(omitted).unwrap().get("name").is_none());
     assert_eq!(
-        store.lock().unwrap().organizations[&organization.id]
+        store
+            .lock()
+            .unwrap()
+            .organizations
+            .get(&organization.id)
+            .unwrap()
             .name
             .json()
             .unwrap(),

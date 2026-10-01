@@ -40,7 +40,7 @@ pub(crate) async fn handle_sign_out(
         return Ok(response);
     };
     // Upstream completes local logout even if provider logout cannot be prepared.
-    let mut accounts = match ctx.database.get_user_accounts(&user_id).await {
+    let mut accounts = match ctx.database.get_user_accounts(user_id.typed()?).await {
         Ok(accounts) => accounts,
         Err(error) => {
             better_auth_core::observability::logger::current().error(

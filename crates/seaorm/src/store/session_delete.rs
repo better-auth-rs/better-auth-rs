@@ -2,14 +2,13 @@ use super::instrumentation::database_operation;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter,
+    QuerySelect,
 };
 
 use crate::SeaOrmStore;
 use crate::error::AuthResult;
 use crate::hooks::SessionUpdate;
 use crate::schema::{AuthSchema, SeaOrmSessionModel};
-use better_auth_core::{AuthSession, user_fields::UserFieldType, wire::SessionView};
-use serde_json::{Map, Value};
 
 use super::{HookTransaction, map_db_err};
 
@@ -20,56 +19,11 @@ where
     S: AuthSchema,
     S::Session: SeaOrmSessionModel,
 {
-    fn session_delete_needs_projection(&self) -> bool {
-        self.config()
-            .session
-            .additional_fields
-            .values()
-            .any(|field| {
-                field.output_transform.is_some()
-                    || field.references_id()
-                    || matches!(field.field_type, UserFieldType::Date | UserFieldType::Json)
-            })
-    }
-
-    pub(super) fn validate_session_delete_projection(&self) -> AuthResult<()> {
-        if self.session_delete_needs_projection() && !S::Session::SUPPORTS_RUNTIME_HYDRATION {
-            return Err(better_auth_core::AuthError::config(
-                "Session delete hooks with configured fields require AuthSession runtime hydration; derive AuthEntity or implement from_runtime_fields",
-            ));
-        }
-        Ok(())
-    }
-
-    pub(super) fn session_delete_snapshot(&self, session: S::Session) -> AuthResult<S::Session> {
-        if !self.session_delete_needs_projection() {
-            return Ok(session);
-        }
-        let view = SessionView::with_internal_fields_for_adapter(
-            &session,
-            &self.config().session,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-        )?;
-        // Preserve application columns that are not part of the configured public schema.
-        let mut fields: Map<String, Value> =
-            serde_json::from_value(serde_json::to_value(&session)?)?;
-        let mut projected: Map<String, Value> = view.into();
-        for (name, config) in &self.config().session.additional_fields {
-            let storage = config.field_name.as_ref().unwrap_or(name);
-            match projected.remove(name) {
-                Some(value) => {
-                    let _ = fields.insert(storage.clone(), value);
-                }
-                None => {
-                    let _ = fields.remove(storage);
-                }
-            }
-        }
-        // Keep typed serialized IDs; the public view renders every ID as a string.
-        for (name, value) in projected {
-            let _ = fields.entry(name).or_insert(value);
-        }
-        S::Session::from_runtime_fields(fields)
+    pub(super) fn session_delete_snapshot(
+        &self,
+        session: S::Session,
+    ) -> AuthResult<better_auth_core::wire::SessionView> {
+        self.output_session(&session, self.connection())
     }
 
     pub(super) async fn delete_sessions_with_connection(
@@ -89,6 +43,10 @@ where
             async {
                 <S::Session as SeaOrmSessionModel>::Entity::find()
                     .filter(condition.clone())
+                    .limit(super::pagination::default_limit(
+                        self.config(),
+                        db.get_database_backend(),
+                    )?)
                     .all(db)
                     .await
                     .map_err(map_db_err)

@@ -38,7 +38,7 @@ pub(in crate::plugins::api_key) async fn consume(
     if config.storage == ApiKeyStorage::Database || config.fallback_to_database {
         let result = ctx
             .database
-            .consume_api_key_usage(&key.id, config.rate_limit.enabled)
+            .consume_api_key_usage(key, config.rate_limit.enabled)
             .await?;
         if config.storage == ApiKeyStorage::SecondaryStorage
             && let ConsumeApiKeyResult::Allowed(key) = &result

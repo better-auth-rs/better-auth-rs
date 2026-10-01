@@ -368,3 +368,130 @@ for (const backend of ["memory", "sqlite"]) {
     db?.close();
   });
 }
+for (const backend of ["memory", "sqlite"]) {
+  test(`${backend} API key usage traces quota, rate and final writes separately`, async () => {
+    const {apiKey}=await import(require.resolve("@better-auth/api-key"));
+    const {Database}=await import("bun:sqlite");
+    const {getMigrations}=await import(require.resolve("better-auth/db/migration"));
+    const db=backend==="sqlite"?new Database(":memory:"):undefined;
+    const options={secret:"observability-reference-secret-more-than-32-characters",baseURL:"http://observability.test",database:db,logger:{disabled:true},plugins:[apiKey({disableKeyHashing:true,deferUpdates:false})]};
+    if(db)await(await getMigrations(options)).runMigrations();
+    const auth=betterAuth(options);
+    const ctx=await auth.$context;
+    const row=await ctx.adapter.create({model:"apikey",data:{key:"secret-key",referenceId:"owner",configId:"default",enabled:true,remaining:3,refillAmount:null,refillInterval:null,lastRefillAt:null,rateLimitEnabled:true,rateLimitTimeWindow:60000,rateLimitMax:1,requestCount:0,lastRequest:null,createdAt:new Date(0),updatedAt:new Date(0)}});
+    const verify=async(expected:string[])=>{
+      spans.length=0;
+      const result=await auth.api.verifyApiKey({body:{key:"secret-key"}});
+      expect(spans.filter(span=>span.name.startsWith("db ")).map(span=>span.name)).toEqual(expected.map(op=>`db ${op} apikey`));
+      return result;
+    };
+    const allowed=await verify(["findOne","incrementOne","incrementOne","update"]);
+    expect(allowed.valid).toBe(true);
+    expect(allowed.key.remaining).toBe(2);
+    expect(allowed.key.requestCount).toBe(1);
+    for(const remaining of [1,0]) {
+      const denied=await verify(["findOne","incrementOne"]);
+      expect(denied.valid).toBe(false);
+      expect(denied.error.code).toBe("RATE_LIMITED");
+      const stored=await ctx.adapter.findOne({model:"apikey",where:[{field:"id",value:row.id}]});
+      expect(stored.remaining).toBe(remaining);
+      expect(stored.requestCount).toBe(1);
+      expect(stored.lastRequest).toEqual(allowed.key.lastRequest);
+      expect(stored.updatedAt).toEqual(allowed.key.updatedAt);
+    }
+    const exhausted=await verify(["findOne","delete"]);
+    expect(exhausted.valid).toBe(false);
+    expect(exhausted.error.code).toBe("USAGE_EXCEEDED");
+    expect(await ctx.adapter.findOne({model:"apikey",where:[{field:"id",value:row.id}]})).toBeNull();
+    db?.close();
+  });
+}
+
+for (const failedField of ["remaining", "requestCount", "updatedAt"]) {
+  test(`sqlite API key ${failedField} failure preserves earlier adapter writes`, async () => {
+    const {apiKey}=await import(require.resolve("@better-auth/api-key"));
+    const {Database}=await import("bun:sqlite");
+    const {getMigrations}=await import(require.resolve("better-auth/db/migration"));
+    const db=new Database(":memory:");
+    const options={secret:"observability-reference-secret-more-than-32-characters",baseURL:"http://observability.test",database:db,logger:{disabled:true},plugins:[apiKey({disableKeyHashing:true,deferUpdates:false})]};
+    await(await getMigrations(options)).runMigrations();
+    const auth=betterAuth(options);
+    const ctx=await auth.$context;
+    const row=await ctx.adapter.create({model:"apikey",data:{key:"secret-key",referenceId:"owner",configId:"default",enabled:true,remaining:3,refillAmount:null,refillInterval:null,lastRefillAt:null,rateLimitEnabled:true,rateLimitTimeWindow:60000,rateLimitMax:1,requestCount:0,lastRequest:null,createdAt:new Date(0),updatedAt:new Date(0)}});
+    db.exec(`CREATE TRIGGER reject_write BEFORE UPDATE OF "${failedField}" ON "apikey" BEGIN SELECT RAISE(ABORT, 'controlled storage failure'); END`);
+    spans.length=0;
+    const result=await auth.api.verifyApiKey({body:{key:"secret-key"}});
+    expect(result.valid).toBe(false);
+    expect(result.error.code).toBe("INVALID_API_KEY");
+    const operations=failedField==="remaining"?["findOne","incrementOne"]:failedField==="requestCount"?["findOne","incrementOne","incrementOne"]:["findOne","incrementOne","incrementOne","update"];
+    const recorded=spans.filter(span=>span.name.startsWith("db "));
+    expect(recorded.map(span=>span.name)).toEqual(operations.map(op=>`db ${op} apikey`));
+    expect(recorded.at(-1)!.status).toEqual({code:2,message:"controlled storage failure"});
+    expect(recorded.at(-1)!.exceptions).toEqual(["controlled storage failure"]);
+    const stored=await ctx.adapter.findOne({model:"apikey",where:[{field:"id",value:row.id}]});
+    expect(stored.remaining).toBe(failedField==="remaining"?3:2);
+    expect(stored.requestCount).toBe(failedField==="updatedAt"?1:0);
+    expect(stored.lastRequest===null).toBe(failedField!=="updatedAt");
+    expect(stored.updatedAt).toEqual(new Date(0));
+    db.close();
+  });
+}
+for (const backend of ["memory", "sqlite"]) {
+  test(`${backend} API key list applies database default before public pagination and ignores raw count`, async () => {
+    const {apiKey}=await import(require.resolve("@better-auth/api-key"));
+    const {Database}=await import("bun:sqlite");
+    const {getMigrations}=await import(require.resolve("better-auth/db/migration"));
+    const db=backend==="sqlite"?new Database(":memory:"):undefined;
+    const options={secret:"observability-reference-secret-more-than-32-characters",baseURL:"http://observability.test",database:db,logger:{disabled:true},emailAndPassword:{enabled:true},advanced:{database:{defaultFindManyLimit:2}},plugins:[apiKey({disableKeyHashing:true,deferUpdates:false})]};
+    if(db)await(await getMigrations(options)).runMigrations();
+    const auth=betterAuth(options);
+    const ctx=await auth.$context;
+    const signup=await auth.api.signUpEmail({body:{email:"list@example.com",name:"List",password:"password-123456"},returnHeaders:true});
+    const headers=new Headers({cookie:signup.headers.getSetCookie().map((value:string)=>value.split(";")[0]).join("; ")});
+    for(const [index,name] of ["D","A","E","C","B"].entries()) {
+      await ctx.adapter.create({model:"apikey",data:{name,key:`secret-${index}`,referenceId:signup.response.user.id,configId:"default",createdAt:new Date(index),updatedAt:new Date(index)}});
+    }
+    expect(await ctx.adapter.count({model:"apikey"})).toBe(5);
+    spans.length=0;
+    const result=await auth.api.listApiKeys({headers,query:{sortBy:"name",sortDirection:"desc",offset:1,limit:1}});
+    expect(result.apiKeys.map((key:any)=>key.name)).toEqual(["D"]);
+    expect(result.total).toBe(2);
+    expect(result.limit).toBe(1);
+    expect(result.offset).toBe(1);
+    const operations=spans.filter(span=>span.attributes["db.collection.name"]==="apikey").map(span=>span.attributes["db.operation.name"]);
+    expect(operations.slice(0,2)).toEqual(["findMany","count"]);
+    db?.close();
+  });
+}
+test("API key list preserves count failures and cached lists skip the database default", async () => {
+  const {apiKey}=await import(require.resolve("@better-auth/api-key"));
+  const values=new Map<string,string>();
+  const customStorage={get:async(key:string)=>values.get(key)??null,set:async(key:string,value:string)=>{values.set(key,value)},delete:async(key:string)=>{values.delete(key)}};
+  const auth=betterAuth({secret:"observability-reference-secret-more-than-32-characters",baseURL:"http://observability.test",logger:{disabled:true},emailAndPassword:{enabled:true},advanced:{database:{defaultFindManyLimit:2}},plugins:[apiKey({storage:"secondary-storage",customStorage,fallbackToDatabase:true,disableKeyHashing:true,deferUpdates:false})]});
+  const ctx=await auth.$context;
+  const signup=await auth.api.signUpEmail({body:{email:"cached-list@example.com",name:"List",password:"password-123456"},returnHeaders:true});
+  const headers=new Headers({cookie:signup.headers.getSetCookie().map((value:string)=>value.split(";")[0]).join("; ")});
+  const keys=[];
+  for(const [index,name] of ["D","A","E","C","B"].entries()) {
+    keys.push(await ctx.adapter.create({model:"apikey",data:{name,key:`cached-${index}`,referenceId:signup.response.user.id,configId:"default",createdAt:new Date(index),updatedAt:new Date(index)}}));
+  }
+  const query={sortBy:"name",sortDirection:"desc",offset:1,limit:1};
+  spans.length=0;
+  const fallback=await auth.api.listApiKeys({headers,query});
+  expect(fallback.total).toBe(2);
+  expect(fallback.apiKeys.map((key:any)=>key.name)).toEqual(["D"]);
+  expect(spans.filter(span=>span.attributes["db.collection.name"]==="apikey").map(span=>span.attributes["db.operation.name"]).slice(0,2)).toEqual(["findMany","count"]);
+  ctx.adapter.count=async()=>{throw new Error("controlled count failure")};
+  spans.length=0;
+  const cached=await auth.api.listApiKeys({headers,query});
+  expect(cached.total).toBe(2);
+  expect(cached.apiKeys.map((key:any)=>key.name)).toEqual(["D"]);
+  expect(spans.filter(span=>span.attributes["db.collection.name"]==="apikey").map(span=>span.attributes["db.operation.name"]).filter(operation=>operation==="findMany"||operation==="count")).toEqual([]);
+  for(const key of keys)values.set(`api-key:by-id:${key.id}`,JSON.stringify(key));
+  values.set(`api-key:by-ref:${signup.response.user.id}`,JSON.stringify(keys.map(key=>key.id)));
+  const allCached=await auth.api.listApiKeys({headers,query});
+  expect(allCached.total).toBe(5);
+  expect(allCached.apiKeys.map((key:any)=>key.name)).toEqual(["D"]);
+  values.clear();
+  await expect(auth.api.listApiKeys({headers,query})).rejects.toThrow("controlled count failure");
+});

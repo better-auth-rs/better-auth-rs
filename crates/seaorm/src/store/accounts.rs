@@ -1,7 +1,9 @@
 use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect,
+};
 
 use better_auth_core::store::AccountStore;
 use better_auth_core::wire::AccountView;
@@ -61,7 +63,18 @@ where
             db.get_database_backend() == sea_orm::DbBackend::Postgres,
             S::Account::native_json_field,
         )?;
-        let mut active = S::Account::new_active(None, input)?;
+        let id = self.generated_id(
+            "account",
+            input
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned),
+        )?;
+        let parsed = id.as_deref().map(S::Account::parse_id).transpose()?;
+        let mut active = S::Account::new_active(parsed, input)?;
+        if id.is_none() {
+            active.not_set(S::Account::id_column());
+        }
         crate::reference_id::apply_bindings(
             &mut active,
             &fields,
@@ -126,9 +139,9 @@ where
         provider: &str,
         provider_account_id: &str,
     ) -> AuthResult<Option<AccountView>> {
-        database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+        let records = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
-            "findOne",
+            "findMany",
             async {
                 <S::Account as SeaOrmAccountModel>::Entity::find()
                     .filter(<S::Account as SeaOrmAccountModel>::provider_id_column().eq(provider))
@@ -136,15 +149,27 @@ where
                         <S::Account as SeaOrmAccountModel>::account_id_column()
                             .eq(provider_account_id),
                     )
-                    .one(self.connection())
+                    .limit(2)
+                    .all(self.connection())
                     .await
                     .map_err(map_db_err)
             },
         )
-        .await?
-        .as_ref()
-        .map(|record| self.output_account(record, self.connection()))
-        .transpose()
+        .await?;
+        // Upstream starts every row projection before observing an output error.
+        let accounts = records
+            .iter()
+            .map(|record| self.output_account(record, self.connection()))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .collect::<AuthResult<Vec<_>>>()?;
+        if accounts.len() > 1 {
+            return Err(crate::error::AuthError::internal(format!(
+                "Multiple accounts match the same accountId for provider {}. Resolve duplicate account identities before continuing.",
+                serde_json::to_string(provider)?
+            )));
+        }
+        Ok(accounts.into_iter().next())
     }
 
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<AccountView>> {
@@ -155,6 +180,10 @@ where
             async {
                 <S::Account as SeaOrmAccountModel>::Entity::find()
                     .filter(<S::Account as SeaOrmAccountModel>::user_id_column().eq(user_id))
+                    .limit(super::pagination::default_limit(
+                        self.config(),
+                        self.connection().get_database_backend(),
+                    )?)
                     .all(self.connection())
                     .await
                     .map_err(map_db_err)

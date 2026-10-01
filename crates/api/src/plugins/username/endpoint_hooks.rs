@@ -18,6 +18,11 @@ impl UsernamePlugin {
             return Ok(None);
         }
         let mut body: Value = request.body_as_json()?;
+        if body.is_null() {
+            return Err(better_auth_core::AuthError::internal(
+                "Username hooks cannot read properties of null",
+            ));
+        }
         let Some(body) = body.as_object_mut() else {
             return Ok(None);
         };
@@ -80,9 +85,9 @@ impl UsernamePlugin {
                     if let Some(existing) =
                         context.database.get_user_by_username(&normalized).await?
                         && (signup
-                            || session
-                                .as_ref()
-                                .is_none_or(|session| existing.id().as_ref() != session.user.id))
+                            || session.as_ref().is_none_or(|session| {
+                                existing.id().into_owned() != session.user.id
+                            }))
                     {
                         return Err(error(
                             400,

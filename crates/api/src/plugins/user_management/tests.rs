@@ -21,6 +21,13 @@ impl SendDeleteAccountVerification for NoopDeleteSender {
     }
 }
 
+#[async_trait]
+impl better_auth_core::email::SendVerificationEmail for NoopDeleteSender {
+    async fn send(&self, _: &UserView, _: &str, _: &str) -> AuthResult<()> {
+        Ok(())
+    }
+}
+
 type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
 // -- change email tests ────────────────────────────────────────────
@@ -29,7 +36,7 @@ type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_sch
 #[tokio::test]
 async fn test_change_email_success() {
     let plugin = UserManagementPlugin::new().change_email_enabled(true);
-    let (ctx, _user, session) = test_helpers::create_test_context_with_user(
+    let (mut ctx, _user, session) = test_helpers::create_test_context_with_user(
         CreateUser::new()
             .with_email("test@example.com")
             .with_name("Test User")
@@ -38,6 +45,12 @@ async fn test_change_email_success() {
     )
     .await;
 
+    ctx.extensions.insert(
+        crate::plugins::email_verification::EmailVerificationConfig {
+            send_verification_email: Some(Arc::new(NoopDeleteSender)),
+            ..Default::default()
+        },
+    );
     let body = serde_json::json!({ "newEmail": "new@example.com" });
     let req = test_helpers::create_auth_request(
         HttpMethod::Post,
@@ -133,7 +146,7 @@ async fn test_change_email_immediate_when_update_without_verification() {
     // Email should be updated immediately
     let updated_user = ctx
         .database
-        .get_user_by_id(&user.id)
+        .get_user_by_id(user.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
@@ -142,7 +155,7 @@ async fn test_change_email_immediate_when_update_without_verification() {
     assert!(!updated_user.email_verified);
 
     // No verification token should have been created
-    let identifier = format!("change_email:{}:new@example.com", user.id);
+    let identifier = format!("change_email:{}:new@example.com", user.id.typed().unwrap());
     let verification = ctx
         .database
         .get_verification_by_identifier(&identifier)
@@ -181,7 +194,11 @@ async fn test_delete_user_immediate() {
     assert_eq!(response.status, 200);
 
     // User should be gone
-    let deleted_user = ctx.database.get_user_by_id(&user.id).await.unwrap();
+    let deleted_user = ctx
+        .database
+        .get_user_by_id(user.id.typed().unwrap())
+        .await
+        .unwrap();
     assert!(deleted_user.is_none());
 }
 
@@ -251,7 +268,11 @@ async fn test_delete_user_with_verification() {
     assert_eq!(response.status, 200);
 
     // User should still exist
-    let still_exists = ctx.database.get_user_by_id(&user.id).await.unwrap();
+    let still_exists = ctx
+        .database
+        .get_user_by_id(user.id.typed().unwrap())
+        .await
+        .unwrap();
     assert!(still_exists.is_some());
 
     // 2. Seed and confirm the callback token
@@ -282,7 +303,11 @@ async fn test_delete_user_with_verification() {
     assert_eq!(response.status, 200);
 
     // User should now be gone
-    let deleted = ctx.database.get_user_by_id(&user.id).await.unwrap();
+    let deleted = ctx
+        .database
+        .get_user_by_id(user.id.typed().unwrap())
+        .await
+        .unwrap();
     assert!(deleted.is_none());
 }
 
@@ -460,7 +485,11 @@ async fn test_delete_user_before_hook_abort() {
     assert_eq!(err.status_code(), 403);
 
     // User should still exist
-    let still_exists = ctx.database.get_user_by_id(&user.id).await.unwrap();
+    let still_exists = ctx
+        .database
+        .get_user_by_id(user.id.typed().unwrap())
+        .await
+        .unwrap();
     assert!(still_exists.is_some());
 
     // after_delete should NOT have been called
@@ -470,9 +499,12 @@ async fn test_delete_user_before_hook_abort() {
 // Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_plugin_routes_conditional() {
-    // All disabled
+    // The endpoint validates configuration after session authentication.
     let plugin = UserManagementPlugin::new();
-    assert!(<UserManagementPlugin as AuthPlugin<TestSchema>>::routes(&plugin).is_empty());
+    assert_eq!(
+        <UserManagementPlugin as AuthPlugin<TestSchema>>::routes(&plugin).len(),
+        1
+    );
 
     // Only change-email enabled
     let plugin = UserManagementPlugin::new().change_email_enabled(true);
@@ -483,7 +515,7 @@ async fn test_plugin_routes_conditional() {
     // Only delete-user enabled
     let plugin = UserManagementPlugin::new().delete_user_enabled(true);
     let routes = <UserManagementPlugin as AuthPlugin<TestSchema>>::routes(&plugin);
-    assert_eq!(routes.len(), 2);
+    assert_eq!(routes.len(), 3);
     assert!(routes.iter().any(|r| r.path == "/delete-user"));
     assert!(routes.iter().any(|r| r.path == "/delete-user/callback"));
 
@@ -499,7 +531,7 @@ async fn test_plugin_routes_conditional() {
 
 // Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
-async fn test_on_request_disabled_routes_passthrough() {
+async fn test_on_request_disabled_change_email_rejects_after_authentication() {
     let plugin = UserManagementPlugin::new(); // both disabled
     let (ctx, _user, session) = test_helpers::create_test_context_with_user(
         CreateUser::new()
@@ -519,6 +551,11 @@ async fn test_on_request_disabled_routes_passthrough() {
         HashMap::new(),
     );
 
-    let result = plugin.on_request(&req, &ctx).await.unwrap();
-    assert!(result.is_none(), "disabled routes should return None");
+    let error = plugin.on_request(&req, &ctx).await.unwrap_err();
+    let response = error.to_auth_response();
+    assert_eq!(response.status, 400);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&response.body).unwrap(),
+        serde_json::json!({"code":"CHANGE_EMAIL_DISABLED","message":"Change email is disabled"})
+    );
 }

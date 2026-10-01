@@ -143,3 +143,5 @@ An update with `banned: true` revokes the user's sessions after the user update 
 | 403 | Current user lacks the required admin permission |
 | 404 | Target user not found |
 | 400 | Validation or admin-plugin bad request error |
+
+User listing transforms only the selected page. A successful list read then performs a separate count with the same filters and without pagination or output transforms. Instrumentation emits separate `findMany` and `count` spans for these logical adapter operations. If a page output transform fails, the Admin endpoint returns its existing empty-result error shape and does not run the count.

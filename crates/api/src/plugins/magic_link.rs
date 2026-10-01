@@ -81,7 +81,7 @@ pub struct MagicLinkPlugin {
 better_auth_core::impl_auth_plugin! {
     MagicLinkPlugin, "magic-link";
     routes {
-        post "/sign-in/magic-link" => handle_send, "signInWithMagicLink";
+        post "/sign-in/magic-link" => handle_send, "signInWithMagicLink", body = send_body;
         get "/magic-link/verify" => handle_verify, "verifyMagicLink", query = crate::plugins::query_input::magic_link;
     }
     extra {
@@ -98,7 +98,7 @@ better_auth_core::impl_auth_plugin! {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SendBody {
     email: String,
@@ -303,7 +303,7 @@ impl MagicLinkPlugin {
         } else {
             let Some(user) = ctx
                 .database
-                .verify_user_and_revoke_unproven_access(&user.id())
+                .verify_user_and_revoke_unproven_access(user.id().typed()?)
                 .await?
             else {
                 return Ok(error_redirect(error_callback, "user_not_found"));
@@ -311,7 +311,7 @@ impl MagicLinkPlugin {
             user
         };
         let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
-        let issued = issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
+        let issued = issue_user_session(ctx, user.id().typed()?, meta.ip_address, meta.user_agent)
             .await
             .map_err(SessionIssueError::into_auth_error)?;
         let response = if req.query_string("callbackURL")?.is_none_or(str::is_empty) {
@@ -360,7 +360,10 @@ fn callback_url<S: AuthSchema>(
 
 fn parse_send(req: &AuthRequest) -> Result<SendBody, AuthResponse> {
     use super::json_body;
-    let value = json_body::parse(req)?;
+    if let Some(body) = req.validated_body::<SendBody>() {
+        return Ok(body.clone());
+    }
+    let value = req.input_body().map_err(|error| error.to_auth_response())?;
     let Some(serde_json::Value::Object(body)) = value.as_ref() else {
         return Err(json_body::validation_error(&json_body::invalid_type(
             "body",
@@ -399,11 +402,12 @@ fn parse_send(req: &AuthRequest) -> Result<SendBody, AuthResponse> {
                 value,
             ));
         } else if field == "email"
-            && !validator::ValidateEmail::validate_email(
-                &value
+            && !json_body::valid_email(
+                value
                     .and_then(serde_json::Value::as_str)
                     .unwrap_or_default(),
             )
+            .map_err(|error| error.to_auth_response())?
         {
             errors.push("[body.email] Invalid email address".into());
         }
@@ -433,4 +437,12 @@ fn error_redirect(mut url: Url, error: &str) -> AuthResponse {
         .extend_pairs(pairs)
         .append_pair("error", error);
     redirect(url)
+}
+
+fn send_body(req: &AuthRequest) -> AuthResult<better_auth_core::endpoint_input::ValidatedBody> {
+    let body = parse_send(req).map_err(AuthError::from)?;
+    Ok(better_auth_core::endpoint_input::ValidatedBody::new(
+        Some(serde_json::to_value(&body)?),
+        body,
+    ))
 }

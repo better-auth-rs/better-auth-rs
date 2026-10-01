@@ -106,7 +106,7 @@ impl CustomSessionCallback<TestSchema> for CustomSessionFixture {
         let mode = request.headers.get("x-custom-mode").map(String::as_str);
         let exists = context
             .database
-            .get_user_by_id(&input.data.user.id)
+            .get_user_by_id(input.data.user.id.typed().unwrap())
             .await?
             .is_some();
         request.append_response_header("x-customized", "true".into())?;

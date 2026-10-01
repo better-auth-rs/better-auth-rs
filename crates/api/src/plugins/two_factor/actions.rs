@@ -32,7 +32,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
         let updated = ctx
             .database
             .update_user(
-                user.id().as_ref(),
+                user.id().typed()?,
                 UpdateUser {
                     two_factor_enabled: Some(true),
                     ..Default::default()
@@ -41,7 +41,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
             .await?;
         let issued = issue_user_session(
             ctx,
-            updated.id().as_ref(),
+            updated.id().typed()?,
             current_session.ip_address().map(str::to_owned),
             current_session.user_agent().map(str::to_owned),
         )
@@ -74,7 +74,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
     }
     let existing = ctx
         .database
-        .get_two_factor_by_user_id(user.id().as_ref())
+        .get_two_factor_by_user_id(user.id().typed()?)
         .await?;
     if existing.as_ref().is_some_and(|factor| factor.verified) {
         return Err(AuthError::Upstream {
@@ -98,7 +98,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
         let updated_user = ctx
             .database
             .update_user(
-                user.id().as_ref(),
+                user.id().typed()?,
                 UpdateUser {
                     two_factor_enabled: Some(true),
                     ..Default::default()
@@ -107,7 +107,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
             .await?;
         let issued = issue_user_session(
             ctx,
-            updated_user.id().as_ref(),
+            updated_user.id().typed()?,
             current_session.ip_address().map(str::to_owned),
             current_session.user_agent().map(str::to_owned),
         )
@@ -140,7 +140,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
         let _ = ctx
             .database
             .create_two_factor(CreateTwoFactor {
-                user_id: user.id().to_string(),
+                user_id: user.id().typed()?.to_string(),
                 secret: encrypted_secret,
                 backup_codes: encrypted_backup_codes,
                 verified: config.skip_verification_on_enable,
@@ -189,18 +189,18 @@ pub(super) async fn disable_core(
     let updated_user = ctx
         .database
         .update_user(
-            user.id().as_ref(),
+            user.id().typed()?,
             UpdateUser {
                 two_factor_enabled: Some(false),
                 ..Default::default()
             },
         )
         .await?;
-    ctx.database.delete_two_factor(user.id().as_ref()).await?;
+    ctx.database.delete_two_factor(user.id().typed()?).await?;
 
     let issued = issue_user_session(
         ctx,
-        updated_user.id().as_ref(),
+        updated_user.id().typed()?,
         current_session.ip_address().map(str::to_owned),
         current_session.user_agent().map(str::to_owned),
     )
@@ -389,7 +389,7 @@ pub(super) async fn verify_otp_core(
     let state = resolve_two_factor_state(req, ctx).await?;
     let factor = if state.is_sign_in() {
         ctx.database
-            .get_two_factor_by_user_id(state.user().id().as_ref())
+            .get_two_factor_by_user_id(state.user().id().typed()?)
             .await?
     } else {
         None
@@ -493,7 +493,7 @@ pub(super) async fn generate_backup_codes_core(
         .await?;
     _ = ctx
         .database
-        .update_two_factor_backup_codes(user.id().as_ref(), &encrypted)
+        .update_two_factor_backup_codes(user.id().typed()?, &encrypted)
         .await?;
 
     Ok(BackupCodesResponse {
@@ -511,7 +511,7 @@ pub(super) async fn verify_backup_code_core(
     let state = resolve_two_factor_state(req, ctx).await?;
     let two_factor = ctx
         .database
-        .get_two_factor_by_user_id(state.user().id().as_ref())
+        .get_two_factor_by_user_id(state.user().id().typed()?)
         .await?
         .ok_or_else(|| AuthError::bad_request("Backup codes aren't enabled"))?;
     assert_not_locked(&state, &two_factor, &config.account_lockout, ctx).await?;

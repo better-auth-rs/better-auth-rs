@@ -23,7 +23,7 @@ where
         user_id: &str,
         database_sessions: bool,
         session_cleanup: Option<&dyn VerificationSessionCleanup>,
-    ) -> AuthResult<Option<S::User>> {
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         let tx = self
             .connection()
             .begin_with_options(TransactionOptions {
@@ -49,11 +49,12 @@ where
                 return Ok(None);
             };
             if user.email_verified() {
-                return Ok(Some(user));
+                return self.output_user(&user, &tx).map(Some);
             }
             let hook_context = self.hook_context(Some((&tx, &hook_transaction)));
             let accounts = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(self.config(), "findMany", async { <S::Account as SeaOrmAccountModel>::Entity::find()
                 .filter(S::Account::user_id_column().eq(S::Account::parse_user_id(user_id)?))
+                .limit(super::pagination::default_limit(self.config(), tx.get_database_backend())?)
                 .all(&tx)
                 .await
                 .map_err(map_db_err) }).await?
@@ -63,9 +64,11 @@ where
             let sessions = if database_sessions {
                 database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(self.config(), "findMany", async { <S::Session as SeaOrmSessionModel>::Entity::find()
                     .filter(S::Session::user_id_column().eq(S::Session::parse_user_id(user_id)?))
+                    .limit(super::pagination::default_limit(self.config(), tx.get_database_backend())?)
                     .all(&tx)
                     .await
                     .map_err(map_db_err) }).await?
+                    .iter().map(|row| self.output_session(row, &tx)).collect::<AuthResult<Vec<_>>>()?
             } else {
                 Vec::new()
             };
@@ -136,6 +139,7 @@ where
                 S::User::field_column,
             )?;
             let user = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(self.config(), "update", async { active.update(&tx).await.map_err(map_db_err) }).await?;
+            let user = self.output_user(&user, &tx)?;
             // External revocation must succeed before the database publishes verified ownership.
             if let Some(cleanup) = session_cleanup {
                 cleanup.revoke().await?;

@@ -15,10 +15,13 @@ impl crate::store::JwksStore for EphemeralStore {
 
     async fn create_jwk(&self, input: crate::CreateJwk) -> AuthResult<crate::Jwk> {
         let key = crate::Jwk {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: self
+                .generated_id("jwks", None, self.lock()?.jwks.len())?
+                .map(crate::SchemaValue::Typed)
+                .unwrap_or_default(),
             public_key: input.public_key,
             private_key: input.private_key,
-            created_at: Utc::now(),
+            created_at: input.created_at,
             expires_at: input.expires_at,
             alg: Some(input.alg),
             crv: input.crv,

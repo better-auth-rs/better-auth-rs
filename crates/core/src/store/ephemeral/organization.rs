@@ -37,11 +37,7 @@ impl OrganizationStore for EphemeralStore {
     }
     async fn create_organization(&self, input: CreateOrganization) -> AuthResult<Organization> {
         let mut state = self.lock()?;
-        if state
-            .organizations
-            .values()
-            .any(|org| org.slug == input.slug)
-        {
+        if state.organizations.iter().any(|org| org.slug == input.slug) {
             return Err(AuthError::bad_request("Organization already exists"));
         }
         let metadata = if self
@@ -58,7 +54,10 @@ impl OrganizationStore for EphemeralStore {
         };
         let org = Organization {
             additional_fields: Default::default(),
-            id: input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            id: self
+                .generated_id("organization", input.id, state.organizations.len())?
+                .map(crate::SchemaValue::Typed)
+                .unwrap_or_default(),
             name: input.name,
             slug: input.slug,
             logo: input.logo,
@@ -76,7 +75,7 @@ impl OrganizationStore for EphemeralStore {
         {
             org.metadata = metadata;
         }
-        let _ = state.organizations.insert(org.id.clone(), org.clone());
+        let _ = state.organizations.push(org.clone());
         self.output_organization(org)
     }
     async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>> {
@@ -93,7 +92,7 @@ impl OrganizationStore for EphemeralStore {
     ) -> AuthResult<Option<Organization>> {
         self.lock()?
             .organizations
-            .values()
+            .iter()
             .find(|organization| json!(organization.id) == *id)
             .cloned()
             .map(|value| self.output_organization(value))
@@ -102,7 +101,7 @@ impl OrganizationStore for EphemeralStore {
     async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>> {
         self.lock()?
             .organizations
-            .values()
+            .iter()
             .find(|org| org.slug == slug)
             .cloned()
             .map(|value| self.output_organization(value))
@@ -112,7 +111,7 @@ impl OrganizationStore for EphemeralStore {
         &self,
         slug: &serde_json::Value,
     ) -> AuthResult<Option<Organization>> {
-        for organization in self.lock()?.organizations.values() {
+        for organization in self.lock()?.organizations.iter() {
             if organization.slug.json()?.as_ref() == Some(slug) {
                 return self.output_organization(organization.clone()).map(Some);
             }
@@ -122,8 +121,8 @@ impl OrganizationStore for EphemeralStore {
     async fn list_organizations_by_ids(&self, ids: &[String]) -> AuthResult<Vec<Organization>> {
         self.lock()?
             .organizations
-            .values()
-            .filter(|org| ids.contains(&org.id))
+            .iter()
+            .filter(|org| ids.iter().any(|id| org.id == *id))
             .cloned()
             .map(|value| self.output_organization(value))
             .collect()
@@ -186,34 +185,29 @@ impl OrganizationStore for EphemeralStore {
         {
             result.metadata = metadata;
         }
-        let _ = state.organizations.shift_remove(id);
-        let _ = state
-            .organizations
-            .insert(result.id.clone(), result.clone());
+        let _ = state.organizations.replace(id, result.clone());
         self.output_organization(result)
     }
     async fn delete_organization(&self, id: &str) -> AuthResult<()> {
         let mut state = self.lock()?;
-        let _ = state.organizations.shift_remove(id);
-        state
-            .members
-            .retain(|_, member| member.organization_id != id);
+        let _ = state.organizations.remove(id);
+        state.members.retain(|member| member.organization_id != id);
         state
             .invitations
-            .retain(|_, invitation| invitation.organization_id != id);
+            .retain(|invitation| invitation.organization_id != id);
         state
             .organization_roles
-            .retain(|_, role| role.organization_id != id);
+            .retain(|role| role.organization_id != id);
         let team_ids: Vec<_> = state
             .teams
-            .values()
+            .iter()
             .filter(|team| team.organization_id == id)
             .map(|team| team.id.clone())
             .collect();
         state
             .team_members
             .retain(|member| !team_ids.contains(&member.team_id));
-        state.teams.retain(|_, team| team.organization_id != id);
+        state.teams.retain(|team| team.organization_id != id);
         Ok(())
     }
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
@@ -221,10 +215,10 @@ impl OrganizationStore for EphemeralStore {
         let mut organizations = Vec::new();
         for member in state
             .members
-            .values()
+            .iter()
             .filter(|member| member.user_id == user_id)
         {
-            if let Some(organization) = state.organizations.get(member.organization_id.typed()?) {
+            if let Some(organization) = state.organizations.get(&member.organization_id) {
                 organizations.push(self.output_organization(organization.clone())?);
             }
         }
@@ -235,28 +229,31 @@ impl OrganizationStore for EphemeralStore {
 impl MemberStore for EphemeralStore {
     async fn create_member(&self, input: CreateMember) -> AuthResult<Member> {
         let mut state = self.lock()?;
-        if state.members.values().any(|member| {
+        if state.members.iter().any(|member| {
             member.organization_id == input.organization_id && member.user_id == input.user_id
         }) {
             return Err(AuthError::bad_request("User is already a member"));
         }
         let member = Member {
             additional_fields: Default::default(),
-            id: uuid::Uuid::new_v4().to_string(),
-            organization_id: (input.organization_id).into(),
-            user_id: (input.user_id).into(),
+            id: self
+                .generated_id("member", None, state.members.len())?
+                .map(crate::SchemaValue::Typed)
+                .unwrap_or_default(),
+            organization_id: input.organization_id,
+            user_id: input.user_id,
             role: input.role,
             created_at: (Utc::now()).into(),
         };
         let member: Member =
             self.store_record(EntityRole::Member, member, None, input.additional_fields)?;
-        let _ = state.members.insert(member.id.clone(), member.clone());
+        let _ = state.members.push(member.clone());
         self.output_member(member)
     }
     async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>> {
         self.lock()?
             .members
-            .values()
+            .iter()
             .find(|member| member.organization_id == organization_id && member.user_id == user_id)
             .cloned()
             .map(|value| self.output_member(value))
@@ -267,7 +264,7 @@ impl MemberStore for EphemeralStore {
         organization_id: &serde_json::Value,
         user_id: &serde_json::Value,
     ) -> AuthResult<Option<Member>> {
-        for member in self.lock()?.members.values() {
+        for member in self.lock()?.members.iter() {
             if member.organization_id.json()?.as_ref() == Some(organization_id)
                 && member.user_id.json()?.as_ref() == Some(user_id)
             {
@@ -304,7 +301,7 @@ impl MemberStore for EphemeralStore {
             let mut teams = Vec::new();
             for team in state
                 .teams
-                .values()
+                .iter()
                 .filter(|team| team.organization_id == member.organization_id)
             {
                 let deleted = state
@@ -321,16 +318,16 @@ impl MemberStore for EphemeralStore {
                     || !teams.iter().any(|team| team.id == team_member.team_id)
             });
             for team in teams {
-                let _ = state.teams.insert(team.id.clone(), team);
+                let _ = state.teams.replace(&team.id.clone(), team);
             }
-            let _ = state.members.shift_remove(id);
+            let _ = state.members.remove(id);
         }
         Ok(())
     }
     async fn list_organization_members(&self, org: &str) -> AuthResult<Vec<Member>> {
         self.lock()?
             .members
-            .values()
+            .iter()
             .filter(|member| member.organization_id == org)
             .cloned()
             .map(|value| self.output_member(value))
@@ -346,13 +343,13 @@ impl MemberStore for EphemeralStore {
         let mut members: Vec<_> = self
             .lock()?
             .members
-            .values()
+            .iter()
             .filter(|member| member.organization_id == params.organization_id)
             .cloned()
             .collect();
         let value = |member: &Member, field: &str| -> Option<Value> {
             match field {
-                "id" => Some(Value::String(member.id.clone())),
+                "id" => member.id.as_str().map(|id| Value::String(id.to_owned())),
                 "organizationId" => Some(json!(member.organization_id)),
                 "userId" => Some(json!(member.user_id)),
                 "role" => Some(json!(member.role)),
@@ -492,14 +489,14 @@ impl MemberStore for EphemeralStore {
         Ok(self
             .lock()?
             .members
-            .values()
+            .iter()
             .filter(|member| member.organization_id == org)
             .count() as i64)
     }
     async fn count_organization_owners(&self, org: &str) -> AuthResult<i64> {
         self.lock()?
             .members
-            .values()
+            .iter()
             .filter(|member| member.organization_id == org)
             .try_fold(0, |count, member| {
                 Ok(count + i64::from(member.role.typed()?.split(',').any(|role| role == "owner")))
@@ -511,7 +508,10 @@ impl InvitationStore for EphemeralStore {
     async fn create_invitation(&self, mut input: CreateInvitation) -> AuthResult<Invitation> {
         let mut invitation = Invitation {
             additional_fields: Default::default(),
-            id: input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            id: self
+                .generated_id("invitation", input.id, self.lock()?.invitations.len())?
+                .map(crate::SchemaValue::Typed)
+                .unwrap_or_default(),
             organization_id: (input.organization_id).into(),
             email: (input.email).into(),
             role: input.role.into(),
@@ -539,10 +539,7 @@ impl InvitationStore for EphemeralStore {
             None,
             input.additional_fields,
         )?;
-        let _ = self
-            .lock()?
-            .invitations
-            .insert(invitation.id.clone(), invitation.clone());
+        let _ = self.lock()?.invitations.push(invitation.clone());
         self.output_invitation(invitation)
     }
     async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
@@ -561,7 +558,7 @@ impl InvitationStore for EphemeralStore {
         for invitation in self
             .lock()?
             .invitations
-            .values()
+            .iter()
             .filter(|invitation| invitation.organization_id == org && invitation.is_pending())
         {
             if invitation.email.typed()?.eq_ignore_ascii_case(email) && !invitation.is_expired()? {
@@ -613,7 +610,7 @@ impl InvitationStore for EphemeralStore {
     async fn list_organization_invitations(&self, org: &str) -> AuthResult<Vec<Invitation>> {
         self.lock()?
             .invitations
-            .values()
+            .iter()
             .filter(|invitation| invitation.organization_id == org)
             .cloned()
             .map(|value| self.output_invitation(value))
@@ -622,7 +619,7 @@ impl InvitationStore for EphemeralStore {
     async fn count_pending_organization_invitations(&self, org: &str) -> AuthResult<i64> {
         self.lock()?
             .invitations
-            .values()
+            .iter()
             .filter(|invitation| invitation.organization_id == org && invitation.is_pending())
             .try_fold(0, |count, invitation| {
                 Ok(count + i64::from(!invitation.is_expired()?))
@@ -633,7 +630,7 @@ impl InvitationStore for EphemeralStore {
         for invitation in self
             .lock()?
             .invitations
-            .values()
+            .iter()
             .filter(|invitation| invitation.is_pending())
         {
             if invitation.email.typed()?.eq_ignore_ascii_case(email) && !invitation.is_expired()? {
@@ -690,14 +687,19 @@ mod query_tests {
             Some(json!(r#"{"visible":1}"#))
         );
         assert_eq!(
-            store.lock().unwrap().organizations[&organization.id]
+            store
+                .lock()
+                .unwrap()
+                .organizations
+                .get(&organization.id)
+                .unwrap()
                 .metadata
                 .json()?,
             Some(json!(r#"{"stored":1}"#))
         );
         assert_eq!(
             store
-                .get_organization_by_id(&organization.id)
+                .get_organization_by_id(organization.id.typed().unwrap())
                 .await?
                 .unwrap()
                 .metadata,
@@ -705,7 +707,7 @@ mod query_tests {
         );
         let updated = store
             .update_organization(
-                &organization.id,
+                organization.id.typed().unwrap(),
                 UpdateOrganization {
                     metadata: Some(Value::Null),
                     ..Default::default()
@@ -715,7 +717,7 @@ mod query_tests {
         assert_eq!(updated.metadata.json()?, Some(json!("null")));
         let role = store
             .create_organization_role(crate::CreateOrganizationRole {
-                organization_id: organization.id,
+                organization_id: organization.id.typed().unwrap().clone(),
                 role: "native".into(),
                 permission: json!({"ignored":["original"]}),
                 additional_fields: [("permission".into(), json!(r#"{"source":["read"]}"#))]
@@ -728,14 +730,19 @@ mod query_tests {
             Some(json!(r#"{"visible":["read"]}"#))
         );
         assert_eq!(
-            store.lock().unwrap().organization_roles[&role.id]
+            store
+                .lock()
+                .unwrap()
+                .organization_roles
+                .get(&role.id)
+                .unwrap()
                 .permission
                 .json()?,
             Some(json!(r#"{"stored":["read"]}"#))
         );
         assert_eq!(
             store
-                .get_organization_role(&role.id)
+                .get_organization_role(role.id.typed().unwrap())
                 .await?
                 .unwrap()
                 .permission,

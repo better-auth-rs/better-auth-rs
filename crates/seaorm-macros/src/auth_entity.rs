@@ -10,10 +10,10 @@ mod organization_model;
 use organization_model::generate as gen_organization_model;
 #[path = "adapter_record.rs"]
 mod adapter_record;
+#[path = "field_aliases.rs"]
+mod field_aliases;
 #[path = "plugin_model.rs"]
 mod plugin_model;
-#[path = "runtime_hydration.rs"]
-mod runtime_hydration;
 
 fn serde_serialized_name(attrs: &[Attribute], key: &str) -> syn::Result<Option<String>> {
     for attr in attrs.iter().filter(|attr| attr.path().is_ident("serde")) {
@@ -169,7 +169,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                 "{}",
                 serde_rename_rule::RenameRule::PascalCase.apply_to_field(&ident.to_string())
             );
-            let mut column_aliases = runtime_hydration::field_aliases(&ident.to_string(), &name);
+            let mut column_aliases = field_aliases::field_aliases(&ident.to_string(), &name);
             column_aliases.sort();
             column_aliases.dedup();
             field_columns.push(quote! { #(#column_aliases)|* => Ok(Column::#column), });
@@ -181,7 +181,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                 continue;
             }
             let mut aliases = if matches!(role, EntityRole::Session) {
-                runtime_hydration::field_aliases(&ident.to_string(), &name)
+                field_aliases::field_aliases(&ident.to_string(), &name)
             } else {
                 vec![name]
             };
@@ -222,14 +222,8 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
         Err(error) => return error.to_compile_error(),
     };
 
-    let hydration = if matches!(role, EntityRole::Session) {
-        match runtime_hydration::generate(
-            input,
-            fields,
-            &all_known,
-            &core_root,
-            matches!(role, EntityRole::Session),
-        ) {
+    let aliases = if matches!(role, EntityRole::Session) {
+        match field_aliases::generate(input, fields, &all_known) {
             Ok(methods) => methods,
             Err(error) => return error.to_compile_error(),
         }
@@ -249,7 +243,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
         ),
         EntityRole::Session => gen_session(
             ident,
-            &hydration,
+            &aliases,
             &has,
             &extra_not_set,
             &extra_updates,
@@ -369,7 +363,7 @@ fn gen_user(
     quote! {
         impl #core_root::entity::AuthUser for #ident {
             const PLUGIN_FIELDS: &'static [&'static str] = &[#(#plugin_fields),*];
-            fn id(&self) -> ::std::borrow::Cow<'_, str> { ::std::borrow::Cow::Borrowed(&self.id) }
+            fn id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(::std::borrow::Cow::Borrowed(&self.id)) }
             fn email(&self) -> Option<&str> { self.email.as_deref() }
             fn name(&self) -> Option<&str> { self.name.as_deref() }
             fn email_verified(&self) -> bool { self.email_verified }
@@ -568,7 +562,7 @@ fn plugin_update_fields_user(
 
 fn gen_session(
     ident: &Ident,
-    hydration: &TokenStream,
+    aliases: &TokenStream,
     has: &dyn Fn(&str) -> bool,
     extras: &[TokenStream],
     extra_updates: &[TokenStream],
@@ -654,16 +648,16 @@ fn gen_session(
 
     quote! {
         impl #core_root::entity::AuthSession for #ident {
-            #hydration
+            #aliases
             const PLUGIN_FIELDS: &'static [&'static str] = &[#(#plugin_fields),*];
-            fn id(&self) -> ::std::borrow::Cow<'_, str> { ::std::borrow::Cow::Borrowed(&self.id) }
+            fn id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(::std::borrow::Cow::Borrowed(&self.id)) }
             fn expires_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.expires_at }
             fn token(&self) -> &str { &self.token }
             fn created_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.created_at }
             fn updated_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.updated_at }
             fn ip_address(&self) -> Option<&str> { self.ip_address.as_deref() }
             fn user_agent(&self) -> Option<&str> { self.user_agent.as_deref() }
-            fn user_id(&self) -> ::std::borrow::Cow<'_, str> { ::std::borrow::Cow::Borrowed(&self.user_id) }
+            fn user_id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(::std::borrow::Cow::Borrowed(&self.user_id)) }
             #impersonated_by_impl
             #active_org_impl
             #active_team_impl
@@ -720,7 +714,7 @@ fn gen_session(
                     id: #seaorm_root::sea_orm::ActiveValue::Set(
                         id.unwrap_or_else(|| #core_root::uuid::Uuid::new_v4().to_string())
                     ),
-                    user_id: #seaorm_root::sea_orm::ActiveValue::Set(create_session.user_id),
+                    user_id: match create_session.user_id { #core_root::SchemaValue::Typed(id) => #seaorm_root::sea_orm::ActiveValue::Set(id), _ => #seaorm_root::sea_orm::ActiveValue::NotSet },
                     token: #seaorm_root::sea_orm::ActiveValue::Set(token),
                     expires_at: #seaorm_root::sea_orm::ActiveValue::Set(create_session.expires_at),
                     created_at: #seaorm_root::sea_orm::ActiveValue::Set(now),

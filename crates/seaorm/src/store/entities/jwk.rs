@@ -22,7 +22,7 @@ impl ActiveModelBehavior for ActiveModel {}
 impl From<Model> for better_auth_core::Jwk {
     fn from(model: Model) -> Self {
         Self {
-            id: model.id,
+            id: model.id.into(),
             public_key: model.public_key,
             private_key: model.private_key,
             created_at: model.created_at,

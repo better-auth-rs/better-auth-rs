@@ -120,6 +120,10 @@ Content-Type: application/json
 }
 ```
 
+The endpoint resolves an authoritative session before checking whether email changes are enabled. Verified users require an email verification sender; a confirmation sender alone does not enable the flow. This configuration check runs before the target-email lookup. An existing target email returns `{status: true}` without changing the user, issuing cookies, or sending a message.
+
+For an unverified user, `.update_without_verification(true)` writes the new email and issues the updated session cookie before invoking the optional verification sender. Otherwise, a configured confirmation sender receives the existing user and new email; the verification fallback receives a user snapshot with the new email. `UserInfo` is an alias for the complete `UserView`. Tokens use `EmailVerificationConfig::verification_token_expiry`, which defaults to one hour. Asynchronous delivery failures are logged after any completed write and cookie issuance. A cancelled user-update hook leaves storage unchanged, but this endpoint still issues cookies and sends the requested verification email. Custom stores must implement `UserStore::update_user_optional`; cancellation returns `None`, while storage and callback errors propagate.
+
 ## AccountManagementPlugin
 
 Provides endpoints for listing and unlinking accounts.

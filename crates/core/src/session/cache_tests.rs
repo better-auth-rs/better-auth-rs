@@ -237,7 +237,7 @@ async fn cache_is_bound_to_session_token_and_signature() {
             .unwrap()
             .data
             .unwrap();
-        assert_eq!(resolved.user.id, user.id().as_ref());
+        assert_eq!(resolved.user.id, user.id().into_owned());
         assert_eq!(resolved.session.token, other.token());
         let headers = req.take_response_headers().unwrap();
         assert!(

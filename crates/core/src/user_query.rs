@@ -8,7 +8,7 @@ use crate::types::ListUsersParams;
 
 fn string_field(user: &impl AuthUser, field: &str) -> Option<String> {
     match field {
-        "id" | "_id" => Some(user.id().into_owned()),
+        "id" | "_id" => user.id().into_owned().as_str().map(str::to_owned),
         "email" => user.email().map(str::to_owned),
         "name" => user.name().map(str::to_owned),
         "username" => user.username().map(str::to_owned),
@@ -154,6 +154,17 @@ fn compare_option_dates(
         "asc" => lhs.cmp(&rhs),
         _ => rhs.cmp(&lhs),
     }
+}
+
+/// Count matching rows without sorting, paging, or applying output transforms.
+pub fn count_users<'a, T: AuthUser + 'a>(
+    users: impl IntoIterator<Item = &'a T>,
+    params: &ListUsersParams,
+) -> usize {
+    users
+        .into_iter()
+        .filter(|user| matches_search(*user, params) && matches_filter(*user, params))
+        .count()
 }
 
 /// Apply Better Auth admin list-users semantics to a user collection.

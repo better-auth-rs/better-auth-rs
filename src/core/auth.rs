@@ -224,8 +224,6 @@ impl<S: AuthSchema> AuthBuilder<S> {
         let mut init_parts = init_context.into_parts();
         let mut context = AuthContext::new(config.clone(), store.clone());
         init_parts.apply_request_runtime(&mut context);
-        let has_plugin_runtime = !init_parts.plugin_user_fields.additional_fields.is_empty()
-            || !init_parts.database_hooks.is_empty();
         let (adapter_fields, endpoint_fields) =
             better_auth_core::plugin_runtime::resolve_user_fields(
                 &config.user,
@@ -234,11 +232,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
         let mut adapter_config = (*config).clone();
         adapter_config.user = adapter_fields.clone();
         let adapter_config = Arc::new(adapter_config);
-        let store = if has_plugin_runtime {
-            store.with_runtime(adapter_config.clone(), init_parts.database_hooks)?
-        } else {
-            store
-        };
+        let store = store.with_runtime(adapter_config.clone(), init_parts.database_hooks)?;
         let mut endpoint_config = (*config).clone();
         endpoint_config.user = endpoint_fields;
         let config = Arc::new(endpoint_config);
@@ -695,7 +689,10 @@ impl<S: AuthSchema> BetterAuth<S> {
             },
             async {
                 let input = (|| -> AuthResult<_> {
-                    let body = match route.as_ref().and_then(|route| route.body_validator) {
+                    let body = match route
+                        .as_ref()
+                        .and_then(|route| route.body_validator.as_ref())
+                    {
                         Some(validate) => validate(&internal_req)?,
                         None => better_auth_core::endpoint_input::ValidatedBody::unvalidated(
                             internal_req.input_body()?,
@@ -948,7 +945,7 @@ impl<S: AuthSchema> BetterAuth<S> {
         update_user.assign_user_fields(additional_fields)?;
         let user = self
             .store
-            .update_user(&current_user.id(), update_user)
+            .update_user(current_user.id().typed()?, update_user)
             .await?;
         context
             .session_manager()

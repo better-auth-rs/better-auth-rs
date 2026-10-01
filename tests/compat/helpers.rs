@@ -144,6 +144,7 @@ pub enum ResetSenderMode {
 pub struct TestAuthOptions {
     pub reset_sender_mode: ResetSenderMode,
     pub creator_role: Option<String>,
+    pub change_email_without_verification: bool,
     pub all_plugins: bool,
 }
 
@@ -356,6 +357,7 @@ pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth
         .plugin(
             UserManagementPlugin::new()
                 .change_email_enabled(true)
+                .update_without_verification(options.change_email_without_verification)
                 .delete_user_enabled(true),
         )
         .plugin(ApiKeyPlugin::builder().build())

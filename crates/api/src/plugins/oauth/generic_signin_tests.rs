@@ -94,7 +94,11 @@ async fn sign_in(
             "code".to_owned(),
             serde_json::Value::from("test-code".to_owned()),
         );
-    plugin.on_request(&callback, ctx).await.unwrap().unwrap()
+    let mut response = plugin.on_request(&callback, ctx).await.unwrap().unwrap();
+    ctx.session_manager()
+        .finish_response(&callback, &mut response)
+        .unwrap();
+    response
 }
 
 #[tokio::test]
@@ -146,7 +150,7 @@ async fn verification_policy_persists_identity_before_denial_and_sends_only_when
                 .unwrap();
             assert_eq!(
                 ctx.database
-                    .get_user_accounts(&user.id())
+                    .get_user_accounts(user.id().typed().unwrap())
                     .await
                     .unwrap()
                     .len(),
@@ -154,7 +158,7 @@ async fn verification_policy_persists_identity_before_denial_and_sends_only_when
             );
             assert!(
                 ctx.session_manager()
-                    .list_user_sessions(&user.id())
+                    .list_user_sessions(user.id().typed().unwrap())
                     .await
                     .unwrap()
                     .is_empty()
@@ -180,7 +184,7 @@ async fn verification_policy_persists_identity_before_denial_and_sends_only_when
         let _ = ctx
             .database
             .update_user(
-                &user.id(),
+                user.id().typed().unwrap(),
                 UpdateUser {
                     email_verified: Some(true),
                     ..Default::default()
@@ -195,7 +199,7 @@ async fn verification_policy_persists_identity_before_denial_and_sends_only_when
         );
         assert_eq!(
             ctx.session_manager()
-                .list_user_sessions(&user.id())
+                .list_user_sessions(user.id().typed().unwrap())
                 .await
                 .unwrap()
                 .len(),
@@ -283,7 +287,7 @@ async fn verified_email_change_preserves_the_user_account_and_allows_sign_in() {
     );
     let accounts = ctx
         .database
-        .get_user_accounts(&updated_user.id())
+        .get_user_accounts(updated_user.id().typed().unwrap())
         .await
         .unwrap();
     assert_eq!(accounts.len(), 1);
@@ -292,14 +296,144 @@ async fn verified_email_change_preserves_the_user_account_and_allows_sign_in() {
     assert_eq!(account.account_id, "stable-subject");
     assert_eq!(
         account.user_id.typed().unwrap().as_str(),
-        updated_user.id().as_ref()
+        updated_user.id().typed().unwrap()
     );
     assert_eq!(
         ctx.session_manager()
-            .list_user_sessions(&updated_user.id())
+            .list_user_sessions(updated_user.id().typed().unwrap())
             .await
             .unwrap()
             .len(),
         2
     );
+}
+
+struct MutableTokens(Mutex<OAuthTokenSet>);
+
+#[async_trait]
+impl OAuthTokenHandler for MutableTokens {
+    async fn get_token(&self, _: OAuthCodeExchange<'_>) -> AuthResult<OAuthTokenSet> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+}
+
+#[tokio::test]
+async fn sign_in_preserves_scopes_and_account_cookie_while_explicit_link_merges_scopes() {
+    for update_on_sign_in in [false, true] {
+        let mut config = test_helpers::create_test_config().base_url("http://localhost:3000");
+        config.account.skip_state_cookie_check = true;
+        config.account.store_account_cookie = Some(true);
+        config.account.update_account_on_sign_in = update_on_sign_in;
+        let ctx = test_helpers::create_test_context_with_config(config).await;
+        let tokens = Arc::new(MutableTokens(Mutex::new(OAuthTokenSet {
+            access_token: Some("first-token".into()),
+            scopes: [" stored ", "common", "", "dup", "common"]
+                .map(str::to_owned)
+                .to_vec(),
+            ..Default::default()
+        })));
+        let profile = Arc::new(MutableProfile(Mutex::new(json!({
+            "id":"stable-subject", "email":"owner@example.test", "emailVerified":true
+        }))));
+        let plugin = OAuthPlugin::new().add_generic_provider(
+            "generic",
+            GenericOAuthConfig {
+                client_id: "client".into(),
+                authorization_url: Some("https://provider.example/authorize".into()),
+                get_token: Some(tokens.clone()),
+                get_user_info: Some(profile),
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            sign_in(&plugin, &ctx)
+                .await
+                .headers
+                .get("Location")
+                .map(String::as_str),
+            Some("http://localhost:3000/welcome")
+        );
+        let incoming = OAuthTokenSet {
+            access_token: Some("second-token".into()),
+            scopes: [" new ", "common", "", "new"].map(str::to_owned).to_vec(),
+            ..Default::default()
+        };
+        *tokens.0.lock().unwrap() = incoming.clone();
+        let response = sign_in(&plugin, &ctx).await;
+        assert_eq!(
+            response.headers.get("Location").map(String::as_str),
+            Some("http://localhost:3000/welcome")
+        );
+        let stored = ctx
+            .database
+            .get_account("generic", "stable-subject")
+            .await
+            .unwrap()
+            .unwrap();
+        let expected_token = if update_on_sign_in {
+            "second-token"
+        } else {
+            "first-token"
+        };
+        assert_eq!(
+            stored.scope.typed().unwrap().as_deref(),
+            Some(" stored ,common,,dup,common")
+        );
+        assert_eq!(
+            stored.access_token.typed().unwrap().as_deref(),
+            Some(expected_token)
+        );
+        let cookies = response
+            .headers
+            .get_all("Set-Cookie")
+            .map(|value| value.split(';').next().unwrap())
+            .collect::<Vec<_>>()
+            .join("; ");
+        let mut request = AuthRequest::new(HttpMethod::Get, "/get-session");
+        let _ = request.headers.insert("cookie".into(), cookies);
+        let cookie = super::handlers::decode_account_cookie(&request, &ctx.config)
+            .unwrap()
+            .unwrap();
+        assert_eq!(cookie.scope, stored.scope);
+        assert_eq!(
+            cookie.access_token.typed().unwrap().as_deref(),
+            Some(expected_token)
+        );
+        let endpoint =
+            crate::plugins::endpoint_context::EndpointContext::new(None, Value::Null, &ctx);
+        super::handlers::complete_link_social(
+            "generic",
+            &super::providers::OAuthUserInfo {
+                id: "stable-subject".into(),
+                email: "owner@example.test".into(),
+                name: None,
+                image: None,
+                email_verified: true,
+                additional_fields: Default::default(),
+            },
+            &incoming,
+            &super::state::OAuthStateLink {
+                user_id: stored.user_id.typed().unwrap().clone(),
+                email: "owner@example.test".into(),
+            },
+            None,
+            &endpoint,
+        )
+        .await
+        .unwrap_or_else(|_| panic!("explicit link must succeed"));
+        let linked = ctx
+            .database
+            .get_account("generic", "stable-subject")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            linked.scope.typed().unwrap().as_deref(),
+            Some("stored,common,dup,new")
+        );
+        assert_eq!(
+            linked.access_token.typed().unwrap().as_deref(),
+            Some("second-token")
+        );
+    }
 }

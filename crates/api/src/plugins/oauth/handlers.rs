@@ -594,7 +594,7 @@ async fn link_with_id_token_core(
         .get_account(&body.provider, &response.user.id)
         .await?
     {
-        if account.user_id != current_user.id().as_ref() {
+        if account.user_id != current_user.id().into_owned() {
             return Err(AuthError::Upstream {
                 status: 409,
                 code: "SOCIAL_ACCOUNT_ALREADY_LINKED",
@@ -625,7 +625,7 @@ async fn link_with_id_token_core(
                 },
             )
             .await?;
-        apply_link_user_info(&current_user.id(), &response.user, ctx).await;
+        apply_link_user_info(current_user.id().typed()?, &response.user, ctx).await;
         return Ok(SocialSignInResponse {
             url: Some(String::new()),
             redirect: false,
@@ -669,7 +669,7 @@ async fn link_with_id_token_core(
         let _ = ctx
             .database
             .create_account_optional(CreateAccount {
-                user_id: (current_user.id().to_string()).into(),
+                user_id: current_user.id().into_owned(),
                 provider_id: (body.provider.clone()).into(),
                 account_id: (response.user.id.clone()).into(),
                 access_token: (token_bundle.access_token)
@@ -696,7 +696,7 @@ async fn link_with_id_token_core(
         code: "LINKING_FAILED",
         message: "Account not linked - unable to create account",
     })?;
-    apply_link_user_info(&current_user.id(), &response.user, ctx).await;
+    apply_link_user_info(current_user.id().typed()?, &response.user, ctx).await;
 
     Ok(SocialSignInResponse {
         url: Some(String::new()),
@@ -820,7 +820,7 @@ async fn link_social_core(
 
     let user = ctx
         .database
-        .get_user_by_id(&session.user_id())
+        .get_user_by_id(session.user_id().typed()?)
         .await?
         .ok_or(AuthError::UserNotFound)?;
     let email = user
@@ -846,7 +846,7 @@ async fn link_social_core(
             additional_data: filter_additional_state_data(body.additional_data.clone())?,
             link: Some(OAuthStateLink {
                 email: email.to_lowercase(),
-                user_id: session.user_id().to_string(),
+                user_id: session.user_id().typed()?.to_string(),
             }),
             disable_redirect: body.disable_redirect.unwrap_or(false),
         },

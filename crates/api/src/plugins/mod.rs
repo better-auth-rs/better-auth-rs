@@ -123,7 +123,7 @@ pub(crate) mod test_helpers {
         expires_in: Duration,
     ) -> SessionView {
         let create_session = CreateSession {
-            user_id,
+            user_id: user_id.into(),
             expires_at: Utc::now() + expires_in,
             ip_address: Some("127.0.0.1".to_string()),
             user_agent: Some("test-agent".to_string()),
@@ -140,7 +140,8 @@ pub(crate) mod test_helpers {
         session_expires_in: Duration,
     ) -> (UserView, SessionView) {
         let user = create_user(ctx, user_data).await;
-        let session = create_session(ctx, user.id.clone(), session_expires_in).await;
+        let session =
+            create_session(ctx, user.id.typed().unwrap().clone(), session_expires_in).await;
         (user, session)
     }
 

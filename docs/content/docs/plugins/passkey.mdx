@@ -152,3 +152,5 @@ const { session } = await verifyRes.json();
 | 403 | Session is not fresh |
 | 404 | Credential not found during management |
 | 500 | Registration verification or an ordinary registration callback failed |
+
+POST body schemas run before session middleware. Registration and update names use ECMAScript whitespace trimming. Endpoint hooks retain the original name and Request bytes; verification and persistence use the validated value. Unknown body keys are removed from handler input.

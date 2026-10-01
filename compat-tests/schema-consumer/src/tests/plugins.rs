@@ -9,8 +9,8 @@ use better_auth::{
         SessionManagementPlugin, TwoFactorPlugin,
     },
     prelude::{
-        CreateDeviceCode, CreatePasskey, UpdateDeviceCode, UpdatePasskeyAuthentication,
-        WalletAddress,
+        CreateDeviceCode, CreatePasskey, CreateWalletAddress, UpdateDeviceCode,
+        UpdatePasskeyAuthentication,
     },
     seaorm::{
         Database, SeaOrmStore,
@@ -119,7 +119,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         .await
         .unwrap();
     assert_eq!(
-        generated::api_key::Entity::find_by_id(&key.api_key.id)
+        generated::api_key::Entity::find_by_id(key.api_key.id.typed().unwrap())
             .one(&database)
             .await
             .unwrap()
@@ -132,7 +132,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         assert_eq!(verified.remaining, Some(remaining));
         assert_eq!(
             auth.store()
-                .get_api_key_by_id(&key.api_key.id)
+                .get_api_key_by_id(key.api_key.id.typed().unwrap())
                 .await
                 .unwrap()
                 .unwrap()
@@ -143,7 +143,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
     assert!(keys.verify(&key.key, Default::default()).await.is_err());
     assert!(
         auth.store()
-            .get_api_key_by_id(&key.api_key.id)
+            .get_api_key_by_id(key.api_key.id.typed().unwrap())
             .await
             .unwrap()
             .is_none()
@@ -309,18 +309,20 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
             .len(),
         1
     );
-    auth.store().delete_passkey(&passkey.id).await.unwrap();
+    auth.store()
+        .delete_passkey(passkey.id.typed().unwrap())
+        .await
+        .unwrap();
     assert!(
         auth.store()
-            .get_passkey_by_id(&passkey.id)
+            .get_passkey_by_id(passkey.id.typed().unwrap())
             .await
             .unwrap()
             .is_none()
     );
 
     auth.store()
-        .create_wallet_address(WalletAddress {
-            id: "wallet".into(),
+        .create_wallet_address(CreateWalletAddress {
             user_id: user_id.into(),
             address: "0x1234".into(),
             chain_id: 1,

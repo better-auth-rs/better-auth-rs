@@ -97,7 +97,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     }
     async fn after_create_session(
         &self,
-        _: &S::Session,
+        _: &better_auth_core::wire::SessionView,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.push("session.create.after");
@@ -105,7 +105,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     }
     async fn before_delete_session(
         &self,
-        _: &S::Session,
+        _: &better_auth_core::wire::SessionView,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         self.push("session.delete.before");
@@ -113,7 +113,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     }
     async fn after_delete_session(
         &self,
-        _: &S::Session,
+        _: &better_auth_core::wire::SessionView,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.push("session.delete.after");
@@ -370,7 +370,7 @@ impl SecondaryFixture {
                     Box::pin(async move {
                         let _ = tx
                             .create_session_with_deferred_secondary(CreateSession {
-                                user_id,
+                                user_id: user_id.into(),
                                 expires_at: Utc::now() + chrono::Duration::days(7),
                                 ip_address: None,
                                 user_agent: None,

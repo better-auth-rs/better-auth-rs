@@ -12,7 +12,7 @@ use better_auth::plugins::{
 };
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult, BetterAuth};
 use better_auth_core::store::AccountStore;
-use better_auth_core::{AuthSchema, AuthUser, CreateAccount, UpdateAccount, UpdateUser};
+use better_auth_core::{AuthUser, CreateAccount, UpdateAccount, UpdateUser};
 use better_auth_seaorm::hooks::{HookControl, SeaOrmHookContext, SeaOrmHooks};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
@@ -184,7 +184,7 @@ password: Default::default(),
 ..Default::default()
 }).await?;
             }}
-            let accounts=match &user { Some(user)=>auth.store().get_user_accounts(&user.id()).await?, None=>vec![] };
+            let accounts=match &user { Some(user)=>auth.store().get_user_accounts(user.id().typed().unwrap()).await?, None=>vec![] };
             let account=accounts.iter().find(|account|account.provider_id=="google");
             let account=account.map(|account| {
                 let raw_access = account.access_token.typed()?.as_deref();
@@ -193,7 +193,7 @@ password: Default::default(),
                 Ok::<_,AuthError>(json!({"encrypted":access.as_ref().is_some_and(|token|!token.is_empty() && Some(token.as_str())!=raw_access),"accessToken":access,"refreshToken":refresh,"idToken":account.id_token.typed()?.as_deref(),"scope":account.scope.typed()?.as_deref(),"accessTokenExpiresAt":*account.access_token_expires_at.typed()?}))
             }).transpose()?;
             let state=fixture.state.lock().unwrap();
-            Ok::<_,AuthError>(Json(json!({"events":state.events,"imageUpdates":state.image_updates,"admissions":state.admissions,"nestedAccounts":accounts.iter().filter(|account|account.provider_id=="nested-cancel").count(),"user":user.map(|user|json!({"name":user.name(),"email":user.email(),"emailVerified":user.email_verified(),"image":user.image(),"department":user.department,"internalCode":user.internal_code})),"account":account})))
+            Ok::<_,AuthError>(Json(json!({"events":state.events,"imageUpdates":state.image_updates,"admissions":state.admissions,"nestedAccounts":accounts.iter().filter(|account|account.provider_id=="nested-cancel").count(),"user":user.map(|user|json!({"name":user.name(),"email":user.email(),"emailVerified":user.email_verified(),"image":user.image(),"department":user.additional_fields.get("department"),"internalCode":user.additional_fields.get("internalCode")})),"account":account})))
         }}))
     }
 }
@@ -284,7 +284,7 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
     }
     async fn after_update_user(
         &self,
-        _: Option<&<TestSchema as AuthSchema>::User>,
+        _: Option<&better_auth_core::wire::UserView>,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<()> {
         self.hook("user.update.after", ctx)

@@ -53,7 +53,7 @@ async fn store_update_user_normalizes_email_before_persisting() {
     let updated = auth
         .store()
         .update_user(
-            &user.id,
+            user.id.typed().unwrap(),
             UpdateUser {
                 email: Some("Updated.Case@Test.com".to_string()),
                 ..Default::default()

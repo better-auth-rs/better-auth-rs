@@ -32,7 +32,7 @@ pub struct OneTapPlugin {
 
 better_auth_core::impl_auth_plugin! {
     OneTapPlugin, "one-tap";
-    routes { post "/one-tap/callback" => callback, "oneTapCallback"; }
+    routes { post "/one-tap/callback" => callback, "oneTapCallback", body = request_body; }
 }
 
 impl OneTapPlugin {
@@ -41,42 +41,12 @@ impl OneTapPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
-        let body = match json_body::parse(req) {
-            Ok(body) => body,
-            Err(response) => return Ok(response),
+        let body = match req.validated_body::<CallbackBody>() {
+            Some(body) => body.clone(),
+            None => parse_body(req)?.0,
         };
-        let Some(Value::Object(body)) = body.as_ref() else {
-            return Ok(json_body::validation_error(&json_body::invalid_type(
-                "body",
-                "object",
-                body.as_ref(),
-            )));
-        };
-        let mut errors = Vec::new();
-        if !body.get("idToken").is_some_and(Value::is_string) {
-            errors.push(json_body::invalid_type(
-                "body.idToken",
-                "string",
-                body.get("idToken"),
-            ));
-        }
-        if let Some(callback) = body.get("callbackURL")
-            && !callback.is_string()
-        {
-            errors.push(json_body::invalid_type(
-                "body.callbackURL",
-                "string",
-                Some(callback),
-            ));
-        }
-        if !errors.is_empty() {
-            return Ok(json_body::validation_error(&errors.join("; ")));
-        }
-        let token = body
-            .get("idToken")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        if let Some(callback) = body.get("callbackURL").and_then(Value::as_str) {
+        let token = body.id_token.as_str();
+        if let Some(callback) = body.callback_url.as_deref() {
             super::oauth::validate_redirect_target(callback, ctx, "Invalid callbackURL")?;
         }
         let provider = ctx
@@ -264,4 +234,22 @@ fn valid_claims(claims: &Value, audience: &[String]) -> bool {
         && claims
             .get("nbf")
             .is_none_or(|value| value.as_f64().is_some_and(|start| start <= now))
+}
+
+#[derive(Clone, serde::Deserialize)]
+struct CallbackBody {
+    #[serde(rename = "idToken")]
+    id_token: String,
+    #[serde(rename = "callbackURL")]
+    callback_url: Option<String>,
+}
+fn parse_body(req: &AuthRequest) -> AuthResult<(CallbackBody, Value)> {
+    json_body::string_input(req, &[("idToken", true), ("callbackURL", false)])
+}
+fn request_body(req: &AuthRequest) -> AuthResult<better_auth_core::endpoint_input::ValidatedBody> {
+    let (body, projection) = parse_body(req)?;
+    Ok(better_auth_core::endpoint_input::ValidatedBody::new(
+        Some(projection),
+        body,
+    ))
 }

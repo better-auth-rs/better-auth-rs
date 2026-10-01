@@ -69,6 +69,9 @@ async fn team(store: &Store) -> String {
         .await
         .unwrap()
         .id
+        .typed()
+        .unwrap()
+        .clone()
 }
 
 async fn invitation(
@@ -85,7 +88,14 @@ async fn invitation(
         expires_at,
     );
     input.team_id = Some(team_id.into());
-    store.create_invitation(input).await.unwrap().id
+    store
+        .create_invitation(input)
+        .await
+        .unwrap()
+        .id
+        .typed()
+        .unwrap()
+        .clone()
 }
 
 #[tokio::test]
@@ -313,7 +323,7 @@ async fn team_deletion_rolls_back_read_and_update_output_errors() {
         let store = store(options()).await;
         let team_id = team(&store).await;
         let _ = store
-            .add_team_member(&team_id, "owner", None)
+            .add_team_member(&team_id.clone().into(), "owner", None)
             .await
             .unwrap();
         let expires = chrono::Utc::now() + chrono::Duration::days(1);

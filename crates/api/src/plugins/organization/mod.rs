@@ -4,6 +4,7 @@ pub mod hooks;
 mod input;
 mod native_json;
 mod policy;
+mod request;
 mod server_api;
 pub use better_auth_core::organization_fields::OrganizationFields;
 pub use server_api::AddMemberInput;
@@ -374,6 +375,16 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
             }
         }
         routes
+            .into_iter()
+            .map(|route| {
+                if route.method == HttpMethod::Post {
+                    let schema = request::prepared_schema(&route.path, &self.config.schema);
+                    route.body_validator(move |req| request::validate(req, &schema))
+                } else {
+                    route
+                }
+            })
+            .collect()
     }
 
     async fn after_request(

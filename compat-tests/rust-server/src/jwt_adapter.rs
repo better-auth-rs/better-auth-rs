@@ -317,7 +317,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
                 payload.extend(input["claims"].as_object().unwrap().clone());
                 let mut header = josekit::jws::JwsHeader::new();
                 header.set_algorithm("EdDSA");
-                header.set_key_id(key.id);
+                header.set_key_id(key.id.typed()?.clone());
                 let token = josekit::jws::serialize_compact(&serde_json::to_vec(&payload)?, &header, &josekit::jws::EdDSA.signer_from_jwk(&private_key).unwrap()).unwrap();
                 events.lock().unwrap().clear();
                 Ok(json!({"accepted":auth.jwt()?.verify(&token, None).await?.is_some()}))
@@ -339,7 +339,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
                         cookie.to_owned()
                     }).collect::<Vec<_>>().join("; ");
                     let user = auth.store().get_user_by_email("jwt@example.com").await?.unwrap();
-                    auth.store().delete_user_sessions(&user.id()).await?;
+                    auth.store().delete_user_sessions(user.id().typed().unwrap()).await?;
                     events.lock().unwrap().push(json!({"event":"verify-cookie"}));
                     let response = invoke(&auth,base,"/get-session",None,false,Some(cookies)).await?;
                     result["verifyStatus"] = response.status.into();

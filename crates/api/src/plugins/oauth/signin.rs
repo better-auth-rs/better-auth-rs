@@ -217,9 +217,6 @@ pub(super) async fn process_oauth_sign_in(
                         refresh_token_expires_at: (tokens.refresh_token_expires_at)
                             .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                             .unwrap_or_default(),
-                        scope: ((!tokens.scopes.is_empty()).then(|| tokens.scopes.join(",")))
-                            .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
-                            .unwrap_or_default(),
                         ..Default::default()
                     },
                 )
@@ -248,7 +245,9 @@ pub(super) async fn process_oauth_sign_in(
             user = ctx
                 .database
                 .update_user(
-                    &user.id(),
+                    user.id()
+                        .typed()
+                        .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
                     UpdateUser {
                         email_verified: Some(true),
                         ..Default::default()
@@ -262,7 +261,9 @@ pub(super) async fn process_oauth_sign_in(
             user = ctx
                 .database
                 .update_user(
-                    &user.id(),
+                    user.id()
+                        .typed()
+                        .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
                     UpdateUser {
                         additional_fields: ctx
                             .config
@@ -291,45 +292,43 @@ pub(super) async fn process_oauth_sign_in(
             .await?;
         let issued = issue_user_session(
             ctx,
-            &user.id(),
+            user.id()
+                .typed()
+                .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
             meta.ip_address.clone(),
             meta.user_agent.clone(),
         )
         .await
         .map_err(OAuthSignInError::from)?;
-        let account_cookie =
-            ctx.config
-                .account
-                .store_account_cookie()
-                .then(|| AccountCookiePayload {
-                    provider_id: provider_name.to_owned().into(),
-                    access_token: token_bundle
-                        .access_token
-                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
-                        .unwrap_or_else(|| existing_account.access_token.clone()),
-                    refresh_token: token_bundle
-                        .refresh_token
-                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
-                        .unwrap_or_else(|| existing_account.refresh_token.clone()),
-                    id_token: token_bundle
-                        .id_token
-                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
-                        .unwrap_or_else(|| existing_account.id_token.clone()),
-                    access_token_expires_at: tokens
-                        .access_token_expires_at
-                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
-                        .unwrap_or_else(|| existing_account.access_token_expires_at.clone()),
-                    refresh_token_expires_at: tokens
-                        .refresh_token_expires_at
-                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
-                        .unwrap_or_else(|| existing_account.refresh_token_expires_at.clone()),
-                    scope: if tokens.scopes.is_empty() {
-                        existing_account.scope.clone()
-                    } else {
-                        better_auth_core::SchemaValue::Typed(Some(tokens.scopes.join(",")))
-                    },
-                    ..existing_account.clone()
-                });
+        let account_cookie = ctx.config.account.store_account_cookie().then(|| {
+            if !ctx.config.account.update_account_on_sign_in {
+                return existing_account.clone();
+            }
+            AccountCookiePayload {
+                provider_id: provider_name.to_owned().into(),
+                access_token: token_bundle
+                    .access_token
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_else(|| existing_account.access_token.clone()),
+                refresh_token: token_bundle
+                    .refresh_token
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_else(|| existing_account.refresh_token.clone()),
+                id_token: token_bundle
+                    .id_token
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_else(|| existing_account.id_token.clone()),
+                access_token_expires_at: tokens
+                    .access_token_expires_at
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_else(|| existing_account.access_token_expires_at.clone()),
+                refresh_token_expires_at: tokens
+                    .refresh_token_expires_at
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_else(|| existing_account.refresh_token_expires_at.clone()),
+                ..existing_account.clone()
+            }
+        });
 
         return Ok(ProcessOAuthUserResult {
             issued: ctx
@@ -374,7 +373,10 @@ pub(super) async fn process_oauth_sign_in(
 
         validate_provider_user(
             user_info,
-            &existing_user.id(),
+            existing_user
+                .id()
+                .typed()
+                .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
             provider_name,
             options.profile,
             crate::plugins::user_admission::UserValidationAction::LinkAccount,
@@ -385,7 +387,7 @@ pub(super) async fn process_oauth_sign_in(
         let created_account = ctx
             .database
             .create_account(CreateAccount {
-                user_id: (linked_user.id().to_string()).into(),
+                user_id: linked_user.id().into_owned(),
                 account_id: (user_info.id.clone()).into(),
                 provider_id: (provider_name.to_string()).into(),
                 access_token: (token_bundle.access_token)
@@ -421,7 +423,10 @@ pub(super) async fn process_oauth_sign_in(
             linked_user = ctx
                 .database
                 .update_user(
-                    &linked_user.id(),
+                    linked_user
+                        .id()
+                        .typed()
+                        .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
                     UpdateUser {
                         email_verified: Some(true),
                         ..Default::default()
@@ -435,7 +440,10 @@ pub(super) async fn process_oauth_sign_in(
             linked_user = ctx
                 .database
                 .update_user(
-                    &linked_user.id(),
+                    linked_user
+                        .id()
+                        .typed()
+                        .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
                     UpdateUser {
                         additional_fields: ctx
                             .config
@@ -464,7 +472,10 @@ pub(super) async fn process_oauth_sign_in(
             .await?;
         let issued = issue_user_session(
             ctx,
-            &linked_user.id(),
+            linked_user
+                .id()
+                .typed()
+                .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
             meta.ip_address.clone(),
             meta.user_agent.clone(),
         )
@@ -562,7 +573,7 @@ pub(super) async fn process_oauth_sign_in(
                 let user = tx.create_user(create_user).await?;
                 let account = tx
                     .create_account(CreateAccount {
-                        user_id: (user.id().into_owned()).into(),
+                        user_id: user.id().into_owned(),
                         ..account
                     })
                     .await?;
@@ -581,7 +592,10 @@ pub(super) async fn process_oauth_sign_in(
             .await?;
         let issued = issue_user_session(
             ctx,
-            &created_user.id(),
+            created_user
+                .id()
+                .typed()
+                .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
             meta.ip_address.clone(),
             meta.user_agent.clone(),
         )

@@ -59,7 +59,7 @@ expires_at: (Utc::now() + Duration::minutes(10)).into(),
             }
             if operation == "accounts" {
                 let user = store.get_user_by_email(body["email"].as_str().unwrap()).await.unwrap().unwrap();
-                let accounts = store.get_user_accounts(user.id().as_ref()).await.unwrap();
+                let accounts = store.get_user_accounts(user.id().typed().unwrap().as_ref()).await.unwrap();
                 return Json(json!(accounts.iter().map(|a| json!({"id":a.id, "userId":a.user_id, "providerId":a.provider_id, "accountId":a.account_id, "accessToken":a.access_token, "refreshToken":a.refresh_token, "idToken":a.id_token})).collect::<Vec<_>>()));
             }
             let keys: Vec<_> = body["secrets"].as_array().map(|keys| keys.iter().map(|key| VersionedSecret::new(key["version"].as_u64().unwrap().into(), key["value"].as_str().unwrap())).collect()).unwrap_or_default();

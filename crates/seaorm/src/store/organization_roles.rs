@@ -27,13 +27,16 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         } else {
             input.permission
         };
-        let mut core = values([
-            ("id", json!(uuid::Uuid::new_v4().to_string())),
-            ("organizationId", json!(input.organization_id)),
-            ("role", json!(input.role)),
-            ("permission", permission),
-            ("createdAt", json!(Utc::now())),
-        ]);
+        let mut core = self.create_fields(
+            "organizationRole",
+            None,
+            values([
+                ("organizationId", json!(input.organization_id)),
+                ("role", json!(input.role)),
+                ("permission", permission),
+                ("createdAt", json!(Utc::now())),
+            ]),
+        )?;
         for name in [
             "organizationId",
             "role",

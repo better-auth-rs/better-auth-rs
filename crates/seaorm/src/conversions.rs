@@ -13,7 +13,7 @@ impl From<&entities::organization::Model> for Organization {
     fn from(model: &entities::organization::Model) -> Self {
         Self {
             additional_fields: Default::default(),
-            id: model.id.clone(),
+            id: model.id.clone().into(),
             name: model.name.clone().into(),
             slug: model.slug.clone().into(),
             logo: model.logo.clone().into(),
@@ -27,7 +27,7 @@ impl From<&entities::member::Model> for Member {
     fn from(model: &entities::member::Model) -> Self {
         Self {
             additional_fields: Default::default(),
-            id: model.id.clone(),
+            id: model.id.clone().into(),
             organization_id: model.organization_id.clone().into(),
             user_id: model.user_id.clone().into(),
             role: model.role.clone().into(),
@@ -40,7 +40,7 @@ impl From<&entities::invitation::Model> for Invitation {
     fn from(model: &entities::invitation::Model) -> Self {
         Self {
             additional_fields: Default::default(),
-            id: model.id.clone(),
+            id: model.id.clone().into(),
             organization_id: model.organization_id.clone().into(),
             email: model.email.clone().into(),
             role: model.role.clone().into(),
@@ -56,7 +56,7 @@ impl From<&entities::invitation::Model> for Invitation {
 impl From<&entities::two_factor::Model> for TwoFactor {
     fn from(model: &entities::two_factor::Model) -> Self {
         Self {
-            id: model.id.clone(),
+            id: model.id.clone().into(),
             secret: model.secret.clone(),
             backup_codes: model.backup_codes.clone(),
             user_id: model.user_id.clone(),
@@ -72,7 +72,7 @@ impl From<&entities::two_factor::Model> for TwoFactor {
 impl From<&entities::api_key::Model> for ApiKey {
     fn from(model: &entities::api_key::Model) -> Self {
         Self {
-            id: model.id.clone(),
+            id: model.id.clone().into(),
             name: model.name.clone(),
             start: model.start.clone().map(Into::into),
             prefix: model.prefix.clone(),
@@ -101,7 +101,7 @@ impl From<&entities::api_key::Model> for ApiKey {
 impl From<&entities::passkey::Model> for Passkey {
     fn from(model: &entities::passkey::Model) -> Self {
         Self {
-            id: model.id.clone(),
+            id: model.id.clone().into(),
             name: model.name.clone(),
             public_key: model.public_key.clone(),
             user_id: model.user_id.clone(),
@@ -121,7 +121,7 @@ impl From<&entities::passkey::Model> for Passkey {
 impl From<&entities::device_code::Model> for DeviceCode {
     fn from(model: &entities::device_code::Model) -> Self {
         Self {
-            id: model.id.clone(),
+            id: model.id.clone().into(),
             device_code: model.device_code.clone(),
             user_code: model.user_code.clone(),
             user_id: model.user_id.clone(),
@@ -129,8 +129,8 @@ impl From<&entities::device_code::Model> for DeviceCode {
             status: model.status.clone(),
             last_polled_at: model.last_polled_at,
             polling_interval: model.polling_interval,
-            client_id: model.client_id.clone(),
-            scope: model.scope.clone(),
+            client_id: model.client_id.clone().into(),
+            scope: model.scope.clone().into(),
         }
     }
 }

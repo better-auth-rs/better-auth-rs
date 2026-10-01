@@ -465,7 +465,9 @@ pub async fn seed_rust_reset_password_token(
         .unwrap_or_else(|error| panic!("user lookup should succeed: {error}"))
         .unwrap_or_else(|| panic!("expected user for email {email}"))
         .id
-        .to_string();
+        .typed()
+        .unwrap()
+        .clone();
 
     let _ = auth
         .store()

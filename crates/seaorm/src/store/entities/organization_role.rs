@@ -20,7 +20,7 @@ impl From<Model> for better_auth_core::OrganizationRole {
     fn from(model: Model) -> Self {
         Self {
             additional_fields: Default::default(),
-            id: model.id,
+            id: model.id.into(),
             organization_id: model.organization_id.into(),
             role: model.role.into(),
             permission: model.permission.into(),

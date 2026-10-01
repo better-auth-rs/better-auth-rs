@@ -75,10 +75,14 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         let _ = record.insert("id".into(), Value::String(id.to_owned()));
         let inserted = self
             .raw("verification", "create", |state| {
-                if state.verifications.contains_key(id) {
+                if state
+                    .verifications
+                    .iter()
+                    .any(|row| row.get("id").and_then(Value::as_str) == Some(id))
+                {
                     return Ok(false);
                 }
-                let _ = state.verifications.insert(id.to_owned(), record.clone());
+                let _ = state.verifications.push(record.clone());
                 Ok(true)
             })
             .await?;
@@ -108,13 +112,15 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .verification
             .field_schema()
             .record_storage_fields_for_adapter(input.fields()?, true, true, |_| true)?;
-        let id = record
-            .entry("id")
-            .or_insert_with(|| Value::String(uuid::Uuid::new_v4().to_string()))
-            .clone();
-        let id = crate::SchemaValue::<String>::from_json(Some(id)).display_string()?;
+        let supplied = record
+            .remove("id")
+            .and_then(|id| id.as_str().map(str::to_owned));
+        let id = self.generated_id("verification", supplied, self.lock()?.verifications.len())?;
+        if let Some(id) = id {
+            let _ = record.insert("id".into(), Value::String(id));
+        }
         self.raw("verification", "create", |state| {
-            let _ = state.verifications.insert(id, record.clone());
+            state.verifications.push(record.clone());
             Ok(())
         })
         .await?;
@@ -134,7 +140,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .raw("verification", "findMany", |state| {
                 Ok(state
                     .verifications
-                    .values()
+                    .iter()
                     .filter(|row| {
                         self.verification_field(row, "identifier")
                             == Some(&Value::String(identifier.to_owned()))
@@ -160,7 +166,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .raw("verification", "findOne", |state| {
                 Ok(state
                     .verifications
-                    .values()
+                    .iter()
                     .find(|row| {
                         self.verification_field(row, "identifier")
                             == Some(&Value::String(identifier.to_owned()))
@@ -180,7 +186,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .raw("verification", "findOne", |state| {
                 Ok(state
                     .verifications
-                    .values()
+                    .iter()
                     .find(|row| {
                         self.verification_field(row, "value")
                             == Some(&Value::String(value.to_owned()))
@@ -201,7 +207,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .raw("verification", "findOne", |state| {
                 Ok(state
                     .verifications
-                    .values()
+                    .iter()
                     .find(|row| {
                         self.verification_field(row, "identifier")
                             == Some(&Value::String(identifier.to_owned()))

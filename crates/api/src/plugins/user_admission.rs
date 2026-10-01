@@ -239,7 +239,7 @@ pub(crate) async fn create_user<S: AuthSchema>(
     mut input: CreateUser,
     method: &str,
     endpoint: &EndpointContext<'_, S>,
-) -> AuthResult<S::User> {
+) -> AuthResult<better_auth_core::wire::UserView> {
     validate_create(
         &input,
         UserValidationSource::new(method, UserValidationAction::CreateUser),

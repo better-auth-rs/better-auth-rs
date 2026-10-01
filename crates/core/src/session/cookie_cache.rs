@@ -140,9 +140,18 @@ pub(super) async fn encode(
     }
 }
 
+fn parse_payload(payload: Value) -> Option<CachedSession> {
+    // The cookie boundary uses the upstream User/Session schemas, which require string IDs.
+    // Secondary storage has a separate snapshot format and permits omitted IDs.
+    let _ = payload.get("user")?.get("id")?.as_str()?;
+    let _ = payload.get("session")?.get("id")?.as_str()?;
+    let _ = payload.get("session")?.get("userId")?.as_str()?;
+    serde_json::from_value(payload).ok()
+}
+
 pub(super) fn parse_jwt(payload: serde_json::Map<String, Value>) -> Option<(CachedSession, i64)> {
     let expires = payload.get("exp")?.as_i64()?.checked_mul(1000)?;
-    let mut parsed: CachedSession = serde_json::from_value(Value::Object(payload)).ok()?;
+    let mut parsed: CachedSession = parse_payload(Value::Object(payload))?;
     parsed.data.session.active = true;
     Some((parsed, expires))
 }
@@ -192,7 +201,7 @@ pub(super) fn decode(
             (payload, expires)
         }
     };
-    let mut payload: CachedSession = serde_json::from_value(payload).ok()?;
+    let mut payload = parse_payload(payload)?;
     // `active` is internal state and is intentionally absent from wire payloads.
     payload.data.session.active = true;
     Some((payload, expires_at))
@@ -257,9 +266,7 @@ fn renew_account_cookie(
     }) else {
         return Ok(());
     };
-    if bind_account_user
-        && account.get("userId").and_then(Value::as_str) != Some(data.user.id.as_str())
-    {
+    if bind_account_user && account.get("userId").and_then(Value::as_str) != data.user.id.as_str() {
         return clear_chunked_cookie(req, &config.auth_cookie("account_data", Default::default()));
     }
     let cookie = config.auth_cookie(

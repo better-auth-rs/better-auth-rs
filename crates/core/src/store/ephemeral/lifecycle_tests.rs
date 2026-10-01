@@ -197,7 +197,8 @@ async fn concurrent_consume_runs_hooks_once_and_invalidates_older_rows() {
         .lock()
         .unwrap()
         .verifications
-        .get_mut(old.id.typed().unwrap())
+        .iter_mut()
+        .find(|row| row.get("id") == old.id.json().unwrap().as_ref())
         .unwrap()
         .insert(
             "createdAt".into(),
@@ -334,7 +335,7 @@ async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
 
     store
         .update_user(
-            &user.id,
+            user.id.typed().unwrap(),
             UpdateUser {
                 image: Some(Some("https://example.test/avatar".into())),
                 ban_reason: Some(Some("temporary".into())),
@@ -346,7 +347,7 @@ async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
         .unwrap();
     store
         .update_user(
-            &user.id,
+            user.id.typed().unwrap(),
             UpdateUser {
                 image: Some(None),
                 ban_reason: Some(None),
@@ -358,7 +359,7 @@ async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
         .unwrap();
     let user = store
         .update_user(
-            &user.id,
+            user.id.typed().unwrap(),
             UpdateUser {
                 name: Some("renamed".into()),
                 ..Default::default()

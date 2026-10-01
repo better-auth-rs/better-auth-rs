@@ -1,21 +1,22 @@
 use serde::{Deserialize, Serialize};
-use validator::Validate;
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct DeviceCodeRequest {
     pub client_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct DeviceTokenRequest {
     pub grant_type: String,
     pub device_code: String,
     pub client_id: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct DeviceActionRequest {
     #[serde(rename = "userCode")]
     pub user_code: String,
@@ -49,8 +50,10 @@ pub(super) struct DeviceVerifyResponse {
 
 #[derive(Debug, Serialize)]
 pub(super) struct DeviceReviewContext {
-    pub client_id: Option<String>,
-    pub scope: Option<String>,
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    pub client_id: better_auth_core::SchemaValue<Option<String>>,
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    pub scope: better_auth_core::SchemaValue<Option<String>>,
 }
 
 #[derive(Debug, Serialize)]

@@ -105,7 +105,7 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
             .unwrap()
             .unwrap();
         assert_eq!(found.id, organization.id);
-        let stored = generated::organization::Entity::find_by_id(&organization.id)
+        let stored = generated::organization::Entity::find_by_id(organization.id.typed().unwrap())
             .one(&database)
             .await
             .unwrap()

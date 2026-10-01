@@ -3,14 +3,30 @@ use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate};
 
 impl EphemeralStore {
+    async fn finish_user_update(
+        &self,
+        id: &str,
+        update: UpdateUser,
+    ) -> AuthResult<Option<UserView>> {
+        let user = self.update_user_record_optional(id, update).await?;
+        self.after(CommittedWrite::UserUpdated(user.clone()))
+            .await?;
+        Ok(user)
+    }
+
     fn output_user(&self, mut user: UserView) -> AuthResult<UserView> {
         user.additional_fields = self.config.user.output_fields(&user.additional_fields)?;
         Ok(user)
     }
-    pub(super) async fn prepare_user_update(
+    pub(super) async fn prepare_user_update(&self, update: UpdateUser) -> AuthResult<UpdateUser> {
+        self.prepare_user_update_optional(update)
+            .await?
+            .ok_or_else(|| AuthError::forbidden("user update cancelled by database hook"))
+    }
+    async fn prepare_user_update_optional(
         &self,
         mut update: UpdateUser,
-    ) -> AuthResult<UpdateUser> {
+    ) -> AuthResult<Option<UpdateUser>> {
         update.prepare_user_fields(&self.config.user)?;
         let original = update.clone();
         let transaction = EphemeralTransaction { store: self };
@@ -25,11 +41,7 @@ impl EphemeralStore {
             .await?
             {
                 DatabaseHookUpdate::Continue => {}
-                DatabaseHookUpdate::Cancel => {
-                    return Err(AuthError::forbidden(
-                        "user update cancelled by database hook",
-                    ));
-                }
+                DatabaseHookUpdate::Cancel => return Ok(None),
                 DatabaseHookUpdate::Patch(mut patch) => {
                     patch.prepare_user_fields(&self.config.user)?;
                     update.merge(patch);
@@ -48,18 +60,30 @@ impl EphemeralStore {
             .user
             .stored_username_field(&update.additional_fields, "displayUsername")?
             .or(update.display_username);
-        Ok(update)
+        Ok(Some(update))
     }
 
     pub(super) async fn update_user_record(
         &self,
         id: &str,
-        mut update: UpdateUser,
+        update: UpdateUser,
     ) -> AuthResult<UserView> {
+        self.update_user_record_optional(id, update)
+            .await?
+            .ok_or(AuthError::UserNotFound)
+    }
+
+    async fn update_user_record_optional(
+        &self,
+        id: &str,
+        mut update: UpdateUser,
+    ) -> AuthResult<Option<UserView>> {
         let user = self
             .raw("user", "update", |state| {
                 Ok({
-                    let user = state.users.get_mut(id).ok_or(AuthError::UserNotFound)?;
+                    let Some(user) = state.users.get_mut(id) else {
+                        return Ok(None);
+                    };
                     if update.phone_number == Some(None) {
                         update.phone_number_verified = Some(false);
                     }
@@ -125,11 +149,11 @@ impl EphemeralStore {
                     }
                     user.updated_at = Utc::now();
                     user.additional_fields.extend(update.additional_fields);
-                    user.clone()
+                    Some(user.clone())
                 })
             })
             .await?;
-        self.output_user(user)
+        user.map(|user| self.output_user(user)).transpose()
     }
 }
 
@@ -196,9 +220,10 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .or(create_user.display_username.take())
             .flatten();
         let now = Utc::now();
-        let id = create_user
-            .id
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let id = self
+            .generated_id("user", create_user.id, self.lock()?.users.len())?
+            .map(crate::SchemaValue::Typed)
+            .unwrap_or_default();
         let user = UserView {
             additional_fields: fields,
             visible_fields: Some(
@@ -254,7 +279,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             "user",
             "create",
             async {
-                let _ = self.lock()?.users.insert(id, user.clone());
+                let _ = self.lock()?.users.push(user.clone());
                 Ok(())
             },
         )
@@ -265,6 +290,15 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         Ok(user)
     }
 
+    async fn get_user_by_id_field(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<UserView>> {
+        let user = self
+            .raw("user", "findOne", |state| Ok(state.users.get(id).cloned()))
+            .await?;
+        user.map(|user| self.output_user(user)).transpose()
+    }
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<UserView>> {
         let user = self
             .raw("user", "findOne", |state| Ok(state.users.get(id).cloned()))
@@ -276,7 +310,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .raw("user", "findOne", |state| {
                 Ok(state
                     .users
-                    .values()
+                    .iter()
                     .find(|user| serde_json::json!(user.id) == *id)
                     .cloned())
             })
@@ -284,13 +318,19 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         user.map(|user| self.output_user(user)).transpose()
     }
 
-    async fn list_users_by_ids(&self, ids: &[String]) -> AuthResult<Vec<UserView>> {
+    async fn list_users_by_ids(&self, ids: &[String], limit: f64) -> AuthResult<Vec<UserView>> {
         let users: Vec<_> = self
             .raw("user", "findMany", |state| {
-                Ok(ids
-                    .iter()
-                    .filter_map(|id| state.users.get(id).cloned())
-                    .collect())
+                Ok(crate::query::paginate_memory(
+                    state
+                        .users
+                        .iter()
+                        .filter(|user| ids.iter().any(|id| user.id.as_str() == Some(id.as_str())))
+                        .cloned()
+                        .collect(),
+                    Some(limit),
+                    None,
+                ))
             })
             .await?;
         users
@@ -304,7 +344,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .raw("user", "findOne", |state| {
                 Ok(state
                     .users
-                    .values()
+                    .iter()
                     .find(|user| user.email.as_deref() == Some(&email.to_lowercase()))
                     .cloned())
             })
@@ -317,7 +357,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .raw("user", "findOne", |state| {
                 Ok(state
                     .users
-                    .values()
+                    .iter()
                     .find(|user| user.username.as_deref() == Some(username))
                     .cloned())
             })
@@ -330,7 +370,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .raw("user", "findOne", |state| {
                 Ok(state
                     .users
-                    .values()
+                    .iter()
                     .find(|user| user.phone_number.as_deref() == Some(phone_number))
                     .cloned())
             })
@@ -340,16 +380,19 @@ impl UserStore<StatelessSchema> for EphemeralStore {
 
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<UserView> {
         let update = self.prepare_user_update(update).await?;
-        let user = match self.update_user_record(id, update).await {
-            Err(AuthError::UserNotFound) => {
-                self.after(CommittedWrite::UserUpdated(None)).await?;
-                return Err(AuthError::UserNotFound);
-            }
-            result => result?,
+        self.finish_user_update(id, update)
+            .await?
+            .ok_or(AuthError::UserNotFound)
+    }
+    async fn update_user_optional(
+        &self,
+        id: &str,
+        update: UpdateUser,
+    ) -> AuthResult<Option<UserView>> {
+        let Some(update) = self.prepare_user_update_optional(update).await? else {
+            return Ok(None);
         };
-        self.after(CommittedWrite::UserUpdated(Some(user.clone())))
-            .await?;
-        Ok(user)
+        self.finish_user_update(id, update).await
     }
 
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
@@ -388,7 +431,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             }
         }
         self.raw("user", "delete", |state| {
-            let _ = state.users.shift_remove(id);
+            let _ = state.users.remove(id);
             Ok(())
         })
         .await?;
@@ -400,19 +443,22 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     async fn list_users(&self, mut params: ListUsersParams) -> AuthResult<(Vec<UserView>, usize)> {
         let _ = params
             .limit
-            .get_or_insert(self.config.advanced.database.default_find_many_limit as f64);
+            .get_or_insert(self.config.advanced.database.find_many_limit());
         let users: Vec<_> = self
             .raw("user", "findMany", |state| {
-                Ok(state.users.values().cloned().collect())
+                Ok(state.users.iter().cloned().collect())
             })
             .await?;
-        let (users, total) = crate::user_query::apply_list_users(users, &params);
-        Ok((
-            users
-                .into_iter()
-                .map(|user| self.output_user(user))
-                .collect::<AuthResult<_>>()?,
-            total,
-        ))
+        let (users, _) = crate::user_query::apply_list_users(users, &params);
+        let users = users
+            .into_iter()
+            .map(|user| self.output_user(user))
+            .collect::<AuthResult<Vec<_>>>()?;
+        let total = self
+            .raw("user", "count", |state| {
+                Ok(crate::user_query::count_users(state.users.iter(), &params))
+            })
+            .await?;
+        Ok((users, total))
     }
 }

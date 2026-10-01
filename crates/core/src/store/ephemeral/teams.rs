@@ -11,9 +11,12 @@ impl TeamStore for EphemeralStore {
     async fn create_team(&self, mut input: CreateTeam) -> AuthResult<Team> {
         let team = Team {
             additional_fields: [("memberCount".into(), json!(0))].into_iter().collect(),
-            id: input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            id: self
+                .generated_id("team", input.id, self.lock()?.teams.len())?
+                .map(crate::SchemaValue::Typed)
+                .unwrap_or_default(),
             name: input.name,
-            organization_id: (input.organization_id).into(),
+            organization_id: input.organization_id,
             created_at: input
                 .additional_fields
                 .remove("createdAt")
@@ -27,7 +30,7 @@ impl TeamStore for EphemeralStore {
         };
         let team: Team =
             self.store_record(EntityRole::Team, team, None, input.additional_fields)?;
-        let _ = self.lock()?.teams.insert(team.id.clone(), team.clone());
+        let _ = self.lock()?.teams.push(team.clone());
         self.output_team(team)
     }
     async fn get_team(&self, id: &str) -> AuthResult<Option<Team>> {
@@ -41,7 +44,7 @@ impl TeamStore for EphemeralStore {
     async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<Team>> {
         self.lock()?
             .teams
-            .values()
+            .iter()
             .find(|team| json!(team.id) == *id)
             .cloned()
             .map(|value| self.output_team(value))
@@ -90,7 +93,7 @@ impl TeamStore for EphemeralStore {
             .organization_id;
         let pending = state
             .invitations
-            .values()
+            .iter()
             .filter(|invitation| {
                 invitation.organization_id == *organization_id && invitation.is_pending()
             })
@@ -131,10 +134,12 @@ impl TeamStore for EphemeralStore {
             updates.push(updated);
         }
         // Keep changes staged until every transform succeeds, matching transaction rollback.
-        let _ = state.teams.shift_remove(id);
+        let _ = state.teams.remove(id);
         state.team_members.retain(|member| member.team_id != id);
         for invitation in updates {
-            let _ = state.invitations.insert(invitation.id.clone(), invitation);
+            let _ = state
+                .invitations
+                .replace(&invitation.id.clone(), invitation);
         }
         Ok(())
     }
@@ -142,7 +147,7 @@ impl TeamStore for EphemeralStore {
         let teams: Vec<_> = self
             .lock()?
             .teams
-            .values()
+            .iter()
             .filter(|team| team.organization_id == organization_id)
             .cloned()
             .collect();
@@ -196,7 +201,7 @@ impl TeamStore for EphemeralStore {
     }
     async fn add_team_member(
         &self,
-        team_id: &str,
+        team_id: &crate::SchemaValue<String>,
         user_id: &str,
         maximum: Option<usize>,
     ) -> AuthResult<Option<TeamMember>> {
@@ -209,22 +214,25 @@ impl TeamStore for EphemeralStore {
         if let Some(member) = state
             .team_members
             .iter()
-            .find(|member| member.team_id == team_id && member.user_id == user_id)
+            .find(|member| member.team_id == *team_id && member.user_id == user_id)
         {
             return Ok(Some(member.clone()));
         }
         let actual = state
             .team_members
             .iter()
-            .filter(|member| member.team_id == team_id)
+            .filter(|member| member.team_id == *team_id)
             .count();
         let (team, reserved) = self.reserve_team_seat(team, actual, maximum)?;
-        let _ = state.teams.insert(team_id.to_owned(), team);
+        let _ = state.teams.replace(team_id, team);
         if !reserved {
             return Ok(None);
         }
         let member = TeamMember {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: self
+                .generated_id("teamMember", None, state.team_members.len())?
+                .map(crate::SchemaValue::Typed)
+                .unwrap_or_default(),
             team_id: team_id.to_owned(),
             user_id: user_id.to_owned(),
             created_at: Utc::now(),
@@ -241,7 +249,7 @@ impl TeamStore for EphemeralStore {
             .count();
         if let Some(team) = state.teams.get(team_id).cloned() {
             let team = self.release_team_seats(team, deleted)?;
-            let _ = state.teams.insert(team_id.to_owned(), team);
+            let _ = state.teams.replace(team_id, team);
         }
         state
             .team_members
@@ -317,7 +325,7 @@ impl OrganizationRoleStore for EphemeralStore {
         let mut state = self.lock()?;
         if state
             .organization_roles
-            .values()
+            .iter()
             .any(|role| role.organization_id == input.organization_id && role.role == input.role)
         {
             return Err(AuthError::bad_request("Role already exists"));
@@ -334,7 +342,10 @@ impl OrganizationRoleStore for EphemeralStore {
         };
         let mut role = OrganizationRole {
             additional_fields: Default::default(),
-            id: uuid::Uuid::new_v4().to_string(),
+            id: self
+                .generated_id("organizationRole", None, state.organization_roles.len())?
+                .map(crate::SchemaValue::Typed)
+                .unwrap_or_default(),
             organization_id: (input.organization_id).into(),
             role: (input.role).into(),
             permission,
@@ -362,9 +373,7 @@ impl OrganizationRoleStore for EphemeralStore {
             None,
             input.additional_fields,
         )?;
-        let _ = state
-            .organization_roles
-            .insert(role.id.clone(), role.clone());
+        let _ = state.organization_roles.push(role.clone());
         self.output_organization_role(role)
     }
     async fn get_organization_role(&self, id: &str) -> AuthResult<Option<OrganizationRole>> {
@@ -382,7 +391,7 @@ impl OrganizationRoleStore for EphemeralStore {
         let roles: Vec<_> = self
             .lock()?
             .organization_roles
-            .values()
+            .iter()
             .filter(|role| role.organization_id == organization_id)
             .cloned()
             .collect();
@@ -450,14 +459,11 @@ impl OrganizationRoleStore for EphemeralStore {
             Some(patch),
             update.additional_fields,
         )?;
-        let _ = state.organization_roles.shift_remove(id);
-        let _ = state
-            .organization_roles
-            .insert(role.id.clone(), role.clone());
+        let _ = state.organization_roles.replace(id, role.clone());
         self.output_organization_role(role)
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {
-        let _ = self.lock()?.organization_roles.shift_remove(id);
+        let _ = self.lock()?.organization_roles.remove(id);
         Ok(())
     }
 }
@@ -502,18 +508,33 @@ async fn memory_organization_deletion_cleans_teams_and_roles() {
     let role = store
         .create_organization_role(CreateOrganizationRole {
             additional_fields: Default::default(),
-            organization_id: org.id.clone(),
+            organization_id: org.id.typed().unwrap().clone(),
             role: "editor".into(),
             permission: serde_json::json!({"team":["create"]}),
         })
         .await
         .unwrap();
-    store.delete_organization(&org.id).await.unwrap();
-    assert!(store.get_team(&team.id).await.unwrap().is_none());
-    assert!(store.list_team_members(&team.id).await.unwrap().is_empty());
+    store
+        .delete_organization(org.id.typed().unwrap())
+        .await
+        .unwrap();
     assert!(
         store
-            .get_organization_role(&role.id)
+            .get_team(team.id.typed().unwrap())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        store
+            .list_team_members(team.id.typed().unwrap())
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        store
+            .get_organization_role(role.id.typed().unwrap())
             .await
             .unwrap()
             .is_none()
@@ -565,16 +586,26 @@ async fn memory_team_deletion_rolls_back_invitation_output_errors() {
         let expires = Utc::now() + chrono::Duration::days(1);
         let mut live = Vec::new();
         for _ in 0..2 {
-            let mut input =
-                CreateInvitation::new(&org.id, "recipient@example.com", "member", "owner", expires);
-            input.team_id = Some(team.id.clone());
+            let mut input = CreateInvitation::new(
+                org.id.typed().unwrap(),
+                "recipient@example.com",
+                "member",
+                "owner",
+                expires,
+            );
+            input.team_id = Some(team.id.typed().unwrap().clone());
             live.push(store.create_invitation(input).await.unwrap().id);
         }
         if failure_stage != "updated" {
-            let mut input =
-                CreateInvitation::new(&org.id, "other@example.com", "member", "owner", expires);
+            let mut input = CreateInvitation::new(
+                org.id.typed().unwrap(),
+                "other@example.com",
+                "member",
+                "owner",
+                expires,
+            );
             if failure_stage == "expired" {
-                input.team_id = Some(team.id.clone());
+                input.team_id = Some(team.id.typed().unwrap().clone());
                 input.expires_at = Utc::now() - chrono::Duration::days(1);
             }
             let _ = input
@@ -604,21 +635,38 @@ async fn memory_team_deletion_rolls_back_invitation_output_errors() {
             }
         }));
         store.configure_organization_fields(failing).unwrap();
-        let error = store.delete_team(&team.id).await.unwrap_err();
+        let error = store
+            .delete_team(team.id.typed().unwrap())
+            .await
+            .unwrap_err();
         assert!(error.to_string().contains("invitation output failed"));
         assert_eq!(
             updates.load(Ordering::SeqCst),
             if failure_stage == "updated" { 2 } else { 0 }
         );
         store.configure_organization_fields(config).unwrap();
-        assert!(store.get_team(&team.id).await.unwrap().is_some());
-        assert_eq!(store.list_team_members(&team.id).await.unwrap().len(), 1);
+        assert!(
+            store
+                .get_team(team.id.typed().unwrap())
+                .await
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(
+            store
+                .list_team_members(team.id.typed().unwrap())
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
         for id in live {
-            let row = store.get_invitation_by_id(&id).await.unwrap().unwrap();
-            assert_eq!(
-                row.team_id.typed().unwrap().as_deref(),
-                Some(team.id.as_str())
-            );
+            let row = store
+                .get_invitation_by_id(id.typed().unwrap())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(row.team_id.typed().unwrap().as_deref(), team.id.as_str());
             assert_eq!(row.additional_fields.get("marker"), Some(&json!("created")));
         }
     }

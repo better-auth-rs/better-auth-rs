@@ -217,7 +217,7 @@ impl PasskeyRegistrationHook for PasskeyOptions {
                 let _ = ctx
                     .users
                     .update_user(
-                        &created.id,
+                        created.id.typed().unwrap(),
                         better_auth_core::UpdateUser {
                             banned: Some(banned),
                             ban_expires: user.get("banExpires").and_then(Value::as_str).map(
@@ -242,7 +242,7 @@ impl PasskeyRegistrationHook for PasskeyOptions {
                 let updated = ctx
                     .users
                     .update_user(
-                        &created.id,
+                        created.id.typed().unwrap(),
                         better_auth_core::UpdateUser {
                             name: Some(name.into()),
                             ..Default::default()
@@ -258,8 +258,8 @@ impl PasskeyRegistrationHook for PasskeyOptions {
                 ));
                 input.id = Some("temporary-user".into());
                 let temporary = ctx.users.create_user(input).await?;
-                ctx.users.delete_user(&temporary.id).await?;
-                self.event(json!({"event": "users.deleted", "missing": ctx.users.get_user_by_id(&temporary.id).await?.is_none()}));
+                ctx.users.delete_user(temporary.id.typed().unwrap()).await?;
+                self.event(json!({"event": "users.deleted", "missing": ctx.users.get_user_by_id(temporary.id.typed().unwrap()).await?.is_none()}));
             }
         }
         fail(control.get("registrationMode"))?;
@@ -318,7 +318,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PasskeyOptions {
     }
     async fn after_create_session(
         &self,
-        _: &S::Session,
+        _: &better_auth_core::wire::SessionView,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.event(json!({"event": "session.after"}));

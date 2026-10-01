@@ -19,8 +19,8 @@ impl ActiveModelBehavior for ActiveModel {}
 impl From<Model> for better_auth_core::TeamMember {
     fn from(model: Model) -> Self {
         Self {
-            id: model.id,
-            team_id: model.team_id,
+            id: model.id.into(),
+            team_id: model.team_id.into(),
             user_id: model.user_id,
             created_at: model.created_at,
         }

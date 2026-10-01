@@ -496,7 +496,7 @@ pub fn entity_indexes(table: &str) -> &'static [IndexDef] {
             unique!("phone_number"),
         ],
         "sessions" => &[unique!("token"), index!("user_id"), index!("expires_at")],
-        "accounts" => &[unique!("provider_id", "account_id"), index!("user_id")],
+        "accounts" => &[index!("user_id")],
         "verifications" => &[index!("identifier")],
         "two_factor" => &[unique!("user_id")],
         "device_code" => &[

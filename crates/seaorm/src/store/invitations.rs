@@ -17,31 +17,31 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
 {
     async fn create_invitation(&self, mut input: CreateInvitation) -> AuthResult<Invitation> {
         let config = self.organization_fields()?.invitation;
-        let mut core = values([
-            (
-                "id",
-                json!(input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())),
-            ),
-            ("organization_id", json!(input.organization_id)),
-            ("email", json!(input.email)),
-            ("role", json!(input.role)),
-            (
-                "status",
-                json!(
-                    input
-                        .status
-                        .unwrap_or(InvitationStatus::Pending)
-                        .to_string()
+        let mut core = self.create_fields(
+            "invitation",
+            input.id,
+            values([
+                ("organization_id", json!(input.organization_id)),
+                ("email", json!(input.email)),
+                ("role", json!(input.role)),
+                (
+                    "status",
+                    json!(
+                        input
+                            .status
+                            .unwrap_or(InvitationStatus::Pending)
+                            .to_string()
+                    ),
                 ),
-            ),
-            ("inviter_id", json!(input.inviter_id)),
-            ("team_id", json!(input.team_id)),
-            ("expires_at", json!(input.expires_at)),
-            (
-                "created_at",
-                json!(input.created_at.unwrap_or_else(Utc::now)),
-            ),
-        ]);
+                ("inviter_id", json!(input.inviter_id)),
+                ("team_id", json!(input.team_id)),
+                ("expires_at", json!(input.expires_at)),
+                (
+                    "created_at",
+                    json!(input.created_at.unwrap_or_else(Utc::now)),
+                ),
+            ]),
+        )?;
         for (public, stored) in [
             ("status", "status"),
             ("createdAt", "created_at"),
@@ -228,7 +228,7 @@ mod tests {
             .await
             .expect("cancelable invitation should be created");
         let _ = store
-            .update_invitation_status(&canceled.id, InvitationStatus::Canceled)
+            .update_invitation_status(canceled.id.typed().unwrap(), InvitationStatus::Canceled)
             .await
             .expect("invitation should be canceled");
         let _ = store

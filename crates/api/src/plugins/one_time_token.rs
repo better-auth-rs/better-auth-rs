@@ -79,7 +79,7 @@ better_auth_core::impl_auth_plugin! {
     OneTimeTokenPlugin, "one-time-token";
     routes {
         get "/one-time-token/generate" => handle_generate, "generateOneTimeToken";
-        post "/one-time-token/verify" => handle_verify, "verifyOneTimeToken";
+        post "/one-time-token/verify" => handle_verify, "verifyOneTimeToken", body = verify_body;
     }
     extra {
         async fn after_request(
@@ -220,26 +220,38 @@ pub(crate) fn session_required(error: AuthError) -> AuthError {
     }
 }
 
+#[derive(serde::Deserialize)]
+struct TokenBody {
+    #[serde(alias = "sessionToken")]
+    token: String,
+}
+fn token_input(req: &AuthRequest, field: &str) -> AuthResult<(String, serde_json::Value)> {
+    let (body, projection) = super::json_body::string_input::<TokenBody>(req, &[(field, true)])?;
+    Ok((body.token, projection))
+}
+fn verify_body(req: &AuthRequest) -> AuthResult<better_auth_core::endpoint_input::ValidatedBody> {
+    let (body, projection) = token_input(req, "token")?;
+    Ok(better_auth_core::endpoint_input::ValidatedBody::new(
+        Some(projection),
+        body,
+    ))
+}
+pub(crate) fn session_token_body(
+    req: &AuthRequest,
+) -> AuthResult<better_auth_core::endpoint_input::ValidatedBody> {
+    let (body, projection) = token_input(req, "sessionToken")?;
+    Ok(better_auth_core::endpoint_input::ValidatedBody::new(
+        Some(projection),
+        body,
+    ))
+}
 pub(crate) fn token_body(req: &AuthRequest, field: &str) -> Result<String, AuthResponse> {
-    use super::json_body;
-    let body = json_body::parse(req)?;
-    let Some(serde_json::Value::Object(body)) = body.as_ref() else {
-        return Err(json_body::validation_error(&json_body::invalid_type(
-            "body",
-            "object",
-            body.as_ref(),
-        )));
-    };
-    body.get(field)
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_owned)
-        .ok_or_else(|| {
-            json_body::validation_error(&json_body::invalid_type(
-                &format!("body.{field}"),
-                "string",
-                body.get(field),
-            ))
-        })
+    match req.validated_body::<String>() {
+        Some(body) => Ok(body.clone()),
+        None => token_input(req, field)
+            .map(|(body, _)| body)
+            .map_err(|error| error.to_auth_response()),
+    }
 }
 
 pub(crate) async fn find_session<S: AuthSchema>(
@@ -253,7 +265,11 @@ pub(crate) async fn find_session<S: AuthSchema>(
         data.session.filter_returned_fields(&ctx.config.session);
         return Ok(Some((data.session, ctx.user_view(&data.user)?)));
     }
-    let Some(user) = ctx.database.get_user_by_id(&session.user_id()).await? else {
+    let Some(user) = ctx
+        .database
+        .get_user_by_id(session.user_id().typed()?)
+        .await?
+    else {
         return Ok(None);
     };
     Ok(Some((

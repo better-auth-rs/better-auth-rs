@@ -35,7 +35,7 @@ async fn test_virtual_session_answers_get_and_post_get_session() {
         let body = json_body(&response);
         assert_eq!(body["session"]["id"], id);
         assert_eq!(body["session"]["token"], raw_key);
-        assert_eq!(body["session"]["userId"], user.id);
+        assert_eq!(body["session"]["userId"], user.id.typed().unwrap().as_str());
     }
 }
 
@@ -60,7 +60,7 @@ async fn test_virtual_session_creates_no_db_session() {
     // Count sessions before
     let sessions_before = ctx
         .database
-        .get_user_sessions(&_user.id)
+        .get_user_sessions(_user.id.typed().unwrap())
         .await
         .unwrap()
         .len();
@@ -94,7 +94,7 @@ async fn test_virtual_session_creates_no_db_session() {
     // Count sessions after -- should be unchanged (no DB writes)
     let sessions_after = ctx
         .database
-        .get_user_sessions(&_user.id)
+        .get_user_sessions(_user.id.typed().unwrap())
         .await
         .unwrap()
         .len();
@@ -139,11 +139,11 @@ async fn test_virtual_session_on_get_session() {
             assert_eq!(resp.status, 200);
             let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
             // Should contain user data
-            assert_eq!(body["user"]["id"], user.id);
+            assert_eq!(body["user"]["id"], user.id.typed().unwrap().as_str());
             assert_eq!(body["user"]["email"], "test@example.com");
             // Should contain session-like data
             assert!(body["session"]["id"].is_string());
-            assert_eq!(body["session"]["userId"], user.id);
+            assert_eq!(body["session"]["userId"], user.id.typed().unwrap().as_str());
         }
         BeforeRequestAction::InjectSession { .. } => {
             panic!("Expected Respond for /get-session, got InjectSession");
@@ -374,7 +374,7 @@ async fn test_delete_expired_api_keys_memory_adapter() {
     let past = (Utc::now() - Duration::hours(1)).to_rfc3339();
     ctx.database
         .update_api_key(
-            &id1,
+            &id1.clone().into(),
             UpdateApiKey {
                 expires_at: Some(Some(past)),
                 ..Default::default()
@@ -390,7 +390,7 @@ async fn test_delete_expired_api_keys_memory_adapter() {
     // Verify only the non-expired key remains
     let remaining = ctx
         .database
-        .list_api_keys_by_reference(&_user.id)
+        .list_api_keys_by_reference(_user.id.typed().unwrap())
         .await
         .unwrap();
     assert_eq!(remaining.len(), 1);
@@ -421,7 +421,7 @@ async fn test_delete_expired_removes_only_expired() {
     let past = (Utc::now() - Duration::hours(1)).to_rfc3339();
     ctx.database
         .update_api_key(
-            &id1,
+            &id1.clone().into(),
             UpdateApiKey {
                 expires_at: Some(Some(past)),
                 ..Default::default()
@@ -435,7 +435,7 @@ async fn test_delete_expired_removes_only_expired() {
 
     let remaining = ctx
         .database
-        .list_api_keys_by_reference(&_user.id)
+        .list_api_keys_by_reference(_user.id.typed().unwrap())
         .await
         .unwrap();
     assert_eq!(remaining.len(), 1);
